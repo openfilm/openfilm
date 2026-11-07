@@ -1,0 +1,1187 @@
+{
+ "version": 1,
+ "groups": {
+  "effect": [
+   {
+    "id": "clip-in",
+    "name": {
+     "en": "Clip in",
+     "zh-CN": "入场动画",
+     "ja": "イン",
+     "ko": "등장 애니메이션",
+     "es": "Entrada"
+    }
+   },
+   {
+    "id": "clip-out",
+    "name": {
+     "en": "Clip out",
+     "zh-CN": "出场动画",
+     "ja": "アウト",
+     "ko": "퇴장 애니메이션",
+     "es": "Salida"
+    }
+   },
+   {
+    "id": "clip-loop",
+    "name": {
+     "en": "Clip loop",
+     "zh-CN": "循环动画",
+     "ja": "ループ",
+     "ko": "반복 애니메이션",
+     "es": "Bucle"
+    }
+   }
+  ],
+  "transition": [
+   {
+    "id": "camera",
+    "name": {
+     "en": "Camera moves",
+     "zh-CN": "运镜",
+     "ja": "カメラワーク",
+     "ko": "카메라 무브",
+     "es": "Movimientos de cámara"
+    }
+   }
+  ]
+ },
+ "items": [
+  {
+   "id": "motions/in-fade",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Fade in",
+    "zh-CN": "渐显",
+    "ja": "フェードイン",
+    "ko": "페이드 인",
+    "es": "Aparecer"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "in": {
+     "name": "motion-in-fade",
+     "body": "from { opacity: 0 }",
+     "secs": 0.5,
+     "ease": "ease-out"
+    }
+   },
+   "about": "The clip fades in from transparent over half a second. For calm, neutral entrances of clips, stickers and images.",
+   "tags": [
+    "fade",
+    "soft",
+    "calm"
+   ]
+  },
+  {
+   "id": "motions/in-zoom",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Zoom in",
+    "zh-CN": "放大",
+    "ja": "ズームイン",
+    "ko": "확대",
+    "es": "Acercar"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "in": {
+     "name": "motion-in-zoom",
+     "body": "from { scale: 0.6; opacity: 0 }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The clip grows from 60 percent size while fading in. For smooth, gentle entrances of clips and images.",
+   "tags": [
+    "zoom",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/in-zoom-down",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Shrink in",
+    "zh-CN": "缩小进入",
+    "ja": "縮小イン",
+    "ko": "축소 등장",
+    "es": "Encoger"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "in": {
+     "name": "motion-in-zoom-down",
+     "body": "from { scale: 1.4; opacity: 0 }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The clip shrinks from 140 percent size to normal while fading in. For soft, settling entrances of clips and images.",
+   "tags": [
+    "zoom",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/in-pop",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Pop",
+    "zh-CN": "弹入",
+    "ja": "ポップ",
+    "ko": "팝",
+    "es": "Rebote"
+   },
+   "kind": "motion",
+   "durationMs": 550,
+   "motion": {
+    "in": {
+     "name": "motion-in-pop",
+     "body": "from { scale: 0.2; opacity: 0 }",
+     "secs": 0.55,
+     "ease": "cubic-bezier(0.34, 1.56, 0.64, 1)"
+    }
+   },
+   "about": "The clip springs up from a tiny size with an overshoot, then settles. For stickers, logos and playful entrances.",
+   "tags": [
+    "bounce",
+    "zoom",
+    "playful"
+   ]
+  },
+  {
+   "id": "motions/in-slide-left",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Slide from right",
+    "zh-CN": "向左滑入",
+    "ja": "右からスライド",
+    "ko": "오른쪽에서 슬라이드",
+    "es": "Deslizar desde la derecha"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "in": {
+     "name": "motion-in-slide-left",
+     "body": "from { translate: 100vw 0 }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The clip slides in from the right edge of the screen. For side entrances of clips, cards and overlays.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/in-slide-right",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Slide from left",
+    "zh-CN": "向右滑入",
+    "ja": "左からスライド",
+    "ko": "왼쪽에서 슬라이드",
+    "es": "Deslizar desde la izquierda"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "in": {
+     "name": "motion-in-slide-right",
+     "body": "from { translate: -100vw 0 }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The clip slides in from the left edge of the screen. For side entrances of clips, cards and overlays.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/in-rise",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Rise",
+    "zh-CN": "向上滑入",
+    "ja": "下から上へ",
+    "ko": "위로 등장",
+    "es": "Subir"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "in": {
+     "name": "motion-in-rise",
+     "body": "from { translate: 0 30vh; opacity: 0 }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The clip rises from below while fading in. For gentle entrances of titles, cards and images.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/in-drop",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Drop",
+    "zh-CN": "向下落入",
+    "ja": "上から落ちる",
+    "ko": "위에서 떨어짐",
+    "es": "Caer"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "motion": {
+    "in": {
+     "name": "motion-in-drop",
+     "body": "from { translate: 0 -40vh; opacity: 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.34, 1.56, 0.64, 1)"
+    }
+   },
+   "about": "The clip drops from above with a small bounce when it lands. For playful, lively entrances of stickers and cards.",
+   "tags": [
+    "bounce",
+    "slide",
+    "playful"
+   ]
+  },
+  {
+   "id": "motions/in-spin",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Spin in",
+    "zh-CN": "旋转进入",
+    "ja": "回転イン",
+    "ko": "회전 등장",
+    "es": "Girar"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "motion": {
+    "in": {
+     "name": "motion-in-spin",
+     "body": "from { rotate: -120deg; scale: 0.3; opacity: 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The clip spins in from a tilt while growing from small and fading in. For energetic, playful entrances.",
+   "tags": [
+    "spin",
+    "zoom",
+    "playful"
+   ]
+  },
+  {
+   "id": "motions/in-blur",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Blur in",
+    "zh-CN": "模糊渐显",
+    "ja": "ぼかしイン",
+    "ko": "흐림 등장",
+    "es": "Desenfoque"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "motion": {
+    "in": {
+     "name": "motion-in-blur",
+     "body": "from { filter: blur(24px); opacity: 0 }",
+     "secs": 0.6,
+     "ease": "ease-out"
+    }
+   },
+   "about": "The clip fades in from a heavy blur and comes into focus. For dreamy, soft entrances.",
+   "tags": [
+    "dreamy",
+    "fade",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/in-whip",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Whip in",
+    "zh-CN": "甩入",
+    "ja": "ムチイン",
+    "ko": "휩 등장",
+    "es": "Látigo"
+   },
+   "kind": "motion",
+   "durationMs": 400,
+   "motion": {
+    "in": {
+     "name": "motion-in-whip",
+     "body": "from { translate: -30vw 0; filter: blur(18px); opacity: 0 }",
+     "secs": 0.4,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The clip whips in quickly from the left, blurred, and snaps into focus. For fast, energetic entrances.",
+   "tags": [
+    "slide",
+    "intense"
+   ]
+  },
+  {
+   "id": "motions/in-swing",
+   "cat": "effect",
+   "group": "clip-in",
+   "name": {
+    "en": "Swing in",
+    "zh-CN": "摇摆进入",
+    "ja": "スイングイン",
+    "ko": "흔들며 등장",
+    "es": "Balanceo"
+   },
+   "kind": "motion",
+   "durationMs": 700,
+   "motion": {
+    "in": {
+     "name": "motion-in-swing",
+     "body": "from { rotate: 18deg; translate: 0 10vh; opacity: 0 }",
+     "secs": 0.7,
+     "ease": "cubic-bezier(0.34, 1.56, 0.64, 1)"
+    }
+   },
+   "about": "The clip swings in from a tilt and from below, with a small overshoot. For playful, lively entrances of cards and stickers.",
+   "tags": [
+    "spin",
+    "bounce",
+    "playful"
+   ]
+  },
+  {
+   "id": "motions/out-fade",
+   "cat": "effect",
+   "group": "clip-out",
+   "name": {
+    "en": "Fade out",
+    "zh-CN": "渐隐",
+    "ja": "フェードアウト",
+    "ko": "페이드 아웃",
+    "es": "Desaparecer"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "out": {
+     "name": "motion-out-fade",
+     "body": "to { opacity: 0 }",
+     "secs": 0.5,
+     "ease": "ease-in"
+    }
+   },
+   "about": "The clip fades out to transparent over half a second. For calm, neutral exits.",
+   "tags": [
+    "fade",
+    "soft",
+    "calm"
+   ]
+  },
+  {
+   "id": "motions/out-zoom",
+   "cat": "effect",
+   "group": "clip-out",
+   "name": {
+    "en": "Zoom out",
+    "zh-CN": "缩小消失",
+    "ja": "ズームアウト",
+    "ko": "축소 퇴장",
+    "es": "Alejar"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "out": {
+     "name": "motion-out-zoom",
+     "body": "to { scale: 0.6; opacity: 0 }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    }
+   },
+   "about": "The clip shrinks to 60 percent while fading out. For smooth, gentle exits.",
+   "tags": [
+    "zoom",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/out-zoom-up",
+   "cat": "effect",
+   "group": "clip-out",
+   "name": {
+    "en": "Grow out",
+    "zh-CN": "放大消失",
+    "ja": "拡大アウト",
+    "ko": "확대 퇴장",
+    "es": "Crecer"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "out": {
+     "name": "motion-out-zoom-up",
+     "body": "to { scale: 1.4; opacity: 0 }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    }
+   },
+   "about": "The clip grows to 140 percent while fading out. For smooth exits that feel like flying toward the viewer.",
+   "tags": [
+    "zoom",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/out-slide-left",
+   "cat": "effect",
+   "group": "clip-out",
+   "name": {
+    "en": "Slide out left",
+    "zh-CN": "向左滑出",
+    "ja": "左へスライド",
+    "ko": "왼쪽으로 슬라이드",
+    "es": "Salir por la izquierda"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "out": {
+     "name": "motion-out-slide-left",
+     "body": "to { translate: -100vw 0 }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    }
+   },
+   "about": "The clip slides out to the left edge. For side exits of clips, cards and overlays.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/out-slide-right",
+   "cat": "effect",
+   "group": "clip-out",
+   "name": {
+    "en": "Slide out right",
+    "zh-CN": "向右滑出",
+    "ja": "右へスライド",
+    "ko": "오른쪽으로 슬라이드",
+    "es": "Salir por la derecha"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "out": {
+     "name": "motion-out-slide-right",
+     "body": "to { translate: 100vw 0 }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    }
+   },
+   "about": "The clip slides out to the right edge. For side exits of clips, cards and overlays.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/out-sink",
+   "cat": "effect",
+   "group": "clip-out",
+   "name": {
+    "en": "Sink",
+    "zh-CN": "向下滑出",
+    "ja": "下へ消える",
+    "ko": "아래로 퇴장",
+    "es": "Hundir"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "motion": {
+    "out": {
+     "name": "motion-out-sink",
+     "body": "to { translate: 0 30vh; opacity: 0 }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    }
+   },
+   "about": "The clip sinks down while fading out. For gentle exits of titles, cards and images.",
+   "tags": [
+    "slide",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/out-spin",
+   "cat": "effect",
+   "group": "clip-out",
+   "name": {
+    "en": "Spin out",
+    "zh-CN": "旋转消失",
+    "ja": "回転アウト",
+    "ko": "회전 퇴장",
+    "es": "Girar y salir"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "motion": {
+    "out": {
+     "name": "motion-out-spin",
+     "body": "to { rotate: 120deg; scale: 0.3; opacity: 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    }
+   },
+   "about": "The clip spins away while shrinking and fading out. For energetic, playful exits.",
+   "tags": [
+    "spin",
+    "zoom",
+    "playful"
+   ]
+  },
+  {
+   "id": "motions/out-blur",
+   "cat": "effect",
+   "group": "clip-out",
+   "name": {
+    "en": "Blur out",
+    "zh-CN": "模糊消失",
+    "ja": "ぼかしアウト",
+    "ko": "흐림 퇴장",
+    "es": "Desenfocar"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "motion": {
+    "out": {
+     "name": "motion-out-blur",
+     "body": "to { filter: blur(24px); opacity: 0 }",
+     "secs": 0.6,
+     "ease": "ease-in"
+    }
+   },
+   "about": "The clip blurs heavily while fading out. For dreamy, soft exits.",
+   "tags": [
+    "dreamy",
+    "fade",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/loop-pulse",
+   "cat": "effect",
+   "group": "clip-loop",
+   "name": {
+    "en": "Pulse",
+    "zh-CN": "呼吸",
+    "ja": "脈動",
+    "ko": "맥박",
+    "es": "Pulso"
+   },
+   "kind": "motion",
+   "durationMs": 1600,
+   "motion": {
+    "loop": {
+     "name": "motion-loop-pulse",
+     "body": "0%, 100% { scale: 1 } 50% { scale: 1.05 }",
+     "secs": 1.6,
+     "ease": "ease-in-out"
+    }
+   },
+   "about": "The clip swells 5 percent and back every 1.6 seconds. For gentle emphasis on logos, stickers and buttons.",
+   "tags": [
+    "zoom",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/loop-float",
+   "cat": "effect",
+   "group": "clip-loop",
+   "name": {
+    "en": "Float",
+    "zh-CN": "漂浮",
+    "ja": "浮遊",
+    "ko": "둥실",
+    "es": "Flotar"
+   },
+   "kind": "motion",
+   "durationMs": 2400,
+   "motion": {
+    "loop": {
+     "name": "motion-loop-float",
+     "body": "0%, 100% { translate: 0 0 } 50% { translate: 0 -2.5vh }",
+     "secs": 2.4,
+     "ease": "ease-in-out"
+    }
+   },
+   "about": "The clip floats up and down a little every 2.4 seconds. For calm, hovering stickers, logos and images.",
+   "tags": [
+    "soft",
+    "calm",
+    "dreamy"
+   ]
+  },
+  {
+   "id": "motions/loop-swing",
+   "cat": "effect",
+   "group": "clip-loop",
+   "name": {
+    "en": "Sway",
+    "zh-CN": "摇摆",
+    "ja": "揺れ",
+    "ko": "흔들기",
+    "es": "Vaivén"
+   },
+   "kind": "motion",
+   "durationMs": 2000,
+   "motion": {
+    "loop": {
+     "name": "motion-loop-swing",
+     "body": "0%, 100% { rotate: -3deg } 50% { rotate: 3deg }",
+     "secs": 2,
+     "ease": "ease-in-out"
+    }
+   },
+   "about": "The clip sways a few degrees left and right every 2 seconds. For casual, playful stickers and images.",
+   "tags": [
+    "spin",
+    "playful",
+    "soft"
+   ]
+  },
+  {
+   "id": "motions/loop-shake",
+   "cat": "effect",
+   "group": "clip-loop",
+   "name": {
+    "en": "Shake",
+    "zh-CN": "抖动",
+    "ja": "シェイク",
+    "ko": "흔들림",
+    "es": "Temblor"
+   },
+   "kind": "motion",
+   "durationMs": 400,
+   "motion": {
+    "loop": {
+     "name": "motion-loop-shake",
+     "body": "0%, 100% { translate: 0 0 } 20% { translate: -1.2vw 0.6vh } 40% { translate: 1vw -0.8vh } 60% { translate: -0.8vw -0.4vh } 80% { translate: 0.6vw 0.8vh }",
+     "secs": 0.4,
+     "ease": "linear"
+    }
+   },
+   "about": "The clip jitters quickly in small steps in all directions, 0.4 seconds per cycle. For impact, anger, fear or alarm.",
+   "tags": [
+    "shake",
+    "intense",
+    "tense"
+   ]
+  },
+  {
+   "id": "motions/loop-beat",
+   "cat": "effect",
+   "group": "clip-loop",
+   "name": {
+    "en": "Heartbeat",
+    "zh-CN": "心跳",
+    "ja": "ハートビート",
+    "ko": "심장 박동",
+    "es": "Latido"
+   },
+   "kind": "motion",
+   "durationMs": 1000,
+   "motion": {
+    "loop": {
+     "name": "motion-loop-beat",
+     "body": "0% { scale: 1 } 14% { scale: 1.08 } 28% { scale: 1 } 42% { scale: 1.06 } 70%, 100% { scale: 1 }",
+     "secs": 1,
+     "ease": "ease-out"
+    }
+   },
+   "about": "The clip swells twice quickly, then rests, once per second, like a heartbeat. For love, tension or a racing pulse.",
+   "tags": [
+    "heartbeat",
+    "romantic",
+    "tense"
+   ]
+  },
+  {
+   "id": "motions/loop-flicker",
+   "cat": "effect",
+   "group": "clip-loop",
+   "name": {
+    "en": "Flicker",
+    "zh-CN": "闪烁",
+    "ja": "点滅",
+    "ko": "깜빡임",
+    "es": "Parpadeo"
+   },
+   "kind": "motion",
+   "durationMs": 1200,
+   "motion": {
+    "loop": {
+     "name": "motion-loop-flicker",
+     "body": "0%, 100% { opacity: 1 } 46% { opacity: 1 } 48% { opacity: 0.4 } 50% { opacity: 1 } 70% { opacity: 0.7 } 72% { opacity: 1 }",
+     "secs": 1.2,
+     "ease": "linear"
+    }
+   },
+   "about": "The clip flickers in brightness briefly, now and then. For neon, horror and electric looks.",
+   "tags": [
+    "neon",
+    "scary",
+    "tense"
+   ]
+  },
+  {
+   "id": "motions/loop-ken-burns",
+   "cat": "effect",
+   "group": "clip-loop",
+   "name": {
+    "en": "Slow push",
+    "zh-CN": "缓慢推近",
+    "ja": "ゆっくりズーム",
+    "ko": "천천히 확대",
+    "es": "Empuje lento"
+   },
+   "kind": "motion",
+   "durationMs": 8000,
+   "motion": {
+    "loop": {
+     "name": "motion-loop-ken-burns",
+     "body": "from { scale: 1 } to { scale: 1.12 }",
+     "secs": 8,
+     "ease": "ease-in-out"
+    }
+   },
+   "about": "The clip slowly pushes in from full size to 112 percent over 8 seconds. For still photos and calm shots that need life.",
+   "tags": [
+    "zoom",
+    "calm",
+    "soft",
+    "documentary"
+   ]
+  },
+  {
+   "id": "motions/cut-zoom-through",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Zoom through",
+    "zh-CN": "拉近",
+    "ja": "ズームスルー",
+    "ko": "줌 스루",
+    "es": "Zoom a través"
+   },
+   "kind": "motion",
+   "durationMs": 700,
+   "place": "cut",
+   "motion": {
+    "out": {
+     "name": "motion-out-zoom-through",
+     "body": "to { scale: 1.8; filter: blur(14px) }",
+     "secs": 0.35,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    },
+    "in": {
+     "name": "motion-in-zoom-through",
+     "body": "from { scale: 1.8; filter: blur(14px) }",
+     "secs": 0.35,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The outgoing shot zooms in and blurs, then the next shot settles from the same zoom. For energetic cuts, as if flying through the picture.",
+   "tags": [
+    "zoom",
+    "intense",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/cut-pull-back",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Pull back",
+    "zh-CN": "推远",
+    "ja": "引き",
+    "ko": "멀어지기",
+    "es": "Alejarse"
+   },
+   "kind": "motion",
+   "durationMs": 700,
+   "place": "cut",
+   "motion": {
+    "out": {
+     "name": "motion-out-pull-back",
+     "body": "to { scale: 0.7; filter: blur(12px); opacity: 0 }",
+     "secs": 0.35,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    },
+    "in": {
+     "name": "motion-in-pull-back",
+     "body": "from { scale: 1.6; filter: blur(12px) }",
+     "secs": 0.35,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The outgoing shot shrinks back and fades, then the next shot pulls in from large and blurred. For smooth, flowing scene changes.",
+   "tags": [
+    "zoom",
+    "soft",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/cut-whip-left",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Whip left",
+    "zh-CN": "向左甩",
+    "ja": "左にパン",
+    "ko": "왼쪽 휩",
+    "es": "Barrido a la izquierda"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "place": "cut",
+   "motion": {
+    "out": {
+     "name": "motion-out-whip-left",
+     "body": "to { translate: -15vw 0; scale: 1.3; filter: blur(20px) }",
+     "secs": 0.25,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    },
+    "in": {
+     "name": "motion-in-whip-left",
+     "body": "from { translate: 15vw 0; scale: 1.3; filter: blur(20px) }",
+     "secs": 0.25,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "Both shots slide and blur leftward fast, like a camera whip pan. For fast, energetic cuts in vlogs and action.",
+   "tags": [
+    "slide",
+    "intense",
+    "transition",
+    "action"
+   ]
+  },
+  {
+   "id": "motions/cut-whip-right",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Whip right",
+    "zh-CN": "向右甩",
+    "ja": "右にパン",
+    "ko": "오른쪽 휩",
+    "es": "Barrido a la derecha"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "place": "cut",
+   "motion": {
+    "out": {
+     "name": "motion-out-whip-right",
+     "body": "to { translate: 15vw 0; scale: 1.3; filter: blur(20px) }",
+     "secs": 0.25,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    },
+    "in": {
+     "name": "motion-in-whip-right",
+     "body": "from { translate: -15vw 0; scale: 1.3; filter: blur(20px) }",
+     "secs": 0.25,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "Both shots slide and blur rightward fast, like a camera whip pan. For fast, energetic cuts in vlogs and action.",
+   "tags": [
+    "slide",
+    "intense",
+    "transition",
+    "action"
+   ]
+  },
+  {
+   "id": "motions/cut-whip-up",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Whip up",
+    "zh-CN": "向上甩",
+    "ja": "上にパン",
+    "ko": "위로 휩",
+    "es": "Barrido arriba"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "place": "cut",
+   "motion": {
+    "out": {
+     "name": "motion-out-whip-up",
+     "body": "to { translate: 0 -15vh; scale: 1.3; filter: blur(20px) }",
+     "secs": 0.25,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    },
+    "in": {
+     "name": "motion-in-whip-up",
+     "body": "from { translate: 0 15vh; scale: 1.3; filter: blur(20px) }",
+     "secs": 0.25,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "Both shots slide and blur upward fast, like a tilt whip. For fast, energetic cuts in vlogs and action.",
+   "tags": [
+    "slide",
+    "intense",
+    "transition",
+    "action"
+   ]
+  },
+  {
+   "id": "motions/cut-whip-down",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Whip down",
+    "zh-CN": "向下甩",
+    "ja": "下にパン",
+    "ko": "아래로 휩",
+    "es": "Barrido abajo"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "place": "cut",
+   "motion": {
+    "out": {
+     "name": "motion-out-whip-down",
+     "body": "to { translate: 0 15vh; scale: 1.3; filter: blur(20px) }",
+     "secs": 0.25,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    },
+    "in": {
+     "name": "motion-in-whip-down",
+     "body": "from { translate: 0 -15vh; scale: 1.3; filter: blur(20px) }",
+     "secs": 0.25,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "Both shots slide and blur downward fast, like a tilt whip. For fast, energetic cuts in vlogs and action.",
+   "tags": [
+    "slide",
+    "intense",
+    "transition",
+    "action"
+   ]
+  },
+  {
+   "id": "motions/cut-spin",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Spin",
+    "zh-CN": "旋转",
+    "ja": "スピン",
+    "ko": "회전",
+    "es": "Giro"
+   },
+   "kind": "motion",
+   "durationMs": 700,
+   "place": "cut",
+   "motion": {
+    "out": {
+     "name": "motion-out-spin",
+     "body": "to { rotate: 25deg; scale: 1.7; filter: blur(12px) }",
+     "secs": 0.35,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    },
+    "in": {
+     "name": "motion-in-spin",
+     "body": "from { rotate: -25deg; scale: 1.7; filter: blur(12px) }",
+     "secs": 0.35,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The outgoing shot twists clockwise, enlarged and blurred, and the next shot untwists into place. For dynamic, playful cuts.",
+   "tags": [
+    "spin",
+    "intense",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/cut-spin-back",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Spin back",
+    "zh-CN": "反向旋转",
+    "ja": "逆スピン",
+    "ko": "역회전",
+    "es": "Giro inverso"
+   },
+   "kind": "motion",
+   "durationMs": 700,
+   "place": "cut",
+   "motion": {
+    "out": {
+     "name": "motion-out-spin-back",
+     "body": "to { rotate: -25deg; scale: 1.7; filter: blur(12px) }",
+     "secs": 0.35,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    },
+    "in": {
+     "name": "motion-in-spin-back",
+     "body": "from { rotate: 25deg; scale: 1.7; filter: blur(12px) }",
+     "secs": 0.35,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The outgoing shot twists counter-clockwise, enlarged and blurred, and the next shot untwists into place. For dynamic, playful cuts.",
+   "tags": [
+    "spin",
+    "intense",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/cut-flash-zoom",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Flash zoom",
+    "zh-CN": "闪光放大",
+    "ja": "フラッシュズーム",
+    "ko": "플래시 줌",
+    "es": "Destello"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "motion": {
+    "out": {
+     "name": "motion-out-flash-zoom",
+     "body": "to { scale: 1.3; filter: brightness(3.5) blur(6px) }",
+     "secs": 0.3,
+     "ease": "cubic-bezier(0.55, 0, 1, 0.45)"
+    },
+    "in": {
+     "name": "motion-in-flash-zoom",
+     "body": "from { scale: 1.3; filter: brightness(3.5) blur(6px) }",
+     "secs": 0.3,
+     "ease": "cubic-bezier(0, 0.55, 0.45, 1)"
+    }
+   },
+   "about": "The outgoing shot zooms in and blows out to white, then the next shot settles from the same flash. For beat hits and launch cuts.",
+   "tags": [
+    "light",
+    "zoom",
+    "intense",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/cut-blur",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Blur",
+    "zh-CN": "模糊过渡",
+    "ja": "ぼかし",
+    "ko": "흐림",
+    "es": "Desenfoque"
+   },
+   "kind": "motion",
+   "durationMs": 700,
+   "place": "cut",
+   "motion": {
+    "out": {
+     "name": "motion-out-blur",
+     "body": "to { filter: blur(22px) }",
+     "secs": 0.35,
+     "ease": "ease-in"
+    },
+    "in": {
+     "name": "motion-in-blur",
+     "body": "from { filter: blur(22px) }",
+     "secs": 0.35,
+     "ease": "ease-out"
+    }
+   },
+   "about": "The outgoing shot blurs heavily and the next shot comes into focus from a blur. For soft, dreamy scene changes.",
+   "tags": [
+    "dreamy",
+    "soft",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/cut-shake",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Shake cut",
+    "zh-CN": "震动",
+    "ja": "揺れカット",
+    "ko": "흔들림 컷",
+    "es": "Sacudida"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "place": "cut",
+   "motion": {
+    "out": {
+     "name": "motion-out-shake",
+     "body": "0% { translate: 0 0; scale: 1.15 } 25% { translate: -3vw 2vh; scale: 1.15 } 50% { translate: 3vw -2vh; scale: 1.2 } 75% { translate: -2vw -1vh; scale: 1.2 } 100% { translate: 2vw 1vh; scale: 1.25; filter: blur(6px) }",
+     "secs": 0.25,
+     "ease": "linear"
+    },
+    "in": {
+     "name": "motion-in-shake",
+     "body": "0% { translate: -2vw 1vh; scale: 1.25; filter: blur(6px) } 30% { translate: 2vw -1vh; scale: 1.2 } 60% { translate: -1vw 1vh; scale: 1.1 } 100% { translate: 0 0; scale: 1 }",
+     "secs": 0.25,
+     "ease": "linear"
+    }
+   },
+   "about": "Both shots shake and enlarge with a blur on the cut, like a camera knock. For impacts, beat hits and action.",
+   "tags": [
+    "shake",
+    "intense",
+    "transition",
+    "action"
+   ]
+  }
+ ]
+}

@@ -9,10 +9,14 @@
  *   → { type: 'browser', state: 'downloading' | 'ready' | 'failed', message? }   the headless browser pages draw in
  *   → { type: 'ffmpeg', found }                      whether ffmpeg and ffprobe are on the PATH (video pictures, sound, export)
  *   → { type: 'open', url }                          Studio wants something shown in the person's browser
+ *   → { type: 'ask', id, text }                      a question for the person's agent's own model (askAgent)
+ *   → { type: 'ask-cancel', id }                     that question no longer wanted
+ *   ← { type: 'answer', id, text | error, code? }    its answer
  *   ← { type: 'quit' }                               stop (history is written first)
  *   ← { type: 'working', folders }                   the folders the chat's agents are working in now (not deletable)
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { startStudio } from 'openfilm/studio';
@@ -31,10 +35,33 @@ async function stop() {
 }
 /** the folders the chat's agents are working in, as the main process last told */
 let working = [];
+/** the questions asked of the person's agent, waiting for their answers, by id */
+const asking = new Map();
 parent.on('message', ({ data }) => {
   if (data?.type === 'quit') void stop();
   if (data?.type === 'working' && Array.isArray(data.folders)) working = data.folders.filter((f) => typeof f === 'string');
+  if (data?.type === 'answer') asking.get(data.id)?.(data);
 });
+
+/**
+ * One question answered by the person's agent's own model (the main process picks the agent and asks it, with no
+ * chat): Studio's own work that needs a model, such as translating subtitles.
+ * @param {string} text @param {AbortSignal} [signal] @returns {Promise<string>}
+ */
+function askAgent(text, signal) {
+  const id = randomUUID();
+  return new Promise((resolve, reject) => {
+    const cancel = () => { asking.delete(id); send({ type: 'ask-cancel', id }); reject(signal?.reason ?? new Error('stopped')); };
+    asking.set(id, (answer) => {
+      asking.delete(id);
+      signal?.removeEventListener('abort', cancel);
+      if (typeof answer.text === 'string') resolve(answer.text);
+      else reject(Object.assign(new Error(String(answer.error ?? 'The agent did not answer.')), answer.code ? { code: answer.code } : {}));
+    });
+    signal?.addEventListener('abort', cancel, { once: true });
+    send({ type: 'ask', id, text });
+  });
+}
 
 const port = Number(process.env.OPENFILM_STUDIO_PORT);
 try {
@@ -45,6 +72,7 @@ try {
     /* another app (or `openfilm open`) asked this Studio to stop: the window still needs it, so it stays and says so */
     stays: true,
     working: () => working,
+    askAgent,
     /* the window's page, Studio's editor with the chat beside it (shell/), in place of the editor alone */
     ...(process.env.OPENFILM_EDITOR_DIR ? { editorDir: process.env.OPENFILM_EDITOR_DIR } : {}),
   });

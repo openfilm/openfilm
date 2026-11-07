@@ -22,11 +22,13 @@ import { Tooltip } from './Tooltip';
 import { Popover } from './Popover';
 import { ColorPicker } from './ColorPicker';
 import { MenuSelect } from './MenuSelect';
+import { inspectorFieldVisible, inspectorTabForSection } from '@/lib/inspector-sections';
+import { InspectorEditable, InspectorWorkspaceContext, requestInspectorSection } from './InspectorWorkspace';
 
 /* ───────────────────────────── skin ───────────────────────────── */
 
 /** A field: light fill, no border; a thin edge on hover, the accent ring on focus. */
-export const FIELD = 'group/field relative flex h-[26px] min-w-0 w-full items-center overflow-hidden rounded-[5px] bg-[var(--fill-tsp)] ring-1 ring-inset ring-transparent transition-[box-shadow,background-color] hover:ring-[var(--border)] focus-within:bg-[var(--bg)] focus-within:ring-[1.5px] focus-within:ring-[var(--accent)]';
+export const FIELD = 'group/field relative flex h-[26px] min-w-0 w-full items-center overflow-hidden rounded-[5px] bg-[var(--bg-field)] ring-1 ring-inset ring-transparent transition-[box-shadow,background-color] hover:ring-[var(--border)] focus-within:bg-[var(--bg-panel)] focus-within:ring-[1.5px] focus-within:ring-[var(--accent)]';
 export const INPUT = 'h-[26px] min-w-0 flex-1 border-0 bg-transparent pr-2 text-[11px] text-[var(--text)] outline-none tabular-nums placeholder:text-[var(--text-faint)]';
 const PREFIX = 'flex h-[26px] w-[22px] shrink-0 select-none items-center justify-center text-[10.5px] text-[var(--text-faint)]';
 /** A one-icon button in a header or beside a section title. */
@@ -66,6 +68,7 @@ function writeClosed(id: string, closed: boolean): void {
 /** Unfold a section (a clip menu's Mask opens the inspector there); `data-section` finds it to scroll to. */
 export function openSection(id: string): void {
   if (readClosed()[id] !== false) writeClosed(id, false);
+  requestInspectorSection(id);
 }
 
 function useSectionClosed(id: string, closedByDefault: boolean): [boolean, (v: boolean) => void] {
@@ -79,34 +82,57 @@ function useSectionClosed(id: string, closedByDefault: boolean): [boolean, (v: b
 
 /**
  * A section: its title folds it away (remembered per section, for every selection alike), `aside` holds its actions
- * (reset, add) and stays while folded.
+ * (reset, add) and stays while folded. `bare`: the one section of its category, which names it: no title, no folding,
+ * no line under it, its actions over its fields.
  */
 export function Section({
-  id, title, aside, closedByDefault = false, children,
+  id, title, aside, closedByDefault = false, bare = false, children,
 }: {
   /** Which section, for remembering it folded: the same id for a clip's and a layer's. */
   id: string;
   title: string;
   aside?: React.ReactNode;
   closedByDefault?: boolean;
+  bare?: boolean;
   children: React.ReactNode;
 }) {
   const [closed, setClosed] = useSectionClosed(id, closedByDefault);
+  const workspace = React.useContext(InspectorWorkspaceContext);
+  const register = workspace?.register;
+  const remove = workspace?.remove;
+  React.useLayoutEffect(() => {
+    register?.(id);
+    return () => remove?.(id);
+  }, [id, register, remove]);
+  const visible = !workspace || inspectorTabForSection(id) === workspace.active;
+  const expanded = !closed;
+  if (bare) {
+    return (
+      <section data-section={id} data-bare="" hidden={!visible} aria-label={title} className="px-3 py-2">
+        <InspectorEditable>
+          <div className="flex flex-col gap-2 pb-1">
+            {aside ? <div className="flex items-center justify-end gap-0.5">{aside}</div> : null}
+            {children}
+          </div>
+        </InspectorEditable>
+      </section>
+    );
+  }
   return (
-    <section data-section={id} className="border-t border-[var(--border)] px-3 py-2">
+    <section data-section={id} data-inspector-folded={!expanded} hidden={!visible} className="border-t border-[var(--border)] px-3 py-2">
       <div className="flex h-6 items-center gap-1">
         <button
           type="button"
-          aria-expanded={!closed}
+          aria-expanded={expanded}
           onClick={() => setClosed(!closed)}
-          className={`-ml-1 flex h-6 min-w-0 flex-1 items-center gap-0.5 rounded-[4px] pl-0.5 text-left text-[11px] font-semibold transition hover:text-[var(--text)] ${closed ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}
+          className={`-ml-1 flex h-6 min-w-0 flex-1 items-center gap-0.5 rounded-[4px] pl-0.5 text-left text-[11px] font-semibold transition hover:text-[var(--text)] ${!expanded ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}
         >
-          <ChevronRight size={11} className={`shrink-0 text-[var(--text-faint)] transition-transform ${closed ? '' : 'rotate-90'}`} />
+          <ChevronRight size={11} className={`shrink-0 text-[var(--text-faint)] transition-transform ${expanded ? 'rotate-90' : ''}`} />
           <span className="truncate">{title}</span>
         </button>
-        {aside ? <div className="flex shrink-0 items-center gap-0.5">{aside}</div> : null}
+        {aside ? <InspectorEditable><div className="flex shrink-0 items-center gap-0.5">{aside}</div></InspectorEditable> : null}
       </div>
-      {closed ? null : <div className="mt-1.5 flex flex-col gap-1.5 pb-1">{children}</div>}
+      {expanded ? <InspectorEditable><div className="mt-1.5 flex flex-col gap-2 pb-1">{children}</div></InspectorEditable> : null}
     </section>
   );
 }
@@ -151,7 +177,7 @@ function unitMarks(unit: string | undefined): string[] {
 function stepFocus(from: HTMLInputElement, back: boolean): void {
   const panel = from.closest('[data-film-inspector]');
   if (!panel) return;
-  const fields = [...panel.querySelectorAll<HTMLInputElement>('input[data-insp-field]')].filter((el) => !el.disabled);
+  const fields = [...panel.querySelectorAll<HTMLInputElement>('input[data-insp-field]')].filter((el) => !el.matches(':disabled') && inspectorFieldVisible(el));
   const at = fields.indexOf(from);
   const next = fields[at + (back ? -1 : 1)];
   if (next) { next.focus(); next.select(); } else from.blur();
@@ -258,7 +284,7 @@ export function NumField({
   };
   const scrubProps = {
     onPointerDown: (e: React.PointerEvent<HTMLSpanElement>) => {
-      if (e.button !== 0 || disabled) return;
+      if (e.button !== 0 || disabled || e.currentTarget.closest('fieldset:disabled')) return;
       e.preventDefault();
       const typed = applyOf(raw);
       drag.current = { x: e.clientX, start: !mixed && typed && raw !== '' ? typed(num ?? 0) : (num ?? 0), moved: false };
@@ -429,7 +455,7 @@ export function MetricField({
           aria-hidden
           className={`${PREFIX} cursor-ew-resize touch-none hover:text-[var(--text)]`}
           onPointerDown={(e) => {
-            if (e.button !== 0) return;
+            if (e.button !== 0 || e.currentTarget.closest('fieldset:disabled')) return;
             e.preventDefault();
             drag.current = { x: e.clientX, start: typedNow(), moved: false };
             e.currentTarget.setPointerCapture(e.pointerId);
@@ -575,12 +601,12 @@ export function SliderField({
             keyTimer.current = setTimeout(() => settle(n), 400);
           }}
           onBlur={() => { if (keyTimer.current) settle(slide); }}
-          onDoubleClick={() => { setSlide(null); onCommit(neutral, () => neutral); }}
+          onDoubleClick={(event) => { if (event.currentTarget.matches(':disabled')) return; setSlide(null); onCommit(neutral, () => neutral); }}
           className={`relative h-[26px] w-full cursor-pointer appearance-none bg-transparent
             [&::-webkit-slider-runnable-track]:h-[3px] [&::-webkit-slider-runnable-track]:bg-transparent
-            [&::-webkit-slider-thumb]:-mt-[4.5px] [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--bg)] [&::-webkit-slider-thumb]:shadow-[0_0_0_1px_var(--border-strong),0_1px_3px_rgba(0,0,0,0.25)]
+            [&::-webkit-slider-thumb]:-mt-[4.5px] [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--bg-panel)] [&::-webkit-slider-thumb]:shadow-[0_0_0_1px_var(--border-strong),0_1px_3px_rgba(0,0,0,0.25)]
             [&::-moz-range-track]:h-[3px] [&::-moz-range-track]:bg-transparent
-            [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[var(--bg)] [&::-moz-range-thumb]:shadow-[0_0_0_1px_var(--border-strong),0_1px_3px_rgba(0,0,0,0.25)]`}
+            [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[var(--bg-panel)] [&::-moz-range-thumb]:shadow-[0_0_0_1px_var(--border-strong),0_1px_3px_rgba(0,0,0,0.25)]`}
         />
       </div>
       <NumField
@@ -614,7 +640,7 @@ export function Segmented({
   small?: boolean;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex h-[26px] w-full items-center gap-0.5 rounded-[5px] bg-[var(--fill-tsp)] p-px">
+    <div role="radiogroup" aria-label={label} className="flex h-[26px] w-full items-center gap-0.5 rounded-[5px] bg-[var(--bg-field)] p-px">
       {options.map((opt) => {
         const on = opt.value === value;
         const button = (
@@ -627,7 +653,7 @@ export function Segmented({
             onClick={() => { if (!on) onChange(opt.value); }}
             className={`flex h-6 min-w-0 flex-1 items-center justify-center truncate rounded-[4px] px-1 font-medium transition ${small ? 'text-[10.5px]' : 'text-[11px]'} ${
               on
-                ? 'bg-[var(--bg)] text-[var(--text)] shadow-[0_0_0_0.5px_var(--border-strong),0_1px_2px_rgba(0,0,0,0.06)]'
+                ? 'bg-[var(--bg-picked)] font-semibold text-[var(--accent)]'
                 : 'text-[var(--text-muted)] hover:text-[var(--text)]'
             }`}
           >

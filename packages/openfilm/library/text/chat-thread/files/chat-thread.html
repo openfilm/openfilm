@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Chat bubbles</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --me: #2f80ff; --them: #f1f1f4; --ink: #16171c; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 4vh; padding: 0 8vh; font-family: var(--font); }
+.b { max-width: 84%; font-size: 8.6vh; font-weight: 600; line-height: 1.25; padding: 3.4vh 5.4vh; border-radius: 6vh; white-space: pre; box-shadow: 0 1.6vh 4vh rgba(0, 0, 0, 0.25); animation: pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
+.l { align-self: flex-start; background: var(--them); color: var(--ink); border-bottom-left-radius: 1.4vh; transform-origin: 0 100%; }
+.r { align-self: flex-end; background: var(--me); color: #fff; border-bottom-right-radius: 1.4vh; transform-origin: 100% 100%; }
+.m1 { animation-delay: 0.1s; } .m2 { animation-delay: 0.7s; } .m3 { animation-delay: 1.75s; }
+.slot { display: grid; align-self: flex-start; }
+.slot > * { grid-area: 1 / 1; }
+.typing { align-self: flex-start; display: flex; gap: 1.8vh; padding: 4.4vh 5vh; background: var(--them); border-radius: 6vh; border-bottom-left-radius: 1.4vh; transform-origin: 0 100%; animation: pop 0.4s 1.2s cubic-bezier(0.3, 1.6, 0.5, 1) both, gone 0.15s 1.7s forwards; }
+.typing i { width: 2.6vh; height: 2.6vh; border-radius: 50%; background: #9a9ca5; animation: dot 0.8s ease-in-out infinite; }
+.typing i:nth-child(2) { animation-delay: 0.15s; } .typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes pop { from { opacity: 0; transform: scale(0.2); } }
+@keyframes gone { to { opacity: 0; transform: scale(0.6); } }
+@keyframes dot { 0%, 100% { transform: translateY(0); opacity: 0.5; } 40% { transform: translateY(-1.6vh); opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="b l m1">Are you awake?</div>
+  <div class="b r m2">Yes! Look outside</div>
+  <div class="slot"><div class="typing"><i></i><i></i><i></i></div><div class="b l m3">It's snowing!!</div></div>
+</div>
+<script>
+/*
+ * Chat messages popping in one by one from left and right, the last after a few typing dots. A page of OpenFilm's
+ * library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

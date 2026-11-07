@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Shine</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #fff2b0; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0 2vmin var(--color)); }
+.g { animation: g 1.6s cubic-bezier(.2, .8, .2, 1) infinite; }
+@keyframes g { 0% { transform: scale(0) rotate(-45deg); opacity: 1; } 22% { transform: scale(1.12) rotate(0deg); } 40% { transform: scale(0.95); opacity: 1; } 75% { transform: scale(0.75) rotate(10deg); opacity: 0.85; } 100% { transform: scale(0) rotate(20deg); opacity: 0; } }
+.f { animation: f 1.6s cubic-bezier(.2, .8, .2, 1) infinite; }
+@keyframes f { 0% { transform: scale(0, 1); opacity: 1; } 25% { transform: scale(1, 1); opacity: 1; } 70%, 100% { transform: scale(0.6, 0.5); opacity: 0; } }
+.r { fill: none; stroke: var(--color); stroke-width: 4; animation: r 1.6s cubic-bezier(.2, .8, .2, 1) infinite; }
+@keyframes r { 0% { transform: scale(0.2); opacity: 0; } 8% { opacity: 1; } 60%, 100% { transform: scale(1.5); opacity: 0; } }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 400 400">
+<defs>
+<radialGradient id="c"><stop offset="0" stop-color="#ffffff"/><stop offset="0.5" stop-color="#ffffff"/><stop offset="1" style="stop-color: var(--color)"/></radialGradient>
+<linearGradient id="fl"><stop offset="0" style="stop-color: var(--color)" stop-opacity="0"/><stop offset="0.5" stop-color="#ffffff"/><stop offset="1" style="stop-color: var(--color)" stop-opacity="0"/></linearGradient>
+</defs>
+<g transform="translate(200 200)">
+<circle class="r" r="90"/>
+<g class="f"><rect x="-190" y="-3" width="380" height="6" rx="3" fill="url(#fl)"/></g>
+<g transform="rotate(90)"><g class="f"><rect x="-150" y="-2.5" width="300" height="5" rx="2.5" fill="url(#fl)"/></g></g>
+<g class="g"><path d="M0 -110 C15.400000000000002 -15.400000000000002 15.400000000000002 -15.400000000000002 110 0 C15.400000000000002 15.400000000000002 15.400000000000002 15.400000000000002 0 110 C-15.400000000000002 15.400000000000002 -15.400000000000002 15.400000000000002 -110 0 C-15.400000000000002 -15.400000000000002 -15.400000000000002 -15.400000000000002 0 -110 Z" fill="url(#c)"/><g transform="rotate(45)"><path d="M0 -54 C8.64 -8.64 8.64 -8.64 54 0 C8.64 8.64 8.64 8.64 0 54 C-8.64 8.64 -8.64 8.64 -54 0 C-8.64 -8.64 -8.64 -8.64 0 -54 Z" fill="#ffffff" opacity="0.9"/></g></g>
+</g></svg>
+<script>
+/*
+ * A glint of light that flashes with long flares and a ring, again every second and a half. Its color is the clip's
+ * to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held
+ * at t by the host.
+ */
+window.film = { width: 400, height: 400, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

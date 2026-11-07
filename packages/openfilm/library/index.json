@@ -1,0 +1,3865 @@
+{
+ "version": 1,
+ "groups": {
+  "transition": [
+   {
+    "id": "fade",
+    "name": {
+     "en": "Dissolve",
+     "zh-CN": "叠化",
+     "ja": "ディゾルブ",
+     "ko": "디졸브",
+     "es": "Fundido"
+    }
+   },
+   {
+    "id": "camera",
+    "name": {
+     "en": "Camera moves",
+     "zh-CN": "运镜",
+     "ja": "カメラワーク",
+     "ko": "카메라 무브",
+     "es": "Movimientos de cámara"
+    }
+   },
+   {
+    "id": "slide",
+    "name": {
+     "en": "Slides",
+     "zh-CN": "幻灯片",
+     "ja": "スライド",
+     "ko": "슬라이드",
+     "es": "Diapositivas"
+    }
+   },
+   {
+    "id": "mask",
+    "name": {
+     "en": "Masks",
+     "zh-CN": "遮罩",
+     "ja": "マスク",
+     "ko": "마스크",
+     "es": "Máscaras"
+    }
+   },
+   {
+    "id": "blur",
+    "name": {
+     "en": "Blur",
+     "zh-CN": "模糊",
+     "ja": "ブラー",
+     "ko": "블러",
+     "es": "Desenfoque"
+    }
+   },
+   {
+    "id": "light",
+    "name": {
+     "en": "Light",
+     "zh-CN": "光效",
+     "ja": "光",
+     "ko": "빛",
+     "es": "Luz"
+    }
+   },
+   {
+    "id": "cover",
+    "name": {
+     "en": "Cover",
+     "zh-CN": "遮挡",
+     "ja": "カバー",
+     "ko": "가림",
+     "es": "Cubrir"
+    }
+   },
+   {
+    "id": "shape",
+    "name": {
+     "en": "Shapes",
+     "zh-CN": "形状",
+     "ja": "形",
+     "ko": "도형",
+     "es": "Formas"
+    }
+   },
+   {
+    "id": "glitch",
+    "name": {
+     "en": "Glitch",
+     "zh-CN": "故障",
+     "ja": "グリッチ",
+     "ko": "글리치",
+     "es": "Fallo"
+    }
+   }
+  ],
+  "effect": [
+   {
+    "id": "texture",
+    "name": {
+     "en": "Texture",
+     "zh-CN": "纹理",
+     "ja": "テクスチャ",
+     "ko": "질감",
+     "es": "Textura"
+    }
+   },
+   {
+    "id": "light",
+    "name": {
+     "en": "Light",
+     "zh-CN": "光效",
+     "ja": "光",
+     "ko": "빛",
+     "es": "Luz"
+    }
+   },
+   {
+    "id": "ambience",
+    "name": {
+     "en": "Ambience",
+     "zh-CN": "氛围",
+     "ja": "雰囲気",
+     "ko": "분위기",
+     "es": "Ambiente"
+    }
+   },
+   {
+    "id": "rhythm",
+    "name": {
+     "en": "Rhythm",
+     "zh-CN": "节奏",
+     "ja": "リズム",
+     "ko": "리듬",
+     "es": "Ritmo"
+    }
+   },
+   {
+    "id": "frame",
+    "name": {
+     "en": "Frames",
+     "zh-CN": "边框",
+     "ja": "フレーム",
+     "ko": "프레임",
+     "es": "Marcos"
+    }
+   },
+   {
+    "id": "retro",
+    "name": {
+     "en": "Retro",
+     "zh-CN": "复古",
+     "ja": "レトロ",
+     "ko": "레트로",
+     "es": "Retro"
+    }
+   }
+  ],
+  "text": [
+   {
+    "id": "basic",
+    "name": {
+     "en": "Basic",
+     "zh-CN": "基础",
+     "ja": "ベーシック",
+     "ko": "기본",
+     "es": "Básico"
+    }
+   },
+   {
+    "id": "wordart",
+    "name": {
+     "en": "Word art",
+     "zh-CN": "花字",
+     "ja": "デコ文字",
+     "ko": "꾸밈 글자",
+     "es": "Texto artístico"
+    }
+   },
+   {
+    "id": "in",
+    "name": {
+     "en": "In",
+     "zh-CN": "入场动画",
+     "ja": "イン",
+     "ko": "등장",
+     "es": "Entrada"
+    }
+   },
+   {
+    "id": "loop",
+    "name": {
+     "en": "Loop",
+     "zh-CN": "循环动画",
+     "ja": "ループ",
+     "ko": "반복",
+     "es": "Bucle"
+    }
+   },
+   {
+    "id": "out",
+    "name": {
+     "en": "Out",
+     "zh-CN": "出场动画",
+     "ja": "アウト",
+     "ko": "퇴장",
+     "es": "Salida"
+    }
+   },
+   {
+    "id": "title",
+    "name": {
+     "en": "Titles",
+     "zh-CN": "标题",
+     "ja": "タイトル",
+     "ko": "타이틀",
+     "es": "Títulos"
+    }
+   },
+   {
+    "id": "lower",
+    "name": {
+     "en": "Names and places",
+     "zh-CN": "人名地点",
+     "ja": "名前と場所",
+     "ko": "이름과 장소",
+     "es": "Nombres y lugares"
+    }
+   },
+   {
+    "id": "badge",
+    "name": {
+     "en": "Badges",
+     "zh-CN": "贴纸字",
+     "ja": "バッジ",
+     "ko": "배지",
+     "es": "Insignias"
+    }
+   },
+   {
+    "id": "data",
+    "name": {
+     "en": "Numbers",
+     "zh-CN": "数据",
+     "ja": "数字",
+     "ko": "숫자",
+     "es": "Números"
+    }
+   },
+   {
+    "id": "caption",
+    "name": {
+     "en": "Captions",
+     "zh-CN": "字幕",
+     "ja": "字幕",
+     "ko": "자막",
+     "es": "Subtítulos"
+    }
+   }
+  ],
+  "sticker": [
+   {
+    "id": "animated",
+    "name": {
+     "en": "Animated",
+     "zh-CN": "动态",
+     "ja": "アニメーション",
+     "ko": "움직이는",
+     "es": "Animados"
+    }
+   }
+  ],
+  "sound": [
+   {
+    "id": "transition",
+    "name": {
+     "en": "Transitions",
+     "zh-CN": "转场",
+     "ja": "トランジション",
+     "ko": "전환",
+     "es": "Transiciones"
+    }
+   },
+   {
+    "id": "ui",
+    "name": {
+     "en": "Interface",
+     "zh-CN": "界面",
+     "ja": "インターフェース",
+     "ko": "인터페이스",
+     "es": "Interfaz"
+    }
+   },
+   {
+    "id": "impact",
+    "name": {
+     "en": "Impacts",
+     "zh-CN": "打击",
+     "ja": "インパクト",
+     "ko": "타격",
+     "es": "Impactos"
+    }
+   },
+   {
+    "id": "ambience",
+    "name": {
+     "en": "Ambience",
+     "zh-CN": "环境",
+     "ja": "環境音",
+     "ko": "환경음",
+     "es": "Ambiente"
+    }
+   }
+  ]
+ },
+ "items": [
+  {
+   "id": "transitions/dissolve",
+   "cat": "transition",
+   "group": "fade",
+   "name": {
+    "en": "Cross dissolve",
+    "zh-CN": "叠化",
+    "ja": "クロスディゾルブ",
+    "ko": "크로스 디졸브",
+    "es": "Fundido encadenado"
+   },
+   "kind": "fade",
+   "fade": "dissolve",
+   "about": "The first shot fades into the second while both overlap briefly. For gentle, neutral cuts in any film, vlog or interview.",
+   "tags": [
+    "fade",
+    "soft",
+    "calm",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/dip-black",
+   "cat": "transition",
+   "group": "fade",
+   "name": {
+    "en": "Dip to black",
+    "zh-CN": "闪黑",
+    "ja": "黒にフェード",
+    "ko": "검은색으로",
+    "es": "Fundido a negro"
+   },
+   "kind": "fade",
+   "fade": "dip-black",
+   "about": "The picture fades down to black, then the next shot fades up from black. For scene endings, time jumps and solemn moments.",
+   "tags": [
+    "fade",
+    "dark",
+    "solemn",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/dip-white",
+   "cat": "transition",
+   "group": "fade",
+   "name": {
+    "en": "Dip to white",
+    "zh-CN": "闪白",
+    "ja": "白にフェード",
+    "ko": "흰색으로",
+    "es": "Fundido a blanco"
+   },
+   "kind": "fade",
+   "fade": "dip-white",
+   "about": "The picture washes out to white, then the next shot fades in from white. For bright, dreamy or memory-like scene changes.",
+   "tags": [
+    "fade",
+    "dreamy",
+    "light",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/light-sweep",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Light sweep",
+    "zh-CN": "光斑扫过",
+    "ja": "光のスイープ",
+    "ko": "빛 스윕",
+    "es": "Barrido de luz"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "light-sweep.html",
+   "about": "A warm orange-white glow sweeps left to right across the frame, brightest at the cut. For warm, golden cuts in travel or lifestyle videos.",
+   "tags": [
+    "light",
+    "warm-tone",
+    "slide",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/flare",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Flare",
+    "zh-CN": "镜头光晕",
+    "ja": "フレア",
+    "ko": "플레어",
+    "es": "Destello"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "flare.html",
+   "about": "A white-yellow burst of light grows from the center and whites out the cut. For energetic cuts on a beat or in a launch film.",
+   "tags": [
+    "light",
+    "intense",
+    "zoom",
+    "transition",
+    "trailer"
+   ]
+  },
+  {
+   "id": "transitions/film-burn",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Film burn",
+    "zh-CN": "胶片烧灼",
+    "ja": "フィルムバーン",
+    "ko": "필름 번",
+    "es": "Película quemada"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "film-burn.html",
+   "about": "An orange overexposed band runs across the frame like burnt film, hiding the cut. For nostalgic or analog-style cuts.",
+   "tags": [
+    "film",
+    "light",
+    "warm-tone",
+    "nostalgic",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/wipe",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Color wipe",
+    "zh-CN": "色块擦除",
+    "ja": "カラーワイプ",
+    "ko": "컬러 와이프",
+    "es": "Barrido de color"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "wipe.html",
+   "about": "A flat off-white panel slides in from the left, covers the frame and exits right; the cut happens behind it. For clean, graphic cuts.",
+   "tags": [
+    "wipe",
+    "slide",
+    "minimal",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/shutter",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Shutter",
+    "zh-CN": "快门",
+    "ja": "シャッター",
+    "ko": "셔터",
+    "es": "Obturador"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "shutter.html",
+   "about": "Black bars close from top and bottom to meet in the middle, then open onto the next shot. For crisp, cinematic scene changes.",
+   "tags": [
+    "wipe",
+    "cinematic-look",
+    "dark",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/iris",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Iris",
+    "zh-CN": "圆形收缩",
+    "ja": "アイリス",
+    "ko": "아이리스",
+    "es": "Iris"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "iris.html",
+   "about": "A black circle closes in on the center of the frame, then opens again on the next shot. For classic, playful scene changes.",
+   "tags": [
+    "wipe",
+    "shapes",
+    "playful",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/blinds",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Blinds",
+    "zh-CN": "百叶窗",
+    "ja": "ブラインド",
+    "ko": "블라인드",
+    "es": "Persianas"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "blinds.html",
+   "about": "Vertical black stripes widen like window blinds until the frame is covered, then open again. For stylish scene changes.",
+   "tags": [
+    "wipe",
+    "split",
+    "shapes",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/ink",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Ink",
+    "zh-CN": "墨迹晕开",
+    "ja": "インク",
+    "ko": "잉크",
+    "es": "Tinta"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "ink.html",
+   "about": "Black ink blots spread from the middle and swallow the frame, then lift away over the next shot. For dramatic, artistic cuts.",
+   "tags": [
+    "ink",
+    "dark",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/heart",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Heart",
+    "zh-CN": "爱心",
+    "ja": "ハート",
+    "ko": "하트",
+    "es": "Corazón"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "heart.html",
+   "about": "A pink heart grows from the center until it fills the screen, then fades. For romantic, cute or wedding cuts.",
+   "tags": [
+    "cute",
+    "romantic",
+    "shapes",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/star",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Star",
+    "zh-CN": "星星",
+    "ja": "星",
+    "ko": "별",
+    "es": "Estrella"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 800,
+   "src": "star.html",
+   "about": "A yellow star spins out from the center, covers the frame, then fades. For fun, celebratory or kids' cuts.",
+   "tags": [
+    "shapes",
+    "playful",
+    "spin",
+    "celebration",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/glitch",
+   "cat": "transition",
+   "group": "glitch",
+   "name": {
+    "en": "Glitch",
+    "zh-CN": "信号故障",
+    "ja": "グリッチ",
+    "ko": "글리치",
+    "es": "Fallo"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 600,
+   "src": "glitch.html",
+   "about": "Pink and cyan bars with a dark frame jump sideways for a moment, like a broken signal. For techy, fast cuts.",
+   "tags": [
+    "glitch",
+    "intense",
+    "shake",
+    "tech",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/static",
+   "cat": "transition",
+   "group": "glitch",
+   "name": {
+    "en": "TV static",
+    "zh-CN": "雪花噪点",
+    "ja": "砂嵐",
+    "ko": "TV 노이즈",
+    "es": "Estática"
+   },
+   "place": "cut",
+   "kind": "page",
+   "durationMs": 600,
+   "src": "static.html",
+   "about": "A short burst of grey TV noise flickers over the frame and hides the cut. For retro, horror or channel-change cuts.",
+   "tags": [
+    "retro",
+    "tense",
+    "glitch",
+    "transition"
+   ]
+  },
+  {
+   "id": "effects/grain",
+   "cat": "effect",
+   "group": "texture",
+   "name": {
+    "en": "Film grain",
+    "zh-CN": "胶片颗粒",
+    "ja": "フィルムグレイン",
+    "ko": "필름 그레인",
+    "es": "Grano de película"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "grain.html",
+   "about": "A moving film-grain noise lies over the whole picture and changes every frame. For an analog, filmic texture on any shot.",
+   "tags": [
+    "film",
+    "retro",
+    "cinematic-look"
+   ]
+  },
+  {
+   "id": "effects/vignette",
+   "cat": "effect",
+   "group": "texture",
+   "name": {
+    "en": "Vignette",
+    "zh-CN": "暗角",
+    "ja": "ビネット",
+    "ko": "비네팅",
+    "es": "Viñeta"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "vignette.html",
+   "about": "The corners of the picture are darkened toward black, with a clear center. For drawing the eye to the middle and a moodier look.",
+   "tags": [
+    "cinematic-look",
+    "dark",
+    "minimal"
+   ]
+  },
+  {
+   "id": "effects/scratches",
+   "cat": "effect",
+   "group": "texture",
+   "name": {
+    "en": "Old film",
+    "zh-CN": "老电影划痕",
+    "ja": "古いフィルム",
+    "ko": "오래된 필름",
+    "es": "Película antigua"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "scratches.html",
+   "about": "Thin white and dark vertical scratches jump across the picture, with a faint flicker. For old-film or silent-movie looks.",
+   "tags": [
+    "film",
+    "retro",
+    "nostalgic"
+   ]
+  },
+  {
+   "id": "effects/scanlines",
+   "cat": "effect",
+   "group": "texture",
+   "name": {
+    "en": "Scan lines",
+    "zh-CN": "扫描线",
+    "ja": "走査線",
+    "ko": "스캔 라인",
+    "es": "Líneas de barrido"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "scanlines.html",
+   "about": "Fine dark horizontal lines run across the whole frame, like an old screen. For retro monitor, CRT or sci-fi looks.",
+   "tags": [
+    "retro",
+    "hud",
+    "tech"
+   ]
+  },
+  {
+   "id": "effects/light-leak",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Light leak",
+    "zh-CN": "漏光",
+    "ja": "ライトリーク",
+    "ko": "빛 번짐",
+    "es": "Fuga de luz"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "light-leak.html",
+   "about": "Warm orange and pink light drifts in from the left and right edges, pulsing slowly. For warm, nostalgic or dreamy footage.",
+   "tags": [
+    "light",
+    "warm-tone",
+    "dreamy",
+    "nostalgic"
+   ]
+  },
+  {
+   "id": "effects/lens-flare",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Lens flare",
+    "zh-CN": "镜头光斑",
+    "ja": "レンズフレア",
+    "ko": "렌즈 플레어",
+    "es": "Destello de lente"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "lens-flare.html",
+   "about": "A bright sun-like flare sits in the top-right corner with faint colored spots, breathing slowly. For sunny, cinematic shots.",
+   "tags": [
+    "light",
+    "cinematic-look",
+    "warm"
+   ]
+  },
+  {
+   "id": "effects/light-rays",
+   "cat": "effect",
+   "group": "light",
+   "name": {
+    "en": "Light rays",
+    "zh-CN": "丁达尔光",
+    "ja": "光芒",
+    "ko": "빛줄기",
+    "es": "Rayos de luz"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "light-rays.html",
+   "about": "Soft pale rays fall from the top-left corner and slowly brighten and fade. For sunlight through trees, windows or a hopeful mood.",
+   "tags": [
+    "light",
+    "uplifting",
+    "calm",
+    "nature"
+   ]
+  },
+  {
+   "id": "effects/snow",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Snow",
+    "zh-CN": "下雪",
+    "ja": "雪",
+    "ko": "눈",
+    "es": "Nieve"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "snow.html",
+   "about": "White snowflakes of three sizes fall and sway, the near ones larger and blurred. For winter, holiday or calm scenes.",
+   "tags": [
+    "weather-fx",
+    "particles",
+    "calm",
+    "holiday"
+   ]
+  },
+  {
+   "id": "effects/rain",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Rain",
+    "zh-CN": "下雨",
+    "ja": "雨",
+    "ko": "비",
+    "es": "Lluvia"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "rain.html",
+   "about": "Thin pale streaks fall fast at a slant across the frame. For rainy, sad or moody scenes.",
+   "tags": [
+    "weather-fx",
+    "sad",
+    "calm",
+    "weather"
+   ]
+  },
+  {
+   "id": "effects/sparkles",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Sparkles",
+    "zh-CN": "星光闪烁",
+    "ja": "きらめき",
+    "ko": "반짝임",
+    "es": "Destellos"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "sparkles.html",
+   "about": "Small pale-yellow four-pointed stars twinkle here and there across the frame. For magic, glamour or celebration.",
+   "tags": [
+    "particles",
+    "dreamy",
+    "celebration",
+    "cute"
+   ]
+  },
+  {
+   "id": "effects/confetti",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Confetti",
+    "zh-CN": "彩带",
+    "ja": "紙吹雪",
+    "ko": "색종이",
+    "es": "Confeti"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "confetti.html",
+   "about": "Many small colored paper pieces tumble down the screen. For parties, wins, birthdays and announcements.",
+   "tags": [
+    "celebration",
+    "particles",
+    "happy",
+    "success"
+   ]
+  },
+  {
+   "id": "effects/petals",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Petals",
+    "zh-CN": "樱花",
+    "ja": "桜吹雪",
+    "ko": "벚꽃",
+    "es": "Pétalos"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "petals.html",
+   "about": "Pink cherry blossom petals drift down and sideways across the frame. For spring, romance, weddings and Asian-style scenes.",
+   "tags": [
+    "particles",
+    "romantic",
+    "soft",
+    "nature"
+   ]
+  },
+  {
+   "id": "effects/bubbles",
+   "cat": "effect",
+   "group": "ambience",
+   "name": {
+    "en": "Bubbles",
+    "zh-CN": "气泡",
+    "ja": "泡",
+    "ko": "거품",
+    "es": "Burbujas"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "bubbles.html",
+   "about": "Clear round bubbles with white highlights rise from the bottom of the frame. For underwater, kids and playful scenes.",
+   "tags": [
+    "particles",
+    "playful",
+    "dreamy",
+    "kids"
+   ]
+  },
+  {
+   "id": "effects/flash",
+   "cat": "effect",
+   "group": "rhythm",
+   "name": {
+    "en": "Flash",
+    "zh-CN": "闪白",
+    "ja": "フラッシュ",
+    "ko": "플래시",
+    "es": "Destello"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "flash.html",
+   "about": "A white flash at the start that fades out in about half a second. For hits on a beat, camera flashes and sudden accents.",
+   "tags": [
+    "light",
+    "intense",
+    "camera"
+   ]
+  },
+  {
+   "id": "effects/heartbeat",
+   "cat": "effect",
+   "group": "rhythm",
+   "name": {
+    "en": "Heartbeat",
+    "zh-CN": "心跳",
+    "ja": "鼓動",
+    "ko": "심장 박동",
+    "es": "Latido"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "heartbeat.html",
+   "about": "The screen edges glow red and pulse twice a second, like a heartbeat. For tension, love, fear or a racing pulse.",
+   "tags": [
+    "light",
+    "tense",
+    "heartbeat",
+    "romantic"
+   ]
+  },
+  {
+   "id": "effects/glitch",
+   "cat": "effect",
+   "group": "rhythm",
+   "name": {
+    "en": "Glitch",
+    "zh-CN": "信号故障",
+    "ja": "グリッチ",
+    "ko": "글리치",
+    "es": "Fallo"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "glitch.html",
+   "about": "Pink and cyan bars jump across the picture now and then, like a broken signal. For tech, hacking or distorted moments.",
+   "tags": [
+    "glitch",
+    "tense",
+    "tech"
+   ]
+  },
+  {
+   "id": "effects/letterbox",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Letterbox",
+    "zh-CN": "宽银幕",
+    "ja": "シネスコ",
+    "ko": "시네마 바",
+    "es": "Formato cine"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "letterbox.html",
+   "about": "Black bars sit at the top and bottom of the frame for a wide cinema shape. For a movie look in trailers and film scenes.",
+   "tags": [
+    "frame",
+    "cinematic-look",
+    "trailer"
+   ]
+  },
+  {
+   "id": "effects/polaroid",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Instant photo",
+    "zh-CN": "拍立得",
+    "ja": "インスタント写真",
+    "ko": "즉석 사진",
+    "es": "Foto instantánea"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "polaroid.html",
+   "about": "A cream instant-photo border surrounds the picture, thicker at the bottom. For memories, snapshots and travel photos.",
+   "tags": [
+    "frame",
+    "nostalgic",
+    "retro",
+    "travel"
+   ]
+  },
+  {
+   "id": "effects/film-strip",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Film strip",
+    "zh-CN": "胶片边框",
+    "ja": "フィルム枠",
+    "ko": "필름 프레임",
+    "es": "Tira de película"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "film-strip.html",
+   "about": "Dark edges with light sprocket holes run down both sides, like a strip of film. For memories, old movies and slideshows.",
+   "tags": [
+    "film",
+    "frame",
+    "retro",
+    "nostalgic"
+   ]
+  },
+  {
+   "id": "effects/viewfinder",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Camera viewfinder",
+    "zh-CN": "取景框 REC",
+    "ja": "ファインダー",
+    "ko": "뷰파인더",
+    "es": "Visor de cámara"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "viewfinder.html",
+   "about": "White corner marks frame the picture, with a blinking red dot and REC at the top left. For camcorder, found-footage and vlog looks.",
+   "tags": [
+    "frame",
+    "retro",
+    "vlog",
+    "hud"
+   ]
+  },
+  {
+   "id": "effects/neon-frame",
+   "cat": "effect",
+   "group": "frame",
+   "name": {
+    "en": "Neon frame",
+    "zh-CN": "霓虹边框",
+    "ja": "ネオン枠",
+    "ko": "네온 테두리",
+    "es": "Marco de neón"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "neon-frame.html",
+   "about": "A glowing magenta neon tube outlines the picture and flickers now and then. For nightlife, music and cyberpunk looks.",
+   "tags": [
+    "neon",
+    "frame",
+    "night"
+   ]
+  },
+  {
+   "id": "effects/vhs",
+   "cat": "effect",
+   "group": "retro",
+   "name": {
+    "en": "VHS",
+    "zh-CN": "VHS 录像带",
+    "ja": "VHS",
+    "ko": "VHS",
+    "es": "VHS"
+   },
+   "kind": "page",
+   "durationMs": 4000,
+   "src": "vhs.html",
+   "about": "Scan lines, a PLAY mark, a date stamp and a soft band rolling down the screen, like a VHS tape. For retro, home-video looks.",
+   "tags": [
+    "retro",
+    "nostalgic",
+    "film"
+   ]
+  },
+  {
+   "id": "text/text",
+   "cat": "text",
+   "group": "basic",
+   "name": {
+    "en": "Default text",
+    "zh-CN": "默认文本",
+    "ja": "デフォルトテキスト",
+    "ko": "기본 텍스트",
+    "es": "Texto"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "text.html",
+   "w": 1600,
+   "h": 260,
+   "fit": 0.14,
+   "about": "A single line of words whose font, size, color, style, entrance, loop and exit can all be changed. For any title, caption or label.",
+   "tags": [
+    "title",
+    "subtitle",
+    "minimal"
+   ]
+  },
+  {
+   "id": "text/looks/title",
+   "cat": "text",
+   "group": "basic",
+   "name": {
+    "en": "Title",
+    "zh-CN": "标题",
+    "ja": "タイトル",
+    "ko": "제목",
+    "es": "Título"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "900",
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif"
+   },
+   "w": 1600,
+   "h": 260,
+   "fit": 0.2,
+   "about": "Extra-heavy rounded headline lettering in the default color. For large titles and headlines.",
+   "tags": [
+    "title",
+    "confident"
+   ]
+  },
+  {
+   "id": "text/looks/subtitle",
+   "cat": "text",
+   "group": "basic",
+   "name": {
+    "en": "Subtitle",
+    "zh-CN": "副标题",
+    "ja": "サブタイトル",
+    "ko": "부제목",
+    "es": "Subtítulo"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "700"
+   },
+   "w": 1600,
+   "h": 260,
+   "fit": 0.11,
+   "about": "Bold, plain text for secondary lines. For subtitles and supporting lines under a title.",
+   "tags": [
+    "subtitle",
+    "minimal"
+   ]
+  },
+  {
+   "id": "text/looks/body",
+   "cat": "text",
+   "group": "basic",
+   "name": {
+    "en": "Body",
+    "zh-CN": "正文",
+    "ja": "本文",
+    "ko": "본문",
+    "es": "Cuerpo"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "500",
+    "--in": "fade"
+   },
+   "w": 1600,
+   "h": 260,
+   "fit": 0.08,
+   "about": "Medium-weight plain text that fades in. For body copy and everyday captions.",
+   "tags": [
+    "subtitle",
+    "minimal",
+    "soft"
+   ]
+  },
+  {
+   "id": "text/looks/note",
+   "cat": "text",
+   "group": "basic",
+   "name": {
+    "en": "Note",
+    "zh-CN": "注释",
+    "ja": "注釈",
+    "ko": "주석",
+    "es": "Nota"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--size": "52vh",
+    "--weight": "500",
+    "--box": "rgba(0,0,0,0.55)",
+    "--box-pad": "0.35em 0.7em",
+    "--box-radius": "0.3em",
+    "--in": "fade"
+   },
+   "w": 1600,
+   "h": 260,
+   "fit": 0.08,
+   "about": "Smaller medium text on a dark semi-transparent rounded box, fading in. For notes, tips and small captions over busy footage.",
+   "tags": [
+    "subtitle",
+    "minimal"
+   ]
+  },
+  {
+   "id": "text/looks/lower",
+   "cat": "text",
+   "group": "basic",
+   "name": {
+    "en": "Line below",
+    "zh-CN": "下方字幕",
+    "ja": "下部テロップ",
+    "ko": "하단 자막",
+    "es": "Rótulo inferior"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "600",
+    "--stroke": "0.08em",
+    "--in": "fade"
+   },
+   "w": 1600,
+   "h": 260,
+   "fit": 0.08,
+   "low": true,
+   "about": "Semi-bold text with a thin dark outline, fading in. For readable subtitles over any footage.",
+   "tags": [
+    "subtitle",
+    "minimal",
+    "lowerthird"
+   ]
+  },
+  {
+   "id": "text/looks/white-black",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "White on black edge",
+    "zh-CN": "白字黑边",
+    "ja": "白文字黒フチ",
+    "ko": "흰 글자 검은 테두리",
+    "es": "Blanco con borde"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--stroke": "0.12em",
+    "--stroke-color": "#111"
+   },
+   "about": "White letters with a thick near-black outline. For readable subtitles and captions over any footage.",
+   "tags": [
+    "subtitle",
+    "title",
+    "minimal"
+   ]
+  },
+  {
+   "id": "text/looks/yellow-variety",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Variety yellow",
+    "zh-CN": "综艺黄字",
+    "ja": "バラエティ黄",
+    "ko": "예능 노랑",
+    "es": "Amarillo show"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "#ffd400",
+    "--stroke": "0.14em",
+    "--stroke-color": "#151515",
+    "--shadow": "0.07em 0.09em 0 #151515"
+   },
+   "about": "Yellow rounded letters with a thick black outline and a hard black drop shadow, in a variety-show style. For loud, fun captions.",
+   "tags": [
+    "title",
+    "subtitle",
+    "comic",
+    "playful",
+    "vivid"
+   ]
+  },
+  {
+   "id": "text/looks/variety-pink",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Variety pink",
+    "zh-CN": "综艺粉字",
+    "ja": "バラエティピンク",
+    "ko": "예능 핑크",
+    "es": "Rosa show"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'ZCOOL KuaiLe', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--weight": "400",
+    "--color": "#ffffff",
+    "--stroke": "0.16em",
+    "--stroke-color": "#ff3d7f",
+    "--shadow": "0 0.1em 0 #9e0040"
+   },
+   "about": "White bubbly letters with a thick pink outline and dark-pink shadow, in a variety-show style. For cute, lively captions.",
+   "tags": [
+    "title",
+    "cute",
+    "playful",
+    "pastel"
+   ]
+  },
+  {
+   "id": "text/looks/candy",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Candy",
+    "zh-CN": "糖果字",
+    "ja": "キャンディ",
+    "ko": "캔디",
+    "es": "Caramelo"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'ZCOOL KuaiLe', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--weight": "400",
+    "--color": "transparent",
+    "--fill": "linear-gradient(180deg, #ffffff 35%, #ffe08a 80%)",
+    "--glow": "drop-shadow(0.05em 0em 0 #ff8a00) drop-shadow(-0.05em 0em 0 #ff8a00) drop-shadow(0em 0.05em 0 #ff8a00) drop-shadow(0em -0.05em 0 #ff8a00) drop-shadow(0.04em 0em 0 #ff8a00) drop-shadow(-0.04em 0em 0 #ff8a00) drop-shadow(0em 0.04em 0 #ff8a00) drop-shadow(0em -0.04em 0 #ff8a00) drop-shadow(0 0.09em 0 #c24e00)"
+   },
+   "about": "White-to-cream bubbly letters with a thick orange outline and a darker orange base. For sweet, cheerful titles.",
+   "tags": [
+    "title",
+    "playful",
+    "vivid",
+    "kids"
+   ]
+  },
+  {
+   "id": "text/looks/comic",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Comic",
+    "zh-CN": "漫画字",
+    "ja": "コミック",
+    "ko": "코믹",
+    "es": "Cómic"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'ZCOOL KuaiLe', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--weight": "400",
+    "--color": "#ffeb3b",
+    "--stroke": "0.12em",
+    "--stroke-color": "#111",
+    "--shadow": "0.09em 0.09em 0 #e53935"
+   },
+   "about": "Yellow bubbly letters with a thick black outline and a red offset shadow. For comic, joking and funny captions.",
+   "tags": [
+    "title",
+    "comic",
+    "comedy",
+    "playful"
+   ]
+  },
+  {
+   "id": "text/looks/cute-pink",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Cute pink",
+    "zh-CN": "可爱粉",
+    "ja": "かわいいピンク",
+    "ko": "귀여운 핑크",
+    "es": "Rosa tierno"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'ZCOOL KuaiLe', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--weight": "400",
+    "--color": "#ffffff",
+    "--stroke": "0.13em",
+    "--stroke-color": "#ff7eb6",
+    "--shadow": "0 0.08em 0 #e05597"
+   },
+   "about": "White bubbly letters with a soft pink outline and pink shadow. For cute, girlish and sweet captions.",
+   "tags": [
+    "title",
+    "cute",
+    "pastel",
+    "playful"
+   ]
+  },
+  {
+   "id": "text/looks/mint",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Mint",
+    "zh-CN": "薄荷",
+    "ja": "ミント",
+    "ko": "민트",
+    "es": "Menta"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'ZCOOL KuaiLe', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--weight": "400",
+    "--color": "#ffffff",
+    "--stroke": "0.13em",
+    "--stroke-color": "#2ec4a0",
+    "--shadow": "0 0.08em 0 #13866b"
+   },
+   "about": "White bubbly letters with a mint-green outline and deep-green shadow. For fresh, light and cute captions.",
+   "tags": [
+    "title",
+    "cute",
+    "pastel",
+    "playful"
+   ]
+  },
+  {
+   "id": "text/looks/neon-pink",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Neon pink",
+    "zh-CN": "霓虹粉",
+    "ja": "ネオンピンク",
+    "ko": "네온 핑크",
+    "es": "Neón rosa"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "700",
+    "--color": "#fff0fb",
+    "--glow": "drop-shadow(0 0 0.06em #ff2fd0) drop-shadow(0 0 0.25em #ff2fd0)"
+   },
+   "about": "Near-white letters with a hot pink neon glow. For nightlife, music and cyberpunk titles.",
+   "tags": [
+    "title",
+    "neon",
+    "night"
+   ]
+  },
+  {
+   "id": "text/looks/neon-cyan",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Neon cyan",
+    "zh-CN": "霓虹青",
+    "ja": "ネオンシアン",
+    "ko": "네온 시안",
+    "es": "Neón cian"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "700",
+    "--color": "#effffe",
+    "--glow": "drop-shadow(0 0 0.06em #19e3ff) drop-shadow(0 0 0.25em #19e3ff)"
+   },
+   "about": "Near-white letters with a cyan neon glow. For tech, night and cyberpunk titles.",
+   "tags": [
+    "title",
+    "neon",
+    "night"
+   ]
+  },
+  {
+   "id": "text/looks/neon-yellow",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Neon yellow",
+    "zh-CN": "霓虹黄",
+    "ja": "ネオンイエロー",
+    "ko": "네온 옐로",
+    "es": "Neón amarillo"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "700",
+    "--color": "#fffbe0",
+    "--glow": "drop-shadow(0 0 0.06em #ffd21f) drop-shadow(0 0 0.25em #ff9d00)"
+   },
+   "about": "Pale yellow letters with a yellow-orange neon glow. For nightlife, retro signs and lively titles.",
+   "tags": [
+    "title",
+    "neon",
+    "night"
+   ]
+  },
+  {
+   "id": "text/looks/gold",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Gold",
+    "zh-CN": "鎏金",
+    "ja": "ゴールド",
+    "ko": "골드",
+    "es": "Oro"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "transparent",
+    "--fill": "linear-gradient(180deg, #fff7cc 0%, #f2c14e 45%, #9a6a12 52%, #f6d784 100%)",
+    "--stroke": "0.03em",
+    "--stroke-color": "#5a3a00",
+    "--glow": "drop-shadow(0 0.04em 0.06em rgba(0,0,0,0.55))"
+   },
+   "about": "Letters with a shiny gold metallic gradient, a dark brown edge and a soft shadow. For awards, luxury and celebration titles.",
+   "tags": [
+    "title",
+    "elegant",
+    "celebration",
+    "success"
+   ]
+  },
+  {
+   "id": "text/looks/silver",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Silver",
+    "zh-CN": "银色",
+    "ja": "シルバー",
+    "ko": "실버",
+    "es": "Plata"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "transparent",
+    "--fill": "linear-gradient(180deg, #ffffff 0%, #c9d1d9 45%, #6b7480 52%, #e8edf2 100%)",
+    "--stroke": "0.03em",
+    "--stroke-color": "#2d333b",
+    "--glow": "drop-shadow(0 0.04em 0.06em rgba(0,0,0,0.55))"
+   },
+   "about": "Letters with a shiny silver metallic gradient, a dark edge and a soft shadow. For premium, tech and award titles.",
+   "tags": [
+    "title",
+    "elegant",
+    "tech"
+   ]
+  },
+  {
+   "id": "text/looks/sunset",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Sunset",
+    "zh-CN": "日落渐变",
+    "ja": "サンセット",
+    "ko": "선셋",
+    "es": "Atardecer"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "transparent",
+    "--fill": "linear-gradient(90deg, #ffb35c, #ff4d8d 55%, #8a5cff)"
+   },
+   "about": "Letters filled with an orange-to-pink-to-purple gradient. For warm, dreamy titles and travel videos.",
+   "tags": [
+    "title",
+    "vivid",
+    "warm-tone",
+    "dreamy"
+   ]
+  },
+  {
+   "id": "text/looks/ocean",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Ocean",
+    "zh-CN": "海洋渐变",
+    "ja": "オーシャン",
+    "ko": "오션",
+    "es": "Océano"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "transparent",
+    "--fill": "linear-gradient(90deg, #7cf6ff, #2f8cff 60%, #5b3cff)"
+   },
+   "about": "Letters filled with a cyan-to-blue-to-violet gradient. For cool, fresh titles on water, tech or travel topics.",
+   "tags": [
+    "title",
+    "cool-tone",
+    "vivid",
+    "tech"
+   ]
+  },
+  {
+   "id": "text/looks/aurora",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Aurora",
+    "zh-CN": "极光",
+    "ja": "オーロラ",
+    "ko": "오로라",
+    "es": "Aurora"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "transparent",
+    "--fill": "linear-gradient(90deg, #8affc1, #5ad1ff 50%, #c08bff)",
+    "--glow": "drop-shadow(0 0 0.15em rgba(120,220,255,0.6))"
+   },
+   "about": "Letters filled with a green-to-blue-to-lilac gradient and a soft cyan glow. For dreamy, magical or night-sky titles.",
+   "tags": [
+    "title",
+    "dreamy",
+    "cool-tone",
+    "vivid"
+   ]
+  },
+  {
+   "id": "text/looks/fire",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Fire",
+    "zh-CN": "火焰",
+    "ja": "ファイア",
+    "ko": "불꽃",
+    "es": "Fuego"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "transparent",
+    "--fill": "linear-gradient(0deg, #ff3d00, #ffb300 55%, #fff59d)",
+    "--glow": "drop-shadow(0 0 0.18em #ff6d00)"
+   },
+   "about": "Letters filled with a red-orange to yellow gradient, with an orange glow. For action, hot and intense titles.",
+   "tags": [
+    "title",
+    "fire",
+    "intense",
+    "action"
+   ]
+  },
+  {
+   "id": "text/looks/ice",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Ice",
+    "zh-CN": "冰霜",
+    "ja": "アイス",
+    "ko": "아이스",
+    "es": "Hielo"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "transparent",
+    "--fill": "linear-gradient(180deg, #ffffff, #a8ecff)",
+    "--stroke": "0.02em",
+    "--stroke-color": "#e6faff",
+    "--glow": "drop-shadow(0 0 0.15em #7fdcff)"
+   },
+   "about": "Letters filled with white-to-pale-blue, a thin icy edge and a blue glow. For winter, cool and clean titles.",
+   "tags": [
+    "title",
+    "cool-tone",
+    "weather",
+    "soft"
+   ]
+  },
+  {
+   "id": "text/looks/solid-red",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Solid red",
+    "zh-CN": "立体红",
+    "ja": "立体レッド",
+    "ko": "입체 레드",
+    "es": "Rojo sólido"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "#ff4a3d",
+    "--shadow": "0.012em 0.012em 0 #7a0f08, 0.024em 0.024em 0 #7a0f08, 0.036em 0.036em 0 #7a0f08, 0.048em 0.048em 0 #7a0f08, 0.060em 0.060em 0 #7a0f08, 0.072em 0.072em 0 #7a0f08, 0.084em 0.084em 0 #7a0f08, 0.096em 0.096em 0 #7a0f08"
+   },
+   "about": "Red letters with a deep red extruded shadow down and to the right, like a block. For bold, punchy titles.",
+   "tags": [
+    "title",
+    "vivid",
+    "confident"
+   ]
+  },
+  {
+   "id": "text/looks/solid-blue",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Solid blue",
+    "zh-CN": "立体蓝",
+    "ja": "立体ブルー",
+    "ko": "입체 블루",
+    "es": "Azul sólido"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "#4aa8ff",
+    "--shadow": "0.012em 0.012em 0 #0b2f66, 0.024em 0.024em 0 #0b2f66, 0.036em 0.036em 0 #0b2f66, 0.048em 0.048em 0 #0b2f66, 0.060em 0.060em 0 #0b2f66, 0.072em 0.072em 0 #0b2f66, 0.084em 0.084em 0 #0b2f66, 0.096em 0.096em 0 #0b2f66"
+   },
+   "about": "Blue letters with a deep navy extruded shadow down and to the right, like a block. For bold, punchy titles.",
+   "tags": [
+    "title",
+    "vivid",
+    "confident"
+   ]
+  },
+  {
+   "id": "text/looks/long-shadow",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Long shadow",
+    "zh-CN": "长投影",
+    "ja": "ロングシャドウ",
+    "ko": "롱 섀도",
+    "es": "Sombra larga"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "#ffffff",
+    "--shadow": "0.012em 0.012em 0 rgba(0,0,0,0.35), 0.024em 0.024em 0 rgba(0,0,0,0.35), 0.036em 0.036em 0 rgba(0,0,0,0.35), 0.048em 0.048em 0 rgba(0,0,0,0.35), 0.060em 0.060em 0 rgba(0,0,0,0.35), 0.072em 0.072em 0 rgba(0,0,0,0.35), 0.084em 0.084em 0 rgba(0,0,0,0.35), 0.096em 0.096em 0 rgba(0,0,0,0.35), 0.108em 0.108em 0 rgba(0,0,0,0.35), 0.120em 0.120em 0 rgba(0,0,0,0.35), 0.132em 0.132em 0 rgba(0,0,0,0.35), 0.144em 0.144em 0 rgba(0,0,0,0.35), 0.156em 0.156em 0 rgba(0,0,0,0.35), 0.168em 0.168em 0 rgba(0,0,0,0.35), 0.180em 0.180em 0 rgba(0,0,0,0.35), 0.192em 0.192em 0 rgba(0,0,0,0.35)"
+   },
+   "about": "White letters with a long, soft dark shadow stretching down and to the right. For flat, modern titles.",
+   "tags": [
+    "title",
+    "minimal"
+   ]
+  },
+  {
+   "id": "text/looks/outline",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Outline",
+    "zh-CN": "空心字",
+    "ja": "袋文字",
+    "ko": "외곽선",
+    "es": "Contorno"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "transparent",
+    "--stroke": "0.035em",
+    "--stroke-color": "#ffffff"
+   },
+   "about": "Hollow letters drawn only as a thin white outline. For modern, stylish titles over footage.",
+   "tags": [
+    "title",
+    "minimal",
+    "elegant"
+   ]
+  },
+  {
+   "id": "text/looks/double-edge",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Double edge",
+    "zh-CN": "双描边",
+    "ja": "ダブルフチ",
+    "ko": "이중 테두리",
+    "es": "Doble borde"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "#ffffff",
+    "--glow": "drop-shadow(0.035em 0em 0 #2b5bff) drop-shadow(-0.035em 0em 0 #2b5bff) drop-shadow(0em 0.035em 0 #2b5bff) drop-shadow(0em -0.035em 0 #2b5bff) drop-shadow(0.03em 0em 0 #2b5bff) drop-shadow(-0.03em 0em 0 #2b5bff) drop-shadow(0em 0.03em 0 #2b5bff) drop-shadow(0em -0.03em 0 #2b5bff) drop-shadow(0.035em 0em 0 #ffffff) drop-shadow(-0.035em 0em 0 #ffffff) drop-shadow(0em 0.035em 0 #ffffff) drop-shadow(0em -0.035em 0 #ffffff)"
+   },
+   "about": "White letters with a blue edge and a white outer edge around it. For sticker-like, lively titles.",
+   "tags": [
+    "title",
+    "vivid",
+    "playful"
+   ]
+  },
+  {
+   "id": "text/looks/retro",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Retro",
+    "zh-CN": "复古",
+    "ja": "レトロ",
+    "ko": "레트로",
+    "es": "Retro"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "#f6e7c8",
+    "--shadow": "0.06em 0.06em 0 #d2452f, 0.12em 0.12em 0 #24384d"
+   },
+   "about": "Cream letters with a red then navy offset shadow, in a vintage style. For retro posters and nostalgic titles.",
+   "tags": [
+    "title",
+    "retro",
+    "nostalgic",
+    "warm-tone"
+   ]
+  },
+  {
+   "id": "text/looks/vapor",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Vaporwave",
+    "zh-CN": "蒸汽波",
+    "ja": "ヴェイパー",
+    "ko": "베이퍼웨이브",
+    "es": "Vaporwave"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "#ffe9ff",
+    "--italic": "italic",
+    "--shadow": "0.05em 0.05em 0 #ff4fd8, 0.1em 0.1em 0 #3bd5ff"
+   },
+   "about": "Pale pink italic letters with pink and cyan offset shadows, in a vaporwave style. For retro-futuristic, 80s titles.",
+   "tags": [
+    "title",
+    "retro",
+    "neon",
+    "dreamy"
+   ]
+  },
+  {
+   "id": "text/looks/glitch",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Glitch",
+    "zh-CN": "故障",
+    "ja": "グリッチ",
+    "ko": "글리치",
+    "es": "Glitch"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "#ffffff",
+    "--shadow": "-0.05em 0 0 #ff0050, 0.05em 0 0 #00e5ff"
+   },
+   "about": "White letters with a pink shadow on the left and a cyan shadow on the right, like a broken signal. For techy, edgy titles.",
+   "tags": [
+    "title",
+    "glitch",
+    "tech",
+    "intense"
+   ]
+  },
+  {
+   "id": "text/looks/label-black",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Black label",
+    "zh-CN": "黑底白字",
+    "ja": "黒ラベル",
+    "ko": "검정 라벨",
+    "es": "Etiqueta negra"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "700",
+    "--box": "#111111",
+    "--box-pad": "0.25em 0.55em",
+    "--box-radius": "0.18em"
+   },
+   "about": "White bold text on a solid black rounded box. For clear labels and captions that stand out on any footage.",
+   "tags": [
+    "subtitle",
+    "lowerthird",
+    "minimal"
+   ]
+  },
+  {
+   "id": "text/looks/label-yellow",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Yellow label",
+    "zh-CN": "黄底黑字",
+    "ja": "黄ラベル",
+    "ko": "노랑 라벨",
+    "es": "Etiqueta amarilla"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "800",
+    "--color": "#111111",
+    "--box": "#ffd400",
+    "--box-pad": "0.25em 0.55em",
+    "--box-radius": "0.18em"
+   },
+   "about": "Black bold text on a bright yellow rounded box. For attention-grabbing labels and highlights.",
+   "tags": [
+    "subtitle",
+    "lowerthird",
+    "vivid"
+   ]
+  },
+  {
+   "id": "text/looks/label-red",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "News red",
+    "zh-CN": "新闻红条",
+    "ja": "ニュース赤",
+    "ko": "뉴스 레드",
+    "es": "Rojo noticias"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "800",
+    "--box": "#d6202f",
+    "--box-pad": "0.22em 0.6em",
+    "--box-radius": "0"
+   },
+   "about": "White bold text on a red square-cornered box, like a news tag. For news, alerts and breaking headlines.",
+   "tags": [
+    "news",
+    "lowerthird",
+    "intense"
+   ]
+  },
+  {
+   "id": "text/looks/highlighter",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Highlighter",
+    "zh-CN": "荧光笔",
+    "ja": "蛍光ペン",
+    "ko": "형광펜",
+    "es": "Resaltador"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "800",
+    "--color": "#ffffff",
+    "--box": "linear-gradient(transparent 55%, rgba(255,61,127,0.85) 55%, rgba(255,61,127,0.85) 90%, transparent 90%)",
+    "--box-pad": "0 0.15em"
+   },
+   "about": "White bold text with a pink highlighter stripe over its lower half. For emphasizing key words in a caption.",
+   "tags": [
+    "subtitle",
+    "handdrawn",
+    "vivid"
+   ]
+  },
+  {
+   "id": "text/looks/bubble",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Bubble",
+    "zh-CN": "气泡框",
+    "ja": "吹き出し",
+    "ko": "말풍선",
+    "es": "Burbuja"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'ZCOOL KuaiLe', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--weight": "400",
+    "--color": "#222222",
+    "--box": "#ffffff",
+    "--box-pad": "0.3em 0.8em",
+    "--box-radius": "1.2em",
+    "--glow": "drop-shadow(0 0.05em 0.1em rgba(0,0,0,0.4))"
+   },
+   "about": "Dark bubbly letters on a white rounded box with a soft shadow, like a speech bubble. For chat lines and friendly remarks.",
+   "tags": [
+    "speech",
+    "playful",
+    "cute"
+   ]
+  },
+  {
+   "id": "text/looks/handwriting",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Handwriting",
+    "zh-CN": "手写",
+    "ja": "手書き",
+    "ko": "손글씨",
+    "es": "Manuscrita"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'ZCOOL KuaiLe', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--weight": "400",
+    "--shadow": "0 0.04em 0.2em rgba(0,0,0,0.5)"
+   },
+   "about": "Casual rounded, hand-written style white letters with a soft shadow. For personal notes, diaries and light captions.",
+   "tags": [
+    "handdrawn",
+    "playful",
+    "subtitle"
+   ]
+  },
+  {
+   "id": "text/looks/cinema",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Cinema",
+    "zh-CN": "电影字",
+    "ja": "シネマ",
+    "ko": "시네마",
+    "es": "Cine"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', Georgia, serif",
+    "--weight": "600",
+    "--color": "#f5e6c4",
+    "--spacing": "0.25em",
+    "--size": "6vw",
+    "--shadow": "0 0.02em 0.12em rgba(0,0,0,0.85)"
+   },
+   "about": "Widely spaced cream serif letters with a soft dark shadow. For film titles, credits and dramatic openings.",
+   "tags": [
+    "title",
+    "cinematic-look",
+    "elegant",
+    "warm"
+   ]
+  },
+  {
+   "id": "text/looks/elegant",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Elegant",
+    "zh-CN": "优雅衬线",
+    "ja": "エレガント",
+    "ko": "우아한",
+    "es": "Elegante"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', Georgia, serif",
+    "--weight": "500",
+    "--italic": "italic",
+    "--spacing": "0.06em"
+   },
+   "about": "Medium italic serif letters with slight spacing. For refined quotes, fashion and wedding titles.",
+   "tags": [
+    "title",
+    "elegant",
+    "romantic"
+   ]
+  },
+  {
+   "id": "text/looks/thin",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Thin",
+    "zh-CN": "极简细体",
+    "ja": "ミニマル",
+    "ko": "미니멀",
+    "es": "Fina"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "200",
+    "--spacing": "0.18em"
+   },
+   "about": "Very thin, widely spaced sans-serif letters. For minimal, airy titles and quiet captions.",
+   "tags": [
+    "title",
+    "minimal",
+    "soft",
+    "elegant"
+   ]
+  },
+  {
+   "id": "text/looks/soft-shadow",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Soft shadow",
+    "zh-CN": "柔和投影",
+    "ja": "ソフトシャドウ",
+    "ko": "부드러운 그림자",
+    "es": "Sombra suave"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--weight": "800",
+    "--shadow": "0 0.06em 0.3em rgba(0,0,0,0.65)"
+   },
+   "about": "Heavy white letters with a soft dark shadow underneath. For readable titles on bright or busy footage.",
+   "tags": [
+    "title",
+    "subtitle",
+    "confident"
+   ]
+  },
+  {
+   "id": "text/looks/stamp",
+   "cat": "text",
+   "group": "wordart",
+   "name": {
+    "en": "Stamp",
+    "zh-CN": "印章",
+    "ja": "スタンプ",
+    "ko": "도장",
+    "es": "Sello"
+   },
+   "kind": "textstyle",
+   "vars": {
+    "--font": "'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif",
+    "--color": "#e23b2e",
+    "--box": "transparent",
+    "--box-pad": "0.15em 0.4em",
+    "--stroke": "0",
+    "--shadow": "0.020em 0.000em 0 rgba(226,59,46,0.5), -0.020em 0.000em 0 rgba(226,59,46,0.5), 0.000em 0.020em 0 rgba(226,59,46,0.5), 0.000em -0.020em 0 rgba(226,59,46,0.5), 0.014em 0.014em 0 rgba(226,59,46,0.5), -0.014em 0.014em 0 rgba(226,59,46,0.5), 0.014em -0.014em 0 rgba(226,59,46,0.5), -0.014em -0.014em 0 rgba(226,59,46,0.5)"
+   },
+   "about": "Red letters with a faint rough red edge, like a rubber stamp. For approvals, labels and playful emphasis.",
+   "tags": [
+    "title",
+    "retro",
+    "comic"
+   ]
+  },
+  {
+   "id": "text/motions/in-none",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "None",
+    "zh-CN": "无",
+    "ja": "なし",
+    "ko": "없음",
+    "es": "Ninguna"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "none",
+    "--in-time": "0.6s"
+   },
+   "about": "Text appears at once with no entrance animation. For plain captions that should not move.",
+   "tags": [
+    "minimal",
+    "subtitle"
+   ]
+  },
+  {
+   "id": "text/motions/in-fade",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Fade",
+    "zh-CN": "渐显",
+    "ja": "フェード",
+    "ko": "페이드",
+    "es": "Fundido"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "fade",
+    "--in-time": "0.6s"
+   },
+   "about": "Text fades in from transparent over 0.6 seconds. For calm, neutral entrances for titles and captions.",
+   "tags": [
+    "fade",
+    "soft",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-rise",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Rise",
+    "zh-CN": "上浮",
+    "ja": "浮上",
+    "ko": "떠오르기",
+    "es": "Subir"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "rise",
+    "--in-time": "0.6s"
+   },
+   "about": "Text rises up a little from below while fading in. For gentle title and caption entrances.",
+   "tags": [
+    "slide",
+    "soft",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-drop",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Drop",
+    "zh-CN": "下落",
+    "ja": "落下",
+    "ko": "떨어지기",
+    "es": "Caer"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "drop",
+    "--in-time": "0.6s"
+   },
+   "about": "Text drops down a little from above while fading in. For light, friendly title entrances.",
+   "tags": [
+    "slide",
+    "soft",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-pop",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Pop",
+    "zh-CN": "弹出",
+    "ja": "ポップ",
+    "ko": "팝",
+    "es": "Pop"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "pop",
+    "--in-time": "0.6s"
+   },
+   "about": "Text scales up from small, overshoots slightly and settles. For lively, playful titles and stickers.",
+   "tags": [
+    "bounce",
+    "zoom",
+    "playful",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-zoom",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Zoom",
+    "zh-CN": "缩放",
+    "ja": "ズーム",
+    "ko": "줌",
+    "es": "Zoom"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "zoom",
+    "--in-time": "0.6s"
+   },
+   "about": "Text starts large and blurred, then shrinks and sharpens into place. For dramatic, punchy title reveals.",
+   "tags": [
+    "zoom",
+    "intense",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-blur",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Blur",
+    "zh-CN": "模糊渐显",
+    "ja": "ぼかし",
+    "ko": "블러",
+    "es": "Desenfoque"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "blur",
+    "--in-time": "0.6s"
+   },
+   "about": "Text fades in from a heavy blur and comes into focus. For dreamy, soft title reveals.",
+   "tags": [
+    "dreamy",
+    "fade",
+    "soft",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-slide-left",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "From left",
+    "zh-CN": "左侧滑入",
+    "ja": "左から",
+    "ko": "왼쪽에서",
+    "es": "Desde la izquierda"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "slide-left",
+    "--in-time": "0.6s"
+   },
+   "about": "Text slides in from the left while fading in. For lower thirds, captions and side entrances.",
+   "tags": [
+    "slide",
+    "lowerthird",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-slide-right",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "From right",
+    "zh-CN": "右侧滑入",
+    "ja": "右から",
+    "ko": "오른쪽에서",
+    "es": "Desde la derecha"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "slide-right",
+    "--in-time": "0.6s"
+   },
+   "about": "Text slides in from the right while fading in. For captions and side entrances that follow the first.",
+   "tags": [
+    "slide",
+    "lowerthird",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-wipe",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Wipe",
+    "zh-CN": "擦入",
+    "ja": "ワイプ",
+    "ko": "와이프",
+    "es": "Barrido"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "wipe",
+    "--in-time": "0.6s"
+   },
+   "about": "Text is revealed from left to right as if a mask sweeps across it. For clean, simple title reveals.",
+   "tags": [
+    "wipe",
+    "minimal",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-type",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Typewriter",
+    "zh-CN": "打字机",
+    "ja": "タイプ",
+    "ko": "타자기",
+    "es": "Máquina de escribir"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "type",
+    "--in-time": "1.2s"
+   },
+   "about": "Text is revealed from left to right in a slow 1.2-second sweep, like typing. For captions and quotes.",
+   "tags": [
+    "typewriter",
+    "title",
+    "subtitle"
+   ]
+  },
+  {
+   "id": "text/motions/in-stamp",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Stamp",
+    "zh-CN": "盖章",
+    "ja": "スタンプ",
+    "ko": "도장",
+    "es": "Sello"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "stamp",
+    "--in-time": "0.6s"
+   },
+   "about": "Text slams in large and slightly tilted, then shrinks onto the frame like a rubber stamp. For emphatic words and approvals.",
+   "tags": [
+    "zoom",
+    "intense",
+    "confident",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-spin-in",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Spin",
+    "zh-CN": "旋入",
+    "ja": "回転",
+    "ko": "회전",
+    "es": "Giro"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "spin-in",
+    "--in-time": "0.6s"
+   },
+   "about": "Text spins in from a quarter-turn while growing from small and fading in. For playful, energetic title entrances.",
+   "tags": [
+    "spin",
+    "playful",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-flip-in",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Flip",
+    "zh-CN": "翻转",
+    "ja": "フリップ",
+    "ko": "플립",
+    "es": "Voltear"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "flip-in",
+    "--in-time": "0.6s"
+   },
+   "about": "Text flips up from edge-on, as if turning toward the viewer, while fading in. For tech and stylish title entrances.",
+   "tags": [
+    "spin",
+    "tech",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/in-bounce-in",
+   "cat": "text",
+   "group": "in",
+   "name": {
+    "en": "Bounce",
+    "zh-CN": "弹跳",
+    "ja": "バウンド",
+    "ko": "바운스",
+    "es": "Rebote"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--in": "bounce-in",
+    "--in-time": "0.6s"
+   },
+   "about": "Text drops from above, bounces slightly past its place and settles. For cheerful, cartoon-style titles.",
+   "tags": [
+    "bounce",
+    "playful",
+    "happy",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/loop-none",
+   "cat": "text",
+   "group": "loop",
+   "name": {
+    "en": "None",
+    "zh-CN": "无",
+    "ja": "なし",
+    "ko": "없음",
+    "es": "Ninguna"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--loop": "none"
+   },
+   "about": "Text stays still while it shows, with no looping movement. For plain, steady captions.",
+   "tags": [
+    "minimal",
+    "subtitle"
+   ]
+  },
+  {
+   "id": "text/motions/loop-float",
+   "cat": "text",
+   "group": "loop",
+   "name": {
+    "en": "Float",
+    "zh-CN": "漂浮",
+    "ja": "ふわふわ",
+    "ko": "둥실",
+    "es": "Flotar"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--loop": "float"
+   },
+   "about": "Text drifts up and down slightly, in a slow loop. For light, floating titles and soft moods.",
+   "tags": [
+    "soft",
+    "calm",
+    "dreamy"
+   ]
+  },
+  {
+   "id": "text/motions/loop-pulse",
+   "cat": "text",
+   "group": "loop",
+   "name": {
+    "en": "Pulse",
+    "zh-CN": "脉动",
+    "ja": "パルス",
+    "ko": "펄스",
+    "es": "Latido"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--loop": "pulse"
+   },
+   "about": "Text swells slightly in size and back, in a loop. For gentle emphasis on key words.",
+   "tags": [
+    "zoom",
+    "soft",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/loop-wiggle",
+   "cat": "text",
+   "group": "loop",
+   "name": {
+    "en": "Wiggle",
+    "zh-CN": "摇摆",
+    "ja": "ゆらゆら",
+    "ko": "흔들흔들",
+    "es": "Vaivén"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--loop": "wiggle"
+   },
+   "about": "Text tilts a few degrees left and right, in a loop. For playful, cute emphasis on words.",
+   "tags": [
+    "playful",
+    "cute",
+    "spin"
+   ]
+  },
+  {
+   "id": "text/motions/loop-shake",
+   "cat": "text",
+   "group": "loop",
+   "name": {
+    "en": "Shake",
+    "zh-CN": "抖动",
+    "ja": "シェイク",
+    "ko": "떨림",
+    "es": "Temblor"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--loop": "shake"
+   },
+   "about": "Text trembles quickly from side to side, in a loop. For anger, fear, cold or shock.",
+   "tags": [
+    "shake",
+    "tense",
+    "intense"
+   ]
+  },
+  {
+   "id": "text/motions/loop-breathe",
+   "cat": "text",
+   "group": "loop",
+   "name": {
+    "en": "Breathe",
+    "zh-CN": "呼吸",
+    "ja": "呼吸",
+    "ko": "숨쉬기",
+    "es": "Respirar"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--loop": "breathe"
+   },
+   "about": "Text slowly dims and returns to full brightness, in a loop. For calm, living text and soft glows.",
+   "tags": [
+    "calm",
+    "soft",
+    "fade"
+   ]
+  },
+  {
+   "id": "text/motions/loop-swing",
+   "cat": "text",
+   "group": "loop",
+   "name": {
+    "en": "Swing",
+    "zh-CN": "钟摆",
+    "ja": "スイング",
+    "ko": "스윙",
+    "es": "Columpio"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--loop": "swing"
+   },
+   "about": "Text rocks slowly a few degrees, like a hanging sign. For playful or casual titles.",
+   "tags": [
+    "spin",
+    "playful",
+    "soft"
+   ]
+  },
+  {
+   "id": "text/motions/loop-flicker",
+   "cat": "text",
+   "group": "loop",
+   "name": {
+    "en": "Flicker",
+    "zh-CN": "闪烁",
+    "ja": "点滅",
+    "ko": "깜빡임",
+    "es": "Parpadeo"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--loop": "flicker"
+   },
+   "about": "Text flickers briefly now and then, like a faulty light. For neon, horror and electric titles.",
+   "tags": [
+    "neon",
+    "scary",
+    "tense"
+   ]
+  },
+  {
+   "id": "text/motions/out-none",
+   "cat": "text",
+   "group": "out",
+   "name": {
+    "en": "None",
+    "zh-CN": "无",
+    "ja": "なし",
+    "ko": "없음",
+    "es": "Ninguna"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--out": "none",
+    "--out-time": "0.5s"
+   },
+   "about": "Text disappears at once at the end with no exit animation. For plain captions that cut away.",
+   "tags": [
+    "minimal",
+    "subtitle"
+   ]
+  },
+  {
+   "id": "text/motions/out-fade-out",
+   "cat": "text",
+   "group": "out",
+   "name": {
+    "en": "Fade",
+    "zh-CN": "渐隐",
+    "ja": "フェード",
+    "ko": "페이드",
+    "es": "Fundido"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--out": "fade-out",
+    "--out-time": "0.5s"
+   },
+   "about": "Text fades out to transparent over half a second. For calm, neutral exits.",
+   "tags": [
+    "fade",
+    "soft",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/out-sink",
+   "cat": "text",
+   "group": "out",
+   "name": {
+    "en": "Sink",
+    "zh-CN": "下沉",
+    "ja": "沈む",
+    "ko": "가라앉기",
+    "es": "Hundir"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--out": "sink",
+    "--out-time": "0.5s"
+   },
+   "about": "Text sinks down a little while fading out. For gentle exits, mirroring a rise-in.",
+   "tags": [
+    "slide",
+    "soft",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/out-lift",
+   "cat": "text",
+   "group": "out",
+   "name": {
+    "en": "Lift",
+    "zh-CN": "上飘",
+    "ja": "浮き上がる",
+    "ko": "날아가기",
+    "es": "Elevar"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--out": "lift",
+    "--out-time": "0.5s"
+   },
+   "about": "Text lifts up a little while fading out. For light, airy exits.",
+   "tags": [
+    "slide",
+    "soft",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/out-shrink",
+   "cat": "text",
+   "group": "out",
+   "name": {
+    "en": "Shrink",
+    "zh-CN": "缩小",
+    "ja": "縮小",
+    "ko": "축소",
+    "es": "Encoger"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--out": "shrink",
+    "--out-time": "0.5s"
+   },
+   "about": "Text shrinks to a small size while fading out. For quick, tidy exits.",
+   "tags": [
+    "zoom",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/out-blur-out",
+   "cat": "text",
+   "group": "out",
+   "name": {
+    "en": "Blur",
+    "zh-CN": "模糊消失",
+    "ja": "ぼかし",
+    "ko": "블러",
+    "es": "Desenfoque"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--out": "blur-out",
+    "--out-time": "0.5s"
+   },
+   "about": "Text blurs heavily while fading out. For dreamy, soft exits.",
+   "tags": [
+    "dreamy",
+    "fade",
+    "soft"
+   ]
+  },
+  {
+   "id": "text/motions/out-wipe-out",
+   "cat": "text",
+   "group": "out",
+   "name": {
+    "en": "Wipe",
+    "zh-CN": "擦除",
+    "ja": "ワイプ",
+    "ko": "와이프",
+    "es": "Barrido"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--out": "wipe-out",
+    "--out-time": "0.5s"
+   },
+   "about": "Text is wiped away from left to right as if a mask sweeps over it. For clean, simple exits.",
+   "tags": [
+    "wipe",
+    "minimal",
+    "title"
+   ]
+  },
+  {
+   "id": "text/motions/out-zoom-out",
+   "cat": "text",
+   "group": "out",
+   "name": {
+    "en": "Zoom",
+    "zh-CN": "放大消失",
+    "ja": "ズーム",
+    "ko": "줌",
+    "es": "Zoom"
+   },
+   "kind": "textmotion",
+   "vars": {
+    "--out": "zoom-out",
+    "--out-time": "0.5s"
+   },
+   "about": "Text grows large and blurred while fading out, as if flying past the camera. For dramatic exits.",
+   "tags": [
+    "zoom",
+    "intense",
+    "title"
+   ]
+  },
+  {
+   "id": "text/title-cinema",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Cinematic title",
+    "zh-CN": "片名·电影感",
+    "ja": "映画風タイトル",
+    "ko": "시네마틱 타이틀",
+    "es": "Título de cine"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "title-cinema.html",
+   "about": "Thin, widely spaced serif capitals rise gently into the center of the frame. For film titles, openings and quiet statements.",
+   "tags": [
+    "title",
+    "cinematic-look",
+    "elegant",
+    "intro"
+   ],
+   "w": 1346,
+   "h": 230,
+   "fit": 0.213
+  },
+  {
+   "id": "text/title-bold",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Bold title",
+    "zh-CN": "大标题·粗黑",
+    "ja": "太字タイトル",
+    "ko": "굵은 타이틀",
+    "es": "Título en negrita"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "title-bold.html",
+   "about": "A big heavy white title pops in with a small overshoot. For strong headlines, openers and punchy statements.",
+   "tags": [
+    "title",
+    "confident",
+    "intense",
+    "zoom"
+   ],
+   "w": 1664,
+   "h": 290,
+   "fit": 0.269
+  },
+  {
+   "id": "text/title-outline",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Outline title",
+    "zh-CN": "描边标题",
+    "ja": "アウトライン",
+    "ko": "외곽선 타이틀",
+    "es": "Título contorno"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "title-outline.html",
+   "about": "Big letters drawn as outlines only, with no fill, slide in from the left. For modern, stylish headlines.",
+   "tags": [
+    "title",
+    "minimal",
+    "slide"
+   ],
+   "w": 1152,
+   "h": 290,
+   "fit": 0.269
+  },
+  {
+   "id": "text/title-neon",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Neon",
+    "zh-CN": "霓虹",
+    "ja": "ネオン",
+    "ko": "네온",
+    "es": "Neón"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "title-neon.html",
+   "about": "White letters with a pink glow flicker on like a neon sign. For nightlife, music and retro-futuristic titles.",
+   "tags": [
+    "title",
+    "neon",
+    "night"
+   ],
+   "w": 582,
+   "h": 290,
+   "fit": 0.269
+  },
+  {
+   "id": "text/title-gradient",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Gradient",
+    "zh-CN": "渐变字",
+    "ja": "グラデーション",
+    "ko": "그라데이션",
+    "es": "Degradado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "title-gradient.html",
+   "about": "A large title filled with a gold-to-pink gradient pops in with a small overshoot. For cheerful greetings and lively headlines.",
+   "tags": [
+    "title",
+    "vivid",
+    "happy",
+    "zoom"
+   ],
+   "w": 1460,
+   "h": 324,
+   "fit": 0.3
+  },
+  {
+   "id": "text/typewriter",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Typewriter",
+    "zh-CN": "打字机",
+    "ja": "タイプライター",
+    "ko": "타자기",
+    "es": "Máquina de escribir"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "typewriter.html",
+   "about": "Monospace words are typed out letter by letter with a blinking underscore cursor. For times, dates, notes and technical captions.",
+   "tags": [
+    "typewriter",
+    "title",
+    "tech",
+    "retro"
+   ],
+   "w": 574,
+   "h": 192,
+   "fit": 0.178
+  },
+  {
+   "id": "text/chapter",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Chapter",
+    "zh-CN": "章节号",
+    "ja": "チャプター",
+    "ko": "챕터",
+    "es": "Capítulo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "chapter.html",
+   "about": "A small spaced-out chapter number sits above a large title that rises into place. For chapter cards and section breaks.",
+   "tags": [
+    "title",
+    "intro",
+    "slide"
+   ],
+   "w": 778,
+   "h": 378,
+   "fit": 0.35
+  },
+  {
+   "id": "text/quote",
+   "cat": "text",
+   "group": "title",
+   "name": {
+    "en": "Quote",
+    "zh-CN": "引用",
+    "ja": "引用",
+    "ko": "인용",
+    "es": "Cita"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "quote.html",
+   "about": "A quotation in white italic serif letters rises into the center. For quotes, reflections and quiet moments.",
+   "tags": [
+    "title",
+    "elegant",
+    "soft",
+    "calm"
+   ],
+   "w": 1160,
+   "h": 206,
+   "fit": 0.191
+  },
+  {
+   "id": "text/lower-simple",
+   "cat": "text",
+   "group": "lower",
+   "name": {
+    "en": "Lower third",
+    "zh-CN": "下三分之一·简约",
+    "ja": "ロワーサード",
+    "ko": "하단 자막",
+    "es": "Rótulo inferior"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "lower-simple.html",
+   "about": "A bold name and a smaller role sit at the lower left with a thin line beside them, sliding in. For interviews and introductions.",
+   "tags": [
+    "lowerthird",
+    "minimal",
+    "slide"
+   ],
+   "w": 422,
+   "h": 226,
+   "fit": 0.209,
+   "low": true
+  },
+  {
+   "id": "text/lower-block",
+   "cat": "text",
+   "group": "lower",
+   "name": {
+    "en": "Lower third, block",
+    "zh-CN": "下三分之一·色块",
+    "ja": "ロワーサード・ブロック",
+    "ko": "하단 자막 블록",
+    "es": "Rótulo en bloque"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "lower-block.html",
+   "about": "A name and role sit on a yellow block at the lower left and slide in from the left. For interviews, news and speaker names.",
+   "tags": [
+    "lowerthird",
+    "news",
+    "slide"
+   ],
+   "w": 518,
+   "h": 270,
+   "fit": 0.25,
+   "low": true
+  },
+  {
+   "id": "text/location",
+   "cat": "text",
+   "group": "lower",
+   "name": {
+    "en": "Location",
+    "zh-CN": "地点标注",
+    "ja": "場所",
+    "ko": "장소",
+    "es": "Ubicación"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "location.html",
+   "about": "A place name with a pin symbol beside it, at the lower left, rising into place. For travel and documentary location tags.",
+   "tags": [
+    "lowerthird",
+    "map",
+    "travel"
+   ],
+   "w": 1028,
+   "h": 116,
+   "fit": 0.107,
+   "low": true
+  },
+  {
+   "id": "text/bubble",
+   "cat": "text",
+   "group": "badge",
+   "name": {
+    "en": "Speech bubble",
+    "zh-CN": "对话气泡",
+    "ja": "吹き出し",
+    "ko": "말풍선",
+    "es": "Bocadillo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "bubble.html",
+   "about": "White text in a rounded speech bubble with a tail pops in. For comments, chat lines and friendly remarks.",
+   "tags": [
+    "speech",
+    "playful",
+    "zoom"
+   ],
+   "w": 932,
+   "h": 254,
+   "fit": 0.235
+  },
+  {
+   "id": "text/follow",
+   "cat": "text",
+   "group": "badge",
+   "name": {
+    "en": "Follow button",
+    "zh-CN": "关注按钮",
+    "ja": "フォローボタン",
+    "ko": "팔로우 버튼",
+    "es": "Botón seguir"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "follow.html",
+   "about": "A round red button reading Follow pops in with a small overshoot. For social video calls to action.",
+   "tags": [
+    "social",
+    "ui",
+    "zoom"
+   ],
+   "w": 618,
+   "h": 230,
+   "fit": 0.213
+  },
+  {
+   "id": "text/price",
+   "cat": "text",
+   "group": "badge",
+   "name": {
+    "en": "Price tag",
+    "zh-CN": "价格标签",
+    "ja": "値札",
+    "ko": "가격표",
+    "es": "Etiqueta de precio"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "price.html",
+   "about": "A price in a gold-bordered dark tag pops in with a small overshoot. For products, deals and shopping videos.",
+   "tags": [
+    "title",
+    "vivid",
+    "zoom"
+   ],
+   "w": 486,
+   "h": 266,
+   "fit": 0.246
+  },
+  {
+   "id": "text/countdown",
+   "cat": "text",
+   "group": "data",
+   "name": {
+    "en": "Countdown",
+    "zh-CN": "倒计时",
+    "ja": "カウントダウン",
+    "ko": "카운트다운",
+    "es": "Cuenta atrás"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "countdown.html",
+   "about": "A big monospace number counts 3, 2, 1, one second each, shrinking into place. For launches, intros and reveals.",
+   "tags": [
+    "countdown",
+    "intro",
+    "trailer"
+   ],
+   "w": 360,
+   "h": 440,
+   "fit": 0.407
+  },
+  {
+   "id": "text/progress",
+   "cat": "text",
+   "group": "data",
+   "name": {
+    "en": "Progress bar",
+    "zh-CN": "进度条",
+    "ja": "プログレスバー",
+    "ko": "진행 바",
+    "es": "Barra de progreso"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "progress.html",
+   "about": "A thin teal bar along the bottom fills from left to right over three seconds. For timers, loading and progress cues.",
+   "tags": [
+    "countdown",
+    "ui",
+    "wipe"
+   ],
+   "w": 1720,
+   "h": 34,
+   "fit": 0.031,
+   "low": true
+  },
+  {
+   "id": "text/subtitle-box",
+   "cat": "text",
+   "group": "caption",
+   "name": {
+    "en": "Boxed caption",
+    "zh-CN": "黑底字幕",
+    "ja": "黒帯字幕",
+    "ko": "박스 자막",
+    "es": "Subtítulo con caja"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "subtitle-box.html",
+   "about": "White caption text on a dark semi-transparent box at the bottom middle. For subtitles and spoken-line captions.",
+   "tags": [
+    "subtitle",
+    "minimal"
+   ],
+   "w": 1002,
+   "h": 150,
+   "fit": 0.139,
+   "low": true
+  },
+  {
+   "id": "stickers/arrow-down",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Arrow, bouncing",
+    "zh-CN": "向下箭头",
+    "ja": "下向き矢印",
+    "ko": "아래 화살표",
+    "es": "Flecha abajo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "arrow-down.html",
+   "w": 400,
+   "h": 400,
+   "about": "A thick yellow arrow pointing down bounces gently up and down. For pointing at something below, like a link or button.",
+   "tags": [
+    "arrow",
+    "bounce"
+   ]
+  },
+  {
+   "id": "stickers/tap",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Tap here",
+    "zh-CN": "点击",
+    "ja": "タップ",
+    "ko": "탭",
+    "es": "Toca aquí"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "tap.html",
+   "w": 400,
+   "h": 400,
+   "about": "A yellow dot with a ring that grows and fades, repeating like a tap. For showing where to click or tap in a tutorial.",
+   "tags": [
+    "ui",
+    "explainer",
+    "shapes"
+   ]
+  },
+  {
+   "id": "stickers/heart",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Heart",
+    "zh-CN": "爱心",
+    "ja": "ハート",
+    "ko": "하트",
+    "es": "Corazón"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "heart.html",
+   "w": 400,
+   "h": 400,
+   "about": "A pink-red heart beats with two quick pulses, repeating. For love, likes and affection.",
+   "tags": [
+    "cute",
+    "romantic",
+    "social"
+   ]
+  },
+  {
+   "id": "stickers/sparkle",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Sparkle",
+    "zh-CN": "闪光",
+    "ja": "キラキラ",
+    "ko": "반짝",
+    "es": "Brillo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "sparkle.html",
+   "w": 400,
+   "h": 400,
+   "about": "A yellow four-pointed star twinkles, with a smaller one beside it. For magic, shine and highlights.",
+   "tags": [
+    "particles",
+    "cute",
+    "dreamy"
+   ]
+  },
+  {
+   "id": "stickers/star",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Star",
+    "zh-CN": "星星",
+    "ja": "星",
+    "ko": "별",
+    "es": "Estrella"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "star.html",
+   "w": 400,
+   "h": 400,
+   "about": "A yellow five-pointed star rocks from side to side. For ratings, praise and rewards.",
+   "tags": [
+    "shapes",
+    "cute",
+    "success"
+   ]
+  },
+  {
+   "id": "stickers/check",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Check mark",
+    "zh-CN": "对勾",
+    "ja": "チェック",
+    "ko": "체크",
+    "es": "Marca de verificación"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "check.html",
+   "w": 400,
+   "h": 400,
+   "about": "A green check mark draws itself in one stroke. For done, correct or approved moments.",
+   "tags": [
+    "success",
+    "ui",
+    "explainer"
+   ]
+  },
+  {
+   "id": "stickers/cross",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Cross",
+    "zh-CN": "叉",
+    "ja": "バツ",
+    "ko": "엑스",
+    "es": "Cruz"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "cross.html",
+   "w": 400,
+   "h": 400,
+   "about": "A red cross draws itself in two quick strokes. For wrong, rejected or cancelled points.",
+   "tags": [
+    "error",
+    "ui",
+    "explainer"
+   ]
+  },
+  {
+   "id": "stickers/circle",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Circle it",
+    "zh-CN": "圈出来",
+    "ja": "丸で囲む",
+    "ko": "동그라미",
+    "es": "Círculo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "circle.html",
+   "w": 500,
+   "h": 300,
+   "about": "A red hand-drawn ring draws itself around something. For circling and highlighting a detail in a tutorial.",
+   "tags": [
+    "handdrawn",
+    "arrow",
+    "explainer"
+   ]
+  },
+  {
+   "id": "stickers/underline",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Underline",
+    "zh-CN": "划重点",
+    "ja": "アンダーライン",
+    "ko": "밑줄",
+    "es": "Subrayado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "underline.html",
+   "w": 600,
+   "h": 120,
+   "about": "A yellow brush stroke draws itself left to right as an underline. For emphasizing a word or caption.",
+   "tags": [
+    "handdrawn",
+    "arrow",
+    "explainer"
+   ]
+  },
+  {
+   "id": "stickers/pin",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Location pin",
+    "zh-CN": "定位",
+    "ja": "位置ピン",
+    "ko": "위치 핀",
+    "es": "Ubicación"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "pin.html",
+   "w": 400,
+   "h": 400,
+   "about": "A red map pin drops in from above and settles with a small bounce. For marking a place on a map or in travel clips.",
+   "tags": [
+    "map",
+    "travel",
+    "bounce"
+   ]
+  },
+  {
+   "id": "stickers/arrow-right",
+   "cat": "sticker",
+   "group": "animated",
+   "name": {
+    "en": "Arrow, pointing",
+    "zh-CN": "向右箭头",
+    "ja": "右向き矢印",
+    "ko": "오른쪽 화살표",
+    "es": "Flecha derecha"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "arrow-right.html",
+   "w": 400,
+   "h": 400,
+   "about": "A thick yellow arrow pointing right nudges forward and back, repeating. For leading the eye or pointing to the next item.",
+   "tags": [
+    "arrow",
+    "slide"
+   ]
+  },
+  {
+   "id": "sounds/whoosh.m4a",
+   "cat": "sound",
+   "group": "transition",
+   "name": {
+    "en": "Whoosh",
+    "zh-CN": "嗖·快速",
+    "ja": "シュッ",
+    "ko": "휙",
+    "es": "Zumbido"
+   },
+   "kind": "sound",
+   "durationMs": 700
+  },
+  {
+   "id": "sounds/whoosh-low.m4a",
+   "cat": "sound",
+   "group": "transition",
+   "name": {
+    "en": "Low whoosh",
+    "zh-CN": "嗖·低沉",
+    "ja": "低いシュッ",
+    "ko": "낮은 휙",
+    "es": "Zumbido grave"
+   },
+   "kind": "sound",
+   "durationMs": 1200
+  },
+  {
+   "id": "sounds/swish.m4a",
+   "cat": "sound",
+   "group": "transition",
+   "name": {
+    "en": "Swish",
+    "zh-CN": "刷",
+    "ja": "スウィッシュ",
+    "ko": "쉭",
+    "es": "Silbido"
+   },
+   "kind": "sound",
+   "durationMs": 350
+  },
+  {
+   "id": "sounds/riser.m4a",
+   "cat": "sound",
+   "group": "transition",
+   "name": {
+    "en": "Riser",
+    "zh-CN": "上升音",
+    "ja": "ライザー",
+    "ko": "라이저",
+    "es": "Subida"
+   },
+   "kind": "sound",
+   "durationMs": 2200
+  },
+  {
+   "id": "sounds/drop.m4a",
+   "cat": "sound",
+   "group": "transition",
+   "name": {
+    "en": "Drop",
+    "zh-CN": "下落音",
+    "ja": "ドロップ",
+    "ko": "드롭",
+    "es": "Caída"
+   },
+   "kind": "sound",
+   "durationMs": 1400
+  },
+  {
+   "id": "sounds/ding.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Ding",
+    "zh-CN": "叮",
+    "ja": "チーン",
+    "ko": "띵",
+    "es": "Ding"
+   },
+   "kind": "sound",
+   "durationMs": 1400
+  },
+  {
+   "id": "sounds/pop.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Pop",
+    "zh-CN": "啵",
+    "ja": "ポン",
+    "ko": "뽁",
+    "es": "Pop"
+   },
+   "kind": "sound",
+   "durationMs": 150
+  },
+  {
+   "id": "sounds/click.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Click",
+    "zh-CN": "点击",
+    "ja": "クリック",
+    "ko": "클릭",
+    "es": "Clic"
+   },
+   "kind": "sound",
+   "durationMs": 60
+  },
+  {
+   "id": "sounds/typing.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Typing",
+    "zh-CN": "键盘打字",
+    "ja": "タイピング",
+    "ko": "타자",
+    "es": "Tecleo"
+   },
+   "kind": "sound",
+   "durationMs": 1750
+  },
+  {
+   "id": "sounds/shutter.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Camera shutter",
+    "zh-CN": "相机快门",
+    "ja": "シャッター音",
+    "ko": "카메라 셔터",
+    "es": "Obturador"
+   },
+   "kind": "sound",
+   "durationMs": 300
+  },
+  {
+   "id": "sounds/buzz.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Phone buzz",
+    "zh-CN": "手机震动",
+    "ja": "振動",
+    "ko": "진동",
+    "es": "Vibración"
+   },
+   "kind": "sound",
+   "durationMs": 900
+  },
+  {
+   "id": "sounds/notify.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Notification",
+    "zh-CN": "提示音",
+    "ja": "通知音",
+    "ko": "알림음",
+    "es": "Notificación"
+   },
+   "kind": "sound",
+   "durationMs": 800
+  },
+  {
+   "id": "sounds/tick.m4a",
+   "cat": "sound",
+   "group": "ui",
+   "name": {
+    "en": "Clock ticking",
+    "zh-CN": "时钟滴答",
+    "ja": "時計の音",
+    "ko": "시계 똑딱",
+    "es": "Tictac"
+   },
+   "kind": "sound",
+   "durationMs": 2000
+  },
+  {
+   "id": "sounds/boom.m4a",
+   "cat": "sound",
+   "group": "impact",
+   "name": {
+    "en": "Boom",
+    "zh-CN": "重低音",
+    "ja": "ブーム",
+    "ko": "붐",
+    "es": "Estruendo"
+   },
+   "kind": "sound",
+   "durationMs": 1600
+  },
+  {
+   "id": "sounds/hit.m4a",
+   "cat": "sound",
+   "group": "impact",
+   "name": {
+    "en": "Hit",
+    "zh-CN": "打击",
+    "ja": "ヒット",
+    "ko": "타격",
+    "es": "Golpe"
+   },
+   "kind": "sound",
+   "durationMs": 500
+  },
+  {
+   "id": "sounds/kick.m4a",
+   "cat": "sound",
+   "group": "impact",
+   "name": {
+    "en": "Kick drum",
+    "zh-CN": "鼓点",
+    "ja": "キック",
+    "ko": "킥",
+    "es": "Bombo"
+   },
+   "kind": "sound",
+   "durationMs": 450
+  },
+  {
+   "id": "sounds/heartbeat.m4a",
+   "cat": "sound",
+   "group": "impact",
+   "name": {
+    "en": "Heartbeat",
+    "zh-CN": "心跳",
+    "ja": "心音",
+    "ko": "심장 소리",
+    "es": "Latido"
+   },
+   "kind": "sound",
+   "durationMs": 1600
+  },
+  {
+   "id": "sounds/zap.m4a",
+   "cat": "sound",
+   "group": "impact",
+   "name": {
+    "en": "Zap",
+    "zh-CN": "电流",
+    "ja": "ザップ",
+    "ko": "지직",
+    "es": "Descarga"
+   },
+   "kind": "sound",
+   "durationMs": 400
+  },
+  {
+   "id": "sounds/rain.m4a",
+   "cat": "sound",
+   "group": "ambience",
+   "name": {
+    "en": "Rain",
+    "zh-CN": "雨声",
+    "ja": "雨音",
+    "ko": "빗소리",
+    "es": "Lluvia"
+   },
+   "kind": "sound",
+   "durationMs": 8000
+  },
+  {
+   "id": "sounds/wind.m4a",
+   "cat": "sound",
+   "group": "ambience",
+   "name": {
+    "en": "Wind",
+    "zh-CN": "风声",
+    "ja": "風の音",
+    "ko": "바람 소리",
+    "es": "Viento"
+   },
+   "kind": "sound",
+   "durationMs": 8000
+  }
+ ]
+}

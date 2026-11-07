@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sun rays</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Rays of sunlight fan out from the middle and turn while a sun swells to fill the frame over the cut, then the
+ * light fades as the rays turn on. It lasts 1 s and covers the cut at its middle: put its middle on the cut. A
+ * page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame so it fits
+ * a stage of any shape.
+ */
+const D = 1;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const mix = (a, b, x) => a + (b - a) * x;
+const outCubic = (x) => 1 - (1 - x) ** 3;
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+const inExpo = (x) => (x <= 0 ? 0 : 2 ** (10 * x - 10));
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+function draw(u) {
+  const cx = W / 2, cy = H / 2, R = Math.hypot(W, H);
+  const swell = Math.sin(Math.PI * u);
+  const reach = R * mix(0.15, 1.1, outCubic(seg(u, 0, 0.45)));
+  g.globalCompositeOperation = 'lighter';
+  g.filter = `blur(${Math.round(H * 0.012)}px)`;
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2 + u * 0.9 + hash(i) * 0.15;
+    const w = (0.012 + hash(i + 9) * 0.05) * (0.4 + swell);
+    const len = reach * (0.6 + 0.4 * hash(i + 3));
+    const ray = g.createRadialGradient(cx, cy, 0, cx, cy, len);
+    ray.addColorStop(0, `rgba(255, 246, 210, ${(0.25 + 0.3 * hash(i + 5)) * swell})`);
+    ray.addColorStop(1, 'rgba(255, 180, 70, 0)');
+    g.fillStyle = ray;
+    g.beginPath();
+    g.moveTo(cx, cy);
+    g.arc(cx, cy, len, a - w, a + w);
+    g.closePath();
+    g.fill();
+  }
+  g.globalCompositeOperation = 'source-over';
+  g.filter = 'none';
+  /* the sun: a disc that swells to the frame over the cut */
+  const cover = u < 0.5 ? inExpo(seg(u, 0.25, 0.42)) : 1 - inOut(seg(u, 0.56, 0.84));
+  const r = u < 0.5 ? mix(H * 0.04, R * 0.9, inExpo(seg(u, 0.05, 0.42))) : R * 0.9;
+  const sun = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+  const a = u < 0.5 ? seg(u, 0, 0.1) : cover;
+  sun.addColorStop(0, `rgba(255, 255, 255, ${a})`);
+  sun.addColorStop(0.3, `rgba(255, 248, 225, ${a})`);
+  sun.addColorStop(0.6, `rgba(255, 220, 150, ${a * 0.5})`);
+  sun.addColorStop(1, 'rgba(255, 200, 120, 0)');
+  g.fillStyle = sun;
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = `rgba(255, 250, 236, ${cover})`;
+  g.fillRect(0, 0, W, H);
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

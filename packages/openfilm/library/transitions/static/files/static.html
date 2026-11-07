@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>TV static</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+.l { position: fixed; inset: 0; pointer-events: none; }
+.l { background-color: #777; background-size: 180px; animation: n 0.6s steps(1) both;
+background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='1' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+@keyframes n { 0% { opacity: 0; } 20% { opacity: 1; background-position: 0 0; } 35% { background-position: 40px 70px; } 50% { background-position: -60px 20px; } 65% { background-position: 25px -45px; } 80% { opacity: 1; } 100% { opacity: 0; } }
+</style>
+</head>
+<body>
+<div class="l"></div>
+<script>
+/*
+ * A burst of TV static hides the cut. It lasts 0.6 s and covers the cut at its middle: put its middle on the cut.
+ * A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by
+ * the host.
+ */
+window.film = { duration: 0.6, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

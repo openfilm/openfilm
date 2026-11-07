@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Comic burst</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --font: 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ffd60a; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.in { transform-origin: 200px 200px; animation: in 0.5s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes in { 0% { transform: scale(0) rotate(-50deg); } 55% { transform: scale(1.18) rotate(6deg); } 78% { transform: scale(0.94) rotate(-2deg); } 100% { transform: none; } }
+.j { transform-origin: 200px 200px; animation: j 0.6s steps(1) 0.5s infinite; }
+@keyframes j { 0% { transform: rotate(-1.5deg) scale(1.02); } 33% { transform: rotate(1.5deg) scale(0.99); } 66% { transform: rotate(0deg) scale(1.03); } }
+.label { font: 400 92px var(--font); fill: #16161a; stroke: #ffffff; stroke-width: 12px; stroke-linejoin: round; paint-order: stroke; }
+.tw { transform-origin: 200px 214px; animation: tw 0.5s cubic-bezier(.34, 1.56, .64, 1) 0.12s both; }
+@keyframes tw { from { transform: scale(0.2) rotate(-8deg); } to { transform: rotate(-8deg); } }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 400 400"><g class="in"><g class="j">
+<polygon points="200.0,29.7 232.1,69.6 286.2,35.7 286.6,102.2 351.3,95.6 333.3,149.4 396.6,176.1 322.0,214.8 366.3,263.1 299.9,269.0 319.6,335.1 263.8,321.6 248.5,396.9 200.0,322.7 149.4,405.2 133.5,326.8 75.3,340.7 93.2,273.7 23.1,267.1 69.9,215.8 1.1,175.8 71.6,151.3 56.7,101.1 125.9,116.3 103.7,16.6 168.4,71.8" fill="#16161a" transform="translate(10 12)"/>
+<polygon points="200.0,29.7 232.1,69.6 286.2,35.7 286.6,102.2 351.3,95.6 333.3,149.4 396.6,176.1 322.0,214.8 366.3,263.1 299.9,269.0 319.6,335.1 263.8,321.6 248.5,396.9 200.0,322.7 149.4,405.2 133.5,326.8 75.3,340.7 93.2,273.7 23.1,267.1 69.9,215.8 1.1,175.8 71.6,151.3 56.7,101.1 125.9,116.3 103.7,16.6 168.4,71.8" fill="var(--color)" stroke="#16161a" stroke-width="8" stroke-linejoin="round"/>
+<polygon points="200.0,49.1 226.2,93.7 271.8,63.2 274.3,116.1 335.0,106.8 290.1,165.8 349.6,181.8 307.7,213.1 344.7,254.9 291.8,263.4 293.1,305.1 245.9,287.4 234.3,339.1 200.0,310.1 167.7,331.0 154.9,285.8 108.3,303.5 117.6,256.9 79.0,245.9 94.8,212.8 38.1,180.3 97.1,161.0 70.5,110.6 132.4,123.7 131.5,69.4 173.1,90.7" fill="#ffffff" opacity="0.35"/>
+<g class="tw"><text class="label" x="200" y="244" text-anchor="middle">WOW!</text></g>
+</g></g></svg>
+<script>
+/*
+ * A comic-book burst that bursts out with a word in it, and keeps jittering as if it were shouting. Its words and
+ * color are the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS
+ * animations are held at t by the host.
+ */
+window.film = { width: 400, height: 400, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

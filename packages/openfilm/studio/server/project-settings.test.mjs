@@ -31,6 +31,10 @@ test('a project keeps its settings in .film/settings.json; null takes one away',
     assert.deepEqual(JSON.parse(readFileSync(join(root, PROJECT_SETTINGS_FILE), 'utf8')).fps, 29.97);
     assert.deepEqual(await patchProjectSettings(root, { fps: null }), { trackNames: [{ name: 'Music', index: 3, clips: [] }] });
     await assert.rejects(patchProjectSettings(root, { fps: 12 }), /fps: one of/);
+    const motionBlur = { enabled: true, samples: 12, shutter: 0.25 };
+    await patchProjectSettings(root, { motionBlur });
+    await assert.rejects(patchProjectSettings(root, { motionBlur: { ...motionBlur, samples: 1.5 } }), /motionBlur/);
+    assert.deepEqual((await readProjectSettings(root)).motionBlur, motionBlur, 'refusing a bad sample count keeps the prior settings');
     /* a file written wrong reads as no settings */
     mkdirSync(join(root, '.film'), { recursive: true });
     writeFileSync(join(root, PROJECT_SETTINGS_FILE), '{ not json');

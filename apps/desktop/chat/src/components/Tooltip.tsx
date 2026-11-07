@@ -144,9 +144,9 @@ export function Tooltip({
               top: side === 'bottom' ? at.y + 2 + ARROW_H : at.y - 2 - ARROW_H,
               /* Hidden on the first frame, before the shift is measured, so it doesn't jump from the wrong place. */
               visibility: fit ? 'visible' : 'hidden',
-              background: 'var(--tooltip-bg)',
-              color: 'var(--tooltip-text)',
-              border: '1px solid var(--tooltip-border)',
+              background: 'var(--bg-raised)',
+              color: 'var(--text)',
+              border: '1px solid var(--border-strong)',
             }}
           >
             {content ?? label}
@@ -161,20 +161,20 @@ export function Tooltip({
                 left: fit?.arrow ?? '50%',
                 width: ARROW_BOX,
                 height: ARROW_BOX,
-                background: 'var(--tooltip-bg)',
+                background: 'var(--bg-raised)',
                 /* A square turned 45° with only its two outer edges stroked, over the bubble's border, makes one seamless arrow. */
                 ...(side === 'bottom'
                   ? {
                     top: -ARROW_BOX / 2 - 0.5,
                     transform: 'translateX(-50%) rotate(45deg)',
-                    borderTop: '1px solid var(--tooltip-border)',
-                    borderLeft: '1px solid var(--tooltip-border)',
+                    borderTop: '1px solid var(--border-strong)',
+                    borderLeft: '1px solid var(--border-strong)',
                   }
                   : {
                     bottom: -ARROW_BOX / 2 - 0.5,
                     transform: 'translateX(-50%) rotate(45deg)',
-                    borderBottom: '1px solid var(--tooltip-border)',
-                    borderRight: '1px solid var(--tooltip-border)',
+                    borderBottom: '1px solid var(--border-strong)',
+                    borderRight: '1px solid var(--border-strong)',
                   }),
               }}
             />

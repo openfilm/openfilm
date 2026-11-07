@@ -71,7 +71,7 @@ export function WhatsNew() {
         aria-modal="true"
         aria-labelledby="whats-new-title"
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[min(760px,88vh)] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+        className="flex max-h-[min(760px,88vh)] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]"
       >
         <div className="flex items-start gap-3 px-6 pb-2 pt-6">
           <div className="min-w-0 flex-1">
@@ -94,7 +94,7 @@ export function WhatsNew() {
             {t('whatsNew.changelog')}<ArrowUpRight size={14} aria-hidden />
           </a>
           <button type="button" onClick={close} autoFocus
-            className="ml-auto inline-flex h-9 items-center justify-center rounded-[8px] bg-[var(--text)] px-5 text-[14px] font-medium text-[var(--bg)] transition hover:opacity-90">
+            className="ml-auto inline-flex h-9 items-center justify-center rounded-[8px] bg-[var(--primary)] px-5 text-[14px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)]">
             {t('whatsNew.ok')}
           </button>
         </div>
@@ -139,5 +139,3 @@ function Release({ release }: { release: ReleaseNotes }) {
 
 /** Whether this release has notes to show again (Settings › About). */
 export const hasNotes = (version: string | undefined) => Boolean(version && releaseNotes(version));
-/** The version whose notes are written, for a preview before it ships (Developer). */
-export const notesVersion = () => RELEASE.version;

@@ -2,9 +2,9 @@
  * The outline of a clip selected elsewhere (on the timeline): placed and turned as the clip is, at least 8 × 8.
  */
 import type { MgBox, MgTransform } from '@/lib/mg-transform';
-import { FRAME_BLUE } from './StageTransformFrame';
+import { FRAME_COLOR } from './StageTransformFrame';
 
-export function MgOutline({ t, box, viewScale, color = FRAME_BLUE }: { t: MgTransform; box: MgBox; viewScale: number; color?: string }) {
+export function MgOutline({ t, box, viewScale, color = FRAME_COLOR }: { t: MgTransform; box: MgBox; viewScale: number; color?: string }) {
   return (
     <div
       className="pointer-events-none absolute"

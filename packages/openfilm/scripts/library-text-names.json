@@ -1,0 +1,548 @@
+{
+ "groups/basic": {
+  "en": "Basic",
+  "zh-CN": "基础",
+  "ja": "ベーシック",
+  "ko": "기본",
+  "es": "Básico"
+ },
+ "groups/wordart": {
+  "en": "Word art",
+  "zh-CN": "花字",
+  "ja": "デコ文字",
+  "ko": "꾸밈 글자",
+  "es": "Texto artístico"
+ },
+ "groups/in": {
+  "en": "In",
+  "zh-CN": "入场动画",
+  "ja": "イン",
+  "ko": "등장",
+  "es": "Entrada"
+ },
+ "groups/loop": {
+  "en": "Loop",
+  "zh-CN": "循环动画",
+  "ja": "ループ",
+  "ko": "반복",
+  "es": "Bucle"
+ },
+ "groups/out": {
+  "en": "Out",
+  "zh-CN": "出场动画",
+  "ja": "アウト",
+  "ko": "퇴장",
+  "es": "Salida"
+ },
+ "basic/title": {
+  "en": "Title",
+  "zh-CN": "标题",
+  "ja": "タイトル",
+  "ko": "제목",
+  "es": "Título"
+ },
+ "basic/subtitle": {
+  "en": "Subtitle",
+  "zh-CN": "副标题",
+  "ja": "サブタイトル",
+  "ko": "부제목",
+  "es": "Subtítulo"
+ },
+ "basic/body": {
+  "en": "Body",
+  "zh-CN": "正文",
+  "ja": "本文",
+  "ko": "본문",
+  "es": "Cuerpo"
+ },
+ "basic/note": {
+  "en": "Note",
+  "zh-CN": "注释",
+  "ja": "注釈",
+  "ko": "주석",
+  "es": "Nota"
+ },
+ "basic/lower": {
+  "en": "Line below",
+  "zh-CN": "下方字幕",
+  "ja": "下部テロップ",
+  "ko": "하단 자막",
+  "es": "Rótulo inferior"
+ },
+ "wordart/white-black": {
+  "en": "White on black edge",
+  "zh-CN": "白字黑边",
+  "ja": "白文字黒フチ",
+  "ko": "흰 글자 검은 테두리",
+  "es": "Blanco con borde"
+ },
+ "wordart/yellow-variety": {
+  "en": "Variety yellow",
+  "zh-CN": "综艺黄字",
+  "ja": "バラエティ黄",
+  "ko": "예능 노랑",
+  "es": "Amarillo show"
+ },
+ "wordart/variety-pink": {
+  "en": "Variety pink",
+  "zh-CN": "综艺粉字",
+  "ja": "バラエティピンク",
+  "ko": "예능 핑크",
+  "es": "Rosa show"
+ },
+ "wordart/candy": {
+  "en": "Candy",
+  "zh-CN": "糖果字",
+  "ja": "キャンディ",
+  "ko": "캔디",
+  "es": "Caramelo"
+ },
+ "wordart/comic": {
+  "en": "Comic",
+  "zh-CN": "漫画字",
+  "ja": "コミック",
+  "ko": "코믹",
+  "es": "Cómic"
+ },
+ "wordart/cute-pink": {
+  "en": "Cute pink",
+  "zh-CN": "可爱粉",
+  "ja": "かわいいピンク",
+  "ko": "귀여운 핑크",
+  "es": "Rosa tierno"
+ },
+ "wordart/mint": {
+  "en": "Mint",
+  "zh-CN": "薄荷",
+  "ja": "ミント",
+  "ko": "민트",
+  "es": "Menta"
+ },
+ "wordart/neon-pink": {
+  "en": "Neon pink",
+  "zh-CN": "霓虹粉",
+  "ja": "ネオンピンク",
+  "ko": "네온 핑크",
+  "es": "Neón rosa"
+ },
+ "wordart/neon-cyan": {
+  "en": "Neon cyan",
+  "zh-CN": "霓虹青",
+  "ja": "ネオンシアン",
+  "ko": "네온 시안",
+  "es": "Neón cian"
+ },
+ "wordart/neon-yellow": {
+  "en": "Neon yellow",
+  "zh-CN": "霓虹黄",
+  "ja": "ネオンイエロー",
+  "ko": "네온 옐로",
+  "es": "Neón amarillo"
+ },
+ "wordart/gold": {
+  "en": "Gold",
+  "zh-CN": "鎏金",
+  "ja": "ゴールド",
+  "ko": "골드",
+  "es": "Oro"
+ },
+ "wordart/silver": {
+  "en": "Silver",
+  "zh-CN": "银色",
+  "ja": "シルバー",
+  "ko": "실버",
+  "es": "Plata"
+ },
+ "wordart/sunset": {
+  "en": "Sunset",
+  "zh-CN": "日落渐变",
+  "ja": "サンセット",
+  "ko": "선셋",
+  "es": "Atardecer"
+ },
+ "wordart/ocean": {
+  "en": "Ocean",
+  "zh-CN": "海洋渐变",
+  "ja": "オーシャン",
+  "ko": "오션",
+  "es": "Océano"
+ },
+ "wordart/aurora": {
+  "en": "Aurora",
+  "zh-CN": "极光",
+  "ja": "オーロラ",
+  "ko": "오로라",
+  "es": "Aurora"
+ },
+ "wordart/fire": {
+  "en": "Fire",
+  "zh-CN": "火焰",
+  "ja": "ファイア",
+  "ko": "불꽃",
+  "es": "Fuego"
+ },
+ "wordart/ice": {
+  "en": "Ice",
+  "zh-CN": "冰霜",
+  "ja": "アイス",
+  "ko": "아이스",
+  "es": "Hielo"
+ },
+ "wordart/solid-red": {
+  "en": "Solid red",
+  "zh-CN": "立体红",
+  "ja": "立体レッド",
+  "ko": "입체 레드",
+  "es": "Rojo sólido"
+ },
+ "wordart/solid-blue": {
+  "en": "Solid blue",
+  "zh-CN": "立体蓝",
+  "ja": "立体ブルー",
+  "ko": "입체 블루",
+  "es": "Azul sólido"
+ },
+ "wordart/long-shadow": {
+  "en": "Long shadow",
+  "zh-CN": "长投影",
+  "ja": "ロングシャドウ",
+  "ko": "롱 섀도",
+  "es": "Sombra larga"
+ },
+ "wordart/outline": {
+  "en": "Outline",
+  "zh-CN": "空心字",
+  "ja": "袋文字",
+  "ko": "외곽선",
+  "es": "Contorno"
+ },
+ "wordart/double-edge": {
+  "en": "Double edge",
+  "zh-CN": "双描边",
+  "ja": "ダブルフチ",
+  "ko": "이중 테두리",
+  "es": "Doble borde"
+ },
+ "wordart/retro": {
+  "en": "Retro",
+  "zh-CN": "复古",
+  "ja": "レトロ",
+  "ko": "레트로",
+  "es": "Retro"
+ },
+ "wordart/vapor": {
+  "en": "Vaporwave",
+  "zh-CN": "蒸汽波",
+  "ja": "ヴェイパー",
+  "ko": "베이퍼웨이브",
+  "es": "Vaporwave"
+ },
+ "wordart/glitch": {
+  "en": "Glitch",
+  "zh-CN": "故障",
+  "ja": "グリッチ",
+  "ko": "글리치",
+  "es": "Glitch"
+ },
+ "wordart/label-black": {
+  "en": "Black label",
+  "zh-CN": "黑底白字",
+  "ja": "黒ラベル",
+  "ko": "검정 라벨",
+  "es": "Etiqueta negra"
+ },
+ "wordart/label-yellow": {
+  "en": "Yellow label",
+  "zh-CN": "黄底黑字",
+  "ja": "黄ラベル",
+  "ko": "노랑 라벨",
+  "es": "Etiqueta amarilla"
+ },
+ "wordart/label-red": {
+  "en": "News red",
+  "zh-CN": "新闻红条",
+  "ja": "ニュース赤",
+  "ko": "뉴스 레드",
+  "es": "Rojo noticias"
+ },
+ "wordart/highlighter": {
+  "en": "Highlighter",
+  "zh-CN": "荧光笔",
+  "ja": "蛍光ペン",
+  "ko": "형광펜",
+  "es": "Resaltador"
+ },
+ "wordart/bubble": {
+  "en": "Bubble",
+  "zh-CN": "气泡框",
+  "ja": "吹き出し",
+  "ko": "말풍선",
+  "es": "Burbuja"
+ },
+ "wordart/handwriting": {
+  "en": "Handwriting",
+  "zh-CN": "手写",
+  "ja": "手書き",
+  "ko": "손글씨",
+  "es": "Manuscrita"
+ },
+ "wordart/cinema": {
+  "en": "Cinema",
+  "zh-CN": "电影字",
+  "ja": "シネマ",
+  "ko": "시네마",
+  "es": "Cine"
+ },
+ "wordart/elegant": {
+  "en": "Elegant",
+  "zh-CN": "优雅衬线",
+  "ja": "エレガント",
+  "ko": "우아한",
+  "es": "Elegante"
+ },
+ "wordart/thin": {
+  "en": "Thin",
+  "zh-CN": "极简细体",
+  "ja": "ミニマル",
+  "ko": "미니멀",
+  "es": "Fina"
+ },
+ "wordart/soft-shadow": {
+  "en": "Soft shadow",
+  "zh-CN": "柔和投影",
+  "ja": "ソフトシャドウ",
+  "ko": "부드러운 그림자",
+  "es": "Sombra suave"
+ },
+ "wordart/stamp": {
+  "en": "Stamp",
+  "zh-CN": "印章",
+  "ja": "スタンプ",
+  "ko": "도장",
+  "es": "Sello"
+ },
+ "in/none": {
+  "en": "None",
+  "zh-CN": "无",
+  "ja": "なし",
+  "ko": "없음",
+  "es": "Ninguna"
+ },
+ "in/fade": {
+  "en": "Fade",
+  "zh-CN": "渐显",
+  "ja": "フェード",
+  "ko": "페이드",
+  "es": "Fundido"
+ },
+ "in/rise": {
+  "en": "Rise",
+  "zh-CN": "上浮",
+  "ja": "浮上",
+  "ko": "떠오르기",
+  "es": "Subir"
+ },
+ "in/drop": {
+  "en": "Drop",
+  "zh-CN": "下落",
+  "ja": "落下",
+  "ko": "떨어지기",
+  "es": "Caer"
+ },
+ "in/pop": {
+  "en": "Pop",
+  "zh-CN": "弹出",
+  "ja": "ポップ",
+  "ko": "팝",
+  "es": "Pop"
+ },
+ "in/zoom": {
+  "en": "Zoom",
+  "zh-CN": "缩放",
+  "ja": "ズーム",
+  "ko": "줌",
+  "es": "Zoom"
+ },
+ "in/blur": {
+  "en": "Blur",
+  "zh-CN": "模糊渐显",
+  "ja": "ぼかし",
+  "ko": "블러",
+  "es": "Desenfoque"
+ },
+ "in/slide-left": {
+  "en": "From left",
+  "zh-CN": "左侧滑入",
+  "ja": "左から",
+  "ko": "왼쪽에서",
+  "es": "Desde la izquierda"
+ },
+ "in/slide-right": {
+  "en": "From right",
+  "zh-CN": "右侧滑入",
+  "ja": "右から",
+  "ko": "오른쪽에서",
+  "es": "Desde la derecha"
+ },
+ "in/wipe": {
+  "en": "Wipe",
+  "zh-CN": "擦入",
+  "ja": "ワイプ",
+  "ko": "와이프",
+  "es": "Barrido"
+ },
+ "in/type": {
+  "en": "Typewriter",
+  "zh-CN": "打字机",
+  "ja": "タイプ",
+  "ko": "타자기",
+  "es": "Máquina de escribir"
+ },
+ "in/stamp": {
+  "en": "Stamp",
+  "zh-CN": "盖章",
+  "ja": "スタンプ",
+  "ko": "도장",
+  "es": "Sello"
+ },
+ "in/spin-in": {
+  "en": "Spin",
+  "zh-CN": "旋入",
+  "ja": "回転",
+  "ko": "회전",
+  "es": "Giro"
+ },
+ "in/flip-in": {
+  "en": "Flip",
+  "zh-CN": "翻转",
+  "ja": "フリップ",
+  "ko": "플립",
+  "es": "Voltear"
+ },
+ "in/bounce-in": {
+  "en": "Bounce",
+  "zh-CN": "弹跳",
+  "ja": "バウンド",
+  "ko": "바운스",
+  "es": "Rebote"
+ },
+ "loop/none": {
+  "en": "None",
+  "zh-CN": "无",
+  "ja": "なし",
+  "ko": "없음",
+  "es": "Ninguna"
+ },
+ "loop/float": {
+  "en": "Float",
+  "zh-CN": "漂浮",
+  "ja": "ふわふわ",
+  "ko": "둥실",
+  "es": "Flotar"
+ },
+ "loop/pulse": {
+  "en": "Pulse",
+  "zh-CN": "脉动",
+  "ja": "パルス",
+  "ko": "펄스",
+  "es": "Latido"
+ },
+ "loop/wiggle": {
+  "en": "Wiggle",
+  "zh-CN": "摇摆",
+  "ja": "ゆらゆら",
+  "ko": "흔들흔들",
+  "es": "Vaivén"
+ },
+ "loop/shake": {
+  "en": "Shake",
+  "zh-CN": "抖动",
+  "ja": "シェイク",
+  "ko": "떨림",
+  "es": "Temblor"
+ },
+ "loop/breathe": {
+  "en": "Breathe",
+  "zh-CN": "呼吸",
+  "ja": "呼吸",
+  "ko": "숨쉬기",
+  "es": "Respirar"
+ },
+ "loop/swing": {
+  "en": "Swing",
+  "zh-CN": "钟摆",
+  "ja": "スイング",
+  "ko": "스윙",
+  "es": "Columpio"
+ },
+ "loop/flicker": {
+  "en": "Flicker",
+  "zh-CN": "闪烁",
+  "ja": "点滅",
+  "ko": "깜빡임",
+  "es": "Parpadeo"
+ },
+ "out/none": {
+  "en": "None",
+  "zh-CN": "无",
+  "ja": "なし",
+  "ko": "없음",
+  "es": "Ninguna"
+ },
+ "out/fade-out": {
+  "en": "Fade",
+  "zh-CN": "渐隐",
+  "ja": "フェード",
+  "ko": "페이드",
+  "es": "Fundido"
+ },
+ "out/sink": {
+  "en": "Sink",
+  "zh-CN": "下沉",
+  "ja": "沈む",
+  "ko": "가라앉기",
+  "es": "Hundir"
+ },
+ "out/lift": {
+  "en": "Lift",
+  "zh-CN": "上飘",
+  "ja": "浮き上がる",
+  "ko": "날아가기",
+  "es": "Elevar"
+ },
+ "out/shrink": {
+  "en": "Shrink",
+  "zh-CN": "缩小",
+  "ja": "縮小",
+  "ko": "축소",
+  "es": "Encoger"
+ },
+ "out/blur-out": {
+  "en": "Blur",
+  "zh-CN": "模糊消失",
+  "ja": "ぼかし",
+  "ko": "블러",
+  "es": "Desenfoque"
+ },
+ "out/wipe-out": {
+  "en": "Wipe",
+  "zh-CN": "擦除",
+  "ja": "ワイプ",
+  "ko": "와이프",
+  "es": "Barrido"
+ },
+ "out/zoom-out": {
+  "en": "Zoom",
+  "zh-CN": "放大消失",
+  "ja": "ズーム",
+  "ko": "줌",
+  "es": "Zoom"
+ },
+ "text": {
+  "en": "Default text",
+  "zh-CN": "默认文本",
+  "ja": "デフォルトテキスト",
+  "ko": "기본 텍스트",
+  "es": "Texto"
+ }
+}

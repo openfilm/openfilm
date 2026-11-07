@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "var-omg.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Word\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Gradient top\", \"type\": \"var\", \"var\": \"--from\"}, {\"name\": \"Gradient bottom\", \"type\": \"var\", \"var\": \"--to\"}, {\"name\": \"Marks\", \"type\": \"var\", \"var\": \"--marks\"}]"
+    }
+  },
+  "durationMs": 4000
+}

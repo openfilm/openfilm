@@ -41,6 +41,8 @@ export const ACTIONS = [
   { id: 'prev-marker', tab: 'timeline', keys: ['alt+m', 'alt+shift+m'] },
   { id: 'speed', tab: 'timeline', keys: ['mod+r'] },
   { id: 'detach-audio', tab: 'timeline', keys: ['ctrl+shift+s'] },
+  { id: 'compound', tab: 'timeline', keys: ['alt+g'] },
+  { id: 'uncompound', tab: 'timeline', keys: ['alt+shift+g'] },
   /* the player */
   { id: 'play-pause', tab: 'player', keys: ['Space'] },
   { id: 'play-range', tab: 'player', keys: ['shift+Space'] },
@@ -78,6 +80,7 @@ export const ACTIONS = [
   { id: 'paste-attrs', tab: 'basic', keys: ['mod+shift+v'] },
   /* the rest */
   { id: 'refer', tab: 'other', keys: ['mod+l'] },
+  { id: 'work-mode', tab: 'other', keys: ['mod+e'] },
 ] as const satisfies readonly { id: string; tab: KeyTab; keys: readonly string[] }[];
 
 export type ActionId = (typeof ACTIONS)[number]['id'];
@@ -181,6 +184,9 @@ const PREMIERE: Partial<Record<ActionId, Binding>> = {
 
 /** Final Cut Pro's default keyboard shortcuts (Apple's "Keyboard shortcuts in Final Cut Pro"), where Studio has the action. */
 const FINAL_CUT: Partial<Record<ActionId, Binding>> = {
+  /* New Compound Clip, Break Apart Clip Items */
+  compound: ['alt+g'],
+  uncompound: ['mod+shift+g'],
   'play-pause': ['Space'],
   /* Play Selection */
   'play-range': ['/'],

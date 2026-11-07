@@ -8,7 +8,8 @@
  *
  * Hovering a row or moving through the rows with ↑/↓ shows that family on the picture; Esc, a click elsewhere or
  * closing without a pick takes it back; Enter or a click keeps it (one change). Typing filters by name and alias and
- * highlights the best match; ↑/↓/Enter work from the search box. A name in no list can still be typed and picked.
+ * highlights the best match; ↑/↓/Enter work from the search box. Only a family in the lists can be picked: a name
+ * typed that no font has would draw the words in a fallback, not in it.
  *
  * A family the page cannot draw (not installed, not declared for the page) shows in the field with a warning.
  */
@@ -99,9 +100,7 @@ export function FontFamilyPicker({
     [installed, project, page, recent, query, sample],
   );
   const rows = React.useMemo(() => sections.flatMap((s) => s.rows), [sections]);
-  const typed = query.trim();
-  const custom = typed && !rows.some((r) => r.family.toLowerCase() === typed.toLowerCase()) ? typed : null;
-  const options = React.useMemo(() => (custom ? [...rows.map((r) => r.family), custom] : rows.map((r) => r.family)), [rows, custom]);
+  const options = React.useMemo(() => rows.map((r) => r.family), [rows]);
 
   /* typing: the best match highlighted (not shown on the picture: that is for the hand on a row, or the arrows) */
   React.useEffect(() => { setActive(0); keyed.current = true; }, [query]);
@@ -233,7 +232,7 @@ export function FontFamilyPicker({
           <div
             role="dialog"
             aria-label={label}
-            className="fixed z-[10151] flex flex-col overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--panel)] shadow-[var(--shadow-lg)]"
+            className="fixed z-[10151] flex flex-col overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]"
             style={{ left: at.left, top: at.top, width: at.width, maxHeight: at.maxHeight }}
           >
             <input
@@ -267,19 +266,6 @@ export function FontFamilyPicker({
                   {s.rows.map((row) => rowOf(row, s.id))}
                 </div>
               ))}
-              {custom ? (
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={active === options.length - 1}
-                  data-index={options.length - 1}
-                  onPointerEnter={() => { setActive(options.length - 1); show(custom); }}
-                  onClick={() => pick(custom)}
-                  className={`flex w-full items-center px-2.5 py-1.5 text-left text-[12px] text-[var(--text-muted)] ${active === options.length - 1 ? 'bg-[var(--bg-hover)]' : ''}`}
-                >
-                  {t('inspector.fontUse').replace('{name}', custom)}
-                </button>
-              ) : null}
               {installed != null && !options.length ? (
                 <p className="px-2.5 py-2 text-[12px] text-[var(--text-faint)]">{t('inspector.fontNone')}</p>
               ) : null}

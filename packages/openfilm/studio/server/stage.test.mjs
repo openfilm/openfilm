@@ -122,6 +122,25 @@ test('a click on a title under a full-frame overlay (letterbox, vignette) takes 
   }
 });
 
+test('a page clip drawn larger than it is laid out (scaled about its middle) is found where it is drawn', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-stage-scaled-'));
+  writeFileSync(join(dir, 'word.html'), `<!doctype html><body style="margin:0">
+<div id="word" style="position:absolute;left:0;top:0;width:40px;height:20px;background:#fc0"></div>
+<script>window.film={duration:2,frame(){}}</script></body>`);
+  /* laid out at 100 × 50, drawn twice as large at (100, 40): its 40 × 20 corner is drawn at 100–180, 40–80 */
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'word', src: 'word.html', size: { w: 100, h: 50 }, box: { x: 100, y: 40, w: 200, h: 100 } }] }] }));
+  const stage = await stageOf(dir);
+  try {
+    const word = await stage.ask('hit', { x: 110, y: 50, detail: true });
+    assert.ok(word, 'where it is drawn');
+    samePlace([word.rect.left, word.rect.top, word.rect.width, word.rect.height], [100, 40, 80, 40], 'its outline where it is drawn');
+    assert.equal((await stage.ask('hit', { x: 175, y: 77, detail: true }))?.handle, word.handle, 'to its drawn edge');
+    assert.equal(await stage.ask('hit', { x: 190, y: 90, detail: true }), null, 'not past it');
+  } finally {
+    await stage.close();
+  }
+});
+
 test('a line typed in place starts with all of its words selected; a click on them moves the caret, though something unseen lies over them', { timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-stage-select-'));
   writeFileSync(join(dir, 'title.html'), `<!doctype html><body style="margin:0">

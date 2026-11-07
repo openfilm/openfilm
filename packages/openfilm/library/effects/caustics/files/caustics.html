@@ -1,0 +1,132 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Underwater light</title>
+<style>
+  /* what a clip of it may change: the light's color, how strong it is (0 to 1), how fast the water moves */
+  :root { --color: #bff4ff; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Under water: the net of light that waves focus as it wanders over everything, shafts of sun swaying down from the
+ * surface, a blue-green depth and specks drifting in the water. A page of OpenFilm's library (CC0): the light net is
+ * a moving net of cell edges, worked out from t alone at a low resolution and drawn soft.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// a soft round glow, drawn once for each color: a hot white core fading out through the color
+const sprites = new Map();
+function sprite(c) {
+  const key = c.join();
+  if (sprites.has(key)) return sprites.get(key);
+  const g = document.createElement('canvas'); g.width = g.height = 128;
+  const x = g.getContext('2d'), r = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  const hot = c.map((v) => Math.round(v + (255 - v) * 0.7));
+  r.addColorStop(0, `rgba(${hot},1)`); r.addColorStop(0.18, `rgba(${c},0.85)`); r.addColorStop(0.45, `rgba(${c},0.22)`); r.addColorStop(1, `rgba(${c},0)`);
+  x.fillStyle = r; x.fillRect(0, 0, 128, 128);
+  sprites.set(key, g);
+  return g;
+}
+const net = document.createElement('canvas'), nx = net.getContext('2d');
+let image = null;
+// the brightness of the light net at (u, v) at time s, 0..1: the edges between cells whose centers circle about,
+// where light is focused, warped a little so the lines wave; two such nets at their own scales and speeds
+function edges(u, v, s, seed) {
+  let f1 = 9, f2 = 9;
+  const iu = Math.floor(u), iv = Math.floor(v);
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const cx = iu + i, cy = iv + j, r = hash(cx * 12.9 + cy * 78.2 + seed);
+    const px = cx + 0.5 + 0.38 * Math.sin(s * (0.6 + r) + r * 6.283), py = cy + 0.5 + 0.38 * Math.cos(s * (0.5 + hash(r * 9.1)) + r * 11);
+    const d = (px - u) * (px - u) + (py - v) * (py - v);
+    if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) f2 = d;
+  }
+  const e = Math.sqrt(f2) - Math.sqrt(f1);
+  return Math.pow(Math.max(0, 1 - e / 0.13), 2.5);
+}
+function caustic(u, v, s) {
+  const wu = u + 0.06 * Math.sin(v * 9.1 + s * 0.9) + 0.1 * Math.sin(v * 3.1 + s * 0.5), wv = v + 0.06 * Math.sin(u * 8.3 - s * 0.8) + 0.1 * Math.sin(u * 2.7 - s * 0.4);
+  const a = edges(wu * 3.2, wv * 3.2, s, 1.3), b = edges(wv * 2.3 + 7, wu * 2.3 + 3, s * 0.8, 5.7);
+  // brightest where the two nets cross, and brighter in some patches than others
+  const patch = 0.5 + 0.5 * Math.sin(u * 1.3 + s * 0.2) * Math.sin(v * 1.7 - s * 0.15 + 1);
+  return Math.min(1, (0.35 * a + 0.22 * b + 1.8 * a * b) * (0.45 + 0.75 * patch));
+}
+const specks = Array.from({ length: 90 }, (_, i) => ({ x: hash(i + 0.1), y: hash(i + 0.2), z: hash(i + 0.3), f: 0.1 + hash(i + 0.4) * 0.3, p: hash(i + 0.5) * 6.283 }));
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), speed = num('--speed', 1), c = rgb('--color', '#bff4ff');
+    const tt = t * speed;
+    // the depth: blue-green, deeper toward the bottom
+    const deep = ctx.createLinearGradient(0, 0, 0, h);
+    deep.addColorStop(0, `rgba(30,150,180,${0.08 * amount})`); deep.addColorStop(1, `rgba(0,40,80,${0.22 * amount})`);
+    ctx.fillStyle = deep; ctx.fillRect(0, 0, w, h);
+    // the light net, about 180 points across
+    const lw = 300, lh = Math.max(60, Math.round(300 * h / w));
+    if (net.width !== lw || net.height !== lh) { net.width = lw; net.height = lh; image = nx.createImageData(lw, lh); }
+    const s = tt * 0.9, m = Math.min(lw, lh);
+    for (let y = 0; y < lh; y++) {
+      const fade = 1 - 0.55 * (y / lh);
+      for (let x = 0; x < lw; x++) {
+        const v = caustic((x / m) * 1.5, (y / m) * 1.5, s) * fade;
+        const k = (y * lw + x) * 4;
+        image.data[k] = c[0]; image.data[k + 1] = c[1]; image.data[k + 2] = c[2]; image.data[k + 3] = Math.round(255 * v);
+      }
+    }
+    nx.putImageData(image, 0, 0);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.9 * amount;
+    ctx.drawImage(net, 0, 0, w, h);
+    // shafts of sun from the surface, swaying
+    ctx.globalAlpha = amount;
+    const sway = 0.08 * Math.sin(tt * 0.35);
+    const g = ctx.createConicGradient(Math.PI / 2 - 0.5 + sway, w * 0.5, -h * 0.35);
+    const rays = 14;
+    for (let k = 0; k <= rays; k++) {
+      const f = k / rays, a = Math.max(0, Math.sin(f * Math.PI)) * (0.35 + 0.65 * Math.pow(0.5 + 0.5 * Math.sin(k * 2.7 + tt * (0.4 + 0.2 * hash(k))), 2));
+      g.addColorStop((f * 1) / 6.283, `rgba(${c},${(0.13 * a).toFixed(3)})`);
+    }
+    g.addColorStop(1.02 / 6.283, `rgba(${c},0)`); g.addColorStop(1, `rgba(${c},0)`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    // specks drifting in the water
+    const img = sprite(c);
+    for (const p of specks) {
+      const x = ((p.x + 0.02 * Math.sin(tt * p.f + p.p)) % 1) * w, y = (((p.y - tt * 0.01 * (0.5 + p.z)) % 1 + 1) % 1) * h;
+      const d = (0.3 + p.z * p.z * 1.2) * u * 3;
+      ctx.globalAlpha = 0.25 + 0.25 * Math.sin(t * 2 + p.p);
+      ctx.drawImage(img, x - d / 2, y - d / 2, d, d);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

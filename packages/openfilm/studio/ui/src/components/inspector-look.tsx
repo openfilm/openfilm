@@ -13,7 +13,7 @@ import {
   SquareDashed, Star, Strikethrough, Underline,
 } from 'lucide-react';
 
-import type { useT } from '@/i18n';
+import { useLanguage, type useT } from '@/i18n';
 import {
   ADJUST_KEYS, BLEND_MODES, FADE_DEFAULT, INNER_SHADOW_DEFAULT, PLACED_STROKE_DEFAULT, SHADOW_DEFAULT, adjustOf, backdropBlurCss,
   backdropBlurOf, cropCss, cropForRatio, cropOf, cropRatio, filterParts, framingCss, framingOf, innerShadowCss, innerShadowOf,
@@ -26,6 +26,8 @@ import {
 } from '@/lib/clip-mask';
 import type { MaskSession } from '@/lib/stage-mask';
 import { previewSettled, type Look, type LookEdit, type LookRead, type LookSet } from '@/lib/look';
+import { gradeFilter, gradeOf, withGrade } from '@/lib/grade';
+import { nameOf, useLibraryIndex } from '@/lib/library';
 import { knownAvailable, stylesOf } from '@/lib/font-menu';
 import {
   NAMED_WEIGHTS, isItalic, joinFontFamily, parseStyleValue, snapStyle, splitFontFamily, styleOptions, styleValue, weightKey, weightNumber,
@@ -361,7 +363,7 @@ export function MaskSection({
               type="button"
               aria-pressed={editing}
               onClick={() => setEditing((v) => !v)}
-              className={`flex h-5 items-center gap-1 rounded-[4px] px-1.5 text-[10.5px] font-medium transition hover:bg-[var(--bg-hover)] ${editing ? 'bg-[var(--fill-tsp)] text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}
+              className={`flex h-5 items-center gap-1 rounded-[4px] px-1.5 text-[10.5px] font-medium transition hover:bg-[var(--bg-hover)] ${editing ? 'bg-[var(--bg-field)] text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}
             >
               <SquareDashed size={11} />{t('inspector.maskEditOnPicture')}
             </button>
@@ -407,8 +409,8 @@ export function MaskSection({
               aria-pressed={now.invert}
               onClick={() => look.commit(edit((m) => ({ ...m, invert: !m.invert })))}
               className={`flex h-[26px] items-center justify-center gap-1 rounded-[5px] text-[11px] transition ${now.invert
-                ? 'bg-[var(--bg)] text-[var(--text)] shadow-[0_0_0_0.5px_var(--border-strong)]'
-                : 'bg-[var(--fill-tsp)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+                ? 'bg-[var(--bg-panel)] text-[var(--text)] shadow-[0_0_0_0.5px_var(--border-strong)]'
+                : 'bg-[var(--bg-field)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}
             >
               {t('inspector.maskInvert')}
             </button>
@@ -550,7 +552,7 @@ function RadiusField({ look, t }: { look: Look; t: T }) {
           title={croppedNow ? t('inspector.cornersCropped') : t('inspector.cornersEach')}
           disabled={croppedNow}
           onClick={() => setEach((v) => !v)}
-          className={`flex h-[26px] w-6 items-center justify-center rounded-[5px] transition disabled:opacity-40 ${each ? 'bg-[var(--bg-active)] text-[var(--text)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
+          className={`flex h-[26px] w-6 items-center justify-center rounded-[5px] transition disabled:opacity-40 ${each ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
         >
           <Scan size={12} />
         </button>
@@ -858,6 +860,47 @@ export function AdjustSection({ look, t }: { look: Look; t: T }) {
   );
 }
 
+/**
+ * The library's filter the picture wears (lib/grade), when it has one: its name, how strong it is (0 leaves the
+ * picture as it is), and "−" to take it off. Filters are put on from the library; the adjustments go after one.
+ */
+export function FilterSection({ look, t }: { look: Look; t: T }) {
+  const lang = useLanguage();
+  const index = useLibraryIndex();
+  const now = look.common((read) => gradeOf(read('filter')));
+  const item = now && now !== MIXED ? index?.items.find((i) => i.id === now.id && i.grade) : undefined;
+  if (!item?.grade || !now || now === MIXED) return null;
+  const grade = item.grade;
+  const edit = (apply: FieldApply): LookEdit => (read) => {
+    const n = Math.max(0, Math.min(100, Math.round(apply((gradeOf(read('filter'))?.amount ?? 1) * 100))));
+    return { filter: withGrade(read('filter'), gradeFilter(item.id, grade, n / 100)) };
+  };
+  return (
+    <Section
+      id="filter"
+      title={t('inspector.filter')}
+      aside={(
+        <SectionAction label={t('inspector.filterRemove')} onClick={() => look.commit((read) => ({ filter: withGrade(read('filter'), null) }))}>
+          <Minus size={12} />
+        </SectionAction>
+      )}
+    >
+      <p className="truncate text-[11.5px] font-medium text-[var(--text)]">{nameOf(item.name, lang)}</p>
+      <SliderField
+        label={t('inspector.filterAmount')}
+        value={Math.round(now.amount * 100)}
+        min={0}
+        max={100}
+        neutral={0}
+        unit="%"
+        onPreview={(_, apply) => look.preview(edit(apply))}
+        onCommit={(_, apply) => look.commit(edit(apply))}
+        onRevert={() => look.revert()}
+      />
+    </Section>
+  );
+}
+
 /* ───────────────────────────── effects ───────────────────────────── */
 
 type EffectId = 'shadow' | 'inner' | 'blur' | 'backdrop' | 'fade';
@@ -983,7 +1026,7 @@ export function EffectsSection({ look, t, inner = false }: { look: Look; t: T; i
             </button>
           )}
         >
-          <div className="min-w-[140px] rounded-[7px] border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-lg)]">
+          <div className="min-w-[140px] rounded-[7px] border border-[var(--border)] bg-[var(--bg-raised)] p-1 shadow-[var(--shadow-lg)]">
             {missing.map((m) => (
               <button
                 key={m.id}
@@ -1064,7 +1107,7 @@ export function EffectsSection({ look, t, inner = false }: { look: Look; t: T; i
         <>
           <SubLabel aside={removeBtn('fade')}>{t('inspector.fade')}</SubLabel>
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-1.5">
-            <div role="group" aria-label={t('inspector.fadeSides')} className="flex h-[26px] items-center gap-0.5 rounded-[5px] bg-[var(--fill-tsp)] p-px">
+            <div role="group" aria-label={t('inspector.fadeSides')} className="flex h-[26px] items-center gap-0.5 rounded-[5px] bg-[var(--bg-field)] p-px">
               {(['top', 'right', 'bottom', 'left'] as const).map((side) => {
                 const on = fadeOn(side) === true;
                 return (
@@ -1076,7 +1119,7 @@ export function EffectsSection({ look, t, inner = false }: { look: Look; t: T; i
                     title={t(`inspector.fadeSide.${side}`)}
                     onClick={() => fadeToggle(side)}
                     className={`flex h-6 flex-1 items-center justify-center rounded-[4px] transition ${on
-                      ? 'bg-[var(--bg)] text-[var(--text)] shadow-[0_0_0_0.5px_var(--border-strong)]'
+                      ? 'bg-[var(--bg-panel)] text-[var(--text)] shadow-[0_0_0_0.5px_var(--border-strong)]'
                       : 'text-[var(--text-faint)] hover:text-[var(--text)]'}`}
                   >
                     <EdgeGlyph side={side} />
@@ -1205,7 +1248,7 @@ export function TypographySection({ look, t, svg, sample }: { look: Look; t: T; 
           before.current = null;
           look.commit(edit);
         }}
-        className="group/field relative flex h-[26px] min-w-0 w-full items-center overflow-hidden rounded-[5px] bg-[var(--fill-tsp)] ring-1 ring-inset ring-transparent transition-[box-shadow,background-color] hover:ring-[var(--border)] focus-within:bg-[var(--bg)] focus-within:ring-[1.5px] focus-within:ring-[var(--accent)]"
+        className="group/field relative flex h-[26px] min-w-0 w-full items-center overflow-hidden rounded-[5px] bg-[var(--bg-field)] ring-1 ring-inset ring-transparent transition-[box-shadow,background-color] hover:ring-[var(--border)] focus-within:bg-[var(--bg-panel)] focus-within:ring-[1.5px] focus-within:ring-[var(--accent)]"
       />
       <Row>
         <SelectField
@@ -1314,7 +1357,7 @@ function FontSizeMenu({ t, onPick, onPreview, onRevert }: { t: T; onPick: (n: nu
         role="listbox"
         aria-label={t('inspector.fontSizes')}
         onMouseLeave={() => show(null)}
-        className="w-[72px] overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[var(--panel)] py-1 shadow-[var(--shadow-lg)]"
+        className="w-[72px] overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[var(--bg-raised)] py-1 shadow-[var(--shadow-lg)]"
         style={{ maxHeight: 'min(320px, var(--popover-max-h, 320px))' }}
       >
         {FONT_SIZES.map((n) => (
@@ -1399,7 +1442,7 @@ export function AdvancedSection({
               if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
               if (e.key === 'Escape') { e.preventDefault(); dropDraft.current = true; e.currentTarget.blur(); }
             }}
-            className="h-[26px] w-full rounded-[5px] bg-[var(--fill-tsp)] px-2 font-mono text-[10.5px] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent placeholder:text-[var(--text-faint)] hover:ring-[var(--border)] focus:bg-[var(--bg)] focus:ring-[1.5px] focus:ring-[var(--accent)]"
+            className="h-[26px] w-full rounded-[5px] bg-[var(--bg-field)] px-2 font-mono text-[10.5px] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent placeholder:text-[var(--text-faint)] hover:ring-[var(--border)] focus:bg-[var(--bg-panel)] focus:ring-[1.5px] focus:ring-[var(--accent)]"
           />
         </label>
       ) : null}
@@ -1420,7 +1463,7 @@ export function AdvancedSection({
           if (e.key === 'Escape') { e.preventDefault(); dropDraft.current = true; e.currentTarget.blur(); }
         }}
         rows={Math.min(8, Math.max(2, (draft ?? css).split('\n').length))}
-        className="block w-full resize-y rounded-[5px] bg-[var(--fill-tsp)] px-2 py-1.5 font-mono text-[10.5px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent placeholder:text-[var(--text-faint)] hover:ring-[var(--border)] focus:bg-[var(--bg)] focus:ring-[1.5px] focus:ring-[var(--accent)]"
+        className="block w-full resize-y rounded-[5px] bg-[var(--bg-field)] px-2 py-1.5 font-mono text-[10.5px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent placeholder:text-[var(--text-faint)] hover:ring-[var(--border)] focus:bg-[var(--bg-panel)] focus:ring-[1.5px] focus:ring-[var(--accent)]"
       />
     </Section>
   );

@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Circles burst</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #ff8a3d; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Circles pop open all over the frame in a run of colours, each with a ring flying off it, the last in your colour
+ * filling the frame over the cut; then they pop shut and leave the next shot. It lasts 0.9 s and covers the cut at
+ * its middle: put its middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t
+ * alone, drawn in parts of the frame so it fits a stage of any shape.
+ */
+const D = 0.9;
+const DEFAULT = '#ff8a3d';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const inCubic = (x) => x * x * x;
+const outCubic = (x) => 1 - (1 - x) ** 3;
+const outBack = (x) => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
+const inBack = (x) => 2.70158 * x ** 3 - 1.70158 * x * x;
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+
+/* where each circle pops (parts of the frame), how big it gets (parts of the half-diagonal), and its colour */
+const POPS = [[0.22, 0.3, 0.45, '#ffcf3f'], [0.78, 0.72, 0.5, '#3ec1ff'], [0.72, 0.22, 0.45, '#ff4f6d'], [0.25, 0.78, 0.5, '#7cf29c'], [0.5, 0.45, 0.75, '#ffcf3f'], [0.1, 0.55, 0.55, '#ff4f6d'], [0.9, 0.4, 0.55, '#3ec1ff']];
+
+function draw(u) {
+  const R = Math.hypot(W, H) / 2;
+  const all = [...POPS, [0.5, 0.5, 1.05, color()]];
+  all.forEach(([px, py, size, c], i) => {
+    const x = px * W, y = py * H, last = i === all.length - 1;
+    const far = Math.hypot(Math.max(x, W - x), Math.max(y, H - y));
+    const full = last ? far + 2 : R * size;
+    const a = i * 0.04;
+    let p;
+    if (u < 0.5) p = outBack(seg(u, a, a + 0.14 + (last ? 0.1 : 0)));
+    else p = last ? 1 - inCubic(seg(u, 0.56, 0.68)) : 1 - inBack(seg(u, 0.58 + i * 0.025, 0.72 + i * 0.025));
+    if (p <= 0) return;
+    g.fillStyle = c;
+    g.beginPath();
+    g.arc(x, y, full * p, 0, TAU);
+    g.fill();
+    /* the ring that flies off as it opens */
+    const k = seg(u, a + 0.04, a + 0.22);
+    if (!last && k > 0 && k < 1) {
+      g.strokeStyle = c;
+      g.globalAlpha = 1 - k;
+      g.lineWidth = H * 0.02 * (1 - k);
+      g.beginPath();
+      g.arc(x, y, full * (1 + 0.5 * outCubic(k)), 0, TAU);
+      g.stroke();
+      g.globalAlpha = 1;
+    }
+  });
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

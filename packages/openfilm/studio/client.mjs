@@ -314,8 +314,38 @@ export async function keptNote(from = '.') {
 }
 
 /**
+ * `openfilm canvas`: the canvas of the project around the current folder, as JSON; `openfilm canvas apply <steps>`
+ * takes an agent's steps on it (a JSON list, a .json file, or - for standard input; see applyCanvasOps in
+ * server/canvas.mjs), all or none, and Studio shows them on the board at once. What it adds is the agent's that runs it
+ * (OPENFILM_AGENT, and OPENFILM_SESSION when it says which conversation).
+ * @param {string[]} args @param {(line: string) => void} [say] @returns {Promise<{ ok: boolean, usage?: boolean, lines: string[] }>}
+ */
+export async function canvasCommand(args, say) {
+  const [verb, given] = args;
+  if (verb !== undefined && verb !== 'apply') return { ok: false, usage: true, lines: ['openfilm canvas: `canvas` shows the board, `canvas apply <steps>` changes it'] };
+  const folder = projectAround('.');
+  if (!folder) return { ok: false, usage: true, lines: [`openfilm canvas: ${resolve('.')} is not in a project; \`openfilm open\` makes one`] };
+  /** @type {unknown} */
+  let ops;
+  if (verb === 'apply') {
+    if (given === undefined) return { ok: false, usage: true, lines: ['openfilm canvas apply: the steps, as JSON: [{"op":"add","kind":"note","text":"…"}], a .json file, or - to read them'] };
+    const text = given === '-' ? readFileSync(0, 'utf8') : given.trim().startsWith('[') ? given : readFileSync(given, 'utf8');
+    try { ops = JSON.parse(text); } catch (e) { return { ok: false, usage: true, lines: [`openfilm canvas apply: the steps are not JSON: ${/** @type {Error} */ (e).message}`] }; }
+  }
+  const agent = process.env.OPENFILM_AGENT;
+  const by = agent ? { agent, ...(process.env.OPENFILM_SESSION ? { session: process.env.OPENFILM_SESSION } : {}) } : undefined;
+  const run = await ensureStudio(say);
+  const answer = await post(run, '/api/canvas', { folder, ...(ops === undefined ? {} : { ops }), ...(by ? { by } : {}) });
+  if (!answer?.ok) return { ok: false, usage: answer?.code === 2, lines: [`openfilm canvas: ${answer?.text ?? answer?.error ?? 'Studio did not say how it went'}`] };
+  if (ops === undefined) return { ok: true, lines: [JSON.stringify(answer.canvas, null, 1)] };
+  const { nodes, edges } = answer.canvas;
+  return { ok: true, lines: [`Done${answer.added.length ? `: added ${answer.added.join(', ')}` : ''}. The board has ${nodes.length} nodes and ${edges.length} wires; the person sees it now.`] };
+}
+
+/**
  * `openfilm get [verb] [--option value …] [--yes]`: media for the project around the current folder, made by Studio
- * (started when needed). Without a verb (or with --help): what can be got here now. `--via <provider>` and
+ * (started when needed), or found in OpenFilm's own library here (src/library-search.mjs LIBRARY_VERBS, offline and
+ * free). Without a verb (or with --help): what can be got here now, the library first. `--via <provider>` and
  * `--model <id>` override the person's choices in Studio's Settings (Models) for one run; the listing leaves them
  * out, as it leaves out who makes what. `code` is the exit status: 0 done, 1 it did not run, 2 not a project or a wrong
  * command.
@@ -343,6 +373,16 @@ export async function getMedia(argv, say) {
   const { help, via, model, yes, ...args } = flags;
   if (via !== undefined && typeof via !== 'string') return { code: 2, lines: ['openfilm get: --via names a provider, e.g. --via elevenlabs'] };
   if (model !== undefined && typeof model !== 'string') return { code: 2, lines: ['openfilm get: --model names a model, e.g. --model eleven_v4'] };
+  /* OpenFilm's own library: searched here, offline and free, with no Studio (src/library-search.mjs) */
+  const library = await import('../src/library-search.mjs');
+  if (verb && verb in library.LIBRARY_VERBS && help === undefined) {
+    /* a Studio running keeps the library and its model loaded: it answers a search in milliseconds; asked only when
+       one says it runs (run.json), so a search with none waits for nothing */
+    const run = args.take === undefined && existsSync(join(studioHome(), 'run.json')) ? await running() : null;
+    const answer = run ? await post(run, '/api/get/library', { verb, args }).catch(() => null) : null;
+    if (Array.isArray(answer?.lines) && typeof answer.code === 'number') return { code: answer.code, lines: answer.lines };
+    return library.libraryGet(verb, args);
+  }
   const listing = !verb || verb === 'help' || help !== undefined;
   const folder = projectAround('.');
   if (!folder && !listing) return { code: 2, lines: [`openfilm get: ${resolve('.')} is not in a project; \`openfilm open\` makes one`] };
@@ -354,6 +394,17 @@ export async function getMedia(argv, say) {
     return { code: answer.ok ? 0 : answer.code === 2 ? 2 : 1, lines: [answer.text] };
   }
   const one = verb && verb !== 'help' ? verb : null;
+  /* the library's verbs, listed first: what is there for free comes before what is made */
+  const free = library.libraryVerbs(one ?? undefined);
+  /** @param {{ verb: string, help: string, dir?: string, options: Record<string, { value?: string, required?: boolean, choices?: string[] }> }[]} list @param {number} width */
+  const lines = (list, width) => list.flatMap((v) => {
+    const options = Object.entries(v.options).map(([name, o]) => {
+      const flag = o.value ? `--${name} <${o.choices ? o.choices.join('|') : o.value}>` : `--${name}`;
+      return o.required ? flag : `[${flag}]`;
+    }).join(' ');
+    return [`  ${v.verb.padEnd(width)}  ${v.help}${v.dir ? ` Saved under ${v.dir}/.` : ''}`, `${' '.repeat(width + 4)}${options}`];
+  });
+  if (one && free.length) return { code: 0, lines: lines(free, one.length) };
   /* web search and web pages, for an agent without web tools of its own (the app's own agents say so) */
   const web = process.env.OPENFILM_GET_WEB === '1';
   /** @type {{ verbs: { verb: string, help: string, dir?: string, options: Record<string, { value?: string, required?: boolean, choices?: string[] }> }[], note: string | null, services?: string, error?: string }} */
@@ -369,21 +420,20 @@ export async function getMedia(argv, say) {
   }
   const { verbs, note, services } = listed;
   const where = one || !services ? [] : ['', services];
+  const width = Math.max(...[...free, ...verbs].map((v) => v.verb.length));
+  const first = one ? [] : [
+    'Free, offline, from OpenFilm\'s own library (CC0): search it first, and make only what it does not have.',
+    ...lines(free, width), '',
+  ];
   /* nothing connected: what to do instead, and which services there are */
-  if (!verbs.length) return { code: 0, lines: [...(note ? [note] : []), ...where] };
-  const width = Math.max(...verbs.map((v) => v.verb.length));
-  const pad = ' '.repeat(width + 4);
+  if (!verbs.length) return { code: 0, lines: [...first, ...(note ? [note] : []), ...where] };
   return { code: 0, lines: [
     'openfilm get <what> [--option value …]   media for this project, saved under assets/',
     '  --yes              the person already agreed to what it spends',
     '',
-    ...verbs.flatMap((v) => {
-      const options = Object.entries(v.options).map(([name, o]) => {
-        const flag = o.value ? `--${name} <${o.choices ? o.choices.join('|') : o.value}>` : `--${name}`;
-        return o.required ? flag : `[${flag}]`;
-      }).join(' ');
-      return [`  ${v.verb.padEnd(width)}  ${v.help}${v.dir ? ` Saved under ${v.dir}/.` : ''}`, `${pad}${options}`];
-    }),
+    ...first,
+    ...(one ? [] : ['From a connected service:']),
+    ...lines(verbs, width),
     ...(note ? ['', note] : []),
     ...where,
   ] };

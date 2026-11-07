@@ -65,3 +65,43 @@ test("a Copilot turn's model, read once its usage record has reached the file; a
   assert.equal(await turnModel({ agent: 'claude', sessionId: 'cop-24680', from, env }), null);
   assert.ok(Date.now() - started < 100, 'not waited for');
 });
+
+test("Studio's own question: answered by the agent's model in a session of its own, its words whole, every permission refused", async () => {
+  /* DeepSeek Harness as a fake over ACP: it asks to run a command (refused), then answers in two pieces */
+  const { setChosenPaths } = await import('./agents.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'of-ask-'));
+  const program = join(dir, 'dsh.mjs');
+  writeFileSync(program, `let buf = '';
+const send = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+let prompt = null;
+process.stdin.on('data', (d) => {
+  buf += d;
+  let i;
+  while ((i = buf.indexOf('\\n')) >= 0) {
+    const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+    if (m.method === 'initialize') send({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] } });
+    else if (m.method === 'session/new') send({ jsonrpc: '2.0', id: m.id, result: { sessionId: 's1' } });
+    else if (m.method === 'session/prompt') {
+      prompt = m;
+      send({ jsonrpc: '2.0', id: 900, method: 'session/request_permission', params: { sessionId: 's1', toolCall: { toolCallId: 't1', title: 'rm -rf' }, options: [{ optionId: 'yes', name: 'Allow', kind: 'allow_once' }] } });
+    } else if (m.id === 900) {
+      const update = (u) => send({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: 's1', update: u } });
+      update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '{"lines": ["Hal' } });
+      update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'lo."], "refused": ' + JSON.stringify(m.result?.outcome?.outcome ?? null) + '}' } });
+      send({ jsonrpc: '2.0', id: prompt.id, result: { stopReason: 'end_turn' } });
+    }
+  }
+});
+setInterval(() => {}, 1000);
+`);
+  setChosenPaths({ deepseek: program });
+  try {
+    const agents = registerLocalAgentIpc({ handle: () => {} }, { trusted: () => true });
+    const answer = await agents.ask('deepseek', 'Translate: Hello.');
+    assert.deepEqual(JSON.parse(answer), { lines: ['Hallo.'], refused: 'cancelled' });
+    await assert.rejects(agents.ask('nobody', 'hi'), /Unknown agent/);
+    assert.equal(agents.lastAgent(), null, 'a question of Studio\'s is not the chat\'s conversation');
+  } finally {
+    setChosenPaths({});
+  }
+});

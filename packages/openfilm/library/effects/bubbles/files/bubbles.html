@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Bubbles</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+.l { position: fixed; inset: 0; pointer-events: none; }
+i { position: fixed; bottom: -8vh; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.7); background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.5), transparent 40%); animation: b linear infinite; }
+@keyframes b { to { transform: translate(var(--dx), -120vh); } }
+</style>
+</head>
+<body>
+
+<script>
+/*
+ * Bubbles rising from the bottom. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its
+ * CSS animations are held at t by the host.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+function scatter(n, make) {
+  for (let i = 0; i < n; i++) { const el = document.createElement('i'); make(el, (k) => hash(i * 7.31 + k)); document.body.append(el); }
+}
+scatter(28, (el, r) => { const s = 1.2 + r(1) * 3.5; el.style.width = el.style.height = `${s}vw`; el.style.left = `${r(2) * 100}%`; el.style.animationDuration = `${4 + r(3) * 5}s`; el.style.animationDelay = `${-r(4) * 9}s`; el.style.setProperty('--dx', `${(r(5) - 0.5) * 10}vw`); });
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

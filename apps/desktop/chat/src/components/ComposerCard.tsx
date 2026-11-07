@@ -16,7 +16,7 @@ import { inChat } from '@/lib/chat-layer';
 
 /** The shell of floating layers (menus, dropdowns): the cards' shadow, on the surface color. */
 export const POPOVER_CHROME: React.CSSProperties = {
-  background: 'var(--bg-surface)',
+  background: 'var(--bg-raised)',
   border: '1px solid var(--border-strong)',
   borderRadius: 12,
   boxShadow: '0 16px 40px -8px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.18)',
@@ -51,7 +51,7 @@ export function ComposerCard({
   return (
     <div
       {...(role ? { role } : {})}
-      className={`relative rounded-[12px] border border-[var(--composer-border)] bg-[var(--composer-bg)] px-3.5 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)] ${collapsed ? 'py-2' : 'pb-3 pt-3'} ${className}`}
+      className={`relative rounded-[12px] border border-[var(--border)] bg-[var(--bg-raised)] px-3.5 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)] ${collapsed ? 'py-2' : 'pb-3 pt-3'} ${className}`}
     >
       <div className={`absolute right-2 flex items-center gap-0.5 ${collapsed ? 'top-1.5' : 'top-2'}`}>
         {collapse ? (
@@ -86,7 +86,10 @@ export function ComposerCard({
           ) : (
             <h3 className="text-[13px] font-medium leading-snug text-[var(--text)]">{title}</h3>
           )}
-          {body && !collapsed ? <div className="mt-1 text-[12.5px] leading-relaxed text-[var(--text-muted)]">{body}</div> : null}
+          {/* a long body (a whole script to run) scrolls in its own box: the buttons and the composer stay in view */}
+          {body && !collapsed ? (
+            <div className="mt-1 max-h-[min(40vh,240px)] overflow-y-auto overscroll-contain pr-1 text-[12.5px] leading-relaxed text-[var(--text-muted)]">{body}</div>
+          ) : null}
         </div>
       </div>
       {collapsed ? null : children}
@@ -101,7 +104,7 @@ export function CardActions({ children, className = '' }: { children: React.Reac
 type Weight = 'primary' | 'secondary' | 'quiet' | 'danger';
 
 const WEIGHT: Record<Weight, string> = {
-  primary: 'bg-[var(--text)] text-[var(--panel)] hover:opacity-90',
+  primary: 'bg-[var(--primary)] text-[var(--on-primary)] hover:bg-[var(--primary-hover)]',
   secondary: 'text-[var(--text)] ring-1 ring-inset ring-[var(--border-strong)] hover:bg-[var(--bg-hover)]',
   quiet: 'text-[var(--text-muted)] hover:text-[var(--text)]',
   danger: 'bg-[var(--err)] text-white hover:brightness-110',

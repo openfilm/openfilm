@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Like, comment, share</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff2d55; --color: #ffffff; --disc: rgba(0, 0, 0, 0.5); }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 22vh; font-family: var(--font); color: var(--color); }
+.it { display: flex; flex-direction: column; align-items: center; gap: 4vh; animation: pop 0.55s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
+.it:nth-child(2) { animation-delay: 0.12s; } .it:nth-child(3) { animation-delay: 0.24s; }
+.d { position: relative; width: 58vh; height: 58vh; border-radius: 50%; background: var(--disc); display: flex; align-items: center; justify-content: center; box-shadow: 0 2vh 5vh rgba(0, 0, 0, 0.25); }
+.d svg { width: 30vh; height: 30vh; overflow: visible; }
+.d path { fill: none; stroke: var(--color); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.heart path { animation: fill 0.01s 1s both; }
+.heart svg { animation: beat 0.5s 1s cubic-bezier(0.3, 1.8, 0.5, 1) both, pulse 1.4s 1.8s ease-in-out infinite; }
+.heart i { position: absolute; left: 50%; top: 50%; width: 6vh; height: 6vh; margin: -3vh; border-radius: 50%; background: var(--accent); opacity: 0; animation: burst 0.6s 1.02s ease-out both; }
+.heart i:nth-of-type(even) { background: #ffd23f; width: 4.4vh; height: 4.4vh; margin: -2.2vh; }
+.it span { font-size: 15vh; font-weight: 700; white-space: pre; text-shadow: 0 0.6vh 2vh rgba(0, 0, 0, 0.5); }
+@keyframes pop { from { opacity: 0; transform: scale(0.3) translateY(10vh); } }
+@keyframes fill { to { fill: var(--accent); stroke: var(--accent); } }
+@keyframes beat { 0% { transform: scale(1); } 35% { transform: scale(0.7); } 100% { transform: scale(1); } }
+@keyframes pulse { 50% { transform: scale(1.08); } }
+@keyframes burst { 0% { opacity: 0; transform: rotate(var(--a)) translateY(-14vh) scale(1); } 10% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--a)) translateY(-40vh) scale(0.2); } }
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="it heart"><div class="d"><svg viewBox="0 0 24 24"><path d="M12 20.3C6.4 16.3 2.6 12.8 2.6 8.7c0-3 2.3-5.2 5-5.2 1.8 0 3.4.9 4.4 2.4 1-1.5 2.6-2.4 4.4-2.4 2.7 0 5 2.2 5 5.2 0 4.1-3.8 7.6-9.4 11.6z"/></svg><i style="--a: 0deg"></i><i style="--a: 45deg"></i><i style="--a: 90deg"></i><i style="--a: 135deg"></i><i style="--a: 180deg"></i><i style="--a: 225deg"></i><i style="--a: 270deg"></i><i style="--a: 315deg"></i></div><span class="t1">12.8K</span></div>
+  <div class="it"><div class="d"><svg viewBox="0 0 24 24"><path d="M4.5 4.5h15a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8l-5 4v-4h-2a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM8 11h.01M12 11h.01M16 11h.01"/></svg></div><span class="t2">864</span></div>
+  <div class="it"><div class="d"><svg viewBox="0 0 24 24"><path d="M13.5 4.5l7.5 7-7.5 7v-4.2c-5.6 0-8.8 1.6-11 5.2.8-5.6 3.8-10 11-11.1V4.5z"/></svg></div><span class="t3">Share</span></div>
+</div>
+<script>
+/*
+ * Like, comment and share buttons that pop in one by one with their counts; the heart fills and bursts. A page of
+ * OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

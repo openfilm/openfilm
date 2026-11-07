@@ -11,6 +11,9 @@ import { chooseProvider } from './index.mjs';
 import { runGet } from '../get.mjs';
 import { readTranscript } from '../transcripts.mjs';
 
+/* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
+process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
+
 const fixture = () => ({ audio_info: { duration: 2000 }, result: { text: '你好，AI native。', utterances: [{ words: [
   { text: '你', start_time: 100, end_time: 300 }, { text: '好', start_time: 300, end_time: 600 },
   { text: ' ', start_time: -1, end_time: -1 }, { text: 'AI', start_time: 800, end_time: 1000 },

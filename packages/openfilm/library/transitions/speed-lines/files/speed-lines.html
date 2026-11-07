@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Speed lines</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #ffffff; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Comic focus lines rush in from the edges toward the middle until the frame is all lines over the cut, then burst
+ * back out from the middle onto the next shot. It lasts 0.8 s and covers the cut at its middle: put its middle on
+ * the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame
+ * so it fits a stage of any shape.
+ */
+const D = 0.8;
+const DEFAULT = '#ffffff';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+
+function draw(u) {
+  const c = color(), cx = W / 2, cy = H / 2, R = Math.hypot(W, H) / 2 * 1.15;
+  const n = Math.floor(u * D * 24);
+  /* the open middle closes in before the cut and opens after it */
+  const open = u < 0.5 ? R * (1 - inOut(seg(u, 0, 0.42))) : R * inOut(seg(u, 0.56, 1));
+  const fade = u < 0.5 ? seg(u, 0, 0.12) : 1 - seg(u, 0.9, 1);
+  /* the ground: the frame outside a ragged opening */
+  g.globalAlpha = fade;
+  g.fillStyle = c;
+  g.beginPath();
+  g.rect(0, 0, W, H);
+  if (open > 1) {
+    for (let i = 0; i <= 90; i++) {
+      const a = (i / 90) * TAU, r = open * (0.82 + 0.3 * hash((i % 90) + n * 91));
+      if (i) g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a)); else g.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    }
+    g.closePath();
+  }
+  g.fill('evenodd');
+  /* the lines: thin dark wedges toward the middle, redrawn on each frame */
+  g.fillStyle = '#111';
+  for (let i = 0; i < 120; i++) {
+    const a = hash(i + n * 131) * TAU, w = 0.004 + 0.016 * hash(i * 3 + n * 7);
+    const r0 = Math.max(open, 1) * (0.95 + 0.6 * hash(i * 5 + n)) + (open < 2 ? R * 0.08 * hash(i * 9 + n) : 0);
+    g.beginPath();
+    g.moveTo(cx + r0 * Math.cos(a), cy + r0 * Math.sin(a));
+    g.lineTo(cx + R * 1.2 * Math.cos(a - w), cy + R * 1.2 * Math.sin(a - w));
+    g.lineTo(cx + R * 1.2 * Math.cos(a + w), cy + R * 1.2 * Math.sin(a + w));
+    g.closePath();
+    g.fill();
+  }
+  g.globalAlpha = 1;
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

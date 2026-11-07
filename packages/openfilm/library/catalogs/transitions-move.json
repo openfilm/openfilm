@@ -1,0 +1,932 @@
+{
+ "version": 1,
+ "groups": {
+  "transition": [
+   {
+    "id": "slide",
+    "name": {
+     "en": "Slides",
+     "zh-CN": "幻灯片",
+     "ja": "スライド",
+     "ko": "슬라이드",
+     "es": "Diapositivas"
+    }
+   },
+   {
+    "id": "mask",
+    "name": {
+     "en": "Masks",
+     "zh-CN": "遮罩",
+     "ja": "マスク",
+     "ko": "마스크",
+     "es": "Máscaras"
+    }
+   },
+   {
+    "id": "blur",
+    "name": {
+     "en": "Blur",
+     "zh-CN": "模糊",
+     "ja": "ブラー",
+     "ko": "블러",
+     "es": "Desenfoque"
+    }
+   }
+  ]
+ },
+ "items": [
+  {
+   "id": "motions/move-push-left",
+   "cat": "transition",
+   "group": "slide",
+   "name": {
+    "en": "Push left",
+    "zh-CN": "向左推移",
+    "ja": "左へプッシュ",
+    "ko": "왼쪽으로 밀기",
+    "es": "Empujar a la izquierda"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-push-left",
+     "body": "from { translate: 100vw 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-push-left",
+     "body": "to { translate: -100vw 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The next shot pushes the last one out of the picture, both moving left together. For moving on in a story, a list or a sequence.",
+   "tags": [
+    "slide",
+    "explainer",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-push-right",
+   "cat": "transition",
+   "group": "slide",
+   "name": {
+    "en": "Push right",
+    "zh-CN": "向右推移",
+    "ja": "右へプッシュ",
+    "ko": "오른쪽으로 밀기",
+    "es": "Empujar a la derecha"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-push-right",
+     "body": "from { translate: -100vw 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-push-right",
+     "body": "to { translate: 100vw 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The next shot pushes the last one out of the picture, both moving right together. For moving on in a story, a list or a sequence.",
+   "tags": [
+    "slide",
+    "explainer",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-push-up",
+   "cat": "transition",
+   "group": "slide",
+   "name": {
+    "en": "Push up",
+    "zh-CN": "向上推移",
+    "ja": "上へプッシュ",
+    "ko": "위로 밀기",
+    "es": "Empujar hacia arriba"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-push-up",
+     "body": "from { translate: 0 100vh }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-push-up",
+     "body": "to { translate: 0 -100vh }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The next shot pushes the last one out of the picture, both moving up together. For moving on in a story, a list or a sequence.",
+   "tags": [
+    "slide",
+    "explainer",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-push-down",
+   "cat": "transition",
+   "group": "slide",
+   "name": {
+    "en": "Push down",
+    "zh-CN": "向下推移",
+    "ja": "下へプッシュ",
+    "ko": "아래로 밀기",
+    "es": "Empujar hacia abajo"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-push-down",
+     "body": "from { translate: 0 -100vh }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-push-down",
+     "body": "to { translate: 0 100vh }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The next shot pushes the last one out of the picture, both moving down together. For moving on in a story, a list or a sequence.",
+   "tags": [
+    "slide",
+    "explainer",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-slide-left",
+   "cat": "transition",
+   "group": "slide",
+   "name": {
+    "en": "Slide in left",
+    "zh-CN": "向左滑入",
+    "ja": "左へスライドイン",
+    "ko": "왼쪽으로 슬라이드",
+    "es": "Deslizar a la izquierda"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-slide-left",
+     "body": "from { translate: 100vw 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-slide-left",
+     "body": "to { scale: 0.92; filter: brightness(0.45) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The next shot slides in over the last one, which sinks back and darkens under it. A clean, modern change of scene.",
+   "tags": [
+    "slide",
+    "minimal",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-slide-right",
+   "cat": "transition",
+   "group": "slide",
+   "name": {
+    "en": "Slide in right",
+    "zh-CN": "向右滑入",
+    "ja": "右へスライドイン",
+    "ko": "오른쪽으로 슬라이드",
+    "es": "Deslizar a la derecha"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-slide-right",
+     "body": "from { translate: -100vw 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-slide-right",
+     "body": "to { scale: 0.92; filter: brightness(0.45) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The next shot slides in over the last one, which sinks back and darkens under it. A clean, modern change of scene.",
+   "tags": [
+    "slide",
+    "minimal",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-slide-up",
+   "cat": "transition",
+   "group": "slide",
+   "name": {
+    "en": "Slide in up",
+    "zh-CN": "向上滑入",
+    "ja": "上へスライドイン",
+    "ko": "위로 슬라이드",
+    "es": "Deslizar hacia arriba"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-slide-up",
+     "body": "from { translate: 0 100vh }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-slide-up",
+     "body": "to { scale: 0.92; filter: brightness(0.45) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The next shot slides in over the last one, which sinks back and darkens under it. A clean, modern change of scene.",
+   "tags": [
+    "slide",
+    "minimal",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-slide-down",
+   "cat": "transition",
+   "group": "slide",
+   "name": {
+    "en": "Slide in down",
+    "zh-CN": "向下滑入",
+    "ja": "下へスライドイン",
+    "ko": "아래로 슬라이드",
+    "es": "Deslizar hacia abajo"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-slide-down",
+     "body": "from { translate: 0 -100vh }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-slide-down",
+     "body": "to { scale: 0.92; filter: brightness(0.45) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The next shot slides in over the last one, which sinks back and darkens under it. A clean, modern change of scene.",
+   "tags": [
+    "slide",
+    "minimal",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-reveal-left",
+   "cat": "transition",
+   "group": "slide",
+   "name": {
+    "en": "Slide away",
+    "zh-CN": "向左划出",
+    "ja": "スライドアウト",
+    "ko": "밀어내기",
+    "es": "Deslizar fuera"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-reveal-left",
+     "body": "from { clip-path: inset(0 0 0 100%) } to { clip-path: inset(0 0 0 0) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-reveal-left",
+     "body": "to { translate: -100vw 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The last shot slides away to the left and uncovers the next one, standing still under it.",
+   "tags": [
+    "slide",
+    "minimal",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-squeeze",
+   "cat": "transition",
+   "group": "slide",
+   "name": {
+    "en": "Squeeze",
+    "zh-CN": "挤压",
+    "ja": "スクイーズ",
+    "ko": "압축",
+    "es": "Comprimir"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-squeeze",
+     "body": "from { scale: 0 1; transform-origin: 100% 50% } to { transform-origin: 100% 50% }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-squeeze",
+     "body": "from { transform-origin: 0 50% } to { scale: 0 1; transform-origin: 0 50% }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The next shot grows in from the right edge as the last one is squeezed away to the left.",
+   "tags": [
+    "slide",
+    "playful",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-flip",
+   "cat": "transition",
+   "group": "slide",
+   "name": {
+    "en": "Flip",
+    "zh-CN": "翻转",
+    "ja": "フリップ",
+    "ko": "뒤집기",
+    "es": "Voltear"
+   },
+   "kind": "motion",
+   "durationMs": 700,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-flip",
+     "body": "0%, 50% { rotate: y -90deg } 100% { rotate: y 0deg }",
+     "secs": 0.7,
+     "ease": "cubic-bezier(0.45, 0, 0.55, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-flip",
+     "body": "0% { rotate: y 0deg } 50%, 100% { rotate: y 90deg }",
+     "secs": 0.7,
+     "ease": "cubic-bezier(0.45, 0, 0.55, 1)"
+    }
+   },
+   "about": "The picture turns over like a card, the next shot on its back. For a before and after, or a surprise.",
+   "tags": [
+    "spin",
+    "playful",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-wipe-right",
+   "cat": "transition",
+   "group": "mask",
+   "name": {
+    "en": "Wipe right",
+    "zh-CN": "向右擦除",
+    "ja": "右へワイプ",
+    "ko": "오른쪽으로 와이프",
+    "es": "Barrido a la derecha"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-wipe-right",
+     "body": "from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.45, 0, 0.55, 1)"
+    }
+   },
+   "about": "A straight edge sweeps across the picture (right), the next shot behind it. The classic wipe.",
+   "tags": [
+    "wipe",
+    "minimal",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-wipe-left",
+   "cat": "transition",
+   "group": "mask",
+   "name": {
+    "en": "Wipe left",
+    "zh-CN": "向左擦除",
+    "ja": "左へワイプ",
+    "ko": "왼쪽으로 와이프",
+    "es": "Barrido a la izquierda"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-wipe-left",
+     "body": "from { clip-path: inset(0 0 0 100%) } to { clip-path: inset(0 0 0 0) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.45, 0, 0.55, 1)"
+    }
+   },
+   "about": "A straight edge sweeps across the picture (left), the next shot behind it. The classic wipe.",
+   "tags": [
+    "wipe",
+    "minimal",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-wipe-down",
+   "cat": "transition",
+   "group": "mask",
+   "name": {
+    "en": "Wipe down",
+    "zh-CN": "向下擦除",
+    "ja": "下へワイプ",
+    "ko": "아래로 와이프",
+    "es": "Barrido hacia abajo"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-wipe-down",
+     "body": "from { clip-path: inset(0 0 100% 0) } to { clip-path: inset(0 0 0 0) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.45, 0, 0.55, 1)"
+    }
+   },
+   "about": "A straight edge sweeps across the picture (down), the next shot behind it. The classic wipe.",
+   "tags": [
+    "wipe",
+    "minimal",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-wipe-up",
+   "cat": "transition",
+   "group": "mask",
+   "name": {
+    "en": "Wipe up",
+    "zh-CN": "向上擦除",
+    "ja": "上へワイプ",
+    "ko": "위로 와이프",
+    "es": "Barrido hacia arriba"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-wipe-up",
+     "body": "from { clip-path: inset(100% 0 0 0) } to { clip-path: inset(0 0 0 0) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.45, 0, 0.55, 1)"
+    }
+   },
+   "about": "A straight edge sweeps across the picture (up), the next shot behind it. The classic wipe.",
+   "tags": [
+    "wipe",
+    "minimal",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-soft-wipe",
+   "cat": "transition",
+   "group": "mask",
+   "name": {
+    "en": "Soft wipe",
+    "zh-CN": "柔和擦除",
+    "ja": "ソフトワイプ",
+    "ko": "부드러운 와이프",
+    "es": "Barrido suave"
+   },
+   "kind": "motion",
+   "durationMs": 800,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-soft-wipe",
+     "body": "from { mask-image: linear-gradient(90deg, #000 40%, transparent 60%); mask-size: 300% 100%; mask-repeat: no-repeat; mask-position: 100% 0 } to { mask-image: linear-gradient(90deg, #000 40%, transparent 60%); mask-size: 300% 100%; mask-repeat: no-repeat; mask-position: 0 0 }",
+     "secs": 0.8,
+     "ease": "cubic-bezier(0.33, 0, 0.2, 1)"
+    }
+   },
+   "about": "A wide, feathered edge drifts across, the two shots blending where it passes. Gentle, for calm cuts.",
+   "tags": [
+    "wipe",
+    "soft",
+    "calm",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-iris",
+   "cat": "transition",
+   "group": "mask",
+   "name": {
+    "en": "Circle open",
+    "zh-CN": "圆形展开",
+    "ja": "円形オープン",
+    "ko": "원형 열기",
+    "es": "Apertura circular"
+   },
+   "kind": "motion",
+   "durationMs": 700,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-iris",
+     "body": "from { clip-path: circle(0% at 50% 50%) } to { clip-path: circle(75% at 50% 50%) }",
+     "secs": 0.7,
+     "ease": "cubic-bezier(0.45, 0, 0.55, 1)"
+    }
+   },
+   "about": "The next shot opens from a dot in the middle into the whole picture, like an iris.",
+   "tags": [
+    "wipe",
+    "shapes",
+    "retro",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-diamond",
+   "cat": "transition",
+   "group": "mask",
+   "name": {
+    "en": "Diamond",
+    "zh-CN": "菱形展开",
+    "ja": "ダイヤモンド",
+    "ko": "다이아몬드",
+    "es": "Diamante"
+   },
+   "kind": "motion",
+   "durationMs": 700,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-diamond",
+     "body": "from { clip-path: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%) } to { clip-path: polygon(50% -50%, 150% 50%, 50% 150%, -50% 50%) }",
+     "secs": 0.7,
+     "ease": "cubic-bezier(0.45, 0, 0.55, 1)"
+    }
+   },
+   "about": "The next shot grows out of the middle as a diamond until it fills the picture.",
+   "tags": [
+    "wipe",
+    "shapes",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-split-open",
+   "cat": "transition",
+   "group": "mask",
+   "name": {
+    "en": "Split open",
+    "zh-CN": "中间展开",
+    "ja": "スプリット",
+    "ko": "가운데 열기",
+    "es": "Abrir al centro"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-split-open",
+     "body": "from { clip-path: inset(0 50% 0 50%) } to { clip-path: inset(0 0 0 0) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The next shot opens from a line down the middle out to both sides, like doors.",
+   "tags": [
+    "wipe",
+    "split",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-split-across",
+   "cat": "transition",
+   "group": "mask",
+   "name": {
+    "en": "Split across",
+    "zh-CN": "上下展开",
+    "ja": "上下スプリット",
+    "ko": "위아래 열기",
+    "es": "Abrir en horizontal"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-split-across",
+     "body": "from { clip-path: inset(50% 0 50% 0) } to { clip-path: inset(0 0 0 0) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The next shot opens from a line across the middle, up and down at once, like a letterbox lifting.",
+   "tags": [
+    "wipe",
+    "split",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-blur-dissolve",
+   "cat": "transition",
+   "group": "blur",
+   "name": {
+    "en": "Blur dissolve",
+    "zh-CN": "模糊叠化",
+    "ja": "ブラーディゾルブ",
+    "ko": "블러 디졸브",
+    "es": "Fundido desenfocado"
+   },
+   "kind": "motion",
+   "durationMs": 800,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-blur-dissolve",
+     "body": "from { opacity: 0; filter: blur(24px) }",
+     "secs": 0.8,
+     "ease": "ease-in-out"
+    },
+    "out": {
+     "name": "motion-cut-out-blur-dissolve",
+     "body": "to { filter: blur(24px) }",
+     "secs": 0.8,
+     "ease": "ease-in-out"
+    }
+   },
+   "about": "The last shot melts out of focus while the next one comes into focus through it. Soft and dreamy.",
+   "tags": [
+    "blur",
+    "fade",
+    "dreamy",
+    "soft",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-blur-rush",
+   "cat": "transition",
+   "group": "blur",
+   "name": {
+    "en": "Rush blur",
+    "zh-CN": "冲刺模糊",
+    "ja": "ラッシュブラー",
+    "ko": "돌진 블러",
+    "es": "Desenfoque rápido"
+   },
+   "kind": "motion",
+   "durationMs": 500,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-blur-rush",
+     "body": "from { opacity: 0; scale: 1.3; filter: blur(16px) }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-blur-rush",
+     "body": "to { scale: 1.3; filter: blur(16px) }",
+     "secs": 0.5,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "Both shots rush towards the camera in a blur and meet. Fast, for energy and action.",
+   "tags": [
+    "blur",
+    "zoom",
+    "intense",
+    "action",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-flash-dissolve",
+   "cat": "transition",
+   "group": "blur",
+   "name": {
+    "en": "Light dissolve",
+    "zh-CN": "闪光叠化",
+    "ja": "フラッシュディゾルブ",
+    "ko": "빛 디졸브",
+    "es": "Fundido luminoso"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-flash-dissolve",
+     "body": "from { opacity: 0; filter: brightness(2.6) }",
+     "secs": 0.6,
+     "ease": "ease-in-out"
+    },
+    "out": {
+     "name": "motion-cut-out-flash-dissolve",
+     "body": "to { filter: brightness(2.6) }",
+     "secs": 0.6,
+     "ease": "ease-in-out"
+    }
+   },
+   "about": "The picture brightens to a glow and the next shot comes out of the light. For memories, dreams, moments of joy.",
+   "tags": [
+    "light",
+    "fade",
+    "dreamy",
+    "nostalgic",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-zoom-in",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Zoom in",
+    "zh-CN": "推近",
+    "ja": "ズームイン",
+    "ko": "줌 인",
+    "es": "Acercar"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-zoom-in",
+     "body": "from { opacity: 0; scale: 0.6 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-zoom-in",
+     "body": "to { scale: 1.6; filter: blur(6px) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The camera dives into the last shot while the next one grows out of the middle. For going deeper.",
+   "tags": [
+    "zoom",
+    "camera",
+    "intense",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-zoom-out",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Zoom out",
+    "zh-CN": "拉远",
+    "ja": "ズームアウト",
+    "ko": "줌 아웃",
+    "es": "Alejar"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-zoom-out",
+     "body": "from { opacity: 0; scale: 1.6; filter: blur(6px) }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-zoom-out",
+     "body": "to { scale: 0.6; opacity: 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The last shot shrinks away into the distance as the next one settles down from close up.",
+   "tags": [
+    "zoom",
+    "camera",
+    "soft",
+    "transition"
+   ]
+  },
+  {
+   "id": "motions/move-spin",
+   "cat": "transition",
+   "group": "camera",
+   "name": {
+    "en": "Spin",
+    "zh-CN": "旋转",
+    "ja": "スピン",
+    "ko": "회전",
+    "es": "Girar"
+   },
+   "kind": "motion",
+   "durationMs": 600,
+   "place": "cut",
+   "lap": true,
+   "motion": {
+    "in": {
+     "name": "motion-cut-in-spin",
+     "body": "from { opacity: 0; rotate: -120deg; scale: 0.4 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    },
+    "out": {
+     "name": "motion-cut-out-spin",
+     "body": "to { rotate: 120deg; scale: 1.8; opacity: 0 }",
+     "secs": 0.6,
+     "ease": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+   },
+   "about": "The last shot spins away as the next one spins in from the middle. Playful, for fun and surprises.",
+   "tags": [
+    "spin",
+    "playful",
+    "intense",
+    "transition"
+   ]
+  }
+ ]
+}

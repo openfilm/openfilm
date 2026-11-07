@@ -31,7 +31,7 @@ import { writeAtomic } from './atomic.mjs';
 import { inProject } from './files.mjs';
 import { alignTranslation, segmentLine, subtitleEnd, umIsWord } from './subtitle-segments.mjs';
 import { readTranscript, setLine, transcriptIsCurrent, translationsOf, writeTranscript } from './transcripts.mjs';
-import { subtitleEditRoutes } from './subtitle-edits.mjs';
+import { cuePlain, readVtt } from '../../src/captions.mjs';
 
 export { spokenLines, stripAudioTags } from './transcripts.mjs';
 export { SUBTITLE_SEGMENT_RULES } from './subtitle-segments.mjs';
@@ -263,7 +263,7 @@ export async function filmCaptions(root, options = {}) {
     if (!said) { if (await wantsTranscript(root, clip.src)) untranscribed.add(clip.src); continue; }
     /* a transcript that runs on past the end of its file is not this file's any more (it was made again faster, or
        the transcript's times were moved): its lines would drift later and later and the last ones fall off. It is
-       still shown, and made again with the rest (the CC button) */
+       still shown, and made again with the rest (the timeline's captions button) */
     if (await transcriptOutlasts(said.lines, await lengthOf(clip.src))) untranscribed.add(clip.src);
     const native = clip.time?.length === 2 ? undefined : await lengthOf(clip.src) ?? (said.lines.at(-1)?.endMs ?? 0) / 1000;
     let span;
@@ -336,7 +336,7 @@ function wordsOfLines(lines) {
   });
 }
 
-export const CONNECT_TRANSLATOR = 'Connect a service that translates in Studio: Settings (the OpenFilm logo at the top left) → Providers.';
+export const CONNECT_TRANSLATOR = 'Translating subtitles needs your agent (in the app: Settings → Agents) or a service that translates (Settings → Services); the OpenFilm logo at the top left opens Settings.';
 
 /**
  * Translate the film's voices into `language` (one of FILM_SUBTITLE_LANGUAGES): each source heard in the film that has
@@ -393,7 +393,7 @@ export async function translateFilmSubtitles(root, language, options) {
  * @typedef {(root: string, src: string, signal: AbortSignal) => Promise<void>} Transcribe
  */
 
-export const CONNECT_TRANSCRIBER = 'Connect a service that transcribes in Studio: Settings (the OpenFilm logo at the top left) → Providers.';
+export const CONNECT_TRANSCRIBER = 'Connect a service that transcribes in Studio: Settings (the OpenFilm logo at the top left) → Services.';
 
 /**
  * The subtitle routes under /api/projects/:id/ (`rest` is the part after it). Returns whether it answered.
@@ -403,18 +403,16 @@ export const CONNECT_TRANSCRIBER = 'Connect a service that transcribes in Studio
  *                              subtitle of the line (a cue's `part`); empty text takes it out)
  *   GET  subtitles             → { style: FilmSubtitleStyle | null } (null: never changed)
  *   PUT  subtitles             { style } → { style } (as kept)
- *   POST subtitles/transcribe  → { transcribed, failed } for the speech heard with no transcript yet; 409 { error, code:
+ *   POST subtitles/transcribe  { srcs? } → { transcribed, failed } for the speech heard with no transcript yet (of
+ *                              those files alone, when given); 409 { error, code:
  *                              'no-transcriber' } when no service can
  *   POST subtitles/translate   { language } → translateFilmSubtitles' result (502 when every voice failed);
  *                              409 { error, code: 'no-translator' } when no provider can translate
- *   GET  captions/source, PUT captions/source, PUT captions/files: the subtitle row's edits (subtitle-edits.mjs)
  * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string} root @param {string} rest
  * @param {{ translate?: (root: string) => Promise<TranslateLines | null>, transcribe?: Transcribe }} [options] where
  *   translation and transcription come from (none: nowhere)
  */
 export async function captionRoutes(req, res, root, rest, { translate = async () => null, transcribe } = {}) {
-  /* the subtitle row's edits of one source (subtitle-edits.mjs) */
-  if (await subtitleEditRoutes(req, res, root, rest)) return true;
   if (rest === 'captions' && req.method === 'GET') {
     json(res, 200, await filmCaptions(root));
     return true;
@@ -442,9 +440,11 @@ export async function captionRoutes(req, res, root, rest, { translate = async ()
     const controller = new AbortController();
     res.once('close', () => { if (!res.writableEnded) controller.abort(); });
     const { untranscribed } = await filmCaptions(root);
+    const { srcs } = /** @type {{ srcs?: unknown }} */ (await readJson(req).catch(() => ({})));
+    const only = Array.isArray(srcs) ? new Set(srcs.map(String)) : null;
     /** @type {{ transcribed: string[], failed: { src: string, error: string }[] }} */
     const out = { transcribed: [], failed: [] };
-    for (const src of untranscribed) {
+    for (const src of untranscribed.filter((s) => !only || only.has(s))) {
       /* one made since the file changed is kept, unless it outlasts the file (filmCaptions): then it is not its own */
       if (await transcriptIsCurrent(root, src) && !(await outlastsItsFile(root, src))) continue;
       if (!transcribe) throw new HttpError(409, CONNECT_TRANSCRIBER, { code: 'no-transcriber' });
@@ -476,8 +476,25 @@ export async function captionRoutes(req, res, root, rest, { translate = async ()
   return false;
 }
 
-/** For an export: the project's cues and style in one read (the style as the person left it, or the default). @param {string} root */
+/**
+ * For an export: the project's cues and style in one read (the style as the person left it, or the default). A film
+ * with caption tracks (SPEC §1 Captions) has its subtitles there: the first one shown is the subtitle file's, and
+ * `tracks` says they are drawn by the film itself (nothing to burn in). @param {string} root
+ */
 export async function subtitlesForExport(root) {
+  const tracked = await captionTrackCues(root);
+  if (tracked) return { cues: tracked, style: { ...parseFilmSubtitleStyle(null), language: null, bilingual: false }, tracks: true };
   const [{ cues }, style] = await Promise.all([filmCaptions(root), readSubtitleStyle(root)]);
   return { cues, style: style ?? parseFilmSubtitleStyle(null) };
+}
+
+/** The cues of the film's first caption track that is shown, as subtitle lines (film ms, their words); null without one. @param {string} root */
+async function captionTrackCues(root) {
+  const film = await readProjectFilm(root);
+  const track = /** @type {import('../../src/film-doc.d.mts').FilmDoc | null} */ (film.doc)?.tracks.find((t) => t.captions && !t.hidden);
+  if (!track?.captions) return null;
+  const file = inProject(root, track.captions.src);
+  const text = file ? await readFile(file, 'utf8').catch(() => null) : null;
+  if (text == null) return null;
+  return readVtt(text).cues.map((c) => ({ startMs: Math.round(c.start * 1000), durMs: Math.round((c.end - c.start) * 1000), text: cuePlain(c.text).trim() }));
 }

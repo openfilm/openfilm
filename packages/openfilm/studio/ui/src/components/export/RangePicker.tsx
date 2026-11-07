@@ -283,7 +283,7 @@ export function RangePicker({ projectId, totalMs, fps, stage, boundaries, value,
                 {src && <img src={src} alt="" draggable={false} className="h-full w-full object-contain" />}
               </button>
               <div className="flex min-w-0 items-start gap-1.5 text-[11px] tabular-nums">
-                <span className={`min-w-5 shrink-0 rounded-md px-1 py-0.5 text-center text-[10px] font-medium ${selected ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'}`}>{index + 1}</span>
+                <span className={`min-w-5 shrink-0 rounded-md px-1 py-0.5 text-center text-[10px] font-medium ${selected ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'}`}>{index + 1}</span>
                 <span className={`min-w-0 flex-1 leading-5 ${selected ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
                   {part.read ? <><span className="block truncate">{formatTimecode(part.read.fromMs, { fps })}</span><span className="block truncate text-[var(--text-faint)]">{formatTimecode(part.read.toMs, { fps })}</span></> : t('exportCenter.rangeInvalidSegment')}
                 </span>

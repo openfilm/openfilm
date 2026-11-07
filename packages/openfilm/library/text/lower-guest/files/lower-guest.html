@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Guest with number</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; --accent: #ffc531; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; padding-left: 5vh; gap: 5vh; font-family: var(--font); color: var(--color); text-shadow: 0 0.6vh 2.4vh rgba(0, 0, 0, 0.4); }
+.t1 { font: 800 62vh/0.9 var(--font); color: transparent; -webkit-text-stroke: 1vh var(--accent); letter-spacing: -0.02em; white-space: pre; text-shadow: none; animation: num 0.7s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.v { width: 1vh; height: 66vh; background: var(--accent); animation: tall 0.5s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.tx { display: flex; flex-direction: column; gap: 1.6vh; }
+.t2 { align-self: flex-start; font-size: 8vh; font-weight: 800; letter-spacing: 0.3em; color: #111; background: var(--accent); padding: 0.6vh 1.8vh 0.6vh 2.2vh; text-shadow: none; animation: side 0.5s 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.t3 { font-size: 25vh; font-weight: 800; line-height: 1; white-space: pre; animation: side 0.6s 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.t4 { font-size: 10.5vh; font-weight: 500; opacity: 0.85; white-space: pre; animation: side 0.6s 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes num { from { opacity: 0; transform: translateY(20vh) scale(0.6); } }
+@keyframes tall { from { transform: scaleY(0); } }
+@keyframes side { from { opacity: 0; transform: translateX(-6vh); } }
+</style>
+</head>
+<body>
+<div class="w">
+  <span class="t1">01</span><div class="v"></div>
+  <div class="tx"><span class="t2">GUEST</span><span class="t3">Sofia Reyes</span><span class="t4">Founder, Little Kitchen</span></div>
+</div>
+<script>
+/*
+ * A guest introduced with a big outlined number, a label, a name and a role beside a line that rises. A page of
+ * OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

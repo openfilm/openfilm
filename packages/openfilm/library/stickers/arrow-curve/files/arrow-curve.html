@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Curved arrow</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #ffffff; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+path { fill: none; stroke: var(--color); stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; }
+.d { stroke-dasharray: 1 2; stroke-dashoffset: 1.01; animation: draw var(--l, 0.45s) cubic-bezier(.6, .05, .3, 1) var(--d, 0s) both; }
+@keyframes draw { from { stroke-dashoffset: 1.01; opacity: 0; } 1% { opacity: 1; } to { stroke-dashoffset: 0; opacity: 1; } }
+.n { animation: n 1.1s ease-in-out 0.75s infinite; }
+@keyframes n { 50% { transform: translate(9px, -4px); } }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 400 400"><defs><filter id="boil" filterUnits="userSpaceOnUse" x="-40" y="-40" width="480" height="480"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="1"/><feDisplacementMap in="SourceGraphic" scale="5" xChannelSelector="R" yChannelSelector="G"/></filter></defs><g filter="url(#boil)"><g class="n">
+<path class="d" pathLength="1" style="--l: 0.42s" d="M74 330 C70 250 120 170 214 138 C246 127 278 122 316 118"/>
+<path class="d" pathLength="1" style="--d: 0.36s; --l: 0.2s" d="M267.5 90.0 L316 118 L274.4 155.5"/>
+</g></g></svg>
+<script>
+/*
+ * A curved arrow drawn by hand: its line draws itself, then its head, and it keeps nudging toward what it points at,
+ * its edges alive as a pen line is. Its color is the clip's to change. A page of OpenFilm's library (CC0): what it
+ * shows at t comes from t alone; its CSS animations are held at t by the host.
+ */
+const noise = [...document.querySelectorAll('feTurbulence')];
+window.film = {
+  width: 400,
+  height: 400,
+  frame(t) {
+    for (const n of noise) n.setAttribute('seed', String(1 + (Math.floor(t * 8) % 4)));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

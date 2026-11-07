@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startStudio } from './server.mjs';
@@ -658,4 +658,62 @@ test('a clip a write would leave unreadable: the writer is told of a whole field
   await settleProjectFilm(two);
   assert.deepEqual(clip(read(two), 'v'), { id: 'v', src: 'v.mp4', time: [0, 6], at: 10, speed: 2 });
   assert.equal(tell(two, 'pid:B'), null);
+});
+
+/* the reporter's freeze / unfreeze: one clip swapped between a page and its rendered video, the rest as it is */
+const pageTag = (id, at) => `<iframe id="${id}" src="${id}.html#t=0,4" at="${at}"></iframe>`;
+const videoTag = (id, at) => `<video id="${id}" src="${id}.webm#t=0,4" at="${at}" data-frozen-from="${id}.html"></video>`;
+const filmOf = (...clips) => `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=1920, height=1080">\n</head>\n<body>\n<section>\n${clips.map((c) => `  ${c}`).join('\n')}\n</section>\n</body>\n</html>\n`;
+const clipKinds = (root) => readFilmFile(readFileSync(join(root, 'film.html'), 'utf8')).value.tracks[0].clips.map((c) => `${c.id}:${c.src.split('.').pop()}`).join(' ');
+
+async function swapFolder(text) {
+  const root = mkdtempSync(join(tmpdir(), 'of-swap-'));
+  writeFileSync(join(root, 'film.html'), text);
+  await settleProjectFilm(root);
+  return root;
+}
+/** an outside write, settled as the folder watcher settles it */
+async function outsideWrite(root, text) {
+  writeFileSync(join(root, 'film.html'), text);
+  await settleProjectFilm(root, { stable: true });
+  return clipKinds(root);
+}
+
+test('an outside swap of one clip, there and back, stays as written: no edit of the person\'s is in it (#344)', async () => {
+  const root = await swapFolder(filmOf(videoTag('a', 0), pageTag('b', 4)));
+  assert.equal(await outsideWrite(root, filmOf(pageTag('a', 0), pageTag('b', 4))), 'a:html b:html');
+  assert.equal(await outsideWrite(root, filmOf(videoTag('a', 0), pageTag('b', 4))), 'a:webm b:html');
+  assert.equal(await outsideWrite(root, filmOf(pageTag('a', 0), pageTag('b', 4))), 'a:html b:html');
+  personEdits.forget(root);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('outside swaps of two clips: swapping one back puts back nothing of the other (#344)', async () => {
+  const root = await swapFolder(filmOf(pageTag('a', 0), pageTag('b', 4)));
+  assert.equal(await outsideWrite(root, filmOf(videoTag('a', 0), pageTag('b', 4))), 'a:webm b:html');
+  assert.equal(await outsideWrite(root, filmOf(videoTag('a', 0), videoTag('b', 4))), 'a:webm b:webm');
+  assert.equal(await outsideWrite(root, filmOf(pageTag('a', 0), videoTag('b', 4))), 'a:html b:webm');
+  assert.equal(await outsideWrite(root, filmOf(videoTag('a', 0), videoTag('b', 4))), 'a:webm b:webm');
+  personEdits.forget(root);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('an outside swap back with an edit of the person\'s elsewhere: the swap is taken, the edit stays (#344)', async () => {
+  const root = await swapFolder(filmOf(videoTag('a', 0), pageTag('b', 4)));
+  assert.equal(await outsideWrite(root, filmOf(pageTag('a', 0), pageTag('b', 4))), 'a:html b:html');
+  await editProjectFilm(root, null, [{ op: 'set', clip: 'b', field: 'at', value: 6 }]);
+  assert.equal(await outsideWrite(root, filmOf(videoTag('a', 0), pageTag('b', 6))), 'a:webm b:html');
+  personEdits.forget(root);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('a write over a file that still holds what it was made from is in place when it says so, and leaves no bytes beside it; one over a file changed meanwhile is not made', async () => {
+  const dir = mkdtempSync(join(scratch, 'replace-'));
+  const path = join(dir, 'film.html');
+  writeFileSync(path, 'old');
+  assert.equal(await personEdits.replaceIfStill(path, 'old', 'new'), true);
+  assert.equal(readFileSync(path, 'utf8'), 'new');
+  assert.equal(await personEdits.replaceIfStill(path, 'old', 'newer'), false, 'written meanwhile: not written over');
+  assert.equal(readFileSync(path, 'utf8'), 'new');
+  assert.deepEqual(readdirSync(dir), ['film.html'], 'no bytes on their way left beside it, written or not');
 });

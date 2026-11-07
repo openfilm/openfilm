@@ -11,8 +11,10 @@
  *   trackHeights how tall tracks are drawn on the timeline, px, each with the clips its track had then (as trackNames;
  *                see the editor's lib/track-heights.ts).
  *
+ *   motionBlur   temporal sampling for Studio video exports.
+ *
  *   GET   settings            → { settings }
- *   PATCH settings  { fps?, trackNames?, trackHeights? } → { settings } (null takes a setting away)
+ *   PATCH settings            → { settings } (null takes a setting away)
  */
 import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -27,7 +29,8 @@ export const FRAME_RATES = /** @type {const} */ ([23.976, 24, 25, 29.97, 30, 48,
 
 /** @typedef {{ name: string, index: number, clips: string[] }} TrackName */
 /** @typedef {{ height: number, index: number, clips: string[] }} TrackHeight */
-/** @typedef {{ fps?: number, trackNames?: TrackName[], trackHeights?: TrackHeight[] }} ProjectSettings */
+/** @typedef {{ enabled: boolean, samples: number, shutter: number }} MotionBlur */
+/** @typedef {{ fps?: number, trackNames?: TrackName[], trackHeights?: TrackHeight[], motionBlur?: MotionBlur }} ProjectSettings */
 
 /** The heights a track can be drawn at, px (the editor's lib/track-heights.ts). */
 const TRACK_MIN_H = 28;
@@ -35,6 +38,15 @@ const TRACK_MAX_H = 160;
 
 /** @param {unknown} v @returns {v is Record<string, unknown>} */
 const isRecord = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** @param {unknown} v @returns {MotionBlur | null} */
+function motionBlurOf(v) {
+  if (!isRecord(v) || typeof v.enabled !== 'boolean') return null;
+  const { enabled, samples, shutter } = v;
+  if (typeof samples !== 'number' || !Number.isInteger(samples) || samples < 2 || samples > 64) return null;
+  if (typeof shutter !== 'number' || !Number.isFinite(shutter) || shutter < 0 || shutter > 1) return null;
+  return { enabled, samples, shutter };
+}
 
 /** A frame rate as one of FRAME_RATES (a probed 29.97002997 is 29.97), or null. @param {unknown} v */
 export function frameRateOf(v) {
@@ -66,6 +78,8 @@ export function parseProjectSettings(raw) {
   const out = {};
   const fps = frameRateOf(raw.fps);
   if (fps != null) out.fps = fps;
+  const motionBlur = motionBlurOf(raw.motionBlur);
+  if (motionBlur) out.motionBlur = motionBlur;
   if (Array.isArray(raw.trackNames)) {
     const names = raw.trackNames.map(trackNameOf).filter((n) => n != null).slice(0, 200);
     if (names.length) out.trackNames = /** @type {TrackName[]} */ (names);
@@ -107,6 +121,14 @@ export async function patchProjectSettings(root, patch) {
     else if (!Array.isArray(patch.trackHeights)) throw new HttpError(400, 'trackHeights: a list of { height, index, clips }');
     else next.trackHeights = patch.trackHeights;
   }
+  if ('motionBlur' in patch) {
+    if (patch.motionBlur === null) delete next.motionBlur;
+    else {
+      const value = motionBlurOf(patch.motionBlur);
+      if (!value) throw new HttpError(400, 'motionBlur: enabled, 2 to 64 samples, shutter from 0 to 1');
+      next.motionBlur = value;
+    }
+  }
   const kept = parseProjectSettings(next);
   await mkdir(dirname(join(root, PROJECT_SETTINGS_FILE)), { recursive: true });
   await writeAtomic(join(root, PROJECT_SETTINGS_FILE), `${JSON.stringify(kept, null, 2)}\n`);
@@ -122,7 +144,7 @@ export async function projectSettingsRoute(req, res, root, rest) {
   if (req.method === 'GET') { json(res, 200, { settings: await readProjectSettings(root) }); return true; }
   if (req.method === 'PATCH') {
     const body = await readJson(req);
-    if (!isRecord(body)) throw new HttpError(400, 'which settings? { fps?, trackNames?, trackHeights? }');
+    if (!isRecord(body)) throw new HttpError(400, 'which settings? { fps?, trackNames?, trackHeights?, motionBlur? }');
     json(res, 200, { settings: await patchProjectSettings(root, body) });
     return true;
   }

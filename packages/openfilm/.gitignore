@@ -5,3 +5,14 @@ node_modules/
 studio/ui/dist/
 /film.html
 .dev/
+!library/**/preview.mp4
+# voice samples: published with the library, not kept in git (scripts/library-voices.mjs makes them)
+library/voices/
+# the sounds and music of library/audio.json, with their waveforms: published with the library likewise
+library/audio/
+# the emoji stickers of library/stickers.json: published with the library likewise
+library/stickers/emoji/
+# the model semantic search runs, and its runtime: published with the library likewise (library/models.json)
+library/models/
+# each template's example, with its music (scripts/library-previews.mjs): published with the library likewise
+library/examples/

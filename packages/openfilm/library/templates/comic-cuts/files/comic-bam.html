@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Comic BAM</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A comic-book burst explodes from the middle, red behind yellow with halftone dots, and BAM! slams in over the
+ * cut; then the word flies off and a burst-shaped hole blows open onto the next shot. It lasts 0.9 s and covers
+ * the cut at its middle: put its middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes
+ * from t alone, drawn in parts of the frame so it fits a stage of any shape.
+ */
+const D = 0.9;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+/* 0 at a, 1 at b, 0 again at c */
+const tri = (u, a, b, c) => (u < b ? seg(u, a, b) : 1 - seg(u, b, c));
+const inCubic = (x) => x * x * x;
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+const outBack = (x) => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+/* a jagged burst of n spikes around x, y, between radii ri and ro */
+const burst = (x, y, ro, ri, n, rot, seed) => {
+  for (let i = 0; i < n * 2; i++) {
+    const a = rot + (i / (n * 2)) * TAU, r = (i % 2 ? ri : ro) * (0.85 + 0.3 * hash(i + seed));
+    if (i) g.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)); else g.moveTo(x + r * Math.cos(a), y + r * Math.sin(a));
+  }
+  g.closePath();
+};
+
+function draw(u) {
+  const cx = W / 2, cy = H / 2, R = Math.hypot(W, H) / 2, n = Math.floor(u * D * 24);
+  /* a shake on the hit */
+  const sh = tri(u, 0.3, 0.38, 0.5) * H * 0.02;
+  g.save();
+  g.translate((hash(n) - 0.5) * sh, (hash(n + 1) - 0.5) * sh);
+  if (u < 0.5) {
+    /* the red burst grows past the edges */
+    const p = inOut(seg(u, 0.1, 0.4));
+    if (p > 0) {
+      g.beginPath();
+      burst(cx, cy, R * 2.1 * p, R * 1.45 * p, 14, 0.2, 3);
+      g.fillStyle = '#ff2d2d';
+      g.fill();
+      /* comic speed lines on the red */
+      g.save();
+      g.clip();
+      g.fillStyle = 'rgba(120, 0, 0, 0.35)';
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * TAU + hash(i) * 0.1;
+        g.beginPath();
+        g.moveTo(cx, cy);
+        g.arc(cx, cy, R * 2.2, a, a + 0.04);
+        g.closePath();
+        g.fill();
+      }
+      g.restore();
+    }
+  } else {
+    /* a burst-shaped hole blows open in the red */
+    const p = inOut(seg(u, 0.58, 0.96));
+    g.beginPath();
+    g.rect(-W, -H, W * 3, H * 3);
+    if (p > 0) burst(cx, cy, R * 2.3 * p, R * 1.6 * p, 14, -0.3, 11);
+    g.fillStyle = '#ff2d2d';
+    g.fill('evenodd');
+  }
+  /* the yellow burst with halftone dots */
+  const q = u < 0.5 ? outBack(seg(u, 0.14, 0.38)) : 1 + 2.5 * inCubic(seg(u, 0.56, 0.72));
+  if (q > 0 && u < 0.72) {
+    g.beginPath();
+    burst(cx, cy, H * 0.62 * q, H * 0.44 * q, 12, -0.1, 7);
+    g.fillStyle = '#ffd400';
+    g.fill();
+    g.save();
+    g.clip();
+    g.fillStyle = '#ff9a00';
+    const sp = H * 0.045;
+    g.beginPath();
+    for (let y = 0; y < H + sp; y += sp) {
+      for (let x = (y / sp) % 2 ? sp / 2 : 0; x < W + sp; x += sp) {
+        const r = sp * 0.4 * clamp(Math.hypot(x - cx, y - cy) / (H * 0.62 * q));
+        if (r < 0.5) continue;
+        g.moveTo(x + r, y);
+        g.arc(x, y, r, 0, TAU);
+      }
+    }
+    g.fill();
+    g.restore();
+    g.strokeStyle = '#111';
+    g.lineWidth = H * 0.012;
+    g.lineJoin = 'round';
+    g.beginPath();
+    burst(cx, cy, H * 0.62 * q, H * 0.44 * q, 12, -0.1, 7);
+    g.stroke();
+  }
+  /* the word slams in, and flies off */
+  const t = u < 0.5 ? outBack(seg(u, 0.22, 0.36)) : 1 + 3 * inCubic(seg(u, 0.54, 0.66));
+  const ta = u < 0.5 ? 1 : 1 - seg(u, 0.58, 0.66);
+  if (t > 0 && ta > 0) {
+    g.save();
+    g.globalAlpha = ta;
+    g.translate(cx, cy);
+    g.rotate(-0.12);
+    g.scale(t, t);
+    g.font = `italic 900 ${Math.round(H * 0.22)}px "Arial Black", "Helvetica Neue", Impact, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineJoin = 'round';
+    g.fillStyle = '#111';
+    g.fillText('BAM!', H * 0.015, H * 0.02);
+    g.strokeStyle = '#111';
+    g.lineWidth = H * 0.03;
+    g.strokeText('BAM!', 0, 0);
+    g.fillStyle = '#fff';
+    g.fillText('BAM!', 0, 0);
+    g.restore();
+  }
+  g.restore();
+  /* a white flash on the hit */
+  const f = tri(u, 0.34, 0.38, 0.44);
+  if (f > 0) { g.fillStyle = `rgba(255, 255, 255, ${f * 0.8})`; g.fillRect(0, 0, W, H); }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

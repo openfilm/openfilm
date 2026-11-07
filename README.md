@@ -42,14 +42,16 @@ Then ask your agent for a film:
 > Make a 20-second launch video for my CLI, with music.
 
 It opens the film in Studio and you watch it take shape. If your agent has no skills, tell it: "Run
-`npx -y openfilm@latest` and follow the manual it prints."
+`npx -y openfilm@latest` and follow what it prints."
 
 Or download the desktop app for macOS or Windows from [openfilm.dev](https://openfilm.dev) or
 [Releases](https://github.com/openfilm/openfilm/releases): Studio with a chat beside it for the agents you have. It
 comes with ffmpeg and the headless browser, so there is nothing else to install.
 
-Making, editing and rendering films needs no account. For generated voice, music, images and video, connect the
-services you use (ElevenLabs, OpenAI, Google, fal and others) with your own keys in Studio's Settings → Providers.
+Making, editing and rendering films needs no account, and OpenFilm's library of music, sounds, voices, stickers,
+transitions, effects and templates is free to use. For generated voice, music, images and video, connect the services
+you use (ElevenLabs, OpenAI, Google, OpenRouter, fal and others) with your own keys in Studio's Settings → Services,
+or sign in to OpenFilm there to make them without keys of your own.
 
 To start from a finished film, open one of the [examples](https://github.com/openfilm/examples):
 
@@ -62,16 +64,18 @@ npx -y openfilm@latest open https://github.com/openfilm/examples/tree/main/one-p
 Your agent runs them; so can you, with `npx -y openfilm@latest <command>` or `npm i -g openfilm`.
 
 ```sh
-openfilm                          # the manual: all an agent needs to know
+openfilm                          # what a film is, and OpenFilm's own skills: where an agent starts
 openfilm open   [folder | url]    # show a film in Studio: a new one, an existing one, one from GitHub, else this one or the last
 openfilm look   [what] [t | a-b]  # check the film, a page or a media file: a contact sheet, one frame, or a range
-openfilm render [a-b]             # the MP4; --4k, --blur (motion blur), --alpha (.webm / .mov)
-openfilm get    [what]            # voice-over, music, sound effects, transcripts, images, video, from your services
+openfilm render [a-b]             # the MP4; --4k, --blur (motion blur), --alpha (.webm / .mov), --loudness=-14
+openfilm get    [what]            # media: free from OpenFilm's library first, else made by a connected service
+openfilm canvas [apply <steps>]   # the canvas beside the edit: read it, or lay out notes, files and what to make
+openfilm skills                   # the skills a film can be made with; `openfilm skill <name>` prints one
 openfilm doctor                   # what this computer has for OpenFilm, to paste into an issue
 ```
 
-`openfilm <command> --help` lists a command's options; `openfilm get` alone lists what can be made and how to
-connect a service in Studio with your own key.
+`openfilm <command> --help` lists a command's options; `openfilm get` alone lists what can be made, what the library
+has, and how to connect a service in Studio.
 
 ## Studio
 
@@ -82,8 +86,25 @@ film's files, so the agent sees and keeps them, and you can save named versions 
 the sound or its stems, subtitles, stills, slides, a transparent video, or the timeline itself for Final Cut Pro,
 Premiere Pro and DaVinci Resolve.
 
+Beside the edit is the canvas (⌘E switches between them): a board where you and the agent lay out notes, pictures,
+clips, voice-over, music and sound, wire them into each other, make each with your services, and send what you made
+to the timeline in order. A project can have several, each also seen as a storyboard. The library, in the assets
+drawer, holds footage, voices, sounds, music, text, stickers, filters, effects, transitions and templates, and the
+skills.
+
 The desktop app ([apps/desktop](apps/desktop)) is Studio with a chat beside it, for Claude Code, Codex and the other
 agents, or its own agent with your own key.
+
+## Skills
+
+How a film is made lives in skills, not in the tool. `openfilm` prints one page: what a film is, and OpenFilm's own
+skills, which hold the rest: `edit` (the project, film.html and pages, and checking them), `media` (the library and
+the services) and `canvas`. An agent reads the one a task needs with `openfilm skill <name>`.
+
+Every other skill is a way of making a kind of film, known by its full name, `owner/name`. Studio's library lists
+OpenFilm's and the community's under Discover, from [openfilm/skills](https://github.com/openfilm/skills), which also
+says how to write one; install one there, try it in a conversation without installing it, or add your own from a link
+or a folder (`openfilm skill add <link>`). An installed skill is offered to every agent.
 
 ## How it works
 
@@ -131,7 +152,8 @@ OpenFilm spends its effort where models fail: checking the film. `look` draws ev
 shuffled orders, and names any that changed, along with page errors, fonts that failed to load, missing sound files,
 and text cut off by the frame.
 
-[MANUAL.md](packages/openfilm/MANUAL.md) is what `openfilm` tells your agent; [SPEC.md](packages/openfilm/SPEC.md)
+[MANUAL.md](packages/openfilm/MANUAL.md) is the page `openfilm` prints, and
+[packages/openfilm/manual](packages/openfilm/manual) holds OpenFilm's own skills; [SPEC.md](packages/openfilm/SPEC.md)
 is for anyone building a player, renderer or editor.
 
 ## From source

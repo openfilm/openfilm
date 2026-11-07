@@ -14,6 +14,7 @@
 import React from 'react';
 import { flushSync } from 'react-dom';
 import {
+  Check,
   ClipboardPaste,
   Copy,
   CopyPlus,
@@ -28,34 +29,33 @@ import {
   Paperclip,
   MessageSquarePlus,
   ChevronDown,
-  ChevronUp,
   MousePointer2,
-  MoveHorizontal,
   Play,
   Redo2,
   Scissors,
   SplitSquareHorizontal,
   Trash2,
   Undo2,
-  Video,
   X,
   ZoomIn,
   ZoomOut,
   Volume2,
   VolumeX,
   Waves,
+  Layers,
+  ChevronLeft,
   Link2,
   Link2Off,
-  Mic,
   SeparatorVertical,
   BetweenHorizontalStart,
   ArrowLeftToLine,
   ArrowRightToLine,
-  Pencil,
   TriangleAlert,
   Blend,
+  Plus,
 } from 'lucide-react';
-import { useT } from '@/i18n';
+import { useLanguage, useT } from '@/i18n';
+import { CcMark } from './CcMark';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
 import { ownTrackHeight } from '@/lib/track-heights';
 import type { Op } from '@/api';
@@ -65,6 +65,7 @@ import { filmSrcIsStill, parseFilmDocLoc } from '@/lib/film';
 import {
   assetDropPreview,
   assetDropSpot,
+  libraryOverlay,
   assetDropTargetOf,
   type AssetDropPreview,
   type AssetDropTarget,
@@ -73,6 +74,7 @@ import {
 import {
   computerFileDragItem,
   isComputerFileDrag,
+  hideDragPicture,
   peekResourceDrag,
   readResourceDragData,
   RESOURCE_DRAG_TYPE,
@@ -117,6 +119,7 @@ import { draftNumbersOf, sameClip, type ChatPoint, type DraftMarks } from '@/lib
 import { formatRulerLabel, formatTimecode, frameAt, frameMs, secondFrames, snapToFrame, stepFrames, useTimecodeFps } from '@/lib/timecode';
 import { planNudge, sideTargets, splitAllTargets, splitTargets } from '@/lib/timeline-nav';
 import {
+  VIEW_SPAN_EMPTY_MS,
   VIEW_SPAN_MIN_MS,
   ZOOM_DEFAULT,
   zoomMaxOf,
@@ -149,36 +152,34 @@ import {
   zoomPreviewStep,
   type ZoomPreview,
 } from '@/lib/timeline-view';
-import { OperationHistory, type SessionTimeline } from './OperationHistory';
+import { OperationHistory, trackFlagStep, type SessionTimeline } from './OperationHistory';
 import { BlockThumbs } from './BlockThumbs';
 import { BlockWaveform } from './BlockWaveform';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import type { PlaybackClock } from './LiveTime';
-import { CaptionsIcon } from './player-controls/controls-bar';
 import { inHostPanel, isTypingTarget } from './typing-target';
 import { Popover } from './Popover';
 import { MarkerGlyph } from './TimelineMarkers';
-import { SUBTITLE_ROW_H, SubtitleRow, SubtitleRowHead, useSubtitleRowShown, type SubtitleRowHandle, type SubtitleRowSpec } from './SubtitleRow';
+import { RecordButton, type RecordButtonProps } from './RecordButton';
 import { SoloButton, TrackResizeHandle } from './timeline-head-extras';
 import { clipAtPoint, markReplaceTarget } from './replace-drop';
 import { Tooltip } from './Tooltip';
 import { useBlockDrag, type GestureTip } from './useBlockDrag';
 import { fadeEdits, fadeFromPointer, fadeHandleX, type FadeEdge, type FadeMs } from '@/lib/clip-fade';
 import { canChangeSpeed, roundSpeed } from '@/lib/clip-speed';
-import { hasVolume, volumeAtLineY, volumeEdit, volumeLineY, volumeOf, volumeText } from '@/lib/clip-volume';
+import { canDetachAudio, hasSoundToDetach, hasVolume, volumeAtLineY, volumeEdit, volumeLineY, volumeOf, volumeText } from '@/lib/clip-volume';
 import { speedText } from '@/lib/playback-speed';
+import { isFilterLayer, isLibraryEffect, isLibrarySticker, libraryItemOfClip, nameOf, useLibraryIndex } from '@/lib/library';
+import { CategoryIcon } from './library/icons';
 import { cutNear, transitionSpan, type CutRef, type FilmTransition, type TransitionAsk, type TransitionKind } from '@/lib/transitions';
 
 /** Track head column: kind badge + lock + hide + original sound. */
 const HEAD_W = 108;
 /** A row at least this tall shows its track's name under the badge (a lower one says it on hover). */
-const HEAD_NAME_MIN_H = 34;
 /** The room solo's S takes in a head. */
 const HEAD_SOLO_W = 24;
 /* the head toggles' icons: at 10 px lock and eye are indistinguishable dots on Retina */
 const HEAD_ICON_H = 12;
-/** The kind icon of a row without a badge. */
-const TYPE_BOX = 13;
 /** Toolbar height. The playhead layer starts below it, so it is a constant. */
 const TOOLBAR_H = 34;
 /**
@@ -198,8 +199,12 @@ const referKeyHeld = (e: { metaKey: boolean; ctrlKey: boolean }) => (MAC ? e.met
 /* the range bar's hit height (the visible bar is thinner, see .tl-range-thumb; 5 px could hardly be hit) */
 const H_SCROLL_H = 10;
 const RULER_H = 20;
-/** The markers' row under the ruler (only while there are markers). */
+/** The markers' row under the ruler (only while there are markers): it floats over the rows' top edge, so a marker
+ * added or the last one removed never moves the rows. */
 const MARKER_ROW_H = 16;
+
+/** A compound clip's film (studio/server/compound.mjs): `parts/<name>/film.html`. */
+const COMPOUND_SRC = /^parts\/[^/]+\/film\.html$/;
 
 /** A marker's line through the timeline: where, in its color; `held` while it is dragged (else hovered, fainter). */
 export interface MarkerGuide { ms: number; color: string; held: boolean }
@@ -236,7 +241,7 @@ const SCRUB_STATE_MS = 100;
  */
 const AUDIO_BAND_H = INFO_H;
 /** The gap between rows: two rows read as two, not as one area. */
-const GAP = 3;
+const GAP = 2;
 /**
  * How close to a row's top or bottom edge counts as "open a new track here" rather than "onto this row". It used to
  * be up to 12 px each side of a 44 px row, so more than half the row meant "new track" and a purely horizontal drag
@@ -255,45 +260,76 @@ const ZOOM_SETTLE_MS = 120;
  */
 const ZOOM_RELAYOUT = 1.5;
 
-/** Color by kind of clip: picture, voice, other sound. Muted tones, dark enough for white text and waveforms. */
+/** Color by kind of clip (globals.css `--clip-*`): one quiet color each, under white words; sounds of all kinds one. */
 const KIND_COLOR: Record<TimelineBlockKind, string> = {
-  mg: 'var(--tl-scene)',
-  video: 'var(--tl-video)',
-  voice: 'var(--tl-voice)',
-  sfx: 'var(--tl-sfx)',
-  music: 'var(--tl-music)',
-  caption: 'var(--tl-caption)',
+  mg: 'var(--clip-page)',
+  video: 'var(--clip-video)',
+  voice: 'var(--clip-audio)',
+  sfx: 'var(--clip-audio)',
+  music: 'var(--clip-audio)',
+  caption: 'var(--clip-text)',
 };
 
-/** The timeline's surfaces, CSS variables with a light and a dark set (see globals.css `--tl-*`). */
+/** The timeline's surfaces: the app's (globals.css), and the lanes' own `--tl-*`. */
 const TL = {
-  lane: 'var(--tl-lane)',
-  laneOn: 'var(--tl-lane-on)',
-  head: 'var(--tl-head)',
-  ruler: 'var(--tl-ruler)',
-  line: 'var(--tl-line)',
-  tick: 'var(--tl-tick)',
-  text: 'var(--tl-text)',
-  faint: 'var(--tl-faint)',
+  head: 'var(--bg-panel)',
+  ruler: 'var(--bg-panel)',
+  line: 'var(--border)',
+  tick: 'var(--border-strong)',
+  text: 'var(--text-muted)',
+  faint: 'var(--text-faint)',
 } as const;
 
-function laneTone(track: TimelineTrack, selected: boolean): string {
-  if (track.hidden) return TL.head;
-  const tone = selected ? TL.laneOn : TL.lane;
-  /* the main track: a band of its own, a shade toward the text (lighter in the dark, darker in the light) */
-  return track.main ? `color-mix(in srgb, ${tone} 93%, var(--tl-text))` : tone;
+/* each track is a band of its own from its head across the timeline (`--tl-row`), apart from the next by a gap of the
+   panel under them (`--tl-gap`), so a clip is seen to be on its track; the track of a picked clip is a shade further
+   (`--tl-lane-on`) */
+function laneTone(track: TimelineTrack, picked: boolean): string {
+  if (picked) return 'var(--tl-lane-on)';
+  /* the main track: a band deeper still, a shade toward the text (lighter in the dark, darker in the light) */
+  return track.main && !track.hidden ? 'color-mix(in srgb, var(--tl-row) 94%, var(--text-muted))' : 'var(--tl-row)';
+}
+
+/**
+ * A row's name, V1, V2… for picture (footage, stills, pages, text, captions: what is drawn) or A1, A2… for sound
+ * (voices, sound effects, music), as editors number tracks (timeline-layout badgeRows).
+ */
+function LaneMark({ track }: { track: TimelineTrack }) {
+  return (
+    /* a label, dimmer than the switches beside it, so the two read apart */
+    <span
+      className="flex items-center justify-center text-[10.5px] font-medium leading-none tabular-nums"
+      style={{ width: 21, height: 14, color: 'var(--text-faint)', opacity: track.hidden ? 0.5 : 1 }}
+    >
+      {track.badge}
+    </span>
+  );
+}
+
+/** The entries of a clip's menu a caption's cues keep. */
+const CUE_MENU = new Set(['split', 'duplicate', 'remove', 'ripple', 'ripple-start', 'ripple-end']);
+
+/** A caption track's row, and a row of the library's text: narrow, each cue or clip a line of words. */
+const CAPTION_ROW_H = 26;
+
+/** A sticker's picture on its block: a frame from its middle (it has come in by then), else its poster. */
+function stickerShot(strip: ReadonlyMap<number, string> | undefined, poster: string | undefined): string | undefined {
+  if (!strip?.size) return poster;
+  const at = [...strip.keys()].sort((a, b) => a - b);
+  return strip.get(at[Math.floor(at.length / 2)]!) ?? poster;
 }
 
 /** A row's height: the person's for its track (lib/track-heights), else the timeline's own (the main track taller). */
-function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'>): number {
-  return track.height ?? ownTrackHeight(track);
+function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean; folded?: boolean }): number {
+  /* the heads of transitions on one track: folded away, their marks on the track below */
+  if (track.folded) return 0;
+  return track.height ?? (track.captions || track.text ? CAPTION_ROW_H : ownTrackHeight(track));
 }
 
 /**
  * The height that shows every row (toolbar + ruler + rows + padding + range bar). The editor uses it for the
  * timeline's default height.
  */
-export function timelineFitHeight(tracks: readonly Pick<TimelineTrack, 'kind' | 'height' | 'main'>[]): number {
+export function timelineFitHeight(tracks: readonly (Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean })[]): number {
   const lanes = tracks.reduce((h, tr) => h + rowH(tr) + GAP, 0);
   return TOOLBAR_H + RULER_H + lanes + GAP + 2 * TL_VPAD + H_SCROLL_H;
 }
@@ -367,7 +403,8 @@ function landingForClip(
     title: block.title,
     color: KIND_COLOR[block.kind],
     top: trackSlotTop(tracks, laneIndex, padTop),
-    height: trackKindHeight(tracks[Math.min(laneIndex, Math.max(0, tracks.length - 1))]?.kind ?? block.kind),
+    /* as tall as the row it lands on (a row of words is low), never over the rows under it */
+    height: (() => { const row = tracks[Math.min(laneIndex, Math.max(0, tracks.length - 1))]; return row ? rowH(row) : trackKindHeight(block.kind); })(),
     refused,
   };
 }
@@ -391,8 +428,8 @@ function LandingMark({ landing, pxPerMs }: { landing: DropLanding; pxPerMs: numb
           width: 3,
           top: landing.top - 3,
           height: landing.height + 6,
-          background: 'var(--tl-accent)',
-          boxShadow: '0 0 6px color-mix(in srgb, var(--tl-accent) 70%, transparent)',
+          background: 'var(--accent)',
+          boxShadow: '0 0 6px color-mix(in srgb, var(--accent) 70%, transparent)',
         }}
       />
     );
@@ -409,7 +446,7 @@ function LandingMark({ landing, pxPerMs }: { landing: DropLanding; pxPerMs: numb
             left: 0,
             width: '100%',
             top: landing.top - 1,
-            background: 'color-mix(in srgb, var(--tl-accent) 45%, transparent)',
+            background: 'color-mix(in srgb, var(--accent) 45%, transparent)',
           }}
         />
         <div
@@ -421,8 +458,8 @@ function LandingMark({ landing, pxPerMs }: { landing: DropLanding; pxPerMs: numb
             width: Math.max(8, Math.round((landing.endMs - landing.startMs) * pxPerMs)),
             top: landing.top - 2,
             height: 4,
-            background: 'var(--tl-accent)',
-            boxShadow: '0 0 6px color-mix(in srgb, var(--tl-accent) 70%, transparent)',
+            background: 'var(--accent)',
+            boxShadow: '0 0 6px color-mix(in srgb, var(--accent) 70%, transparent)',
           }}
         />
       </>
@@ -432,22 +469,23 @@ function LandingMark({ landing, pxPerMs }: { landing: DropLanding; pxPerMs: numb
     <div
       data-drop-slot=""
       data-drop-start={Math.round(landing.startMs)}
-      className="absolute overflow-hidden rounded-[3px]"
+      className="absolute overflow-hidden rounded-[4px]"
       style={{
+        background: landing.color,
         left: Math.round(landing.startMs * pxPerMs),
         width: Math.max(8, Math.round(landing.endMs * pxPerMs) - Math.round(landing.startMs * pxPerMs) - 1),
         top: landing.top,
         height: landing.height,
-        background: landing.color,
-        opacity: landing.refused ? 0.28 : 0.45,
+        /* solid, as the clip it will be; refused, faint */
+        opacity: landing.refused ? 0.28 : 1,
         boxShadow: landing.refused
           ? 'inset 0 0 0 1px color-mix(in srgb, var(--err) 70%, transparent)'
           : undefined,
       }}
     >
       <div
-        className="truncate px-1.5 text-[10px] font-medium leading-none text-white/95"
-        style={{ height: INFO_H, display: 'flex', alignItems: 'center', background: 'rgba(0,0,0,0.3)' }}
+        className="truncate px-1.5 text-[10px] font-medium leading-none text-white/90"
+        style={{ height: INFO_H, display: 'flex', alignItems: 'center' }}
       >
         {landing.title}
       </div>
@@ -509,16 +547,6 @@ function laneKindForHint(kind: string): 'visual' | 'audio' {
   return kind === 'voice' || kind === 'sfx' || kind === 'music' || kind === 'audio' ? 'audio' : 'visual';
 }
 
-/* A row head starts with its badge (P1 / V1 / A1, see timeline-layout badgeRows); rows without one fall back to an
-   icon: a camera for pictures, a wave for sound. */
-
-/** Badge colors: the family of the clips on the row. */
-const BADGE_COLOR: Record<string, string> = {
-  M: 'var(--tl-scene)',
-  V: 'var(--tl-video)',
-  A: 'var(--tl-voice)',
-};
-
 /** Word cues too close together keep only the first: zoomed out, five words a second is a smear. */
 function cueTicks(
   cues: readonly { word: string; tMs: number }[],
@@ -553,6 +581,13 @@ export interface TimelineProps {
   blockMenuExtra?: (blocks: readonly TimelineBlock[]) => ContextMenuEntry[];
   /** The menu of a track's head (right-clicked); without entries the head has no menu. */
   trackMenuExtra?: (track: TimelineTrack) => ContextMenuEntry[];
+  /** The media files whose words the film's captions come from (a voice with its transcript): their clips say so by their name. */
+  transcribed?: ReadonlySet<string>;
+  /**
+   * While the library's New captions is open: the clips the captions are made of (`lit`, drawn framed in the accent),
+   * and those with no transcript to tick in or out of them (`choosable`, a tick at their top right; `picked` ticked).
+   */
+  captionPick?: { lit: ReadonlySet<string>; choosable: ReadonlySet<string>; picked: ReadonlySet<string>; toggle: (clipId: string) => void } | null;
   /** Clips dragged out of the timeline onto the panel of the app around Studio (its chat): handed to it, not moved. */
   onReferBlocks?: (blocks: TimelineBlock[]) => void;
   /** The range marked on the ruler (the editor keeps it): drawn as a band across the tracks. */
@@ -607,6 +642,8 @@ export interface TimelineProps {
    * but not dragged — a read-only film, rather than a drag that does nothing. Null = done; a sentence = shown.
    */
   onEditOps?: (ops: Op[], label: string) => Promise<string | null>;
+  /** A caption put in on a caption track (its file) at a time (ms); why not, when it is not. */
+  onAddCaption?: (src: string, atMs: number) => Promise<string | null>;
   /** Clip id → its `data-link`: clips sharing one are selected and edited together (see the Linked switch). */
   links?: ReadonlyMap<string, string>;
   /**
@@ -619,8 +656,15 @@ export interface TimelineProps {
    * Without it there is no split tool.
    */
   onSplit?: (blocks: readonly TimelineBlock[], atMs: number) => Promise<string | null>;
-  /** Take a video's sound apart from its picture, onto a track of its own (an editor's unlink). */
-  onDetachAudio?: (block: TimelineBlock) => Promise<string | null>;
+  /** Take the videos' sounds apart from their pictures, each onto a sound track with room for it (an editor's unlink). */
+  onDetachAudio?: (blocks: readonly TimelineBlock[]) => Promise<string | null>;
+  /** The picked clips made one compound clip; a compound clip taken apart (studio/server/compound.mjs). */
+  onCompound?: (blocks: readonly TimelineBlock[]) => void;
+  onUncompound?: (block: TimelineBlock) => void;
+  /** A compound clip double-clicked: its film opened to edit. */
+  onEnterCompound?: (block: TimelineBlock) => void;
+  /** Editing a compound clip's film: the way back to the film it is in, said on the toolbar. */
+  crumb?: { outer: string; name: string; onBack: () => void } | null;
   /**
    * Thumbnails: key (`mtime:clipId@intoMs#v`, see thumb-frame) → image address. Shot outside; keyed by the
    * clip's own millisecond, not film time, so moving a clip does not change its pictures.
@@ -628,29 +672,15 @@ export interface TimelineProps {
   thumbs?: ReadonlyMap<string, string>;
   /** A poster per clip src, covering a picture clip until its thumbnails exist. */
   posters?: Readonly<Record<string, string>>;
-  /** Clips whose media shows no picture, by source path, and why — marked on their own block. */
-  mediaTrouble?: ReadonlyMap<string, 'decode' | 'unreachable' | 'missing'>;
+  /** Clips whose media shows no picture, by source path, and why — marked on their own block. `waiting`: gone while an
+      agent changes the film, so on its way rather than missing. */
+  mediaTrouble?: ReadonlyMap<string, 'decode' | 'unreachable' | 'missing' | 'waiting'>;
   /** Files in the project a missing clip's media may have moved to (same file name), best first. */
   relinkCandidates?: (src: string) => readonly string[];
   /** Point a clip whose media is missing at another file: one of the candidates, or null to pick a file to import. */
   onRelink?: (block: TimelineBlock, path: string | null) => void;
   /** What is in view and at what density: thumbnail shooting only shoots what can be seen (the zoom is ours). */
   onViewChange?: (view: { fromMs: number; toMs: number; pxPerMs: number }) => void;
-  subtitles?: {
-    on: boolean;
-    onToggle: () => void;
-    onConfigure: () => void;
-    configuring?: boolean;
-    /** How many subtitle lines the film has. 0 = none yet: the button is disabled and says why. */
-    count: number;
-    /** Speech heard in the film with no transcript yet: the button makes subtitles for it (`onMake`). */
-    untranscribed?: number;
-    onMake?: () => void;
-    /** A transcription runs now. */
-    making?: boolean;
-    /** Why making them failed; `connect`: no service can transcribe, and the button opens Providers. */
-    problem?: { text: string; connect: boolean } | null;
-  };
   /** A clip's waveform address, from its src. Without it no waveforms are drawn. */
   waveUrl?: (src: string) => string;
   /** Copy clips (the clipboard lives outside, so it survives across tracks and projects). */
@@ -669,6 +699,11 @@ export interface TimelineProps {
    */
   onDropAsset?: (file: ResourceDragItem, target: AssetDropTarget, atMs: number) => Promise<string | null>;
   /**
+   * What goes on a clip or a cut rather than on a track (a drag's `apply`, lib/library): a look dropped on a clip (its
+   * block id), a fade on the cut nearest where it was let go. Null = done.
+   */
+  onApplyDrop?: (file: ResourceDragItem, at: { blockId: string } | { cut: CutRef }) => Promise<string | null>;
+  /**
    * Files from the computer dropped at this time and place: imported into the media pane, then placed where they were
    * dropped (`hit` is the row under the pointer, as assetDropSpot reads it). Null = done.
    */
@@ -680,18 +715,14 @@ export interface TimelineProps {
   /** Selection, when owned outside (the Inspector). Kept internally without it. */
   selected?: readonly string[];
   onSelectedChange?: (ids: readonly string[]) => void;
-  /** Names given to tracks (by film.html track index), shown in their heads. */
-  trackNames?: ReadonlyMap<number, string>;
-  /** Name a track (an empty name takes it away): with it, a track's head menu has Rename. */
-  onRenameTrack?: (docIndex: number, name: string) => void;
-  /** The subtitle row under the ruler (components/SubtitleRow): the film's subtitles, timed by hand. */
-  subtitleRow?: SubtitleRowSpec;
   /** Solo (Studio's playback only): the tracks soloed (film.html indexes), and a click on a head's S (⌥: alone). */
   solo?: { tracks: ReadonlySet<number>; onToggle: (docIndex: number, only: boolean) => void };
-  /** The markers' row under the ruler (under the subtitle row when it shows), while there are any. */
+  /** The markers' row under the ruler, while there are any. */
   markerLane?: { shown: boolean; render: (lane: MarkerLaneView) => React.ReactNode };
   /** The toolbar's Add marker (left of split); M does the same. */
   onAddMarker?: () => void;
+  /** The toolbar's record button (components/RecordButton): sound from the microphone, put on at the playhead. */
+  recorder?: Pick<RecordButtonProps, 'now' | 'onSave'>;
   /** The ruler's own right-click menu, at a moment (film ms): adding a marker there. */
   rulerMenu?: (atMs: number) => ContextMenuEntry[];
   /** Drawn on each row, over its clips (the clips' markers). */
@@ -701,7 +732,9 @@ export interface TimelineProps {
   /** A track's head edge dragged (a height, `done` at the end) or double-clicked (null: its own height). */
   onResizeTrack?: (track: TimelineTrack, height: number | null, done: boolean) => void;
   /** A file from the media pane dropped with ⇧ on a clip: it takes the clip's place (lib/clip-replace). */
-  onReplaceDrop?: (block: TimelineBlock, file: ResourceDragItem) => void;
+  onReplaceDrop?: (block: TimelineBlock, file: ResourceDragItem, atMs?: number) => void;
+  /** Clips a file dropped on takes the place of something in, without ⇧ (a template's: its place there), told where. */
+  dropInto?: (block: TimelineBlock) => boolean;
   /**
    * Each clip's fades, ms (clip id → [in, out]; lib/clip-fade): a handle at each end of the clip under the pointer, at
    * the bottom of its picture (a sound's: the top of its waveform), that is dragged inward to set them (written through
@@ -759,14 +792,14 @@ const SELECT_HIT = 8;
 const FADE_DOT = 8;
 const FADE_DOT_INSET = FADE_DOT / 2;
 /** What the app's chat points at (a pill hovered there): an accent ring and its glow, around a clip or a track's head. */
-const CHAT_RING = '0 0 0 2px var(--tl-accent), 0 0 10px 1px color-mix(in srgb, var(--tl-accent) 60%, transparent)';
+const CHAT_RING = '0 0 0 2px var(--accent), 0 0 10px 1px color-mix(in srgb, var(--accent) 60%, transparent)';
 /* the sides (trim handles) are solid, top and bottom lighter; theme color (--tl-select) so it shows on light lanes */
 const SELECT_EDGE_X = 'var(--tl-select)';
 const SELECT_EDGE_Y = 'color-mix(in srgb, var(--tl-select) 70%, transparent)';
 
 /* Speed on: the same frame in the accent, its edges changing the speed instead of trimming */
-const SPEED_EDGE_X = 'var(--tl-accent)';
-const SPEED_EDGE_Y = 'color-mix(in srgb, var(--tl-accent) 70%, transparent)';
+const SPEED_EDGE_X = 'var(--accent)';
+const SPEED_EDGE_Y = 'color-mix(in srgb, var(--accent) 70%, transparent)';
 
 function SelectFrame({ speed = false }: { speed?: boolean }) {
   return (
@@ -793,8 +826,8 @@ function ChatNumbers({ numbers }: { numbers: readonly number[] }) {
   return (
     <span aria-hidden data-chat-numbers={numbers.join(',')} className="pointer-events-none absolute -top-[5px] left-[3px] z-[3] flex gap-[2px]">
       {numbers.map((n) => (
-        <span key={n} className="flex h-[14px] min-w-[14px] items-center justify-center rounded-full px-[3px] text-[9.5px] font-semibold leading-none tabular-nums text-white shadow-[0_1px_3px_rgba(0,0,0,.35)]"
-          style={{ background: 'var(--tl-accent)' }}>{n}</span>
+        <span key={n} className="flex h-[14px] min-w-[14px] items-center justify-center rounded-full px-[3px] text-[9.5px] font-semibold leading-none tabular-nums text-[var(--on-accent)] shadow-[0_1px_3px_rgba(0,0,0,.35)]"
+          style={{ background: 'var(--accent)' }}>{n}</span>
       ))}
     </span>
   );
@@ -930,6 +963,8 @@ export const Timeline = React.memo(function Timeline({
   tracks,
   blockMenuExtra,
   trackMenuExtra,
+  transcribed,
+  captionPick,
   onReferBlocks,
   range,
   flashRange,
@@ -951,14 +986,20 @@ export const Timeline = React.memo(function Timeline({
   onRemoveMany,
   onEditBlocks,
   onEditOps,
+  onAddCaption,
   links,
   commandsRef,
   onSplit,
   onDetachAudio,
+  onCompound,
+  onUncompound,
+  onEnterCompound,
+  crumb,
   onCopy,
   onPaste,
   onExportBlock,
   onDropAsset,
+  onApplyDrop,
   onDropFiles,
   hasClipboard,
   thumbs,
@@ -967,22 +1008,20 @@ export const Timeline = React.memo(function Timeline({
   relinkCandidates,
   onRelink,
   onViewChange,
-  subtitles,
   waveUrl,
   history,
   selected: selectedProp,
   onSelectedChange,
-  trackNames,
-  onRenameTrack,
-  subtitleRow,
   solo,
   markerLane,
   onAddMarker,
+  recorder,
   rulerMenu,
   trackOverlay,
   snapPointsMs,
   onResizeTrack,
   onReplaceDrop,
+  dropInto,
   fades,
   transitions,
   onTransition,
@@ -1003,6 +1042,13 @@ export const Timeline = React.memo(function Timeline({
     return clock.subscribe(sync);
   }, [clock]);
   const t = useT();
+  /* a thing of the library is called by its name there, in the app's language (every emoji's page is emoji.html) */
+  const language = useLanguage();
+  const libraryIndex = useLibraryIndex();
+  const libraryTitle = React.useCallback((block: { src?: string | undefined }) => {
+    const item = libraryIndex ? libraryItemOfClip(block.src) : null;
+    return item ? nameOf(item.name, language) : null;
+  }, [libraryIndex, language]);
   const keyHint = useKeyHint();
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
@@ -1044,6 +1090,10 @@ export const Timeline = React.memo(function Timeline({
     if (pref === 'magnet' && on) onMagnetOn.current();
   }, []);
   const [assetHint, setAssetHint] = React.useState<AssetHint | null>(null);
+  /* over the lanes the dragged thing is the clip it will be, drawn where it lands: its picture is not shown meanwhile */
+  React.useEffect(() => { hideDragPicture(Boolean(assetHint)); }, [assetHint]);
+  /* a fade dragged over the timeline: the cut it would go on, shown by the snap guide */
+  const [applyCutMs, setApplyCutMs] = React.useState<number | null>(null);
   const [dropBusy, setDropBusy] = React.useState(false);
   /* what went wrong (a drop, an edit), or what an edit could not do: said in the toolbar until dismissed */
   const [dropError, setDropError] = React.useState<string | null>(null);
@@ -1135,8 +1185,9 @@ export const Timeline = React.memo(function Timeline({
   /*
    * When the film's length changes (dragged past the end, undo, a new evaluation) the time in view stays; only the
    * zoom factor is adjusted. Otherwise 100% = the whole film, and a longer film would squeeze every clip mid-drag.
-   * Not from a film shorter than the narrowest view (the first clip arriving): that would open zoomed all the way in.
-   * Worked out during render and written back (the slider follows); not before the width is known.
+   * The first clip arriving on an empty timeline keeps its scale too, so it stays where it was let go, when it fits
+   * the empty view; a longer one is shown at the zoom as it was (as a share of the film). Worked out during render
+   * and written back (the slider follows); not before the width is known.
    */
   const clipEndMs = tracks.reduce((ms, tr) => {
     for (const b of tr.blocks) if (b.endMs > ms) ms = b.endMs;
@@ -1151,7 +1202,7 @@ export const Timeline = React.memo(function Timeline({
     if (laneW > 0) {
       const prev = prevTotalMs.current;
       prevTotalMs.current = spanMs;
-      if (prev >= VIEW_SPAN_MIN_MS && spanMs > 0) {
+      if (spanMs > 0 && (prev >= VIEW_SPAN_MIN_MS || (prev <= 0 && spanMs <= VIEW_SPAN_EMPTY_MS))) {
         const keep = zoomedPxPerMs(prev, laneW, zoom);
         viewZoom = zoomForPxPerMs(spanMs, laneW, keep);
         if (Math.abs(viewZoom - zoom) > 1e-9) setZoom(viewZoom);
@@ -1181,8 +1232,9 @@ export const Timeline = React.memo(function Timeline({
   const tracksH = hasLanes
     ? tracks.reduce((h, tr) => h + rowH(tr) + GAP, 0)
     : 0;
-  /* at least TL_VPAD even when the rows overflow, counted in padTop so every hit test uses the same number */
-  const padTop = Math.max(TL_VPAD, Math.floor((view.height - tracksH) / 2));
+  /* clear of the markers' row floating over the top even when the rows overflow (whether or not there are markers, so
+     one added never moves them), counted in padTop so every hit test uses the same number */
+  const padTop = Math.max(MARKER_ROW_H + 2, Math.floor((view.height - tracksH) / 2));
   padTopRef.current = padTop;
   const viewHeightRef = React.useRef(view.height);
   viewHeightRef.current = view.height;
@@ -1525,11 +1577,6 @@ export const Timeline = React.memo(function Timeline({
 
   /* dragging clips; every clip flat for snapping, across rows (putting a sound on a picture cut is the common case) */
   const allBlocks = React.useMemo(() => tracks.flatMap((tr) => tr.blocks), [tracks]);
-  /* the subtitle row, under the ruler while its switch is on */
-  const [subRowOn] = useSubtitleRowShown();
-  const subRowRef = React.useRef<SubtitleRowHandle | null>(null);
-  const subRowShown = Boolean(subtitleRow) && subRowOn && hasLanes;
-  const subRowH = subRowShown ? SUBTITLE_ROW_H : 0;
   const markerRowH = markerLane?.shown ? MARKER_ROW_H : 0;
   /* a marker hovered or dragged: its line through the whole timeline */
   const [markerGuide, setMarkerGuide] = React.useState<MarkerGuide | null>(null);
@@ -1769,9 +1816,6 @@ export const Timeline = React.memo(function Timeline({
     if (targetLane && !tracks.some((tr) => tr.lane === targetLane)) setTargetLane(null);
   }, [tracks, targetLane]);
   /** The track whose name is being typed in its head (film.html index). */
-  const [renaming, setRenaming] = React.useState<number | null>(null);
-  const renamingRef = React.useRef(renaming);
-  renamingRef.current = renaming;
   const headW = HEAD_W + (solo ? HEAD_SOLO_W : 0);
   /* picking clips lets the gap go; so does an edit that fills or moves it */
   React.useEffect(() => { if (selected.length) setGap(null); }, [selected.length]);
@@ -2236,9 +2280,9 @@ export const Timeline = React.memo(function Timeline({
   const [splitting, setSplitting] = React.useState(false);
 
   const acceptAssetDrag = React.useCallback((e: React.DragEvent): boolean => (
-    (Boolean(onDropAsset) && e.dataTransfer.types.includes(RESOURCE_DRAG_TYPE))
+    (Boolean(onDropAsset || onApplyDrop) && e.dataTransfer.types.includes(RESOURCE_DRAG_TYPE))
     || (Boolean(onDropFiles) && isComputerFileDrag(e.dataTransfer))
-  ), [onDropAsset, onDropFiles]);
+  ), [onDropAsset, onApplyDrop, onDropFiles]);
 
   /**
    * The time under the pointer for a drop — unlike msAtClientX, not clamped to the film: a drop is what makes the film
@@ -2252,10 +2296,11 @@ export const Timeline = React.memo(function Timeline({
   }, [pxPerMs]);
 
   /* where a drop lands, and what it snapped to: on an edge it snapped to, else on a frame. Decided here, before the
-     free space is checked: rounded after, a drop on a clip's end (not on a frame) landed a few ms inside it. The first
-     clip of a film starts at 0: black before it is never what was meant */
+     free space is checked: rounded after, a drop on a clip's end (not on a frame) landed a few ms inside it. With the
+     main track's magnet on, the first clip of a film starts at 0 (black before it is never what was meant); with it
+     off, it goes where it is let go, as any */
   const dropAt = React.useCallback((atMs: number): { ms: number; target: SnapTarget | null } => {
-    if (!allBlocks.some((b) => b.clipId)) return { ms: 0, target: { ms: 0, kind: 'zero' } };
+    if (prefsRef.current.magnet && !allBlocks.some((b) => b.clipId)) return { ms: 0, target: { ms: 0, kind: 'zero' } };
     const raw = Math.max(0, atMs);
     const snapped = snap && pxPerMs > 0
       ? snapMs(raw, snapTargetsFor(allBlocks, '', timeMsRef.current, undefined, snapPointsMs), pxPerMs)
@@ -2264,11 +2309,30 @@ export const Timeline = React.memo(function Timeline({
   }, [allBlocks, pxPerMs, snap, snapPointsMs]);
 
   /**
+   * Where a thing that is no clip would go (a drag's `apply`): a look on the clip under the pointer, a fade on the cut
+   * nearest it on the row under the pointer (within a few pixels' reach). Null: nowhere there.
+   */
+  const applyTarget = React.useCallback((file: ResourceDragItem, clientX: number, clientY: number): { blockId: string } | { cut: CutRef & { atMs: number } } | null => {
+    if (file.apply === 'look') {
+      const blockId = clipAtPoint(clientX, clientY);
+      const block = blockId ? allBlocks.find((b) => b.id === blockId) : undefined;
+      /* a picture's: a page, a video or a still */
+      return blockId && block?.clipId && (block.kind === 'mg' || block.kind === 'video') ? { blockId } : null;
+    }
+    const row = tracks[laneHitAtY(clientY).lane];
+    if (row?.docIndex == null || pxPerMs <= 0) return null;
+    const cut = cutNear(modelRef.current, row.docIndex, dropMsAtClientX(clientX), 24 / pxPerMs);
+    return cut ? { cut } : null;
+  }, [allBlocks, tracks, laneHitAtY, dropMsAtClientX, pxPerMs]);
+
+  /**
    * How a drop from the media pane goes in. Onto the main track with the magnet: in between two clips at the insert
    * point there, what follows on that track moving on (nothing is cut). Anywhere else it is put down where it is let
    * go, or on a new track when that spot is taken. ⌥: an overwrite.
    */
-  const dropModeAt = React.useCallback((hit: { lane: number; band: DropBand }, alt: boolean): EditMode | undefined => {
+  const dropModeAt = React.useCallback((hit: { lane: number; band: DropBand }, alt: boolean, file?: ResourceDragItem | null): EditMode | undefined => {
+    /* a sticker, text or effect of the library goes over the film, never into the main track (assetDropSpot) */
+    if (file && libraryOverlay(file)) return alt && !tracks[hit.lane]?.main ? 'overwrite' : undefined;
     if (alt) return 'overwrite';
     /* onto the main track with the magnet: in between, what follows moving on */
     const doc = hit.band === 'body' ? tracks[hit.lane]?.docIndex : undefined;
@@ -2283,7 +2347,7 @@ export const Timeline = React.memo(function Timeline({
    */
   const assetLanding = React.useCallback((file: ResourceDragItem, clientX: number, clientY: number, altKey: boolean): AssetHint | null => {
     const laneHit = laneHitAtY(clientY);
-    const editMode = dropModeAt(laneHit, altKey);
+    const editMode = dropModeAt(laneHit, altKey, file);
     const pointerMs = dropMsAtClientX(clientX);
     const snapped = dropAt(pointerMs);
     const preview = assetDropPreview(file, tracks, laneHit, snapped.ms, onEditOps ? editMode : undefined);
@@ -2314,24 +2378,42 @@ export const Timeline = React.memo(function Timeline({
     };
   }, [allBlocks, dropAt, dropMsAtClientX, laneHitAtY, onEditOps, tracks]);
 
+  /* the clip a file let go here takes the place of something in: with ⇧ any, else one that takes a file in (dropInto) */
+  const replaceTargetAt = React.useCallback((clientX: number, clientY: number, shift: boolean): string | null => {
+    const id = clipAtPoint(clientX, clientY);
+    if (!id || shift) return id;
+    const block = dropInto ? tracks.flatMap((tr) => tr.blocks).find((b) => b.id === id) : undefined;
+    return block && dropInto!(block) ? id : null;
+  }, [dropInto, tracks]);
   const onAssetDragOver = React.useCallback((e: React.DragEvent) => {
     if (!acceptAssetDrag(e)) return;
     e.preventDefault();
     /* the preview reads the file kept at dragstart: during a drag Safari often only exposes text/plain. A file from
        the computer is only a type until it is dropped: drawn by its kind, at a default length */
     const file = isComputerFileDrag(e.dataTransfer) ? computerFileDragItem(e.dataTransfer, t('timeline.dropFromComputer')) : peekResourceDrag();
-    /* ⇧ over a clip: the file takes its place (onReplaceDrop), shown by a ring round it, not by a landing */
-    const over = onReplaceDrop && e.shiftKey && !isComputerFileDrag(e.dataTransfer) ? clipAtPoint(e.clientX, e.clientY) : null;
+    /* a look: a ring round the clip it would go on; a fade: the guide on the cut */
+    if (file?.apply) {
+      const at = onApplyDrop ? applyTarget(file, e.clientX, e.clientY) : null;
+      markReplaceTarget(at && 'blockId' in at ? at.blockId : null);
+      setApplyCutMs(at && 'cut' in at ? at.cut.atMs : null);
+      setAssetHint(null);
+      e.dataTransfer.dropEffect = at ? 'copy' : 'none';
+      return;
+    }
+    /* ⇧ over a clip, or over one that takes a file in (dropInto): the file takes its place (onReplaceDrop), shown by a
+       ring round it, not by a landing */
+    const over = onReplaceDrop && !isComputerFileDrag(e.dataTransfer) ? replaceTargetAt(e.clientX, e.clientY, e.shiftKey) : null;
     markReplaceTarget(over);
     if (over) { e.dataTransfer.dropEffect = 'copy'; setAssetHint(null); return; }
     const next = file ? assetLanding(file, e.clientX, e.clientY, e.altKey) : null;
     e.dataTransfer.dropEffect = next && !next.error ? 'copy' : 'none';
     setAssetHint((cur) => (sameAssetHint(cur, next) ? cur : next));
-  }, [acceptAssetDrag, assetLanding, t, onReplaceDrop]);
+  }, [acceptAssetDrag, assetLanding, t, onReplaceDrop, onApplyDrop, applyTarget, replaceTargetAt]);
 
   const onAssetDragLeave = React.useCallback((e: React.DragEvent) => {
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
     setAssetHint(null);
+    setApplyCutMs(null);
     markReplaceTarget(null);
   }, []);
 
@@ -2340,12 +2422,20 @@ export const Timeline = React.memo(function Timeline({
     e.preventDefault();
     e.stopPropagation();
     setAssetHint(null);
+    setApplyCutMs(null);
     markReplaceTarget(null);
-    const replaced = onReplaceDrop && e.shiftKey && !isComputerFileDrag(e.dataTransfer) ? clipAtPoint(e.clientX, e.clientY) : null;
+    const applying = readResourceDragData(e.dataTransfer) ?? peekResourceDrag();
+    if (applying?.apply) {
+      const at = onApplyDrop ? applyTarget(applying, e.clientX, e.clientY) : null;
+      if (!at || !onApplyDrop) return;
+      void onApplyDrop(applying, 'cut' in at ? { cut: { a: at.cut.a, b: at.cut.b } } : at).then((err) => { if (err) setDropError(err); });
+      return;
+    }
+    const replaced = onReplaceDrop && !isComputerFileDrag(e.dataTransfer) ? replaceTargetAt(e.clientX, e.clientY, e.shiftKey) : null;
     const replacing = replaced ? tracks.flatMap((tr) => tr.blocks).find((b) => b.id === replaced && b.clipId) : undefined;
     const dragged = replacing ? readResourceDragData(e.dataTransfer) ?? peekResourceDrag() : null;
-    if (replacing && dragged) { onReplaceDrop!(replacing, dragged); return; }
-    const editMode = dropModeAt(laneHitAtY(e.clientY), e.altKey);
+    if (replacing && dragged) { onReplaceDrop!(replacing, dragged, dropMsAtClientX(e.clientX)); return; }
+    const editMode = dropModeAt(laneHitAtY(e.clientY), e.altKey, applying);
     if (isComputerFileDrag(e.dataTransfer)) {
       const files = [...e.dataTransfer.files];
       if (!onDropFiles || !files.length) return;
@@ -2374,7 +2464,7 @@ export const Timeline = React.memo(function Timeline({
       },
       () => { setDropBusy(false); },
     );
-  }, [acceptAssetDrag, assetLanding, dropAt, dropMsAtClientX, laneHitAtY, onDropAsset, onDropFiles, onEditOps, tracks, onReplaceDrop]);
+  }, [acceptAssetDrag, assetLanding, dropAt, dropMsAtClientX, laneHitAtY, onDropAsset, onDropFiles, onEditOps, tracks, onReplaceDrop, onApplyDrop, applyTarget, replaceTargetAt]);
 
   /**
    * Split clips at a time (the playhead by default), in one edit: those it is not inside, or on a locked track, are
@@ -2452,14 +2542,8 @@ export const Timeline = React.memo(function Timeline({
     });
   }, [msAtClientX, tracks, pxPerMs]);
 
-  /* a track's head: the app's entries (a reference in its chat), then the track's own (its name) */
-  const headEntries = React.useCallback((track: TimelineTrack): ContextMenuEntry[] => {
-    const extra = trackMenuExtra?.(track) ?? [];
-    const own: ContextMenuEntry[] = onRenameTrack && track.docIndex != null ? [{
-      id: 'rename-track', label: t('timeline.renameTrack'), icon: <Pencil size={14} />, onSelect: () => setRenaming(track.docIndex!),
-    }] : [];
-    return extra.length && own.length ? [...extra, { id: 'track-sep', separator: true }, ...own] : [...extra, ...own];
-  }, [trackMenuExtra, onRenameTrack, t]);
+  /* a track's head: the app's entries (a reference in its chat) */
+  const headEntries = React.useCallback((track: TimelineTrack): ContextMenuEntry[] => trackMenuExtra?.(track) ?? [], [trackMenuExtra]);
   /* the menu of the whole track, when there is anything on it (else the browser's own) */
   const openHeadMenu = React.useCallback((e: React.MouseEvent, track: TimelineTrack) => {
     if (!headEntries(track).length) return;
@@ -2538,7 +2622,7 @@ export const Timeline = React.memo(function Timeline({
     if (e.button !== 0) return;
     /* a head pressed is the targeted track */
     if (tracks[laneIndex]?.docIndex != null) setTargetLane(tracks[laneIndex]!.lane);
-    if (!onEditBlocks) return;
+    if (!onEditOps && !onEditBlocks) return;
     const fromDoc = tracks[laneIndex]?.docIndex;
     if (fromDoc == null) return;
     e.preventDefault();
@@ -2573,7 +2657,9 @@ export const Timeline = React.memo(function Timeline({
         toDoc = tracks[hoverLane]?.docIndex;
       }
       if (toDoc == null || toDoc === fromDoc) return;
-      void onEditBlocks([{
+      /* the track itself moved: a caption track has no clip of film.html to say it through */
+      if (onEditOps) { void onEditOps([{ op: 'reorder', from: fromDoc, to: toDoc }], 'history.stepTrackOrder'); return; }
+      void onEditBlocks?.([{
         loc: `film.html#${fromDoc}.0`,
         prop: 'trackOrder',
         value: { from: fromDoc, to: toDoc },
@@ -2581,7 +2667,7 @@ export const Timeline = React.memo(function Timeline({
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
-  }, [onEditBlocks, tracks, laneAtY]);
+  }, [onEditOps, onEditBlocks, tracks, laneAtY]);
 
   const clipThumbs = React.useMemo(
     () => indexClipThumbs(thumbs ?? new Map()) as ReadonlyMap<string, ReadonlyMap<number, string>>,
@@ -2589,13 +2675,18 @@ export const Timeline = React.memo(function Timeline({
   );
 
   const toggleTrack = React.useCallback((track: TimelineTrack, prop: 'locked' | 'hidden' | 'muted') => {
+    /* the track's own switch; a caption track has no clip of film.html to say it through */
+    if (onEditOps && track.docIndex != null) {
+      void onEditOps([{ op: 'track', track: track.docIndex, field: prop, value: !track[prop] }], trackFlagStep(prop, !track[prop], track.badge ?? ''));
+      return;
+    }
     if (!onEditBlocks) return;
-    const loc = track.blocks.find((b) => b.loc)?.loc ?? (
+    const loc = track.blocks.find((b) => b.loc && !b.cue)?.loc ?? (
       track.docIndex != null ? `film.html#${track.docIndex}.0` : null
     );
     if (!loc) return;
     void onEditBlocks([{ loc, prop, value: track[prop] ? null : true }]);
-  }, [onEditBlocks]);
+  }, [onEditOps, onEditBlocks]);
 
   /* what the app's chat points at: read in the memoized rows and heads (they rebuild only when it changes) */
   const chatTrack = chat?.track ?? null;
@@ -2617,7 +2708,7 @@ export const Timeline = React.memo(function Timeline({
   /* each head's element is kept while nothing it shows changes (as the clips' are, see clipElements): the heads drawn
      follow the scroll, and rebuilding every one of them each time rendered all their buttons and tooltips again */
   const headElements = React.useMemo(() => new Map<string, { pose: string; node: React.ReactElement }>(), [
-    tracks, t, onEditBlocks, startLaneReorder, toggleTrack, openHeadMenu, trackNames, onRenameTrack, solo, onResizeTrack,
+    tracks, t, onEditBlocks, startLaneReorder, toggleTrack, openHeadMenu, solo, onResizeTrack,
   ]);
   /** The head column (outside the scroller, so drawn apart from the rows). */
   const heads = React.useMemo(() => tracks.map((track, laneIndex) => {
@@ -2625,31 +2716,24 @@ export const Timeline = React.memo(function Timeline({
     const liftingHead = laneOrder?.fromLane === laneIndex;
     const canReorder = Boolean(onEditBlocks && track.docIndex != null);
     const canToggle = Boolean(onEditBlocks && (track.docIndex != null || track.blocks.some((b) => b.loc)));
-    const LaneIcon = track.kind === 'visual' ? Video : Waves;
-    /* the name the person gave it (on its first row only: rows spread from one track share it) */
-    const given = track.docIndex != null && track.index === 1 ? trackNames?.get(track.docIndex) : undefined;
-    const laneTitle = given ?? track.name ?? track.kind;
     const lit = selectedLanes.has(track.lane);
     const targeted = targetLane === track.lane;
-    const renamingHere = renaming != null && renaming === track.docIndex && track.index === 1;
-    /* far from the view, only its place (the one being renamed or dragged keeps all of it) */
-    if ((laneIndex < nearFirst || laneIndex > nearLast) && !renamingHere && !liftingHead) {
-      return <div key={track.lane} className="rounded-l-[3px]" style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
+    /* far from the view, only its place (the one being dragged keeps all of it) */
+    if (((laneIndex < nearFirst || laneIndex > nearLast) && !liftingHead) || track.folded) {
+      return <div key={track.lane} style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
     }
-    /* typing a name always has its field; a name given shows when the row has room for it */
-    const nameLine = renamingHere || (Boolean(given) && h >= HEAD_NAME_MIN_H);
     /* the main track is marked by its look (its band) and its hover title, not by a name or a badge that reads as a switch */
     const mainHead = Boolean(track.main) && track.index === 1;
     /* the track a pill hovered in the app's chat points at */
     const chatLit = chatTrack != null && track.docIndex === chatTrack;
-    const pose = `${liftingHead}:${lit}:${targeted}:${renamingHere}:${chatLit}`;
+    const pose = `${liftingHead}:${lit}:${targeted}:${chatLit}`;
     const cached = headElements.get(track.lane);
     if (cached?.pose === pose) return cached.node;
     const node = (
       /* each head is its own block with gaps between, matching its row one to one */
       <div
         key={track.lane}
-        className="relative grid w-full items-center justify-items-center rounded-l-[3px] px-0.5"
+        className="relative grid w-full items-center justify-items-center px-0.5"
         data-lane-reorder={canReorder ? '1' : '0'}
         data-lane-target={targeted ? '1' : '0'}
         data-lane-type={track.kind}
@@ -2659,49 +2743,25 @@ export const Timeline = React.memo(function Timeline({
         data-lane-locked={track.locked ? '1' : '0'}
         data-lane-muted={track.muted ? '1' : '0'}
         onPointerDown={(e) => startLaneReorder(e, laneIndex)}
-        onDoubleClick={() => { if (onRenameTrack && track.docIndex != null && track.index === 1) setRenaming(track.docIndex); }}
         onContextMenu={(e) => openHeadMenu(e, track)}
-        title={mainHead ? `${laneTitle} · ${t('timeline.mainTrack')}` : laneTitle}
+        title={mainHead ? t('timeline.mainTrack') : undefined}
         data-main-track={mainHead ? '' : undefined}
         style={{
           marginTop: GAP,
           height: h,
-          gridTemplateColumns: `repeat(${solo ? 5 : 4}, minmax(0, 1fr))`,
-          /* a name goes on a line of its own under the badge and the toggles: the heads keep their width */
-          ...(nameLine ? { gridTemplateRows: 'auto auto', alignContent: 'center', rowGap: 3 } : {}),
+          /* what the row holds on the left, a label; its switches after it, each in its own column */
+          gridTemplateColumns: `24px 4px repeat(${solo ? 4 : 3}, minmax(0, 1fr))`,
           background: laneTone(track, lit),
-          /* the targeted track: an accent bar down its left edge */
-          boxShadow: [chatLit ? CHAT_RING : '', targeted ? 'inset 2px 0 0 var(--tl-accent)' : ''].filter(Boolean).join(', ') || undefined,
+          boxShadow: chatLit ? CHAT_RING : undefined,
           opacity: liftingHead ? 0.45 : 1,
           cursor: canReorder ? (liftingHead ? 'grabbing' : 'grab') : undefined,
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
-          {track.badge ? (
-            <span
-              className="flex items-center justify-center rounded-[3px] font-semibold tabular-nums"
-              style={{
-                minWidth: 21,
-                height: 14,
-                padding: '0 3px',
-                fontSize: 10,
-                letterSpacing: '0.02em',
-                color: '#fff',
-                background: BADGE_COLOR[track.badge[0]!] ?? 'var(--tl-caption)',
-                opacity: track.hidden ? 0.55 : 1,
-              }}
-            >
-              {track.badge}
-            </span>
-          ) : (
-            <span
-              className="flex items-center justify-center"
-              style={{ width: TYPE_BOX, height: TYPE_BOX, color: 'var(--text-faint)' }}
-            >
-              <LaneIcon size={TYPE_BOX} />
-            </span>
-          )}
+          {/* its name as editors number tracks: no title of its own */}
+          <LaneMark track={track} />
         </span>
+        <span aria-hidden />
         {onEditBlocks ? <>
         <TrackHeadButton
           label={track.locked ? t('timeline.unlockTrack') : t('timeline.lockTrack')}
@@ -2729,6 +2789,7 @@ export const Timeline = React.memo(function Timeline({
           disabled={!canToggle}
           onToggle={() => toggleTrack(track, 'muted')}
         >
+          {/* heard or not: a speaker, or one crossed out */}
           {track.muted ? <VolumeX size={HEAD_ICON_H} /> : <Volume2 size={HEAD_ICON_H} />}
         </TrackHeadButton>}
         </> : null}
@@ -2736,32 +2797,12 @@ export const Timeline = React.memo(function Timeline({
         {solo ? (track.role === 'mg' || track.docIndex == null ? <span aria-hidden /> : (
           <SoloButton on={solo.tracks.has(track.docIndex)} onToggle={(only) => solo.onToggle(track.docIndex!, only)} />
         )) : null}
-        {/* the track's name, on its own line under the badge and the toggles */}
-        {nameLine && renamingHere ? (
-          <input
-            autoFocus
-            defaultValue={given ?? ''}
-            aria-label={t('timeline.renameTrack')}
-            placeholder={track.badge ?? ''}
-            maxLength={40}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === 'Enter') { onRenameTrack?.(track.docIndex!, e.currentTarget.value); setRenaming(null); }
-              if (e.key === 'Escape') setRenaming(null);
-            }}
-            onBlur={(e) => { if (renamingRef.current === track.docIndex) { onRenameTrack?.(track.docIndex!, e.currentTarget.value); setRenaming(null); } }}
-            className="col-span-full h-[16px] w-full min-w-0 justify-self-stretch rounded-[3px] bg-[var(--bg)] px-1 text-[11px] text-[var(--text)] outline-none ring-1 ring-[var(--tl-accent)]"
-          />
-        ) : nameLine && given ? (
-          <span className="col-span-full w-full min-w-0 justify-self-stretch truncate px-1 text-[10.5px] font-medium leading-[14px]" style={{ color: TL.text }} data-track-name="">{given}</span>
-        ) : null}
         {onResizeTrack && track.docIndex != null ? <TrackResizeHandle height={h} onResize={(height, done) => onResizeTrack(track, height, done)} /> : null}
       </div>
     );
     headElements.set(track.lane, { pose, node });
     return node;
-  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, trackNames, targetLane, renaming, onRenameTrack, solo, onResizeTrack, nearFirst, nearLast, headElements]);
+  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, targetLane, solo, onResizeTrack, nearFirst, nearLast, headElements]);
 
   /* row backgrounds are fixed to the view and only follow vertical scroll; the clips move horizontally above them */
   const laneSkins = React.useMemo(() => tracks.map((track) => (
@@ -2975,6 +3016,7 @@ export const Timeline = React.memo(function Timeline({
       : null;
     return tracks.map((track, laneIndex) => {
     const h = rowH(track);
+    if (track.folded) return <div key={track.lane} aria-hidden style={{ marginTop: GAP, height: 0 }} />;
     const liftingHere = Boolean(liftingIds && track.blocks.some((b) => liftingIds.has(b.id)));
     /* a row far from the view keeps its place and its clips in hand, moving or selected (see rowsNear) */
     const near = laneIndex >= nearFirst && laneIndex <= nearLast;
@@ -3033,7 +3075,10 @@ export const Timeline = React.memo(function Timeline({
             /* its fade handles and volume line: on the clip under the pointer, and on the one whose handle or line is
                in hand until it is let go */
             const pointed = hoveredBlock === block.id || Boolean(fadeTip) || Boolean(volumeTip);
-            const pose = `${startMs}:${endMs}:${!!live}:${gone}:${lifting}:${floating ? drag.preview?.offsetY : ''}:${picked}:${Math.round(winFrom)}-${Math.round(winTo)}:${trouble ?? ''}:${chatLit}:${chatNumbers.join(',')}:${fade[0]}-${fade[1]}:${fadeTip}:${volume}:${volumeTip ? Math.round(volumeTip.x) : ''}:${speeding}:${pointed}`;
+            /* New captions open: whether the captions are made of it, and whether it is ticked */
+            const captionMark = captionPick && block.clipId
+              ? `${captionPick.lit.has(block.clipId) ? 'l' : ''}${captionPick.choosable.has(block.clipId) ? 'c' : ''}${captionPick.picked.has(block.clipId) ? 'p' : ''}` : '';
+            const pose = `${startMs}:${endMs}:${!!live}:${gone}:${lifting}:${floating ? drag.preview?.offsetY : ''}:${picked}:${Math.round(winFrom)}-${Math.round(winTo)}:${trouble ?? ''}:${chatLit}:${chatNumbers.join(',')}:${fade[0]}-${fade[1]}:${fadeTip}:${volume}:${volumeTip ? Math.round(volumeTip.x) : ''}:${speeding}:${pointed}:${block.words ?? ''}:${captionMark}`;
             const cached = clipElements.get(block.id);
             if (cached?.pose === pose) return cached.node;
             /* on whole pixels: a fractional left and width blur the edges, and a cut between two clips is the key
@@ -3041,7 +3086,16 @@ export const Timeline = React.memo(function Timeline({
                still lines up with the ruler */
             const left = Math.round(startMs * pxPerMs);
             const width = Math.max(2, Math.round(endMs * pxPerMs) - left - 1);
-            const color = KIND_COLOR[block.kind];
+            /* a line of the library's words (a row of them, or one among other clips): drawn as a caption track is, its
+               words, no pictures */
+            const textRow = Boolean(track.text) || block.words != null;
+            /* a sticker of the library: a block of its own color with its picture at its start, no filmstrip */
+            const sticker = !textRow && isLibrarySticker(block.src);
+            /* a filter or an effect of the library over the film: a block of its kind's color, its mark and name, no
+               pictures (a filter's page is see-through, an effect's says nothing at a glance) */
+            const laid = textRow || sticker ? null : isFilterLayer(block.src) ? 'filter' as const : isLibraryEffect(block.src) ? 'effect' as const : null;
+            const color = textRow ? 'var(--clip-text)' : sticker ? 'var(--clip-sticker)' : laid ? `var(--clip-${laid})`
+              : block.kind === 'video' && block.src && filmSrcIsStill(block.src) ? 'var(--clip-image)' : KIND_COLOR[block.kind];
             const able = drag.can(block);
             const strip = clipThumbs.get(clipThumbId(block));
             const poster = block.src ? posters?.[block.src] : undefined;
@@ -3109,7 +3163,13 @@ export const Timeline = React.memo(function Timeline({
                      .tl-blade on the scroller sets the blade and an inline cursor would override it */
                   cursor: mode === 'split' ? undefined : floating ? 'grabbing' : 'pointer',
                 }}
-                title={trouble ? `${blockTitleOf(block)}\n${t(trouble === 'length' ? 'timeline.noLengthHint' : trouble === 'missing' ? 'timeline.mediaMissingHint' : trouble === 'decode' ? 'timeline.mediaCannotPlay' : 'timeline.mediaReconnecting')}` : blockTitleOf(block)}
+                title={trouble ? `${blockTitleOf(block)}\n${t(trouble === 'length' ? 'timeline.noLengthHint' : trouble === 'missing' ? 'timeline.mediaMissingHint' : trouble === 'waiting' ? 'timeline.mediaWaitingHint' : trouble === 'decode' ? 'timeline.mediaCannotPlay' : 'timeline.mediaReconnecting')}` : blockTitleOf(block)}
+                onDoubleClick={(e) => {
+                  /* a compound clip opens: its own film, edited as any (a breadcrumb leads back) */
+                  if (!onEnterCompound || mode === 'split' || !COMPOUND_SRC.test((block.src ?? '').replace(/#.*$/, ''))) return;
+                  e.stopPropagation();
+                  onEnterCompound(block);
+                }}
                 onPointerDown={(e) => {
                   /* a click selects and does not move the playhead (only empty space seeks); stop it reaching the
                      empty-space handler, which would seek and clear the selection */
@@ -3166,7 +3226,7 @@ export const Timeline = React.memo(function Timeline({
                 onPointerLeave={() => { hoverBlockRef.current?.(null); setPointedBlock((id) => (id === block.id ? null : id)); }}
               >
                 <div
-                  className="absolute inset-0 overflow-hidden rounded-[3px]"
+                  className="absolute inset-0 overflow-hidden rounded-[4px]"
                   style={{
                     background: color,
                     boxShadow: floating
@@ -3181,24 +3241,34 @@ export const Timeline = React.memo(function Timeline({
                 {/* info strip: name and length side by side (one statement), not at opposite ends of a wide clip */}
                 <div
                   className="pointer-events-none absolute inset-x-0 top-0 flex items-center overflow-hidden px-1.5"
-                  style={{ height: INFO_H, background: 'rgba(0,0,0,0.3)' }}
+                  style={{ height: textRow || sticker || laid ? '100%' : INFO_H }}
                 >
                   {/* pinned to the left of the view so a clip wider than the screen still says what it is (pinLabels,
                       on scroll: scrolling rebuilds nothing) */}
                   <span className="flex min-w-0 items-center gap-1" data-pin={left} data-pin-max={width - 48}>
-                    {/* a voice says so before its name: it is what the subtitles are made from */}
-                    {block.kind === 'voice' ? <Mic className="h-2.5 w-2.5 shrink-0 text-white/90" aria-hidden /> : null}
-                    <span className="min-w-0 truncate text-[10px] font-medium leading-none text-white/95">
-                      {block.title}
+                    {laid && width > 14 ? <span aria-hidden className="flex shrink-0 text-white/85"><CategoryIcon id={laid} on={false} size={12} /></span> : null}
+                    {sticker && width > 14 ? (() => {
+                      const shot = stickerShot(strip, poster);
+                      return (
+                        <span aria-hidden data-clip-sticker="" className="block shrink-0 rounded-[3px] bg-black/45 bg-contain bg-center bg-no-repeat"
+                          style={{ width: Math.min(rowH(track) - 10, width - 8), height: rowH(track) - 10, ...(shot ? { backgroundImage: `url(${JSON.stringify(shot)})` } : {}) }} />
+                      );
+                    })() : null}
+                    {/* its words are the film's captions' source (its transcript) */}
+                    {block.src && transcribed?.has(block.src.replace(/#.*$/, '')) ? (
+                      <span data-clip-transcribed="" role="img" aria-label={t('timeline.hasTranscript')} className="flex shrink-0 text-white/90"><CcMark size={12} /></span>
+                    ) : null}
+                    <span className={`min-w-0 truncate font-medium leading-none text-white/90 ${textRow ? 'text-[11px]' : 'text-[10px]'}`}>
+                      {textRow ? block.words ?? block.title : libraryTitle(block) ?? block.title}
                     </span>
-                    {width > 64 ? (
-                      <span className="shrink-0 text-[10px] leading-none tabular-nums text-white/70">
+                    {width > 64 && !textRow ? (
+                      <span className="shrink-0 text-[10px] leading-none tabular-nums text-white/55">
                         {block.noLength ? t('timeline.noLength') : `${((endMs - startMs) / 1000).toFixed(endMs - startMs < 1000 ? 2 : 1)}s`}
                       </span>
                     ) : null}
                     {/* the speed handles on: the speed they set, as it is now */}
                     {speeding && width > 96 ? (
-                      <span data-clip-speed="" className="shrink-0 text-[10px] font-medium leading-none tabular-nums text-white/95">
+                      <span data-clip-speed="" className="shrink-0 text-[10px] font-medium leading-none tabular-nums text-white/90">
                         {speedText(roundSpeed(thumbSpeed))}
                       </span>
                     ) : null}
@@ -3210,9 +3280,15 @@ export const Timeline = React.memo(function Timeline({
                     {width > 64 ? <span className="truncate px-1 text-[11px] font-medium text-white/90">{t('timeline.mediaMissing')}</span> : null}
                   </span>
                 ) : null}
+                {/* gone while an agent changes the film: on its way, so neutral stripes and a word, not an alarm */}
+                {trouble === 'waiting' ? (
+                  <span aria-hidden data-clip-waiting="" className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] flex items-center justify-center overflow-hidden" style={{ top: INFO_H, background: 'repeating-linear-gradient(135deg, rgb(255 255 255 / .07) 0 6px, rgb(255 255 255 / .02) 6px 12px), #2a2a2a' }}>
+                    {width > 64 ? <span className="truncate px-1 text-[11px] font-medium text-white/60">{t('timeline.mediaWaiting')}</span> : null}
+                  </span>
+                ) : null}
                 {/* preview band: thumbnails by the clip's own time (a move keeps them, a left trim seeks deeper).
                     Before thumbnails exist, one poster at the left — tiling it would fake a filmstrip. */}
-                {strip?.size && visual && width > 8 ? (
+                {strip?.size && visual && !textRow && !sticker && !laid && width > 8 ? (
                   <BlockThumbs
                     thumbs={strip}
                     startMs={intoOrigin}
@@ -3223,7 +3299,7 @@ export const Timeline = React.memo(function Timeline({
                     thumbWidthPx={THUMB_CELL_PX}
                     visiblePx={{ from: thumbWindow.from - left, to: thumbWindow.to - left }}
                   />
-                ) : poster && visual && width > 8 ? (
+                ) : poster && visual && !textRow && !sticker && !laid && width > 8 ? (
                   <span
                     aria-hidden
                     className="pointer-events-none absolute left-0 opacity-90"
@@ -3246,7 +3322,7 @@ export const Timeline = React.memo(function Timeline({
                     className="absolute inset-x-0 bottom-0"
                     style={{
                       height: AUDIO_BAND_H,
-                      background: 'rgba(0,0,0,0.3)',
+                      background: 'rgba(0,0,0,0.22)',
                     }}
                   >
                     {bandAudio && waveUrl && block.src && width > 8 ? (
@@ -3274,7 +3350,7 @@ export const Timeline = React.memo(function Timeline({
                       <span
                         key={c.tMs}
                         className="absolute top-0 bottom-0 w-px"
-                        style={{ left: c.tMs * pxPerMs, background: 'rgba(255,255,255,0.45)' }}
+                        style={{ left: c.tMs * pxPerMs, background: 'rgba(255,255,255,0.4)' }}
                         title={c.word}
                       />
                     ))}
@@ -3336,8 +3412,8 @@ export const Timeline = React.memo(function Timeline({
                     <span aria-hidden className={`pointer-events-none absolute top-[3px] h-px origin-top transition-opacity [@media(min-resolution:2dppx)]:scale-y-50 ${volumeTip ? 'opacity-60' : 'opacity-30 group-hover/vol:opacity-60'}`}
                       style={{ left: -trimHit(width), right: -trimHit(width), background: '#fff' }} />
                     {volumeTip ? (
-                      <span className={`pointer-events-none absolute ${tipUp ? 'bottom-[8px]' : 'top-[8px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
-                        style={{ left: Math.max(36, Math.min(width - 36, volumeTip.x)) - trimHit(width), background: 'var(--tl-accent)' }}>
+                      <span className={`pointer-events-none absolute ${tipUp ? 'bottom-[8px]' : 'top-[8px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-[var(--on-accent)] tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
+                        style={{ left: Math.max(36, Math.min(width - 36, volumeTip.x)) - trimHit(width), background: 'var(--accent)' }}>
                         {`${t('inspector.gainDb')} ${volumeText(volume)}`}
                       </span>
                     ) : null}
@@ -3346,7 +3422,7 @@ export const Timeline = React.memo(function Timeline({
                 {/* fade handles on the clip under the pointer, a dot just inside each end, on the bottom of its picture or
                     the top of its waveform: dragged inward, the clip fades in or out, the dot where the fade ends
                     (lib/clip-fade) */}
-                {pointed && onEditOps && block.clipId && !track.locked && width > 18 && !floating && mode === 'select' && !speeding ? (['in', 'out'] as const).map((edge) => {
+                {pointed && onEditOps && block.clipId && !block.cue && !track.locked && width > 18 && !floating && mode === 'select' && !speeding ? (['in', 'out'] as const).map((edge) => {
                   const ms = edge === 'in' ? fade[0] : fade[1];
                   const x = fadeHandleX(edge, ms, width, pxPerMs, FADE_DOT_INSET);
                   const what = t(edge === 'in' ? 'inspector.fadeIn' : 'inspector.fadeOut');
@@ -3360,14 +3436,27 @@ export const Timeline = React.memo(function Timeline({
                       <span aria-hidden className={`pointer-events-none box-border rounded-full border-2 border-solid bg-black shadow-[0_0_2px_rgba(0,0,0,.5)] transition-transform ${fadeTip === edge ? 'scale-[1.25]' : 'group-hover/fade:scale-[1.25]'}`}
                         style={{ width: FADE_DOT, height: FADE_DOT, borderColor: '#fff' }} />
                       {fadeTip === edge ? (
-                        <span className={`pointer-events-none absolute left-1/2 ${fadeTipUp ? 'bottom-[14px]' : 'top-[14px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
-                          style={{ background: 'var(--tl-accent)' }}>
+                        <span className={`pointer-events-none absolute left-1/2 ${fadeTipUp ? 'bottom-[14px]' : 'top-[14px]'} -translate-x-1/2 whitespace-nowrap rounded-[4px] px-1.5 py-[1px] text-[10.5px] font-medium leading-[15px] text-[var(--on-accent)] tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]`}
+                          style={{ background: 'var(--accent)' }}>
                           {t('transitions.fadeTip').replace('{what}', what).replace('{s}', (ms / 1000).toFixed(2))}
                         </span>
                       ) : null}
                     </span>
                   );
                 }) : null}
+                {/* New captions open: the clips its captions are made of framed, a tick on those it may take or leave */}
+                {captionPick && block.clipId && captionPick.lit.has(block.clipId) ? (
+                  <span aria-hidden data-caption-lit="" className="pointer-events-none absolute inset-0 z-[6] rounded-[4px] shadow-[inset_0_0_0_2px_var(--accent)]" />
+                ) : null}
+                {captionPick && block.clipId && captionPick.choosable.has(block.clipId) && width > 22 ? (
+                  <button type="button" role="checkbox" aria-checked={captionPick.picked.has(block.clipId)} data-caption-tick=""
+                    aria-label={t('timeline.captionTick')} title={t('timeline.captionTick')}
+                    className={`absolute right-1 top-[3px] z-[7] grid h-[14px] w-[14px] place-items-center rounded-[3px] ${captionPick.picked.has(block.clipId) ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-black/45 shadow-[inset_0_0_0_1.5px_rgba(255,255,255,.85)] hover:bg-black/60'}`}
+                    onPointerDown={(e) => { e.stopPropagation(); }}
+                    onClick={(e) => { e.stopPropagation(); captionPick.toggle(block.clipId!); }}>
+                    {captionPick.picked.has(block.clipId) ? <Check size={10} strokeWidth={3} /> : null}
+                  </button>
+                ) : null}
               </div>
             );
             clipElements.set(block.id, { pose, node });
@@ -3383,12 +3472,12 @@ export const Timeline = React.memo(function Timeline({
           const top = Math.max(INFO_H + 1, Math.round(h / 2) - 8);
           return (
             <div key={`tr:${tr.key}`} role="button" tabIndex={-1} data-transition={tr.kind} data-transition-picked={on ? '1' : '0'}
-              title={t('transitions.mark').replace('{kind}', t(`transitions.${tr.kind}`)).replace('{s}', len)}
+              title={t('transitions.mark').replace('{kind}', tr.label ?? t(`transitions.${tr.kind}`)).replace('{s}', len)}
               className="absolute z-[13] flex items-center justify-center overflow-hidden rounded-[4px] text-[10px] font-medium leading-none"
               style={{
                 left: x, width: w, top, height: 16,
-                background: on ? 'var(--tl-select)' : 'rgba(255,255,255,0.88)',
-                color: on ? '#fff' : '#1b1e25',
+                background: on ? 'var(--accent)' : 'rgba(255,255,255,0.88)',
+                color: on ? 'var(--on-accent)' : '#1b1e25',
                 boxShadow: on ? '0 0 0 1px rgba(255,255,255,.9), 0 1px 4px rgba(0,0,0,.35)' : '0 1px 3px rgba(0,0,0,.35)',
                 cursor: 'pointer',
               }}
@@ -3405,7 +3494,7 @@ export const Timeline = React.memo(function Timeline({
                 <path d="M0 15 L100 1" stroke="currentColor" strokeOpacity="0.45" strokeWidth="1.2" vectorEffect="non-scaling-stroke" fill="none" />
                 <path d="M0 1 L100 15" stroke="currentColor" strokeOpacity="0.45" strokeWidth="1.2" vectorEffect="non-scaling-stroke" fill="none" />
               </svg>
-              {w > 70 ? <span className="relative truncate px-1.5">{t(`transitions.${tr.kind}`)}</span> : null}
+              {w > 70 ? <span className="relative truncate px-1.5">{tr.label ?? t(`transitions.${tr.kind}`)}</span> : null}
               {!track.locked && onTransition ? (['start', 'end'] as const).map((side) => (
                 <span key={side} role="presentation" data-transition-edge={side}
                   className="absolute inset-y-0 w-[6px] cursor-ew-resize"
@@ -3415,16 +3504,16 @@ export const Timeline = React.memo(function Timeline({
             </div>
           );
         })}
-        {/* the gap picked on this track (on its first row): ⌫ closes it */}
+        {/* the gap picked on this track (on its first row): ⌫ closes it, its menu works on it; nothing is drawn, only its
+            place is kept (for automated UI checks) */}
         {near && gap && track.docIndex === gap.track && track.index === 1 ? (
           <div
             data-gap=""
-            className="pointer-events-none absolute inset-y-[2px] z-[3] rounded-[3px] border border-dashed"
+            aria-hidden
+            className="pointer-events-none absolute inset-y-[2px]"
             style={{
               left: Math.round(gap.startMs * pxPerMs),
               width: Math.max(2, Math.round(gap.endMs * pxPerMs) - Math.round(gap.startMs * pxPerMs) - 1),
-              borderColor: 'var(--tl-select)',
-              background: 'color-mix(in srgb, var(--tl-select) 16%, transparent)',
             }}
           />
         ) : null}
@@ -3434,7 +3523,7 @@ export const Timeline = React.memo(function Timeline({
             className="pointer-events-none absolute inset-0 z-[20]"
             style={{
               backgroundImage:
-                'repeating-linear-gradient(-45deg, transparent, transparent 5px, color-mix(in srgb, var(--tl-accent) 16%, transparent) 5px, color-mix(in srgb, var(--tl-accent) 16%, transparent) 10px)',
+                'repeating-linear-gradient(-45deg, transparent, transparent 5px, color-mix(in srgb, var(--accent) 16%, transparent) 5px, color-mix(in srgb, var(--accent) 16%, transparent) 10px)',
             }}
           />
         ) : null}
@@ -3442,11 +3531,11 @@ export const Timeline = React.memo(function Timeline({
     );
     });
   }, [
-    tracks, trackPx, pxPerMs, ringed, selected, drag, waveUrl, mode, msAtClientX, onSplit, clipThumbs, posters, mediaTrouble, t,
+    tracks, trackPx, pxPerMs, ringed, selected, drag, waveUrl, mode, msAtClientX, onSplit, clipThumbs, posters, mediaTrouble, t, libraryTitle,
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast, speedOn, hoveredBlock,
+    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound, snap, allBlocks, onSeek, totalMs, transcribed, captionPick,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {
@@ -3460,7 +3549,7 @@ export const Timeline = React.memo(function Timeline({
           left: ms * pxPerMs,
           borderColor: label ? TL.line : TL.tick,
           /* labels are read to find a place: 82% of the text color, not the faintest tone */
-          color: label ? 'color-mix(in srgb, var(--tl-text) 82%, transparent)' : undefined,
+          color: label ? 'color-mix(in srgb, var(--text-muted) 82%, transparent)' : undefined,
         }}
       >
         {label ? formatRulerLabel(ms, fps) : null}
@@ -3490,13 +3579,15 @@ export const Timeline = React.memo(function Timeline({
         }];
       }
       const top = trackSlotTop(tracks, assetHint.laneIndex, padTop);
-      const height = trackKindHeight(tracks[assetHint.laneIndex]?.kind ?? laneKindForHint(assetHint.blockKind));
+      /* as tall as the row it lands on, in the look it will have there (words, a sticker) */
+      const row = tracks[assetHint.laneIndex];
+      const height = row ? rowH(row) : trackKindHeight(laneKindForHint(assetHint.blockKind));
       return [{
         type: 'slot',
         startMs: assetHint.startMs,
         endMs: assetHint.endMs,
         title: assetHint.title,
-        color: KIND_COLOR[assetHint.blockKind],
+        color: assetHint.look === 'text' ? 'var(--clip-text)' : assetHint.look === 'sticker' ? 'var(--clip-sticker)' : KIND_COLOR[assetHint.blockKind],
         top,
         height,
         refused: Boolean(assetHint.error),
@@ -3550,7 +3641,7 @@ export const Timeline = React.memo(function Timeline({
 
   /* the snap guide when snapped (to an edge, zero, a marker or the playhead) and landing right there (useBlockDrag
      landsFlush): over the playhead too, so the person sees it caught */
-  const snapGuideMs = drag.preview?.snappedTo ? drag.preview.snappedTo.ms : (assetHint?.snapGuideMs ?? null);
+  const snapGuideMs = drag.preview?.snappedTo ? drag.preview.snappedTo.ms : (assetHint?.snapGuideMs ?? applyCutMs ?? null);
 
   /** The selected clips, in timeline order. */
   const selectedBlocks = React.useMemo(
@@ -3664,6 +3755,13 @@ export const Timeline = React.memo(function Timeline({
     if (!picked.length) {
       const laneLocked = Boolean(tracks.find((tr) => tr.lane === menu.lane)?.locked);
       const entries: ContextMenuEntry[] = [];
+      /* a caption track: a caption put in here (its words typed in the inspector) */
+      const captionRow = tracks.find((tr) => tr.lane === menu.lane)?.captions;
+      if (captionRow && onAddCaption) {
+        const at = menu.atMs;
+        entries.push({ id: 'add-caption', label: t('captionTrack.addHere'), icon: <Plus size={14} />, disabled: laneLocked, onSelect: () => { void onAddCaption(captionRow.src, at).then((err) => { if (err) setDropError(err); }); } });
+        return entries;
+      }
       if (onPaste) {
         entries.push({
           id: 'paste',
@@ -3704,7 +3802,7 @@ export const Timeline = React.memo(function Timeline({
     ));
     const nowMs = timeMsRef.current;
     const spans = (b: TimelineBlock) => nowMs > b.startMs + MIN_BLOCK_MS && nowMs < b.endMs - MIN_BLOCK_MS;
-    const canSplit = Boolean(onSplit && !pickedLocked && picked.some((b) => b.loc && spans(b)));
+    const canSplit = Boolean(onSplit && !pickedLocked && picked.some((b) => (b.loc || b.cue) && spans(b)));
     const out: ContextMenuEntry[] = [];
     const extra = blockMenuExtra?.(picked) ?? [];
     if (extra.length) out.push(...extra, { id: 'extra-sep', separator: true });
@@ -3769,16 +3867,30 @@ export const Timeline = React.memo(function Timeline({
         });
       }
     }
-    /* a video's sound onto a track of its own: its picture and sound edited apart from then on */
-    if (one && onDetachAudio && one.kind === 'video' && one.clipId && !(one.src && filmSrcIsStill(one.src))) {
-      const heard = Boolean(one.ownAudio) && !one.silent;
+    /* the picked clips as one compound clip (a film of their own), and one taken apart */
+    const placed = picked.filter((b) => b.clipId && b.loc && parseFilmDocLoc(b.loc) != null);
+    if (onCompound && placed.length && placed.length === picked.length) {
+      out.push({
+        id: 'compound', label: t('timeline.menuCompound'), icon: <Layers size={14} />, shortcut: keyHint('compound'),
+        disabled: pickedLocked, hint: t('timeline.trackLocked'), onSelect: () => { onCompound(placed); },
+      });
+    }
+    if (one && onUncompound && COMPOUND_SRC.test((one.src ?? '').replace(/#.*$/, ''))) {
+      out.push({
+        id: 'uncompound', label: t('timeline.menuUncompound'), icon: <Layers size={14} />, shortcut: keyHint('uncompound'),
+        disabled: pickedLocked, hint: t('timeline.trackLocked'), onSelect: () => { onUncompound(one); },
+      });
+    }
+    /* the videos' sounds onto tracks of their own: their pictures and sounds edited apart from then on */
+    if (onDetachAudio && picked.some(canDetachAudio)) {
+      const heard = picked.filter(hasSoundToDetach);
       out.push({
         id: 'detach-audio',
         label: t('timeline.menuDetachAudio'),
         icon: <Waves size={14} />,
-        disabled: !heard || pickedLocked,
+        disabled: !heard.length || pickedLocked,
         hint: pickedLocked ? t('timeline.trackLocked') : t('timeline.menuDetachAudioNone'),
-        onSelect: () => { void onDetachAudio(one); },
+        onSelect: () => { void onDetachAudio(heard); },
       });
     }
     /* a clip's own sound: film.html's `volume` 0 is silent; unmuted it plays as is (the inspector sets a level) */
@@ -3888,10 +4000,12 @@ export const Timeline = React.memo(function Timeline({
         });
       }
     }
+    /* a caption's cues: what a clip's menu does that a line of words has (no speed, sound, media or file of its own) */
+    if (picked.length && picked.every((b) => b.cue)) return out.filter((e) => 'separator' in e || CUE_MENU.has(e.id));
     return out;
   }, [
     menu, t, keyHint, onSplit, onDetachAudio, onRemove, onRemoveMany, onCopy, onPaste, onExportBlock, mediaTrouble, relinkCandidates,
-    onRelink, hasClipboard, runSplit, removeMany, rippleRemove, magnetRemove, onEditOps, tracks, blockMenuExtra, headEntries, withLinked,
+    onRelink, hasClipboard, runSplit, removeMany, rippleRemove, magnetRemove, onEditOps, onAddCaption, tracks, blockMenuExtra, headEntries, withLinked,
     runPlan, closeGapOn, rippleTrimToPlayhead, linkBlocks, unlinkBlocks, transitions, onTransition, onPickTransition, transitionEntries,
     speedOn, selectedKey, onEditBlocks, onDuplicate,
   ]);
@@ -3971,6 +4085,15 @@ export const Timeline = React.memo(function Timeline({
 
         {/* the middle is for status: "Editing source…" and errors (not among the tools, where it would look like one) */}
         <div className="flex min-w-0 flex-1 items-center justify-center">
+          {crumb && !(dropBusy || drag.saving || dropError || drag.error || notice) ? (
+            <button type="button" data-compound-back="" onClick={crumb.onBack} title={crumb.outer}
+              className="flex max-w-[min(360px,100%)] items-center gap-1 truncate rounded-[4px] px-1.5 py-0.5 text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]">
+              <ChevronLeft size={14} className="shrink-0" aria-hidden />
+              <span className="truncate text-[var(--text-muted)]">{crumb.outer}</span>
+              <span className="text-[var(--text-faint)]">/</span>
+              <span className="truncate">{crumb.name}</span>
+            </button>
+          ) : null}
           {dropBusy || drag.saving ? (
             <span className="text-[11px]" style={{ color: TL.faint }}>{t('timeline.applying')}</span>
           ) : dropError || drag.error ? (
@@ -3999,18 +4122,23 @@ export const Timeline = React.memo(function Timeline({
           ) : null}
         </div>
 
-        {/* the switches (lib/timeline-prefs), in this order: the main-track magnet, snapping and linkage */}
+        {/* the right side: recording first, then the switches (lib/timeline-prefs), in this order: snapping, the
+            main-track magnet and linkage */}
+        {recorder ? <>
+          <RecordButton now={recorder.now} onSave={recorder.onSave} onProblem={setNotice} />
+          <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
+        </> : null}
         {onEditOps ? <>
-          <span data-timeline-magnet={prefs.magnet ? '1' : '0'}>
-            <ToolButton onClick={() => togglePref('magnet')} active={prefs.magnet} label={t('timeline.magnet')}
-              hint={prefs.magnet ? t('timeline.magnetOn') : t('timeline.magnetOff')}>
-              <Magnet size={15} />
-            </ToolButton>
-          </span>
           <span data-timeline-snap={snap ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('snap')} active={snap} label={t('timeline.snap')}
               hint={snap ? t('timeline.snapOn') : t('timeline.snapOff')}>
               <SeparatorVertical size={15} />
+            </ToolButton>
+          </span>
+          <span data-timeline-magnet={prefs.magnet ? '1' : '0'}>
+            <ToolButton onClick={() => togglePref('magnet')} active={prefs.magnet} label={t('timeline.magnet')}
+              hint={prefs.magnet ? t('timeline.magnetOn') : t('timeline.magnetOff')}>
+              <Magnet size={15} />
             </ToolButton>
           </span>
           <span data-timeline-linkage={prefs.linkage ? '1' : '0'}>
@@ -4021,6 +4149,7 @@ export const Timeline = React.memo(function Timeline({
           </span>
         </> : null}
 
+        <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
         <ToolButton
           onClick={() => zoomBy(1 / ZOOM_STEP)}
           disabled={!(hasLanes && spanMs > 0) || viewZoom <= zoomMinOf(spanMs)}
@@ -4051,17 +4180,6 @@ export const Timeline = React.memo(function Timeline({
         >
           <ZoomIn size={15} />
         </ToolButton>
-        {/* back to the opening zoom (80%, a little room after the end); a horizontal arrow: zoom is horizontal only */}
-        <ToolButton
-          onClick={() => zoomTo(ZOOM_DEFAULT)}
-          disabled={!playable || Math.abs(viewZoom - ZOOM_DEFAULT) < 0.01}
-          label={t('timeline.zoomFit')}
-        >
-          <MoveHorizontal size={15} />
-        </ToolButton>
-
-        {/* subtitles: toggles the overlay on the picture (not the film itself) */}
-        {subtitles ? <SubtitlePicker subtitles={subtitles} /> : null}
       </div>
 
       {/* ── Body: two columns. The head column is not inside the scroller (no scrollbar under it, no rubber-band,
@@ -4080,11 +4198,10 @@ export const Timeline = React.memo(function Timeline({
         >
           {/* as tall as the ruler, so heads line up with rows; no bottom line, it is not a column of its own */}
           <div style={{ height: RULER_H }} />
-          {subRowShown ? <SubtitleRowHead onAdd={() => subRowRef.current?.addAtPlayhead()} /> : null}
-          {markerRowH ? <div style={{ height: markerRowH }} /> : null}
           <div
             className="relative overflow-hidden"
-            style={{ height: `calc(100% - ${RULER_H + subRowH + markerRowH}px - ${H_SCROLL_H}px)` }}
+            /* the ground the heads lie on, seen in the gaps between them as between the rows */
+            style={{ height: `calc(100% - ${RULER_H}px - ${H_SCROLL_H}px)`, background: 'var(--tl-gap)' }}
           >
             {/* moved with the track area's vertical scroll (onScroll), as the rows' backgrounds are; its own block
                 (flow-root), so the first head's margin stays inside it and the reorder guide's top counts from it */}
@@ -4106,7 +4223,7 @@ export const Timeline = React.memo(function Timeline({
                   <div
                     className="pointer-events-none absolute left-0 right-0 z-40 h-0.5"
                     data-lane-order-guide=""
-                    style={{ top, background: 'var(--tl-select)' }}
+                    style={{ top, background: 'var(--accent)' }}
                   />
                 );
               })() : null}
@@ -4158,36 +4275,8 @@ export const Timeline = React.memo(function Timeline({
             </div>
           </div>
 
-          {subRowShown && subtitleRow ? (
-            <SubtitleRow ref={subRowRef} spec={subtitleRow} pxPerMs={pxPerMs} scrollLeft={view.left} width={trackPx}
-              playheadMs={() => timeMsRef.current} snap={snap} snapTargets={() => snapTargetsFor(allBlocks, null, timeMsRef.current)}
-              onScrub={startScrub} onError={setDropError} />
-          ) : null}
-
-          {/* the markers' row: pins along it, scrolling with the tracks; a press between them moves the playhead (and
-              drags it) as in the tracks' empty space, a right-click adds a marker there */}
-          {markerRowH && markerLane ? (
-            <div
-              data-marker-lane=""
-              onPointerDown={(e) => startScrub(e)}
-              className="relative shrink-0 touch-none overflow-hidden select-none"
-              style={{ height: markerRowH, background: TL.head }}
-              onContextMenu={rulerMenu ? (e) => {
-                e.preventDefault();
-                const items = rulerMenu(Math.max(0, Math.min(totalMs, msAtClientX(e.clientX))));
-                if (items.length) setRulerMenuAt({ x: e.clientX, y: e.clientY, items });
-              } : undefined}
-            >
-              <div className="absolute inset-y-0 left-0" style={{ width: trackPx, transform: `translate3d(${-view.left}px,0,0)` }}>
-                <div data-zoom-layer="content" className="absolute inset-0">
-                  {markerLane.render({ pxPerMs, widthPx: trackPx, snap: snapMarker, guide: setMarkerGuide })}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
           {/* track area: backgrounds fixed to the view, clips scroll horizontally above them */}
-          <div className="relative min-h-0 min-w-0 flex-1" style={{ background: TL.head }}>
+          <div className="relative min-h-0 min-w-0 flex-1" style={{ background: 'var(--tl-gap)' }}>
             {hasLanes ? (
               <div
                 aria-hidden
@@ -4219,7 +4308,7 @@ export const Timeline = React.memo(function Timeline({
                 <div
                   data-timeline-empty=""
                   className="pointer-events-none flex h-[60px] w-full items-center gap-2 rounded-[4px] border border-dashed px-4"
-                  style={{ background: TL.lane, borderColor: TL.line }}
+                  style={{ background: 'var(--bg-field)', borderColor: TL.line }}
                 >
                   <Film size={15} className="shrink-0" style={{ color: TL.faint }} aria-hidden />
                   <p className="truncate text-[12px]" style={{ color: TL.text }}>
@@ -4265,8 +4354,8 @@ export const Timeline = React.memo(function Timeline({
                       /* follows the pointer, not row edges (contentY already includes the scroll) */
                       top: Math.min(marquee.fromY, marquee.toY),
                       height: Math.abs(marquee.toY - marquee.fromY),
-                      borderColor: 'var(--tl-accent)',
-                      background: 'color-mix(in srgb, var(--tl-accent) 18%, transparent)',
+                      borderColor: 'var(--accent)',
+                      background: 'color-mix(in srgb, var(--accent) 18%, transparent)',
                     }}
                   />
                 ) : null}
@@ -4286,6 +4375,22 @@ export const Timeline = React.memo(function Timeline({
               </div>
             )}
           </div>
+          {/* the markers' row, floating over the rows' top edge (taking no room of its own, so the rows stay where they
+              are): pins along it, scrolling with the tracks sideways; between them the press falls through to the
+              tracks' empty space, which moves the playhead as the row did */}
+          {markerRowH && markerLane ? (
+            <div
+              data-marker-lane=""
+              className="pointer-events-none absolute inset-x-0 top-0 z-[22] touch-none overflow-hidden select-none"
+              style={{ height: markerRowH }}
+            >
+              <div className="absolute inset-y-0 left-0" style={{ width: trackPx, transform: `translate3d(${-view.left}px,0,0)` }}>
+                <div data-zoom-layer="content" className="absolute inset-0 [&_[data-marker]]:pointer-events-auto">
+                  {markerLane.render({ pxPerMs, widthPx: trackPx, snap: snapMarker, guide: setMarkerGuide })}
+                </div>
+              </div>
+            </div>
+          ) : null}
           </div>
           <TimelineRangeBar
             zoom={viewZoom}
@@ -4359,7 +4464,7 @@ export const Timeline = React.memo(function Timeline({
         >
           <div
             data-snap-guide=""
-            className="absolute inset-y-0 left-0 w-px bg-[var(--tl-accent)]"
+            className="absolute inset-y-0 left-0 w-px bg-[var(--accent)]"
             style={{
               transform: `translate3d(${snapGuideMs * pxPerMs - scrollLeft + PLAYHEAD_BLEED}px,0,0)`,
             }}
@@ -4377,8 +4482,8 @@ export const Timeline = React.memo(function Timeline({
               style={{
                 transform: `translate3d(${chat.span.startMs * pxPerMs - scrollLeft}px,0,0)`,
                 width: Math.max(2, (chat.span.endMs - chat.span.startMs) * pxPerMs),
-                background: 'color-mix(in srgb, var(--tl-accent) 45%, transparent)',
-                boxShadow: 'inset 0 -2px 0 var(--tl-accent)',
+                background: 'color-mix(in srgb, var(--accent) 45%, transparent)',
+                boxShadow: 'inset 0 -2px 0 var(--accent)',
               }}
             />
           </div>
@@ -4395,8 +4500,8 @@ export const Timeline = React.memo(function Timeline({
               style={{
                 transform: `translate3d(${flashRange.startMs * pxPerMs - scrollLeft}px,0,0)`,
                 width: Math.max(1, (flashRange.endMs - flashRange.startMs) * pxPerMs),
-                borderColor: 'color-mix(in srgb, var(--tl-accent) 55%, transparent)',
-                background: 'color-mix(in srgb, var(--tl-accent) 10%, transparent)',
+                borderColor: 'color-mix(in srgb, var(--accent) 55%, transparent)',
+                background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
               }}
             />
           </div>
@@ -4419,11 +4524,11 @@ export const Timeline = React.memo(function Timeline({
                   style={{
                     transform: `translate3d(${fromX}px,0,0)`,
                     width,
-                    borderColor: 'var(--tl-accent)',
-                    background: 'color-mix(in srgb, var(--tl-accent) 13%, transparent)',
+                    borderColor: 'var(--accent)',
+                    background: 'color-mix(in srgb, var(--accent) 13%, transparent)',
                   }}
                 >
-                  <div className="absolute inset-x-0 top-0" style={{ height: RULER_H, background: 'color-mix(in srgb, var(--tl-accent) 28%, transparent)' }} />
+                  <div className="absolute inset-x-0 top-0" style={{ height: RULER_H, background: 'color-mix(in srgb, var(--accent) 28%, transparent)' }} />
                 </div>
               </div>
             </div>
@@ -4441,8 +4546,8 @@ export const Timeline = React.memo(function Timeline({
                       e.dataTransfer.setData('text/plain', label);
                       e.dataTransfer.effectAllowed = 'copy';
                     }}
-                    className={`absolute top-0 origin-left whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.25)] ${rangeRef ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : ''}`}
-                    style={{ left: Math.max(4, fromX + 4), background: 'var(--tl-accent)' }}
+                    className={`absolute top-0 origin-left whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-[var(--on-accent)] tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.25)] ${rangeRef ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : ''}`}
+                    style={{ left: Math.max(4, fromX + 4), background: 'var(--accent)' }}
                   >
                     {label}
                   </div>
@@ -4478,9 +4583,9 @@ function GestureLabel({ tip, left, top }: { tip: GestureTip; left: number; top: 
   return (
     <div
       data-gesture-tip={tip.kind}
-      className="pointer-events-none absolute z-[70] whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-white tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]"
+      className="pointer-events-none absolute z-[70] whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-[var(--on-accent)] tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.35)]"
       /* centred on the edge, but never cut off at the film's start (a clip at 0 s made 100× has its edge there) */
-      style={{ left, top: Math.max(0, top - 21), transform: `translateX(max(-50%, ${-left}px))`, background: 'var(--tl-accent)' }}
+      style={{ left, top: Math.max(0, top - 21), transform: `translateX(max(-50%, ${-left}px))`, background: 'var(--accent)' }}
     >
       {what} {tip.speed != null ? speedText(roundSpeed(tip.speed)) : signedSeconds(tip.deltaMs)}
       {tip.lengthMs != null ? <span className="opacity-75"> · {(tip.lengthMs / 1000).toFixed(2)} s</span> : null}
@@ -4500,7 +4605,7 @@ function PlayheadKnob({ filled }: { filled: boolean }) {
     <svg width="12" height="17" viewBox="0 0 12 17" aria-hidden="true">
       <path
         d="M1.9 3.4a2 2 0 0 1 2-2h4.2a2 2 0 0 1 2 2v5.3a4.1 4.1 0 0 1-8.2 0z"
-        fill={filled ? 'var(--tl-playhead)' : 'var(--tl-ruler)'}
+        fill={filled ? 'var(--tl-playhead)' : 'var(--bg-panel)'}
         stroke="var(--tl-playhead)"
         strokeWidth="1.9"
         strokeLinejoin="round"
@@ -4544,7 +4649,8 @@ function TrackHeadButton({
         }}
         className="flex h-full w-full items-center justify-center rounded-[4px] bg-transparent outline-none ring-0 transition-colors hover:bg-[var(--bg-hover)] focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:hover:bg-transparent"
         style={{
-          color: disabled ? 'var(--text-faint)' : active ? 'var(--tl-accent)' : 'var(--text-dim)',
+          /* a switch at rest is brighter than the row's mark; one turned on (locked, hidden, muted) is the accent */
+          color: disabled ? 'var(--text-faint)' : active ? 'var(--accent)' : 'var(--text-muted)',
         }}
       >
         {children}
@@ -4614,45 +4720,17 @@ function ToolButton({
         aria-label={title}
         aria-pressed={active}
         /* no focus outline after a click; focus-visible still shows for keyboard users */
-        className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)] ${
+        className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--accent)] ${
           disabled ? 'cursor-default' : ''
-        } ${active || disabled ? '' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
+        } ${active || disabled ? '' : 'hover:bg-[var(--bg-hover)]'}`}
+        /* on: the accent on a soft well of it, not a solid block (a row of them would shout) */
         style={active
-          ? { color: '#fff', background: 'var(--tl-accent)' }
-          : { color: disabled ? 'var(--text-faint)' : 'var(--text-dim)' }}
+          ? { color: 'var(--accent)', background: 'var(--accent-soft)' }
+          : { color: disabled ? 'var(--text-faint)' : 'var(--text-muted)' }}
       >
         {children}
       </button>
     </Tooltip>
-  );
-}
-
-/** Visibility stays in the toolbar; appearance is edited in the Inspector. */
-function SubtitlePicker({ subtitles }: { subtitles: NonNullable<TimelineProps['subtitles']> }) {
-  const t = useT();
-  const none = subtitles.count === 0;
-  const n = subtitles.untranscribed ?? 0;
-  /* no lines yet and speech with no transcript: the button makes them (with some lines, it shows them, and the
-     Inspector makes the rest) */
-  const make = none && n > 0 && !!subtitles.onMake;
-  const label = subtitles.making ? t('timeline.subtitlesMaking')
-    : subtitles.problem ? (subtitles.problem.connect ? t('timeline.subtitlesConnect') : t('timeline.subtitlesFailed').replace('{error}', subtitles.problem.text))
-      : make ? t(n === 1 ? 'timeline.subtitlesMakeOne' : 'timeline.subtitlesMake').replace('{n}', String(n))
-        : !none ? t('timeline.subtitles') : t('timeline.subtitlesNone');
-  return (
-    <div className="flex items-center gap-0.5">
-      <ToolButton onClick={make || subtitles.problem ? () => subtitles.onMake?.() : subtitles.onToggle} active={subtitles.on && !none && !make} disabled={subtitles.making || (none && !make && !subtitles.problem)}
-        label={label}>
-        <CaptionsIcon size={19} />
-      </ToolButton>
-      <Tooltip side="bottom" label={t('timeline.subtitleStyle')}>
-        <button type="button" onClick={subtitles.onConfigure}
-          aria-label={t('timeline.subtitleStyle')} aria-expanded={!!subtitles.configuring}
-          className={`flex h-6 w-4 shrink-0 items-center justify-center rounded transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--text-muted)] ${subtitles.configuring ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
-          <ChevronUp size={12} aria-hidden className={`transition-transform ${subtitles.configuring ? 'rotate-180' : ''}`} />
-        </button>
-      </Tooltip>
-    </div>
   );
 }
 
@@ -4698,8 +4776,8 @@ function ModePicker({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="flex h-[28px] w-[15px] shrink-0 items-center justify-center rounded-[6px] transition hover:bg-black/5 dark:hover:bg-white/10"
-            style={{ color: 'var(--text-dim)' }}
+            className="flex h-[28px] w-[15px] shrink-0 items-center justify-center rounded-[6px] transition hover:bg-[var(--bg-hover)]"
+            style={{ color: 'var(--text-muted)' }}
             aria-label={current.label}
           >
             <ChevronDown size={12} />
@@ -4708,23 +4786,23 @@ function ModePicker({
       >
         <div
           className="min-w-[150px] rounded-[8px] border p-1 shadow-lg"
-          style={{ background: 'var(--tl-head)', borderColor: 'var(--tl-line)' }}
+          style={{ background: 'var(--bg-panel)', borderColor: 'var(--border)' }}
         >
           {items.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => { onPick(item.id); setOpen(false); }}
-              className="flex w-full items-center gap-2 rounded-[4px] px-2 py-1.5 text-[12px] transition hover:bg-black/5 dark:hover:bg-white/10"
+              className="flex w-full items-center gap-2 rounded-[4px] px-2 py-1.5 text-[12px] transition hover:bg-[var(--bg-hover)]"
               style={{
-                color: 'var(--tl-text)',
+                color: 'var(--text-muted)',
                 /* the current row: --tl-line (a gray in both themes; translucent white vanishes on light) */
-                background: item.id === mode ? 'var(--tl-line)' : undefined,
+                background: item.id === mode ? 'var(--border)' : undefined,
               }}
             >
               {item.icon}
               <span className="flex-1 text-left">{item.label}</span>
-              <span style={{ color: 'var(--tl-faint)' }}>{item.key}</span>
+              <span style={{ color: 'var(--text-faint)' }}>{item.key}</span>
             </button>
           ))}
         </div>
@@ -4933,8 +5011,8 @@ function RulerRefer({ hoverMs, draft, pxPerMs, widthPx }: { hoverMs: number | nu
     const flip = x > widthPx - 96;
     return (
       <span
-        className="absolute top-1/2 flex h-[15px] items-center gap-[3px] whitespace-nowrap rounded-[4px] px-[5px] text-[10px] font-medium leading-none tabular-nums text-white shadow-[0_1px_3px_rgba(0,0,0,.35)]"
-        style={{ left: x, background: 'var(--tl-accent)', transform: `translate(${flip ? 'calc(-100% - 5px)' : '5px'}, -50%)` }}
+        className="absolute top-1/2 flex h-[15px] items-center gap-[3px] whitespace-nowrap rounded-[4px] px-[5px] text-[10px] font-medium leading-none tabular-nums text-[var(--on-accent)] shadow-[0_1px_3px_rgba(0,0,0,.35)]"
+        style={{ left: x, background: 'var(--accent)', transform: `translate(${flip ? 'calc(-100% - 5px)' : '5px'}, -50%)` }}
       >
         <MessageSquarePlus size={9} aria-hidden />
         {text}
@@ -4946,7 +5024,7 @@ function RulerRefer({ hoverMs, draft, pxPerMs, widthPx }: { hoverMs: number | nu
     const width = Math.max(1, (draft.endMs - draft.startMs) * pxPerMs);
     return (
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div data-timeline-refer-range="" className="absolute inset-y-0" style={{ left, width, background: 'color-mix(in srgb, var(--tl-accent) 22%, transparent)', boxShadow: 'inset 1px 0 var(--tl-accent), inset -1px 0 var(--tl-accent)' }} />
+        <div data-timeline-refer-range="" className="absolute inset-y-0" style={{ left, width, background: 'color-mix(in srgb, var(--accent) 22%, transparent)', boxShadow: 'inset 1px 0 var(--accent), inset -1px 0 var(--accent)' }} />
         {tag(left + width, `${chatClock(draft.startMs)}–${chatClock(draft.endMs)}`)}
       </div>
     );
@@ -4954,7 +5032,7 @@ function RulerRefer({ hoverMs, draft, pxPerMs, widthPx }: { hoverMs: number | nu
   const x = hoverMs! * pxPerMs;
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0">
-      <div className="absolute inset-y-0 w-px" style={{ left: x, background: 'var(--tl-accent)' }} />
+      <div className="absolute inset-y-0 w-px" style={{ left: x, background: 'var(--accent)' }} />
       {tag(x, chatClock(hoverMs!))}
     </div>
   );

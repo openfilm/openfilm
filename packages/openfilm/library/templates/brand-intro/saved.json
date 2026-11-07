@@ -1,0 +1,140 @@
+{
+ "version": 2,
+ "kind": "group",
+ "clips": [
+  {
+   "track": 0,
+   "at": 0.3,
+   "clip": {
+    "src": "title-slab.html",
+    "time": [
+     0,
+     2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Slab\", \"type\": \"var\", \"var\": \"--slab\"}, {\"name\": \"Second slab\", \"type\": \"var\", \"var\": \"--slab2\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.32}"
+    },
+    "size": {
+     "w": 1000,
+     "h": 500
+    },
+    "overrides": [
+     {
+      "at": ".t1",
+      "text": "MAKE IT"
+     },
+     {
+      "at": ".t2",
+      "text": "SEASON 01"
+     },
+     {
+      "fade": [
+       0,
+       0.25
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "track": 0,
+   "at": 4.8,
+   "clip": {
+    "src": "title-sweep.html",
+    "time": [
+     0,
+     3.2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Subtitle\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Box\", \"type\": \"var\", \"var\": \"--box\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.28}"
+    },
+    "size": {
+     "w": 1000,
+     "h": 400
+    },
+    "overrides": [
+     {
+      "at": ".t1",
+      "text": "YOUR BRAND"
+     }
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 1.95,
+   "clip": {
+    "src": "color-bars.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.9
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 4.1,
+   "clip": {
+    "src": "ribbon.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 0,
+   "clip": {
+    "src": "example-1.jpg",
+    "time": [
+     0,
+     2.4
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "1"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 2.4,
+   "clip": {
+    "src": "example-2.jpg",
+    "time": [
+     0,
+     2.2
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "2"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 4.6,
+   "clip": {
+    "src": "example-3.jpg",
+    "time": [
+     0,
+     3.4
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "3"
+    }
+   }
+  }
+ ],
+ "durationMs": 8000
+}

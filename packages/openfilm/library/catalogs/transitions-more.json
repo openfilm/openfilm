@@ -1,0 +1,1152 @@
+{
+ "version": 1,
+ "groups": {
+  "transition": [
+   {
+    "id": "mg",
+    "name": {
+     "en": "Motion graphics",
+     "zh-CN": "MG动画",
+     "ja": "モーショングラフィックス",
+     "ko": "모션 그래픽",
+     "es": "Gráficos animados"
+    }
+   },
+   {
+    "id": "film",
+    "name": {
+     "en": "Film",
+     "zh-CN": "胶片",
+     "ja": "フィルム",
+     "ko": "필름",
+     "es": "Película"
+    }
+   },
+   {
+    "id": "nature",
+    "name": {
+     "en": "Nature",
+     "zh-CN": "自然",
+     "ja": "自然",
+     "ko": "자연",
+     "es": "Naturaleza"
+    }
+   },
+   {
+    "id": "social",
+    "name": {
+     "en": "Social",
+     "zh-CN": "互动",
+     "ja": "ソーシャル",
+     "ko": "소셜",
+     "es": "Social"
+    }
+   }
+  ]
+ },
+ "items": [
+  {
+   "id": "transitions/exposure",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Overexposure",
+    "zh-CN": "闪白光晕",
+    "ja": "露出オーバー",
+    "ko": "노출 과다",
+    "es": "Sobreexposición"
+   },
+   "kind": "page",
+   "durationMs": 800,
+   "src": "exposure.html",
+   "place": "cut",
+   "about": "A quick pre-flash, then the frame blows out to white from a glowing core and ebbs in a halo. For energetic cuts on a beat.",
+   "tags": [
+    "light",
+    "fade",
+    "intense",
+    "transition",
+    "trailer"
+   ]
+  },
+  {
+   "id": "transitions/light-leak",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Light leak burst",
+    "zh-CN": "漏光爆闪",
+    "ja": "ライトリーク",
+    "ko": "빛 번짐",
+    "es": "Fuga de luz"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "light-leak.html",
+   "place": "cut",
+   "about": "Warm orange, rose and gold leaks drift across, merge into golden white over the cut, then clear. For warm, nostalgic or romantic cuts.",
+   "tags": [
+    "light",
+    "warm-tone",
+    "soft",
+    "nostalgic",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/flare-whip",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Flare whip",
+    "zh-CN": "光线甩过",
+    "ja": "フレアスワイプ",
+    "ko": "플레어 휩",
+    "es": "Destello rápido"
+   },
+   "kind": "page",
+   "durationMs": 700,
+   "src": "flare-whip.html",
+   "place": "cut",
+   "about": "A wide streak of light whips across the frame, cool at its leading edge, whites out the cut, exits warm. For fast, punchy cuts.",
+   "tags": [
+    "light",
+    "slide",
+    "intense",
+    "transition",
+    "trailer"
+   ]
+  },
+  {
+   "id": "transitions/prism",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Prism flash",
+    "zh-CN": "棱镜彩虹",
+    "ja": "プリズム",
+    "ko": "프리즘",
+    "es": "Prisma"
+   },
+   "kind": "page",
+   "durationMs": 900,
+   "src": "prism.html",
+   "place": "cut",
+   "about": "A rainbow-split light sweeps diagonally across the frame, flashes white over the cut and trails its spectrum off. For bright, dreamy or celebratory cuts.",
+   "tags": [
+    "light",
+    "vivid",
+    "slide",
+    "dreamy",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/sun-rays",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Sun rays",
+    "zh-CN": "太阳光芒",
+    "ja": "太陽光線",
+    "ko": "햇살",
+    "es": "Rayos de sol"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "sun-rays.html",
+   "place": "cut",
+   "about": "Sunlight rays fan out and turn while a sun swells to fill the frame, then fades. For hopeful, sunny cuts and mornings.",
+   "tags": [
+    "light",
+    "warm-tone",
+    "uplifting",
+    "morning",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/sparkle",
+   "cat": "transition",
+   "group": "light",
+   "name": {
+    "en": "Sparkle",
+    "zh-CN": "星光闪现",
+    "ja": "きらめき",
+    "ko": "반짝임",
+    "es": "Destellos"
+   },
+   "kind": "page",
+   "durationMs": 900,
+   "src": "sparkle.html",
+   "place": "cut",
+   "about": "Star glints pop across the frame, brighter toward the cut where they melt into white, then twinkle out. For magical, glamorous or festive cuts.",
+   "tags": [
+    "particles",
+    "light",
+    "wonder",
+    "dreamy",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/circle-zoom",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Circle zoom",
+    "zh-CN": "圆形放大",
+    "ja": "円ズーム",
+    "ko": "원형 확대",
+    "es": "Zoom circular"
+   },
+   "kind": "page",
+   "durationMs": 800,
+   "src": "circle-zoom.html",
+   "place": "cut",
+   "about": "A circle grows from the middle to fill the frame, then a circular hole opens onto the next shot. For clean graphic cuts in explainers.",
+   "tags": [
+    "shapes",
+    "zoom",
+    "wipe",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/diamond",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Diamond",
+    "zh-CN": "菱形展开",
+    "ja": "ダイヤ",
+    "ko": "다이아몬드",
+    "es": "Rombo"
+   },
+   "kind": "page",
+   "durationMs": 800,
+   "src": "diamond.html",
+   "place": "cut",
+   "about": "A diamond spins open from the middle to fill the frame, then a diamond hole opens on the next shot. For stylish graphic cuts.",
+   "tags": [
+    "shapes",
+    "spin",
+    "wipe",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/hex-tiles",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Hexagon flip",
+    "zh-CN": "六边形翻转",
+    "ja": "六角形フリップ",
+    "ko": "육각형 뒤집기",
+    "es": "Hexágonos"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "hex-tiles.html",
+   "place": "cut",
+   "about": "Hexagon tiles flip over in a wave from the left to cover the frame, then flip away. For techy, modern cuts in product films.",
+   "tags": [
+    "shapes",
+    "split",
+    "spin",
+    "tech",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/shards",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Triangle shards",
+    "zh-CN": "三角碎片",
+    "ja": "三角の破片",
+    "ko": "삼각 조각",
+    "es": "Fragmentos"
+   },
+   "kind": "page",
+   "durationMs": 900,
+   "src": "shards.html",
+   "place": "cut",
+   "about": "Triangle shards fly in spinning from the corners, lock together over the cut, then break apart and fall away. For bold, dynamic cuts.",
+   "tags": [
+    "shapes",
+    "split",
+    "spin",
+    "intense",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/stripes",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Diagonal stripes",
+    "zh-CN": "斜条滑过",
+    "ja": "斜めストライプ",
+    "ko": "사선 스트라이프",
+    "es": "Franjas diagonales"
+   },
+   "kind": "page",
+   "durationMs": 800,
+   "src": "stripes.html",
+   "place": "cut",
+   "about": "Diagonal stripes slide in from both sides one after another, lock together over the cut, then slide out. For clean, rhythmic cuts.",
+   "tags": [
+    "shapes",
+    "slide",
+    "wipe",
+    "transition",
+    "social"
+   ]
+  },
+  {
+   "id": "transitions/checker",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Checkerboard",
+    "zh-CN": "棋盘格",
+    "ja": "チェッカー",
+    "ko": "체커보드",
+    "es": "Damero"
+   },
+   "kind": "page",
+   "durationMs": 800,
+   "src": "checker.html",
+   "place": "cut",
+   "about": "Squares pop up in a checkerboard, turning as they grow, cover the frame, then shrink away. For playful graphic cuts.",
+   "tags": [
+    "shapes",
+    "split",
+    "bounce",
+    "playful",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/clock",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Clock wipe",
+    "zh-CN": "时钟擦除",
+    "ja": "時計ワイプ",
+    "ko": "시계 와이프",
+    "es": "Barrido de reloj"
+   },
+   "kind": "page",
+   "durationMs": 800,
+   "src": "clock.html",
+   "place": "cut",
+   "about": "A hand sweeps round from twelve o'clock, filling the frame behind it, then a second turn clears it. For time passing and explainers.",
+   "tags": [
+    "wipe",
+    "spin",
+    "shapes",
+    "explainer",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/doors",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Split doors",
+    "zh-CN": "对开门",
+    "ja": "両開きドア",
+    "ko": "양문",
+    "es": "Puertas"
+   },
+   "kind": "page",
+   "durationMs": 800,
+   "src": "doors.html",
+   "place": "cut",
+   "about": "Two doors slide in from the sides, shut over the cut with a small bump, then slide open. For clean, simple corporate cuts.",
+   "tags": [
+    "wipe",
+    "slide",
+    "split",
+    "corporate",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/slats",
+   "cat": "transition",
+   "group": "shape",
+   "name": {
+    "en": "Diagonal slats",
+    "zh-CN": "斜向百叶",
+    "ja": "斜めスラット",
+    "ko": "사선 블라인드",
+    "es": "Lamas diagonales"
+   },
+   "kind": "page",
+   "durationMs": 900,
+   "src": "slats.html",
+   "place": "cut",
+   "about": "Diagonal slats turn shut one after another, shaded as they turn, then turn open again. For stylish cuts in fashion and promos.",
+   "tags": [
+    "wipe",
+    "split",
+    "spin",
+    "elegant",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/color-bars",
+   "cat": "transition",
+   "group": "mg",
+   "name": {
+    "en": "Color sweep",
+    "zh-CN": "色块扫过",
+    "ja": "カラースイープ",
+    "ko": "컬러 스윕",
+    "es": "Barrido de colores"
+   },
+   "kind": "page",
+   "durationMs": 900,
+   "src": "color-bars.html",
+   "place": "cut",
+   "about": "Slanted yellow, rose and blue panels sweep across one after another, the last in your colour covering the cut, then sweep off. For bright cuts.",
+   "tags": [
+    "wipe",
+    "slide",
+    "vivid",
+    "happy",
+    "transition",
+    "social"
+   ]
+  },
+  {
+   "id": "transitions/ribbon",
+   "cat": "transition",
+   "group": "mg",
+   "name": {
+    "en": "Ribbon spiral",
+    "zh-CN": "丝带旋入",
+    "ja": "リボンスパイラル",
+    "ko": "리본 나선",
+    "es": "Espiral de cinta"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "ribbon.html",
+   "place": "cut",
+   "about": "A ribbon in your colour, led by yellow and rose ones, spirals out from the middle to fill the frame, then unwinds. For festive cuts.",
+   "tags": [
+    "shapes",
+    "spin",
+    "playful",
+    "celebration",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/blob",
+   "cat": "transition",
+   "group": "mg",
+   "name": {
+    "en": "Liquid blob",
+    "zh-CN": "液态融合",
+    "ja": "リキッド",
+    "ko": "리퀴드",
+    "es": "Gota líquida"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "blob.html",
+   "place": "cut",
+   "about": "Wobbling yellow, rose and colour blobs swell from the middle, one inside another, fill the frame, then open wobbling holes. For fun cuts.",
+   "tags": [
+    "shapes",
+    "bounce",
+    "playful",
+    "happy",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/circles-burst",
+   "cat": "transition",
+   "group": "mg",
+   "name": {
+    "en": "Circle pops",
+    "zh-CN": "圆圈爆开",
+    "ja": "サークルポップ",
+    "ko": "원 터짐",
+    "es": "Círculos"
+   },
+   "kind": "page",
+   "durationMs": 900,
+   "src": "circles-burst.html",
+   "place": "cut",
+   "about": "Colored circles pop open all over the frame, each with a ring flying off, fill the frame, then pop shut. For lively, cheerful cuts.",
+   "tags": [
+    "shapes",
+    "bounce",
+    "happy",
+    "playful",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/zigzag",
+   "cat": "transition",
+   "group": "mg",
+   "name": {
+    "en": "Zigzag wipe",
+    "zh-CN": "锯齿擦除",
+    "ja": "ジグザグ",
+    "ko": "지그재그",
+    "es": "Zigzag"
+   },
+   "kind": "page",
+   "durationMs": 800,
+   "src": "zigzag.html",
+   "place": "cut",
+   "about": "Zigzag-edged layers rise from the bottom one after another, yellow, rose, then your colour over the cut, and exit off the top. For bright cuts.",
+   "tags": [
+    "wipe",
+    "slide",
+    "shapes",
+    "vivid",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/liquid",
+   "cat": "transition",
+   "group": "mg",
+   "name": {
+    "en": "Liquid fill",
+    "zh-CN": "液体上涨",
+    "ja": "リキッドフィル",
+    "ko": "액체 채우기",
+    "es": "Llenado líquido"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "liquid.html",
+   "place": "cut",
+   "about": "Liquid in your colour rises in waves from the bottom with bubbles, fills the frame, then flows up and out. For fresh, fluid cuts.",
+   "tags": [
+    "wipe",
+    "slide",
+    "shapes",
+    "playful",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/pixels",
+   "cat": "transition",
+   "group": "mg",
+   "name": {
+    "en": "Pixel squares",
+    "zh-CN": "像素方块",
+    "ja": "ピクセル",
+    "ko": "픽셀",
+    "es": "Píxeles"
+   },
+   "kind": "page",
+   "durationMs": 800,
+   "src": "pixels.html",
+   "place": "cut",
+   "about": "Squares pop in, sweeping corner to corner, in three shades of your colour until they cover the cut, then pop away. For retro-game cuts.",
+   "tags": [
+    "shapes",
+    "split",
+    "chiptune",
+    "tech",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/dots",
+   "cat": "transition",
+   "group": "mg",
+   "name": {
+    "en": "Halftone dots",
+    "zh-CN": "波点过渡",
+    "ja": "ドット",
+    "ko": "도트",
+    "es": "Puntos"
+   },
+   "kind": "page",
+   "durationMs": 900,
+   "src": "dots.html",
+   "place": "cut",
+   "about": "A grid of dots swells in a wave from left to right until it runs together over the cut, then shrinks away. For pop-art cuts.",
+   "tags": [
+    "shapes",
+    "comic",
+    "wipe",
+    "playful",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/rgb-split",
+   "cat": "transition",
+   "group": "glitch",
+   "name": {
+    "en": "RGB split",
+    "zh-CN": "RGB分离",
+    "ja": "RGBずれ",
+    "ko": "RGB 분리",
+    "es": "Separación RGB"
+   },
+   "kind": "page",
+   "durationMs": 600,
+   "src": "rgb-split.html",
+   "place": "cut",
+   "about": "Bands go black and bars split into red, green and blue until the frame is torn over the cut, then snaps back. For glitchy cuts.",
+   "tags": [
+    "hud",
+    "shake",
+    "intense",
+    "tech",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/datamosh",
+   "cat": "transition",
+   "group": "glitch",
+   "name": {
+    "en": "Datamosh",
+    "zh-CN": "数据错乱",
+    "ja": "データモッシュ",
+    "ko": "데이터모시",
+    "es": "Datamosh"
+   },
+   "kind": "page",
+   "durationMs": 700,
+   "src": "datamosh.html",
+   "place": "cut",
+   "about": "The picture breaks into blocks of smeared, wrong colour that spread over the cut, then drop out block by block. For glitch-art cuts.",
+   "tags": [
+    "hud",
+    "split",
+    "intense",
+    "tech",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/vhs",
+   "cat": "transition",
+   "group": "glitch",
+   "name": {
+    "en": "VHS roll",
+    "zh-CN": "录像带跳动",
+    "ja": "VHSロール",
+    "ko": "VHS 롤",
+    "es": "Rollo VHS"
+   },
+   "kind": "page",
+   "durationMs": 900,
+   "src": "vhs.html",
+   "place": "cut",
+   "about": "A blue tape screen rolls down with a noisy bar and tracking lines, shows PLAY over the cut, rolls on. For retro VHS cuts.",
+   "tags": [
+    "retro",
+    "slide",
+    "nostalgic",
+    "vlog",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/scan-tear",
+   "cat": "transition",
+   "group": "glitch",
+   "name": {
+    "en": "Scan tear",
+    "zh-CN": "画面撕裂",
+    "ja": "スキャン断裂",
+    "ko": "스캔 찢김",
+    "es": "Desgarro"
+   },
+   "kind": "page",
+   "durationMs": 600,
+   "src": "scan-tear.html",
+   "place": "cut",
+   "about": "Thin bright tears open into black bands edged in cyan and magenta as a scan line races down, then close. For glitchy, tense digital cuts.",
+   "tags": [
+    "neon",
+    "hud",
+    "tense",
+    "tech",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/crt-off",
+   "cat": "transition",
+   "group": "glitch",
+   "name": {
+    "en": "TV switch-off",
+    "zh-CN": "电视关机",
+    "ja": "テレビオフ",
+    "ko": "TV 꺼짐",
+    "es": "Apagado de TV"
+   },
+   "kind": "page",
+   "durationMs": 800,
+   "src": "crt-off.html",
+   "place": "cut",
+   "about": "Picture collapses into a bright line, then a dot fading to black over the cut, like a TV switching off, then on. For retro cuts.",
+   "tags": [
+    "retro",
+    "zoom",
+    "nostalgic",
+    "tech",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/film-slip",
+   "cat": "transition",
+   "group": "film",
+   "name": {
+    "en": "Film slip",
+    "zh-CN": "胶片跳帧",
+    "ja": "フィルムスリップ",
+    "ko": "필름 미끄러짐",
+    "es": "Salto de película"
+   },
+   "kind": "page",
+   "durationMs": 700,
+   "src": "film-slip.html",
+   "place": "cut",
+   "about": "A strip of light-struck film frames with sprocket holes races down through the frame over the cut. For film-style cuts in documentaries and nostalgic edits.",
+   "tags": [
+    "film",
+    "retro",
+    "slide",
+    "nostalgic",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/projector",
+   "cat": "transition",
+   "group": "film",
+   "name": {
+    "en": "Projector flicker",
+    "zh-CN": "放映机闪烁",
+    "ja": "映写機フリッカー",
+    "ko": "영사기 깜빡임",
+    "es": "Parpadeo de proyector"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "projector.html",
+   "place": "cut",
+   "about": "An old projector flickers, dust and hairs flash, and the lamp flares to warm white over the cut, then flickers down. For vintage, nostalgic cuts.",
+   "tags": [
+    "film",
+    "retro",
+    "light",
+    "nostalgic",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/burn-through",
+   "cat": "transition",
+   "group": "film",
+   "name": {
+    "en": "Film burn-through",
+    "zh-CN": "胶片烧穿",
+    "ja": "フィルム焼け",
+    "ko": "필름 타들어감",
+    "es": "Película ardiendo"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "burn-through.html",
+   "place": "cut",
+   "about": "Film burns: holes with glowing orange rims merge into white over the cut, then holes burn through onto the next shot. For dramatic vintage cuts.",
+   "tags": [
+    "film",
+    "fire",
+    "retro",
+    "drama",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/cue-dot",
+   "cat": "transition",
+   "group": "film",
+   "name": {
+    "en": "Changeover cue",
+    "zh-CN": "换卷标记",
+    "ja": "チェンジマーク",
+    "ko": "체인지오버 큐",
+    "es": "Marca de cambio"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "cue-dot.html",
+   "place": "cut",
+   "about": "A cue dot flashes twice in the corner, then the frame flares to warm white over the cut and fades flickering. For old-cinema reel changes.",
+   "tags": [
+    "film",
+    "retro",
+    "light",
+    "nostalgic",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/leader",
+   "cat": "transition",
+   "group": "film",
+   "name": {
+    "en": "Film leader",
+    "zh-CN": "胶片倒数",
+    "ja": "フィルムリーダー",
+    "ko": "필름 리더",
+    "es": "Cuenta atrás"
+   },
+   "kind": "page",
+   "durationMs": 1200,
+   "src": "leader.html",
+   "place": "cut",
+   "about": "A film leader flickers in and counts down with a sweeping hand, 2 before the cut, 1 after, then a white flash. For old-cinema openings.",
+   "tags": [
+    "film",
+    "retro",
+    "countdown",
+    "intro",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/comic-bam",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Comic BAM",
+    "zh-CN": "漫画爆炸",
+    "ja": "コミック BAM",
+    "ko": "만화 BAM",
+    "es": "Cómic ¡BAM!"
+   },
+   "kind": "page",
+   "durationMs": 900,
+   "src": "comic-bam.html",
+   "place": "cut",
+   "about": "A red and yellow halftone comic burst explodes from the middle, BAM! slams in over the cut, then a burst-shaped hole opens. For loud cuts.",
+   "tags": [
+    "comic",
+    "shapes",
+    "zoom",
+    "comedy",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/speed-lines",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Speed lines",
+    "zh-CN": "速度线",
+    "ja": "集中線",
+    "ko": "집중선",
+    "es": "Líneas de velocidad"
+   },
+   "kind": "page",
+   "durationMs": 800,
+   "src": "speed-lines.html",
+   "place": "cut",
+   "about": "Comic focus lines rush in from the edges until the frame is all lines over the cut, then burst outward. For fast action cuts.",
+   "tags": [
+    "comic",
+    "zoom",
+    "intense",
+    "action",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/shock",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Shock flash",
+    "zh-CN": "冲击闪光",
+    "ja": "ショック",
+    "ko": "충격 플래시",
+    "es": "Impacto"
+   },
+   "kind": "page",
+   "durationMs": 600,
+   "src": "shock.html",
+   "place": "cut",
+   "about": "Shock waves ring out as the frame darkens, strobes black, white and red over the cut, and a ring blasts open. For sudden, tense cuts.",
+   "tags": [
+    "shake",
+    "light",
+    "tense",
+    "intense",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/swipe-blur",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Fast swipe",
+    "zh-CN": "动感滑屏",
+    "ja": "スワイプ",
+    "ko": "스와이프",
+    "es": "Deslizamiento"
+   },
+   "kind": "page",
+   "durationMs": 600,
+   "src": "swipe-blur.html",
+   "place": "cut",
+   "about": "A panel whips across from the right with motion streaks racing ahead, covers the cut, and whips off left. For fast swipe cuts in vlogs.",
+   "tags": [
+    "slide",
+    "blur",
+    "intense",
+    "vlog",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/page-turn",
+   "cat": "transition",
+   "group": "cover",
+   "name": {
+    "en": "Page turn",
+    "zh-CN": "翻页",
+    "ja": "ページめくり",
+    "ko": "페이지 넘김",
+    "es": "Pasar página"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "page-turn.html",
+   "place": "cut",
+   "about": "A page with curl and shadow is laid over the picture from the right, covers the cut, then turns away left. For storybook cuts.",
+   "tags": [
+    "slide",
+    "wipe",
+    "nostalgic",
+    "drama",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/smoke",
+   "cat": "transition",
+   "group": "nature",
+   "name": {
+    "en": "Smoke billow",
+    "zh-CN": "烟雾弥漫",
+    "ja": "煙",
+    "ko": "연기",
+    "es": "Humo"
+   },
+   "kind": "page",
+   "durationMs": 1200,
+   "src": "smoke.html",
+   "place": "cut",
+   "about": "Soft rolling smoke billows up from the bottom and sides to fill the frame, then clears in patches and drifts up. For moody, mysterious cuts.",
+   "tags": [
+    "weather-fx",
+    "fade",
+    "mysterious",
+    "dark",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/ink-drop",
+   "cat": "transition",
+   "group": "nature",
+   "name": {
+    "en": "Ink bloom",
+    "zh-CN": "水墨晕染",
+    "ja": "墨のにじみ",
+    "ko": "수묵 번짐",
+    "es": "Tinta difusa"
+   },
+   "kind": "page",
+   "durationMs": 1200,
+   "src": "ink-drop.html",
+   "place": "cut",
+   "about": "Ink drops land and bloom with soft, feathered edges until they merge over the cut, then wash out in pale blooms. For calm, artistic cuts.",
+   "tags": [
+    "ink",
+    "fade",
+    "calm",
+    "elegant",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/ripple",
+   "cat": "transition",
+   "group": "nature",
+   "name": {
+    "en": "Water ripple",
+    "zh-CN": "水波涟漪",
+    "ja": "波紋",
+    "ko": "물결",
+    "es": "Onda de agua"
+   },
+   "kind": "page",
+   "durationMs": 900,
+   "src": "ripple.html",
+   "place": "cut",
+   "about": "Ripples spread from the middle as if a drop fell into the picture, flashing white over the cut. For dreamy, memory or water cuts.",
+   "tags": [
+    "light",
+    "fade",
+    "dreamy",
+    "calm",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/clouds",
+   "cat": "transition",
+   "group": "nature",
+   "name": {
+    "en": "Through the clouds",
+    "zh-CN": "云层穿过",
+    "ja": "雲を抜ける",
+    "ko": "구름 통과",
+    "es": "Entre nubes"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "clouds.html",
+   "place": "cut",
+   "about": "Puffy clouds rush toward the viewer and past the edges, whiter until all is white over the cut, then thin out. For dreamy, uplifting changes.",
+   "tags": [
+    "weather-fx",
+    "zoom",
+    "fade",
+    "dreamy",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/sticker-pop",
+   "cat": "transition",
+   "group": "social",
+   "name": {
+    "en": "Sticker burst",
+    "zh-CN": "贴纸炸开",
+    "ja": "ステッカー",
+    "ko": "스티커 팡",
+    "es": "Pegatinas"
+   },
+   "kind": "page",
+   "durationMs": 900,
+   "src": "sticker-pop.html",
+   "place": "cut",
+   "about": "Stars, hearts, sparkles and dots burst from the middle on a disc of your colour filling the frame, then a hole opens. For cute cuts.",
+   "tags": [
+    "cute",
+    "shapes",
+    "zoom",
+    "happy",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/hearts",
+   "cat": "transition",
+   "group": "social",
+   "name": {
+    "en": "Heart swarm",
+    "zh-CN": "爱心飘满",
+    "ja": "ハートいっぱい",
+    "ko": "하트 가득",
+    "es": "Lluvia de corazones"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "hearts.html",
+   "place": "cut",
+   "about": "A swarm of bobbing hearts rises from the bottom, fills the frame over the cut, then floats up and away. For romantic or cute cuts.",
+   "tags": [
+    "cute",
+    "shapes",
+    "slide",
+    "romantic",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/confetti",
+   "cat": "transition",
+   "group": "social",
+   "name": {
+    "en": "Confetti curtain",
+    "zh-CN": "彩纸落幕",
+    "ja": "紙吹雪",
+    "ko": "꽃가루 커튼",
+    "es": "Telón de confeti"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "confetti.html",
+   "place": "cut",
+   "about": "A curtain of your colour drops behind tumbling confetti, covers the cut, then falls out of the bottom. For party, celebration and success cuts.",
+   "tags": [
+    "celebration",
+    "particles",
+    "slide",
+    "happy",
+    "transition"
+   ]
+  },
+  {
+   "id": "transitions/msg-flood",
+   "cat": "transition",
+   "group": "social",
+   "name": {
+    "en": "Message flood",
+    "zh-CN": "消息刷屏",
+    "ja": "メッセージ洪水",
+    "ko": "메시지 폭탄",
+    "es": "Lluvia de mensajes"
+   },
+   "kind": "page",
+   "durationMs": 1000,
+   "src": "msg-flood.html",
+   "place": "cut",
+   "about": "Chat bubbles pop up faster and faster, scrolling as they stack until they fill the frame over the cut, then pop away. For chat stories.",
+   "tags": [
+    "speech",
+    "bounce",
+    "ui",
+    "social",
+    "transition"
+   ]
+  }
+ ]
+}

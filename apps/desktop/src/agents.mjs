@@ -22,7 +22,8 @@
  * or its maker's app where they share it (Codex, DeepSeek Harness).
  *
  * The agent works the way it would in a terminal: in the project's folder, with the `openfilm` command on its PATH
- * (this app's copy, so its Studio is the one in the window) and a few lines saying where it is (INSTRUCTIONS).
+ * (this app's copy, so its Studio is the one in the window) and a few lines saying where it is and naming that command
+ * by its whole path (agentInstructions).
  *
  * Reads no Electron module, so `node --test` can use it.
  */
@@ -41,6 +42,7 @@ import { logSwitches } from './agent-logs.mjs';
 import { afterFirstReading, firstWindowsApps, refreshWindowsApps } from './windows-apps.mjs';
 import { mergeConfig, sessionSkills } from './agent-skills.mjs';
 import { nodeBinary } from './node-runtime.mjs';
+import { openfilmCommand } from './openfilm-command.mjs';
 import { outOfBalance } from './pi-config.mjs';
 import { AGENT_DEFINITIONS } from './agent-definitions.mjs';
 
@@ -128,37 +130,48 @@ export const HARNESS_AGENTS = Object.freeze(['byok']);
 export const isChatAgent = (id) => isAgentId(id) || HARNESS_AGENTS.includes(id);
 
 /** How the person points at things in Studio, and how the agent points back: told to every agent, the app's own too. */
-export const STUDIO_REFERENCES = `When the person mentions something in Studio, they may name a clip, a page or a moment (as seconds); find it in
-film.html and the project's files.
+export const STUDIO_REFERENCES = `The person may name a clip, a page or a moment (in seconds) of Studio: find it in film.html and the project's
+files.
 
-In your replies you can point at things in Studio for the person: [[clip:ID]] (a clip, by its id in film.html),
-[[t:SECONDS]] (a moment), [[range:START-END]] (a stretch, in seconds), [[track:N]] (a track, 0 is the first) and
-[[file:PATH]] (a file of the project). They show as links that open it in Studio.`;
+In your replies, [[clip:ID]] (by its id in film.html), [[t:SECONDS]], [[range:START-END]] (in seconds), [[track:N]]
+(0 is the first) and [[file:PATH]] (a file of the project) show as links that open it in Studio.`;
 
-/** What the agent is told about where it is, on top of its own instructions. */
-export const INSTRUCTIONS = `You are working inside OpenFilm, a desktop app for making videos. Beside this chat the person sees OpenFilm Studio,
+/**
+ * What the agent is told about where it is, on top of its own instructions. `command`: the app's `openfilm` by its
+ * whole path (openfilmCommand), named in place of the one on the PATH, which the agent's shell may not find first.
+ */
+export function agentInstructions(command = null) {
+  const run = command ?? 'openfilm';
+  const which = command
+    ? `That is this app's own \`openfilm\` command, on the Studio beside you: run it by
+that path every time, as its manual does, not as \`openfilm\` (your shell may find another one first) and not as
+\`npx openfilm\`, whatever a skill says.`
+    : `Use the \`openfilm\` command on your PATH (this app's own, on the Studio beside you), not
+\`npx openfilm\`, whatever a skill says.`;
+  return `You are working inside OpenFilm, a desktop app for making videos. Beside this chat the person sees OpenFilm Studio,
 the video editor, showing the project in your working directory; it updates live as you save files.
 
 The project is an OpenFilm film: pages with window.film, cut together by film.html. Before you change anything, run
-\`openfilm\` with no arguments and read the manual it prints; follow it. Use the \`openfilm\` command on your PATH (this
-app's own, on the Studio beside you), not \`npx openfilm\`, whatever a skill says. Studio is already open on this
-project: you never need \`openfilm open\` and never open Studio in a browser. Run \`openfilm look\` after each change
-to see what you made. Render the MP4 only when the person asks for it; they can also export from Studio. Reply in the
-language the person writes in.
+\`${run}\` with no arguments and read the manual it prints; follow it. ${which} Studio is already open on this
+project: you never need \`${run} open\` and never open Studio in a browser, and the person exports the film from it.
+Run \`${run} look\` after each change to see what you made. Reply in the language the person writes in.
 
 ${STUDIO_REFERENCES}`;
+}
+
+export const INSTRUCTIONS = agentInstructions();
 
 /**
  * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): who it is,
- * where it is and how it works with the person (agent-prompt.md: written for it, so not INSTRUCTIONS, which tell
- * another agent to go and read the manual), how the person points at Studio (STUDIO_REFERENCES), and the manual
- * `openfilm` prints, so it starts knowing it. Each thing is said once: what the manual says (`openfilm get`'s
- * services, rendering, the person's changes) and what Pi's tools say of themselves are not said again.
+ * where it is and how it talks with the person (agent-prompt.md: written for it, so not INSTRUCTIONS, which tell
+ * another agent to go and read the manual), and how the person points at Studio (STUDIO_REFERENCES). How a film is
+ * made is OpenFilm's skills' (openfilm/skills coreSkills), which Pi lists after it and the agent reads when a task
+ * needs one. `edit` false: the person turned OpenFilm's `edit` off, so the prompt does not send the agent to it.
  */
-export function ownAgentPrompt() {
-  const prompt = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
-  const manual = readFileSync(join(dirname(require.resolve('openfilm/package.json')), 'MANUAL.md'), 'utf8').replaceAll('npx openfilm', 'openfilm').trim();
-  return `${prompt}\n\n## Pointing at Studio\n\n${STUDIO_REFERENCES}\n\n<manual>\n${manual}\n</manual>`;
+export function ownAgentPrompt({ edit = true } = {}) {
+  const read = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
+  const prompt = edit ? read : read.replace(/: read `edit` before you make or change a film\./, '.');
+  return `${prompt}\n\n## Pointing at Studio\n\n${STUDIO_REFERENCES}`;
 }
 
 /**
@@ -182,6 +195,20 @@ export function codexDeveloperInstructions(toml) {
       : ({ n: '\n', t: '\t', r: '\r', '"': '"', '\\': '\\' })[c] ?? c));
   }
   return text.trim() || null;
+}
+
+/**
+ * What Codex's adapter starts Codex with on top of its config.toml (CODEX_CONFIG): the app's instructions after the
+ * person's own (`theirs`), and the PATH the session has (`path`), kept for each command. Codex runs a command after
+ * the person's shell profile is read again (its shell snapshot), whose PATH can put another `openfilm` before the
+ * app's; the PATH its config sets is kept. A dotted key leaves the rest of their shell_environment_policy as it is.
+ * Not on Windows, which has no such snapshot.
+ */
+export function codexSessionConfig(instructions, { theirs = null, path, platform = process.platform }) {
+  return {
+    developer_instructions: theirs ? `${theirs}\n\n${instructions}` : instructions,
+    ...(platform === 'win32' ? {} : { 'shell_environment_policy.set.PATH': path }),
+  };
 }
 
 /** Codex's config.toml: in CODEX_HOME when the person's shell sets it, else ~/.codex. */
@@ -1122,12 +1149,14 @@ export class AgentSession {
    *           onUpdate?: (update: any) => void, onPermission?: (params: any) => Promise<string | null>,
    *           onQuestion?: (ask: { message: string, toolCallId: string | null, questions: any[] }) => Promise<Record<string, { label?: string, text?: string }> | null>,
    *           onExit?: (info: { code: number | null, stderr: string }) => void,
-   *           onSend?: (sent: { prompt: any[], _meta?: any }) => void, stallMs?: number }} opts
+   *           onSend?: (sent: { prompt: any[], _meta?: any }) => void, stallMs?: number, answerOnly?: boolean }} opts
    * `onSend` hears each message as it goes to the agent, whole (the app's words before the first one's, for an agent
    * told them there); `opened`, once started, says what it was started and opened with.
    * `skills`: the session has its maker's skills and MCP servers, OpenFilm's skills, and of the person's own only those
    * let in (`allowed`, `mcpAllowed`), each agent told by its own switch (agent-skills.mjs); `opened.skills` says how.
    * `stallMs`: how long the agent may wait on its model with nothing coming (MODEL_STALL_MS) before the turn is stopped.
+ * `answerOnly`: it may only answer (Studio's own questions): every permission it asks is refused, even what the app
+ * lets every agent do.
    * `logDir` (Developer mode): an agent whose own record lacks what its model got is started with its own logging
    * switch, writing under this folder (agent-logs.mjs); `opened.log` says where.
    */
@@ -1199,7 +1228,7 @@ export class AgentSession {
     }
     const node = nodeRuntime();
     const path = [this.opts.binDir, shell.PATH, this.opts.fallbackDir].filter(Boolean).join(PATH_SEP);
-    const instructions = INSTRUCTIONS;
+    const instructions = agentInstructions(this.opts.binDir ? openfilmCommand(this.opts.binDir) : null);
     /* the app's own agent: what Pi runs with (its whole system prompt is ours), and the web search of `openfilm get`
        (OPENFILM_GET_WEB lists it) */
     const own = !harness ? {} : {
@@ -1209,7 +1238,7 @@ export class AgentSession {
     /* its skills and MCP servers: its maker's, OpenFilm's skills, and the person's own only those let in (agent-skills.mjs) */
     const skills = this.opts.skills
       ? await sessionSkills(this.opts.agent, { cwd: this.opts.cwd, env: shell, ...this.opts.skills }).catch(() => null) : null;
-    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt(), skills: skills?.piSkills ?? null });
+    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt({ edit: skills?.piSkills?.names.includes('edit') ?? true }), skills: skills?.piSkills ?? null });
     /* Developer mode: the agent's own logging switch, so the turn log has what its model got; none when the person
        set its telemetry themselves (agent-logs.mjs) */
     this.logging = this.opts.logDir && cli && !this.spec.adapter
@@ -1218,7 +1247,9 @@ export class AgentSession {
     const native = cli && !this.spec.adapter ? starting(cli.path, [...this.spec.args, ...(this.logging?.args ?? []), ...(skills?.args ?? [])]) : null;
     /* what a failure names: the agent's program and its own words, as the person would run it (not our logging or skills) */
     this.command = native ? [cli.path, ...this.spec.args] : null;
-    const extra = { ...agentDefaults(this.opts.agent, shell), ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...skills?.env, ...this.logging?.env };
+    /* who it is, as `openfilm canvas` marks what it puts on the board (OPENFILM_AGENT) */
+    const extra = { ...agentDefaults(this.opts.agent, shell), ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...skills?.env, ...this.logging?.env,
+      OPENFILM_AGENT: this.spec.label };
     /* OpenCode's inline configuration carries both its skills and, in Developer mode, its logging */
     if (skills?.env?.OPENCODE_CONFIG_CONTENT && this.logging?.env?.OPENCODE_CONFIG_CONTENT) {
       extra.OPENCODE_CONFIG_CONTENT = JSON.stringify(mergeConfig(JSON.parse(skills.env.OPENCODE_CONFIG_CONTENT), JSON.parse(this.logging.env.OPENCODE_CONFIG_CONTENT)));
@@ -1228,7 +1259,7 @@ export class AgentSession {
     if (this.spec.adapter === AGENTS.codex.adapter) {
       this.ownLogs = shell.CODEX_HOME || join(homedir(), '.codex');
       const theirs = codexDeveloperInstructions(codexConfigText(shell));
-      env.CODEX_CONFIG = JSON.stringify(mergeConfig({ developer_instructions: theirs ? `${theirs}\n\n${instructions}` : instructions }, skills?.codexConfig ?? {}));
+      env.CODEX_CONFIG = JSON.stringify(mergeConfig(codexSessionConfig(instructions, { theirs, path }), skills?.codexConfig ?? {}));
     }
     /* the others have no place for it: the session's first message carries it */
     this.instructions = harness || this.spec.systemPrompt ? null : instructions;
@@ -1245,7 +1276,8 @@ export class AgentSession {
     const stream = acp.ndJsonStream(Writable.toWeb(this.child.stdin), Readable.toWeb(this.child.stdout));
     this.conn = acp.client({ name: 'openfilm-desktop' })
       .onRequest(acp.methods.client.session.requestPermission, async (ctx) => {
-        const optionId = (this.spec.approve ? allowOption(ctx.params) : null)
+        /* a session that may only answer is never given a permission, not even what every agent is let do */
+        const optionId = (this.spec.approve && !this.opts.answerOnly ? allowOption(ctx.params) : null)
           ?? (this.opts.onPermission ? await this.opts.onPermission(ctx.params) : null);
         return optionId ? { outcome: { outcome: 'selected', optionId } } : { outcome: { outcome: 'cancelled' } };
       })

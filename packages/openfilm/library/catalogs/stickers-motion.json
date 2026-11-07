@@ -1,0 +1,1230 @@
+{
+ "version": 1,
+ "groups": {
+  "sticker": [
+   {
+    "id": "arrows",
+    "name": {
+     "en": "Arrows",
+     "zh-CN": "指示",
+     "ja": "矢印",
+     "ko": "화살표",
+     "es": "Flechas"
+    }
+   },
+   {
+    "id": "marks",
+    "name": {
+     "en": "Marks",
+     "zh-CN": "圈画",
+     "ja": "手描き",
+     "ko": "손그림",
+     "es": "Trazos"
+    }
+   },
+   {
+    "id": "emphasis",
+    "name": {
+     "en": "Emphasis",
+     "zh-CN": "强调",
+     "ja": "強調",
+     "ko": "강조",
+     "es": "Énfasis"
+    }
+   },
+   {
+    "id": "social",
+    "name": {
+     "en": "Social",
+     "zh-CN": "互动",
+     "ja": "ソーシャル",
+     "ko": "소셜",
+     "es": "Social"
+    }
+   },
+   {
+    "id": "badges",
+    "name": {
+     "en": "Badges",
+     "zh-CN": "标签",
+     "ja": "ラベル",
+     "ko": "배지",
+     "es": "Etiquetas"
+    }
+   },
+   {
+    "id": "deco",
+    "name": {
+     "en": "Decor",
+     "zh-CN": "装饰",
+     "ja": "デコ",
+     "ko": "꾸미기",
+     "es": "Adornos"
+    }
+   }
+  ]
+ },
+ "items": [
+  {
+   "id": "stickers/arrow-curve",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Curved arrow",
+    "zh-CN": "手绘弯箭头",
+    "ja": "手描きカーブ矢印",
+    "ko": "손그림 곡선 화살표",
+    "es": "Flecha curva"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "arrow-curve.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.32,
+   "about": "A hand-drawn curved arrow draws its line, then its head, and keeps nudging toward its target. For pointing out something in tutorials and vlogs.",
+   "tags": [
+    "arrow",
+    "handdrawn",
+    "explainer",
+    "vlog"
+   ]
+  },
+  {
+   "id": "stickers/arrow-loop",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Loop arrow",
+    "zh-CN": "绕圈箭头",
+    "ja": "ループ矢印",
+    "ko": "루프 화살표",
+    "es": "Flecha con bucle"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "arrow-loop.html",
+   "w": 500,
+   "h": 300,
+   "fit": 0.28,
+   "about": "A playful hand-drawn arrow loops once on its way from tail to head, then keeps nudging. For fun pointing in vlogs and tutorials.",
+   "tags": [
+    "arrow",
+    "handdrawn",
+    "playful",
+    "explainer",
+    "vlog"
+   ]
+  },
+  {
+   "id": "stickers/chevrons",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Chevrons",
+    "zh-CN": "箭头指引",
+    "ja": "シェブロン",
+    "ko": "방향 표시",
+    "es": "Chevrones"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "chevrons.html",
+   "w": 400,
+   "h": 200,
+   "fit": 0.2,
+   "about": "Three chevrons pop in one after another and light up in turn, leading the eye right. For directing attention and next steps.",
+   "tags": [
+    "arrow",
+    "slide",
+    "ui",
+    "social",
+    "explainer"
+   ]
+  },
+  {
+   "id": "stickers/cursor-click",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Cursor click",
+    "zh-CN": "鼠标点击",
+    "ja": "クリック",
+    "ko": "마우스 클릭",
+    "es": "Clic del cursor"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "cursor-click.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.3,
+   "about": "A pointer glides in and clicks again and again, each click a ripple and a few sparks. For app demos, tutorials and call-to-click moments.",
+   "tags": [
+    "arrow",
+    "ui",
+    "tech",
+    "explainer",
+    "social"
+   ]
+  },
+  {
+   "id": "stickers/swipe-up",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Swipe up",
+    "zh-CN": "上滑提示",
+    "ja": "上にスワイプ",
+    "ko": "위로 스와이프",
+    "es": "Desliza arriba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "swipe-up.html",
+   "w": 300,
+   "h": 400,
+   "fit": 0.36,
+   "about": "Three chevrons rise and light up from the bottom over a word, as a swipe-up hint. For social videos and link prompts.",
+   "tags": [
+    "arrow",
+    "slide",
+    "ui",
+    "social"
+   ]
+  },
+  {
+   "id": "stickers/look-here",
+   "cat": "sticker",
+   "group": "arrows",
+   "name": {
+    "en": "Look here",
+    "zh-CN": "看这里",
+    "ja": "ここを見て",
+    "ko": "여기 보세요",
+    "es": "Mira aquí"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "look-here.html",
+   "w": 600,
+   "h": 240,
+   "fit": 0.2,
+   "about": "A bold arrow and label shoot in from the right; the arrow keeps jabbing at the spot with burst strokes. For pointing at a detail.",
+   "tags": [
+    "arrow",
+    "bounce",
+    "intense",
+    "explainer",
+    "social"
+   ]
+  },
+  {
+   "id": "stickers/scribble-circle",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Circle it",
+    "zh-CN": "圈出重点",
+    "ja": "丸で囲む",
+    "ko": "동그라미 강조",
+    "es": "Rodear"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "scribble-circle.html",
+   "w": 600,
+   "h": 360,
+   "fit": 0.4,
+   "about": "A loop is drawn round something by hand, a little more than once, its line alive like a pen line. For circling a detail.",
+   "tags": [
+    "arrow",
+    "handdrawn",
+    "explainer",
+    "vlog"
+   ]
+  },
+  {
+   "id": "stickers/double-underline",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Double underline",
+    "zh-CN": "双下划线",
+    "ja": "二重下線",
+    "ko": "이중 밑줄",
+    "es": "Doble subrayado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "double-underline.html",
+   "w": 600,
+   "h": 160,
+   "fit": 0.16,
+   "about": "Two quick hand-drawn swooshes under a word, the second shorter. For emphasizing a word or key point in titles and explainers.",
+   "tags": [
+    "handdrawn",
+    "arrow",
+    "title",
+    "explainer"
+   ]
+  },
+  {
+   "id": "stickers/highlight",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Highlighter",
+    "zh-CN": "荧光笔",
+    "ja": "マーカー",
+    "ko": "형광펜",
+    "es": "Marcador"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "highlight.html",
+   "w": 600,
+   "h": 160,
+   "fit": 0.16,
+   "about": "A highlighter sweeps across a line in two passes of see-through ink with flat ends. For marking key text in explainers, lessons and notes.",
+   "tags": [
+    "handdrawn",
+    "arrow",
+    "explainer",
+    "subtitle"
+   ]
+  },
+  {
+   "id": "stickers/sketch-box",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Sketch box",
+    "zh-CN": "手绘方框",
+    "ja": "手描き枠",
+    "ko": "손그림 박스",
+    "es": "Recuadro a mano"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "sketch-box.html",
+   "w": 600,
+   "h": 360,
+   "fit": 0.4,
+   "about": "A box is drawn round something by hand, four quick strokes whose corners cross. For boxing a detail in tutorials and reviews.",
+   "tags": [
+    "handdrawn",
+    "frame",
+    "arrow",
+    "explainer"
+   ]
+  },
+  {
+   "id": "stickers/tick-list",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Checklist",
+    "zh-CN": "打勾清单",
+    "ja": "チェックリスト",
+    "ko": "체크리스트",
+    "es": "Lista de tareas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "tick-list.html",
+   "w": 500,
+   "h": 360,
+   "fit": 0.42,
+   "about": "Three boxes pop in one by one and are ticked, each with its words. For checklists, feature lists and steps in explainers.",
+   "tags": [
+    "ui",
+    "explainer",
+    "bounce",
+    "tech",
+    "corporate"
+   ]
+  },
+  {
+   "id": "stickers/strike",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Cross out",
+    "zh-CN": "划掉",
+    "ja": "取り消し線",
+    "ko": "취소선",
+    "es": "Tachar"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "strike.html",
+   "w": 600,
+   "h": 160,
+   "fit": 0.16,
+   "about": "Two hasty hand-drawn strokes cross out a word. For corrections, jokes, before-and-after and wrong-answer moments.",
+   "tags": [
+    "handdrawn",
+    "arrow",
+    "comedy",
+    "explainer",
+    "playful"
+   ]
+  },
+  {
+   "id": "stickers/wavy-underline",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Wavy underline",
+    "zh-CN": "波浪线",
+    "ja": "波線",
+    "ko": "물결 밑줄",
+    "es": "Subrayado ondulado"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "wavy-underline.html",
+   "w": 600,
+   "h": 120,
+   "fit": 0.13,
+   "about": "A wavy line runs out under a word and keeps rippling along. For emphasizing words in playful titles and captions.",
+   "tags": [
+    "handdrawn",
+    "arrow",
+    "playful",
+    "title",
+    "subtitle"
+   ]
+  },
+  {
+   "id": "stickers/focus-corners",
+   "cat": "sticker",
+   "group": "marks",
+   "name": {
+    "en": "Focus frame",
+    "zh-CN": "对焦框",
+    "ja": "フォーカス枠",
+    "ko": "포커스 프레임",
+    "es": "Marco de enfoque"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "focus-corners.html",
+   "w": 600,
+   "h": 360,
+   "fit": 0.42,
+   "about": "Four corners snap in round something as a camera finds focus, then breathe in and out. For highlighting a subject, face or UI detail.",
+   "tags": [
+    "frame",
+    "hud",
+    "focused",
+    "tech",
+    "explainer"
+   ]
+  },
+  {
+   "id": "stickers/comic-burst",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Comic burst",
+    "zh-CN": "爆炸框",
+    "ja": "コミック吹き出し",
+    "ko": "만화 폭발",
+    "es": "Explosión cómic"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "comic-burst.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.36,
+   "about": "A comic-book burst bursts out with a word in it and keeps jittering as if shouting. For loud reactions, emphasis and funny moments.",
+   "tags": [
+    "comic",
+    "speech",
+    "shake",
+    "comedy",
+    "playful"
+   ]
+  },
+  {
+   "id": "stickers/speed-ring",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Speed ring",
+    "zh-CN": "速度线",
+    "ja": "スピード線",
+    "ko": "스피드 라인",
+    "es": "Líneas de velocidad"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "speed-ring.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.45,
+   "about": "A ring of speed lines rushes toward the middle and keeps flickering, as a comic shows a sudden moment. For surprise, focus and action emphasis.",
+   "tags": [
+    "comic",
+    "zoom",
+    "intense",
+    "action",
+    "comedy"
+   ]
+  },
+  {
+   "id": "stickers/sparkle-cluster",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Sparkles",
+    "zh-CN": "闪闪发光",
+    "ja": "キラキラ",
+    "ko": "반짝반짝",
+    "es": "Destellos"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "sparkle-cluster.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.32,
+   "about": "A cluster of glints spins in one after another, then each twinkles in its own time. For adding shine to products, food and glamorous moments.",
+   "tags": [
+    "particles",
+    "light",
+    "spin",
+    "wonder",
+    "fashion"
+   ]
+  },
+  {
+   "id": "stickers/exclaim",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Exclamation",
+    "zh-CN": "感叹号",
+    "ja": "びっくりマーク",
+    "ko": "느낌표",
+    "es": "Exclamación"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "exclaim.html",
+   "w": 300,
+   "h": 400,
+   "fit": 0.34,
+   "about": "An exclamation mark drops in, squashes as it lands and keeps hopping, with surprise strokes beside it. For surprise, alerts and emphasis.",
+   "tags": [
+    "comic",
+    "bounce",
+    "playful",
+    "comedy",
+    "ui"
+   ]
+  },
+  {
+   "id": "stickers/question",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Question mark",
+    "zh-CN": "问号",
+    "ja": "はてな",
+    "ko": "물음표",
+    "es": "Interrogación"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "question.html",
+   "w": 300,
+   "h": 400,
+   "fit": 0.34,
+   "about": "A big question mark pops in tilting, two small ones follow, and they keep wondering side to side. For confusion, curiosity and quiz moments.",
+   "tags": [
+    "comic",
+    "bounce",
+    "playful",
+    "mysterious",
+    "comedy"
+   ]
+  },
+  {
+   "id": "stickers/shine",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Shine",
+    "zh-CN": "闪光",
+    "ja": "きらめき",
+    "ko": "빛반사",
+    "es": "Brillo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "shine.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.32,
+   "about": "A glint of light flashes with long flares and a ring, repeating every second and a half. For highlighting a product or jewelry.",
+   "tags": [
+    "light",
+    "particles",
+    "fashion",
+    "elegant"
+   ]
+  },
+  {
+   "id": "stickers/surprise-marks",
+   "cat": "sticker",
+   "group": "emphasis",
+   "name": {
+    "en": "Surprise marks",
+    "zh-CN": "惊讶符号",
+    "ja": "びっくり線",
+    "ko": "놀람 표시",
+    "es": "Marcas de sorpresa"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "surprise-marks.html",
+   "w": 300,
+   "h": 300,
+   "fit": 0.26,
+   "about": "Three tapered strokes spring out from a corner, as a comic shows a start of surprise, and keep twitching. For surprise reactions.",
+   "tags": [
+    "comic",
+    "shake",
+    "comedy",
+    "playful"
+   ]
+  },
+  {
+   "id": "stickers/like",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Like",
+    "zh-CN": "点赞",
+    "ja": "いいね",
+    "ko": "좋아요",
+    "es": "Me gusta"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "like.html",
+   "w": 500,
+   "h": 240,
+   "fit": 0.2,
+   "about": "A pill pops in, its heart fills with a burst and a +1 floats up, then the heart beats beside the count. For like prompts.",
+   "tags": [
+    "ui",
+    "bounce",
+    "social",
+    "vlog",
+    "happy"
+   ]
+  },
+  {
+   "id": "stickers/subscribe",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Subscribe",
+    "zh-CN": "订阅按钮",
+    "ja": "登録ボタン",
+    "ko": "구독 버튼",
+    "es": "Suscribirse"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "subscribe.html",
+   "w": 600,
+   "h": 200,
+   "fit": 0.18,
+   "about": "A subscribe button pops in, a pointer clicks it, and it turns into subscribed with a ringing bell. For YouTube-style calls to subscribe.",
+   "tags": [
+    "ui",
+    "arrow",
+    "social",
+    "vlog",
+    "bounce"
+   ]
+  },
+  {
+   "id": "stickers/follow",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Follow",
+    "zh-CN": "关注按钮",
+    "ja": "フォロー",
+    "ko": "팔로우",
+    "es": "Seguir"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "follow.html",
+   "w": 460,
+   "h": 180,
+   "fit": 0.17,
+   "about": "A follow button pops in, is tapped with a ripple, and its plus turns into a tick as it becomes following. For follow prompts.",
+   "tags": [
+    "ui",
+    "bounce",
+    "social",
+    "vlog"
+   ]
+  },
+  {
+   "id": "stickers/share",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Share",
+    "zh-CN": "分享",
+    "ja": "シェア",
+    "ko": "공유",
+    "es": "Compartir"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "share.html",
+   "w": 300,
+   "h": 300,
+   "fit": 0.26,
+   "about": "A round share button pops in and its curved arrow keeps swinging forward, trailing quick strokes. For share call-to-actions in social videos.",
+   "tags": [
+    "ui",
+    "arrow",
+    "bounce",
+    "social",
+    "vlog"
+   ]
+  },
+  {
+   "id": "stickers/comment",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Typing",
+    "zh-CN": "评论输入中",
+    "ja": "入力中",
+    "ko": "입력 중",
+    "es": "Escribiendo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "comment.html",
+   "w": 400,
+   "h": 320,
+   "fit": 0.28,
+   "about": "A speech bubble pops out of its tail with three dots bouncing as someone types. For chat, comment or message-incoming moments.",
+   "tags": [
+    "speech",
+    "ui",
+    "bounce",
+    "social",
+    "comedy"
+   ]
+  },
+  {
+   "id": "stickers/bell",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Notification bell",
+    "zh-CN": "通知铃铛",
+    "ja": "通知ベル",
+    "ko": "알림 벨",
+    "es": "Campana"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "bell.html",
+   "w": 360,
+   "h": 360,
+   "fit": 0.3,
+   "about": "A bell pops in and keeps ringing, swinging on its top with waves of sound and a numbered badge. For notification and subscribe reminders.",
+   "tags": [
+    "ui",
+    "bounce",
+    "shake",
+    "social",
+    "news"
+   ]
+  },
+  {
+   "id": "stickers/thumbs-up",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Thumbs up",
+    "zh-CN": "大拇指",
+    "ja": "グッド",
+    "ko": "엄지척",
+    "es": "Pulgar arriba"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "thumbs-up.html",
+   "w": 360,
+   "h": 360,
+   "fit": 0.3,
+   "about": "A round badge pops in and a thumb springs up with a burst of strokes, then keeps pumping. For approval, likes and success moments.",
+   "tags": [
+    "cute",
+    "bounce",
+    "happy",
+    "success",
+    "social"
+   ]
+  },
+  {
+   "id": "stickers/rec",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "REC",
+    "zh-CN": "录制中",
+    "ja": "録画中",
+    "ko": "녹화 중",
+    "es": "Grabando"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "rec.html",
+   "w": 440,
+   "h": 140,
+   "fit": 0.12,
+   "about": "A blinking red dot, REC and a running timecode counted from t, as on a camera. For camera-view, behind-the-scenes and found-footage scenes.",
+   "tags": [
+    "hud",
+    "retro",
+    "vlog",
+    "documentary",
+    "news"
+   ]
+  },
+  {
+   "id": "stickers/live",
+   "cat": "sticker",
+   "group": "social",
+   "name": {
+    "en": "Live",
+    "zh-CN": "直播中",
+    "ja": "ライブ中",
+    "ko": "라이브",
+    "es": "En directo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "live.html",
+   "w": 400,
+   "h": 140,
+   "fit": 0.12,
+   "about": "A red LIVE label with a pulsing dot pops in and a viewer count slides out beside it. For live-stream and broadcast looks.",
+   "tags": [
+    "ui",
+    "hud",
+    "slide",
+    "news",
+    "social"
+   ]
+  },
+  {
+   "id": "stickers/new-tag",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "NEW",
+    "zh-CN": "新品标签",
+    "ja": "NEWラベル",
+    "ko": "NEW 태그",
+    "es": "Nuevo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "new-tag.html",
+   "w": 360,
+   "h": 200,
+   "fit": 0.2,
+   "about": "A NEW label pops in tilted, a glint twinkling on its corner and a shine sweeping across now and then. For announcing new products.",
+   "tags": [
+    "ui",
+    "light",
+    "bounce",
+    "trailer",
+    "social"
+   ]
+  },
+  {
+   "id": "stickers/hot",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "HOT",
+    "zh-CN": "火爆",
+    "ja": "人気",
+    "ko": "HOT",
+    "es": "Popular"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "hot.html",
+   "w": 360,
+   "h": 180,
+   "fit": 0.18,
+   "about": "A HOT label with a flame slides in; the flame keeps flickering and the label glows. For trending, hot-deal and bestseller callouts.",
+   "tags": [
+    "fire",
+    "ui",
+    "warm-tone",
+    "intense",
+    "social"
+   ]
+  },
+  {
+   "id": "stickers/sale-ribbon",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "SALE ribbon",
+    "zh-CN": "促销丝带",
+    "ja": "セールリボン",
+    "ko": "세일 리본",
+    "es": "Cinta de rebajas"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "sale-ribbon.html",
+   "w": 560,
+   "h": 220,
+   "fit": 0.2,
+   "about": "A ribbon banner unfolds from its middle with SALE on it, tails tucked behind, a shine passing over now and then. For sales ads.",
+   "tags": [
+    "ui",
+    "light",
+    "slide",
+    "corporate",
+    "trailer"
+   ]
+  },
+  {
+   "id": "stickers/discount",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Discount",
+    "zh-CN": "折扣",
+    "ja": "割引",
+    "ko": "할인",
+    "es": "Descuento"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "discount.html",
+   "w": 340,
+   "h": 340,
+   "fit": 0.3,
+   "about": "A starburst price badge spins in with a discount on it, its burst slowly turning and the badge pulsing. For sale and promo ads.",
+   "tags": [
+    "shapes",
+    "spin",
+    "bounce",
+    "corporate",
+    "social"
+   ]
+  },
+  {
+   "id": "stickers/stamp",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Stamp",
+    "zh-CN": "印章",
+    "ja": "スタンプ",
+    "ko": "도장",
+    "es": "Sello"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "stamp.html",
+   "w": 520,
+   "h": 240,
+   "fit": 0.22,
+   "about": "A rubber stamp slams down at a slant, ink rough and uneven, with a shake as it lands. For approved, rejected, paid or official-look callouts.",
+   "tags": [
+    "ui",
+    "shake",
+    "intense",
+    "corporate",
+    "drama"
+   ]
+  },
+  {
+   "id": "stickers/price-tag",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Price tag",
+    "zh-CN": "价格吊牌",
+    "ja": "値札",
+    "ko": "가격표",
+    "es": "Etiqueta de precio"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "price-tag.html",
+   "w": 300,
+   "h": 400,
+   "fit": 0.36,
+   "about": "A price tag drops in on its string, swings to rest and keeps gently swaying. For showing prices on products and shop videos.",
+   "tags": [
+    "ui",
+    "bounce",
+    "soft",
+    "fashion",
+    "corporate"
+   ]
+  },
+  {
+   "id": "stickers/tips",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Tips",
+    "zh-CN": "小贴士",
+    "ja": "ヒント",
+    "ko": "팁",
+    "es": "Consejo"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "tips.html",
+   "w": 400,
+   "h": 160,
+   "fit": 0.16,
+   "about": "A round light bulb pops in, a label slides out of it, and the bulb keeps glowing with rays. For tips, ideas and how-to callouts.",
+   "tags": [
+    "ui",
+    "light",
+    "slide",
+    "explainer",
+    "lowerthird"
+   ]
+  },
+  {
+   "id": "stickers/step",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Step number",
+    "zh-CN": "步骤序号",
+    "ja": "ステップ番号",
+    "ko": "단계 번호",
+    "es": "Número de paso"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "step.html",
+   "w": 300,
+   "h": 300,
+   "fit": 0.26,
+   "about": "A step number in a round badge pops in, a ring draws round it and a light runs along it. For numbered steps in tutorials.",
+   "tags": [
+    "ui",
+    "shapes",
+    "explainer",
+    "cooking",
+    "countdown"
+   ]
+  },
+  {
+   "id": "stickers/rating",
+   "cat": "sticker",
+   "group": "badges",
+   "name": {
+    "en": "Star rating",
+    "zh-CN": "评分星级",
+    "ja": "星評価",
+    "ko": "별점",
+    "es": "Valoración"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "rating.html",
+   "w": 600,
+   "h": 160,
+   "fit": 0.15,
+   "about": "Five stars fill in one after another, each with a pop and a glint, then shimmer in turn. For reviews and ratings.",
+   "tags": [
+    "ui",
+    "particles",
+    "bounce",
+    "social",
+    "fashion"
+   ]
+  },
+  {
+   "id": "stickers/confetti",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Confetti",
+    "zh-CN": "彩带礼花",
+    "ja": "紙吹雪",
+    "ko": "꽃가루",
+    "es": "Confeti"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "confetti.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.5,
+   "about": "A popper bursts confetti strips and dots up from below; they spin and flutter down, and burst again every couple of seconds. For celebrations.",
+   "tags": [
+    "celebration",
+    "particles",
+    "happy",
+    "holiday",
+    "success"
+   ]
+  },
+  {
+   "id": "stickers/floating-hearts",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Floating hearts",
+    "zh-CN": "飘爱心",
+    "ja": "浮かぶハート",
+    "ko": "떠오르는 하트",
+    "es": "Corazones flotantes"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "floating-hearts.html",
+   "w": 300,
+   "h": 500,
+   "fit": 0.5,
+   "about": "Hearts pop up from below one after another and float away, swaying and fading in shades of one colour. For love, thanks and cute reactions.",
+   "tags": [
+    "cute",
+    "particles",
+    "romantic",
+    "happy",
+    "soft"
+   ]
+  },
+  {
+   "id": "stickers/twinkle-stars",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Twinkling stars",
+    "zh-CN": "星光闪烁",
+    "ja": "きらめく星",
+    "ko": "반짝이는 별",
+    "es": "Estrellas brillantes"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "twinkle-stars.html",
+   "w": 500,
+   "h": 300,
+   "fit": 0.4,
+   "about": "A scatter of little stars and glints pops in here and there and keeps twinkling, each in its own time. For magical or festive decoration.",
+   "tags": [
+    "particles",
+    "light",
+    "dreamy",
+    "wonder",
+    "night"
+   ]
+  },
+  {
+   "id": "stickers/firework",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Fireworks",
+    "zh-CN": "烟花",
+    "ja": "花火",
+    "ko": "불꽃놀이",
+    "es": "Fuegos artificiales"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "firework.html",
+   "w": 400,
+   "h": 400,
+   "fit": 0.5,
+   "about": "Rockets shoot up and burst into trails of sparks that fall and flicker out, three at a time, repeating. For celebrations, New Year and finales.",
+   "tags": [
+    "celebration",
+    "particles",
+    "light",
+    "holiday",
+    "night"
+   ]
+  },
+  {
+   "id": "stickers/ribbon",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Ribbon swirl",
+    "zh-CN": "丝带飘舞",
+    "ja": "リボン",
+    "ko": "리본",
+    "es": "Cinta"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "ribbon.html",
+   "w": 600,
+   "h": 300,
+   "fit": 0.32,
+   "about": "A satin ribbon swirls across in loops, drawn from end to end, then a gleam keeps running along it. For elegant, festive or gift-themed decoration.",
+   "tags": [
+    "shapes",
+    "light",
+    "elegant",
+    "celebration",
+    "soft"
+   ]
+  },
+  {
+   "id": "stickers/music-notes",
+   "cat": "sticker",
+   "group": "deco",
+   "name": {
+    "en": "Music notes",
+    "zh-CN": "音符飘动",
+    "ja": "音符",
+    "ko": "음표",
+    "es": "Notas musicales"
+   },
+   "kind": "page",
+   "durationMs": 3000,
+   "src": "music-notes.html",
+   "w": 300,
+   "h": 400,
+   "fit": 0.4,
+   "about": "Music notes pop up one after another and drift away, swaying and turning as they fade. For music, singing and happy, carefree moments.",
+   "tags": [
+    "particles",
+    "cute",
+    "happy",
+    "playful",
+    "soft"
+   ]
+  }
+ ]
+}

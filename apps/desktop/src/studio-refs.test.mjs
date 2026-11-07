@@ -148,3 +148,16 @@ test('an example, or a part of it: its pill names it and the part, the agent rea
   assert.ok(sameStudioThing(part, { ...part }) && !sameStudioThing(part, whole));
   assert.equal(pillCard(pill, (k) => k).title, 'refCard.title.example');
 });
+
+test('a voice of the library: its pill names it and its service, the agent reads how to speak in it', () => {
+  const voice = { kind: 'voice', provider: 'cartesia', service: 'Cartesia', id: 'db6b0ed5', name: 'Skylar', via: 'openfilm', models: ['cartesia/sonic-3.6'], language: 'en-US', description: 'Friendly guide' };
+  const away = { ...voice, id: 'Aanya', provider: 'inworld', service: 'Inworld', name: 'Aanya', via: null, models: [] };
+  const pill = refPill(undefined, voice);
+  assert.deepEqual([pill.id, pill.kind, pill.label, pill.detail], ['studio:voice:cartesia/db6b0ed5', 'voice', 'Skylar', 'Cartesia']);
+  const text = studioReferencesText([voice, away]);
+  assert.match(text, /\[1\] voice "Skylar" of Cartesia for voice-over, id `db6b0ed5` · speaks en-US · speak in it with `openfilm get tts --via openfilm --model cartesia\/sonic-3\.6 --voice db6b0ed5`/);
+  assert.match(text, /\[2\] voice "Aanya" of Inworld .* not connected: the person connects Inworld or OpenFilm in Studio's Settings › Services first/);
+  assert.ok(sameStudioThing(voice, { ...voice, via: null }));
+  assert.ok(!sameStudioThing(voice, away));
+  assert.equal(pillCard(pill, (k) => k).title, 'refCard.title.voice');
+});

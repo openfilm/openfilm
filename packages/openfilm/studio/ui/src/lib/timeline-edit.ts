@@ -12,12 +12,15 @@
  *   · with linkage, a clip on another track that rides on a main-track clip (ridesOn) keeps the moment of that clip's
  *     footage it starts at wherever the edit takes the footage, and goes with the clip when it is deleted; carried
  *     into another clip on its track, it goes to a free track nearby;
+ *   · a caption track's cues are clips of it (lib/caption-blocks): they move, trim, split, ripple and ride as any; a cue
+ *     goes only onto a caption track and nothing else does, and a cue put over another stays there (its file cuts the
+ *     other short) rather than opening a track;
  *   · a ripple (a ripple delete, a closed gap, an insert, a ripple trim) moves what follows on the tracks edited
  *     alone; other tracks follow only by linkage. `shortMs` says how much time could not be closed.
  *
  * Pure: the timeline draws a plan's `placed` while the hand is still on a clip, and sends its `ops` on release.
  */
-import type { Op, PropValue } from '../api.ts';
+import type { Clip, Op, PropEdit, PropValue } from '../api.ts';
 import type { TimelineTrack } from './timeline-layout';
 import { MIN_BLOCK_MS, newTrackSide } from './timeline-drag.ts';
 import { frameMs } from './timecode.ts';
@@ -49,6 +52,8 @@ export interface EditClip {
   vin?: number;
   /** Its `data-link`: clips sharing one move, trim, split and delete together. */
   link?: string;
+  /** A caption track's cue (lib/caption-blocks): it goes onto caption tracks only. */
+  cue?: boolean;
 }
 
 export interface EditTrack {
@@ -59,6 +64,8 @@ export interface EditTrack {
   locked?: boolean;
   /** What the timeline calls it by the clips on it; a sound taken off a video goes to an `audio` one. */
   role?: 'mg' | 'video' | 'audio';
+  /** A caption track: its clips are its cues, and only cues go onto it. */
+  captions?: boolean;
   clips: EditClip[];
 }
 
@@ -126,14 +133,15 @@ export function editModelOf(tracks: readonly TimelineTrack[], links?: ReadonlyMa
     if (row.docIndex == null) continue;
     let track = byIndex.get(row.docIndex);
     if (!track) {
-      track = { index: row.docIndex, role: row.role, clips: [], ...(row.locked ? { locked: true } : {}) };
+      track = { index: row.docIndex, role: row.role, clips: [], ...(row.locked ? { locked: true } : {}), ...(row.captions ? { captions: true } : {}) };
       byIndex.set(row.docIndex, track);
     }
     if (row.locked) track.locked = true;
     for (const b of row.blocks) {
-      if (!b.clipId || !b.loc) continue;
+      /* a cue is no clip of film.html (it has no place there) but is edited as one */
+      if (!b.clipId || (!b.loc && !b.cue)) continue;
       const speed = b.speed && b.speed > 0 ? b.speed : 1;
-      const still = Boolean(b.anchor?.still);
+      const still = Boolean(b.anchor?.still || b.cue);
       const inMs = still ? 0 : b.inMs ?? Math.round((b.anchor?.trimFrom ?? 0) * 1000);
       const srcEnd = inMs + (b.endMs - b.startMs) * speed;
       const sourceMs = still ? Infinity
@@ -144,6 +152,7 @@ export function editModelOf(tracks: readonly TimelineTrack[], links?: ReadonlyMa
         id: b.clipId, startMs: b.startMs, endMs: b.endMs, inMs, speed, sourceMs,
         ...(still ? { still: true } : {}),
         ...(link ? { link } : {}),
+        ...(b.cue ? { cue: true } : {}),
       });
     }
   }
@@ -490,7 +499,8 @@ function carry(d: Draft, rides: ReadonlyMap<string, Ride>, dropWithHost = false)
 function settle(d: Draft, moved: ReadonlySet<EditClip>): void {
   const main = mainTrackOf(d.tracks);
   for (const t of [...d.tracks]) {
-    if (t.index < 0 || t.locked || t.index === main) continue;
+    /* a cue carried over another stays: its file cuts the other short */
+    if (t.index < 0 || t.locked || t.index === main || t.captions) continue;
     const kept: EditClip[] = [];
     for (const c of [...t.clips].sort((a, b) => a.startMs - b.startMs)) {
       const hits = kept.filter((k) => overlap(k, c));
@@ -508,7 +518,7 @@ function settle(d: Draft, moved: ReadonlySet<EditClip>): void {
 function relocate(d: Draft, from: EditTrack, c: EditClip, main: number | null): void {
   const sound = (t: EditTrack) => t.role === 'audio';
   const free = d.tracks
-    .filter((t) => t !== from && t.index >= 0 && t.index !== main && !t.locked && sound(t) === sound(from))
+    .filter((t) => t !== from && t.index >= 0 && t.index !== main && !t.locked && !t.captions && sound(t) === sound(from))
     .filter((t) => !t.clips.some((x) => overlap(x, c)))
     .sort((a, b) => {
       const away = Math.abs(a.index - from.index) - Math.abs(b.index - from.index);
@@ -605,6 +615,36 @@ function planOf(d: Draft): EditPlan {
   if (joinEdits.length) ops.push({ op: 'props', edits: joinEdits });
   ops.push(...removes);
   return { ops, placed, shortMs: d.shortMs };
+}
+
+/**
+ * A stretch of the film taken out, everything after it closed up (the library's captions: the words of a caption cut,
+ * picture and sound with them): what lies in it goes, what crosses its edges is trimmed to them (a clip across the
+ * whole of it is cut in two), and every clip after it moves back by its length, on every track but a locked one.
+ */
+export function planCutRange(model: EditModel, range: { startMs: number; endMs: number }): EditPlan {
+  const d = draftOf(model);
+  const { startMs: a, endMs: b } = range;
+  const len = b - a;
+  if (!(len > TOUCH_MS)) return emptyPlan();
+  for (const t of d.tracks) {
+    if (t.locked) continue;
+    for (const c of [...t.clips]) {
+      if (c.endMs <= a + TOUCH_MS) continue;
+      if (c.startMs >= b - TOUCH_MS) { shiftClip(c, -len); continue; }
+      if (c.startMs >= a - TOUCH_MS && c.endMs <= b + TOUCH_MS) { t.clips.splice(t.clips.indexOf(c), 1); continue; }
+      if (c.startMs < a && c.endMs > b) {
+        const right = cutAt(d, t, c, b);
+        c.endMs = a;
+        if (right) shiftClip(right, -len);
+        continue;
+      }
+      if (c.startMs < a) { c.endMs = a; continue; }
+      setStart(c, b);
+      shiftClip(c, -len);
+    }
+  }
+  return planOf(d);
 }
 
 /* the draft's own steps, for edits planned elsewhere (lib/transitions) */
@@ -717,17 +757,18 @@ export function planCloseMainGaps(model: EditModel, sw: Switches): EditPlan {
 
 /**
  * Delete clips. Without `ripple` they leave a gap (a lift), but on the main track with the magnet, which closes up;
- * with it the time they took closes on each of their tracks (a ripple delete). With linkage what rides on a deleted
- * main-track clip goes with it, and what rides on the clips after it moves with them. Clips on locked tracks stay.
+ * with it the time they took closes on each of their tracks (a ripple delete). With linkage the titles and overlays
+ * riding on a deleted main-track clip go with it (a sound stays where it is: a voice or music is never lost to a cut),
+ * and what rides on the clips after it moves with them. Clips on locked tracks stay.
  */
 export function planRemove(model: EditModel, ids: readonly string[], opts: { ripple: boolean } & Partial<Switches>): EditPlan {
   const d = draftOf(model);
   const main = mainTrackOf(model);
   const rides = opts.linkage ? ridesOf(d, main, new Set(ids)) : new Map<string, Ride>();
-  /* what rides on a deleted main-track clip goes with it (it moves and is deleted with the main track) */
+  /* the pictures riding on a deleted main-track clip go with it (they move and are deleted with the main track) */
   const deleted = new Set(ids);
   for (const [id, ride] of rides) {
-    if (!deleted.has(ride.host)) continue;
+    if (!deleted.has(ride.host) || trackAt(d, d.before.get(id)!.track)?.role === 'audio') continue;
     deleted.add(id);
     rides.delete(id);
   }
@@ -843,6 +884,9 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
     const dest = destOf(id);
     if (trackAt(d, d.before.get(id)!.track)?.locked) return null;
     if (typeof dest === 'number' && (!trackAt(d, dest) || trackAt(d, dest)!.locked)) return null;
+    /* a cue onto a caption track, and nothing else: never to a new track */
+    const cue = Boolean(d.before.get(id)!.clip.cue);
+    if (typeof dest === 'number' ? Boolean(trackAt(d, dest)!.captions) !== cue : cue) return null;
   }
   const main = mainTrackOf(model);
   const magnet = Boolean(spec.magnet) && magnetOn(model, main, true);
@@ -918,7 +962,7 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
   if (spec.mode === 'place') {
     for (const [id, c] of lifted) {
       const dest = destOf(id);
-      if (typeof dest !== 'number' || inserted.has(id)) continue;
+      if (typeof dest !== 'number' || inserted.has(id) || c.cue) continue;
       if ((trackAt(d, dest)?.clips ?? []).some((x) => overlap(x, c))) taken.add(dest);
     }
   }
@@ -1166,4 +1210,48 @@ export function soundTrackFor(model: EditModel, range: { startMs: number; endMs:
   const sounds = model.filter((t) => t.role === 'audio');
   const last = Math.max(-1, ...model.map((t) => t.index));
   return { insert: sounds.length ? Math.max(...sounds.map((t) => t.index)) + 1 : last + 1 };
+}
+
+/**
+ * Videos' sounds taken apart from their pictures in one edit: each video silent and linked (`data-link`) to its own
+ * sound, the same file's sound alone at the same seconds and speed, on a sound track with room for it. The sounds
+ * placed earlier in the edit count, so two that overlap don't land on one track, and a track opened for one is there
+ * for the next. Videos not in `model` are left as they are.
+ */
+export function planDetachAudio(model: EditModel, videos: readonly Clip[]): Op[] {
+  let tracks: EditTrack[] = model.map((t) => ({ ...t, clips: [...t.clips] }));
+  const links = new Set<string>();
+  const edits: PropEdit[] = [];
+  const inserts: Op[] = [];
+  for (const video of videos) {
+    const from = tracks.find((t) => t.clips.some((c) => c.id === video.id));
+    const placed = from?.clips.find((c) => c.id === video.id);
+    if (!from || !placed) continue;
+    const link = video.attrs?.['data-link'] ?? freshLink(model, video.id, links);
+    links.add(link);
+    edits.push({ clip: video.id, prop: 'volume', value: 0 }, { clip: video.id, prop: 'link', value: link });
+    const track = soundTrackFor(tracks, placed, from.index);
+    inserts.push({
+      op: 'insert',
+      clip: {
+        src: video.src,
+        sound: true,
+        ...(video.at != null ? { at: video.at } : {}),
+        ...(video.time ? { time: video.time } : {}),
+        ...(video.speed != null ? { speed: video.speed } : {}),
+        ...(video.volume != null && video.volume !== 0 ? { volume: video.volume } : {}),
+        attrs: { 'data-link': link },
+      },
+      track,
+    });
+    /* the sound as the next one sees it: on its track, or on a track opened for it (those after it one further down) */
+    const sound: EditClip = { ...placed, id: `${video.id}~sound`, link };
+    if (typeof track === 'number') tracks.find((t) => t.index === track)!.clips.push(sound);
+    else {
+      tracks = tracks.map((t) => (t.index >= track.insert ? { ...t, index: t.index + 1 } : t));
+      tracks.push({ index: track.insert, role: 'audio', clips: [sound] });
+      tracks.sort((a, b) => a.index - b.index);
+    }
+  }
+  return edits.length ? [{ op: 'props', edits }, ...inserts] : [];
 }

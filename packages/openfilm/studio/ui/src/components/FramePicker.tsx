@@ -47,8 +47,8 @@ export function CustomFrame({ value, disabled, onPick, className = '', chip = fa
   const id = customFilmFrame(Number(w), Number(h));
   const apply = () => { if (id) onPick(id); };
   const field = chip
-    ? 'h-6 w-9 rounded-full bg-[var(--fill-tsp)] text-center text-[12px] font-medium tabular-nums text-[var(--text)] outline-none ring-[var(--text-faint)] focus:ring-1'
-    : 'h-6 w-12 rounded-[5px] border border-[var(--border)] bg-[var(--bg)] px-1.5 text-center text-[12px] tabular-nums text-[var(--text)] outline-none focus:border-[var(--accent)]';
+    ? 'h-6 w-9 rounded-full bg-[var(--bg-field)] text-center text-[12px] font-medium tabular-nums text-[var(--text)] outline-none ring-[var(--text-faint)] focus:ring-1'
+    : 'h-6 w-12 rounded-[5px] border border-[var(--border)] bg-[var(--bg-panel)] px-1.5 text-center text-[12px] tabular-nums text-[var(--text)] outline-none focus:border-[var(--accent)]';
   return (
     <div className={chip
       ? `flex items-center gap-1 rounded-lg border border-[var(--border)] py-[4px] pl-2.5 pr-[4px] ${className}`

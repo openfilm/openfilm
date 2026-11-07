@@ -1,0 +1,155 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Text</title>
+<!-- the fonts a person added to the project for its lines of words (Studio's font menu) -->
+<link rel="stylesheet" href="fonts/own.css">
+<style>
+/* the display fonts it comes with (SIL Open Font License: fonts/*-OFL.txt) */
+@font-face { font-family: 'Smiley Sans'; src: url(fonts/SmileySans.woff2) format('woff2'); font-display: block; }
+@font-face { font-family: 'ZCOOL KuaiLe'; src: url(fonts/ZCOOLKuaiLe.ttf) format('truetype'); font-display: block; }
+/*
+ * A line of words, all of it the clip's to change through CSS variables (its component properties): the words, the
+ * font, size and color; a word-art look (a fill, a stroke, shadows, a glow, a box behind); and how it comes in, moves
+ * while it shows, and goes out. A look or a motion from the library is only values of these variables.
+ */
+:root {
+  --font: 'Smiley Sans', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif;
+  /* of the clip's box: the words are as tall as this part of it, and never wider or taller than all of it */
+  --size: 62vh;
+  --weight: 800;
+  --color: #ffffff;
+  --fill: none;
+  --stroke: 0;
+  --stroke-color: #000000;
+  --shadow: none;
+  --glow: none;
+  --box: transparent;
+  --box-pad: 0;
+  --box-radius: 0;
+  --spacing: 0.02em;
+  /* lines break where the words do (a new line typed in); a line wider than the box is made smaller, never wrapped
+     (pre-wrap wraps it instead) */
+  --wrap: pre;
+  --italic: normal;
+  --align: center;
+  /* how it comes in, moves while shown, goes out: an animation's name (none: still) and how long. Each stays within
+     the room its box keeps around the words (Studio puts a line in hugged: a fifth of their size each side, and a
+     little of their width), so none is cut by the box. None at first: a line put in shows at once where it is put in
+     (and can be typed into there); a way in is picked for it */
+  --in: none;
+  --in-time: 0.5s;
+  --loop: none;
+  --loop-time: 1.6s;
+  --out: none;
+  --out-time: 0.4s;
+  /* when the clip ends, in the page's own time (Studio keeps it: its #t= end, its length unless it was split or trimmed
+     at its head): the way out ends there */
+  --clip-length: 3600s;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+/* the words in the middle of the box's height, and to its left, middle or right as they are aligned (in a box wider
+   than they are: one a side was pulled out on), with their room kept at that side */
+.stage {
+  position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; justify-items: unsafe var(--align);
+  padding: 0 calc(var(--size) * 0.23);
+}
+.box {
+  /* the words' size here, so the box's padding and corners (in em) are of the words, not of the page's 16px */
+  font-size: var(--size);
+  /* as wide as its words (a line is never wrapped for want of room: fit makes it smaller) */
+  text-align: var(--align); scale: var(--fit, 1); transform-origin: var(--align) center;
+  background: var(--box); padding: var(--box-pad); border-radius: var(--box-radius);
+}
+.t {
+  display: inline-block; white-space: var(--wrap);
+  font-family: var(--font); font-size: 1em; font-weight: var(--weight); font-style: var(--italic);
+  letter-spacing: var(--spacing); line-height: 1.15;
+  color: var(--color);
+  background: var(--fill); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-stroke: var(--stroke) var(--stroke-color); paint-order: stroke fill;
+  text-shadow: var(--shadow);
+  filter: var(--glow);
+  animation:
+    var(--in) var(--in-time) cubic-bezier(.2, .8, .2, 1) both,
+    var(--loop) var(--loop-time) ease-in-out var(--in-time) infinite,
+    var(--out) var(--out-time) cubic-bezier(.6, 0, .8, .2) calc(var(--clip-length) - var(--out-time)) forwards;
+}
+
+/* coming in */
+@keyframes fade { from { opacity: 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(0.2em); } }
+@keyframes drop { from { opacity: 0; transform: translateY(-0.2em); } }
+@keyframes pop { 0% { opacity: 0; transform: scale(0.4); } 70% { transform: scale(1.04); } 100% { transform: scale(1); } }
+@keyframes zoom { from { opacity: 0; transform: scale(0.8); filter: blur(6px); } }
+@keyframes blur { from { opacity: 0; filter: blur(14px); } }
+@keyframes slide-left { from { opacity: 0; transform: translateX(-0.2em); } }
+@keyframes slide-right { from { opacity: 0; transform: translateX(0.2em); } }
+@keyframes wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes stamp { 0% { opacity: 0; transform: scale(0.6) rotate(-3deg); } 60% { opacity: 1; transform: scale(1.04) rotate(0); } 100% { transform: scale(1); } }
+@keyframes spin-in { from { opacity: 0; transform: rotate(-6deg) scale(0.6); } }
+@keyframes flip-in { from { opacity: 0; transform: perspective(600px) rotateX(90deg); } }
+@keyframes bounce-in { 0% { opacity: 0; transform: translateY(-0.2em); } 55% { opacity: 1; transform: translateY(0.06em); } 75% { transform: translateY(-0.03em); } 100% { transform: translateY(0); } }
+
+/* while it shows */
+@keyframes float { 50% { transform: translateY(-0.12em); } }
+@keyframes pulse { 50% { transform: scale(1.04); } }
+@keyframes wiggle { 25% { transform: rotate(-2deg); } 75% { transform: rotate(2deg); } }
+@keyframes shake { 20% { transform: translateX(-0.04em); } 40% { transform: translateX(0.04em); } 60% { transform: translateX(-0.03em); } 80% { transform: translateX(0.03em); } }
+@keyframes breathe { 50% { opacity: 0.55; } }
+@keyframes swing { 50% { transform: rotate(2deg); } }
+@keyframes flicker { 0%, 100% { opacity: 1; } 8% { opacity: 0.4; } 10% { opacity: 1; } 52% { opacity: 0.7; } 54% { opacity: 1; } }
+
+/* going out */
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes sink { to { opacity: 0; transform: translateY(0.2em); } }
+@keyframes lift { to { opacity: 0; transform: translateY(-0.2em); } }
+@keyframes shrink { to { opacity: 0; transform: scale(0.4); } }
+@keyframes blur-out { to { opacity: 0; filter: blur(14px); } }
+@keyframes wipe-out { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 0 0 100%); } }
+@keyframes zoom-out { to { opacity: 0; transform: scale(0.8); filter: blur(6px); } }
+</style>
+</head>
+<body>
+<div class="stage"><div class="box"><span class="t">Your words here</span></div></div>
+<script>
+/*
+ * A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the
+ * host.
+ */
+/* tried from the library (its address says a look or a motion, `?vars=` its variables as JSON, `?words=` what it
+   says): shown with them */
+try {
+  const query = new URLSearchParams(location.search);
+  const tried = JSON.parse(query.get('vars') ?? 'null');
+  if (tried && typeof tried === 'object') for (const [k, v] of Object.entries(tried)) if (k.startsWith('--')) document.documentElement.style.setProperty(k, String(v));
+  if (query.has('words')) document.querySelector('.t').textContent = query.get('words');
+} catch { /* not tried: the clip's own */ }
+/* the words fitted to the clip's box: never wider or taller than it (a long line is made smaller, not cut) */
+const box = document.querySelector('.box');
+const stage = document.querySelector('.stage');
+const fit = () => {
+  box.style.setProperty('--fit', '1');
+  /* within the room the stage keeps at its sides; a box hugging its words (as Studio makes one) is left as it is */
+  const side = parseFloat(getComputedStyle(stage).paddingLeft) || 0;
+  const most = Math.min((innerWidth - 2 * side) / box.offsetWidth, (innerHeight * 0.98) / box.offsetHeight);
+  const k = most > 0.99 ? 1 : most;
+  box.style.setProperty('--fit', String(Math.round(k * 1000) / 1000));
+};
+/* fitted again whenever its variables or its words change (a host sets them after a frame is drawn) */
+new MutationObserver(fit).observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+new MutationObserver(fit).observe(box, { subtree: true, characterData: true, childList: true });
+/* and when its box is made another size (a side pulled, the words typed in growing it) */
+addEventListener('resize', fit);
+document.fonts?.ready.then(fit);
+window.film = { frame() { fit(); } };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

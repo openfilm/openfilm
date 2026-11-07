@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Scan tear</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Thin bright tears open across the frame into black bands edged in cyan and magenta, and a scan line races down
+ * over the cut; then the tears close again. It lasts 0.6 s and covers the cut at its middle: put its middle on the
+ * cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame so
+ * it fits a stage of any shape.
+ */
+const D = 0.6;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const mix = (a, b, x) => a + (b - a) * x;
+const inCubic = (x) => x * x * x;
+const outCubic = (x) => 1 - (1 - x) ** 3;
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+/* smooth noise in [0, 1] along x */
+const noise = (x, seed = 0) => { const i = Math.floor(x), f = x - i; return mix(hash(i + seed * 57), hash(i + 1 + seed * 57), f * f * (3 - 2 * f)); };
+
+function draw(u) {
+  const n = Math.floor(u * D * 30), tears = 8;
+  for (let i = 0; i < tears; i++) {
+    const y = ((i + 0.5) / tears + (hash(i) - 0.5) * 0.06) * H + (hash(n * 3 + i) - 0.5) * 3;
+    const a = 0.1 + hash(i + 20) * 0.14, b = 0.58 + hash(i + 30) * 0.14;
+    const open = u < 0.5 ? outCubic(seg(u, a, a + 0.18)) : 1 - inCubic(seg(u, b, b + 0.2));
+    if (open <= 0) continue;
+    const h = H * 0.2 * open + 1;
+    const shift = (hash(n * 7 + i) - 0.5) * W * 0.06 * (1 - open);
+    g.fillStyle = '#040406';
+    g.fillRect(shift - W * 0.05, y - h / 2, W * 1.1, h);
+    /* signal edges, split in colour */
+    g.fillStyle = 'rgba(0, 240, 255, 0.85)';
+    g.fillRect(shift + W * 0.01, y - h / 2 - 2, W, 2);
+    g.fillStyle = 'rgba(255, 0, 170, 0.85)';
+    g.fillRect(shift - W * 0.01, y + h / 2, W, 2);
+    /* dashes of noise in the tear */
+    for (let k = 0; k < 5; k++) {
+      g.fillStyle = `rgba(255, 255, 255, ${0.15 + 0.4 * hash(n * 13 + i * 5 + k)})`;
+      g.fillRect(hash(n * 17 + i * 5 + k) * W, y + (hash(n * 19 + i * 5 + k) - 0.5) * h, W * 0.12 * hash(k + i), 1);
+    }
+  }
+  /* a scan line races down through the cut */
+  const s = seg(u, 0.36, 0.64);
+  if (s > 0 && s < 1) {
+    const y = s * H;
+    const glow = g.createLinearGradient(0, y - H * 0.08, 0, y + H * 0.01);
+    glow.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    glow.addColorStop(1, 'rgba(220, 255, 255, 0.5)');
+    g.fillStyle = glow;
+    g.fillRect(0, y - H * 0.08, W, H * 0.09);
+    g.fillStyle = '#fff';
+    g.fillRect(0, y, W, 2);
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -42,6 +42,13 @@ test('a clip goes onto the row it is dropped on, whatever is there; only outside
   /* locked: refused */
   const locked = lanes.map((l, i) => (i === 2 ? { ...l, locked: true } : l));
   assert.deepEqual(moveDestFor(1, locked, 2), { action: 'refuse' });
+  /* a sound track takes sounds alone, and a sound goes on nothing else */
+  const withSound = lanes.map((l, i) => (i === 2 ? { ...l, sound: true } : l));
+  assert.deepEqual(moveDestFor(1, withSound, 2), { action: 'refuse' });
+  assert.deepEqual(moveDestFor(2, withSound, 1), { action: 'refuse' });
+  /* a sound left on a picture track (an older film) can be moved to a sound track, a page not */
+  assert.deepEqual(moveDestFor(1, withSound, 2, true), { action: 'move', trackIndex: 2 });
+  assert.deepEqual(moveDestFor(1, withSound, 2, false), { action: 'refuse' });
   /* above every row: a new top track; below: a new bottom one */
   assert.deepEqual(moveDestFor(2, lanes, -1), { action: 'insert', at: 0 });
   assert.deepEqual(moveDestFor(0, lanes, 3), { action: 'insert', at: 3 });

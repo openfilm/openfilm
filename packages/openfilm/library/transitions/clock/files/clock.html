@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Clock wipe</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #1d1d22; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A hand sweeps round from twelve o'clock, filling the frame behind it, a lighter sweep running ahead, and covers
+ * the cut; a second turn clears it onto the next shot. It lasts 0.8 s and covers the cut at its middle: put its
+ * middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of
+ * the frame so it fits a stage of any shape.
+ */
+const D = 0.8;
+const DEFAULT = '#1d1d22';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+/* 0 at a, 1 at b, 0 again at c */
+const tri = (u, a, b, c) => (u < b ? seg(u, a, b) : 1 - seg(u, b, c));
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+const rgbOf = (c) => { g.fillStyle = '#000'; g.fillStyle = c; const s = String(g.fillStyle); return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number); };
+/* a colour made lighter (k > 0, toward white) or darker (k < 0, toward black), at an opacity */
+const tone = (c, k, a = 1) => `rgba(${rgbOf(c).map((x) => Math.round(k > 0 ? x + (255 - x) * k : x * (1 + k))).join(', ')}, ${a})`;
+
+/* the sector of the frame between turns a0 and a1 (in turns from twelve o'clock) */
+const sector = (a0, a1, style) => {
+  if (a1 <= a0) return;
+  const R = Math.hypot(W, H);
+  g.fillStyle = style;
+  g.beginPath();
+  g.moveTo(W / 2, H / 2);
+  g.arc(W / 2, H / 2, R, -Math.PI / 2 + a0 * TAU, -Math.PI / 2 + a1 * TAU);
+  g.closePath();
+  g.fill();
+};
+
+function draw(u) {
+  const c = color(), R = Math.hypot(W, H);
+  let hand;
+  if (u < 0.5) {
+    const a = inOut(seg(u, 0, 0.42)), lead = inOut(seg(u, 0, 0.36));
+    sector(a, lead, tone(c, 0.35, 0.5));
+    sector(0, a, c);
+    hand = a;
+  } else {
+    const a = inOut(seg(u, 0.56, 0.94)), trail = inOut(seg(u, 0.62, 1));
+    sector(a, 1, c);
+    sector(trail, a, tone(c, 0.35, 0.5));
+    hand = a;
+  }
+  /* the hand on the sweeping edge, and the pin it turns on */
+  const k = u < 0.5 ? tri(u, 0, 0.2, 0.44) : tri(u, 0.56, 0.8, 1);
+  const ang = -Math.PI / 2 + hand * TAU;
+  g.strokeStyle = `rgba(255, 255, 255, ${0.9 * k})`;
+  g.lineWidth = Math.max(2, H * 0.008);
+  g.beginPath();
+  g.moveTo(W / 2, H / 2);
+  g.lineTo(W / 2 + R * Math.cos(ang), H / 2 + R * Math.sin(ang));
+  g.stroke();
+  g.fillStyle = `rgba(255, 255, 255, ${k})`;
+  g.beginPath();
+  g.arc(W / 2, H / 2, H * 0.015, 0, TAU);
+  g.fill();
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

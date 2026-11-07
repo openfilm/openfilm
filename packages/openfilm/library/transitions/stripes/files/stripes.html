@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Stripes</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #ff6a3d; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Diagonal stripes slide in from both sides, one after another, and lock together over the cut; then they slide on
+ * out the other way. It lasts 0.8 s and covers the cut at its middle: put its middle on the cut. A page of
+ * OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame so it fits a stage
+ * of any shape.
+ */
+const D = 0.8;
+const DEFAULT = '#ff6a3d';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const inOutQuart = (x) => (x < 0.5 ? 8 * x ** 4 : 1 - (-2 * x + 2) ** 4 / 2);
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+const rgbOf = (c) => { g.fillStyle = '#000'; g.fillStyle = c; const s = String(g.fillStyle); return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number); };
+/* a colour made lighter (k > 0, toward white) or darker (k < 0, toward black), at an opacity */
+const tone = (c, k, a = 1) => `rgba(${rgbOf(c).map((x) => Math.round(k > 0 ? x + (255 - x) * k : x * (1 + k))).join(', ')}, ${a})`;
+
+function draw(u) {
+  const c = color(), L = Math.hypot(W, H), n = 7, bh = L / n;
+  g.save();
+  g.translate(W / 2, H / 2);
+  g.rotate(-0.5);
+  for (let i = 0; i < n; i++) {
+    const dir = i % 2 ? 1 : -1, s = (i / (n - 1)) * 0.12;
+    const off = u < 0.5 ? dir * L * (1 - inOutQuart(seg(u, s, s + 0.3))) : -dir * L * inOutQuart(seg(u, 0.56 + s, s + 0.86));
+    const y = -L / 2 + i * bh;
+    g.fillStyle = i % 2 ? tone(c, -0.22) : c;
+    g.fillRect(-L / 2 + off, y - 0.5, L, bh + 1);
+    /* a bright line on the edge it leads with */
+    g.fillStyle = tone(c, 0.45);
+    const edge = (u < 0.5 ? -dir : dir) * L / 2 + off;
+    g.fillRect(edge - 2, y - 0.5, 4, bh + 1);
+  }
+  g.restore();
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>
