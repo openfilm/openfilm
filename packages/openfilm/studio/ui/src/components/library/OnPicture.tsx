@@ -5,7 +5,7 @@
  * push, a wipe: the picture going out by the move's `out` while the picture turned round comes in by its `in`, over
  * black), a transition's page over it.
  * On a card (LibraryDrawer) the picture is drawn under it; over the viewer (LibraryTrial, `live`) the film is, and only
- * what moves is drawn. Played again and again while `playing`, a moment between.
+ * what moves is drawn. Played again and again while `playing`, a moment between; with `onEnded`, once.
  */
 import * as React from 'react';
 import { pageUrl, type LibraryItem } from '@/lib/library';
@@ -34,7 +34,7 @@ function secsOf(item: LibraryItem): number {
   return (item.durationMs ?? 1000) / 1000;
 }
 
-export function TransitionOnPicture({ item, picture, playing, live = false, blur = 0.15 }: {
+export function TransitionOnPicture({ item, picture, playing, live = false, blur = 0.15, onEnded }: {
   item: LibraryItem;
   /** the picture it plays on (null: the plain one) */
   picture: string | null;
@@ -43,19 +43,32 @@ export function TransitionOnPicture({ item, picture, playing, live = false, blur
   live?: boolean;
   /** a card's blurs, of a stage's */
   blur?: number;
+  /** played once, then nothing is drawn and this is told */
+  onEnded?: () => void;
 }) {
   const [round, setRound] = React.useState(0);
   const secs = secsOf(item);
+  const once = Boolean(onEnded);
+  const told = React.useRef(onEnded);
+  told.current = onEnded;
+  /* a page's time starts when it has loaded */
+  const [begun, setBegun] = React.useState(item.kind !== 'page');
+  const [ended, setEnded] = React.useState(false);
   React.useEffect(() => {
     if (!playing) return undefined;
+    if (once) {
+      if (!begun) return undefined;
+      const timer = window.setTimeout(() => { setEnded(true); told.current?.(); }, secs * 1000);
+      return () => window.clearTimeout(timer);
+    }
     const timer = window.setInterval(() => setRound((r) => r + 1), (secs + 0.6) * 1000);
     return () => window.clearInterval(timer);
-  }, [playing, secs]);
+  }, [playing, secs, once, begun]);
   const src = picture ?? PLAIN;
   const img = (style?: React.CSSProperties) => <img src={src} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-cover" style={style} />;
   const name = `of-cut-${item.id.replace(/[^a-z0-9]+/gi, '-')}`;
   const moving = (() => {
-    if (!playing) return null;
+    if (!playing || ended) return null;
     if (item.kind === 'fade') {
       if (item.fade === 'dissolve') return img({ transform: 'scaleX(-1)', animation: `of-dissolve ${secs}s ease-in-out both` });
       return <span className="pointer-events-none absolute inset-0" style={{ background: item.fade === 'dip-white' ? '#fff' : '#000', animation: `of-dip ${secs}s ease-in-out both` }} />;
@@ -88,7 +101,7 @@ export function TransitionOnPicture({ item, picture, playing, live = false, blur
       );
     }
     if (item.kind === 'page' && item.src) {
-      return <iframe title="" src={pageUrl(item)} tabIndex={-1} className="pointer-events-none absolute inset-0 h-full w-full border-0" style={{ colorScheme: 'normal' }} />;
+      return <iframe title="" src={pageUrl(item)} tabIndex={-1} onLoad={() => setBegun(true)} className="pointer-events-none absolute inset-0 h-full w-full border-0" style={{ colorScheme: 'normal' }} />;
     }
     return null;
   })();
