@@ -242,7 +242,9 @@ function matchToInline(match: RegExpExecArray, text: string): MarkdownInline | n
 export function safeMarkdownHref(raw: string): string | null {
   const href = raw.trim();
   if (!href) return null;
-  const probe = href.replace(/[\u0000-\u0020\u00a0\u2028\u2029]/g, '').toLowerCase();
+  /* A browser reads a backslash as a slash in a special-scheme URL, so `\\host` and `/\host` leave the site just as
+     `//host` does. The probe must see them the same way before the scheme and `//` checks. */
+  const probe = href.replace(/[\u0000-\u0020\u00a0\u2028\u2029]/g, '').replace(/\\/g, '/').toLowerCase();
   if (!probe) return null;
   // `//host` leaves the site: not a relative path
   if (probe.startsWith('//')) return null;
