@@ -27,6 +27,11 @@ test('the project title opens Projects immediately, keeps its hover card, and re
     studio = await startStudio({ port: 0, openBrowser: () => {} });
     browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
     const page = await browser.newPage({ viewport: { width: 1400, height: 900 }, locale: 'en-US', reducedMotion: 'reduce' });
+    let posterRequests = 0;
+    await page.route(`**/api/projects/${project.id}/poster*`, (route) => {
+      if (++posterRequests === 1) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"code":"drawing"}' });
+      return route.continue();
+    });
     await page.addInitScript(({ id }) => {
       window.tabEvents = [];
       const tab = (id, projectId, title) => ({ id, projectId, title, active: id === 'self', working: false, asking: false, exporting: null });
@@ -63,7 +68,12 @@ test('the project title opens Projects immediately, keeps its hover card, and re
     assert.equal(await card.getByRole('button', { name: 'Recent only', exact: true }).count(), 0, 'recent projects stay in All projects');
     assert.equal(await card.getByText('Recent', { exact: true }).count(), 0, 'the hover card has no recent section');
     assert.equal(await card.locator('img').count(), 1, 'the cover remains in a film with content');
+    await page.waitForFunction(() => {
+      const img = document.querySelector('[data-project-card] img');
+      return img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0;
+    });
     await card.locator('img').evaluate((img) => img.decode());
+    assert.ok(posterRequests >= 2, 'a poster still being drawn is asked for again without reopening the card');
     const cover = await card.locator('img').evaluate((img) => ({
       ratio: img.parentElement.clientWidth / img.parentElement.clientHeight,
       sourceRatio: img.naturalWidth / img.naturalHeight,
