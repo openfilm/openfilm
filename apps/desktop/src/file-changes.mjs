@@ -5,7 +5,7 @@
  *
  * Text files (by their extension, up to TEXT_MAX) are kept whole at the start and compared line by line at the end.
  * Any other file (media, a large file) is compared by its size and time only, and says no lines. Studio's own folder
- * (.film), hidden folders and node_modules are not read.
+ * (.film), hidden folders and node_modules are not read, apart from explicitly requested canvas documents.
  *
  * A turn can be undone (undoTurn): the folder put back as the turn found it. film.html is kept whole whatever its size
  * (up to FILM_MAX), since the film is the project; any other text from what was kept of it, any other file from a hard
@@ -14,7 +14,7 @@
  *
  * Reads no Electron module, so `node --test` can use it.
  */
-import { link, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import { structuredPatch } from 'diff';
 
@@ -45,7 +45,7 @@ export const dropHold = (/** @type {string | null} */ hold) => (hold ? rm(hold, 
 
 /**
  * @typedef {{ size: number, mtimeMs: number, text?: string, held?: true }} Seen
- * @typedef {{ files: Map<string, Seen>, cut: boolean }} Snapshot
+ * @typedef {{ files: Map<string, Seen>, cut: boolean, canvas?: true }} Snapshot
  * @typedef {{ oldStart: number, oldLines: number, newStart: number, newLines: number, lines: string[] }} Hunk
  * @typedef {{ path: string, change: 'added' | 'removed' | 'changed', added?: number, removed?: number,
  *   hunks?: Hunk[], cut?: boolean }} FileChange
@@ -54,9 +54,9 @@ export const dropHold = (/** @type {string | null} */ hold) => (hold ? rm(hold, 
 /**
  * The project's files now: each one's size and time, and a text file's text. With `hold`, each other file is linked
  * there too (`held`), to be put back if it goes.
- * @param {string} root @param {{ hold?: string | null }} [opts]
+ * @param {string} root @param {{ hold?: string | null, canvas?: boolean }} [opts]
  */
-export async function snapshot(root, { hold = null } = {}) {
+export async function snapshot(root, { hold = null, canvas = false } = {}) {
   /** @type {Map<string, Seen>} */
   const files = new Map();
   let kept = 0;
@@ -91,7 +91,28 @@ export async function snapshot(root, { hold = null } = {}) {
     }
   };
   await walk(root, 0);
-  return { files, cut };
+  /* Canvas documents are project content too. Keep only the board files, never caches, credentials or logs in .film.
+     They are text snapshots, so an in-place rewrite can be undone without relying on a hard link to the same inode. */
+  if (canvas) {
+    const own = await lstat(join(root, '.film')).catch((e) => { if (e.code !== 'ENOENT') cut = true; return null; });
+    const directory = own?.isDirectory() ? await lstat(join(root, '.film', 'canvases')).catch((e) => { if (e.code !== 'ENOENT') cut = true; return null; }) : null;
+    if ((own && !own.isDirectory()) || (directory && !directory.isDirectory())) cut = true;
+    const boards = directory?.isDirectory() ? await readdir(join(root, '.film', 'canvases'), { withFileTypes: true }).catch(() => { cut = true; return []; }) : [];
+    const paths = [...(own?.isDirectory() ? ['.film/canvas.json'] : []), ...boards.filter((e) => e.isFile() && /^[a-z0-9]{1,32}\.json$/.test(e.name)).map((e) => `.film/canvases/${e.name}`)];
+    for (const path of paths) {
+      const abs = join(root, ...path.split('/'));
+      let info;
+      try { info = await lstat(abs); } catch (e) { if (e.code !== 'ENOENT') cut = true; continue; }
+      if (!info.isFile()) { cut = true; continue; }
+      if (files.size >= FILES_MAX || info.size > FILM_MAX || kept + info.size > KEEP_MAX) { cut = true; continue; }
+      try {
+        const text = await readFile(abs, 'utf8');
+        files.set(path, { size: info.size, mtimeMs: info.mtimeMs, text });
+        kept += info.size;
+      } catch { cut = true; }
+    }
+  }
+  return { files, cut, ...(canvas ? { canvas: true } : {}) };
 }
 
 /** A text's lines that changed, in hunks with three lines around each, or null when the diff gave up. */
@@ -122,7 +143,7 @@ function clip(hunks, max) {
  * @returns {Promise<{ files: FileChange[], cut: boolean }>}
  */
 export async function changes(root, before) {
-  const after = await snapshot(root);
+  const after = await snapshot(root, { canvas: before.canvas });
   const paths = [...new Set([...before.files.keys(), ...after.files.keys()])].sort();
   /** @type {FileChange[]} */
   const out = [];
@@ -160,7 +181,7 @@ export async function changes(root, before) {
  * @returns {Promise<{ restored: number, missed: string[] }>}
  */
 export async function undoTurn(root, before, hold, { trash }) {
-  const after = await snapshot(root);
+  const after = await snapshot(root, { canvas: before.canvas });
   let restored = 0;
   /** @type {string[]} */
   const missed = [];
@@ -171,6 +192,14 @@ export async function undoTurn(root, before, hold, { trash }) {
     if (was && now && was.size === now.size && was.mtimeMs === now.mtimeMs) continue;
     if (was?.text != null && now?.text != null && was.text === now.text) continue;
     try {
+      /* A board path may have been replaced by a link since the turn began. Check again at restore time,
+         including its parents, before writing a saved document or sending a new one to the trash. */
+      if (path.startsWith('.film/')) {
+        for (const part of ['.film', ...(path.startsWith('.film/canvases/') ? ['.film/canvases'] : []), path]) {
+          const info = await lstat(join(root, ...part.split('/'))).catch((e) => { if (e.code !== 'ENOENT') throw e; return null; });
+          if (info && (part === path ? !info.isFile() : !info.isDirectory())) throw new Error('canvas path is linked or has changed kind');
+        }
+      }
       if (!was) { await trash(to); restored += 1; continue; }
       if (was.text != null) {
         await mkdir(dirname(to), { recursive: true });

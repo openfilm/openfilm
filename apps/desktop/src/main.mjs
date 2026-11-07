@@ -1,5 +1,5 @@
 /**
- * OpenFilm for desktop: one window of tabs, a project in each, Studio on the left and a chat on the right, one page
+ * OpenFilm for desktop: one window of tabs, a project in each, a chat on the left and Studio on the right, one page
  * per tab (tabs.mjs). A project is picked in Studio's projects window (the tabs' `+`), and its tab opens; with no tab
  * open, the window's page is the projects (HOME).
  *
@@ -587,10 +587,10 @@ async function start() {
     trash: (path) => shell.trashItem(path),
     tell: (channel, value) => broadcast(channel, value),
     log,
-    filmPutBack: async (dir) => {
+    filmPutBack: async (dir, done = false) => {
       const { projects } = await studioApi('/api/projects');
       const found = projects.find((p) => p.path === dir);
-      if (found) await studioApi(`/api/projects/${encodeURIComponent(found.id)}/history/put-back`, 'POST');
+      if (found) await studioApi(`/api/projects/${encodeURIComponent(found.id)}/history/put-back${done ? '/done' : ''}`, 'POST');
     },
   });
   /* the tabs, drawn by each page in Studio's top bar: asked for, and told of every change (tellTabs) */
