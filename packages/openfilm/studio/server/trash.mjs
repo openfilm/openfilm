@@ -13,8 +13,9 @@
  *            shell's own answer would be to delete it for good, without a word
  */
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { cp, mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, link, lstat, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -115,13 +116,24 @@ function freeName(/** @type {string} */ dir, /** @type {string} */ name) {
   return candidate;
 }
 
-/** Move `from` to `to`; from another disk, which rename cannot cross, a copy and then the original removed. */
+/**
+ * Move `from` to `to`; from another disk, which rename cannot cross, a copy under a name of its own, given `to` only
+ * once whole and never over what is there, and then the original removed. A copy that fails removes only its own part.
+ * Once `to` is whole a failed removal is `copied`: the item is in the trash, and what is left of the original stays.
+ */
 async function moveInto(/** @type {string} */ from, /** @type {string} */ to) {
   try { await rename(from, to); return; }
   catch (e) { if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EXDEV') throw e; }
-  try { await cp(from, to, { recursive: true, errorOnExist: true, force: false, preserveTimestamps: true, verbatimSymlinks: true }); }
-  catch (e) { await rm(to, { recursive: true, force: true }); throw e; }
-  await rm(from, { recursive: true });
+  const part = `${to}.part-${randomUUID()}`;
+  try {
+    await cp(from, part, { recursive: true, errorOnExist: true, force: false, preserveTimestamps: true, verbatimSymlinks: true });
+    if ((await lstat(part)).isDirectory()) await rename(part, to);
+    else await link(part, to);
+  } finally {
+    await rm(part, { recursive: true, force: true });
+  }
+  try { await rm(from, { recursive: true }); }
+  catch (e) { throw Object.assign(/** @type {Error} */ (e), { copied: true }); }
 }
 
 /** @param {string} path an absolute path */
@@ -177,7 +189,10 @@ export async function moveToTrash(path) {
       throw e;
     }
     try { await moveInto(path, join(files, name)); }
-    catch (e) { await rm(record, { force: true }); throw e; }
+    catch (e) {
+      if (!(/** @type {{ copied?: boolean }} */ (e).copied)) await rm(record, { force: true });
+      throw e;
+    }
     return;
   }
 }
