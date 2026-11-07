@@ -34,3 +34,16 @@ export function nextStep<S>(s: Steps<S>, kind: 'undo' | 'redo'): S | null {
   const list = kind === 'undo' ? s.done : s.undone;
   return list.length ? list[list.length - 1] : null;
 }
+
+/**
+ * Tasks taken one at a time, each once the one before it is done (failed: done too): undo, redo and the history's
+ * jumps, so a step whose writes wait (another file first) is taken before the next one is looked for.
+ */
+export function inTurn(): <T>(task: () => T | Promise<T>) => Promise<T> {
+  let last: Promise<unknown> = Promise.resolve();
+  return (task) => {
+    const run = last.then(task);
+    last = run.catch(() => {});
+    return run;
+  };
+}

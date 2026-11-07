@@ -50,9 +50,8 @@ export interface ExportTrayHandle {
 
 /**
  * `onError`: a finished export that could not be opened or shown (its file moved or deleted since), in a sentence.
- * `inset`: how much of the window's right side the app's own panel takes (its chat): the tray stays beside it, not under it.
  */
-export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string; onError?: (message: string) => void; inset?: number }>(function ExportTray({ projectId, onError, inset = 0 }, ref) {
+export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string; onError?: (message: string) => void }>(function ExportTray({ projectId, onError }, ref) {
   const t = useT();
   const fileAction = (run: Promise<void>) => { void run.catch(() => onError?.(t('exportTray.fileGone'))); };
   const [jobs, setJobs] = React.useState<ExportJob[]>([]);
@@ -140,10 +139,9 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
 
   return (
     <div
-      style={{ right: 16 + inset }}
-      className="pointer-events-auto fixed bottom-4 z-[120] w-[340px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+      className="pointer-events-auto fixed bottom-4 right-4 z-[120] w-[340px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]"
     >
-      <div className="flex items-center gap-2 border-b border-[var(--border-soft)] px-3.5 py-2.5">
+      <div className="flex items-center gap-2 border-b border-[var(--border)] px-3.5 py-2.5">
         {!ended ? <Loader2 size={14} className="shrink-0 animate-spin text-[var(--text-muted)]" />
           : ended.tone === 'err' ? <CircleAlert size={14} className="shrink-0 text-[var(--err)]" />
             : ended.tone === 'muted' ? <Ban size={14} className="shrink-0 text-[var(--text-faint)]" />
@@ -175,7 +173,7 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
       {!collapsed && (
         <ul className="max-h-[320px] overflow-y-auto">
           {visible.map((job) => (
-            <li key={job.id} className="border-b border-[var(--border-soft)] px-3.5 py-2.5 last:border-b-0">
+            <li key={job.id} className="border-b border-[var(--border)] px-3.5 py-2.5 last:border-b-0">
               <div className="flex items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-[var(--text)]">{job.label || job.kind}</span>
                 {jobIsActive(job) ? (
@@ -238,13 +236,13 @@ function JobLine({ job, cancelling, t }: { job: ExportJob; cancelling: boolean; 
     const left = job.etaMs != null ? `${t('exportTray.eta')} ${formatDuration(job.etaMs)}` : '';
     return (
       <div className="mt-1.5">
-        <div className="h-[3px] overflow-hidden rounded-full bg-[var(--surface-2)]">
-          <div className="h-full rounded-full bg-[var(--text)] transition-[width] duration-500" style={{ width: `${pct}%` }} />
+        <div className="h-[3px] overflow-hidden rounded-full bg-[var(--bg-field)]">
+          <div className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-500" style={{ width: `${pct}%` }} />
         </div>
         <p className="mt-1 flex items-center gap-1.5 text-[11px] tabular-nums text-[var(--text-faint)]">
           <span className="min-w-0 flex-1 truncate">{parts.join(' · ')}{left ? ' ·' : ''}</span>
           {left ? <span className="shrink-0">{left}</span> : null}
-          {job.encoder ? <span className="shrink-0 rounded bg-[var(--surface-2)] px-1 py-px font-mono text-[10px]">{job.encoder}</span> : null}
+          {job.encoder ? <span className="shrink-0 rounded bg-[var(--bg-field)] px-1 py-px font-mono text-[10px]">{job.encoder}</span> : null}
           <span className="shrink-0">{pct}%</span>
         </p>
       </div>

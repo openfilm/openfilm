@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Clouds</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * We fly into clouds: puffy clouds rush toward us and past the edges, thicker and whiter until all is white over
+ * the cut, then thin out as we fly out the other side. It lasts 1 s and covers the cut at its middle: put its
+ * middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of
+ * the frame so it fits a stage of any shape.
+ */
+const D = 1;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const inCubic = (x) => x * x * x;
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+/* one cloud: a cluster of soft round puffs, lit from above */
+const cloud = (x, y, s, seed, a) => {
+  for (let i = 0; i < 10; i++) {
+    const px = x + (hash(seed + i) - 0.5) * s * 1.8, py = y + (hash(seed + i + 9) - 0.5) * s * 0.6 - Math.sin((i / 9) * Math.PI) * s * 0.3;
+    const r = s * (0.3 + 0.35 * hash(seed + i + 17));
+    const p = g.createRadialGradient(px, py - r * 0.3, 0, px, py, r);
+    p.addColorStop(0, `rgba(255, 255, 255, ${a * 0.85})`);
+    p.addColorStop(0.45, `rgba(238, 243, 250, ${a * 0.6})`);
+    p.addColorStop(1, 'rgba(214, 224, 238, 0)');
+    g.fillStyle = p;
+    g.fillRect(px - r, py - r, 2 * r, 2 * r);
+  }
+};
+
+function draw(u) {
+  const cx = W / 2, cy = H / 2, F = Math.min(W, H) * 0.5;
+  /* the camera flies forward; clouds sit at depths ahead of it */
+  const cam = 2.6 * inOut(u);
+  const list = [];
+  for (let i = 0; i < 46; i++) {
+    const z = 0.4 + hash(i) * 2.8 - cam;
+    if (z <= 0.08 || z > 2) continue;
+    list.push({ i, z });
+  }
+  list.sort((a, b) => b.z - a.z);
+  list.forEach(({ i, z }) => {
+    const ox = (hash(i + 1) - 0.5) * 3.2, oy = (hash(i + 2) - 0.5) * 1.8;
+    const x = cx + (ox / z) * F, y = cy + (oy / z) * F, s = (0.3 + 0.25 * hash(i + 3)) * F / z;
+    const a = clamp((2 - z) / 0.5) * clamp(z / 0.3) * seg(u, 0, 0.15) * (1 - seg(u, 0.8, 1));
+    cloud(x, y, s, i * 31, 0.95 * a);
+  });
+  /* inside the cloud: all white */
+  const white = u < 0.5 ? inCubic(seg(u, 0.22, 0.42)) : 1 - inOut(seg(u, 0.56, 0.84));
+  g.fillStyle = `rgba(246, 249, 253, ${white})`;
+  g.fillRect(0, 0, W, H);
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

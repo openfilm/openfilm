@@ -20,15 +20,37 @@ test('each picture is fitted to the new canvas on its own: a full-frame video, a
     /* a title a fifth of the width, at the top center */
     { id: 't', kind: 'still', own: { w: 400, h: 200 }, box: { x: 760, y: 0, w: 384, h: 192 } },
     { id: 's', kind: 'sound' },
-    /* a video without a box is the canvas in any shape: left as it is */
-    { id: 'free', kind: 'video', own: wide },
   ], wide, tall);
   /* the video fills the width; the photo fills the width too (its fitted size there), not shrunk by the video */
   assert.deepEqual(boxOf(out, 'v'), { x: 0, y: 416, w: 1080, h: 608 });
   assert.deepEqual(boxOf(out, 'p'), { x: 0, y: 0, w: 1080, h: 1440 });
   /* the title: a fifth of its fitted width, its center as far up the canvas as it was */
   assert.deepEqual(boxOf(out, 't'), { x: 428, y: 74, w: 216, h: 108 });
-  assert.equal(out.some((c) => c.id === 's' || c.id === 'free'), false);
+  assert.equal(out.some((c) => c.id === 's'), false);
+});
+
+test('a video that was the canvas, fitted whole, gets a box of its own shape on a canvas of another, so its fade edges and crop are on its picture, not on the bars', () => {
+  const portrait = { w: 1080, h: 1920 };
+  const out = fitToCanvas([
+    { id: 'shot', kind: 'video', own: wide },
+    { id: 'photo', kind: 'still', own: { w: 1080, h: 1440 }, fit: 'contain' },
+    /* the new canvas is its shape: it fills it, and stays the canvas */
+    { id: 'tall', kind: 'video', own: portrait },
+    /* cropped or stretched to the canvas, it fills any: left as it is */
+    { id: 'cover', kind: 'video', own: wide, fit: 'cover' },
+    { id: 'fill', kind: 'still', own: wide, fit: 'fill' },
+    /* its shape not known yet */
+    { id: 'unknown', kind: 'video' },
+  ], wide, portrait);
+  /* where it showed: the width of the canvas, in the middle */
+  assert.deepEqual(boxOf(out, 'shot'), { x: 0, y: 656, w: 1080, h: 608 });
+  assert.deepEqual(boxOf(out, 'photo'), { x: 0, y: 240, w: 1080, h: 1440 });
+  assert.deepEqual(out.map((c) => c.id), ['shot', 'photo']);
+  /* at the top of a square canvas (its object-position): its center as far up the tall one as it was */
+  const square = { w: 1080, h: 1080 };
+  assert.deepEqual(boxOf(fitToCanvas([{ id: 'top', kind: 'video', own: wide, position: [50, 0] }], square, portrait), 'top'), { x: 0, y: 236, w: 1080, h: 608 });
+  /* the canvas back to its shape: the full-frame video fills it again */
+  assert.deepEqual(boxOf(fitToCanvas([{ id: 'shot', kind: 'video', own: wide, box: boxOf(out, 'shot')! }], portrait, wide), 'shot'), { x: 0, y: 0, w: 1920, h: 1080 });
 });
 
 test('shapes picked one after another never shrink a picture: 16:9 → 3:4 → 2.35:1 → 16:9 is the whole frame again', () => {

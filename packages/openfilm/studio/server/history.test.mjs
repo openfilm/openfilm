@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkoutVersion, copyVersion, discardChanges, log, saveVersion, status, versionFilesChanged } from './history.mjs';
+import { checkoutVersion, copyVersion, discardChanges, log, restoreFilm, saveVersion, status, versionFilesChanged } from './history.mjs';
 import { replaceFile } from './atomic.mjs';
 
 let trash;
@@ -443,4 +443,39 @@ test('a history that kept the film\'s files only is brought up to date: the proj
   assert.ok(tracked(root).includes('notes.md'));
   assert.deepEqual(mark(join(root, 'notes.md')), before, 'the person\'s files are not written');
   assert.match(readFileSync(join(root, '.film', 'history', 'openfilm.json'), 'utf8'), /"format":3/);
+});
+
+test('without film.html nothing is saved: the person is told why, a version on its own is not made (#304)', async () => {
+  const root = project();
+  const first = await saveVersion(root, { message: 'First' });
+  writeFileSync(join(root, 'notes.md'), 'the agent\'s notes');
+  rmSync(join(root, 'film.html'));
+  await rejects(saveVersion(root, { message: 'Empty' }), 'missing-film');
+  await rejects(saveVersion(root), 'missing-film');
+  assert.equal(await saveVersion(root, { kind: 'auto' }), null);
+  assert.equal(await saveVersion(root, { kind: 'agent' }), null);
+  assert.deepEqual((await versions(root)).map((v) => v.commit), [first], 'no version was made');
+  assert.equal((await status(root)).filmMissing, true);
+  /* back, the film saves again */
+  writeFileSync(join(root, 'film.html'), film(page('title.html'), sound('a.mp3')));
+  assert.ok(await saveVersion(root, { message: 'Back' }));
+  assert.ok(tracked(root).includes('film.html'));
+});
+
+test('film.html missing: only it comes back from a version; every other file stays, none to the trash, the version checked out unchanged (#304)', async () => {
+  const root = project();
+  const first = await saveVersion(root, { message: 'First' });
+  writeFileSync(join(root, 'title.html'), 'the agent\'s new title');
+  writeFileSync(join(root, 'notes.md'), 'the agent\'s notes');
+  const kept = readFileSync(join(root, 'film.html'), 'utf8');
+  rmSync(join(root, 'film.html'));
+  const trashed = readdirSync(trash).length;
+  assert.deepEqual(await restoreFilm(root, first), { commit: first });
+  assert.equal(readFileSync(join(root, 'film.html'), 'utf8'), kept);
+  assert.equal(readFileSync(join(root, 'title.html'), 'utf8'), 'the agent\'s new title', 'not written over');
+  assert.equal(readFileSync(join(root, 'notes.md'), 'utf8'), 'the agent\'s notes', 'not sent to the trash');
+  assert.equal(readdirSync(trash).length, trashed);
+  assert.equal((await status(root)).head, first);
+  /* film.html there: the whole version is the way */
+  await rejects(restoreFilm(root, first), 'dirty');
 });

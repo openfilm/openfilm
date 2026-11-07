@@ -74,7 +74,12 @@ export type FilmTrack = {
   muted?: boolean;
   /** attributes of its <section> kept as they are: id, class, title, lang, dir, data-*, aria-* */
   attrs?: Record<string, string>;
+  /** a caption track (it has no clips): its WebVTT file on the film's time (SPEC §1 Captions) */
+  captions?: FilmCaptions;
 }
+
+/** A caption track's `<track>`: its WebVTT file, and the language and name it is shown by. */
+export type FilmCaptions = { src: string; kind: 'captions' | 'subtitles'; srclang?: string; label?: string };
 
 export type FilmDoc = {
   stage: { w: number; h: number };
@@ -85,6 +90,9 @@ export declare const FILM_FILE: 'film.html';
 export declare const DEFAULT_STAGE: Readonly<{ w: number; h: number }>;
 export declare const SPEED_MIN: number;
 export declare const SPEED_MAX: number;
+export declare const MEDIA_RATE_MIN: number;
+export declare const MEDIA_RATE_MAX: number;
+export declare function mediaPlays(rate: number): boolean;
 
 export declare function isStill(src: string): boolean;
 export declare function isPage(src: string): boolean;

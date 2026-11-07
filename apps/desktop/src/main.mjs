@@ -35,16 +35,28 @@ import { stepAside } from './update-launch.mjs';
 import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegIn, ffmpegOnPath } from './ffmpeg-runtime.mjs';
 import { PATH_SEP } from './environment.mjs';
 import { firstWindowsApps } from './windows-apps.mjs';
-import { createTabs } from './tabs.mjs';
+import { createTabs, projectGone } from './tabs.mjs';
+import { restartDelay } from './studio-restart.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const mac = process.platform === 'darwin';
 const windows = process.platform === 'win32';
 /** Windows' window buttons over the top bar: the board's color, and the text's */
-const overlayColours = (t) => ({ color: t === 'dark' ? '#111111' : '#f2f2f2', symbolColor: t === 'dark' ? '#dadada' : '#1f1f1f', height: 32 });
+const overlayColours = (t) => ({ color: t === 'dark' ? '#111114' : '#e9e9eb', symbolColor: t === 'dark' ? '#ebebed' : '#161619', height: 32 });
 
 /* HTML-in-Canvas in Studio's viewer, as in the renderer (the `openfilm` package's src/host.mjs) */
 app.commandLine.appendSwitch('enable-blink-features', 'CanvasDrawElement');
+if (mac) {
+  /* Flush small Canvas2D batches: blur on hundreds of strokes otherwise queues gigabytes of intermediate
+     textures. Keep GPU canvas-to-WebGL uploads fast without changing the rest of Graphite's batching. */
+  const features = app.commandLine.getSwitchValue('enable-features');
+  app.commandLine.appendSwitch('enable-features', [
+    features,
+    'Canvas2DAutoFlushParams:max_recorded_op_graphite_kb/4',
+  ].filter(Boolean).join(','));
+} else {
+  app.commandLine.appendSwitch('disable-skia-graphite');
+}
 
 /* each flavour its own name, data folder and single-instance lock (flavor.mjs) */
 app.setName(PRODUCT_NAME);
@@ -104,8 +116,8 @@ let localAgents = null;
 /** @type {ReturnType<typeof createRoster> | null} */
 let roster = null;
 
-/** the board Studio's panes sit on (its --dock-shell), so the window never flashes another color */
-const BACKGROUND = { light: '#f2f2f2', dark: '#111111' };
+/** the board Studio's panes sit on (its --bg-app), so the window never flashes another color */
+const BACKGROUND = { light: '#e9e9eb', dark: '#111114' };
 
 function focusWindow() {
   if (!win) return;
@@ -311,7 +323,8 @@ function openInTabs(to) {
  * first time, the last project's; none: the projects.
  */
 async function openTabs() {
-  const projects = (await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.filter((p) => !p.missing);
+  const listed = (await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects;
+  const projects = listed.filter((p) => !projectGone(listed, p.id));
   tabs = createTabs({ saved: state.tabs ?? null });
   /* a tab of a project no longer there is left out, and not kept to open again */
   const known = new Set(projects.map((p) => p.id));
@@ -388,8 +401,37 @@ function tellWorking(/** @type {string[]} */ folders) {
   void tellTabsWorking({ working: folders });
 }
 
+/** Studio's questions for the person's agent that are being answered, by id: each stops with its controller. */
+const asked = new Map();
+
+/**
+ * Studio asks the person's agent a question of its own (studio-process.mjs askAgent): the agent the chat last started a
+ * conversation with, else the first one ready in Settings → Agents, answers with its own model and no chat. None ready:
+ * `code: 'no-agent'`, so Studio says to connect one.
+ * @type {import('./studio.mjs').AskHandler}
+ */
+function answerStudio(message, reply) {
+  if (message.type === 'ask-cancel') { asked.get(message.id)?.abort(); return; }
+  const ready = (roster?.list() ?? []).filter((a) => a.status === 'ready').map((a) => a.id);
+  const last = localAgents?.lastAgent();
+  const agent = last && ready.includes(last) ? last : ready[0];
+  if (!agent || !localAgents) { reply({ type: 'answer', id: message.id, error: 'No agent is connected.', code: 'no-agent' }); return; }
+  const stop = new AbortController();
+  asked.set(message.id, stop);
+  localAgents.ask(agent, String(message.text ?? ''), stop.signal)
+    .then((text) => reply({ type: 'answer', id: message.id, text }))
+    .catch((error) => { if (!stop.signal.aborted) reply({ type: 'answer', id: message.id, error: error?.message ?? String(error), ...(error?.code ? { code: String(error.code) } : {}) }); })
+    .finally(() => asked.delete(message.id));
+}
+
+/** when the running Studio started, and the wait before it did (studio-restart.mjs) */
+let startedAt = 0;
+let restartWait = 0;
+
 async function runStudio(env) {
+  startedAt = Date.now();
   studio = await startWindowStudio({
+    onAsk: answerStudio,
     home: env.OPENFILM_HOME,
     port: IDENTITY.studioPort,
     /* Studio serves the window's page as its editor (shell/: its editor with the chat beside it) */
@@ -407,8 +449,10 @@ async function runStudio(env) {
     },
     onExit: (code) => {
       if (quitting) return;
-      log(`Studio stopped (${code}); starting it again\n`);
-      setTimeout(() => void runStudio(env).catch((error) => log(`Studio did not start again: ${error.message}\n`)), 1000);
+      /* stopping again and again at once: started again later each time (studio-restart.mjs) */
+      restartWait = restartDelay(restartWait, Date.now() - startedAt);
+      log(`Studio stopped (${code}); starting it again in ${restartWait / 1000} s\n`);
+      setTimeout(() => void runStudio(env).catch((error) => log(`Studio did not start again: ${error.message}\n`)), restartWait);
     },
   });
   /* a Studio started again hears where the agents are working */
@@ -467,6 +511,8 @@ async function start() {
       ...(IDENTITY.studioHome || process.env.OPENFILM_EXPORTS ? {} : { OPENFILM_EXPORTS: app.getPath('desktop') }),
       /* another examples index (a file, to try one), passed through when run from source */
       ...(process.env.OPENFILM_EXAMPLES_INDEX ? { OPENFILM_EXAMPLES_INDEX: process.env.OPENFILM_EXAMPLES_INDEX } : {}),
+      /* another OpenFilm service (a local one, to develop it), passed through when run from source */
+      ...(process.env.OPENFILM_API_URL ? { OPENFILM_API_URL: process.env.OPENFILM_API_URL } : {}),
     },
   });
 
@@ -535,9 +581,10 @@ async function start() {
   /* the chat's record of each project (in the project's .film/chat and .film/logs) and the app's own preferences */
   registerChatIpc(ipcMain, {
     trusted: fromPage,
-    projects: async () => (await studioApi('/api/projects')).projects.filter((p) => !p.missing).map((p) => p.path),
+    projects: async () => { const { projects } = await studioApi('/api/projects'); return projects.filter((p) => !projectGone(projects, p.id)).map((p) => p.path); },
     dataDir: DATA,
     reveal: (path) => shell.showItemInFolder(path),
+    trash: (path) => shell.trashItem(path),
     tell: (channel, value) => broadcast(channel, value),
     log,
   });
@@ -554,8 +601,15 @@ async function start() {
   /* what a page shows now: its project's title, an export's progress; or its project gone */
   tabHandle('desktop:tabs:report', (self, { title, exporting, gone }) => {
     if (!tabs) return { ok: false };
-    /* its project gone (deleted, in this page or another; its folder gone): its tab closes, without asking */
-    if (gone === true) { const tab = tabs.get(self); if (tab) projectsGone([tab.projectId]); return { ok: true }; }
+    /* its project gone (deleted, in this page or another; its folder gone): its tab closes, without asking. Asked of
+       Studio first: a tab closed stops its agent, and a project missing only film.html is not gone (tabs.mjs projectGone) */
+    if (gone === true) {
+      const tab = tabs.get(self);
+      if (tab) {
+        void studioApi('/api/projects').then(({ projects }) => { if (projectGone(projects, tab.projectId)) projectsGone([tab.projectId]); }, () => {});
+      }
+      return { ok: true };
+    }
     tabs.report(self, { ...(typeof title === 'string' ? { title: title.slice(0, 200) } : {}), ...(exporting !== undefined ? { exporting: typeof exporting === 'number' ? exporting : null } : {}) });
     tellTabs();
     return { ok: true };
@@ -606,7 +660,7 @@ async function start() {
   /* the composer's Skills button */
   registerSkillsIpc(ipcMain, {
     trusted: fromPage,
-    projects: async () => (await studioApi('/api/projects')).projects.filter((p) => !p.missing).map((p) => p.path),
+    projects: async () => { const { projects } = await studioApi('/api/projects'); return projects.filter((p) => !projectGone(projects, p.id)).map((p) => p.path); },
     dataDir: DATA,
     mine: mySkills,
     prefsHome,

@@ -10,7 +10,7 @@
  *
  * What an export asks (POST exports, one ask or `{ jobs: [ask…], folder? }`):
  *
- *   { kind: 'video', codec?, frame?, fill?, shortEdge?, fps?, quality?, audio?, clip?, scale?, preset?, sidecar? }
+ *   { kind: 'video', codec?, frame?, fill?, shortEdge?, fps?, quality?, audio?, clip?, scale?, preset?, sidecar?, loudness? }
  *       codec    h264 (default) | hevc | vp9 | prores422hq | prores4444 | hevc_alpha | png (a zipped PNG sequence);
  *                vp9, prores4444, hevc_alpha and png keep transparency
  *       frame    native (default), or a ratio W:H from 1:4 to 4:1 (16:9, 9:16, 4:5, 2.39:1…): a delivery frame around
@@ -19,6 +19,8 @@
  *       clip     only this clip of film.html (by id), from its start, at the stage's size × `scale` (default 1)
  *       preset   a platform's name, for the file name
  *       sidecar  'srt' | 'vtt': the subtitles as a file beside the video too
+ *       loudness the sound brought to this many LUFS (-70 to -5), true peaks under -1 dBTP (render --loudness);
+ *                none: as mixed
  *   { kind: 'gif', frame?, fill?, width? (long side, default 640), fps? (default 15) }
  *   { kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean (default true), stems?: boolean }
  *       mix: `<name> - mix`; stems: voice, music, sound effects and the footage's own sound, each its own file
@@ -39,7 +41,8 @@
  *       a folder an editing program opens (see nle.mjs): `<name>.xml` (xmeml: Premiere Pro, DaVinci Resolve) or `<name>.fcpxml` (Final Cut Pro), each
  *       web page rendered with its alpha to a MOV in media/ (`alpha`, for a draft: `auto`, the default, a page with no
  *       clear pixel in any frame as H.264 and the others as lossless PNG, each picture kept once for as long as it
- *       shows; `png`, every page so; `prores`, 422 HQ and 4444 the same way. For xml ProRes 4444, the default, or PNG;
+ *       shows, and footage or a still drawn so with no picture under it on the film's background, opaque; `png`, every
+ *       page with its alpha; `prores`, 422 HQ and 4444 the same way. For xml ProRes 4444, the default, or PNG;
  *       for fcpxml ProRes 4444. 剪映 shows a VP9 WebM's alpha black, and lossless H.264 off its colors),
  *       footage, stills and sounds cloned there (`link`:
  *       pointed at where they are), the sound as clips or as mixed stems, `<name>.srt` when there are subtitles.
@@ -71,12 +74,13 @@ import { FilmPage, launch } from '../../src/host.mjs';
 import { broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, onTheChip, prores709, proresOptions } from '../../src/encoders.mjs';
 import { COMMAND_ROOM, filmSound, filterScriptOption, kill as killProcess, mix, open } from '../../src/shared.mjs';
 import { defaultWorkers, machine } from '../../src/render.mjs';
+import { isLoudness, LOUDNESS_RANGE } from '../../src/loudness.mjs';
 import { selectionClips } from '../../src/render-ranges.mjs';
 import { filmVideos } from '../../src/seekable.mjs';
 import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFilmFile } from '../../src/film-doc.mjs';
 import { layerBlocks, rowBadges, trackKind } from './track-layout.mjs';
 import { fcpxmlDocument } from './fcpxml.mjs';
-import { NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
+import { frameSpan, NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
 import { draftsRoot, jianyingDraft } from './jianying.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
 import { subtitlesForExport } from './captions.mjs';
@@ -99,7 +103,8 @@ export { exportsRoot };
  * @typedef {'standard' | 'high' | 'master'} Quality
  * @typedef {{ frame?: FrameId, fill?: 'contain' | 'cover', burnSubtitles?: boolean }} Framing
  * @typedef {Framing & { kind: 'video', codec?: VideoCodec, shortEdge?: number, scale?: number,
- *   fps?: number, quality?: Quality, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean }} VideoAsk
+ *   fps?: number, quality?: Quality, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean, loudness?: number,
+ *   samples?: number, shutter?: number }} VideoAsk
  * @typedef {Framing & { kind: 'gif', width?: number, fps?: number }} GifAsk
  * @typedef {{ kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean, stems?: boolean }} AudioAsk
  * @typedef {Framing & { kind: 'stills', as?: 'files' | 'zip', format?: 'png' | 'jpg', shortEdge?: number, at?: number[] }} StillsAsk
@@ -144,6 +149,8 @@ export async function exportCapabilities() {
     hevcAlpha: have.has('hevc_videotoolbox'),
     vp9: have.has('libvpx-vp9'),
     prores: have.has('prores_ks') || have.has('prores_videotoolbox'),
+    /* ProRes through the Mac's media engine, else ffmpeg's prores_ks: the dialog's size range differs (export-spec.ts) */
+    proresChip: Boolean(await hardwareEncoder('prores', have)),
     mp3: have.has('libmp3lame'),
   };
 }
@@ -333,11 +340,14 @@ function checked(/** @type {ExportAsk} */ ask) {
       if (ask.codec !== undefined && !CODECS.includes(ask.codec)) throw new ExportError(`codec: ${CODECS.join(', ')}`);
       if (!between(ask.fps, 1, 120)) throw new ExportError('fps: 1 to 120');
       if (!between(ask.scale, 0.25, 4)) throw new ExportError('scale: 0.25 to 4');
+      if (ask.samples !== undefined && (!Number.isInteger(ask.samples) || !between(ask.samples, 1, 64))) throw new ExportError('samples: 1 to 64 whole samples');
+      if (!between(ask.shutter, 0, 1)) throw new ExportError('shutter: 0 to 1');
       if (ask.quality !== undefined && !['standard', 'high', 'master'].includes(ask.quality)) throw new ExportError('quality: standard, high or master');
       if (ask.hardware !== undefined && typeof ask.hardware !== 'boolean') throw new ExportError('hardware: true or false');
       if (ask.clip !== undefined && (typeof ask.clip !== 'string' || !ask.clip || ask.clip.length > 200)) throw new ExportError(`clip: a clip id of ${FILM_FILE}`);
       if (ask.preset !== undefined && (typeof ask.preset !== 'string' || ask.preset.length > 60)) throw new ExportError('preset: a name, at most 60 characters');
       if (ask.sidecar !== undefined && ask.sidecar !== 'srt' && ask.sidecar !== 'vtt') throw new ExportError('sidecar: srt or vtt');
+      if (ask.loudness !== undefined && !isLoudness(ask.loudness)) throw new ExportError(`loudness: ${LOUDNESS_RANGE[0]} to ${LOUDNESS_RANGE[1]} LUFS`);
       break;
     case 'gif':
       if (!between(ask.width, 64, 1920)) throw new ExportError('width: 64 to 1920 pixels');
@@ -438,6 +448,9 @@ export async function projectFiles(root, parts, skip) {
   if (existsSync(style)) files.push({ name: `${TOOL_DIR}/subtitles.json`, file: style, size: statSync(style).size });
   const settings = join(root, TOOL_DIR, 'settings.json');
   if (existsSync(settings)) files.push({ name: `${TOOL_DIR}/settings.json`, file: settings, size: statSync(settings).size });
+  /* its canvas: how it was laid out and made, with the film */
+  const canvas = join(root, TOOL_DIR, 'canvas.json');
+  if (existsSync(canvas)) files.push({ name: `${TOOL_DIR}/canvas.json`, file: canvas, size: statSync(canvas).size });
   for (const part of parts) await walk(join(root, TOOL_DIR, part), `${TOOL_DIR}/${part}`);
   return files;
 }
@@ -590,7 +603,8 @@ function encoding(codec, quality, size, fps, have, hw = null) {
     case 'hevc':
       if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(0.8), { gop }), ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
       if (have.has('libx265')) {
-        return { encoder: 'libx265', format: { video: ['-c:v', 'libx265', '-preset', 'medium', '-crf', String(X265_CRF[quality]), '-x265-params', 'log-level=error', '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
+        /* master in 10 bits (Main 10): a dark gradient keeps steps 8 bits break into bands */
+        return { encoder: 'libx265', format: { video: ['-c:v', 'libx265', '-preset', 'medium', '-crf', String(X265_CRF[quality]), '-x265-params', 'log-level=error', '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709], ...(quality === 'master' ? { pix: YUV_709('yuv420p10le') } : {}) } };
       }
       if (have.has('hevc_videotoolbox')) return { encoder: 'hevc_videotoolbox', format: { video: ['-c:v', 'hevc_videotoolbox', '-b:v', bitrate(0.8), '-g', String(gop), '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
       throw new ExportError('this computer\'s ffmpeg has no HEVC encoder (libx265 or hevc_videotoolbox)');
@@ -675,7 +689,7 @@ async function transcode(make, out, signal, video) {
   const chip = prores ? await hardwareEncoder('prores', have) : null;
   await onTheChip(chip, async (encoder, decoding) => {
     const own = prores ? null : encoding('png', 'master', video ?? { w: 1920, h: 1080 }, video?.fps ?? 30, have).format;
-    const { video: codec, pix } = own ? { video: own.video, pix: /** @type {{ pix: string }} */ (own).pix } : proresOptions(encoder ?? 'prores_ks', alpha);
+    const { video: codec, pix } = own ? { video: own.video, pix: /** @type {{ pix: string }} */ (/** @type {unknown} */ (own)).pix } : proresOptions(encoder ?? 'prores_ks', alpha);
     const tail = ['-map', '0:v:0', '-map', '0:a?', '-vf', pix, ...codec, '-c:a', 'pcm_s16le', '-ar', '48000', out];
     /* VP9's alpha is a side channel ffmpeg's own decoder drops: libvpx reads it */
     if (alpha) {
@@ -775,9 +789,10 @@ const STOP_WAIT_MS = 8000;
 
 /**
  * The export queue. `onChange(job)` is told every change of a job (its progress included), for the pages watching.
- * `captions(root)`: a film's subtitle cues and the person's style for them (captions.mjs by default).
+ * `captions(root)`: a film's subtitle cues and the person's style for them, `tracks` when they are its caption tracks
+ * (captions.mjs by default).
  * `drafts(app)`: 剪映's or CapCut's drafts folder, where its draft goes (null: the exports folder); this computer's by default.
- * @param {{ onChange?: (job: ExportJob) => void, captions?: (root: string) => Promise<{ cues: Cue[], style: SubtitleStyle }>,
+ * @param {{ onChange?: (job: ExportJob) => void, captions?: (root: string) => Promise<{ cues: Cue[], style: SubtitleStyle, tracks?: boolean }>,
  *   drafts?: (app: 'jianying' | 'capcut') => string | null }} [options]
  */
 export function createExports({ onChange = () => {}, captions = subtitlesForExport, drafts = defaultDrafts } = {}) {
@@ -864,7 +879,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const how = (chip) => {
         const { encoder, format } = encoding(codec, quality, size, fps ?? 30, have, chip);
         const container = /** @type {{ pix?: string }} */ (format).pix ?? (codec === 'h264' || codec === 'hevc' ? YUV_709('yuv420p') : codec === 'vp9' ? YUV_709('yuva420p') : 'format=yuva444p10le');
-        return { encoder, opts: { fps, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', format: { ...format, pix: `${place.vf},${container}` }, ...(clip || burn ? { root } : {}) } };
+        /* master: frames taken as PNG and footage read from copies near the file (`fine`), so nothing on the way bands */
+        return { encoder, opts: { fps, samples: ask.samples, shutter: ask.shutter, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(quality === 'master' ? { fine: true } : {}), ...(clip || burn ? { root } : {}) } };
       };
       let { encoder, opts } = how(hw);
       update(job, { encoder });
@@ -1351,7 +1367,15 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         const time = p.kind === 'video' ? [p.from, Math.min(native, p.from + (frames / timeline.rate.fps) * p.speed)] : [p.from, p.from + frames / timeline.rate.fps];
         /* a draft's page with no clear pixel in any frame needs no alpha (each frame's alpha is read as it is drawn, so
            it is what Studio shows): written opaque as it is drawn, nothing written twice. At the first pixel that shows
-           through it is drawn again with its alpha: as lossless PNG, or as ProRes 4444 (`prores`) */
+           through it is drawn again with its alpha: as lossless PNG, or as ProRes 4444 (`prores`). A draft's footage or
+           still with no picture under it while it shows (on the lowest track) is drawn on the film's own background, as
+           the film shows it: opaque, never a lossless PNG of every frame of a video. Under it is on the sequence's
+           frames, so a clip just before it, ending a hair past its cut, is not */
+        const own = frameSpan(p.at, p.end, timeline.rate);
+        const ground = app && alpha !== 'png' && p.kind !== 'page' && !pictures.some((q) => {
+          const span = frameSpan(q.at, q.end, timeline.rate);
+          return q !== p && q.track >= p.track && span.start < own.end && own.start < span.end;
+        });
         let clear = true;
         try {
           const one = await clipFilm(root, id, { change: { time }, doc });
@@ -1359,7 +1383,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             /** @param {Record<string, unknown>} how */
             const draw = async (how) => {
               const result = await pool.render([one.dir], {
-                root, alpha: true, silent: true, fps: timeline.rate.fps, out: staged(file), signal: stop.signal, workers, ...how,
+                root, alpha: !ground, silent: true, fps: timeline.rate.fps, out: staged(file), signal: stop.signal, workers,
+                ...(ground ? { format: how.format } : how),
                 /* a page drawn again counts from where it was: it holds until the second drawing passes it */
                 onProgress: (/** @type {number} */ done) => {
                   drawnFrames.set(file.id, Math.max(drawnFrames.get(file.id) ?? 0, done));
@@ -1644,6 +1669,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     /** How many subtitle cues the film at `root` has (0 when they can't be read): the dialog's subtitle choices need some. */
     async subtitles(/** @type {string} */ root) {
       try { return (await subtitlesOf(root)).cues.length; } catch { return 0; }
+    },
+    /** Whether the film's subtitles are its caption tracks (drawn in its picture, never burned in). */
+    async captionTracks(/** @type {string} */ root) {
+      try { return Boolean((await captions(root)).tracks); } catch { return false; }
     },
     /** Whether an export is waiting or running. */
     busy: () => work.size > 0 || jobs.some((j) => j.status === 'waiting'),

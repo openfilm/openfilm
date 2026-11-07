@@ -1,6 +1,6 @@
 /**
- * The Layers panel's tree (components/LayersPanel): the picture clips shown at the playhead, the top one first, and a
- * page's layers inside it, each level in the order it is drawn (the one on top first), as the stage reads them
+ * The Layers panel's tree (components/LayersPanel): the picture clips and captions shown at the playhead, the top one
+ * first, and a page's layers inside it, each level in the order it is drawn (the one on top first), as the stage reads them
  * (studio/server/stage.js `tree`). Reordering a level writes z-index overrides (stage.js `restack`).
  */
 
@@ -125,6 +125,66 @@ export function movedOrder(siblings: readonly LayerRow[], from: number, to: numb
   const rest = siblings.filter((_, i) => i !== from);
   rest.splice(Math.max(0, Math.min(rest.length, at)), 0, siblings[from]!);
   return rest.map((r) => r.branch);
+}
+
+/** A line's part in the selection: selected, inside a selected one, or neither. */
+export type RowTone = 'on' | 'in' | null;
+
+/**
+ * Each line's part in the selection: 'on' selected, 'in' inside a selected one (a group's layers, a clip's), else
+ * null. Lines come in tree order, so what a line holds follows it, deeper.
+ */
+export function selectionTones(lines: readonly LayerLine[], isSelected: (line: LayerLine) => boolean): RowTone[] {
+  let under: number | null = null;
+  return lines.map((line) => {
+    if (under != null && line.depth <= under) under = null;
+    if (isSelected(line)) { under ??= line.depth; return 'on'; }
+    return under != null ? 'in' : null;
+  });
+}
+
+/**
+ * The layer rows shown from `a` to `b` (either way round), in tree order: the rows a Shift-click selects. A row inside
+ * another of them is left out: the one around it holds it already (and is not moved twice).
+ */
+export function rowsBetween(lines: readonly LayerLine[], a: LayerLine, b: LayerLine): LayerLine[] {
+  const i = lines.indexOf(a);
+  const j = lines.indexOf(b);
+  if (i < 0 || j < 0) return [];
+  const span = lines.slice(Math.min(i, j), Math.max(i, j) + 1).filter((l) => l.row);
+  const keys = new Set(span.map((l) => l.key));
+  const byKey = new Map(lines.map((l) => [l.key, l]));
+  const inside = (l: LayerLine) => {
+    for (let up = byKey.get(l.parentKey); up; up = byKey.get(up.parentKey)) if (keys.has(up.key)) return true;
+    return false;
+  };
+  return span.filter((l) => !inside(l));
+}
+
+/** A caption shown now: its cue's clip id (lib/caption-blocks), its caption track's place in film.html, picked or not. */
+export interface LayerCaption {
+  clip: string;
+  track: number;
+  selected: boolean;
+}
+
+/**
+ * The clips with the captions shown now among them, each where its track is drawn: a track earlier in film.html is
+ * drawn over the later ones, so a caption goes above the first clip of a track after its own. A clip whose track is not
+ * known stays where it is.
+ */
+export function withCaptions(clips: readonly LayerClip[], captions: readonly LayerCaption[], trackOf: (clipId: string) => number | null): LayerClip[] {
+  if (!captions.length) return [...clips];
+  const rest = [...captions].sort((a, b) => a.track - b.track);
+  const out: LayerClip[] = [];
+  let i = 0;
+  for (const c of clips) {
+    const track = trackOf(c.clip);
+    while (track != null && i < rest.length && rest[i]!.track < track) out.push({ clip: rest[i++]!.clip, kind: 'caption', layers: [] });
+    out.push(c);
+  }
+  for (; i < rest.length; i += 1) out.push({ clip: rest[i]!.clip, kind: 'caption', layers: [] });
+  return out;
 }
 
 /** Two reads of the tree are the same picture of it (the panel redraws only when they differ). */

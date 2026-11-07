@@ -169,8 +169,12 @@ test('a sound used by many clips is one input, split and cut in the graph: the s
     const parts = [{ at: 0, from: 0.25, to: 0.75 }, { at: 1, from: 1, to: 1.5 }, { at: 2, from: 0, to: 0.5, fade: { in: 0.1, out: 0.1, length: 0.5, skip: 0 } }];
     const clip = (file, p) => ({ file, volume: 1, speed: 1, ...p });
     const shared = parts.map((p) => clip(tone, p));
-    const { inputs } = mixGraph(shared, 3);
+    const { inputs, filter } = mixGraph(shared, 3);
     assert.equal(inputs.filter((a) => a === '-i').length, 1, 'one input for one file');
+    /* the mix gets its timestamps before it is padded to the film's length: amix's frames come without any at times
+       (ffmpeg 8 on Linux, about one mix in 25 with files of their own), and apad pads by them, so the mix ended with
+       its last sound, at 2.5 s here, not 3 */
+    assert.match(filter, /amix=[^;]*,asetpts=N\/SR\/TB,apad=whole_dur=3,atrim=0:3\[out\]$/, 'timestamps set, then padded, then cut');
     const one = join(dir, 'one.wav'), each = join(dir, 'each.wav');
     await mix(shared, 3, one, ['-c:a', 'pcm_s16le']);
     /* the same parts, each from a file of its own: each its own input, seeking to its part */

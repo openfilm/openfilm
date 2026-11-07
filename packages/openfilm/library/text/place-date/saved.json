@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "place-date.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Month\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Day\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Weekday\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Year\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Band\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Paper\", \"type\": \"var\", \"var\": \"--paper\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--ink\"}]"
+    }
+  },
+  "durationMs": 4000
+}

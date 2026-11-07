@@ -15,6 +15,14 @@ import {
 import { normalizeWavePeaks } from '@/lib/waveform-columns';
 import { useMediaImage } from '@/lib/media-queue';
 
+/** The one ground under every picture, video and page that may be clear in places (a thumbnail, a preview): a faint
+    checkerboard of the words' own color over what is behind it, so it reads as "clear here" in either theme without
+    being seen much. On the picture's own box only, never its letterbox. */
+export const CLEAR: React.CSSProperties = {
+  backgroundImage: 'repeating-conic-gradient(color-mix(in srgb, var(--text) 7%, transparent) 0 25%, transparent 0 50%)',
+  backgroundSize: '10px 10px',
+};
+
 /** A file's icon by kind, where there is no picture of it. */
 export const KIND_ICON: Record<WorkspaceResourceKind, LucideIcon> = {
   video: FileVideo,
@@ -78,7 +86,8 @@ export function MediaPreview({
   if (file.kind === 'audio') return <AudioPreview file={file} sources={sources} />;
 
   const Icon = KIND_ICON[file.kind] ?? FileIcon;
-  const IMG = 'absolute inset-0 h-full w-full min-w-0 object-contain';
+  /* as large as the tile allows at its own shape (a poster is larger than any tile), so the clear ground is on it alone */
+  const IMG = 'max-h-full max-w-full min-w-0';
 
   return (
     <span ref={boxRef} className="absolute inset-0 flex items-center justify-center">
@@ -89,9 +98,10 @@ export function MediaPreview({
           alt=""
           onError={() => (poster && !failed ? setFailed(true) : setBroken(true))}
           className={IMG}
+          style={CLEAR}
         />
       ) : thumbable && file.kind === 'video' && shown ? (
-        <img src={shown} alt="" onError={() => setBroken(true)} className={IMG} />
+        <img src={shown} alt="" onError={() => setBroken(true)} className={IMG} style={CLEAR} />
       ) : file.kind === 'other' ? (
         /* a file Studio does not play (a document, a model, data): its icon and its ending, which say what it is */
         <span className="flex flex-col items-center gap-1">
@@ -107,8 +117,7 @@ export function MediaPreview({
 
 /**
  * A sound's waveform: 1px columns from the bottom, each as tall as the loudest peak under it, scaled to the file's own
- * peak as on the timeline (normalizeWavePeaks): drawn as recorded, a quiet bed is a line along the bottom of a dark
- * tile. Without a waveform (it could not be read), the sound's icon.
+ * peak (normalizeWavePeaks): drawn as recorded, a quiet bed is a line along the bottom of a dark tile. Without a waveform (it could not be read), the sound's icon.
  */
 function AudioPreview({ file, sources }: { file: WorkspaceResource; sources: MediaSources }) {
   const wrapRef = React.useRef<HTMLSpanElement>(null);

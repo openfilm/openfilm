@@ -5,8 +5,7 @@
  *   desktop:local-agents:list        → [{ id, label, cli: { path, source } | null, signedIn, install, setupRequired }]
  *   desktop:local-agents:sign-in     { agent } → Terminal runs its own sign-in, which opens its own page
  *   desktop:local-agents:probe       { agent } → { ok, info }: a session opened and closed, only for its options
- *                                    (model, reasoning effort) and its commands (info.commands), so the menu and the
- *                                    composer's / show them before the first message
+ *                                    (model, reasoning effort), so the menu shows them before the first message
  *   desktop:local-agents:start       { agent, cwd, resume? } → { ok, key, info } | { ok: false, error, code? }
  *                                    resume: the agent's own id of a conversation it had (info.sessionId of an earlier
  *                                    start), taken up where it stopped: the session still open here (a reloaded
@@ -61,8 +60,6 @@ const BETWEEN_TURNS_MAX = 500;
 /** a session nobody has spoken in for this long closes; how often that is looked at */
 const IDLE_MS = 20 * 60_000;
 const IDLE_CHECK_MS = 60_000;
-/** how long a session opened for its options waits for the agent to say its commands */
-const PROBE_COMMANDS_MS = 1500;
 /** how long after its turn a session whose skills changed closes: the page has settled the turn by then */
 const STALE_CLOSE_MS = 3000;
 /** the pictures one message may carry (the page's PROMPT_PICTURES_MAX), and how big each (base64, at most 2000 px a side) */
@@ -164,6 +161,8 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   /** @type {Map<string, { session: AgentSession, sender: import('electron').WebContents, pending: Map<string, (answer: any) => void>, agent: string, cwd: string, turn: any }>} */
   const sessions = new Map();
   let activePrompts = 0;
+  /** the agent the chat last started a conversation with: the one Studio's own questions go to (`ask`) */
+  let lastAgent = null;
   /** the folders a turn is running in now: what a project cannot be deleted from under */
   const working = () => [...new Set([...sessions.values()].filter((entry) => entry.running > 0).map((entry) => entry.cwd))];
   /** the folders where an agent waits for the person's answer (a permission, a question): told on each change */
@@ -222,23 +221,15 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     if (!isChatAgent(agent)) return { ok: false, error: `Unknown agent: ${String(agent)}` };
     let session;
     try {
-      /* its commands too (the composer's / menu), which it says just after the session opens: waited for a moment */
-      let commands = null;
       let options = null;
-      let said = () => {};
-      const heard = new Promise((done) => { said = done; });
       session = new AgentSession({ agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent),
-        onUpdate: (update) => {
-          if (update?.sessionUpdate === 'available_commands_update') { commands = update.availableCommands ?? null; said(); }
-          if (update?.sessionUpdate === 'config_option_update') options = update.configOptions ?? null;
-        } });
+        onUpdate: (update) => { if (update?.sessionUpdate === 'config_option_update') options = update.configOptions ?? null; } });
       let info = await session.start();
       if (options) info = { ...info, configOptions: options };
       options = null;
       info = await optionsForModel(session, info, typeof opts?.model === 'string' ? opts.model : undefined);
-      await Promise.race([heard, new Promise((done) => setTimeout(done, PROBE_COMMANDS_MS))]);
       if (options) info = { ...info, configOptions: options };
-      return { ok: true, info: { ...info, ...(commands ? { commands } : {}) } };
+      return { ok: true, info };
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
       /* the model menu says only that it could not start: what went wrong is kept here (logs/studio.log) */
@@ -258,6 +249,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     const meta = opts?.meta && typeof opts.meta === 'object' ? opts.meta : null;
     if (!isChatAgent(agent)) return { ok: false, error: `Unknown agent: ${String(agent)}` };
     if (typeof cwd !== 'string' || !cwd) return { ok: false, error: 'Missing project folder.' };
+    lastAgent = agent;
     /* the conversation still open here (the page was reloaded): taken up as it is, no second process */
     const open = resume ? [...sessions].find(([, e]) => e.agent === agent && e.cwd === cwd && e.info?.sessionId === resume && e.sender === event.sender) : null;
     if (open) {
@@ -274,7 +266,9 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
         resume,
         binDir,
         fallbackDir,
-        env,
+        /* its name to Studio, by the chat's conversation: the `openfilm` commands it runs say so, and Studio tells it
+           once what the person changed while it worked (openfilm's studio/client.mjs agentName) */
+        env: { ...env, OPENFILM_AGENT: `app:${typeof meta?.sessionId === 'string' && meta.sessionId ? meta.sessionId : key}` },
         logDir: logDir(),
         skills: skillsFor(agent),
         harness: await harnessFor(agent),
@@ -480,6 +474,34 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   return {
     isBusy: () => activePrompts > 0,
     working,
+    /** the agent the chat last started a conversation with, or null */
+    lastAgent: () => lastAgent,
+    /**
+     * One question answered by `agent`'s own model, with no chat: Studio's own work that needs a model (translating
+     * subtitles). A session of its own in an empty folder, where the agent may do nothing but answer (`answerOnly`: every
+     * permission refused; every question skipped); its words, whole. `signal` stops it.
+     * @param {string} agent @param {string} text @param {AbortSignal} [signal] @returns {Promise<string>}
+     */
+    ask: async (agent, text, signal) => {
+      if (!isChatAgent(agent)) throw new Error(`Unknown agent: ${String(agent)}`);
+      let said = '';
+      const session = new AgentSession({
+        agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent), answerOnly: true,
+        onUpdate: (update) => { if (update?.sessionUpdate === 'agent_message_chunk' && update.content?.type === 'text') said += update.content.text ?? ''; },
+        onQuestion: async () => null,
+      });
+      const stop = () => { void session.cancel().catch(() => {}); session.close(); };
+      signal?.addEventListener('abort', stop, { once: true });
+      try {
+        await session.start();
+        signal?.throwIfAborted();
+        await session.prompt([{ type: 'text', text }]);
+        return said;
+      } finally {
+        signal?.removeEventListener('abort', stop);
+        session.close();
+      }
+    },
     closeAll: () => [...sessions.keys()].forEach(close),
     /** an agent disconnected in Settings: its sessions close */
     closeAgent: (agent) => { for (const [key, entry] of [...sessions]) if (entry.agent === agent) close(key); },

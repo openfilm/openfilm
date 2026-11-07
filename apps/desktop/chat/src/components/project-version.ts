@@ -32,6 +32,8 @@ export interface ProjectVersion {
   settledAt?: string;
   /** what the turn changed in the project's files (lib/file-changes); none when nothing did */
   fileChanges?: FileChange[];
+  /** the app keeps the files as the turn found them: the turn can be undone (its footer's Undo) */
+  undoable?: boolean;
   /** 'background': the agent started it by itself, a background task of its own having come back (no message) */
   origin?: 'background';
 }

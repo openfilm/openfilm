@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Confetti</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+.ring { fill: none; stroke: #ffffff; stroke-width: 4; }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 400 400"><circle class="ring" cx="200" cy="330" r="10"/></svg>
+<script>
+/*
+ * A popper of confetti: strips and dots burst up from below, spin and flutter down, and burst again every couple of
+ * seconds; every piece is worked out from t alone. A page of OpenFilm's library (CC0): what it shows at t comes from
+ * t alone; its CSS animations are held at t by the host.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const svg = document.querySelector('svg');
+const ns = 'http://www.w3.org/2000/svg';
+const COLORS = ['#ff3b30', '#ffd60a', '#34c759', '#30b0ff', '#af52de', '#ff9500', '#ff2d55', '#ffffff'];
+const N = 64, P = 2.4;
+const make = () => Array.from({ length: N }, (_, i) => {
+  const kind = i % 4;
+  const el = document.createElementNS(ns, kind === 3 ? 'circle' : 'rect');
+  if (kind === 3) el.setAttribute('r', '7');
+  else { const w = kind === 2 ? 30 : 20, ht = kind === 2 ? 7 : 11; el.setAttribute('x', -w / 2); el.setAttribute('y', -ht / 2); el.setAttribute('width', w); el.setAttribute('height', ht); el.setAttribute('rx', 1.5); }
+  el.setAttribute('fill', COLORS[i % COLORS.length]);
+  return svg.appendChild(el);
+});
+const sets = [make(), make()];
+const ring = document.querySelector('.ring');
+const K = 2.6, G = 520;
+const place = (el, i, age, b) => {
+  if (age < 0 || age > P + 1.2) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  const s = i + b * 131;
+  const a = -Math.PI / 2 + (hash(s + 0.1) - 0.5) * 1.9, v = 420 + hash(s + 0.2) * 520;
+  const e = (1 - Math.exp(-K * age)) / K;
+  const x = 200 + Math.cos(a) * v * e + Math.sin(age * (3 + hash(s + 0.3) * 3) + s) * 10 * Math.min(age, 1);
+  const y = 330 + Math.sin(a) * v * e + (G / K) * (age - e);
+  const spin = age * (300 + hash(s + 0.4) * 500) * (hash(s + 0.5) < 0.5 ? -1 : 1);
+  const flip = Math.cos(age * (6 + hash(s + 0.6) * 8) + s);
+  const grow = Math.min(age / 0.12, 1);
+  el.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${spin.toFixed(0)}) scale(${grow.toFixed(2)} ${(grow * flip).toFixed(2)})`);
+  el.style.opacity = String(Math.max(0, Math.min(1, (P + 1.2 - age) / 0.6)));
+};
+window.film = {
+  width: 400,
+  height: 400,
+  frame(t) {
+    const b = Math.floor(t / P), age = t - b * P;
+    sets[b % 2].forEach((el, i) => place(el, i, age, b));
+    sets[(b + 1) % 2].forEach((el, i) => place(el, i, b > 0 ? age + P : -1, b - 1));
+    const r = Math.min(age / 0.35, 1);
+    ring.setAttribute('r', String(10 + r * 60));
+    ring.style.opacity = String(1 - r);
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

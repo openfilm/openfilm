@@ -179,6 +179,8 @@ function saveSettings(s: Settings): void {
 }
 
 const SHORT_EDGES = [480, 720, 1080, 1440, 2160];
+/** The loudness a video can be exported at, in LUFS: streaming sites, podcasts, broadcast (EBU R128). */
+const LOUDNESS_TARGETS = [-14, -16, -23] as const;
 const STILL_EDGES = [720, 1080, 1440, 2160];
 /** A video's rates: the project's list (lib/timecode), one spec for both. */
 const FPS_CHOICES = FRAME_RATES;
@@ -265,6 +267,8 @@ export function ExportCenter(props: ExportCenterProps) {
   const [defaultFolder, setDefaultFolder] = React.useState<string>('');
   /** How many subtitle cues the film has (null until the server says). */
   const [captionCount, setCaptionCount] = React.useState<number | null>(null);
+  /** Whether they are the film's caption tracks: part of its picture, in every export unless the track is hidden. */
+  const [captionTracks, setCaptionTracks] = React.useState(false);
   /** How big the project and each of its parts are (null: not known yet). */
   const [projectSizes, setProjectSizes] = React.useState<ProjectSizes | null>(null);
   /** The footage's frame rate, as an editor's rate (an editor wants the source's exact rate: 29.97 in a 30 timeline slips a frame every 1,000). */
@@ -290,7 +294,7 @@ export function ExportCenter(props: ExportCenterProps) {
     setExportName(props.title);
     setNameTyped(false);
     setRange(false);
-    void listExports(props.projectId).then((r) => { setCan(r.can); setDraftApps({ jianying: Boolean(r.drafts?.jianying), capcut: Boolean(r.drafts?.capcut) }); setDefaultFolder(r.folder); setCaptionCount(r.subtitles ?? 0); setProjectSizes(r.project ?? null); }).catch(() => {});
+    void listExports(props.projectId).then((r) => { setCan(r.can); setDraftApps({ jianying: Boolean(r.drafts?.jianying), capcut: Boolean(r.drafts?.capcut) }); setDefaultFolder(r.folder); setCaptionCount(r.subtitles ?? 0); setCaptionTracks(Boolean(r.captionTracks)); setProjectSizes(r.project ?? null); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -411,7 +415,7 @@ export function ExportCenter(props: ExportCenterProps) {
   /* ── the exports this screen asks for ── */
   const baseRequests = React.useMemo((): ExportRequest[] => {
     /* subtitles drawn into the picture: only a film that has some */
-    const burn = (on: boolean) => (captions > 0 && on ? { burnSubtitles: true } : {});
+    const burn = (on: boolean) => (captions > 0 && on && !captionTracks ? { burnSubtitles: true } : {});
     switch (dest) {
       case 'video': {
         const v = s.video;
@@ -420,6 +424,7 @@ export function ExportCenter(props: ExportCenterProps) {
           quality: v.quality, audio: v.audio, label: selectedVideoPreset?.name ?? codecName(videoCodec), ...burn(v.burn),
           ...(selectedVideoPreset ? { preset: selectedVideoPreset.name } : {}),
           ...(captions > 0 && v.sidecar !== 'none' && videoCodec !== 'png' ? { sidecar: v.sidecar } : {}),
+          ...(v.audio && v.loudness != null && videoCodec !== 'png' ? { loudness: v.loudness } : {}),
         }];
       }
       case 'alpha': {
@@ -456,7 +461,7 @@ export function ExportCenter(props: ExportCenterProps) {
         }];
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, projectParts, moments]);
+  }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, captionTracks, projectParts, moments]);
 
   const requests = React.useMemo(() => canRange && range && parsedRanges
     ? applyRangeDelivery(baseRequests, parsedRanges, rangeDelivery) : baseRequests,
@@ -472,7 +477,7 @@ export function ExportCenter(props: ExportCenterProps) {
       const size = exportFramedDims(stage, frame, fill, r.shortEdge ?? Math.min(stage.w, stage.h));
       return add(exportEstimateBytes({
         codec: r.codec, size, filmPixels: exportFilmPixels(stage, frame, fill, size), fps: r.fps, quality: r.quality, durationMs: requestDurationMs(r, totalMs),
-        audio: r.audio && r.codec !== 'png' && !knownSilent,
+        audio: r.audio && r.codec !== 'png' && !knownSilent, proresKs: !can?.proresChip,
       }));
     }
     if (r.kind === 'gif') {
@@ -492,7 +497,7 @@ export function ExportCenter(props: ExportCenterProps) {
       return add([bytes, bytes]);
     }
     return [low, high];
-  }, [0, 0]), [requests, stage, totalMs, soundKinds, knownSilent, projectSizes]);
+  }, [0, 0]), [requests, stage, totalMs, soundKinds, knownSilent, projectSizes, can]);
   /* "about 0.8 MB–8 MB"; one size when both ends read the same */
   const estText = estBytes[1] > 0 ? [...new Set(estBytes.map((b) => formatBytes(b)))].join('–') : '';
 
@@ -594,7 +599,7 @@ export function ExportCenter(props: ExportCenterProps) {
       >
         {/* left: destinations */}
         {/* the list scrolls when the window is short; the note under it stays whole */}
-        <nav className="flex min-h-0 w-[212px] shrink-0 flex-col border-r border-[var(--border-soft)] bg-[var(--surface-2)]">
+        <nav className="flex min-h-0 w-[212px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-field)]">
           <h2 className="shrink-0 px-5 pb-2 pt-4 text-[15px] font-semibold tracking-tight text-[var(--text)]">{t('exportCenter.title')}</h2>
           <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-3 pb-2">
           {DESTS.map((d) => {
@@ -606,7 +611,7 @@ export function ExportCenter(props: ExportCenterProps) {
                 aria-pressed={on}
                 onClick={() => { patch('dest', d.id); setResult(null); }}
                 className={`flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition ${
-                  on ? 'bg-[var(--surface)] shadow-[var(--shadow-sm)]' : 'hover:bg-[var(--bg-hover)]'
+                  on ? 'bg-[var(--bg-raised)] shadow-[var(--shadow-sm)]' : 'hover:bg-[var(--bg-hover)]'
                 }`}
               >
                 <span className={`mt-0.5 shrink-0 ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{d.icon}</span>
@@ -620,7 +625,7 @@ export function ExportCenter(props: ExportCenterProps) {
             );
           })}
           </div>
-          <div className="shrink-0 border-t border-[var(--border-soft)] px-5 py-3 text-[10.5px] leading-relaxed text-[var(--text-faint)]">
+          <div className="shrink-0 border-t border-[var(--border)] px-5 py-3 text-[10.5px] leading-relaxed text-[var(--text-faint)]">
             {t('exportCenter.engineDesktop')}
           </div>
         </nav>
@@ -728,10 +733,23 @@ export function ExportCenter(props: ExportCenterProps) {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <Field label={t('exportCenter.audio')}>
                         <Toggle checked={s.video.audio} onChange={(audio) => patch('video', { audio })} label={t('exportCenter.includeAudio')} />
+                        {s.video.audio && (
+                          <div className="mt-2">
+                            <Segmented
+                              value={s.video.loudness == null ? 'mixed' : String(s.video.loudness)}
+                              options={[
+                                { value: 'mixed', label: t('exportCenter.loudnessAsMixed') },
+                                ...LOUDNESS_TARGETS.map((n) => ({ value: String(n), label: `${n} LUFS` })),
+                              ]}
+                              onChange={(v) => patch('video', { loudness: v === 'mixed' ? null : Number(v) })}
+                            />
+                            <span className="mt-1 block text-[11px] leading-snug text-[var(--text-faint)]">{t('exportCenter.loudnessHint')}</span>
+                          </div>
+                        )}
                       </Field>
                       {captions > 0 && (
                         <Field label={t('exportCenter.subtitles')}>
-                          <Toggle checked={s.video.burn} onChange={(burn) => patch('video', { burn })} label={t('exportCenter.burnIn')} />
+                          {captionTracks ? <Hint>{t('exportCenter.captionTracksDrawn')}</Hint> : <Toggle checked={s.video.burn} onChange={(burn) => patch('video', { burn })} label={t('exportCenter.burnIn')} />}
                           <div className="mt-2">
                             <Segmented
                               value={s.video.sidecar}
@@ -904,7 +922,7 @@ export function ExportCenter(props: ExportCenterProps) {
                     <Chips value={s.gif.fps} options={GIF_FPS.map((f) => ({ value: f, label: `${f}` }))} onChange={(fps) => patch('gif', { fps })} />
                   </Field>
                   {captions > 0 && (
-                    <Toggle checked={s.gif.burn} onChange={(burn) => patch('gif', { burn })} label={t('exportCenter.burnIn')} />
+                    captionTracks ? <Hint>{t('exportCenter.captionTracksDrawn')}</Hint> : <Toggle checked={s.gif.burn} onChange={(burn) => patch('gif', { burn })} label={t('exportCenter.burnIn')} />
                   )}
                   <Hint>{t('exportCenter.gifHint')}</Hint>
                 </>
@@ -1024,7 +1042,7 @@ export function ExportCenter(props: ExportCenterProps) {
                     value={moments}
                     onChange={pickMoments}
                     max={imageDocument ? MOMENTS_MAX.slides : MOMENTS_MAX.frames}
-                    note={captions > 0 && s.images.burn ? t('exportCenter.moments.noSubtitles') : undefined}
+                    note={captions > 0 && s.images.burn && !captionTracks ? t('exportCenter.moments.noSubtitles') : undefined}
                   />
                   <div className="flex min-w-0 flex-col gap-5">
                     <Field label={t('exportCenter.imageOutput')}>
@@ -1066,7 +1084,7 @@ export function ExportCenter(props: ExportCenterProps) {
                       />
                     </Field>
                     {captions > 0 && (
-                      <Toggle checked={s.images.burn} onChange={(burn) => patch('images', { burn })} label={t('exportCenter.burnIn')} />
+                      captionTracks ? <Hint>{t('exportCenter.captionTracksDrawn')}</Hint> : <Toggle checked={s.images.burn} onChange={(burn) => patch('images', { burn })} label={t('exportCenter.burnIn')} />
                     )}
                   </div>
                 </div>
@@ -1104,7 +1122,7 @@ export function ExportCenter(props: ExportCenterProps) {
 
           {/* bottom: where it goes (a button like the dialog's other pickers: a click picks another folder), what it is
               called, what comes out, and the primary button */}
-          <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-3 border-t border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-2)_45%,transparent)] px-5 py-3.5">
+          <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-3 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-field)_45%,transparent)] px-5 py-3.5">
             <div className="flex min-w-[280px] max-w-[560px] flex-1 items-center gap-2">
               {toDrafts ? (
                 <span className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-[13px] text-[var(--text-muted)]">
@@ -1124,7 +1142,7 @@ export function ExportCenter(props: ExportCenterProps) {
                     if (e.key === 'Enter') { e.preventDefault(); commitFolder(); }
                     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setFolderDraft(null); }
                   }}
-                  className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 font-mono text-[12px] text-[var(--text)] outline-none focus:border-[var(--text-faint)]"
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] px-3 font-mono text-[12px] text-[var(--text)] outline-none focus:border-[var(--text-faint)]"
                 />
               ) : (
                 <button
@@ -1133,7 +1151,7 @@ export function ExportCenter(props: ExportCenterProps) {
                   disabled={picking}
                   title={folder}
                   aria-label={`${t('exportCenter.saveTo')}: ${folder || '—'}. ${t('exportCenter.change')}`}
-                  className="flex h-10 min-w-0 max-w-[45%] shrink-0 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--fill-tsp)] pl-3 pr-2.5 text-[13px] text-[var(--text)] outline-none transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] focus-visible:border-[var(--accent)] disabled:opacity-60"
+                  className="flex h-10 min-w-0 max-w-[45%] shrink-0 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-field)] pl-3 pr-2.5 text-[13px] text-[var(--text)] outline-none transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] focus-visible:border-[var(--accent)] disabled:opacity-60"
                 >
                   {picking ? <Loader2 size={15} className="shrink-0 animate-spin text-[var(--text-muted)]" /> : <FolderOpen size={15} className="shrink-0 text-[var(--text-muted)]" />}
                   <span className="min-w-0 truncate">{folderName(folder) || '—'}</span>
@@ -1153,7 +1171,7 @@ export function ExportCenter(props: ExportCenterProps) {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.nativeEvent.isComposing && !disabled) { e.preventDefault(); void queue(requests); }
                   }}
-                  className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--text-faint)]"
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] px-3 text-[13px] text-[var(--text)] outline-none transition focus:border-[var(--text-faint)]"
                 />
               )}
             </div>
@@ -1182,7 +1200,7 @@ export function ExportCenter(props: ExportCenterProps) {
                 type="button"
                 onClick={() => void queue(requests)}
                 disabled={disabled}
-                className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[var(--text)] px-6 text-[13.5px] font-medium text-[var(--bg)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[var(--primary)] px-6 text-[13.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {working ? <Loader2 size={14} className="animate-spin" /> : null}
                 {primaryLabel}
@@ -1224,7 +1242,7 @@ function Hint({ children }: { children: React.ReactNode }) {
 
 function Callout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
+    <div className="flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-field)] px-3 py-2.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
       <AlertTriangle size={14} className="mt-0.5 shrink-0 text-[var(--warn)]" />
       <span>{children}</span>
     </div>
@@ -1312,7 +1330,7 @@ function Segmented<V extends string>({ value, options, onChange }: {
 }) {
   return (
     /* a capsule in a capsule: the same even gap all round, so their curves run side by side */
-    <div className="inline-flex max-w-full self-start overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--bg)] p-[3px]">
+    <div className="inline-flex max-w-full self-start overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--bg-panel)] p-[3px]">
       {options.map((o) => (
         <button
           key={o.value}
@@ -1320,7 +1338,7 @@ function Segmented<V extends string>({ value, options, onChange }: {
           aria-pressed={o.value === value}
           onClick={() => onChange(o.value)}
           className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-medium transition ${
-            o.value === value ? 'bg-[var(--surface-3,var(--bg-hover))] text-[var(--text)] shadow-[var(--shadow-sm)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            o.value === value ? 'bg-[var(--bg-pressed,var(--bg-hover))] text-[var(--text)] shadow-[var(--shadow-sm)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
           }`}
         >
           {o.label}
@@ -1347,9 +1365,9 @@ function Toggle({ checked, onChange, label, disabled, locked }: {
         aria-readonly={locked || undefined}
         disabled={disabled}
         onClick={() => { if (!locked) onChange(!checked); }}
-        className={`relative h-[18px] w-[30px] shrink-0 rounded-full transition ${checked || locked ? 'bg-[var(--text)]' : 'bg-[var(--border-strong,var(--border))]'} ${locked ? 'cursor-default' : ''} disabled:opacity-50`}
+        className={`relative h-[18px] w-[30px] shrink-0 rounded-full transition ${checked || locked ? 'bg-[var(--switch-on)]' : 'bg-[var(--border-strong)]'} ${locked ? 'cursor-default' : ''} disabled:opacity-50`}
       >
-        <span className={`absolute top-[2px] h-[14px] w-[14px] rounded-full bg-[var(--bg)] transition-[left] ${checked || locked ? 'left-[14px]' : 'left-[2px]'}`} />
+        <span className={`absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-[left] ${checked || locked ? 'left-[14px]' : 'left-[2px]'}`} />
       </button>
       {label}
     </label>

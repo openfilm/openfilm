@@ -1,0 +1,184 @@
+{
+ "groups": [
+  {"id": "vlog", "name": {"en": "Vlog", "zh-CN": "Vlog", "ja": "Vlog", "ko": "브이로그", "es": "Vlog"}},
+  {"id": "intro", "name": {"en": "Openers", "zh-CN": "片头", "ja": "オープニング", "ko": "오프닝", "es": "Aperturas"}},
+  {"id": "beat", "name": {"en": "On the beat", "zh-CN": "卡点", "ja": "ビート合わせ", "ko": "비트", "es": "Al ritmo"}},
+  {"id": "promo", "name": {"en": "Shop", "zh-CN": "电商", "ja": "ショップ", "ko": "쇼핑", "es": "Tienda"}},
+  {"id": "memory", "name": {"en": "Memories", "zh-CN": "回忆", "ja": "思い出", "ko": "추억", "es": "Recuerdos"}},
+  {"id": "holiday", "name": {"en": "Holidays", "zh-CN": "节日", "ja": "イベント", "ko": "기념일", "es": "Fiestas"}},
+  {"id": "knowledge", "name": {"en": "Explainers", "zh-CN": "知识", "ja": "解説", "ko": "지식", "es": "Explicativos"}}
+ ],
+ "templates": [
+  {
+   "id": "travel-vlog", "group": "vlog",
+   "name": {"en": "Travel diary", "zh-CN": "旅行日记", "ja": "旅の日記", "ko": "여행 일기", "es": "Diario de viaje"},
+   "slots": [3, 2.4, 2.4, 3.2], "tone": "#36506b", "photos": ["scenery", "film", "food", "mood"],
+   "music": "audio/music/plucky-light-underscore-f5be3b.mp3",
+   "cut": ["transitions/exposure", "transitions/flare-whip"],
+   "over": [{"item": "effects/light-leak", "len": 2.8}],
+   "marks": [
+    {"item": "text/title-script", "at": 0.3, "len": 2.5, "fit": 0.34, "words": {".t1": "Summer Days", ".t2": "TRAVEL DIARY · DAY 1"}, "fade": [0, 0.3]},
+    {"item": "text/place-pin", "at": 5.6, "len": 2.6, "x": 0.3, "y": 0.82, "fit": 0.2, "fade": [0, 0.3]},
+    {"item": "stickers/look-here", "at": 8.2, "len": 2.4, "x": 0.72, "y": 0.3, "fit": 0.2}
+   ]
+  },
+  {
+   "id": "weekend-vlog", "group": "vlog",
+   "name": {"en": "Weekend vlog", "zh-CN": "周末Vlog", "ja": "週末Vlog", "ko": "주말 브이로그", "es": "Vlog de fin de semana"},
+   "slots": [2.2, 2, 2, 2, 2.4], "tone": "#5a4a3e", "photos": ["fresh", "food", "portrait", "film", "mood"],
+   "music": "audio/music/cafe-tape-piano-8646df.mp3",
+   "cut": ["transitions/swipe-blur", "transitions/circle-zoom", "transitions/swipe-blur", "transitions/dots"],
+   "over": [{"item": "effects/grain"}],
+   "marks": [
+    {"item": "text/place-date", "at": 0.2, "len": 2.6, "x": 0.82, "y": 0.28, "fit": 0.3, "fade": [0, 0.3]},
+    {"item": "text/lower-vlog", "at": 2.6, "len": 3, "x": 0.34, "y": 0.84, "fit": 0.18, "words": {".t1": "My weekend"}, "fade": [0, 0.3]},
+    {"item": "text/end-seeyou", "at": 8.4, "len": 2.2, "y": 0.5, "fit": 0.3, "words": {".t2": "MORE NEXT WEEKEND"}}
+   ]
+  },
+  {
+   "id": "cinema-open", "group": "intro",
+   "name": {"en": "Film opening", "zh-CN": "电影开场", "ja": "映画のオープニング", "ko": "영화 오프닝", "es": "Apertura de cine"},
+   "slots": [3.4, 3, 3.6], "tone": "#24262c", "photos": ["cinema", "mood", "city"],
+   "music": "audio/music/cinematic-bloom-swell-7cb0bd.mp3",
+   "cut": ["transitions/burn-through", "transitions/projector"],
+   "over": [{"item": "effects/letterbox"}, {"item": "effects/grain"}],
+   "marks": [
+    {"item": "text/title-serif", "at": 6.6, "len": 3.4, "fit": 0.3, "words": {".t1": "The Long Summer", ".t2": "A SHORT FILM", ".t3": "written and directed by you"}}
+   ]
+  },
+  {
+   "id": "brand-intro", "group": "intro",
+   "name": {"en": "Brand opener", "zh-CN": "品牌开场", "ja": "ブランドオープニング", "ko": "브랜드 오프닝", "es": "Apertura de marca"},
+   "slots": [2.4, 2.2, 3.4], "tone": "#1f2b45", "photos": ["city", "fresh", "portrait"],
+   "music": "audio/music/confident-tech-launch-4c279b.mp3",
+   "cut": ["transitions/color-bars", "transitions/ribbon"],
+   "marks": [
+    {"item": "text/title-slab", "at": 0.3, "len": 2, "fit": 0.32, "words": {".t1": "MAKE IT", ".t2": "SEASON 01"}, "fade": [0, 0.25]},
+    {"item": "text/title-sweep", "at": 4.8, "len": 3.2, "fit": 0.28, "words": {".t1": "YOUR BRAND"}}
+   ]
+  },
+  {
+   "id": "beat-cut", "group": "beat",
+   "name": {"en": "Quick cuts", "zh-CN": "卡点快剪", "ja": "クイックカット", "ko": "빠른 컷", "es": "Cortes rápidos"},
+   "slots": [0.8, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.8, 1.6], "tone": "#3a2140", "photos": ["city", "portrait", "scenery", "food", "film", "fresh", "mood", "cinema", "vintage"],
+   "music": "audio/music/bright-electro-pop-groove-d9ec8e.mp3",
+   "cut": ["transitions/shock", "transitions/rgb-split"],
+   "marks": [
+    {"item": "text/title-glitch", "at": 5.8, "len": 1.6, "fit": 0.3, "words": {".t1": "ON REPEAT"}}
+   ]
+  },
+  {
+   "id": "comic-cuts", "group": "beat",
+   "name": {"en": "Comic beats", "zh-CN": "综艺卡点", "ja": "バラエティ", "ko": "예능 비트", "es": "Ritmo cómico"},
+   "slots": [1.4, 1.2, 1.2, 1.4], "tone": "#4a2a1c", "photos": ["portrait", "food", "fresh", "mood"],
+   "music": "audio/music/wonky-synth-versus-pulse-3bf0a8.mp3",
+   "cut": ["transitions/comic-bam", "transitions/speed-lines", "transitions/comic-bam"],
+   "marks": [
+    {"item": "text/var-wow", "at": 0.2, "len": 1.2, "x": 0.5, "y": 0.42, "fit": 0.34},
+    {"item": "text/var-noway", "at": 2.7, "len": 1.2, "x": 0.5, "y": 0.5, "fit": 0.3},
+    {"item": "text/var-lol", "at": 3.9, "len": 1.2, "x": 0.5, "y": 0.5, "fit": 0.3},
+    {"item": "text/var-omg", "at": 5.1, "len": 1.1, "x": 0.5, "y": 0.45, "fit": 0.34}
+   ]
+  },
+  {
+   "id": "product-promo", "group": "promo",
+   "name": {"en": "New product", "zh-CN": "新品推广", "ja": "新商品", "ko": "신제품", "es": "Producto nuevo"},
+   "slots": [2.6, 2.4, 2.4, 3.2], "tone": "#2e3a4a", "photos": ["fresh", "food", "portrait", "city"],
+   "music": "audio/music/corporate-electronic-groove-78bc80.mp3",
+   "cut": ["transitions/stripes", "transitions/swipe-blur", "transitions/stripes"],
+   "marks": [
+    {"item": "stickers/new-tag", "at": 0.3, "len": 2.2, "x": 0.82, "y": 0.22, "fit": 0.2},
+    {"item": "text/shop-specs", "at": 2.8, "len": 4.4, "x": 0.76, "y": 0.5, "fit": 0.46, "fade": [0, 0.3]},
+    {"item": "text/shop-strike", "at": 7.6, "len": 2.8, "x": 0.3, "y": 0.42, "fit": 0.3},
+    {"item": "text/shop-buy", "at": 8.2, "len": 2.2, "x": 0.3, "y": 0.78, "fit": 0.15}
+   ]
+  },
+  {
+   "id": "flash-sale", "group": "promo",
+   "name": {"en": "Flash sale", "zh-CN": "限时促销", "ja": "タイムセール", "ko": "타임 세일", "es": "Oferta relámpago"},
+   "slots": [2.4, 2.2, 3], "tone": "#4a1f24", "photos": ["food", "fresh", "portrait"],
+   "music": "audio/music/playful-electronic-pop-c27b46.mp3",
+   "cut": ["transitions/comic-bam", "transitions/shock"],
+   "marks": [
+    {"item": "text/shop-limited", "at": 0.2, "len": 2.2, "y": 0.2, "fit": 0.13, "fade": [0, 0.2]},
+    {"item": "text/shop-burst", "at": 2.6, "len": 2, "x": 0.76, "y": 0.4, "fit": 0.4},
+    {"item": "text/shop-coupon", "at": 4.8, "len": 2.8, "y": 0.5, "fit": 0.3}
+   ]
+  },
+  {
+   "id": "old-days", "group": "memory",
+   "name": {"en": "Old days", "zh-CN": "旧时光", "ja": "あの頃", "ko": "그 시절", "es": "Viejos tiempos"},
+   "slots": [3.2, 3, 3, 3.4], "tone": "#4a3b2c", "photos": ["vintage", "mono", "film", "mood"],
+   "music": "audio/music/americana-nocturne-guitar-ccb2da.mp3",
+   "cut": ["transitions/film-slip", "transitions/burn-through", "transitions/cue-dot"],
+   "over": [{"item": "effects/scratches"}, {"item": "effects/grain"}, {"item": "effects/vignette"}],
+   "marks": [
+    {"item": "text/title-serif", "at": 0.4, "len": 2.6, "fit": 0.28, "words": {".t1": "Those Days", ".t2": "A FAMILY FILM", ".t3": "from the old albums"}, "fade": [0, 0.4]},
+    {"item": "text/place-date", "at": 6.4, "len": 2.8, "x": 0.82, "y": 0.72, "fit": 0.28, "words": {".t1": "JUN", ".t2": "12", ".t3": "SUNDAY", ".t4": "1998"}, "fade": [0, 0.3]}
+   ]
+  },
+  {
+   "id": "love-story", "group": "memory",
+   "name": {"en": "Love story", "zh-CN": "恋爱日记", "ja": "ラブストーリー", "ko": "러브 스토리", "es": "Historia de amor"},
+   "slots": [3, 2.6, 2.6, 3.4], "tone": "#5a3242", "photos": ["portrait", "mood", "fresh", "film"],
+   "music": "audio/music/garden-serenade-piano-strings-5533fa.mp3",
+   "cut": ["transitions/heart", "transitions/sparkle", "transitions/heart"],
+   "over": [{"item": "effects/petals"}],
+   "marks": [
+    {"item": "text/title-script", "at": 0.3, "len": 2.6, "fit": 0.34, "words": {".t1": "Love Story", ".t2": "YOU AND ME"}, "fade": [0, 0.3]},
+    {"item": "stickers/floating-hearts", "at": 5.6, "len": 3, "x": 0.82, "y": 0.6, "fit": 0.4},
+    {"item": "text/info-quote", "at": 8.4, "len": 3.2, "y": 0.5, "fit": 0.32, "words": {".t1": "Every day with you", ".t2": "is my favorite day.", ".t3": "US"}}
+   ]
+  },
+  {
+   "id": "birthday", "group": "holiday",
+   "name": {"en": "Birthday", "zh-CN": "生日快乐", "ja": "誕生日", "ko": "생일 축하", "es": "Cumpleaños"},
+   "slots": [2.8, 2.6, 3.6], "tone": "#4a2c55", "photos": ["portrait", "food", "fresh"],
+   "music": "audio/music/birthday-celebration-piano-52fa16.mp3",
+   "cut": ["transitions/circles-burst", "transitions/sparkle"],
+   "over": [{"item": "effects/confetti", "at": 5.4, "len": 3.6}],
+   "marks": [
+    {"item": "text/fest-birthday", "at": 5.6, "len": 3.4, "fit": 0.38},
+    {"item": "stickers/twinkle-stars", "at": 0.3, "len": 2.4, "x": 0.22, "y": 0.26, "fit": 0.28}
+   ]
+  },
+  {
+   "id": "new-year", "group": "holiday",
+   "name": {"en": "New Year", "zh-CN": "新年快乐", "ja": "新年", "ko": "새해", "es": "Año Nuevo"},
+   "slots": [2.8, 2.6, 3.8], "tone": "#4a1c1c", "photos": ["city", "food", "portrait"],
+   "music": "audio/music/tang-banquet-pipa-88468c.mp3",
+   "cut": ["transitions/exposure", "transitions/sun-rays"],
+   "over": [{"item": "effects/sparkles"}],
+   "marks": [
+    {"item": "text/fest-newyear", "at": 5.6, "len": 3.6, "fit": 0.38},
+    {"item": "stickers/firework", "at": 0.4, "len": 2.6, "x": 0.8, "y": 0.28, "fit": 0.36}
+   ]
+  },
+  {
+   "id": "how-to", "group": "knowledge",
+   "name": {"en": "Step by step", "zh-CN": "干货步骤", "ja": "ステップ解説", "ko": "단계별 설명", "es": "Paso a paso"},
+   "slots": [2.6, 3, 3, 3, 2.6], "tone": "#22303a", "photos": ["food", "fresh", "food", "portrait", "fresh"],
+   "music": "audio/music/minimal-tech-ambient-25420d.mp3",
+   "cut": ["transitions/slats", "transitions/pixels"],
+   "marks": [
+    {"item": "text/chapter-number", "at": 0.3, "len": 2.2, "fit": 0.32, "words": {".t1": "01", ".t2": "HOW TO", ".t3": "A perfect breakfast"}, "fade": [0, 0.3]},
+    {"item": "text/callout-step", "at": 2.8, "len": 2.7, "x": 0.4, "y": 0.82, "fit": 0.18, "words": {".t1": "1", ".t2": "STEP ONE", ".t3": "Get everything ready"}, "fade": [0, 0.25]},
+    {"item": "text/callout-step", "at": 5.8, "len": 2.7, "x": 0.4, "y": 0.82, "fit": 0.18, "words": {".t1": "2", ".t2": "STEP TWO", ".t3": "Take it slowly"}, "fade": [0, 0.25]},
+    {"item": "text/callout-step", "at": 8.8, "len": 2.7, "x": 0.4, "y": 0.82, "fit": 0.18, "words": {".t1": "3", ".t2": "STEP THREE", ".t3": "Enjoy it"}, "fade": [0, 0.25]},
+    {"item": "text/social-subscribe", "at": 11.8, "len": 2.4, "y": 0.5, "fit": 0.2}
+   ]
+  },
+  {
+   "id": "news-flash", "group": "knowledge",
+   "name": {"en": "News flash", "zh-CN": "新闻快报", "ja": "ニュース速報", "ko": "뉴스 속보", "es": "Noticia de última hora"},
+   "slots": [3.4, 3.2, 3.4], "tone": "#1f2633", "photos": ["city", "mono", "scenery"],
+   "music": "audio/music/minimal-data-documentary-pulse-bb6f8d.mp3",
+   "cut": ["transitions/scan-tear", "transitions/slats"],
+   "marks": [
+    {"item": "text/news-breaking", "at": 0.3, "len": 3, "y": 0.78, "fit": 0.15, "fade": [0, 0.3]},
+    {"item": "text/news-ticker", "at": 0, "len": 10, "y": 0.965, "fit": 0.07},
+    {"item": "text/lower-news", "at": 3.8, "len": 2.8, "x": 0.36, "y": 0.78, "fit": 0.18, "fade": [0, 0.3]}
+   ]
+  }
+ ]
+}

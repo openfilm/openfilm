@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Thumbs up</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #2f7bff; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.in { transform-origin: 180px 180px; animation: in 0.45s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes in { from { transform: scale(0); } }
+.t { transform-origin: 150px 250px; animation: t 0.5s cubic-bezier(.34, 1.56, .64, 1) 0.15s both, pump 1.4s cubic-bezier(.2, .8, .2, 1) 0.8s infinite; }
+@keyframes t { from { transform: rotate(-40deg) scale(0.3); opacity: 0; } }
+@keyframes pump { 0%, 50%, 100% { transform: none; } 15% { transform: rotate(-12deg) scale(1.08); } 32% { transform: rotate(3deg); } }
+.b path { fill: none; stroke: var(--color); stroke-width: 10; stroke-linecap: round; stroke-dasharray: 1 2; opacity: 0; animation: b 1.4s cubic-bezier(.2, .8, .2, 1) 0.3s infinite; }
+@keyframes b { 0% { stroke-dashoffset: 1.01; opacity: 0; } 1%, 33% { opacity: 1; } 18% { stroke-dashoffset: 0; } 35%, 100% { stroke-dashoffset: -1; opacity: 0; } }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 360 360">
+<g class="b"><path pathLength="1" d="M253.0 53.6 L266.0 31.0"/><path pathLength="1" d="M317.2 130.1 L341.6 121.2"/><path pathLength="1" d="M317.2 229.9 L341.6 238.8"/><path pathLength="1" d="M253.0 306.4 L266.0 329.0"/><path pathLength="1" d="M107.0 306.4 L94.0 329.0"/><path pathLength="1" d="M42.8 229.9 L18.4 238.8"/><path pathLength="1" d="M42.8 130.1 L18.4 121.2"/><path pathLength="1" d="M107.0 53.6 L94.0 31.0"/></g>
+<g class="in"><circle cx="180" cy="180" r="130" fill="var(--color)"/><circle cx="180" cy="180" r="130" fill="url(#hi)"/>
+<defs><linearGradient id="hi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.3"/><stop offset="0.6" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs>
+<g class="t"><g transform="translate(184 176) scale(7.4) translate(-11.85 -12.2)" fill="#ffffff" stroke="#ffffff" stroke-width="1" stroke-linejoin="round">
+<rect x="2" y="10" width="4.2" height="11.8" rx="1"/>
+<path d="M8 10.4 L11.6 3.7 C12.1 2.8 13.5 2.6 14.3 3.5 C14.9 4.2 15 5.1 14.8 6 L14 9.4 L19.5 9.4 C21 9.4 22 10.7 21.7 12.1 L20.3 19.7 C20.1 20.9 19 21.8 17.8 21.8 L8 21.8 Z"/>
+</g></g></g></svg>
+<script>
+/*
+ * A thumbs-up: a round badge pops in, the thumb springs up with a burst of strokes and keeps pumping. Its color is
+ * the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS
+ * animations are held at t by the host.
+ */
+window.film = { width: 360, height: 360, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

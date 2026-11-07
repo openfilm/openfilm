@@ -1,19 +1,17 @@
 /**
- * The `@` menu (and the `/` menu of the agent's commands): when typing counts as an `@` or a `/`, which items show,
- * and in what order.
+ * The `@` menu: when typing counts as an `@`, which items show, and in what order.
  *
  * Pure logic; the Lexical half is in MentionMenuPlugin. Kept apart so these rules can be
  * tested on plain strings: an email address opening the menu, or the best match ranked
  * eighth, raises no error.
  */
-import type React from 'react';
 import type { PromptReference, PromptReferenceKind } from './prompt-text';
 
 /**
  * One menu item.
  *
- * It does not know whether it stands for a moment or a file; the provider does. Here it
- * is only an icon, a label, what typing finds it, and the reference it yields.
+ * It does not know whether it stands for a moment, a file or a skill; the provider does.
+ * Here it is only an icon, a label, what typing finds it, and the reference it yields.
  */
 export interface MentionItem {
   /** Unique in the menu. The id of the reference it will become is simplest. */
@@ -29,17 +27,14 @@ export interface MentionItem {
   disabled?: boolean;
   /** Why it is not usable; a gray item without a reason looks broken. */
   disabledHint?: string;
-  /** The detail is a description (an agent's command): the label keeps its width, the detail is cut. */
+  /** The detail is a description (a skill's): the label keeps its width, the detail is cut. */
   describes?: boolean;
-  /** Its own icon, instead of its kind's (an agent's command). */
-  icon?: React.ComponentType<{ size?: number; className?: string }>;
   /**
    * Picks it: records what it needs and returns how it appears in the sentence, possibly
-   * several references (the current selection is every selected thing), or plain text
-   * (`{ text }`: an agent's command). Null or empty means it failed (too many references,
-   * or the thing is gone).
+   * several references (the current selection is every selected thing). Null or empty
+   * means it failed (too many references, or the thing is gone).
    */
-  select: () => PromptReference | PromptReference[] | { text: string } | null;
+  select: () => PromptReference | PromptReference[] | null;
 }
 
 /**
@@ -53,6 +48,8 @@ export interface MentionProvider {
   id: string;
   /** The group title, already localized; this layer has no i18n. */
   groupLabel: string;
+  /** The most rows it shows (MENTION_MENU_LIMIT); Infinity for a group a person scrolls through whole. */
+  limit?: number;
   items: MentionItem[];
 }
 
@@ -97,17 +94,6 @@ export function matchMentionTrigger(textBeforeCursor: string): MentionTrigger | 
      usually the next word, and a lingering menu would cover it. */
   if (query.length > MAX_QUERY_CHARS || /\s/.test(query)) return null;
   return { leadOffset: at, query, replaceableString: textBeforeCursor.slice(at) };
-}
-
-/**
- * Whether the message so far is a `/` being typed at its very start: an agent's command, as in its own chat (`/` in
- * the middle of a sentence is a path or a fraction). The query is what follows, up to the first space.
- */
-export function matchSlashTrigger(textBeforeCursor: string): MentionTrigger | null {
-  const m = /^\s*\/([^\s/]{0,40})$/.exec(textBeforeCursor);
-  if (!m) return null;
-  const at = textBeforeCursor.indexOf('/');
-  return { leadOffset: at, query: m[1]!, replaceableString: textBeforeCursor.slice(at) };
 }
 
 /* Ranking: prefix < word start < substring < subsequence (other characters in between).
@@ -166,19 +152,16 @@ export function scoreMentionItem(item: MentionItem, query: string): number | nul
   return best;
 }
 
-/** The most rows the menu shows; with hundreds of files, typing a little more beats scrolling. */
+/** The most rows a group shows unless it says; with hundreds of files, typing a little more beats scrolling. */
 export const MENTION_MENU_LIMIT = 20;
 
 /**
  * Flattens the providers into the menu's rows.
  *
- * Groups stay together, each one kind of thing; sorting happens only within a group.
+ * Groups stay together, each one kind of thing; sorting happens only within a group. Each
+ * group is cut on its own, so a long one (files) never pushes a later one out of the menu.
  */
-export function buildMentionMenu(
-  providers: MentionProvider[],
-  query: string,
-  limit: number = MENTION_MENU_LIMIT,
-): MentionEntry[] {
+export function buildMentionMenu(providers: MentionProvider[], query: string): MentionEntry[] {
   const entries: MentionEntry[] = [];
   for (const provider of providers) {
     provider.items
@@ -192,6 +175,7 @@ export function buildMentionMenu(
         // Ties keep the provider's order (files come newest first).
         return a.order - b.order;
       })
+      .slice(0, provider.limit ?? MENTION_MENU_LIMIT)
       .forEach((row, index) => {
         entries.push({
           item: row.item,
@@ -201,6 +185,5 @@ export function buildMentionMenu(
         });
       });
   }
-  /* Cut from the end, so every remaining group keeps its first row and title. */
-  return entries.slice(0, limit);
+  return entries;
 }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { getPriority, tmpdir, totalmem } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -262,7 +262,44 @@ test('--subtitles burns the project\'s subtitles into its film, named as its ren
     await assert.rejects(render([join(dir, 'page.html')], { ...quiet, subtitles: true }), /into the project's film: render the project's folder, not page\.html/);
     rmSync(join(dir, 'assets', 'vo.vtt'));
     await assert.rejects(render([dir], { ...quiet, subtitles: true, out: join(dir, 'none.mp4') }), /no subtitles to burn in/);
+    /* with a caption track, the subtitles are the film's picture: rendered as it is */
+    mkdirSync(join(dir, 'captions'));
+    writeFileSync(join(dir, 'captions', 'c.vtt'), 'WEBVTT\n\n00:00:00.500 --> 00:00:01.800\nOn the track\n');
+    writeFileSync(join(dir, 'film.html'), readFileSync(join(dir, 'film.html'), 'utf8').replace('<body>', '<body><section><track kind="captions" src="captions/c.vtt"></section>'));
+    const tracked = await render([dir], { ...quiet, subtitles: true, out: join(dir, 'tracked.mp4') });
+    assert.ok(changed(bottom(tracked.out, 10), bottom(tracked.out, 2)) > 200, 'the caption track drawn');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('--loudness brings the sound to the target with true peaks under -1 dBTP, the picture as drawn; a target out of range is refused (#323)', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-loud-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, 'assets'));
+  writeFileSync(join(dir, 'page.html'), '<!doctype html><body style="margin:0;background:#204080"><script>window.film = { duration: 3, width: 320, height: 180, frame() {} };</script>');
+  /* a quiet voice, and a knock at 1 s on another track: lavfi's sine is at 1/8, so the knock is about -18.6 dBFS, still caught by the limiter once turned up */
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=220:duration=3', '-af', 'volume=-28dB', '-ac', '1', '-ar', '48000', join(dir, 'assets', 'vo.wav')]);
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=900:duration=0.01', '-af', 'volume=-0.5dB', '-ac', '1', '-ar', '48000', join(dir, 'assets', 'knock.wav')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ id: 'p', src: 'page.html' }] }, { clips: [{ id: 'vo', src: 'assets/vo.wav' }] }, { clips: [{ id: 'k', src: 'assets/knock.wav', at: 1 }] },
+  ] }));
+  /* software encoding: h264_videotoolbox on macOS gives different bytes each time */
+  const quiet = { workers: 1, silent: true, onProgress() {}, fps: 10, hardware: false };
+  const plain = await render([dir], { ...quiet, silent: false, out: join(dir, 'plain.mp4') });
+  const loud = await render([dir], { ...quiet, silent: false, loudness: -16, out: join(dir, 'loud.mp4') });
+  const { loudnessOf } = await import('./loudness.mjs');
+  const was = await loudnessOf(plain.out);
+  const now = await loudnessOf(loud.out);
+  assert.ok(was.lufs < -25, `the mix as it is: ${was.lufs} LUFS`);
+  assert.ok(Math.abs(now.lufs - -16) <= 0.5, `integrated loudness ${now.lufs}`);
+  assert.ok(now.peak <= -1, `true peak ${now.peak}`);
+  assert.ok(loud.lines.some((l) => /^♪ sound at -16 LUFS: .* → .*LUFS · true peak .* dBTP$/.test(l)), loud.lines.join('\n'));
+  /* the picture is the same stream: not encoded again for the sound */
+  const video = (/** @type {string} */ file) => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:v', '-c', 'copy', '-f', 'md5', '-'], { encoding: 'utf8' });
+  assert.equal(video(loud.out), video(plain.out));
+  await assert.rejects(render([dir], { ...quiet, loudness: -3, out: join(dir, 'bad.mp4') }), /--loudness is a target from -70 to -5 LUFS/);
+  /* a render without sound (silent) has nothing to bring there, and says nothing of it */
+  const mute = await render([dir], { ...quiet, loudness: -16, out: join(dir, 'mute.mp4') });
+  assert.ok(!mute.lines.some((l) => /loudness/.test(l)), 'a silent render (no sound asked) says nothing of it');
 });

@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Happy Birthday</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --c1: #ff5fa2; --c2: #3fd0ff; --c3: #ffd23f; --ribbon: #a98bff; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: var(--font); color: #fff; }
+.cf { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.cf i { position: absolute; top: -4vh; width: 2.2vh; height: 3.6vh; border-radius: 0.4vh; animation: conf linear infinite; }
+.bn { position: absolute; left: 4%; right: 4%; top: 2vh; height: 26vh; transform-origin: 50% 0; animation: swing 0.9s cubic-bezier(0.3, 1.5, 0.5, 1) both, sway 3s 1s ease-in-out infinite; }
+.bn svg { width: 100%; height: 100%; overflow: visible; }
+.bn path { fill: none; stroke: #fff; stroke-width: 0.5; opacity: 0.85; }
+.row { width: 92vw; display: flex; justify-content: center; margin-top: 8vh; }
+.k { font-size: calc(24vh * var(--k, 1)); font-weight: 800; }
+.k .fx { -webkit-text-stroke: 2vh #fff; paint-order: stroke fill; text-shadow: 0 1.6vh 0 rgba(30, 20, 50, 0.55); }
+.k .fx .ch:nth-child(3n+1) { color: var(--c1); } .k .fx .ch:nth-child(3n+2) { color: var(--c2); } .k .fx .ch:nth-child(3n) { color: var(--c3); }
+.t2 { position: relative; margin-top: 4vh; padding: 2vh 9vh; font-size: 11vh; font-weight: 800; letter-spacing: 0.08em; background: var(--ribbon); white-space: pre; clip-path: polygon(0 0, 100% 0, calc(100% - 4vh) 50%, 100% 100%, 0 100%, 4vh 50%); animation: rib 0.6s 0.9s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+@keyframes conf { from { transform: translate(0, 0) rotate(0); } to { transform: translate(4vh, 108vh) rotate(var(--r)); } }
+@keyframes swing { from { transform: translateY(-30vh) rotate(-4deg); opacity: 0; } }
+@keyframes sway { 50% { rotate: 1.2deg; } }
+@keyframes rib { from { opacity: 0; transform: scaleX(0.2); } }
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="cf"><i style="left: 70.8%; background: #ff5fa2; animation-duration: 4.1s; animation-delay: -3.4s; --r: -156deg"></i><i style="left: 87.6%; background: #3fd0ff; animation-duration: 3.8s; animation-delay: -1.0s; --r: -199deg"></i><i style="left: 56.5%; background: #ffd23f; animation-duration: 4.4s; animation-delay: -2.8s; --r: -281deg"></i><i style="left: 23.3%; background: #7cf0a0; animation-duration: 2.9s; animation-delay: -1.7s; --r: 57deg"></i><i style="left: 24.2%; background: #a98bff; animation-duration: 3.1s; animation-delay: -3.9s; --r: -218deg"></i><i style="left: 38.6%; background: #ff5fa2; animation-duration: 4.0s; animation-delay: -2.9s; --r: 234deg"></i><i style="left: 14.3%; background: #3fd0ff; animation-duration: 3.6s; animation-delay: -4.0s; --r: 357deg"></i><i style="left: 50.3%; background: #ffd23f; animation-duration: 4.1s; animation-delay: -3.4s; --r: -348deg"></i><i style="left: 17.1%; background: #7cf0a0; animation-duration: 3.8s; animation-delay: -2.4s; --r: 233deg"></i><i style="left: 56.9%; background: #a98bff; animation-duration: 2.8s; animation-delay: -2.4s; --r: 193deg"></i><i style="left: 5.8%; background: #ff5fa2; animation-duration: 2.9s; animation-delay: -3.8s; --r: -111deg"></i><i style="left: 53.8%; background: #3fd0ff; animation-duration: 2.5s; animation-delay: -3.4s; --r: -163deg"></i><i style="left: 69.0%; background: #ffd23f; animation-duration: 2.5s; animation-delay: -3.9s; --r: 165deg"></i><i style="left: 26.3%; background: #7cf0a0; animation-duration: 3.0s; animation-delay: -3.6s; --r: 329deg"></i><i style="left: 97.6%; background: #a98bff; animation-duration: 2.6s; animation-delay: -2.4s; --r: -282deg"></i><i style="left: 15.0%; background: #ff5fa2; animation-duration: 4.3s; animation-delay: -0.8s; --r: -247deg"></i><i style="left: 76.6%; background: #3fd0ff; animation-duration: 3.3s; animation-delay: -1.2s; --r: 63deg"></i><i style="left: 93.7%; background: #ffd23f; animation-duration: 4.2s; animation-delay: -2.4s; --r: 268deg"></i><i style="left: 95.9%; background: #7cf0a0; animation-duration: 3.1s; animation-delay: -1.3s; --r: 224deg"></i><i style="left: 54.0%; background: #a98bff; animation-duration: 3.2s; animation-delay: -2.5s; --r: -99deg"></i><i style="left: 98.6%; background: #ff5fa2; animation-duration: 2.9s; animation-delay: -2.7s; --r: -160deg"></i><i style="left: 15.7%; background: #3fd0ff; animation-duration: 3.0s; animation-delay: -1.4s; --r: 306deg"></i><i style="left: 1.5%; background: #ffd23f; animation-duration: 3.1s; animation-delay: -2.0s; --r: -271deg"></i><i style="left: 2.0%; background: #7cf0a0; animation-duration: 4.3s; animation-delay: -2.3s; --r: -182deg"></i><i style="left: 34.6%; background: #a98bff; animation-duration: 2.7s; animation-delay: -0.5s; --r: -268deg"></i><i style="left: 45.6%; background: #ff5fa2; animation-duration: 3.7s; animation-delay: -0.2s; --r: -196deg"></i><i style="left: 75.7%; background: #3fd0ff; animation-duration: 3.7s; animation-delay: -2.6s; --r: -210deg"></i><i style="left: 61.8%; background: #ffd23f; animation-duration: 3.5s; animation-delay: -1.2s; --r: 34deg"></i><i style="left: 56.5%; background: #7cf0a0; animation-duration: 3.3s; animation-delay: -0.1s; --r: 332deg"></i><i style="left: 11.1%; background: #a98bff; animation-duration: 4.0s; animation-delay: -4.0s; --r: -198deg"></i></div>
+  <div class="bn"><svg viewBox="0 0 100 26" preserveAspectRatio="none"><path d="M0 2 Q 50 16, 100 2"/><polygon points="3.0,3.58 9.0,3.78 6.0,12.58" fill="#ff5fa2"/><polygon points="11.0,5.37 17.0,5.57 14.0,14.37" fill="#3fd0ff"/><polygon points="19.0,6.80 25.0,7.00 22.0,15.80" fill="#ffd23f"/><polygon points="27.0,7.88 33.0,8.08 30.0,16.88" fill="#7cf0a0"/><polygon points="35.0,8.60 41.0,8.80 38.0,17.60" fill="#a98bff"/><polygon points="43.0,8.96 49.0,9.16 46.0,17.96" fill="#ff5fa2"/><polygon points="51.0,8.96 57.0,9.16 54.0,17.96" fill="#3fd0ff"/><polygon points="59.0,8.60 65.0,8.80 62.0,17.60" fill="#ffd23f"/><polygon points="67.0,7.88 73.0,8.08 70.0,16.88" fill="#7cf0a0"/><polygon points="75.0,6.80 81.0,7.00 78.0,15.80" fill="#a98bff"/><polygon points="83.0,5.37 89.0,5.57 86.0,14.37" fill="#ff5fa2"/><polygon points="91.0,3.58 97.0,3.78 94.0,12.58" fill="#3fd0ff"/></svg></div>
+  <div class="row"><span class="ln k"><span class="t1 src">Happy Birthday</span></span></div>
+  <span class="t2">DEAR MAYA</span>
+</div>
+<script>
+/*
+ * A string of little flags swinging down, a greeting in bright letters hopping in, a name on a ribbon, confetti
+ * falling. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held
+ * at t by the host.
+ */
+/* moves drawn from t: each layer's place at t comes from t alone */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, at, len) => clamp((t - at) / len);
+const easeOut = (x) => 1 - (1 - x) ** 3;
+const easeBack = (x, s = 1.9) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 + (s + 1) * (x - 1) ** 3 + s * (x - 1) ** 2);
+const hash = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const draws = [];
+let now = 0;
+/* an element's words, a line break for each <br> (as the editor writes them) */
+const linesOf = (el) => [...el.childNodes].map((n) => (n.nodeType === 3 ? n.data : n.localName === 'br' ? '\n' : '')).join('');
+/*
+ * An editable layer drawn again on a copy over it (letter by letter, a number counting): the layer itself stays, its
+ * words see-through, so the editor still finds, moves and changes it; the copy follows its words and its tweaks.
+ */
+function overlay(sel, build, paint) {
+  const src = document.querySelector(sel);
+  const fx = document.createElement('span');
+  fx.className = 'fx';
+  fx.setAttribute('aria-hidden', 'true');
+  src.after(fx);
+  let text = null;
+  let state = null;
+  const sync = () => {
+    fx.style.cssText = src.style.cssText;
+    const words = linesOf(src);
+    if (words !== text) { text = words; state = build(fx, words); }
+    paint(state, now);
+  };
+  new MutationObserver(sync).observe(src, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+  sync();
+  draws.push((t) => paint(state, t));
+}
+/* the layer's letters, each moved by `move(letter, t, i, n)` */
+function letters(sel, move) {
+  overlay(sel, (fx, words) => {
+    const out = [];
+    fx.replaceChildren();
+    words.split('\n').forEach((line, k) => {
+      if (k) fx.append(document.createElement('br'));
+      for (const ch of Array.from(line)) {
+        const c = document.createElement('span');
+        c.className = 'ch';
+        c.textContent = ch;
+        fx.append(c);
+        out.push(c);
+      }
+    });
+    return out;
+  }, (out, t) => out.forEach((c, i) => move(c, t, i, out.length)));
+}
+/* the number in the layer's words, counted up from 0 between `at` and `at + len` seconds (its words around it kept) */
+function countUp(sel, at, len) {
+  overlay(sel, (fx, words) => {
+    const m = words.match(/^([^\d]*?)(\d[\d,]*(?:\.\d+)?)([\s\S]*)$/);
+    if (!m) { fx.textContent = words; return null; }
+    const [, pre, num, post] = m;
+    return { fx, pre, post, value: Number(num.replace(/,/g, '')), places: (num.split('.')[1] ?? '').length, commas: num.includes(',') };
+  }, (s, t) => {
+    if (!s) return;
+    const v = s.value * easeOut(prog(t, at, len));
+    let str = v.toFixed(s.places);
+    if (s.commas) { const [a, b] = str.split('.'); str = a.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (b ? '.' + b : ''); }
+    s.fx.textContent = s.pre + str + s.post;
+  });
+}
+/* the layer's words typed from `at`, `cps` letters a second, a cursor after them blinking once they are all there */
+function typed(sel, at, cps) {
+  overlay(sel, (fx, words) => {
+    fx.replaceChildren();
+    const out = [];
+    words.split('\n').forEach((line, k) => {
+      if (k) { const br = document.createElement('br'); fx.append(br); out.push(br); }
+      for (const ch of Array.from(line)) { const c = document.createElement('span'); c.textContent = ch; fx.append(c); out.push(c); }
+    });
+    const cur = document.createElement('span');
+    cur.className = 'cur';
+    fx.append(cur);
+    return { out, cur };
+  }, ({ out, cur }, t) => {
+    const n = Math.floor((t - at) * cps);
+    out.forEach((c, i) => { c.style.display = i < n ? '' : 'none'; });
+    cur.style.opacity = t < at || (n >= out.length && (t * 1.8) % 1 > 0.5) ? 0 : 1;
+  });
+}
+/* a layer made smaller when its words grow wider than `room` (an element, or a share of the page's width): its --k */
+function autofit(sel, room) {
+  const el = document.querySelector(sel);
+  const box = typeof room === 'string' ? document.querySelector(room) : null;
+  const fit = () => {
+    el.style.setProperty('--k', '1');
+    const w = el.scrollWidth;
+    const limit = box ? box.clientWidth : innerWidth * room;
+    if (w > limit) el.style.setProperty('--k', (limit / w).toFixed(3));
+  };
+  new MutationObserver(fit).observe(el, { childList: true, characterData: true, subtree: true });
+  fit();
+}
+letters('.t1', (c, t, i) => {
+  const p = prog(t, 0.3 + i * 0.045, 0.5);
+  const hop = Math.max(0, Math.sin((t - 1.2) * 5 - i * 0.6)) * 2 * prog(t, 1.2, 0.4);
+  c.style.opacity = clamp(p * 4);
+  c.style.transform = `translateY(${(1 - easeBack(p, 2.6)) * 22 - hop}vh) rotate(${(i % 2 ? 5 : -5) * (1 - easeOut(p)) * 4}deg)`;
+});
+autofit('.k', '.row');
+window.film = { frame(t) { now = t; for (const d of draws) d(t); } };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

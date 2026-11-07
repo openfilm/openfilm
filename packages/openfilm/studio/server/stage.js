@@ -13,6 +13,8 @@
  *            { type: 'stage-event', event: 'text', handle, commit, value?, before? }   an in-place edit ended
  *            { type: 'stage-event', event: 'key', key, code, repeat, metaKey, ctrlKey, shiftKey, altKey }
  *                                                   a key pressed in the picture (not while typing in it)
+ *            { type: 'stage-event', event: 'wheel', x, y, deltaX, deltaY, deltaMode, ctrlKey, metaKey, shiftKey, buttons }
+ *                                                   a wheel or pinch over the picture (the viewer's zoom)
  *
  * Points and boxes are in stage px (the film's own size, before the editor scales its frame). A layer is named by a
  * `handle` (a number, good while its element is in the page) and by `loc`: its selector, with `#n` when the selector
@@ -28,8 +30,10 @@
   const hooks = () => window.__filmEditor?.stage;
   const clips = () => hooks()?.clips() ?? [];
 
-  /* ── handles: a number per element, kept weakly ── */
-  let nextHandle = 1;
+  /* ── handles: a number per element, kept weakly; counted from this load of the film's own base (its `load`, see
+     editor/Preview), so a handle the editor kept from an earlier load names nothing here, and the layer is found by its
+     selector instead ── */
+  let nextHandle = (Number(new URL(location.href).searchParams.get('load')) || 0) * 2 ** 32 + 1;
   const byHandle = new Map();
   const handles = new WeakMap();
   const handleOf = (el) => {
@@ -51,7 +55,29 @@
   const clipById = (id) => clips().find((c) => c.id === id) ?? null;
 
   /* ── a clip on the stage: its placement maps its own px to stage px ── */
-  const matrixOf = (c) => new DOMMatrix(getComputedStyle(c.el).transform);
+  /* where the clip's element draws, as the browser applies it: about its transform-origin (the film places a scaled or
+     turned clip about its middle, timeline.mjs place), its translate, rotate and scale, then its transform (as
+     timeline.mjs matrixOf), so a point is found in the clip where it is drawn */
+  const matrixOf = (c) => {
+    const css = getComputedStyle(c.el);
+    const [ox = 0, oy = 0] = css.transformOrigin.split(' ').map(parseFloat);
+    const m = new DOMMatrix().translateSelf(ox, oy);
+    if (css.translate && css.translate !== 'none') {
+      const [x = '0', y = '0', z = '0'] = css.translate.split(' ');
+      m.translateSelf(parseFloat(x), parseFloat(y), parseFloat(z));
+    }
+    if (css.rotate && css.rotate !== 'none') {
+      const parts = css.rotate.split(' ');
+      const deg = parseFloat(parts.pop() ?? '0');
+      const axis = parts.length === 3 ? parts.map(Number) : parts[0] === 'x' ? [1, 0, 0] : parts[0] === 'y' ? [0, 1, 0] : [0, 0, 1];
+      m.rotateAxisAngleSelf(axis[0], axis[1], axis[2], deg);
+    }
+    if (css.scale && css.scale !== 'none') {
+      const [sx, sy = sx, sz = '1'] = css.scale.split(' ');
+      m.scaleSelf(parseFloat(sx), parseFloat(sy), parseFloat(sz));
+    }
+    return m.multiplySelf(new DOMMatrix(css.transform === 'none' ? undefined : css.transform)).translateSelf(-ox, -oy);
+  };
   const mapPoint = (M, x, y) => { const p = M.transformPoint(new DOMPoint(x, y)); return { x: p.x, y: p.y }; };
   /** A box in the clip's px → the stage box around it. */
   const mapRect = (M, r) => {
@@ -705,7 +731,8 @@
   const outline = (c, hit) => {
     const M = matrixOf(c);
     const turned = hit.frame.r || clipTurn(M);
-    return { handle: handleOf(hit.el), rect: mapRect(M, hit.rect), ...(turned ? { frame: mapFrame(M, hit.frame) } : {}) };
+    /* `of`: the clip it is in (`clip` would say it is the whole clip's outline) */
+    return { handle: handleOf(hit.el), of: c.id, rect: mapRect(M, hit.rect), ...(turned ? { frame: mapFrame(M, hit.frame) } : {}) };
   };
   /** A layer by its handle, else by its clip and its selector (`at` and `n`, or a `loc`: `at`, or `at#n`). */
   const layerOf = (ref) => {
@@ -807,12 +834,20 @@
       paintAround(b, c, { t: g.t, s: [round(g.s[0] * ks[0]), round(g.s[1] * ks[1])], r: Math.round((g.r + dr) * 100) / 100 }, center);
     }
   };
+  /* clips shown with overrides of an inspector's not written yet (the show op): their own overrides then */
+  const shownWith = new Map();
   const release = (id) => {
     if (!drafts.delete(id)) return;
     editor()?.preview(id, null);
   };
   /* the film was updated: a clip whose kept overrides changed shows them, not the drafts made against the old ones */
   const updated = () => {
+    for (const [id, base] of shownWith) {
+      const c = clipById(id);
+      if (c && JSON.stringify(c.overrides ?? []) === base) continue;
+      shownWith.delete(id);
+      editor()?.preview(id, null);
+    }
     for (const [id, d] of drafts) {
       const c = clipById(id);
       if (!c || JSON.stringify(c.overrides ?? []) !== d.base) release(id);
@@ -928,6 +963,10 @@
     /* the new words stay on screen until the edit is kept (or refused: the editor releases the clip), with what held
        the others in place as they were typed (kept with them) */
     const hold = kept && edit.hold && Object.keys(edit.hold).length ? edit.hold : null;
+    /* a line of words fitted as it was typed (fitTyped): its words' size as shown, kept with the words until written
+       (shown again with the clip's overrides, the size set on the page itself would go, and the words jump) */
+    const size = kept && edit.fit ? c.win?.document.documentElement.style.getPropertyValue('--size') : '';
+    if (size) draft(c, { at: ':root' }, { style: { '--size': size } });
     if (kept) draft(c, edit.target, { text: value, ...(hold ? { style: hold } : {}) });
     post({ type: 'stage-event', event: 'text', handle: edit.handle, commit: Boolean(kept), ...(kept ? { value, before: edit.before, ...(hold ? { hold } : {}) } : {}) });
   };
@@ -972,8 +1011,11 @@
     /* the editor shows the words as they are typed (the inspector's box with them); they are kept at Enter or blur */
     const onInput = () => {
       if (!editing) return;
-      if (search) editing.hold = search(holdInline);
-      post({ type: 'stage-event', event: 'typing', handle, value: overlay ? collapse(host.innerText ?? host.textContent ?? '') : stageText(host) });
+      /* a line of words whose box follows its words (textFit): its box made so here, before the picture is drawn again
+         (asked of the editor, it would come a frame or more late: the words shrunk or wrapped meanwhile) */
+      const size = editing.fit ? fitTyped(editing) : null;
+      if (search && !editing.fit) editing.hold = search(holdInline);
+      post({ type: 'stage-event', event: 'typing', handle, value: overlay ? collapse(host.innerText ?? host.textContent ?? '') : stageText(host), ...(size ? { size } : {}) });
     };
     const host = overlay ? openOverlay(el) : el;
     /* the line hidden under its overlay, the blocks in it still shown (they are not what is typed) */
@@ -1002,6 +1044,9 @@
       children: [...el.childNodes],
       before: textOf(el),
       hold: null,
+      fit: null,
+      holdOff: () => holdInline({}),
+      refit: () => onInput(),
       cleanup: () => { host.removeEventListener('keydown', onKey); host.removeEventListener('blur', onBlur); host.removeEventListener('input', onInput); release(); },
     };
     /* the line in its page, and its page in the film */
@@ -1012,6 +1057,51 @@
     host.focus({ preventScroll: true });
     doc.getSelection()?.selectAllChildren(host);
     return true;
+  };
+
+  /**
+   * The box of a line of words being typed in, fitted to its words as each is typed (the editor's fitTextNow, done
+   * here in the same task as the typing): one line hugs its words with their room (never wider than `maxW`, where it
+   * wraps), a line a side was pulled on keeps its width; as tall as its lines, its words as large (`--size` in vh of
+   * its height: set in px on the page itself while it is typed, see textFit), its middle where it was. `fit` (from the editor, textFit): its box and place as
+   * kept (w0 × h0 at x0, y0, scale s, turn r), its font size, whether it hugs. Answers its new size.
+   */
+  const fitTyped = (ed) => {
+    const f = ed.fit;
+    const doc = ed.c.win?.document;
+    const box = doc?.querySelector('.box');
+    if (!box || !hooks()) return null;
+    const nw = oneLineWidth(box);
+    const room = 2 * (0.23 * f.font + 0.04 * nw);
+    const w = f.hug ? Math.max(1, Math.min(f.maxW, 8192, Math.round(nw + room))) : f.w0;
+    const show = (h) => {
+      /* grown from its side as it is aligned: a line aligned left keeps its left edge, right its right, else its middle */
+      const grow = f.align === 'left' || f.align === 'start' ? 0 : f.align === 'right' || f.align === 'end' ? 1 : 0.5;
+      const x = f.x0 - (w - f.w0) * f.s * grow;
+      const y = f.y0 - ((h - f.h0) * f.s) / 2;
+      hooks().place(ed.c.id, { x: Math.round(x), y: Math.round(y), w: Math.round(w * f.s), h: Math.round(h * f.s), ...(f.r ? { r: f.r } : {}) }, { w, h });
+    };
+    let h = f.h ?? f.h0;
+    show(h);
+    const tall = Math.min(8192, Math.round(box.offsetHeight + 2 * 0.23 * f.font));
+    if (Math.abs(tall - h) >= 2) { h = tall; show(h); }
+    f.h = h;
+    return { w, h };
+  };
+
+  /** How wide `el` is with the words in it (`.t`, or itself) on one line, nothing wrapped. */
+  const oneLineWidth = (el) => {
+    const line = el.matches('.t') ? el : el.querySelector('.t') ?? el;
+    /* the words on one line, and a box around them not held to its page's width (its max-width) while measured */
+    const set = (node, prop, value) => {
+      const was = [node.style.getPropertyValue(prop), node.style.getPropertyPriority(prop)];
+      node.style.setProperty(prop, value, 'important');
+      return () => { if (was[0]) node.style.setProperty(prop, was[0], was[1]); else node.style.removeProperty(prop); };
+    };
+    const back = [set(line, 'white-space', 'pre'), ...(line !== el ? [set(el, 'max-width', 'none')] : [])];
+    const w = el.offsetWidth;
+    for (const undo of back) undo();
+    return w;
   };
 
   /* ── keys pressed while the picture has focus go to the editor (its own keys work there too) ── */
@@ -1028,12 +1118,32 @@
     if ((EDITOR_KEYS.has(e.key) && !mod) || (mod && (k === 'z' || (k === 'a' && !e.shiftKey && !e.altKey) || (e.shiftKey && (k === 'h' || k === 'l'))))) e.preventDefault();
     post({ type: 'stage-event', event: 'key', key: e.key, code: e.code, repeat: e.repeat, metaKey: e.metaKey, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey });
   };
+  /*
+   * A wheel or a pinch over the picture reaches here only while words are typed in it (the editor's overlay steps aside
+   * then): sent on for the viewer's zoom and pan, at its place in stage px. ⌘/Ctrl + wheel is never the page's (a
+   * browser would zoom all of Studio).
+   */
+  const onWheel = (e) => {
+    if (e.ctrlKey || e.metaKey) e.preventDefault();
+    let x = e.clientX, y = e.clientY;
+    for (let win = e.view; win && win !== window && win.frameElement; win = win.parent) {
+      const frame = win.frameElement;
+      const r = frame.getBoundingClientRect();
+      x = r.left + x * (r.width / (frame.clientWidth || r.width));
+      y = r.top + y * (r.height / (frame.clientHeight || r.height));
+    }
+    post({
+      type: 'stage-event', event: 'wheel', x, y, deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode,
+      ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, buttons: e.buttons,
+    });
+  };
   /* by document: a page closed and opened again (the timeline does, far from the playhead) is a new one to hear */
   const listening = new WeakSet();
   const listen = (win) => {
     if (!win?.document || listening.has(win.document)) return;
     listening.add(win.document);
     win.addEventListener('keydown', onKey, true);
+    win.addEventListener('wheel', onWheel, { capture: true, passive: false });
   };
   const listenAll = () => { listen(window); for (const c of clips()) if (c.win) listen(c.win); };
   listen(window);
@@ -1043,7 +1153,9 @@
     listenAll();
     const h = hooks();
     /* an update may have added pages: their keys are heard too */
-    if (h) { h.updated = () => { listenAll(); updated(); }; h.woke = listenAll; }
+    /* a page opened after its frame was drawn (one just put in at the playhead): the editor draws the frame again, so
+       it shows without the playhead being moved */
+    if (h) { h.updated = () => { listenAll(); updated(); }; h.woke = () => { listenAll(); post({ type: 'stage-event', event: 'woke' }); }; }
   })();
 
   /* ── restacking ── */
@@ -1300,6 +1412,280 @@
     return collect(doc.body);
   };
 
+  /* ── a layer as it looks now, to be written into another page (the editor's lib/layer-paste pastedElsewhere) ── */
+  /** What of an element's computed style is its look: where it is, its box, its type, its paint. */
+  const LOOK = [
+    'display', 'position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'box-sizing', 'margin', 'padding',
+    'flex-direction', 'flex-wrap', 'justify-content', 'align-items', 'align-content', 'align-self', 'flex', 'gap', 'order',
+    'grid-template-columns', 'grid-template-rows', 'grid-column', 'grid-row',
+    'color', 'background-color', 'background-image', 'background-size', 'background-position', 'background-repeat',
+    'border', 'border-radius', 'outline', 'box-shadow', 'opacity', 'visibility', 'overflow', 'z-index',
+    'transform', 'transform-origin', 'translate', 'scale', 'rotate', 'filter', 'backdrop-filter', 'mix-blend-mode',
+    'clip-path', 'mask-image', 'object-fit', 'object-position',
+    'font-family', 'font-size', 'font-weight', 'font-style', 'line-height', 'letter-spacing', 'word-spacing', 'text-align',
+    'text-transform', 'text-decoration', 'text-shadow', 'white-space', '-webkit-text-stroke', 'text-indent', 'vertical-align',
+    'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'stroke-dashoffset',
+  ];
+  const DEFAULT_LOOK = new Map();
+  /** A property's value an element of this tag has with no CSS of the page's: not written. */
+  const defaultLook = (doc, tag) => {
+    if (DEFAULT_LOOK.has(tag)) return DEFAULT_LOOK.get(tag);
+    const probe = doc.createElement(tag);
+    let out = new Map();
+    try {
+      probe.style.all = 'initial';
+      doc.body.append(probe);
+      const cs = doc.defaultView.getComputedStyle(probe);
+      out = new Map(LOOK.map((p) => [p, cs.getPropertyValue(p)]));
+    } finally { probe.remove(); }
+    DEFAULT_LOOK.set(tag, out);
+    return out;
+  };
+  /**
+   * `el` as it looks now, as markup that holds its look itself: each element's computed look written in its style (no
+   * class: another page's CSS does not reach it; its ids are made new ones where it goes), what it loads as full
+   * addresses, no scripts or handlers; the root placed where it is in its page (`position: absolute`, page px). With
+   * the page's @font-face rules of the fonts in it.
+   */
+  const snapshotOf = (el) => {
+    const doc = el.ownerDocument;
+    const view = doc.defaultView;
+    const copy = el.cloneNode(true);
+    const from = [el, ...el.querySelectorAll('*')];
+    const to = [copy, ...copy.querySelectorAll('*')];
+    const families = new Set();
+    from.forEach((src, i) => {
+      const out = to[i];
+      if (!out) return;
+      const cs = view.getComputedStyle(src);
+      const plain = defaultLook(doc, src.localName);
+      const turned = ['transform', 'scale', 'rotate'].some((p) => cs.getPropertyValue(p) !== 'none');
+      const decls = LOOK.filter((p) => {
+        const v = cs.getPropertyValue(p);
+        if (v === plain.get(p)) return false;
+        /* a border or outline not drawn, a turning point of nothing turned: not its look */
+        if ((p === 'border' || p === 'outline') && (/(^|\s)0px(\s|$)/.test(v) || /\bnone\b/.test(v))) return false;
+        return p !== 'transform-origin' || turned;
+      }).map((p) => `${p}: ${cs.getPropertyValue(p)}`);
+      for (const f of cs.fontFamily.split(',')) families.add(f.trim().replace(/^["']|["']$/g, ''));
+      out.removeAttribute('class');
+      for (const a of [...out.attributes]) if (/^on/i.test(a.name)) out.removeAttribute(a.name);
+      out.setAttribute('style', decls.join('; '));
+      for (const a of ['src', 'href', 'poster']) if (src[a] && typeof src[a] === 'string' && out.hasAttribute(a)) out.setAttribute(a, src[a]);
+    });
+    for (const n of copy.querySelectorAll('script')) n.remove();
+    /* the root where it is in its page, its own box: not the flow it was in */
+    let left = 0;
+    let top = 0;
+    let [w, h] = [el.offsetWidth, el.offsetHeight];
+    if (el.offsetParent !== undefined) for (let n = el; n; n = n.offsetParent) { left += n.offsetLeft; top += n.offsetTop; }
+    else {
+      /* an SVG element has no offset*: where it is drawn in its page */
+      const r = el.getBoundingClientRect();
+      [left, top, w, h] = [r.left, r.top, r.width, r.height];
+    }
+    copy.style.setProperty('position', 'absolute');
+    copy.style.setProperty('left', `${left}px`);
+    copy.style.setProperty('top', `${top}px`);
+    copy.style.setProperty('width', `${w}px`);
+    copy.style.setProperty('height', `${h}px`);
+    copy.style.setProperty('margin', '0');
+    copy.style.setProperty('box-sizing', 'border-box');
+    copy.style.removeProperty('right');
+    copy.style.removeProperty('bottom');
+    const fonts = [];
+    for (const sheet of doc.styleSheets) {
+      let list = [];
+      try { list = [...sheet.cssRules]; } catch { continue; }
+      for (const r of list) {
+        if (r.type !== 5) continue;
+        const family = r.style.getPropertyValue('font-family').trim().replace(/^["']|["']$/g, '');
+        if (!families.has(family)) continue;
+        /* its files as full addresses */
+        const base = sheet.href ?? doc.baseURI;
+        fonts.push(r.cssText.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (m, q, u) => { try { return `url("${new URL(u, base).href}")`; } catch { return m; } }));
+      }
+    }
+    return { html: copy.outerHTML, fonts, base: new URL('.', location.href).href };
+  };
+
+  /* ── a layer to be written into its page (the editor's lib/layer-paste) ── */
+  /** Where `el` is in `root`: element after element, from it. */
+  const pathIn = (root, el) => {
+    const path = [];
+    for (let n = el; n !== root; n = n.parentElement) path.unshift([...n.parentElement.children].indexOf(n));
+    return path;
+  };
+  /** A selector list's parts: split at its own commas, not those in :is(…) or [a="b, c"]. */
+  const selectorParts = (list) => {
+    const got = [];
+    let depth = 0;
+    let quote = null;
+    let from = 0;
+    for (let i = 0; i < list.length; i++) {
+      const ch = list[i];
+      if (quote) { if (ch === quote && list[i - 1] !== '\\') quote = null; continue; }
+      if (ch === '"' || ch === "'") quote = ch;
+      else if (ch === '(' || ch === '[') depth++;
+      else if (ch === ')' || ch === ']') depth--;
+      else if (ch === ',' && depth === 0) { got.push(list.slice(from, i).trim()); from = i + 1; }
+    }
+    got.push(list.slice(from).trim());
+    return got;
+  };
+  /** A selector's weight [ids, classes and the like, types] (CSS Selectors 4: :is() / :not() / :has() their heaviest). */
+  const specificityOf = (sel) => {
+    const w = [0, 0, 0];
+    const add = (x) => { w[0] += x[0]; w[1] += x[1]; w[2] += x[2]; };
+    const heavier = (x, y) => (x[0] - y[0] || x[1] - y[1] || x[2] - y[2]) > 0;
+    const heaviest = (list) => selectorParts(list).map(specificityOf).reduce((m, x) => (heavier(x, m) ? x : m), [0, 0, 0]);
+    const name = (i) => { let k = i; while (k < sel.length && (/[\w-]/.test(sel[k]) || sel.charCodeAt(k) > 127 || sel[k] === '\\')) k += sel[k] === '\\' ? 2 : 1; return k; };
+    const inner = (i) => {
+      let depth = 0;
+      for (let k = i; k < sel.length; k++) {
+        if (sel[k] === '(') depth++;
+        else if (sel[k] === ')' && --depth === 0) return [sel.slice(i + 1, k), k + 1];
+      }
+      return [sel.slice(i + 1), sel.length];
+    };
+    for (let i = 0; i < sel.length;) {
+      const ch = sel[i];
+      if (ch === '#') { w[0]++; i = name(i + 1); } else if (ch === '.') { w[1]++; i = name(i + 1); } else if (ch === '[') {
+        w[1]++;
+        i = sel.indexOf(']', i) + 1 || sel.length;
+      } else if (ch === ':' && sel[i + 1] === ':') {
+        w[2]++;
+        i = name(i + 2);
+        if (sel[i] === '(') i = inner(i)[1];
+      } else if (ch === ':') {
+        const end = name(i + 1);
+        const pseudo = sel.slice(i + 1, end).toLowerCase();
+        i = end;
+        if (['before', 'after', 'first-line', 'first-letter'].includes(pseudo)) { w[2]++; continue; }
+        if (sel[i] !== '(') { w[1]++; continue; }
+        const [arg, next] = inner(i);
+        i = next;
+        if (pseudo === 'where') continue;
+        if (['is', 'not', 'has', 'matches', '-webkit-any'].includes(pseudo)) { add(heaviest(arg)); continue; }
+        w[1]++;
+        const of = /\sof\s([^]*)$/.exec(arg);
+        if ((pseudo === 'nth-child' || pseudo === 'nth-last-child') && of) add(heaviest(of[1]));
+      } else if (/[A-Za-z_-]/.test(ch) || sel.charCodeAt(i) > 127) { w[2]++; i = name(i); } else i++;
+    }
+    return w;
+  };
+  /**
+   * The page's style rules in their order: each one's selector list in parts (a nested rule's, as it reads where it
+   * is: `&` its parent, `:is(…)`), its declarations as written, the at-rules it is in (`@media …`, `@supports …`,
+   * `@layer …`, `@container …`, outermost first), and the stylesheet it is in (its `<style>` or `<link>`, by place among
+   * them).
+   */
+  const styleRules = (doc) => {
+    const out = [];
+    const nest = (parts, parent) => (parent == null ? parts : parts.map((p) => (p.includes('&') ? p.replaceAll('&', `:is(${parent})`) : `:is(${parent}) ${p}`)));
+    const walk = (rules, within, sheet, parent) => {
+      for (const r of rules) {
+        if (r.selectorText != null) {
+          const parts = nest(selectorParts(r.selectorText), parent);
+          out.push({ parts, style: r.style, within, sheet });
+          if (r.cssRules?.length) walk(r.cssRules, within, sheet, parts.join(', '));
+        } else if (r.styleSheet) {
+          let list = [];
+          try { list = [...r.styleSheet.cssRules]; } catch { /* another origin's */ }
+          walk(list, within, sheet, parent);
+        } else if (r.cssRules) walk(r.cssRules, [...within, r.cssText.slice(0, r.cssText.indexOf('{')).trim()], sheet, parent);
+      }
+    };
+    const owners = [...doc.querySelectorAll('style, link[rel~="stylesheet" i]')];
+    for (const sheet of doc.styleSheets) {
+      let list = [];
+      try { list = [...sheet.cssRules]; } catch { continue; }
+      walk(list, [], owners.indexOf(sheet.ownerNode), null);
+    }
+    return out;
+  };
+  const matchesAny = (el, parts) => parts.some((part) => { try { return el.matches(part); } catch { return false; } });
+  /**
+   * A rule's declarations as it writes them, shorthands and `var()` kept (its longhands read one by one lose a
+   * shorthand written with a `var()`): [property, value] in its order.
+   */
+  const declsOf = (style) => {
+    const out = [];
+    let depth = 0;
+    let quote = null;
+    let from = 0;
+    const text = style.cssText;
+    const take = (part) => {
+      const at = part.indexOf(':');
+      if (at > 0) out.push([part.slice(0, at).trim(), part.slice(at + 1).trim()]);
+    };
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quote) { if (ch === quote && text[i - 1] !== '\\') quote = null; continue; }
+      if (ch === '"' || ch === "'") quote = ch;
+      else if (ch === '(') depth++;
+      else if (ch === ')') depth--;
+      else if (ch === ';' && depth === 0) { take(text.slice(from, i)); from = i + 1; }
+    }
+    take(text.slice(from));
+    return out;
+  };
+  /** An element's words as its page draws them, without what the clip's changes of words wrote (src/overrides.mjs). */
+  const pageWords = (c, el) => {
+    const texts = new Map();
+    for (const saved of c.touched?.values?.() ?? []) for (const [node, data] of saved.texts ?? []) texts.set(node, data);
+    const of = (n) => {
+      if (n.nodeType === 3) return texts.has(n) ? texts.get(n) : n.data;
+      if (n.nodeType !== 1) return '';
+      const saved = c.touched?.get?.(n);
+      if (saved?.nodes) return saved.nodes.map((x) => x.textContent ?? '').join('');
+      return [...n.childNodes].map(of).join('');
+    };
+    return of(el);
+  };
+  /**
+   * Where an element is laid out: its `position`, and its box (px) in what places it, as `position: absolute` would
+   * place it there. An SVG's own shapes are placed by it: null.
+   */
+  const layoutOf = (el) => {
+    const view = el.ownerDocument.defaultView;
+    const position = view.getComputedStyle(el).position;
+    if (el.offsetParent !== undefined) {
+      /* from what places it absolutely (its nearest positioned parent, else the page), through the offset parents
+         between (a table cell is one, and places nothing) */
+      let box = el.parentElement;
+      while (box && view.getComputedStyle(box).position === 'static') box = box.parentElement;
+      let [left, top] = [0, 0];
+      for (let n = el; n && n !== box;) {
+        left += n.offsetLeft;
+        top += n.offsetTop;
+        n = n.offsetParent;
+        if (n && n !== box) { left += n.clientLeft; top += n.clientTop; }
+      }
+      /* its size as laid out, fractions kept: offsetWidth rounds, and a copy 0.4px narrower wraps its words */
+      const cs = view.getComputedStyle(el);
+      const edges = (/** @type {string[]} */ ...names) => names.reduce((sum, n) => sum + (parseFloat(cs.getPropertyValue(n)) || 0), 0);
+      const exact = (/** @type {string} */ size, /** @type {number} */ rounded, /** @type {string[]} */ sides) => {
+        const v = parseFloat(size);
+        if (!Number.isFinite(v)) return rounded;
+        const outer = cs.boxSizing === 'border-box' ? v : v + edges(...sides);
+        return Math.abs(outer - rounded) < 1 ? outer : rounded;
+      };
+      return {
+        position, left, top,
+        width: exact(cs.width, el.offsetWidth, ['padding-left', 'padding-right', 'border-left-width', 'border-right-width']),
+        height: exact(cs.height, el.offsetHeight, ['padding-top', 'padding-bottom', 'border-top-width', 'border-bottom-width']),
+      };
+    }
+    if (el.localName !== 'svg' || el.ownerSVGElement) return null;
+    /* an <svg> in the page: no offset*; its box from where it is drawn, in what places it (its offset parent's) */
+    let box = el.parentElement;
+    while (box && box !== el.ownerDocument.body && view.getComputedStyle(box).position === 'static') box = box.parentElement;
+    const r = el.getBoundingClientRect();
+    const b = box?.getBoundingClientRect() ?? { left: 0, top: 0 };
+    const k = localScale(el);
+    return { position, left: (r.left - b.left - (box?.clientLeft ?? 0)) / k, top: (r.top - b.top - (box?.clientTop ?? 0)) / k, width: r.width / k, height: r.height / k };
+  };
   /* ── the ops ── */
   const ops = {
     /** The layer under a point: the smallest (Alt: the next one under `cycleFrom`); groups stand for their layers. */
@@ -1372,10 +1758,65 @@
         return { id: c.id, visible: on.has(c), x: r.left, y: r.top, w: r.width, h: r.height };
       });
     },
+    /**
+     * The caption cues on the picture now (top track first): each one's box as laid out (`box`) and where its words
+     * are drawn (`text`), stage px.
+     */
+    captions() {
+      const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
+      return (hooks()?.captions?.() ?? []).map(({ el, ...cue }) => ({ ...cue, box: rect(el), text: rect(el.querySelector('.cue-text') ?? el) }));
+    },
+    /**
+     * Show cues of a caption track moved by (dx, dy) stage px and scaled by `k` about their middle, not kept yet (`ids`
+     * null: every one; none of them: in place again).
+     */
+    captionShift({ track, ids, dx, dy, k }) {
+      for (const cue of hooks()?.captions?.() ?? []) {
+        if (cue.track !== track || (ids && !ids.includes(cue.id))) continue;
+        cue.el.style.translate = dx || dy ? `${dx}px ${dy}px` : '';
+        cue.el.style.scale = k && k !== 1 ? String(k) : '';
+        /* a cue in a region is held to its box: shown whole while it is dragged out of it */
+        const region = cue.el.closest('.cue-region');
+        if (region) region.style.overflow = dx || dy || (k && k !== 1) ? 'visible' : '';
+      }
+      return true;
+    },
     /** `pictures`: a video or a still only (a page is clicked by its layers; what is under its empty parts is found). */
     clipAt({ x, y, pictures }) { return clipAt(x, y, Boolean(pictures))?.id ?? null; },
     /** Show a clip placed in a box not kept yet (null: in its own again). */
-    place({ clip, box }) { hooks()?.place(clip, box ?? null); return true; },
+    /* `vars`: its page's variables shown with it, in the same frame (a line of words grown taller, its words as large).
+       `root`: the same set on the page itself, not as a draft (a draft shows the clip's overrides again, and would put
+       back the words of a line being typed in) */
+    place({ clip, box, size, vars, root }) {
+      const c = vars || root ? clipById(clip) : null;
+      if (vars && c?.kind === 'page') draft(c, { at: ':root' }, { style: vars });
+      if (root && c?.win) for (const [k, v] of Object.entries(root)) c.win.document.documentElement.style.setProperty(k, String(v));
+      hooks()?.place(clip, box ?? null, size ?? null);
+      return true;
+    },
+    /**
+     * Show a page clip with `overrides` instead of its own (an inspector's edit measured before it is written), until
+     * its own change (written: see updated) or this is called with null.
+     */
+    show({ clip, overrides }) {
+      const c = clipById(clip);
+      if (!c) return false;
+      if (Array.isArray(overrides)) shownWith.set(clip, JSON.stringify(c.overrides ?? [])); else shownWith.delete(clip);
+      editor()?.preview(clip, Array.isArray(overrides) ? overrides : null);
+      return true;
+    },
+    /** An element of a clip shown now, as its page lays it out (no transform counted): its size, and its font's. */
+    /* `natural`: also its width with its words on one line, nothing wrapped (`nw`; a box with its padding: its words,
+       `.t`, kept on one line) */
+    measure({ clip, at, natural }) {
+      const c = clipById(clip);
+      let el = null;
+      try { el = c?.win?.document?.querySelector(String(at)) ?? null; } catch { /* not a selector */ }
+      if (!el || !c?.win) return null;
+      const out = { w: el.offsetWidth, h: el.offsetHeight, font: parseFloat(c.win.getComputedStyle(el).fontSize) || 0 };
+      if (natural) out.nw = oneLineWidth(el);
+      return out;
+    },
     /** Show a clip in CSS of its own not kept yet (null: its own again). */
     look({ clip, css }) { hooks()?.look?.(clip, typeof css === 'string' ? css : null); return true; },
     /** Show a layer's move / scale / turn; with `center` (stage px), its offset keeps its center there. */
@@ -1479,6 +1920,187 @@
         const found = o?.at ? matches(doc, o) : [];
         return found.length > 0 && found.every((el) => gone.some((g) => g.contains(el)));
       });
+    },
+    /**
+     * What writing a copy of the layers `of` of clip `clip` into their page needs (the editor's lib/layer-paste), per
+     * layer: a selector naming it alone, its tag, id, classes and words as its page has them (the clip's changes of
+     * words undone: to find it in the page's file), where it is laid out, the clip's changes of it and of the layers
+     * in it, in order, each with where it is in the layer (element by element, from it), and how it looks now
+     * (snapshotOf). Null for a layer not found. (The page's rules of its ids are afterCopy's `looks`, as any rule it
+     * gets and its copy does not.)
+     */
+    layerSource({ clip, of }) {
+      const c = clipById(clip);
+      const doc = c?.kind === 'page' ? c.win?.document : null;
+      if (!doc) return null;
+      return (of ?? []).map((o) => {
+        const el = matches(doc, o)[0];
+        if (!el) return null;
+        const at = selectorOf(el);
+        const tweaks = [];
+        for (const t of c.overrides ?? []) {
+          if (t.at === undefined) continue;
+          const { at: _at, n: _n, lock: _lock, ...tweak } = t;
+          if (!Object.keys(tweak).length) continue;
+          for (const m of matches(doc, t)) if (el.contains(m)) tweaks.push({ path: pathIn(el, m), tag: m.localName, ...tweak });
+        }
+        return {
+          at: matches(doc, { at }).length === 1 ? at : null,
+          tag: el.localName,
+          id: el.id || null,
+          classes: [...el.classList],
+          text: pageWords(c, el).replace(/\s+/g, ' ').trim().slice(0, 200),
+          place: layoutOf(el),
+          tweaks,
+          snapshot: snapshotOf(el),
+        };
+      });
+    },
+    /**
+     * Copies of the layers `of` of clip `clip` written into its page as lib/layer-paste writes them, tried there and
+     * taken away again. Per layer, where its copy goes among the elements beside it (`after`: the index of the one it
+     * goes after, -1 first; `siblings`: their tags): right after it, unless the page's CSS would then draw what is
+     * beside it otherwise (`:nth-child`, `:last-child`, `+` …), else the nearest place where it draws nothing
+     * otherwise (after it first, then before it). Per override of the clip, the selector naming what it finds now
+     * when it would find other elements once they are there (null: the same). Per layer, what the page's rules give
+     * it and not its copy there, and the copy and not it (`looks`: element by element, from it, rules for the copy,
+     * each with the weight, at-rules and stylesheet of the page's rule it answers), so the copy looks as it does.
+     */
+    afterCopy({ clip, of }) {
+      const c = clipById(clip);
+      const doc = c?.kind === 'page' ? c.win?.document : null;
+      const els = doc ? (of ?? []).map((o) => matches(doc, o)[0] ?? null) : [];
+      if (!doc || !els.length || els.some((el) => !el)) return null;
+      const list = c.overrides ?? [];
+      const before = list.map((o) => (o.at === undefined ? null : matches(doc, o)));
+      const view = doc.defaultView;
+      const LOOKED = ['color', 'background-color', 'display', 'position', 'width', 'height', 'margin', 'font-size', 'opacity', 'transform', 'visibility', 'order', 'border-color'];
+      const COPY = 'data-openfilm-copy';
+      const looks = (parent) => [...parent.querySelectorAll(`:scope > :not([${COPY}]), :scope > :not([${COPY}]) *`)]
+        .filter((x) => !x.closest(`[${COPY}]`))
+        .map((x) => [...LOOKED.map((p) => view.getComputedStyle(x).getPropertyValue(p)), ...['::before', '::after'].map((pe) => view.getComputedStyle(x, pe).getPropertyValue('content'))].join('|')).join('\n');
+      /* a copy as lib/layer-paste writes it: its ids new ones, and what in it names them too (`for`, `href="#…"`,
+         `aria-*`, `url(#…)`) */
+      const NAMES_IDS = ['for', 'aria-labelledby', 'aria-describedby', 'aria-controls', 'aria-owns', 'list', 'form', 'headers'];
+      const copyOf = (el) => {
+        const copy = el.cloneNode(true);
+        copy.setAttribute(COPY, '');
+        const all = [copy, ...copy.querySelectorAll('*')];
+        const ids = new Set(all.map((n) => n.id).filter(Boolean));
+        const renamed = (id) => (ids.has(id) ? `${id}-openfilm-copy` : id);
+        for (const n of all) {
+          if (n.id) n.id = renamed(n.id);
+          for (const a of [...n.attributes]) {
+            let v = a.value;
+            if (NAMES_IDS.includes(a.name)) v = v.split(/\s+/).map(renamed).join(' ');
+            else if ((a.name === 'href' || a.name === 'xlink:href') && v.startsWith('#')) v = `#${renamed(v.slice(1))}`;
+            else v = v.replace(/url\((["']?)#([^"')]+)\1\)/g, (m, q, id) => `url(${q}#${renamed(id)}${q})`);
+            if (v !== a.value) n.setAttribute(a.name, v);
+          }
+        }
+        return copy;
+      };
+      const put = (copy, parent, after) => {
+        const kids = [...parent.children].filter((x) => !x.hasAttribute(COPY));
+        if (after < 0) parent.prepend(copy); else kids[after].after(copy);
+      };
+      const places = els.map((el) => {
+        const parent = el.parentElement;
+        const kids = [...parent.children].filter((x) => !x.hasAttribute(COPY));
+        const own = kids.indexOf(el);
+        const was = looks(parent);
+        const tries = [own];
+        for (let k = own + 1; k < kids.length && tries.length < 40; k++) tries.push(k);
+        for (let k = own - 1; k >= -1 && tries.length < 80; k--) tries.push(k);
+        const copy = copyOf(el);
+        let after = own;
+        for (const k of tries) {
+          put(copy, parent, k);
+          const same = looks(parent) === was;
+          copy.remove();
+          if (same) { after = k; break; }
+        }
+        return { after, siblings: kids.map((x) => x.localName) };
+      });
+      const copies = els.map((el, i) => {
+        const copy = copyOf(el);
+        put(copy, el.parentElement, places[i].after);
+        return copy;
+      });
+      /* what the page's CSS draws otherwise on a copy where it goes (a :first-child, a p + p): its original's, element
+         by element, to be written on it. Not where it is and how big (the paste places it), nor what its new ids lose
+         (their rules are said again of them) */
+      /* what the page's rules give an element where it is and not its copy where it goes (a :first-child), and what
+         they give the copy there and not it (a p + p), element by element. The first said again of the copy as the rule
+         says it (`var()`, `currentColor`, an animation stay what they are); the second answered, property by property,
+         by what the element's own rules say (none: `unset`, so it inherits). Each with its rule's weight, at-rules and
+         stylesheet, for a rule of the copy's that the cascade weighs as that one */
+      /* each rule's parts with the pseudo-element they end in apart (`::before`, `::marker` …: what an element's own
+         match cannot say), so a rule of an element's pseudo-element is weighed as the element's, and said again of
+         the copy's same pseudo-element */
+      const PSEUDO = /(?:::[\w-]+(?:\([^)]*\))?|:(?:before|after|first-line|first-letter)(?![\w-]))+$/i;
+      const rules = styleRules(doc).map((r, order) => ({
+        ...r,
+        order,
+        split: r.parts.map((part) => {
+          const m = PSEUDO.exec(part);
+          return m ? { part, base: part.slice(0, m.index).trim() || '*', pseudo: m[0] } : { part, base: part, pseudo: '' };
+        }),
+      }));
+      const pseudosOf = (r) => [...new Set(r.split.map((x) => x.pseudo))];
+      const found = (r, el, pseudo) => r.split.filter((x) => x.pseudo === pseudo && matchesAny(el, [x.base]));
+      /* the element part's weight: the pseudo-element is written again after the copy's selector, and weighs there */
+      const weightOf = (r, el, pseudo) => found(r, el, pseudo).map((x) => specificityOf(x.base))
+        .reduce((m, x) => ((x[0] - m[0] || x[1] - m[1] || x[2] - m[2]) > 0 ? x : m), [0, 0, 0]);
+      const heavier = (x, y) => (x[0] - y[0] || x[1] - y[1] || x[2] - y[2]);
+      const looksOf = (el, copy) => {
+        const from = [el, ...el.querySelectorAll('*')];
+        const to = [copy, ...copy.querySelectorAll('*')];
+        return from.flatMap((src, k) => {
+          const out = to[k];
+          if (!out || out.localName !== src.localName) return [];
+          const said = [];
+          for (const r of rules) {
+            for (const pseudo of pseudosOf(r)) {
+              const mine = found(r, src, pseudo).length > 0;
+              const its = found(r, out, pseudo).length > 0;
+              if (mine && !its) said.push({ sheet: r.sheet, within: r.within, pseudo, weight: weightOf(r, src, pseudo), decls: declsOf(r.style) });
+              if (its && !mine) {
+                const own = rules.filter((x) => found(x, src, pseudo).length);
+                const decls = [];
+                for (let i = 0; i < r.style.length; i++) {
+                  const p = r.style[i];
+                  /* its own winning rule for it: !important first, then the heavier, then the later */
+                  const by = own.filter((x) => x.style.getPropertyValue(p)).sort((x, y) => (
+                    (x.style.getPropertyPriority(p) === 'important') - (y.style.getPropertyPriority(p) === 'important')
+                    || heavier(weightOf(x, src, pseudo), weightOf(y, src, pseudo)) || x.order - y.order
+                  )).at(-1);
+                  const priority = by?.style.getPropertyPriority(p) === 'important' ? ' !important' : '';
+                  decls.push([p, by ? `${by.style.getPropertyValue(p)}${priority}` : 'unset']);
+                }
+                said.push({ sheet: r.sheet, within: r.within, pseudo, weight: weightOf(r, out, pseudo), decls });
+              }
+            }
+          }
+          return said.length ? [{ path: pathIn(el, src), rules: said }] : [];
+        });
+      };
+      try {
+        /* read with the copies' own new ids: a rule naming an original's id (`#a`, `:not(#a)`) is one more rule it
+           gets and the copy not, or the other way */
+        const looks = els.map((el, i) => looksOf(el, copies[i]));
+        const moved = list.map((o, i) => {
+          const was = before[i];
+          if (!was) return null;
+          /* the copies are elements of the page once written: what finds them too finds others */
+          const now = matches(doc, o);
+          if (now.length === was.length && now.every((n, k) => n === was[k])) return null;
+          return was.length ? was.map((n) => selectorOf(n)).join(', ') : null;
+        });
+        return { places, moved, looks };
+      } finally {
+        for (const copy of copies) copy.remove();
+      }
     },
     /** Stop showing what was not kept on a clip (a refused edit, a cancelled drag). */
     release({ clip }) { release(clip); return true; },
@@ -1599,6 +2221,20 @@
     },
     textStart: startText,
     textFinish({ commit }) { finishText(Boolean(commit)); return true; },
+    /* the line being typed in is a line of words whose box follows its words (fitTyped); null: no more */
+    textFit({ fit }) {
+      if (!editing) return false;
+      editing.fit = fit && typeof fit === 'object' ? { ...fit } : null;
+      /* its words' size in px while it is typed in (its box's height changes as lines come and go; a size in vh of it
+         would change with it); what was typed before this came: fitted now */
+      if (editing.fit) {
+        editing.c.win?.document.documentElement.style.setProperty('--size', `${Math.round(editing.fit.font * 100) / 100}px`);
+        editing.holdOff();
+        editing.hold = null;
+        editing.refit();
+      }
+      return true;
+    },
     /**
      * What a page clip shows that it can change without opening the page (its properties are made of these): the CSS
      * custom properties its stylesheets set on `:root` (or `html`), each with its value now; its words, each layer of
@@ -1648,6 +2284,19 @@
     },
   };
 
+  /*
+   * What a drag shows (a layer moved, a clip placed, a value dragged) is answered once the picture has drawn it. The
+   * editor asks the next step only after the answer, and draws its outline from it: answered at once, a page slow to
+   * draw had the outline run ahead of the picture, and each step's work kept it from drawing. Hidden (no frames
+   * drawn), it answers soon anyway.
+   */
+  const SHOWN_OPS = new Set(['paint', 'paintMany', 'place', 'look', 'tweak']);
+  const drawn = () => new Promise((done) => {
+    const late = setTimeout(done, 250);
+    /* the frame's callbacks run before it is drawn; a task after them runs once it is */
+    requestAnimationFrame(() => setTimeout(() => { clearTimeout(late); done(); }, 0));
+  });
+
   window.addEventListener('message', async (e) => {
     if (e.origin !== EDITOR || e.source !== parent || e.data?.source !== 'openfilm-studio' || e.data.type !== 'stage') return;
     const { seq, op, ...args } = e.data;
@@ -1663,6 +2312,7 @@
       post({ type: 'stage', seq, result: null, error: String(error?.message ?? error) });
       return;
     }
+    if (SHOWN_OPS.has(op)) await drawn();
     post({ type: 'stage', seq, result });
   });
 })();

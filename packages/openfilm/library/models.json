@@ -1,0 +1,35 @@
+{
+ "version": 1,
+ "model": "multilingual-e5-small",
+ "dims": 384,
+ "onnx": "models/multilingual-e5-small/model_quantized.onnx",
+ "tokenizer": "models/multilingual-e5-small/vocab.bin",
+ "runtime": "models/onnxruntime-web-1.31.1/ort.wasm.min.mjs",
+ "files": [
+  {
+   "path": "models/multilingual-e5-small/model_quantized.onnx",
+   "bytes": 118308185,
+   "sha256": "f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193"
+  },
+  {
+   "path": "models/multilingual-e5-small/vocab.bin",
+   "bytes": 5581385,
+   "sha256": "b3bea46ce18a08227a3f9cf66682cfd5a9b345419a85b6b471811d952464062f"
+  },
+  {
+   "path": "models/onnxruntime-web-1.31.1/ort.wasm.min.mjs",
+   "bytes": 53725,
+   "sha256": "c21d9c326d453a4a61398270c804d5979e118540597cb0c07f7b3d64e6098234"
+  },
+  {
+   "path": "models/onnxruntime-web-1.31.1/ort-wasm-simd-threaded.mjs",
+   "bytes": 24738,
+   "sha256": "30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3"
+  },
+  {
+   "path": "models/onnxruntime-web-1.31.1/ort-wasm-simd-threaded.wasm",
+   "bytes": 14848852,
+   "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+  }
+ ]
+}

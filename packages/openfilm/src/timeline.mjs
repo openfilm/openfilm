@@ -2,8 +2,9 @@
 // in host.mjs); the file's own elements are the clips: an <iframe> a web page, a <video>, an <img> a still, an
 // <audio> a sound for the mix. Where each plays and sits is what film-doc.mjs reads in the file, the same reading
 // Studio plays and exports by; how each looks is the file's own CSS. Track 0, the first <section>, is on top.
-import { clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, kindOf, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
+import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
+import { CAPTION_BASE_CSS, cueCss, cueLayout, cueNodes, readVtt, regionBox } from './captions.mjs';
 
 /* the file as written (without what the host puts in it), read as every reader reads it */
 const own = new URL(location.href);
@@ -11,9 +12,14 @@ own.searchParams.set('film-host', '0');
 const ownText = await (await fetch(own, { cache: 'no-store' })).text();
 const read = readFilmFile(ownText);
 /* what the tracks and the stage are not (the styles, the fonts): changed, the film is loaded again, not changed in
-   place. The stage is the viewport's size, and changes in place (see change) */
+   place. The stage is the viewport's size, and the keyframes its clips move by are a value of the film's: both change
+   in place (see change) */
 const VIEWPORT = /<meta\b[^>]*\bname\s*=\s*["']?viewport\b[^>]*>/i;
-const styleOf = (text) => text.replace(VIEWPORT, '');
+const styleOf = (text) => {
+  let out = text.replace(VIEWPORT, '');
+  for (const k of keyframeBlocks(out).reverse()) out = out.slice(0, k.start) + out.slice(k.end);
+  return out;
+};
 const head = styleOf(filmHead(ownText));
 if (!read.doc) throw new Error(read.problems.length === 1 ? read.problems[0] : `film.html has ${read.problems.length} problems:\n  ${read.problems.join('\n  ')}`);
 let doc = read.doc;
@@ -24,11 +30,34 @@ Object.assign(document.body.style, { width: stage.w + 'px', height: stage.h + 'p
 const CLIP_TAGS = new Set(['iframe', 'video', 'img', 'audio']);
 const sections = [...document.body.children].filter((el) => el.localName === 'section');
 const elements = sections.map((s) => { s.style.display = 'contents'; return [...s.children].filter((el) => CLIP_TAGS.has(el.localName)); });
+/* the file written again while this page loaded (an editor's edit lands in a few writes): the page as it came and the
+   file as read since hold other clips. It is loaded again, as it is now, a few times at most; still apart, they are
+   said to be */
+if (doc.tracks.length !== elements.length || doc.tracks.some((tr, ti) => tr.clips.length !== elements[ti].length)) {
+  const again = new URL(location.href);
+  const n = Number(again.searchParams.get('film-again')) || 0;
+  if (n < 3) {
+    again.searchParams.set('film-again', String(n + 1));
+    location.replace(again.href);
+    await new Promise(() => {});
+  }
+  throw new Error('film.html changed while it was read, again and again: the page and the file hold other clips');
+}
 const url = (src) => new URL(srcHref(src), location.href);
 /* an editor's preview (`?film-missing=skip`) plays on past a clip whose file is not there: the clip keeps its time,
    but is neither loaded, drawn nor heard. Anything else (a check, an export) says the missing file and stops */
 const SKIP_MISSING = new URL(location.href).searchParams.get('film-missing') === 'skip';
 const ready = (a) => Promise.resolve(typeof a.ready === 'function' ? a.ready() : a.ready);
+
+/**
+ * Each caption track as drawn: its layer over the picture (in its track's place in the stack), the CSS of its file's
+ * STYLE, its cues and regions as read, and the cues on now, by the cue (their elements are kept while they stay on).
+ * @type {{ ti: number, src: string, el: HTMLElement, css: HTMLStyleElement, cues: import('./captions.mjs').VttCue[], regions: Map<string, ReturnType<typeof regionBox>>, on: Map<object, HTMLElement>, hidden: boolean, read: Promise<void> | null }[]}
+ */
+const captionLayers = [];
+let captionBase = null;
+/** The text component's fonts and motions loading (see syncCaptions). */
+let captionText = null;
 
 /** A gate that runs what is given to it when fewer than `most` of its runs are going. */
 function gate(most) {
@@ -89,18 +118,124 @@ function hostFacts(href) {
  * Put a clip's element where film-doc's pictureRect says its picture lands in `box`. A page is drawn at its own size
  * (`c.nw` × `c.nh`) and scaled into place; a video or still is laid out at its box's size, so the file's CSS for it
  * (object-fit, border-radius, a mask) speaks in stage px. `c.w` × `c.h` is the element's own frame either way.
- * Everything that places it is written here, on the element itself: nothing in the file's CSS moves a clip.
+ * Everything that places it is written here, on the element itself: nothing in the file's CSS moves a clip. Its
+ * animation's `translate`, `rotate` and `scale` (SPEC §1) go on top: its origin is its box's middle on the stage, and
+ * the placing transform is written around it, so they move it in stage px and turn and size it about that middle.
  */
 function place(c, box) {
   const at = pictureRect(c.kind, { w: c.nw, h: c.nh }, stage, box);
   const page = c.kind === 'page';
   c.w = page ? c.nw : at.w; c.h = page ? c.nh : at.h;
   const k = page ? ` scale(${at.w / c.nw}, ${at.h / c.nh})` : '';
+  const cx = at.x + at.w / 2, cy = at.y + at.h / 2;
   Object.assign(c.el.style, {
     position: 'absolute', left: '0', top: '0', right: 'auto', bottom: 'auto', margin: '0', translate: 'none', rotate: 'none', scale: 'none',
-    width: c.w + 'px', height: c.h + 'px', transformOrigin: '0 0',
-    transform: `translate(${at.x + at.w / 2}px, ${at.y + at.h / 2}px) rotate(${at.r}deg) translate(${-at.w / 2}px, ${-at.h / 2}px)${k}`,
+    width: c.w + 'px', height: c.h + 'px', transformOrigin: `${cx}px ${cy}px`,
+    /* T(−origin) · placing · T(origin), the first two of which cancel: about the origin it is the placing alone */
+    transform: `rotate(${at.r}deg) translate(${-at.w / 2}px, ${-at.h / 2}px)${k} translate(${cx}px, ${cy}px)`,
   });
+}
+
+/* ── animated pictures ─────────────────────────────────────────────────── */
+
+/* the pictures that may move by themselves: a GIF, an animated PNG or WebP */
+const ANIMATED = /\.(gif|png|apng|webp)$/i;
+/* how many of a moving picture's frames are kept decoded */
+const FRAMES_KEPT = 48;
+
+/**
+ * A moving picture's frames and their timing, or null when it is still (or this browser cannot read it). Shown as a
+ * clip, it is not left to play by itself: the frame its own timing has at the clip's time is drawn, counted from the
+ * clip's start and looping as many times as the file says, then holding its last frame. So the same t always draws
+ * the same picture.
+ */
+async function animationOf(href) {
+  if (typeof ImageDecoder === 'undefined' || !ANIMATED.test(new URL(href).pathname)) return null;
+  try {
+    const res = await fetch(href);
+    const type = (res.headers.get('content-type') ?? '').split(';')[0].trim();
+    if (!res.ok || !type || !(await ImageDecoder.isTypeSupported(type))) return null;
+    const decoder = new ImageDecoder({ data: await res.arrayBuffer(), type });
+    await decoder.tracks.ready;
+    const track = decoder.tracks.selectedTrack;
+    if (!track?.animated || track.frameCount < 2) { decoder.close(); return null; }
+    await decoder.completed;
+    /* each frame's start, in ms; a delay under 20 ms is shown for 100 ms, as browsers show a GIF */
+    const starts = [];
+    let total = 0;
+    for (let i = 0; i < track.frameCount; i++) {
+      const { image } = await decoder.decode({ frameIndex: i });
+      const ms = (image.duration ?? 0) / 1000;
+      image.close();
+      starts.push(total);
+      total += ms >= 20 ? ms : 100;
+    }
+    return { decoder, starts, total, plays: track.repetitionCount + 1, kept: new Map() };
+  } catch {
+    return null;
+  }
+}
+
+/** The frame a moving picture shows `s` seconds into its clip. */
+function frameAt({ starts, total, plays }, s) {
+  const ms = Math.max(0, s) * 1000;
+  if (ms >= total * plays) return starts.length - 1;
+  const at = ms % total;
+  let lo = 0, hi = starts.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= at) lo = mid; else hi = mid - 1; }
+  return lo;
+}
+
+/** A frame of a moving picture as a picture of its own (an object URL), decoded once and kept among the last few. */
+function frameUrl(a, i) {
+  let made = a.kept.get(i);
+  if (!made) {
+    made = a.decoder.decode({ frameIndex: i }).then(async ({ image }) => {
+      const canvas = new OffscreenCanvas(image.displayWidth, image.displayHeight);
+      canvas.getContext('2d').drawImage(image, 0, 0);
+      image.close();
+      return URL.createObjectURL(await canvas.convertToBlob({ type: 'image/png' }));
+    });
+    a.kept.set(i, made);
+    if (a.kept.size > FRAMES_KEPT) {
+      const [first, gone] = a.kept.entries().next().value;
+      a.kept.delete(first);
+      gone.then((u) => URL.revokeObjectURL(u), () => {});
+    }
+  }
+  return made;
+}
+
+/**
+ * Show a moving picture's frame for t on its element. `exact`: wait until the element has it decoded (an export's
+ * frame); watched, the frame shows as soon as it is ready, unless a later one was asked meanwhile.
+ */
+async function animate(c, t, exact) {
+  const i = frameAt(c.anim, t - c.at);
+  c.frame = i;
+  const src = await frameUrl(c.anim, i).catch(() => null);
+  if (!src || c.frame !== i || c.el.src === src) return;
+  c.el.src = src;
+  if (exact) await c.el.decode().catch(() => {});
+}
+
+/**
+ * A clip's animations (SPEC §1) held at its own time, `t − at`: paused here first, so the clock that holds the rest
+ * of the document's at the film's t (FILM_CLOCK's settle) leaves them be. `c.moves`: it has any.
+ */
+function hold(c, t) {
+  if (!c.moves) return;
+  const list = c.el.getAnimations();
+  c.moves = list.length > 0;
+  for (const a of list) {
+    if (a.playState !== 'paused') a.pause();
+    a.currentTime = (t - c.at) * 1000;
+  }
+}
+/** Whether a clip's look has it move, read again whenever its look changes, and its animations held at once. */
+function moving(c) {
+  c.moves = Boolean(c.el.getAnimations?.().length);
+  if (c.moves) hold(c, shownT ?? c.at);
 }
 
 /**
@@ -125,6 +260,9 @@ function dress(c, row) {
   if (!c.el) return;
   if ((c.el.getAttribute('class') ?? '') !== (row.class ?? '')) { unfade(c); c.base = undefined; c.el.setAttribute('class', row.class ?? ''); refade(c); }
   wear(c, row.style ?? '');
+  /* how long it is on the film, for an animation timed from its end */
+  if (c.span) c.el.style.setProperty('--clip-length', `${Math.round(c.span.length * 1000) / 1000}s`);
+  moving(c);
   if (c.kind === 'page' && !c.el.style.border) c.el.style.border = '0';
   c.el.style.zIndex = String(doc.tracks.length - c.ti); // track 0 on top
   /* a page coming on shows once it is drawn (see draw) */
@@ -140,7 +278,8 @@ function fadeAt(c, t) {
   c.fadeT = t;
   const k = c.fade ? fadeGain(t - c.at, c.span.length, c.fade) : 1;
   if (k >= 1) { unfade(c); return; }
-  if (c.base == null) { unfade(c); c.base = Number(getComputedStyle(c.el).opacity); }
+  /* an animated opacity is read as it is at this moment (the clip's animation already held at t) */
+  if (c.base == null || c.moves) { unfade(c); c.base = Number(getComputedStyle(c.el).opacity); }
   c.el.style.setProperty('opacity', String(c.base * k), 'important');
   c.faded = true;
 }
@@ -253,12 +392,22 @@ const START_LAG = 0.08;   // s: how long play() takes to get a video going
 /** Keep a playing video at `want` as the film plays at `rate`: its pace nudged when it drifts, sought when far off. */
 function roll(c, want, rate) {
   const v = c.el;
+  const speed = (c.span.speed ?? 1) * rate;
+  /* a clip × viewer rate the browser does not play (faster than 16×, slower than 1/16×): the film is followed by
+     seeking, as when autoplay is refused */
+  if (!mediaPlays(speed)) {
+    if (!v.paused) v.pause();
+    c.steer = 0; c.off = 0;
+    step(c, want);
+    return;
+  }
   const drift = v.currentTime - want;
   if (Math.abs(drift) > ROLL_SEEK || v.ended) { v.currentTime = want; c.steer = 0; c.off = 0; }
   else if (Math.abs(drift) > ROLL_STEER) { c.off = (c.off ?? 0) + 1; if (c.off >= 2) c.steer = drift > 0 ? -1 : 1; }
   else { c.off = 0; if (Math.abs(drift) < ROLL_SETTLE) c.steer = 0; }
-  /* the pace is written only when it changes: each write is work for the media pipeline */
-  const pace = (c.span.speed ?? 1) * rate * (1 + (c.steer ?? 0) * ROLL_NUDGE);
+  /* the pace is written only when it changes (each write is work for the media pipeline), and nudged within those
+     rates: a 16× clip a little behind would ask the browser for 16.48×, and it throws */
+  const pace = Math.max(MEDIA_RATE_MIN, Math.min(MEDIA_RATE_MAX, speed * (1 + (c.steer ?? 0) * ROLL_NUDGE)));
   if (Math.abs(v.playbackRate - pace) > 1e-4) v.playbackRate = pace;
   if (v.paused) v.play().catch((e) => { if (e?.name === 'NotAllowedError') c.held = true; });
   c.lastWant = want;
@@ -362,7 +511,7 @@ function getReady(c, lead, rate) {
     v.currentTime = cue;
     c.cued = c.lastWant = cue;
   }
-  if (lead < rolling + START_LAG * rate && v.paused && !v.seeking && !c.held) {
+  if (mediaPlays(speed * rate) && lead < rolling + START_LAG * rate && v.paused && !v.seeking && !c.held) {
     v.playbackRate = speed * rate;
     v.play().catch((e) => { if (e?.name === 'NotAllowedError') c.held = true; });
   }
@@ -605,9 +754,17 @@ function wake(c, from = null) {
   if (from > 0) v.currentTime = from;
   c.awake = new Promise((done) => {
     v.addEventListener('loadeddata', () => done(), { once: true });
-    v.addEventListener('error', () => done(), { once: true });
+    v.addEventListener('error', () => { if (v.error && v.error.code !== v.error.MEDIA_ERR_NETWORK) undecoded(c.row.src); done(); }, { once: true });
   });
   return c.awake;
+}
+
+/** The videos this browser could not play (each src once), told to an editor (see __filmEditor.undecoded). */
+const notPlayed = new Set();
+function undecoded(src) {
+  if (notPlayed.has(src)) return;
+  notPlayed.add(src);
+  window.__filmEditor.undecoded?.(src);
 }
 
 /** Let a video's file go: its decoder and buffers are freed. A page is closed (see restPage). */
@@ -830,10 +987,31 @@ function settle(c, row, track, ti) {
   }
 }
 
-/** The film's sound: each sound clip's and each video's own, placed where its clip sits (`clip`: whose). */
+/** A clip's page that is a film of its own: a folder's film.html. */
+const nestedFilm = (src) => /(^|\/)film\.html$/.test(src.replace(/[#?].*$/, '')) && src.includes('/');
+
+/**
+ * The film's sound: each sound clip's and each video's own, placed where its clip sits (`clip`: whose), and a film's in
+ * the film: each of its sounds, cut to the part of it the clip plays, where that part sits here, as loud as it is
+ * there times the clip's volume; the clip's fades go on the ones at its edges.
+ */
 function hear() {
   sounds.length = 0;
   for (const c of clips) {
+    if (c.inner && c.volume > 0) {
+      const from = c.span.from, to = c.span.to;
+      for (const s of c.inner) {
+        const end = s.at + (s.to - s.from) / s.speed;
+        const lo = Math.max(s.at, from), hi = Math.min(end, to);
+        if (!(hi > lo)) continue;
+        const fade = s.fade ? [Math.max(0, s.fade[0] - (lo - s.at)), Math.max(0, s.fade[1] - (end - hi))] : [0, 0];
+        if (c.fade && lo === from) fade[0] = Math.max(fade[0], c.fade[0]);
+        if (c.fade && hi === to) fade[1] = Math.max(fade[1], c.fade[1]);
+        sounds.push({ clip: `${c.id}/${s.clip}`, src: s.src, at: c.at + (lo - from), from: s.from + (lo - s.at) * s.speed,
+          to: s.from + (hi - s.at) * s.speed, volume: s.volume * c.volume, speed: s.speed, ...(fade[0] || fade[1] ? { fade } : {}) });
+      }
+      continue;
+    }
     if (c.volume <= 0 || (c.kind !== 'sound' && c.kind !== 'video')) continue;
     sounds.push({ clip: c.id, src: url(c.row.src).pathname, at: c.at, from: c.span.from, to: c.span.to, volume: c.volume, speed: c.span.speed,
       ...(c.fade ? { fade: c.fade } : {}) });
@@ -873,10 +1051,17 @@ async function load(row, track, ti, el) {
   } else if (kind === 'still') {
     /* its file as the film names it: a name written with a bare `?` or `%` asks the browser for another file */
     const href = url(row.src).href;
+    el.__filmAnim?.decoder.close();
+    el.__filmAnim = null;
     if (el.src.replace(/#.*$/, '') !== href) el.src = href;
     await el.decode().catch(() => {});
     if (!el.naturalWidth && !(await mustBeThere(row.src))) c.missing = true;
     c.nw = el.naturalWidth || stage.w; c.nh = el.naturalHeight || stage.h;
+    /* a moving picture: drawn frame by frame at the film's t (see animate), never left to play by itself */
+    if (!c.missing) {
+      c.anim = el.__filmAnim = await animationOf(href);
+      if (c.anim) await animate(c, c.at, true);
+    }
   } else if (kind === 'video') {
     el.muted = true; el.playsInline = true;
     rest(c);
@@ -888,6 +1073,15 @@ async function load(row, track, ti, el) {
     /* a page that is not there: its clip keeps its time, at the stage's size */
     c.missing = true;
     c.nw = stage.w; c.nh = stage.h;
+  } else if (nestedFilm(row.src)) {
+    /* a film in the film (its own folder's film.html): opened now, as it is loaded, for its sound, heard in this one
+       (see hear) wherever the playhead is */
+    c.row = row;
+    await wakePage(c);
+    const length = c.child.duration;
+    c.native = Number.isFinite(length) && length > 0 ? length : undefined;
+    c.inner = (c.win.__filmSounds?.() ?? []).map((s) => ({ ...s }));
+    if ([...pagesAwake].filter((p) => p.child).length > PAGES_AWAKE) restPage(c);
   } else if (SKIP_MISSING && row.time?.length === 2) {
     /* an editor's preview: a page whose #t= is its length opens when the playhead comes near (see near), its own
        length and size learned then (see wakePage); the film is up without waiting for every page of a long film */
@@ -923,7 +1117,9 @@ async function loadAll(list) {
    fonts from the network) takes longer to load than a host waits for the object to appear. Ready is every clip's
    length and place known and every page ready; a video's picture loads when a frame needs it. */
 const loading = (async () => {
+  const captionsRead = syncCaptions(doc);
   clips.push(...await loadAll(doc.tracks.flatMap((track, ti) => track.clips.map((row, ci) => ({ row, track, ti, el: elements[ti][ci] })))));
+  await captionsRead;
   hear();
 })();
 /* a film that cannot load (a clip with no length, a missing file) is the host's to report, once, when it awaits
@@ -959,6 +1155,7 @@ async function draw(t, live, play = null) {
   footageFrame = live ? ++footageFrames : 0;
   footagePlay = playing ? { rate: play.rate, now: play.now, t } : null;
   try {
+    drawCaptions(t);
     await Promise.all(clips.map((c) => drawClip(c, t, live, playing ? play : null, turn, coming, going)));
     if (playing) idleFootage(t);
   } finally {
@@ -967,7 +1164,10 @@ async function draw(t, live, play = null) {
     for (const c of coming) if (c.coming === turn) c.coming = 0;
     if (live && turn === watched) {
       for (const c of going) if (!c.shown) c.el.style.visibility = 'hidden';
-      for (const c of coming) if (c.shown) c.el.style.visibility = 'visible';
+      let appeared = false;
+      for (const c of coming) if (c.shown) { c.el.style.visibility = 'visible'; appeared = true; }
+      /* a page that came on shows now: an editor that reads the picture (Studio's Layers panel) looks again */
+      if (appeared) window.__filmEditor.appeared?.();
     }
   }
 }
@@ -981,6 +1181,7 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   if (live && appears && c.kind === 'page') { c.coming = turn; coming.push(c); }
   else if (live && !on && c.el.style.visibility === 'visible') going.push(c);
   else c.el.style.visibility = on ? 'visible' : 'hidden';
+  hold(c, t);
   if (on) fadeAt(c, t);
   if (!on) {
     if (c.kind !== 'video') return;
@@ -988,7 +1189,10 @@ async function drawClip(c, t, live, play, turn, coming, going) {
     else { if (!c.el.paused) c.el.pause(); c.lastWant = c.cued = undefined; }
     return;
   }
-  if (c.kind === 'still') return;
+  if (c.kind === 'still') {
+    if (c.anim) { if (live) animate(c, t, false); else await animate(c, t, true); }
+    return;
+  }
   if (c.kind === 'video') {
     if (play) {
       /* where it should be this moment (not at the frame on its way): its own clock runs on to that frame */
@@ -1021,6 +1225,7 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   if (!live) await pageLoaded(c);
   const local = sourceAt(c.span, t - c.at, c.row, c.native);
   c.win.filmHost?.time?.(local);
+  if (c.child.frameReadsOverrides) override(c, c.preview ?? c.overrides);
   /* a page's error says which clip and which of its own seconds, not only the film's t */
   try { await c.child.frame(local); }
   catch (e) { throw new Error(`clip "${c.id}" (${c.src}) at its ${Number(local.toFixed(3))}s: ${e?.message ?? e}`); }
@@ -1028,6 +1233,181 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   if (!live) await mediaShown(c.win.document);
   c.drawn = true;
   override(c, c.preview ?? c.overrides);
+  held(c, local);
+  /* drawn again once they are in: the page laid its frame out without them */
+  if (!live && await overrideFonts(c)) {
+    await c.child.frame(local);
+    c.win.filmHost?.settle?.(local);
+    held(c, local);
+  }
+}
+
+/**
+ * For an exact frame, wait for the fonts a page's overrides name (a font picked in Studio for a line of words): the page
+ * has loaded before they were put on, and such a font starts loading only once it is named, so the frame would be drawn
+ * without its words. Laid out first, so that what they name starts loading; given up after PAGE_LOAD_MS. Whether it
+ * waited.
+ */
+async function overrideFonts(c) {
+  const doc = c.win.document;
+  void doc.body?.offsetWidth;
+  if (doc.fonts.status === 'loaded') return false;
+  let timer;
+  await Promise.race([doc.fonts.ready, new Promise((done) => { timer = setTimeout(done, PAGE_LOAD_MS); })]);
+  clearTimeout(timer);
+  return true;
+}
+
+/**
+ * A page's animations held at its own second `local` again, after its overrides were put on: an override that names
+ * another animation (a line of words' way in) makes a new one, which would otherwise play on by itself while the film
+ * stands still.
+ */
+function held(c, local) {
+  c.local = local;
+  c.win?.filmHost?.settle?.(local);
+}
+
+/* ── caption tracks (SPEC §1 Captions): a track's <track>, its WebVTT cues drawn over the tracks below it ── */
+
+
+/** The caption tracks of `value`, each with its layer and its file read: those gone taken out. */
+async function syncCaptions(value) {
+  if (!captionBase && value.tracks.some((t) => t.captions)) {
+    captionBase = document.createElement('style');
+    captionBase.textContent = CAPTION_BASE_CSS;
+    document.head.append(captionBase);
+    /* the library text's fonts and motions: a caption's look can be any of its looks */
+    const link = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: '__film/caption-text.css' });
+    captionText = new Promise((done) => { link.onload = done; link.onerror = done; });
+    document.head.append(link);
+  }
+  const want = value.tracks.flatMap((track, ti) => (track.captions ? [{ ti, track }] : []));
+  for (const layer of [...captionLayers]) {
+    if (want.some((w) => w.ti === layer.ti && w.track.captions.src === layer.src)) continue;
+    layer.el.remove();
+    layer.css.remove();
+    captionLayers.splice(captionLayers.indexOf(layer), 1);
+  }
+  await captionText;
+  await Promise.all(want.map(async ({ ti, track }) => {
+    let layer = captionLayers.find((l) => l.ti === ti);
+    if (!layer) {
+      const el = document.createElement('div');
+      el.dataset.filmCaptions = String(ti);
+      Object.assign(el.style, { width: stage.w + 'px', height: stage.h + 'px' });
+      sectionOf(ti, track).append(el);
+      const css = document.createElement('style');
+      document.head.append(css);
+      layer = { ti, src: track.captions.src, el, css, cues: [], regions: new Map(), on: new Map(), hidden: false, locked: false, read: null };
+      captionLayers.push(layer);
+    }
+    layer.hidden = Boolean(track.hidden);
+    layer.locked = Boolean(track.locked);
+    layer.el.style.zIndex = String(value.tracks.length - ti); // track 0 on top
+    Object.assign(layer.el.style, { width: stage.w + 'px', height: stage.h + 'px' });
+    layer.read ??= readCaptions(layer);
+    await layer.read;
+  }));
+}
+
+/** A caption track's file read into its layer: its cues, its regions, its STYLE as the page's CSS. */
+async function readCaptions(layer) {
+  const res = await fetch(url(layer.src), { cache: 'no-store' }).catch(() => null);
+  if (!res?.ok) {
+    if (!SKIP_MISSING) throw new Error(`caption track ${layer.ti + 1} (${layer.src}): its file is not there`);
+    layer.cues = [];
+    return;
+  }
+  const vtt = readVtt(await res.text());
+  layer.cues = vtt.cues;
+  layer.regions = new Map(vtt.regions.map((r) => regionBox(r)).map((r) => [r.id, r]));
+  layer.css.textContent = cueCss(vtt.styles.join('\n'), `[data-film-captions="${layer.ti}"]`);
+  /* the fonts it names, loaded before a frame is drawn with them (they are shown only once loaded) */
+  const named = vtt.styles.join('\n');
+  await Promise.all([...document.fonts].filter((f) => named.includes(f.family.replace(/^["']|["']$/g, ''))).map((f) => f.load().catch(() => null)));
+  for (const el of layer.on.values()) el.remove();
+  layer.on.clear();
+  layer.el.replaceChildren();
+}
+
+/** A cue's text as elements: its spans as the tags WebVTT names (`<c>`, `<v voice>`…), a word after a timestamp marked by it. */
+function cueContent(parent, nodes) {
+  for (const n of nodes) {
+    if (n.type === 'text') {
+      if (n.t == null) { parent.append(n.text); continue; }
+      const span = document.createElement('span');
+      span.dataset.t = String(n.t);
+      span.textContent = n.text;
+      parent.append(span);
+      continue;
+    }
+    const el = document.createElement(n.tag);
+    if (n.classes.length) el.className = n.classes.join(' ');
+    if (n.tag === 'v' && n.annotation) el.setAttribute('voice', n.annotation);
+    if (n.tag === 'lang' && n.annotation) el.setAttribute('lang', n.annotation);
+    if (n.t != null) el.dataset.t = String(n.t);
+    cueContent(el, n.children);
+    parent.append(el);
+  }
+}
+
+/** A cue's element, placed as its settings say (an `auto` one stacked from the bottom, a region's in its region). */
+function cueElement(layer, cue) {
+  const box = document.createElement('div');
+  box.className = 'cue';
+  const text = document.createElement('span');
+  text.className = 'cue-text';
+  if (cue.id) text.dataset.cueId = cue.id;
+  /* its words in a box of their own: what a fill paints and a motion moves (CAPTION_BASE_CSS) */
+  const words = document.createElement('span');
+  words.className = 'cue-words';
+  cueContent(words, cueNodes(cue.text));
+  text.append(words);
+  box.append(text);
+  box.style.setProperty('--clip-length', `${Math.max(0, cue.end - cue.start)}s`);
+  const at = cueLayout(cue.settings, new Set(layer.regions.keys()));
+  box.style.textAlign = at.align;
+  let into = layer.el;
+  if (at.mode === 'auto') {
+    into = layer.el.querySelector(':scope > .cue-auto') ?? layer.el.appendChild(Object.assign(document.createElement('div'), { className: 'cue-auto' }));
+    Object.assign(box.style, { width: at.width + '%', marginLeft: at.left + '%', alignSelf: 'flex-start' });
+  } else if (at.mode === 'region') {
+    const r = layer.regions.get(at.region);
+    into = layer.el.querySelector(`:scope > .cue-region[data-region="${CSS.escape(at.region)}"]`) ?? layer.el.appendChild(Object.assign(document.createElement('div'), { className: 'cue-region' }));
+    into.dataset.region = at.region;
+    Object.assign(into.style, { left: r.left + '%', top: r.top + '%', width: r.width + '%', height: r.height + '%' });
+  } else {
+    Object.assign(box.style, { left: at.left + '%', width: at.width + '%', ...(at.top != null ? { top: at.top + '%' } : { bottom: at.bottom + '%' }), ...(at.shift ? { transform: `translateY(${at.shift}%)` } : {}) });
+  }
+  into.append(box);
+  return box;
+}
+
+/** The caption tracks at film second t: the cues on now shown, their words past and future, their animations at their own time. */
+function drawCaptions(t) {
+  for (const layer of captionLayers) {
+    layer.el.style.visibility = layer.hidden ? 'hidden' : 'visible';
+    const now = new Set(layer.hidden ? [] : layer.cues.filter((c) => c.start <= t && t < c.end));
+    for (const [cue, el] of layer.on) if (!now.has(cue)) { el.remove(); layer.on.delete(cue); }
+    for (const cue of now) {
+      const el = layer.on.get(cue) ?? cueElement(layer, cue);
+      layer.on.set(cue, el);
+      for (const w of el.querySelectorAll('[data-t]')) {
+        const at = Number(w.dataset.t);
+        w.classList.toggle('past', at < t);
+        w.classList.toggle('future', at > t);
+      }
+      /* each animation on the cue's own time, from its start or from the timestamp before the element */
+      for (const a of el.getAnimations({ subtree: true })) {
+        const target = a.effect?.target;
+        const from = target?.closest?.('[data-t]')?.dataset.t;
+        if (a.playState !== 'paused') a.pause();
+        a.currentTime = Math.max(0, t - (from != null ? Number(from) : cue.start)) * 1000;
+      }
+    }
+    for (const box of layer.el.querySelectorAll(':scope > .cue-auto, :scope > .cue-region')) if (!box.childElementCount) box.remove();
+  }
 }
 
 window.__filmVideos = () => ({ ...videoSeen });
@@ -1087,6 +1467,18 @@ function element(row) {
   return el;
 }
 
+/**
+ * The film's keyframes after an edit: all of them in a <style> of their own at the end of the head, so each one there
+ * stands over the one of its name the film was loaded with (a running animation takes its keyframes' change).
+ */
+let keyframesStyle = null;
+function keyframesNow(keyframes) {
+  if (!keyframes) return;
+  keyframesStyle ??= document.head.appendChild(document.createElement('style'));
+  const text = Object.entries(keyframes).map(([name, body]) => `@keyframes ${name} { ${body} }`).join('\n');
+  if (keyframesStyle.textContent !== text) keyframesStyle.textContent = text;
+}
+
 /** Track `ti`'s section; one more is made after the last for a track the film did not have when it loaded. */
 function sectionOf(ti, track) {
   while (sections.length <= ti) {
@@ -1108,6 +1500,7 @@ function sectionOf(ti, track) {
 async function change(value, look) {
   if (look != null && styleOf(look) !== head) return false;
   const next = parseFilm(value);
+  keyframesNow(value.keyframes);
   const rows = next.tracks.flatMap((track, ti) => track.clips.map((row) => ({ row, track, ti })));
   const byId = new Map(clips.map((c) => [c.id, c]));
   const kept = (row) => { const c = byId.get(row.id); return c && c.src === row.src && c.kind === kindOf(row) ? c : null; };
@@ -1135,8 +1528,9 @@ async function change(value, look) {
     await Promise.race([ready, late]);
     clearTimeout(timer);
   }
-  try { reshape(next.stage); doc = next; rows.forEach(({ row, track, ti }, i) => settle(records[i], row, track, ti)); }
+  try { reshape(next.stage); doc = next; rows.forEach(({ row, track, ti }, i) => settle(records[i], row, track, ti)); await syncCaptions(next); }
   catch { return false; }
+  if (shownT != null) drawCaptions(shownT);
   /* what the change put on at the moment shown and made ready shows now, with the clips it took away going: the
      picture changes at once, not first without them until that moment is drawn again */
   if (shownT != null) {
@@ -1192,15 +1586,39 @@ async function cue(c, row, track, t, fresh) {
     if (!c.child) return;
     const local = sourceAt(span, t - at, row, c.native);
     c.win.filmHost?.time?.(local);
+    if (c.child.frameReadsOverrides) override(c, c.overrides);
     await c.child.frame(local);
     c.win.filmHost?.settle?.(local);
     c.drawn = true;
     override(c, c.overrides);
+    held(c, local);
   } finally { cueing.delete(c); }
 }
 
-/** Where a clip's own pixel (x, y) is on the stage: its placement, as the browser applies it. */
-const matrixOf = (c) => new DOMMatrix(getComputedStyle(c.el).transform);
+/**
+ * Where a clip's own pixel (x, y) is on the stage: its placement and its animation's translate, rotate and scale at
+ * this moment, about its origin, as the browser applies them.
+ */
+function matrixOf(c) {
+  const css = getComputedStyle(c.el);
+  const [ox, oy] = css.transformOrigin.split(' ').map(parseFloat);
+  const m = new DOMMatrix().translateSelf(ox, oy);
+  if (css.translate && css.translate !== 'none') {
+    const [x = '0', y = '0', z = '0'] = css.translate.split(' ');
+    m.translateSelf(parseFloat(x), parseFloat(y), parseFloat(z));
+  }
+  if (css.rotate && css.rotate !== 'none') {
+    const parts = css.rotate.split(' ');
+    const deg = parseFloat(parts.pop());
+    const axis = parts.length === 3 ? parts.map(Number) : parts[0] === 'x' ? [1, 0, 0] : parts[0] === 'y' ? [0, 1, 0] : [0, 0, 1];
+    m.rotateAxisAngleSelf(axis[0], axis[1], axis[2], deg);
+  }
+  if (css.scale && css.scale !== 'none') {
+    const [sx, sy = sx, sz = '1'] = css.scale.split(' ');
+    m.scaleSelf(parseFloat(sx), parseFloat(sy), parseFloat(sz));
+  }
+  return m.multiplySelf(new DOMMatrix(css.transform)).translateSelf(-ox, -oy);
+}
 const toStage = (c, x, y) => { const p = matrixOf(c).transformPoint(new DOMPoint(x, y)); return [p.x, p.y]; };
 
 /** A selector that finds this element in its page (a unique id or class, else its path), and which match it is. */
@@ -1256,9 +1674,13 @@ window.__filmEditor = {
    */
   stage: {
     clips: () => clips,
-    place(id, box) {
+    /* `size`: a page without a size of its own laid out at another while it is shown so (a line of words pulled wider:
+       it lays itself out again as it goes); none, at its clip's own again */
+    place(id, box, size) {
       const c = clips.find((x) => x.id === id);
-      if (c?.el && c.kind !== 'sound') place(c, box ?? c.row.box);
+      if (!c?.el || c.kind === 'sound') return;
+      if (c.kind === 'page' && !c.own) { const s = size ?? c.row.size ?? stage; c.nw = s.w; c.nh = s.h; }
+      place(c, box ?? c.row.box);
     },
     /** Show a clip in CSS of its own not kept yet (null: its own again), as an inspector's value is dragged. */
     look(id, css) {
@@ -1269,9 +1691,24 @@ window.__filmEditor = {
     },
     updated: null,
     woke: null,
+    /** The caption cues on the picture now, each with its element (`.cue`, its text in `.cue-text`), top track first. */
+    captions: () => captionLayers.filter((l) => !l.hidden).sort((a, b) => a.ti - b.ti)
+      .flatMap((l) => [...l.on].map(([cue, el]) => ({ track: l.ti, src: l.src, id: cue.id, locked: l.locked, el }))),
   },
   /** Set by a host (Studio's bridge) to hear of a page's own length and size learned as it first opens (see load). */
   learned: null,
+  /** Set by a host to hear of each video this browser could not play (its src): `unplayed()` lists those so far. */
+  undecoded: null,
+  /** The caption tracks' files read again (an editor wrote one, or the agent did), and the moment shown drawn again. */
+  async captions() {
+    for (const layer of captionLayers) layer.read = null;
+    await syncCaptions(doc);
+    if (shownT != null) drawCaptions(shownT);
+  },
+  unplayed: () => [...notPlayed],
+  /** Set by a host to hear of a page that came on being shown (its first frame drawn, see draw): it is in the picture
+      only then, and an editor that read the picture before (Studio's Layers panel) looks again. */
+  appeared: null,
   /**
    * The film after an edit (`look`: its file's filmHead, when the edit came from the file; another one than this film
    * was loaded with needs the page loaded again): changed in place (see change), resolving to true, or to false when
@@ -1291,7 +1728,9 @@ window.__filmEditor = {
     if (!c) return;
     restore(c);
     c.preview = overrides ?? undefined;
-    if (c.drawn) override(c, c.preview ?? c.overrides);
+    if (!c.drawn) return;
+    override(c, c.preview ?? c.overrides);
+    if (c.local != null) held(c, c.local);
   },
   /** What is on top under the stage point (x, y) now: an element of a page, or a clip. */
   pick(x, y) {

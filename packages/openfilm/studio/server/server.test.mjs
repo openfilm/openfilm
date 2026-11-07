@@ -159,12 +159,17 @@ test('read, edit by id, and a stale edit on a clip the agent removed comes back 
   const added = await (await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { base: read.rev, ops: [{ op: 'insert', clip: { src: 'title.html' } }] } })).json();
   assert.equal(added.doc.tracks[0].clips[0].id, 'title');
 
-  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 1920, h: 1080 }, tracks: [] }));
-  const stale = await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { base: added.rev, ops: [{ op: 'set', clip: 'title', field: 'at', value: 2 }] } });
+  /* the agent's own clip, which it removes from the latest copy (one written over an older copy that lacks it would be
+     kept: person-edits.mjs) */
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [{ id: 'title', src: 'title.html' }, { id: 'card', src: 'card.html', at: 5 }] }] }));
+  const seen = await (await api(`/api/projects/${project.id}`)).json();
+  const moved = await (await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { base: seen.rev, ops: [{ op: 'set', clip: 'title', field: 'at', value: 1 }] } })).json();
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [{ id: 'title', src: 'title.html', at: 1 }] }] }));
+  const stale = await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { base: moved.rev, ops: [{ op: 'set', clip: 'card', field: 'at', value: 2 }] } });
   assert.equal(stale.status, 409);
   const body = await stale.json();
-  assert.match(body.error, /"title"/);
-  assert.deepEqual(body.doc.tracks, []);
+  assert.match(body.error, /"card"/);
+  assert.deepEqual(body.doc.tracks[0].clips.map((c) => c.id), ['title']);
 
   const bad = await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { ops: [{ op: 'insert', clip: { src: 'notes.txt' } }] } });
   assert.equal(bad.status, 422);
@@ -370,22 +375,36 @@ test('the preview plays heavy footage from its proxy once made; what the file is
   mkdirSync(join(project.path, 'assets'), { recursive: true });
   const big = join(project.path, 'assets', 'big.mp4');
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=2560x1440:rate=25:duration=1', '-pix_fmt', 'yuv420p', big]);
-  assert.deepEqual(await (await api('/api/prefs')).json(), { proxies: { on: true, height: 720 }, seenVersion: null, projectsFolder: null, keys: null, autoVersions: false, showAutoVersions: false });
+  assert.deepEqual(await (await api('/api/prefs')).json(), { proxies: { on: true, height: 720 }, seenVersion: null, projectsFolder: null, keys: null, autoVersions: false, showAutoVersions: false, libraryCategories: null });
   let answer;
   for (const end = Date.now() + 30_000; answer?.states?.['assets/big.mp4']?.state !== 'ready' && Date.now() < end;) {
     answer = await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json();
     if (answer.states['assets/big.mp4']?.state !== 'ready') await new Promise((r) => setTimeout(r, 150));
   }
-  assert.deepEqual(answer, { on: true, height: 720, states: { 'assets/big.mp4': { state: 'ready' } } });
+  assert.deepEqual(answer, { on: true, height: 720, states: { 'assets/big.mp4': { state: 'ready' } }, checks: {} });
   const { folder } = await (await api(`/api/projects/${project.id}`)).json();
   const size = async (q = '') => (await (await fetch(`${folder}assets/big.mp4${q}`)).arrayBuffer()).byteLength;
   const played = await size();
   assert.ok(played > 0 && played !== statSync(big).size, 'the proxy');
   assert.equal(await size('?film-facts=1'), statSync(big).size, 'what the file is: the file');
   /* off: the original, and no proxy asked for */
-  assert.deepEqual(await (await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: false } } })).json(), { proxies: { on: false, height: 720 }, seenVersion: null, projectsFolder: null, keys: null, autoVersions: false, showAutoVersions: false });
+  assert.deepEqual(await (await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: false } } })).json(), { proxies: { on: false, height: 720 }, seenVersion: null, projectsFolder: null, keys: null, autoVersions: false, showAutoVersions: false, libraryCategories: null });
   assert.equal(await size(), statSync(big).size);
   assert.deepEqual((await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json()).states, {});
+  /* footage the editor's browser does not decode: its proxy is made and played, off as on */
+  const hevc = join(project.path, 'assets', 'drone.mp4');
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=25:duration=1', '-c:v', 'libx265', '-pix_fmt', 'yuv420p10le', '-tag:v', 'hvc1', '-x265-params', 'log-level=error', hevc]);
+  answer = await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json();
+  assert.deepEqual(answer.checks, { 'assets/drone.mp4': { type: 'video/mp4; codecs="hvc1.2.4.L93.B0"', width: 1280, height: 720, fps: 25 } }, 'what the editor asks its browser');
+  assert.deepEqual(answer.states, {}, 'not said yet');
+  for (const end = Date.now() + 30_000; answer?.states?.['assets/drone.mp4']?.state !== 'ready' && Date.now() < end;) {
+    answer = await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: { undecoded: ['assets/drone.mp4', '../elsewhere.mp4'] } })).json();
+    if (answer.states['assets/drone.mp4']?.state !== 'ready') await new Promise((r) => setTimeout(r, 150));
+  }
+  assert.deepEqual(answer.states, { 'assets/drone.mp4': { state: 'ready', needed: true } });
+  const served = (await (await fetch(`${folder}assets/drone.mp4`)).arrayBuffer()).byteLength;
+  assert.ok(served > 0 && served !== statSync(hevc).size, 'its proxy');
+  assert.equal(await size(), statSync(big).size, 'the heavy one still the original');
   await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: true } } });
 });
 
@@ -502,10 +521,11 @@ test('history: the person commits versions; checking one out makes none and tell
   const nothing = await history('/save', {});
   assert.equal(nothing.status, 409);
   assert.equal((await nothing.json()).code, 'nothing', 'the editor says why in its own words');
-  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 1, h: 1 }, tracks: [] }));
+  /* the person's own stage, in Studio: one written from outside over it would be put back (person-edits.mjs) */
+  await api(`/api/projects/${project.id}/edit`, { method: 'POST', body: { ops: [{ op: 'stage', w: 1, h: 1 }] } });
   const { commit: square } = await (await history('/save', { message: 'Square' })).json();
   assert.deepEqual((await (await history(`/versions/${square}`)).json()).files, [{ path: 'film.html', change: 'modified' }]);
-  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 2, h: 2 }, tracks: [] }));
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ stage: { w: 1, h: 1 }, tracks: [{ clips: [{ id: 'a', src: 'a.html' }] }] }));
   const dirty = await history('/checkout', { commit });
   assert.equal(dirty.status, 409);
   assert.equal((await dirty.json()).code, 'dirty');
@@ -603,18 +623,23 @@ test('a project whose folder is gone says so, never takes Studio down, and can b
   assert.ok(!(await (await api('/api/projects')).json()).projects.some((p) => p.id === project.id));
 });
 
-test('a removed film is unavailable before opening or editing; remaining files are preserved on removal', async () => {
+test('a removed film keeps the project open but says so; nothing writes the film until it is back; remaining files are preserved on removal', async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Film removed externally') } })).json();
   rmSync(join(project.path, 'film.html'));
   writeFileSync(join(project.path, 'keep.txt'), 'remaining work');
+  /* the project itself opens (its page says film.html is missing), and so does its stream, which says so at once */
+  const opened = await api(`/api/projects/${project.id}`);
+  assert.equal(opened.status, 200);
+  assert.equal((await opened.json()).filmMissing, true);
+  assert.equal((await api(`/api/projects/${project.id}/opened`, { method: 'POST' })).status, 200);
+  const told = await collect(`/api/projects/${project.id}/events`, (events) => events.some((e) => e.type === 'film-missing'));
+  assert.ok(told.some((e) => e.type === 'film-missing') && !told.some((e) => e.type === 'gone'));
   for (const [rest, options] of [
-    ['', {}],
-    ['/opened', { method: 'POST' }],
     ['/files', {}],
     ['/edit', { method: 'POST', body: { ops: [{ op: 'insert', clip: { src: 'title.html' } }] } }],
   ]) {
     const response = await api(`/api/projects/${project.id}${rest}`, options);
-    assert.equal(response.status, 410, rest || 'opening the project');
+    assert.equal(response.status, 410, rest);
     assert.equal((await response.json()).code, 'missing-film');
   }
   assert.ok(!existsSync(join(project.path, 'film.html')), 'opening or editing never recreates the removed film');
@@ -624,6 +649,42 @@ test('a removed film is unavailable before opening or editing; remaining files a
   assert.equal((await api(`/api/projects/${project.id}`, { method: 'DELETE' })).status, 200);
   assert.equal(readFileSync(join(project.path, 'keep.txt'), 'utf8'), 'remaining work');
   assert.equal((await api('/api/health')).status, 200);
+});
+
+test('without film.html the history still lists, restores and discards: a version that has it brings back film.html alone (#304)', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Film lost') } })).json();
+  const history = (path = '', body) => api(`/api/projects/${project.id}/history${path}`, body ? { method: 'POST', body } : {});
+  const kept = filmHtml({ stage: { w: 640, h: 360 }, tracks: [] });
+  writeFileSync(join(project.path, 'film.html'), kept);
+  const { commit } = await (await history('/save', { message: 'Kept' })).json();
+  rmSync(join(project.path, 'film.html'));
+  const listed = await history();
+  assert.equal(listed.status, 200);
+  const { status, versions } = await listed.json();
+  assert.equal(status.filmMissing, true);
+  assert.deepEqual(versions.map((v) => v.commit), [commit]);
+  assert.equal((await history(`/versions/${commit}`)).status, 200);
+  /* nothing to save: an empty version is never made */
+  const empty = await history('/save', { message: 'Empty' });
+  assert.equal(empty.status, 409);
+  assert.equal((await empty.json()).code, 'missing-film');
+  assert.deepEqual((await (await history()).json()).versions.map((v) => v.commit), [commit]);
+  /* restored: only film.html comes back as the version had it; the agent's other work stays as it is */
+  writeFileSync(join(project.path, 'notes.md'), 'the agent\'s notes');
+  const restored = await history('/film', { commit });
+  assert.equal(restored.status, 200);
+  assert.equal(readFileSync(join(project.path, 'film.html'), 'utf8'), kept);
+  assert.equal(readFileSync(join(project.path, 'notes.md'), 'utf8'), 'the agent\'s notes');
+  assert.equal((await (await history()).json()).status.filmMissing, undefined);
+  /* back meanwhile: the whole version is the way, not this */
+  assert.equal((await (await history('/film', { commit })).json()).code, 'dirty');
+  /* a whole version checked out, or the changes discarded, bring it back too */
+  rmSync(join(project.path, 'film.html'));
+  assert.equal((await history('/checkout', { commit, discard: true })).status, 200);
+  assert.equal(readFileSync(join(project.path, 'film.html'), 'utf8'), kept);
+  rmSync(join(project.path, 'film.html'));
+  assert.equal((await history('/discard', {})).status, 200);
+  assert.equal(readFileSync(join(project.path, 'film.html'), 'utf8'), kept);
 });
 
 test('a page gone mid-request (its connection reset) ends only its own stream, never Studio', async () => {
@@ -697,11 +758,13 @@ test('a web page\'s poster and frames are drawn (it has no file to cut from)', a
   </script></body>`);
   const poster = await api(`/api/projects/${project.id}/media?what=poster&path=p.html`);
   assert.equal(poster.status, 200);
-  assert.equal(poster.headers.get('content-type'), 'image/jpeg');
+  /* a page's poster is drawn clear (pageframes.mjs), a WebP; its frames on the timeline on black, JPEG */
+  assert.equal(poster.headers.get('content-type'), 'image/webp');
   const bytes = Buffer.from(await poster.arrayBuffer());
-  assert.deepEqual([...bytes.subarray(0, 2)], [0xff, 0xd8]);
+  assert.equal(bytes.subarray(0, 4).toString('latin1'), 'RIFF');
   const frame = await api(`/api/projects/${project.id}/media?what=frame&path=p.html&ms=200&w=160`);
   assert.equal(frame.status, 200);
+  assert.equal(frame.headers.get('content-type'), 'image/jpeg');
   assert.equal((await api(`/api/projects/${project.id}/media?what=poster&path=gone.html`)).status, 404);
 });
 

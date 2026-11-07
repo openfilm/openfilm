@@ -6,26 +6,26 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, ShieldQuestion, Square, SquareSlash, X } from 'lucide-react';
+import { ArrowDown, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, Square } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
-import { ConversationSessionBar } from '@/components/ConversationSessionBar';
-import { ProjectConversation, primeStoredTranscript } from '@/components/ProjectConversation';
+import { ConversationBar } from '@/components/ConversationSessionBar';
+import { ProjectConversation, TurnUndoContext, primeStoredTranscript } from '@/components/ProjectConversation';
+import type { ProjectVersion } from '@/components/project-version';
 import { ProjectStarters } from '@/components/ProjectStarters';
 import { AttachmentPreview, type AttachmentPreviewItem } from '@/components/AttachmentPreview';
-import { ATTACHMENT_CARD, ATTACHMENT_THUMB, AttachmentCardBody, PlayMark } from '@/components/AttachmentCard';
-import { attachmentPlace } from '@/lib/attachment-place';
 import { ModelPopover } from '@/components/ModelPopover';
 import { AddSkillDialog, type PickedSkill } from '@/components/AddSkill';
 import { SKILLS_CHANGED } from 'openfilm/studio-ui/lib/project-sources.ts';
 import { CardActions, CardButton, ComposerCard } from '@/components/ComposerCard';
+import { AgentPermissionCard } from '@/components/AgentPermissionCard';
 import { LocalAgentQuestionCard } from '@/components/TurnQuestionCard';
 import { Tooltip } from '@/components/Tooltip';
 import { StickToBottomContext, useStickToBottom, useTailSpacer } from '@/components/useStickToBottom';
 import { PromptEditor, PromptPill, PromptPillHoverContext, PromptPillRevealContext, activatedSkillIds, fileReferenceId, fileReferencePath, promptReferenceToken, resolvePromptReferences, skillReferenceId, skillReferencePackage, splitPromptReferenceText, type MentionProvider, type PromptEditorHandle, type PromptEditorState, type PromptPillHover, type PromptReference } from '@/components/prompt-editor';
 import { filesFromTransfer, transferHasFiles } from '@/lib/composer-attachments';
-import { attachmentIcon } from '@/lib/project-resources';
-import { PROMPT_PICTURES_MAX, attachedPictures, attachedText, attachmentBlocker, formatFileSize, turnAttachments, useDesktopAttachments } from '@/lib/desktop-attachments';
+import { PROMPT_PICTURES_MAX, attachedPictures, attachmentBlocker, formatFileSize, turnAttachments, useDesktopAttachments } from '@/lib/desktop-attachments';
+import { attachmentPill, attachmentsInText, attachmentWords, isAttachmentPill, projectFilePath, sentPill } from '@/lib/attachment-pills';
 import { deriveProjectTurns } from '@/lib/project-versions';
 import { makePlaceholder, mergeAssetLists } from '@/lib/asset-lists';
 import { isEmptyBackgroundTurn } from '@/lib/unprompted';
@@ -48,9 +48,10 @@ import {
   restingItems,
   saveLocalAgentTurn,
   steerLocalAgentTurn,
-  useAgentCommands,
+  undoLocalAgentTurn,
   useAgentContext,
   useLocalAgentTurn,
+  useRunningLocalTurns,
   type LocalAgentTurn,
   type LocalTranscriptStore,
 } from '@/lib/local-agent-run';
@@ -60,9 +61,10 @@ import type { TurnFileChanges } from '@/lib/file-changes';
 import { readBalance, type TurnBalance } from '@/lib/balance';
 import { BalanceNotice } from '@/components/BalanceNotice';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
+import { Notice, type NoticeTone } from '@/components/NoticeCard';
 import { accountName, accountTrouble } from '@/lib/account-trouble';
 import { accountModel, accountModelOf, routeWithoutKey } from '@/lib/route-without-key';
-import { readStudioFilm } from '@/lib/studio-film';
+import { keptNote, ProjectFolderContext, readStudioProject } from '@/lib/studio-film';
 import { studioRefsFromTransfer, transferHasStudioRefs } from '@/lib/studio-transfer';
 import { agentModelSummary, agentOptions, currentAgent, effectivePrefs, offeredOption, useLocalAgents } from '@/state/local-agent-store';
 import { useLiveActivityFromStore } from '@/lib/live-activity';
@@ -87,6 +89,7 @@ const isActive = (turn: Turn | undefined) => turn?.status === 'generating' || tu
 
 /** how often a running turn is kept, at most (it changes with every word) */
 const KEEP_RUNNING_MS = 1500;
+
 /** how full the agent's context gets before the chat says a new conversation would work better */
 const CONTEXT_NOTICE_SHARE = 0.85;
 
@@ -127,31 +130,42 @@ export function App({ initialProject, initialSelection, initialFfmpeg }: {
   /* the project's chat record, read from its folder before its conversation shows */
   const chatReady = useProjectChat(project);
   const ffState = typeof ffmpeg === 'object' && ffmpeg ? ffmpeg : null;
+  /* what Studio and its tools tell, as notices on the composer: each closed stays closed for what it said */
+  const [closed, setClosed] = React.useState<ReadonlySet<string>>(() => new Set());
+  const notice = (key: string, tone: NoticeTone, text: React.ReactNode, closable = true) => (closed.has(key) ? null : (
+    <Notice key={key} tone={tone} {...(closable ? { onClose: () => setClosed((set) => new Set(set).add(key)) } : {})}>{text}</Notice>
+  ));
   const banners = (
     <>
-      {studioFailed ? <Banner tone="error">{t('banner.studioFailed').replace('{error}', studioFailed)}</Banner> : null}
-      {ffmpeg === false ? <Banner>{t('banner.ffmpegMissing')} <code className="font-mono">{navigator.platform.startsWith('Win') ? 'winget install ffmpeg' : 'brew install ffmpeg'}</code></Banner> : null}
-      {ffState?.state === 'downloading' ? <Banner>{t('banner.ffmpegDownloading').replace('{n}', String(Math.round((ffState.progress ?? 0) * 100)))}</Banner> : null}
-      {ffState?.state === 'failed' ? <Banner tone="error">{t('banner.ffmpegFailed').replace('{error}', ffState.message ?? '')}</Banner> : null}
-      {browser?.state === 'downloading' ? <Banner>{t('banner.browserDownloading')}</Banner> : null}
-      {browser?.state === 'failed' ? <Banner tone="error">{t('banner.browserFailed').replace('{error}', browser.message ?? '')}</Banner> : null}
+      {studioFailed ? notice(`studio:${studioFailed}`, 'error', t('banner.studioFailed').replace('{error}', studioFailed)) : null}
+      {ffmpeg === false ? notice('ffmpeg:missing', 'warn', <>{t('banner.ffmpegMissing')} <code className="font-mono">{navigator.platform.startsWith('Win') ? 'winget install ffmpeg' : 'brew install ffmpeg'}</code></>) : null}
+      {ffState?.state === 'downloading' ? notice('ffmpeg:downloading', 'info', t('banner.ffmpegDownloading').replace('{n}', String(Math.round((ffState.progress ?? 0) * 100)))) : null}
+      {ffState?.state === 'failed' ? notice(`ffmpeg:${ffState.message ?? ''}`, 'error', t('banner.ffmpegFailed').replace('{error}', ffState.message ?? '')) : null}
+      {browser?.state === 'downloading' ? notice('browser:downloading', 'info', t('banner.browserDownloading')) : null}
+      {browser?.state === 'failed' ? notice(`browser:${browser.message ?? ''}`, 'error', t('banner.browserFailed').replace('{error}', browser.message ?? '')) : null}
     </>
   );
 
   const onProject = Boolean(project) && /^\/projects\//.test(location.pathname);
   return (
-    <div className={`relative flex h-full flex-col ${assetsOpen ? '' : 'bg-[var(--dock-shell)]'}`}>
+    <div className={`relative flex h-full flex-col ${assetsOpen ? '' : 'bg-[var(--bg-app)] pt-px'}`}>
       {addingSkill ? (
         <AddSkillDialog onClose={() => setAddingSkill(false)} onAdded={async () => { window.dispatchEvent(new Event(SKILLS_CHANGED)); }}
           onPick={onProject ? (skill) => app.useSkill?.(skill) : undefined}
           onMake={onProject ? () => window.dispatchEvent(new Event(MAKE_SKILL)) : undefined} />
       ) : null}
-      {/* under Studio's top bar (it runs over this, across the window): the seam on the left is the handle */}
+      {/* under Studio's top bar (it runs over this, across the window), a line below it: the seam on the right, the
+          line between this and Studio's panes, is the handle */}
       <Divider />
-      <div className="mb-[6px] ml-[6px] mr-[6px] flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         {project && chatReady
           ? <ChatPane key={`${project.id}:${project.path}`} project={project} banners={banners} selection={selection && selection.projectId === project.id ? selection : null} assetsOpen={assetsOpen} />
-          : <aside className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden rounded-[7px] bg-[var(--dock-pane)]">{banners}<Loader2 size={16} className="animate-spin text-[var(--text-faint)]" /></aside>}
+          : (
+            <aside className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--bg-panel)]">
+              <div className="flex flex-1 items-center justify-center"><Loader2 size={16} className="animate-spin text-[var(--text-faint)]" /></div>
+              <div className="flex shrink-0 flex-col gap-2 px-4 pb-3 empty:hidden">{banners}</div>
+            </aside>
+          )}
       </div>
     </div>
   );
@@ -184,16 +198,33 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       return out;
     });
   }, [projectKey]);
+  /* renamed, pinned or archived: changed where it is, its day kept (touchSession's is for being talked in) */
+  const editSession = React.useCallback((id: string, patch: Partial<ProjectSessionItem>) => {
+    setSessions((list) => {
+      const out = list.some((s) => s.id === id)
+        ? list.map((s) => (s.id === id ? { ...s, ...patch } : s))
+        : [{ ...newSession(), id, ...patch }, ...list];
+      saveSessions(projectKey, out);
+      return out;
+    });
+  }, [projectKey]);
 
   /* ── turns: the ones kept on this Mac, and the one running now ── */
-  const [turns, setTurns] = React.useState<Turn[]>([]);
-  const [rev, bump] = React.useReducer((n: number) => n + 1, 0);
-  React.useEffect(() => {
-    const saved = loadLocalAgentTurns(projectKey, sessionId);
+  const readTurns = (id: string): Turn[] => {
+    const saved = loadLocalAgentTurns(projectKey, id);
     for (const entry of saved) primeStoredTranscript(entry.turn.id, entry.items);
-    const live = runningLocalTurns(projectKey).filter((r) => r.sessionId === sessionId).map((r) => r.turn);
-    setTurns(mergeAssetLists([...saved.map((entry) => entry.turn), ...live], []));
-  }, [projectKey, sessionId, rev]);
+    const live = runningLocalTurns(projectKey).filter((r) => r.sessionId === id).map((r) => r.turn);
+    return mergeAssetLists([...saved.map((entry) => entry.turn), ...live], []);
+  };
+  const [turns, setTurns] = React.useState<Turn[]>(() => readTurns(sessionId));
+  const [rev, bump] = React.useReducer((n: number) => n + 1, 0);
+  /* read again in the render that shows another conversation (or is asked to), not after it: the one shown is never
+     drawn empty for a frame (the skills of a new one flashing in between) */
+  const [readFor, setReadFor] = React.useState({ session: sessionId, rev });
+  if (readFor.session !== sessionId || readFor.rev !== rev) {
+    setReadFor({ session: sessionId, rev });
+    setTurns(readTurns(sessionId));
+  }
 
   /** This turn is over: the Mac keeps it, the conversation shows it as it ended. */
   function settleLocalTurn(meta: LocalAgentTurnMeta, turn: LocalAgentTurn, patch: Partial<Turn & TurnBalance>): Turn {
@@ -211,8 +242,14 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     return done;
   }
 
-  /* the clips' files, so a clip an agent names in its reply gets its icon (lib/studio-film) */
-  React.useEffect(() => { void readStudioFilm(project.id); }, [project.id]);
+  /* The clips' files and the project's serving URL for audio links in replies (lib/studio-film). */
+  const [projectFolder, setProjectFolder] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    let current = true;
+    setProjectFolder(null);
+    void readStudioProject(project.id).then((folder) => { if (current) setProjectFolder(folder); });
+    return () => { current = false; };
+  }, [project.id]);
 
   /* the page was reloaded while a turn ran (the window, its session and the agent stayed): put it back */
   React.useEffect(() => {
@@ -240,7 +277,11 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectKey]);
 
-  const ordered = React.useMemo(() => [...turns].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)), [turns]);
+  /* the shown conversation's only: for the moment after another tab is shown, `turns` are still the last one's */
+  const ordered = React.useMemo(
+    () => turns.filter((turn) => turn.sessionId === sessionId).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)),
+    [turns, sessionId],
+  );
   const asset = ordered.at(-1);
   const active = isActive(asset);
   const blank = ordered.length === 0;
@@ -283,13 +324,13 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const [scrolled, setScrolled] = React.useState(false);
   const tail = useTailSpacer(thread.viewport, thread.pinIfFollowing, active);
   const composerRef = React.useRef<PromptEditorHandle>(null);
-  /* the composer and what stands on it (a question, a permission): its height, with the 6 px under the pane, is all
-     this view keeps while the assets are open */
+  /* the composer and what stands on it (a question, a permission): its height is all this view keeps while the assets
+     are open, the drawer above meeting it */
   const composerBlockRef = React.useRef<HTMLDivElement>(null);
   React.useLayoutEffect(() => {
     const block = composerBlockRef.current;
     if (!block) return undefined;
-    const tell = () => app.setComposerHeight(Math.ceil(block.getBoundingClientRect().height) + 6);
+    const tell = () => app.setComposerHeight(Math.ceil(block.getBoundingClientRect().height));
     tell();
     const seen = new ResizeObserver(tell);
     seen.observe(block);
@@ -299,8 +340,12 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const [followUpRefs, setFollowUpRefs] = React.useState<PromptReference[]>([]);
   /** what the person pointed at in Studio for this message, by pill id */
   const [studioRefs, setStudioRefs] = React.useState<Map<string, StudioRef>>(() => new Map());
-  const [queued, setQueued] = React.useState(false);
+  /** the conversation whose message waits for its turn to end (an agent that cannot take one mid-turn) */
+  const [queued, setQueued] = React.useState<string | null>(null);
   const [followUpError, setFollowUpError] = React.useState<string | null>(null);
+  /* the notices on the composer closed here (NoticeCard): each stays closed for what it said */
+  const [closed, setClosed] = React.useState<ReadonlySet<string>>(() => new Set());
+  const close = (key: string) => setClosed((set) => new Set(set).add(key));
   const composerFiles = useDesktopAttachments(project.path);
   /* a file of the message being written, opened to look at */
   const [openedFile, setOpenedFile] = React.useState<AttachmentPreviewItem | null>(null);
@@ -314,8 +359,27 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   /** skills named with the Skills button or `/` (each pill turns into the skill's name, its SKILL.md after the message) */
   const [skillRefs, setSkillRefs] = React.useState<PromptReference[]>([]);
   const composerPills = React.useMemo(
-    () => [...[...studioRefs.entries()].map(([id, ref]) => refPill(id, ref)), ...fileRefs, ...skillRefs],
-    [studioRefs, fileRefs, skillRefs],
+    () => [...[...studioRefs.entries()].map(([id, ref]) => refPill(id, ref)), ...fileRefs, ...skillRefs, ...composerFiles.files.map(attachmentPill)],
+    [studioRefs, fileRefs, skillRefs, composerFiles.files],
+  );
+  /** files brought in (dropped, pasted, picked with +): pills where they were let go, or at the caret */
+  const attachFiles = (files: File[], point?: { x: number; y: number }) => {
+    const added = composerFiles.add(files);
+    if (added.length) composerRef.current?.insertReferences(added.map(attachmentPill), point);
+  };
+  const attachmentOf = React.useCallback(
+    (pill: { id: string }) => (isAttachmentPill(pill.id) ? composerFiles.files.find((f) => f.id === pill.id) : undefined),
+    [composerFiles.files],
+  );
+  const attachmentState = React.useCallback((pill: PromptReference) => {
+    const state = attachmentOf(pill)?.state;
+    return state === 'pending' || state === 'failed' ? state : null;
+  }, [attachmentOf]);
+  const opensPill = React.useCallback((pill: PromptReference) => isAttachmentPill(pill.id), []);
+  /** what the card takes from a drag: files from the disk, Studio's things */
+  const showsDropCaret = React.useCallback(
+    (data: DataTransfer) => transferHasStudioRefs(data) || [...data.types].includes('Files'),
+    [],
   );
 
   /* ── the @ menu: this moment in Studio, and the project's files (asked for when the menu opens) ── */
@@ -347,7 +411,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   const [contextNoticeOff, setContextNoticeOff] = React.useState<string | null>(null);
   const contextFull = Boolean(agentContext && agentContext.size > 0 && agentContext.used / agentContext.size >= CONTEXT_NOTICE_SHARE) && contextNoticeOff !== sessionId;
 
-  /* the skills this message can name (the Skills button, and `/`) */
+  /* the skills this message can name (the Skills button, and `@`) */
   const [skillListing, setSkillListing] = React.useState<SkillListing | null>(null);
   const reloadSkills = React.useCallback(async () => {
     const next = await app.skills?.list(project.path, agent).catch(() => null);
@@ -357,19 +421,24 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   /* a skill as people see it, in the language shown: its title, and what its page says (none: its name and the
      agent's description) */
   const locale = useUiLocale();
+  /* the skills named from a card or Try now, not installed so not in the listing: their words as they came */
+  const pickedSkills = React.useRef(new Map<string, PickedSkill>());
   const skillWords = React.useCallback((name: string, description = '') => {
     const shown = skillListing?.openfilm.find((s) => s.name === name)?.shown;
+    const picked = pickedSkills.current.get(name);
+    const about = description || picked?.description || '';
     const pick = (words?: Record<string, string>) => (words ? words[locale] ?? words[locale.split('-')[0]!] ?? words.en ?? Object.values(words)[0] : undefined);
     const summary = pick(shown?.summary);
     return {
-      title: pick(shown?.title) ?? name,
-      summary: summary ?? description,
-      text: shown ? [summary, ...(pick(shown.details)?.split('\n') ?? [])].filter((w): w is string => Boolean(w)) : description ? [description] : [],
+      title: pick(shown?.title) ?? picked?.title ?? name,
+      summary: summary ?? about,
+      text: shown ? [summary, ...(pick(shown.details)?.split('\n') ?? [])].filter((w): w is string => Boolean(w)) : about ? [about] : [],
     };
   }, [skillListing, locale]);
   const skillPill = React.useCallback((skill: PickedSkill): PromptReference => {
+    pickedSkills.current.set(skill.name, skill);
     /* its title alone: what it does is in its hover card */
-    const pill: PromptReference = { id: skillReferenceId(skill.name), kind: 'skill', label: skillWords(skill.name, skill.description).title };
+    const pill: PromptReference = { id: skillReferenceId(skill.name), kind: 'skill', label: skill.title ?? skillWords(skill.name, skill.description).title };
     setSkillRefs((list) => (list.some((p) => p.id === pill.id) ? list : [...list, pill]));
     return pill;
   }, [skillWords]);
@@ -397,42 +466,6 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     window.addEventListener(MAKE_SKILL, make);
     return () => { window.removeEventListener(SKILLS_CHANGED, changed); window.removeEventListener(MAKE_SKILL, make); };
   }, [reloadSkills, skillListing, t]);
-  /* the agent's own skills hidden in OpenFilm: not offered among its commands either */
-  const hiddenSkills = React.useMemo(() => new Set((skillListing?.own.filtered ? skillListing.own.skills.filter((s) => !s.allowed) : []).map((s) => s.name)), [skillListing]);
-
-  /* the agent's own commands, a `/` at the start of the message, as in its own chat: they go as typed; above them, the
-     skills, each a pill */
-  const agentCommands = useAgentCommands(agent);
-  const commandMenu = React.useMemo(() => (agentCommands.length || nameableSkills.length ? {
-    label: t('composer.commands'),
-    providers: [...(nameableSkills.length ? [{
-      id: 'skills',
-      groupLabel: t('skills.button'),
-      items: nameableSkills.map((skill) => ({
-        id: skillReferenceId(skill.name),
-        kind: 'skill' as const,
-        icon: Blocks,
-        label: skillWords(skill.name).title,
-        ...(skillWords(skill.name, skill.description).summary ? { detail: skillWords(skill.name, skill.description).summary, describes: true } : {}),
-        keywords: [skill.name, skillWords(skill.name).title],
-        select: () => skillPill(skill),
-      })),
-    }] : []), ...(agentCommands.length ? [{
-      id: 'commands',
-      groupLabel: t('composer.commands'),
-      items: agentCommands.filter((c) => !hiddenSkills.has(c.name)).map((c) => ({
-        id: `command:${c.name}`,
-        kind: 'file' as const,
-        icon: SquareSlash,
-        label: `/${c.name}`,
-        /* what it does, cut to the row */
-        ...(c.description ? { detail: c.description, describes: true } : {}),
-        /* found by its name, as in the agent's own chat (its description would put a word in it first) */
-        keywords: [c.name],
-        select: () => ({ text: `/${c.name}` }),
-      })),
-    }] : [])],
-  } : undefined), [agentCommands, nameableSkills, hiddenSkills, skillPill, skillWords, t]);
   const mentionProviders = React.useMemo<MentionProvider[]>(() => {
     const picked = selection?.refs ?? [];
     const range = selection ? selectionRange(selection) : null;
@@ -479,8 +512,27 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           };
         }),
       },
+      /* the skills, each the pill the Skills button makes: after the files, which people reach for most and which stop
+         at 20. Every one, uncut: an agent's own can be a hundred or more, and a person may not remember the name to type */
+      {
+        id: 'skills',
+        groupLabel: t('skills.button'),
+        limit: Infinity,
+        items: nameableSkills.map((skill) => {
+          const words = skillWords(skill.name, skill.description);
+          return {
+            id: skillReferenceId(skill.name),
+            kind: 'skill' as const,
+            label: words.title,
+            /* what it does, cut to the row */
+            ...(words.summary ? { detail: words.summary, describes: true } : {}),
+            keywords: [skill.name],
+            select: () => skillPill(skill),
+          };
+        }),
+      },
     ];
-  }, [selection, mentionFiles, t, takeStudioRefs]);
+  }, [selection, mentionFiles, nameableSkills, skillWords, skillPill, t, takeStudioRefs]);
   const onComposerChange = React.useCallback((state: PromptEditorState) => {
     setFollowUp(state.text);
     setFollowUpRefs(state.references);
@@ -490,6 +542,16 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   React.useEffect(() => app.onRefer((ref) => {
     const [pill] = takeStudioRefs([ref]);
     requestAnimationFrame(() => { composerRef.current?.insertReference(pill!); composerRef.current?.focus(); });
+  }), [takeStudioRefs]);
+
+  /* a question Studio wrote for the person (an example's "Explain how it's made"): in the composer, for them to send */
+  React.useEffect(() => app.onAsk?.((request) => {
+    const pills = takeStudioRefs(request.refs);
+    requestAnimationFrame(() => {
+      composerRef.current?.setText(request.text);
+      composerRef.current?.insertReferences(pills);
+      composerRef.current?.focus();
+    });
   }), [takeStudioRefs]);
 
   /* Studio's things pasted into the composer, or dropped on its words: pills there */
@@ -515,15 +577,31 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       const words = skillWords(name, skill?.description);
       return { title: words.title, rows: [], text: words.text };
     }
+    /* a file brought in: where it is, or why it could not be had */
+    const file = attachmentOf(pill);
+    if (file) {
+      return {
+        title: file.folder ? `${file.name}/` : file.name,
+        rows: file.path ? [[t('refCard.path'), file.path] as [string, string]] : [],
+        ...(file.state === 'failed' && file.error ? { text: [file.error] } : {}),
+      };
+    }
     return pillCard(pill, t);
-  }, [t, nameableSkills, skillWords]);
+  }, [t, nameableSkills, skillWords, attachmentOf]);
   const revealPill = React.useCallback((pill: { id: string; label: string; target?: Record<string, unknown> }) => {
-    /* a skill: its page in the Community; anything else: where it is in Studio */
+    /* a skill: its page in the library; anything else: where it is in Studio */
     const name = skillReferencePackage(pill.id);
     if (name) { app.showExamples?.({ kind: 'skill', name }); return; }
+    /* a file brought in opens to look at: a picture large, a video played, a text read; a folder, shown where it is */
+    const file = attachmentOf(pill);
+    if (file) {
+      if (file.folder) { if (file.path && file.state === 'ready') void desktopBridge()?.revealPath(file.path); }
+      else if (file.previewUrl) setOpenedFile({ name: file.name, kind: file.kind, url: file.previewUrl, ...(file.mediaType ? { mediaType: file.mediaType } : {}) });
+      return;
+    }
     const ref = refFromPill(pill);
     if (ref) app.showInStudio(ref);
-  }, []);
+  }, [attachmentOf]);
   const sentPills = React.useMemo(
     () => ({ onReveal: revealPill, revealLabel: t('library.revealReference'), describe: describePill }),
     [revealPill, describePill, t],
@@ -539,7 +617,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     const listeners = new Set<() => void>();
     const hover: PromptPillHover = {
       hover: (pill) => {
-        const path = pill && !pill.target ? fileReferencePath(pill.id) : null;
+        /* a file of the project lights up in Studio's media; one elsewhere on the disk is in no pane there */
+        const path = pill && !pill.target ? projectFilePath(fileReferencePath(pill.id)) : null;
         app.highlightInStudio(pill ? refFromPill(pill) ?? (path ? { kind: 'file', path, fileKind: pill.kind } : null) : null);
       },
       lit: (pill) => {
@@ -565,7 +644,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
   /** each open turn's way to settle (by turn id), and the agent's run each running turn belongs to */
   const settlers = React.useRef(new Map<string, (patch: Partial<Turn & TurnBalance>) => void>());
-  const runs = React.useRef(new Map<string, Promise<unknown>>());
+  const runs = React.useRef(new Map<string, { conversation: string; run: Promise<unknown> }>());
   /** the conversation shown now (a turn opened in another is kept, not shown) */
   const shownSession = React.useRef(sessionId);
   shownSession.current = sessionId;
@@ -650,7 +729,10 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
         if (!fileChanges.length) return;
         const kept: Turn & TurnFileChanges = { ...done, fileChanges };
         saveLocalAgentTurn(meta.projectId, kept, turn.items);
-        setTurns((list) => list.map((item) => (item.id === id ? { ...item, fileChanges } : item)));
+        /* the files as the turn found them, kept by the app: its footer's Undo. Not kept with the turn: the app keeps
+           them only while it runs */
+        const undoable = found?.undoable === true;
+        setTurns((list) => list.map((item) => (item.id === id ? { ...item, fileChanges, ...(undoable ? { undoable } : {}) } : item)));
       });
     });
     keep();
@@ -661,7 +743,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
    * Send a turn to the agent: what it is sent (`prepared`: the text, and the pictures) may take a moment to make. It
    * settles the turn the agent's run ends on: this one, or the last message sent into it while it ran (steerTurn).
    */
-  function runTurn(opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[] }>): void {
+  function runTurn(opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[]; said?: () => void }>): void {
     const { turn, meta, prefs, ready } = opened;
     const id = meta.turnId;
     const finish = (lastTurnId: string | undefined, patch: Partial<Turn & TurnBalance>) => {
@@ -670,7 +752,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     };
     /* the agent's own session of this conversation, gone on with (after a restart too); a new one is kept for next time */
     const resume = sessions.find((s) => s.id === sessionId)?.agentSessions?.[agent] ?? null;
-    const run = Promise.all([prepared, ready]).then(([{ text, images, skills }]) => runLocalAgentTurn({
+    const run = Promise.all([prepared, ready]).then(([{ text, images, skills, said }]) => runLocalAgentTurn({
       projectId: projectKey,
       conversation: sessionId,
       resume,
@@ -682,6 +764,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       options: prefs,
       meta,
       onOptions: (options) => useLocalAgents.getState().noteOptions(agent, options),
+      /* Studio's note in the message reached the agent: Studio counts it told (lib/studio-film keptNote) */
+      onStarted: said,
       onSessionInfo: (info) => {
         /* a session it could not take up again has none of the skills' pages from before: those of this message only */
         const fresh = !info.resumed || info.sessionId !== resume;
@@ -704,7 +788,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
         finish(lastTurnId, { status: 'error', error: reason, ...(balance ? { balance } : {}) });
       },
     ).finally(() => { runs.current.delete(id); });
-    runs.current.set(id, run);
+    runs.current.set(id, { conversation: meta.sessionId, run });
   }
 
   /**
@@ -712,42 +796,95 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
    * (an agent that takes steering). It shows as a turn of its own, what the agent says from then on under it, and the
    * running one is done. One that did not join (the turn ended meanwhile) is sent once that run ends.
    */
-  function steerTurn(fromId: string, opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[] }>): void {
+  function steerTurn(fromId: string, opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[]; said?: () => void }>): void {
     /* the agent's run going now (one at a time in a conversation): a message that did not join waits for it */
-    const run = [...runs.current.values()].at(-1) ?? Promise.resolve();
-    void Promise.all([prepared, opened.ready]).then(async ([{ text, images, skills }]) => {
+    const run = [...runs.current.values()].filter((r) => r.conversation === opened.meta.sessionId).at(-1)?.run ?? Promise.resolve();
+    void Promise.all([prepared, opened.ready]).then(async ([{ text, images, skills, said }]) => {
       if (await steerLocalAgentTurn(fromId, opened.turn, text, images)) {
+        said?.();
         settlers.current.get(fromId)?.({ status: 'ready' });
         return;
       }
       await run.catch(() => {});
-      runTurn(opened, Promise.resolve({ text, images, ...(skills ? { skills } : {}) }));
+      runTurn(opened, Promise.resolve({ text, images, ...(skills ? { skills } : {}), ...(said ? { said } : {}) }));
     });
   }
+
+  /* the conversations whose last turn the person undid, told to their agent with the next message there */
+  const undone = React.useRef(new Set<string>());
+  const undoneNote = (conversation: string): string => {
+    if (!undone.current.delete(conversation)) return '';
+    return '\n\n<studio_note>The person undid your last turn: the project\'s files are back as they were before it, and its message is out of the chat.</studio_note>';
+  };
+  /**
+   * Undo the conversation's last turn: the files as it found them (the app keeps them while it runs), the turn out of
+   * the conversation, and its message back in the composer, its pills too (a file brought in is not kept: its pill goes).
+   */
+  const undoTurn = async (entry: ProjectVersion): Promise<void> => {
+    const done = await app.chat.undo?.(project.path, entry.assetId).catch(() => null);
+    if (!done?.ok) { setFollowUpError(t('undo.gone')); return; }
+    undoLocalAgentTurn(projectKey, entry.assetId);
+    setTurns((list) => list.filter((item) => item.id !== entry.assetId));
+    touchSession(sessionId, (s) => ({ turns: Math.max(0, s.turns - 1) }));
+    undone.current.add(sessionId);
+    setFollowUpError(done.missed.length ? t('undo.missed').replace('{names}', done.missed.slice(0, 3).join(', ') + (done.missed.length > 3 ? ` (+${done.missed.length - 3})` : '')) : null);
+    const display = entry.promptDisplay ?? { text: entry.prompt, references: [] };
+    const studio = new Map<string, StudioRef>();
+    const files: PromptReference[] = [];
+    const named: PromptReference[] = [];
+    /* kept as the composer had them */
+    for (const pill of display.references as PromptReference[]) {
+      const ref = refFromPill(pill);
+      if (ref) studio.set(pill.id, ref);
+      else if (skillReferencePackage(pill.id)) named.push(pill);
+      else if (!isAttachmentPill(pill.id)) files.push(pill);
+    }
+    setStudioRefs(studio);
+    setFileRefs(files);
+    setSkillRefs(named);
+    /* written once the pills are the composer's, so each token finds its pill */
+    requestAnimationFrame(() => { composerRef.current?.setText(display.text); composerRef.current?.focus(); });
+  };
+  const undoNow = React.useRef(undoTurn);
+  undoNow.current = undoTurn;
+  /* the last turn's Undo, for the conversation shown and none running: asked on the composer first */
+  const [undoAsk, setUndoAsk] = React.useState<ProjectVersion | null>(null);
+  const onUndo = React.useMemo(() => (active ? null : (entry: ProjectVersion) => setUndoAsk(entry)), [active]);
+  React.useEffect(() => { if (active) setUndoAsk(null); }, [active]);
 
   function submitFollowUp(): void {
     if (!followUpFilled) return;
     /* while a turn runs: into it, for an agent that takes that; else it waits for the turn to end */
     const steer = active && asset ? canSteer(asset.id) : false;
-    if (active && !steer) { setQueued(true); return; }
-    setQueued(false);
-    /* the sentence as the agent reads it: a pill becomes "[n: name]", and what each number is follows, in a block */
+    if (active && !steer) { setQueued(sessionId); return; }
+    setQueued(null);
+    /* the sentence as the agent reads it: a pill becomes "[n: name]", and what each number is follows, in a block; a
+       file brought in becomes where it is */
+    const attached = attachmentsInText(composerFiles.files, followUpRefs);
+    const attachedById = new Map(attached.map((f) => [f.id, f]));
     const used: StudioRef[] = [];
     const instruction = resolvePromptReferences(followUp, (pillId, index) => {
       const ref = studioRefs.get(pillId);
       if (!ref) return null;
       used[index - 1] = ref;
       return `[${index}: ${refPill(pillId, ref).label}]`;
-    }, (pillId) => { const name = skillReferencePackage(pillId); return name ? `skill “${name}”` : null; }).trim();
+    }, (pillId) => {
+      const name = skillReferencePackage(pillId);
+      if (name) return `skill “${name}”`;
+      const file = attachedById.get(pillId);
+      return file ? attachmentWords(file) ?? '' : null;
+    }).trim();
     /* the skills it names, for this message: each one's SKILL.md follows it, unseen in the chat, the first time this
        conversation's agent session meets that skill (lib/skill-pages) */
     const agentSession = sessions.find((s) => s.id === sessionId)?.agentSessions?.[agent] ?? null;
     const skillNames = pagesToSend(activatedSkillIds(followUpRefs), sessions.find((s) => s.id === sessionId)?.skillsGiven, agent, agentSession);
     if (!instruction) return;
-    const blocker = attachmentBlocker(composerFiles.files, t);
+    const blocker = attachmentBlocker(attached, t);
     if (blocker) { setFollowUpError(blocker); return; }
     setFollowUpError(null);
-    const promptDisplay = buildPromptDisplay(followUp, followUpRefs);
+    /* sent with the assets open: they close (as they were, for next time) and the conversation shows */
+    if (assetsOpen) app.setAssetsOpen(false);
+    const promptDisplay = buildPromptDisplay(followUp, followUpRefs.map(sentPill));
     thread.scrollToBottom({ smooth: true });
     composerRef.current?.clear();
     setFollowUp('');
@@ -755,9 +892,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     setStudioRefs(new Map());
     setFileRefs([]);
     setSkillRefs([]);
-    const files = composerFiles.take();
+    const files = composerFiles.take(attached.map((f) => f.id));
     const id = makeLocalAgentTurnId();
-    const said = instruction + attachedText(files);
     const refs = used.filter(Boolean);
     const stage = selection?.stage ?? null;
     /* each reference's picture is kept in the project for the agent (the block names it), and sent to one that takes pictures */
@@ -766,12 +902,15 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     /* an example pointed at: its folder fetched now if it is not yet (the turn waits, as it waits for its reply) */
     const withFolders = Promise.all(refs.map(async (ref) => (ref.kind === 'example' && !ref.folder
       ? { ...ref, folder: await app.exampleFolder?.(ref.id).catch(() => undefined) } : ref)));
-    /* the pictures sent: the references' first, then the attached ones while there is room (the rest by their path) */
-    const prepared = withFolders.then((ready) => Promise.all([referencePictures(ready, { project: project.path, turnId: id }), skillTexts])
-      .then(async ([{ pictures, images }, skills]) => ({
-        text: said + studioReferencesText(ready, { stage, pictures }) + skills.map((s) => `\n\n${s.text}`).join(''),
+    /* the pictures sent: the references' first, then the files brought in, in the order of their pills, while there is
+       room (the rest by their path) */
+    /* what the person changed while the agent last worked that Studio kept over its writes, said with this message */
+    const prepared = withFolders.then((ready) => Promise.all([referencePictures(ready, { project: project.path, turnId: id }), skillTexts, keptNote(project.id, sessionId)])
+      .then(async ([{ pictures, images }, skills, kept]) => ({
+        text: instruction + studioReferencesText(ready, { stage, pictures }) + kept.text + undoneNote(sessionId) + skills.map((s) => `\n\n${s.text}`).join(''),
         images: [...images, ...await attachedPictures(files, PROMPT_PICTURES_MAX - images.length)],
         skills: skills.map((s) => s.name),
+        said: kept.said,
       })));
     const opened = openTurn(id, instruction, promptDisplay ?? null, turnAttachments(files));
     if (steer && asset) steerTurn(asset.id, opened, prepared);
@@ -779,16 +918,57 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
   }
 
   /* queued while the turn ran (an agent that cannot take a message mid-turn): sent as soon as it ends */
-  React.useEffect(() => { if (queued && !active) submitFollowUp(); }, [queued, active]); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    /* another tab shown meanwhile: the message stays written, not sent there */
+    if (queued && queued !== sessionId) setQueued(null);
+    else if (queued && !active) submitFollowUp();
+  }, [queued, active, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onNewSession = () => {
-    if (active) return;
+  /* the conversations whose turn runs now, by the turn: their lights breathe, and they cannot be archived meanwhile */
+  const allRunning = useRunningLocalTurns();
+  const running = React.useMemo(
+    () => new Map(allRunning.filter((r) => r.projectId === projectKey).map((r) => [r.sessionId, r.id])),
+    [allRunning, projectKey],
+  );
+  /* those that stopped while another was shown, and how their last turn ended: lit until shown */
+  const [unseen, setUnseen] = React.useState<Map<string, 'done' | 'error'>>(() => new Map());
+  const wasRunning = React.useRef(running);
+  React.useEffect(() => {
+    const ended = [...wasRunning.current.keys()].filter((id) => !running.has(id) && id !== shownSession.current);
+    wasRunning.current = running;
+    if (!ended.length) return;
+    setUnseen((map) => {
+      const next = new Map(map);
+      for (const id of ended) next.set(id, loadLocalAgentTurns(projectKey, id).at(-1)?.turn.status === 'error' ? 'error' : 'done');
+      return next;
+    });
+  }, [running, projectKey]);
+  React.useEffect(() => {
+    setUnseen((map) => {
+      if (!map.has(sessionId)) return map;
+      const next = new Map(map);
+      next.delete(sessionId);
+      return next;
+    });
+  }, [sessionId]);
+  /* each conversation's agent at work whichever is shown: a new one, or another, any time; none while
+     the one shown is new itself (false) */
+  const onNewSession = (): boolean => {
+    if (blank && !running.has(sessionId)) { composerRef.current?.focus(); return false; }
     setSessionId(newSession().id);
     composerRef.current?.focus();
+    return true;
   };
   newConversation.current = onNewSession;
-  const onSelectSession = (id: string) => { if (!active) setSessionId(id); };
-  const onRenameSession = async (title: string) => { touchSession(sessionId, () => ({ title })); };
+  const onSelectSession = (id: string) => { setSessionId(id); composerRef.current?.focus(); };
+  const onRenameSession = (id: string, title: string) => editSession(id, { title });
+  const onPinSession = (id: string, pinned: boolean) => editSession(id, { pinned });
+  /* the conversation shown, archived: a new one in its place */
+  const onArchiveSession = (id: string, archived: boolean) => {
+    if (archived && running.has(id)) return;
+    editSession(id, { archived });
+    if (archived && id === sessionId) setSessionId(newSession().id);
+  };
   const shownSessions = React.useMemo(
     () => (sessions.some((s) => s.id === sessionId) ? sessions : [{ ...newSession(), id: sessionId }, ...sessions]),
     [sessions, sessionId],
@@ -815,27 +995,12 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
 
   const editComposerCard = (
     <div className="flex flex-col gap-1">
-      {/* the agent this conversation used cannot be used now: the next message goes to the one picked below */}
-      {agentWas ? (
-        <div className="flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-[12px] text-[var(--text-muted)]">
-          <span className="min-w-0 flex-1">{t('composer.agentWas').replace('{name}', wasName)}</span>
-        </div>
-      ) : null}
-      {contextFull ? (
-        <div className="flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] py-1.5 pl-3 pr-1.5 text-[12px] text-[var(--text-muted)]">
-          <span className="min-w-0 flex-1">{t('composer.contextFull')}</span>
-          <button type="button" onClick={onNewSession}
-            className="h-6 shrink-0 rounded-[6px] px-2 text-[12px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{t('composer.contextFullNew')}</button>
-          <button type="button" onClick={() => setContextNoticeOff(sessionId)} aria-label={t('project.close')}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><X size={12} /></button>
-        </div>
-      ) : null}
       <div
-        /* a file from the disk dropped on the card is brought along (it goes into the project); Studio's things
-           dropped on it become pills */
+        /* a file from the disk dropped on the card is brought along, a pill where it was let go (on the words) or at
+           the cursor; Studio's things dropped on it become pills too */
         onKeyDownCapture={onComposerKey}
         onDragOver={(event) => {
-          if (!transferHasStudioRefs(event.dataTransfer) && ![...event.dataTransfer.types].includes('Files')) return;
+          if (!showsDropCaret(event.dataTransfer)) return;
           event.preventDefault();
           event.dataTransfer.dropEffect = 'copy';
           setDropping(true);
@@ -859,66 +1024,13 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           if (!transferHasFiles(event.dataTransfer)) return;
           event.preventDefault();
           event.stopPropagation();
-          composerFiles.add(filesFromTransfer(event.dataTransfer));
+          attachFiles(filesFromTransfer(event.dataTransfer), { x: event.clientX, y: event.clientY });
         }}
         data-prompt-shell=""
-        className={`rounded-[12px] border bg-[var(--composer-bg)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors duration-200 ${
-          dropping ? 'border-[var(--accent)]' : 'border-[var(--composer-border)] focus-within:border-[var(--composer-border-active)]'
+        className={`rounded-[12px] border bg-[var(--bg-raised)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors duration-200 ${
+          dropping ? 'border-[var(--accent)]' : 'border-[var(--border)] focus-within:border-[var(--text-faint)]'
         }`}
       >
-        {composerFiles.files.length > 0 && (
-          /* whole rows: up to three show at once, only more than that scrolls */
-          <div className="flex max-h-[144px] flex-wrap gap-1.5 overflow-y-auto px-3.5 pt-3">
-            {composerFiles.files.map((file) => {
-              const Icon = attachmentIcon({ name: file.name, mediaType: file.mediaType, folder: file.folder });
-              const remove = (
-                <span
-                  role="button"
-                  tabIndex={-1}
-                  onClick={(event) => { event.stopPropagation(); composerFiles.drop(file.id); }}
-                  aria-label={t(file.kind === 'image' ? 'composer.removeImage' : 'composer.removeFile')}
-                  className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100"
-                >
-                  <X size={10} />
-                </span>
-              );
-              const busy = file.state === 'pending' ? <Loader2 size={12} className="absolute inset-0 m-auto animate-spin text-white drop-shadow" /> : null;
-              /* a picture shows itself; a video, a frame of itself with a play mark (once one is had) */
-              const picture = file.kind === 'image' ? file.previewUrl : file.thumb;
-              /* clicked, it opens to look at: a picture large, a video played, a text read; a folder, shown where it is */
-              const folderPath = file.folder && file.state === 'ready' ? file.path : undefined;
-              const open = file.previewUrl || folderPath ? {
-                role: 'button' as const,
-                tabIndex: 0,
-                'aria-label': t(folderPath ? 'composer.revealFolder' : 'composer.openAttachment').replace('{name}', file.name),
-                onClick: () => (folderPath
-                  ? void desktopBridge()?.revealPath(folderPath)
-                  : setOpenedFile({ name: file.name, kind: file.kind, url: file.previewUrl!, ...(file.mediaType ? { mediaType: file.mediaType } : {}) })),
-                onKeyDown: (event: React.KeyboardEvent) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); (event.currentTarget as HTMLElement).click(); } },
-              } : {};
-              return picture ? (
-                <div key={file.id} title={file.error ?? file.path ?? file.name} {...open}
-                  className={`group ${ATTACHMENT_THUMB} transition ${file.previewUrl ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
-                  <img src={picture} alt={file.name} className={`h-full w-full object-cover transition ${file.state === 'ready' ? '' : 'opacity-45'}`} />
-                  {file.kind !== 'image' && !busy ? <PlayMark /> : null}
-                  {busy}
-                  {remove}
-                </div>
-              ) : (
-                <div key={file.id} title={file.error ?? file.path ?? file.name} {...open}
-                  className={`group ${ATTACHMENT_CARD} transition ${file.previewUrl || folderPath ? 'cursor-pointer' : ''} ${file.state === 'failed' ? 'border-[var(--danger)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
-                  <AttachmentCardBody
-                    icon={file.state === 'pending' ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
-                    name={file.name}
-                    /* a folder's size is not read: where it is says more */
-                    detail={file.state === 'failed' ? 'Not added' : file.folder ? (file.path ? attachmentPlace(file.path) : null) : formatFileSize(file.size)}
-                  />
-                  {remove}
-                </div>
-              );
-            })}
-          </div>
-        )}
         {openedFile ? <AttachmentPreview item={openedFile} onClose={() => setOpenedFile(null)} /> : null}
         <div className="flex items-end gap-1 py-2.5 pl-3.5 pr-2">
           <div className="min-w-0 flex-1">
@@ -936,10 +1048,12 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
               placeholder={t(blank ? 'project.composerPlaceholderBlank' : 'project.composerPlaceholder')}
               minHeight={22}
               maxHeight={158}
-              contentClassName="text-[14px] leading-[22px] text-[var(--chat-text)]"
-              onPasteFiles={(files) => composerFiles.add(files)}
+              contentClassName="text-[14px] leading-[22px] text-[var(--text)]"
+              onPasteFiles={(files) => attachFiles(files)}
+              pillState={attachmentState}
+              pillOpens={opensPill}
+              showsDropCaret={showsDropCaret}
               mentions={{ providers: mentionProviders, label: t('mention.menu'), onOpen: loadMentionFiles }}
-              commands={commandMenu}
             />
           </div>
           {/* while it works: Stop, or Send once something is written (it goes into the turn, or after it); Esc stops */}
@@ -948,7 +1062,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
               type="button"
               onClick={stopping ? () => { if (asset) void cancelLocalAgentTurn(asset.id); } : submitFollowUp}
               disabled={stopping ? false : !followUpFilled}
-              className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] text-[var(--text-dim)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:text-[var(--text-faint)] disabled:hover:bg-transparent"
+              className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:text-[var(--text-faint)] disabled:hover:bg-transparent"
               aria-label={stopping ? t('project.stop') : t('project.sendFollowUp')}
             >
               {stopping ? <Square size={14} /> : <CornerDownLeft size={14} />}
@@ -971,20 +1085,13 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           type="file"
           multiple
           hidden
-          onChange={(event) => { composerFiles.add(Array.from(event.target.files ?? [])); event.target.value = ''; }}
+          onChange={(event) => { attachFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }}
         />
         <Tooltip label={t('project.addAttachment')}>
           <button type="button" onClick={() => attachInputRef.current?.click()} className="openfilm-composer-tool" aria-label={t('project.addAttachment')}>
             <Plus size={16} strokeWidth={1.75} />
           </button>
         </Tooltip>
-        {app.showExamples ? (
-          <Tooltip label={t('community.tooltip')}>
-            <button type="button" onClick={() => app.showExamples?.()} className="openfilm-composer-tool" aria-label={t('community.button')}>
-              <Blocks size={16} strokeWidth={1.75} />
-            </button>
-          </Tooltip>
-        ) : null}
 
         <Tooltip label={t('project.assets')}>
           <button type="button" onClick={() => app.setAssetsOpen(!assetsOpen)} aria-pressed={assetsOpen} className="openfilm-composer-tool" aria-label={t('project.assets')}>
@@ -1010,18 +1117,20 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
       <PromptPillHoverContext.Provider value={pillHover.hover}>
         <WaitingContext.Provider value={Boolean(localTurn?.state.question || localTurn?.state.permission || spendAsk)}>
           <StickToBottomContext.Provider value={thread}>
-            {/* with the assets open only the composer shows, at the bottom: the drawer above it is Studio's, and the two
-                read as one pane */}
-            <aside className={`relative flex min-h-0 flex-col overflow-hidden bg-[var(--dock-pane)] ${assetsOpen ? 'mt-auto shrink-0 rounded-b-[7px]' : 'flex-1 rounded-[7px]'}`}>
-              {assetsOpen ? null : banners}
+            {/* with the assets open only the composer shows, at the bottom, floating over Studio's drawer: the drawer
+                runs on under it, fading out behind it so the words under the composer stay clear */}
+            <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden ${assetsOpen ? 'mt-auto shrink-0 bg-[linear-gradient(to_bottom,transparent,var(--bg-panel)_36px)]' : 'flex-1 bg-[var(--bg-panel)]'}`}>
               <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOpen ? 'hidden' : 'flex'}`}>
-                <ConversationSessionBar
+                <ConversationBar
                   sessions={shownSessions}
                   currentSessionId={sessionId}
-                  onNewSession={onNewSession}
+                  running={running}
+                  unseen={unseen}
                   onSelectSession={onSelectSession}
+                  onNewSession={onNewSession}
                   onRenameSession={onRenameSession}
-                  busy={active}
+                  onPinSession={onPinSession}
+                  onArchiveSession={onArchiveSession}
                 />
                 <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
                   {/* the first message well below the session bar, as a chat app opens a conversation; the last well above
@@ -1033,35 +1142,36 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                   >
                     {blank ? (
                       <div ref={thread.contentRef}>
-                        <ProjectStarters
-                          onPick={(text) => { composerRef.current?.setText(text); composerRef.current?.focus(); }}
-                          onAttach={() => attachInputRef.current?.click()}
-                        />
+                        <ProjectStarters onSkill={pickSkill} />
                       </div>
                     ) : (
                       <div ref={thread.contentRef} className="min-w-0 shrink-0">
                         <PromptPillRevealContext.Provider value={sentPills}>
-                          <LiveConversation
-                            store={liveStore}
-                            turns={opLog}
-                            liveAssetId={active ? asset!.id : null}
-                            liveActive={active}
-                            liveActivity={activity}
-                            lastTurnRef={tail.lastTurnRef}
-                          />
+                          <TurnUndoContext.Provider value={onUndo}>
+                          <ProjectFolderContext.Provider value={projectFolder}>
+                            <LiveConversation
+                              store={liveStore}
+                              turns={opLog}
+                              liveAssetId={active ? asset!.id : null}
+                              liveActive={active}
+                              liveActivity={activity}
+                              lastTurnRef={tail.lastTurnRef}
+                            />
+                          </ProjectFolderContext.Provider>
+                          </TurnUndoContext.Provider>
                         </PromptPillRevealContext.Provider>
                       </div>
                     )}
                   </div>
-                  <div aria-hidden className={`pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-[var(--dock-pane)] to-transparent transition-opacity duration-150 ${scrolled && !blank ? 'opacity-100' : 'opacity-0'}`} />
-                  <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-[var(--dock-pane)] to-transparent" />
+                  <div aria-hidden className={`pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-[var(--bg-panel)] to-transparent transition-opacity duration-150 ${scrolled && !blank ? 'opacity-100' : 'opacity-0'}`} />
+                  <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-[var(--bg-panel)] to-transparent" />
                   {!blank && !thread.atBottom && (
                     <Tooltip label={t('project.jumpToLatest')}>
                       <button
                         type="button"
                         onClick={() => thread.scrollToBottom({ smooth: true })}
                         aria-label={t('project.jumpToLatest')}
-                        className="absolute bottom-4 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-dim)] shadow-[0_2px_10px_rgba(0,0,0,0.18)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                        className="absolute bottom-4 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--bg-raised)] text-[var(--text-muted)] shadow-[0_2px_10px_rgba(0,0,0,0.18)] transition hover:bg-[var(--bg-field)] hover:text-[var(--text)]"
                       >
                         <ArrowDown size={17} />
                       </button>
@@ -1070,8 +1180,13 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                 </div>
               </div>
 
-              <div ref={composerBlockRef} className={`relative flex shrink-0 flex-col px-4 pb-1.5 ${assetsOpen ? 'pt-2' : ''}`}>
-                <div className="flex flex-col gap-2">
+              {/* over the drawer it starts at its first card: the height it tells (setComposerHeight) is where the drawer's
+                  player ends, on the card, no strip between */}
+              <div ref={composerBlockRef} className="relative flex shrink-0 flex-col px-4 pb-1.5">
+                <div className="flex flex-col gap-2" data-composer-cards="">
+                  {/* what is said apart from the conversation, each a notice on the composer (NoticeCard): Studio's
+                      own trouble, the asks waiting on the person, then this conversation's */}
+                  {assetsOpen ? null : banners}
                   {spendAsk ? (
                     <ComposerCard role="alertdialog" icon={<Coins size={14} />} title={spendAsk.title}
                       body={spendAsk.body ? <span className="break-words">{spendAsk.body}</span> : undefined}>
@@ -1089,63 +1204,48 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                     />
                   ) : null}
                   {localTurn?.state.permission ? (
-                    <ComposerCard
-                      role="alertdialog"
-                      icon={<ShieldQuestion size={14} />}
-                      title={t('composer.agentPermissionTitle').replace('{name}', agentName)}
-                      body={localTurn.state.permission.title ? (
-                        <span className="break-words font-mono text-[11.5px]">{localTurn.state.permission.title}</span>
-                      ) : undefined}
-                    >
-                      <CardActions className="flex-wrap">
-                        <CardButton weight="quiet" onClick={() => { if (asset) void answerLocalAgentPermission(asset.id, null); }}>
-                          {t('composer.agentPermissionDeny')}
-                        </CardButton>
-                        {localTurn.state.permission.options.map((option, index) => (
-                          <CardButton
-                            key={option.optionId}
-                            weight={index === 0 && option.kind.startsWith('allow') ? 'primary' : 'secondary'}
-                            onClick={() => { if (asset) void answerLocalAgentPermission(asset.id, option.optionId); }}
-                          >
-                            {option.name}
-                          </CardButton>
-                        ))}
-                      </CardActions>
-                    </ComposerCard>
+                    <AgentPermissionCard
+                      key={localTurn.state.permission.requestId}
+                      agentName={agentName}
+                      permission={localTurn.state.permission}
+                      onAnswer={(optionId) => { if (asset) void answerLocalAgentPermission(asset.id, optionId); }}
+                    />
                   ) : null}
-                  {turnError ? (
-                    <p role="alert" className="text-xs text-[var(--err)]">
-                      {keyless ? t(onAccount ? 'composer.routeNoKey' : 'composer.routeNoKeyNoAccount') : turnError}{' '}
-                      {onAccount ? (
-                        <span className="text-[var(--text-muted)]">
-                          {onAccountPicked ? `${t('composer.accountModelPicked').replace('{model}', onAccountPicked.name)} ` : (
-                            <><button type="button" onClick={pickAccountModel} className="underline underline-offset-2 hover:text-[var(--text)]">
-                              {t('composer.useAccountModel').replace('{model}', onAccount.name)}
-                            </button>{' '}</>
-                          )}
-                        </span>
-                      ) : null}
-                      {/* failed for its account: whose it is, and Settings → Agents to switch it */}
-                      {switchFor ? (
-                        <span className="text-[var(--text-muted)]">
-                          {switchFor.who ? `${t('composer.signedInAs').replace('{account}', switchFor.who)} ` : null}
-                          <button type="button" onClick={() => desktopBridge()?.openSettings?.('agents')} className="underline underline-offset-2 hover:text-[var(--text)]">
-                            {t('composer.switchAccount')}
-                          </button>{' '}
-                        </span>
-                      ) : null}
-                      {/* what to send when it keeps failing */}
-                      <span className="text-[var(--text-muted)]"><CopyDiagnostics /></span>
-                    </p>
+                  {undoAsk ? (
+                    <Notice tone="warn" role="alertdialog" title={t('undo.title')} onClose={() => setUndoAsk(null)}
+                      actions={<>
+                        <CardButton weight="quiet" onClick={() => setUndoAsk(null)}>{t('undo.cancel')}</CardButton>
+                        <CardButton weight="danger" onClick={() => { const entry = undoAsk; setUndoAsk(null); void undoNow.current(entry); }}>{t('undo.confirm')}</CardButton>
+                      </>}>
+                      {t('undo.description')}
+                    </Notice>
                   ) : null}
-                  {localTurn?.state.balance ? <BalanceNotice balance={localTurn.state.balance} /> : null}
-                  {followUpError && <p className="text-xs text-[var(--err)]">{followUpError}</p>}
-                  {queued && active ? (
-                    <p role="status" className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent)]" />
-                      <span className="min-w-0 flex-1">{t('composer.queued')}</span>
-                      <button type="button" onClick={() => setQueued(false)} className="shrink-0 underline underline-offset-2 hover:text-[var(--text)]">{t('composer.queuedCancel')}</button>
-                    </p>
+                  {turnError && !closed.has(`error:${sessionId}:${turnError}`) ? (
+                    <Notice tone="error" below onClose={() => close(`error:${sessionId}:${turnError}`)}
+                      actions={<>
+                        {/* what to send when it keeps failing */}
+                        <CopyDiagnostics />
+                        {/* failed for its account: Settings → Agents to switch it */}
+                        {switchFor ? <CardButton weight="secondary" onClick={() => desktopBridge()?.openSettings?.('agents')}>{t('composer.switchAccount')}</CardButton> : null}
+                        {onAccount && !onAccountPicked ? <CardButton weight="primary" onClick={pickAccountModel}>{t('composer.useAccountModel').replace('{model}', onAccount.name)}</CardButton> : null}
+                      </>}>
+                      {keyless ? t(onAccount ? 'composer.routeNoKey' : 'composer.routeNoKeyNoAccount') : turnError}
+                      {onAccountPicked ? ` ${t('composer.accountModelPicked').replace('{model}', onAccountPicked.name)}` : null}
+                      {switchFor?.who ? ` ${t('composer.signedInAs').replace('{account}', switchFor.who)}` : null}
+                    </Notice>
+                  ) : null}
+                  {localTurn?.state.balance && !closed.has(`balance:${sessionId}`) ? <BalanceNotice balance={localTurn.state.balance} onClose={() => close(`balance:${sessionId}`)} /> : null}
+                  {followUpError ? <Notice tone="error" onClose={() => setFollowUpError(null)}>{followUpError}</Notice> : null}
+                  {queued === sessionId && active ? (
+                    <Notice actions={<CardButton weight="quiet" onClick={() => setQueued(null)}>{t('composer.queuedCancel')}</CardButton>}>{t('composer.queued')}</Notice>
+                  ) : null}
+                  {/* the agent this conversation used cannot be used now: the next message goes to the one picked below */}
+                  {agentWas && !closed.has(`was:${sessionId}`) ? (
+                    <Notice onClose={() => close(`was:${sessionId}`)}>{t('composer.agentWas').replace('{name}', wasName)}</Notice>
+                  ) : null}
+                  {contextFull ? (
+                    <Notice onClose={() => setContextNoticeOff(sessionId)}
+                      actions={<CardButton weight="secondary" onClick={onNewSession}>{t('composer.contextFullNew')}</CardButton>}>{t('composer.contextFull')}</Notice>
                   ) : null}
                   {editComposerCard}
                 </div>
@@ -1164,11 +1264,3 @@ function LiveConversation({ store, ...rest }: { store: LocalTranscriptStore } & 
   return <ProjectConversation {...rest} liveTranscript={transcript} />;
 }
 
-function Banner({ tone = 'plain', action, children }: { tone?: 'plain' | 'error'; action?: { label: string; onClick: () => void }; children: React.ReactNode }) {
-  return (
-    <div className={`flex shrink-0 items-center gap-2 border-b px-3 py-2 text-[12px] leading-snug ${tone === 'error' ? 'border-[color-mix(in_srgb,var(--err)_25%,transparent)] text-[var(--err)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>
-      <span className="min-w-0 flex-1">{children}</span>
-      {action ? <CardButton weight="secondary" className="h-6 px-2" onClick={action.onClick}>{action.label}</CardButton> : null}
-    </div>
-  );
-}

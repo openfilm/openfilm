@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Look here</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ff3b30; }
+svg { position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; overflow: visible; }
+.w { position: absolute; inset: 0; filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.in { position: absolute; inset: 0; animation: in 0.55s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes in { from { transform: translateX(36vw); opacity: 0; } 40% { opacity: 1; } }
+.jab { animation: jab 1s cubic-bezier(.2, .8, .2, 1) 0.6s infinite; }
+@keyframes jab { 0%, 100% { transform: none; } 18% { transform: translateX(-16px); } }
+.b path { opacity: 0; fill: none; stroke: var(--color); stroke-width: 8; stroke-linecap: round; stroke-dasharray: 1 2; stroke-dashoffset: 1.01; animation: b 1s cubic-bezier(.2, .8, .2, 1) 0.62s infinite; }
+@keyframes b { 0% { stroke-dashoffset: 1.01; opacity: 0; } 1%, 43% { opacity: 1; } 20% { stroke-dashoffset: 0; } 45%, 100% { stroke-dashoffset: -1; opacity: 0; } }
+.label { position: absolute; left: 46vw; top: 50%; transform: translateY(-50%); height: 35vh; line-height: 35vh; padding: 0 5.5vw; border-radius: 17.5vh; background: var(--color); color: #fff; font: 800 18vh var(--font); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="w">
+<svg viewBox="0 0 600 240"><g class="b"><path pathLength="1" d="M62 92 L28 70"/><path pathLength="1" d="M56 120 L16 120"/><path pathLength="1" d="M62 148 L28 170"/></g></svg>
+<div class="in">
+<svg viewBox="0 0 600 240"><g class="jab"><path d="M70 120 L156 52 L156 94 L250 94 Q260 94 260 104 L260 136 Q260 146 250 146 L156 146 L156 188 Z" fill="var(--color)" stroke="var(--color)" stroke-width="10" stroke-linejoin="round"/></g></svg>
+<div class="label">Look here</div>
+</div></div>
+<script>
+/*
+ * A bold arrow and a label that shoot in from the right; the arrow keeps jabbing at the spot, a burst of strokes at
+ * its tip each time. Its words and color are the clip's to change. A page of OpenFilm's library (CC0): what it shows
+ * at t comes from t alone; its CSS animations are held at t by the host.
+ */
+window.film = { width: 600, height: 240, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

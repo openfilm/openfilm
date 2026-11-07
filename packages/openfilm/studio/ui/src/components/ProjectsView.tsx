@@ -269,11 +269,11 @@ export function ProjectsView({
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={t('library.searchPlaceholder')}
-                  className="h-8 w-full rounded-lg bg-[var(--surface-2)] pl-8 pr-3 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)]"
+                  className="h-8 w-full rounded-lg bg-[var(--bg-field)] pl-8 pr-3 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)]"
                 />
               </label>
               <SortButton sort={sort} onSort={setSort} />
-              <div className="flex h-8 shrink-0 items-center gap-0.5 rounded-lg bg-[var(--surface-2)] px-[3px]" aria-label={t('library.viewLabel')}>
+              <div className="flex h-8 shrink-0 items-center gap-0.5 rounded-lg bg-[var(--bg-field)] px-[3px]" aria-label={t('library.viewLabel')}>
                 <ViewButton active={view === 'cards'} label={t('library.viewCards')} onClick={() => setView('cards')} icon={<LayoutGrid size={14} />} />
                 <ViewButton active={view === 'list'} label={t('library.viewList')} onClick={() => setView('list')} icon={<List size={14} />} />
               </div>
@@ -331,7 +331,7 @@ export function ProjectsView({
         {selecting ? (
           <div className="pointer-events-none sticky bottom-0 z-20 flex justify-center pb-5">
             <div
-              className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] py-1.5 pl-4 pr-1.5 shadow-[var(--shadow-lg)]"
+              className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-[var(--border)] bg-[var(--bg-raised)] py-1.5 pl-4 pr-1.5 shadow-[var(--shadow-lg)]"
               style={{ animation: 'openfilm-rise 0.16s ease-out both' }}
             >
               <span className="text-[13px] font-medium tabular-nums text-[var(--text)]">
@@ -565,7 +565,7 @@ function NewProjectCard({ creating, onNewProject, onOpenFolder, onGetFromGitHub 
         aria-busy={creating}
         className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--text)] transition group-hover:scale-105">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--bg-field)] text-[var(--text)] transition group-hover:scale-105">
           <Plus size={18} strokeWidth={2.2} />
         </span>
         <span className="text-[13px] font-medium">{t('projects.newProject')}</span>
@@ -591,7 +591,7 @@ function NewProjectListRow({ creating, onNewProject, onOpenFolder, onGetFromGitH
         className="flex aspect-video w-28 shrink-0 items-center justify-center rounded-md border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60 sm:w-36"
         aria-label={t('projects.newProject')}
       >
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--text)] transition group-hover:scale-105">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-field)] text-[var(--text)] transition group-hover:scale-105">
           <Plus size={16} strokeWidth={2.2} />
         </span>
       </button>
@@ -674,7 +674,7 @@ function ProjectCard({
         <button
           type="button"
           onClick={open}
-          className="relative block aspect-video w-full overflow-hidden rounded-lg bg-[var(--surface-2)] text-left ring-1 ring-[var(--border)] transition duration-200 hover:brightness-[1.04]"
+          className="relative block aspect-video w-full overflow-hidden rounded-lg bg-[var(--bg-field)] text-left ring-1 ring-[var(--border)] transition duration-200 hover:brightness-[1.04]"
           aria-label={title}
           aria-pressed={selecting ? selected : undefined}
         >
@@ -734,7 +734,7 @@ function MissingActions({ reason, onLocate, onRemove, compact = false }: { reaso
     <div className={compact ? 'flex items-center gap-1' : 'pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 p-2'}>
       {compact ? null : <span className="text-[12px] font-semibold text-white drop-shadow">{t(reason === 'film' ? 'projects.missingFilm' : 'projects.missing')}</span>}
       <div className="pointer-events-auto flex items-center gap-1.5">
-        <button type="button" onClick={onLocate} className={`${button} bg-[var(--surface)] text-[var(--text)] shadow hover:brightness-95`}>
+        <button type="button" onClick={onLocate} className={`${button} bg-[var(--bg-raised)] text-[var(--text)] shadow hover:brightness-95`}>
           <FolderSearch size={13} />
           {t('projects.locate')}
         </button>
@@ -807,7 +807,7 @@ function ProjectListRow({
         <button
           type="button"
           onClick={open}
-          className="relative block aspect-video w-28 overflow-hidden rounded-md bg-[var(--surface-2)] ring-1 ring-[var(--border)] sm:w-36"
+          className="relative block aspect-video w-28 overflow-hidden rounded-md bg-[var(--bg-field)] ring-1 ring-[var(--border)] sm:w-36"
           aria-label={title}
         >
           <PosterMedia project={project} />
@@ -899,7 +899,7 @@ function FolderFace({ posters, small = false }: { posters: FolderItemProps['post
   return (
     <div className={`absolute grid ${small ? 'inset-1.5 gap-1' : 'inset-3 gap-1.5'} ${posters.length === 1 ? 'grid-cols-1' : posters.length === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'}`}>
       {posters.slice(0, 4).map((cover, i) => (
-        <div key={cover.id} className={`relative overflow-hidden ${small ? 'rounded-[3px]' : 'rounded-[5px]'} bg-[var(--surface-3)] ${posters.length === 3 && i === 0 ? 'row-span-2' : ''}`}>
+        <div key={cover.id} className={`relative overflow-hidden ${small ? 'rounded-[3px]' : 'rounded-[5px]'} bg-[var(--bg-pressed)] ${posters.length === 3 && i === 0 ? 'row-span-2' : ''}`}>
           <MiniPoster id={cover.id} url={cover.poster} />
         </div>
       ))}
@@ -917,7 +917,7 @@ function FolderFrame({ small = false, children }: { small?: boolean; children: R
     <>
       <span aria-hidden className={`absolute left-0 top-0 h-1/2 w-[38%] bg-[var(--folder-back)] ${small ? 'rounded-[5px]' : 'rounded-lg'}`} />
       <span
-        className={`absolute inset-x-0 bottom-0 overflow-hidden bg-[var(--surface-2)] ring-1 ring-[var(--border)] transition duration-200 group-hover/frame:bg-[var(--surface-3)] group-hover/frame:ring-[var(--border-strong)] ${small ? 'top-[9%] rounded-md' : 'top-[7%] rounded-lg'}`}
+        className={`absolute inset-x-0 bottom-0 overflow-hidden bg-[var(--bg-field)] ring-1 ring-[var(--border)] transition duration-200 group-hover/frame:bg-[var(--bg-pressed)] group-hover/frame:ring-[var(--border-strong)] ${small ? 'top-[9%] rounded-md' : 'top-[7%] rounded-lg'}`}
       >
         {children}
       </span>
@@ -958,7 +958,7 @@ function FolderCard({
             className={`absolute bottom-2 right-2 rounded-full px-1.5 py-0.5 text-[10.5px] font-medium tabular-nums ${
               posters.length > 0
                 ? 'bg-black/45 text-white/90 backdrop-blur-sm'
-                : 'border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)]'
+                : 'border border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-muted)]'
             }`}
           >
             {count}
@@ -976,7 +976,7 @@ function FolderCard({
               initial={folder.name}
               onCommit={onCommitRename}
               onCancel={onCancelRename}
-              className="h-6 w-full rounded-md border border-[var(--text)] bg-[var(--surface)] px-1.5 text-[13px] font-semibold text-[var(--text)] outline-none"
+              className="h-6 w-full rounded-md border border-[var(--text)] bg-[var(--bg-raised)] px-1.5 text-[13px] font-semibold text-[var(--text)] outline-none"
             />
           ) : (
             <button
@@ -1056,7 +1056,7 @@ function FolderListRow({
             initial={folder.name}
             onCommit={onCommitRename}
             onCancel={onCancelRename}
-            className="h-7 w-[240px] rounded-md border border-[var(--text)] bg-[var(--surface)] px-2 text-[14px] font-semibold text-[var(--text)] outline-none"
+            className="h-7 w-[240px] rounded-md border border-[var(--text)] bg-[var(--bg-raised)] px-2 text-[14px] font-semibold text-[var(--text)] outline-none"
           />
         ) : (
           <button
@@ -1097,7 +1097,7 @@ function FolderMenu({ onRename, onMove, onDelete }: { onRename: () => void; onMo
           const box = event.currentTarget.getBoundingClientRect();
           setAnchor((cur) => (cur ? null : { x: box.right, y: box.bottom + 4, top: box.top - 4 }));
         }}
-        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
       >
         <MoreHorizontal size={14} />
       </button>
@@ -1170,7 +1170,7 @@ function FolderCrumb({
             if (name && name !== folder.name) onRename(name);
           }}
           onCancel={() => setRenaming(false)}
-          className="h-8 w-[220px] rounded-lg border border-[var(--text)] bg-[var(--surface)] px-2.5 text-[15px] font-semibold text-[var(--text)] outline-none"
+          className="h-8 w-[220px] rounded-lg border border-[var(--text)] bg-[var(--bg-raised)] px-2.5 text-[15px] font-semibold text-[var(--text)] outline-none"
         />
       ) : (
         <button
@@ -1230,7 +1230,7 @@ function InlineNameInput({
       onBlur={commit}
       onFocus={(event) => event.currentTarget.select()}
       onClick={(event) => event.stopPropagation()}
-      className={className ?? 'h-8 w-[160px] rounded-lg border border-[var(--text)] bg-[var(--surface)] px-2.5 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]'}
+      className={className ?? 'h-8 w-[160px] rounded-lg border border-[var(--text)] bg-[var(--bg-raised)] px-2.5 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]'}
     />
   );
 }
@@ -1319,7 +1319,7 @@ function FolderPicker({
               <ChevronRight size={13} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
             </button>
           ) : <span className="w-4 shrink-0" />}
-          <span className={`shrink-0 ${isPicked ? '' : 'text-[var(--text-dim)]'}`}>{icon}</span>
+          <span className={`shrink-0 ${isPicked ? '' : 'text-[var(--text-muted)]'}`}>{icon}</span>
           <span className="min-w-0 flex-1 truncate">{label}</span>
           {here ? <span className={`shrink-0 text-[11.5px] ${isPicked ? 'opacity-80' : 'text-[var(--text-faint)]'}`}>{t('projects.hereNow')}</span> : null}
         </div>
@@ -1328,13 +1328,13 @@ function FolderPicker({
             {naming === id ? (
               <div className="flex h-8 items-center gap-1.5 pr-2.5" style={{ paddingLeft: 6 + (depth + 1) * 18 }}>
                 <span className="w-4 shrink-0" />
-                <Folder size={15} strokeWidth={1.7} className="shrink-0 text-[var(--text-dim)]" />
+                <Folder size={15} strokeWidth={1.7} className="shrink-0 text-[var(--text-muted)]" />
                 <InlineNameInput
                   initial=""
                   placeholder={t('projects.newFolderName')}
                   onCommit={(name) => void named(name)}
                   onCancel={() => setNaming(undefined)}
-                  className="h-6 min-w-0 flex-1 rounded border border-[var(--text)] bg-[var(--surface)] px-1.5 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
+                  className="h-6 min-w-0 flex-1 rounded border border-[var(--text)] bg-[var(--bg-raised)] px-1.5 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
                 />
               </div>
             ) : null}
@@ -1356,7 +1356,7 @@ function FolderPicker({
       }}
     >
       <div
-        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]"
         style={{ animation: 'openfilm-pop 0.16s ease-out both' }}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && naming === undefined && canMove && !(event.target instanceof HTMLInputElement)) { event.preventDefault(); move(picked); }
@@ -1377,7 +1377,7 @@ function FolderPicker({
           </button>
         </div>
 
-        <div role="tree" tabIndex={0} className="mx-5 h-[260px] overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg)] p-1 outline-none">
+        <div role="tree" tabIndex={0} className="mx-5 h-[260px] overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-1 outline-none">
           {place(null, 0, <LayoutGrid size={15} strokeWidth={1.7} />, t('nav.projects'))}
         </div>
 
@@ -1390,7 +1390,7 @@ function FolderPicker({
           <button type="button" onClick={onClose}
             className="h-8 rounded-lg border border-[var(--border)] px-3 text-[12.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{t('confirm.cancel')}</button>
           <button type="button" disabled={!canMove} onClick={() => move(picked)}
-            className="h-8 rounded-lg bg-[var(--text)] px-4 text-[12.5px] font-medium text-[var(--bg)] transition hover:opacity-90 disabled:opacity-40">{t('projects.move')}</button>
+            className="h-8 rounded-lg bg-[var(--primary)] px-4 text-[12.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-40">{t('projects.move')}</button>
         </div>
       </div>
     </div>,
@@ -1436,7 +1436,7 @@ function PosterMedia({ project, shade = false }: { project: LibraryProject; shad
         draggable={false}
         onLoad={() => setLoadedUrl(src)}
         onError={() => setAttempt({ url: tried.url, n: tried.n, failed: true })}
-        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${ready ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ${ready ? 'opacity-100' : 'opacity-0'}`}
       />
       {ready ? shadow : null}
     </>
@@ -1488,7 +1488,7 @@ function SortButton({
   }, [anchor]);
   const row = (selected: boolean) =>
     `flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] transition hover:bg-[var(--bg-hover)] ${
-      selected ? 'text-[var(--text)]' : 'text-[var(--text-dim)]'
+      selected ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'
     }`;
 
   return (
@@ -1502,8 +1502,8 @@ function SortButton({
           aria-label={t('library.sortLabel')}
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] transition ${
             anchor != null
-              ? 'bg-[var(--bg-active)] text-[var(--text)]'
-              : 'bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)]'
+              ? 'bg-[var(--bg-pressed)] text-[var(--text)]'
+              : 'bg-[var(--bg-raised)] text-[var(--text-muted)] hover:text-[var(--text)]'
           }`}
         >
           <SlidersHorizontal size={14} />
@@ -1513,7 +1513,7 @@ function SortButton({
         ? createPortal(
           <div
             role="dialog"
-            className="fixed z-[10060] w-[200px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] pb-1.5 shadow-[var(--shadow-lg)]"
+            className="fixed z-[10060] w-[200px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-raised)] pb-1.5 shadow-[var(--shadow-lg)]"
             style={{ left: anchor.left, top: anchor.top, animation: 'openfilm-rise 0.14s ease-out both' }}
             onClick={(event) => event.stopPropagation()}
           >
@@ -1552,7 +1552,7 @@ function ViewButton({
         onClick={onClick}
         className={`flex h-6 w-8 items-center justify-center rounded-[5px] transition ${
           active
-            ? 'bg-[var(--surface-3)] text-[var(--text)]'
+            ? 'bg-[var(--bg-pressed)] text-[var(--text)]'
             : 'text-[var(--text-faint)] hover:text-[var(--text)]'
         }`}
       >

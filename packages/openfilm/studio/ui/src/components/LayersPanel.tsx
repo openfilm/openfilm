@@ -1,24 +1,30 @@
 /**
- * The Layers panel: what is on the picture at the playhead as layers, the top one first. Each picture clip shown is
- * a row; a page clip opens into its layers, each level in the order the page draws it. A row selects its layer on
- * the picture (and the picture's selection opens the rows down to it); its eye hides it, its lock keeps it from
- * being moved and its bin deletes it (lib/layer-delete; Delete or Backspace does too, for the layer in hand on the
- * picture, which a row's click makes it); dragged up or down its own level, or into the level of a row around it
- * (which then moves, with all it holds: CSS restacks only within a level), it is restacked (z-index overrides,
- * studio/server/stage.js `restack`). Nothing is kept here: the tree is read from the pages each time they may have
- * changed, and every change is an override of the page clip in film.html.
+ * The Layers panel: what is on the picture at the playhead as layers, the top one first. Each picture clip shown is a
+ * row, and each caption shown (a row that picks its cue, as a click on the picture does); a page clip opens into its layers, each level in the order the page draws it. A row selects its layer on the
+ * picture; ⌘-clicked (Ctrl) it adds it to what is selected there or takes it away, Shift-clicked it selects the rows
+ * shown from the last one clicked to it (and the picture's selection opens the rows down to each layer of it). Rows
+ * selected one after another are one block, and what a selected layer holds is tinted with it. Its eye hides it, its
+ * lock keeps it from being moved and its bin deletes it (lib/layer-delete; Delete or Backspace does too, for the layer
+ * in hand on the picture, which a row's click makes it); its right-click takes its layer (a clip's row: the clip) in
+ * hand and opens the picture's own menu for it, so the two menus are one; dragged up or down its own level, or into the
+ * level of a row around it (which then moves, with all it holds: CSS restacks only within a level), it is restacked
+ * (z-index overrides, studio/server/stage.js `restack`). Nothing is kept here: the tree is read from the pages each
+ * time they may have changed, and every change is an override of the page clip in film.html.
  */
 import React from 'react';
 import {
-  ChevronRight, Eye, EyeOff, Film, Globe, Image as ImageIcon, Lock, LockOpen, Shapes, Square, SquareDashed, Trash2, Type, X,
+  Captions, ChevronRight, Eye, EyeOff, Film, Globe, Image as ImageIcon, Lock, LockOpen, Shapes, Sparkles, Square, SquareDashed, Sticker, Trash2, Type, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import {
-  layerKey, layerLines, movedOrder, moverFor, openTo, sameTree, type LayerClip, type LayerLine, type LayerRow, type LayerRowKind,
+  layerKey, layerLines, movedOrder, moverFor, openTo, rowsBetween, sameTree, selectionTones, withCaptions,
+  type LayerCaption, type LayerClip, type LayerLine, type LayerRow, type LayerRowKind, type RowTone,
 } from '@/lib/layers-tree';
 import type { StageArrangeResult } from './stage-menu';
 import { PANE_BAR, PANE_BTN, PANE_ICON, PANE_TITLE } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
+import { filmSrcIsStill, parseFilmDocLoc } from '@/lib/film';
+import { isLibrarySticker } from '@/lib/library';
 
 const ROW_H = 26;
 const INDENT = 12;
@@ -26,6 +32,17 @@ const INDENT = 12;
 const PLAYING_EVERY_MS = 400;
 
 const KIND_ICON: Record<LayerRowKind, typeof Type> = { text: Type, image: ImageIcon, shape: Shapes, box: Square, group: SquareDashed };
+
+/** A clip's row icon, as the timeline tells it: words, a sticker, an effect, a video, a still, a caption, a page. */
+function clipIcon(clip: { kind: string; src?: string; words?: boolean } | null): typeof Type {
+  const src = clip?.src?.split('#')[0] ?? '';
+  if (clip?.words) return Type;
+  if (isLibrarySticker(src)) return Sticker;
+  if (src.startsWith('saved/openfilm/effects-')) return Sparkles;
+  if (clip?.kind === 'caption') return Captions;
+  if (clip?.kind === 'video') return src && filmSrcIsStill(src) ? ImageIcon : Film;
+  return clip?.kind === 'mg' ? Globe : ImageIcon;
+}
 
 export interface LayersPanelProps {
   /** Asks the picture's stage (studio/server/stage.js ops). */
@@ -35,12 +52,17 @@ export interface LayersPanelProps {
   /** Changes with film.html: the pages may have new overrides. */
   filmKey: unknown;
   /** A clip by its film.html id: how the timeline names it, and its place. */
-  clipOf: (clipId: string) => { label: string; kind: string; loc?: string } | null;
-  /** The layer in hand on the picture. */
-  selected: { clipId?: string; loc: string | null } | null;
+  /** `whole`: a thing of the library (a sticker, an effect, words): one row, the parts of its page not shown. `src`
+      and `words` (a line of words) tell its icon. */
+  clipOf: (clipId: string) => { label: string; kind: string; loc?: string; whole?: boolean; src?: string; words?: boolean } | null;
+  /** The layers in hand on the picture: one, several selected together, or none. */
+  selected: readonly { clipId?: string; loc: string | null }[];
   /** The clips selected (film.html places). */
   selectedClipLocs: readonly string[];
-  onSelectLayer: (clipId: string, loc: string) => void;
+  /** The captions shown at the playhead (their tracks not hidden); the stage's tree has only clips. */
+  captions: readonly LayerCaption[];
+  /** Select these layers together; `toggle`: each added to what is selected, or taken away (a ⌘-click). */
+  onSelectLayers: (layers: readonly { clipId: string; loc: string }[], toggle: boolean) => void;
   onSelectClip: (clipLoc: string) => void;
   /** The pointer is on a row (its layer outlined on the picture), or left them (null). */
   onPoint: (target: { clipId: string; loc: string } | null) => void;
@@ -48,6 +70,8 @@ export interface LayersPanelProps {
   onToggle: (clipId: string, row: LayerRow, what: 'hidden' | 'locked') => void;
   /** A row's bin: its layer deleted. */
   onDelete: (clipId: string, row: LayerRow) => void;
+  /** A row's right-click at `at` (client px): the picture's menu for its layer (no `loc`: its clip), taken in hand. */
+  onMenu: (target: { clipId: string; loc?: string }, at: { x: number; y: number }) => void;
   /** A level restacked: the overrides to write in the clip, or why nothing was (a message). */
   onRestack: (clipId: string, edits: StageArrangeResult['edits']) => void;
   onNotify: (message: string) => void;
@@ -57,15 +81,21 @@ export interface LayersPanelProps {
 
 export function LayersPanel(p: LayersPanelProps) {
   const t = useT();
-  const [clips, setClips] = React.useState<LayerClip[] | null>(null);
-  const clipsRef = React.useRef(clips);
-  clipsRef.current = clips;
+  const [stageClips, setClips] = React.useState<LayerClip[] | null>(null);
+  const clipsRef = React.useRef(stageClips);
+  clipsRef.current = stageClips;
+  const clipOf = p.clipOf;
+  const clips = React.useMemo(() => (stageClips ? withCaptions(stageClips.map((c) => (clipOf(c.clip)?.whole ? { ...c, layers: [] } : c)), p.captions, (id) => {
+    const loc = clipOf(id)?.loc;
+    return loc ? parseFilmDocLoc(loc)?.track ?? null : null;
+  }) : null), [stageClips, p.captions, clipOf]);
   /* the lines the person opened or closed (lib/layers-tree: which start open) */
   const [toggled, setToggled] = React.useState<ReadonlySet<string>>(() => new Set());
   const askRef = React.useRef(p.ask);
   askRef.current = p.ask;
 
-  /* the tree, read again when the picture may have changed: a seek, the film edited, and while it plays */
+  /* the tree, read again when the picture may have changed: a seek, the film edited, a page that came on drawn (it
+     is in the tree only then; the picture says so), and while it plays */
   const read = React.useCallback(async () => {
     const next = await askRef.current<LayerClip[]>('tree');
     if (next && !sameTree(clipsRef.current, next)) setClips(next);
@@ -88,17 +118,19 @@ export function LayersPanel(p: LayersPanelProps) {
     return () => window.clearInterval(id);
   }, [read, p.playing]);
 
-  /* the layer picked on the picture: the rows down to it opened, and it scrolled to */
+  /* the layers picked on the picture: the rows down to each opened, and the first scrolled to */
   const list = React.useRef<HTMLDivElement | null>(null);
-  const selClip = p.selected?.clipId;
-  const selLoc = p.selected?.loc ?? null;
+  const picked = p.selected.flatMap((s) => (s.clipId && s.loc ? [layerKey(s.clipId, s.loc)] : []));
+  const pickedKey = picked.join('\n');
   React.useEffect(() => {
-    if (!clips || !selClip || !selLoc) return;
-    setToggled((cur) => openTo(clips, cur, selClip, selLoc));
+    const keys = p.selected.flatMap((s) => (s.clipId && s.loc ? [{ clipId: s.clipId, loc: s.loc }] : []));
+    if (!clips || !keys.length) return;
+    setToggled((cur) => keys.reduce((open, s) => openTo(clips, open, s.clipId, s.loc), cur));
     requestAnimationFrame(() => {
-      list.current?.querySelector(`[data-layer-key="${CSS.escape(layerKey(selClip, selLoc))}"]`)?.scrollIntoView({ block: 'nearest' });
+      list.current?.querySelector(`[data-layer-key="${CSS.escape(layerKey(keys[0]!.clipId, keys[0]!.loc))}"]`)?.scrollIntoView({ block: 'nearest' });
     });
-  }, [clips, selClip, selLoc]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clips, pickedKey]);
 
   const lines = React.useMemo(() => (clips ? layerLines(clips, toggled) : []), [clips, toggled]);
   const toggleOpen = (line: LayerLine) => {
@@ -153,10 +185,35 @@ export function LayersPanel(p: LayersPanelProps) {
 
   const isSelected = (line: LayerLine) => {
     if (!line.row) {
+      const caption = p.captions.find((c) => c.clip === line.clipId);
+      if (caption) return caption.selected;
       const loc = p.clipOf(line.clipId)?.loc;
-      return !p.selected && Boolean(loc && p.selectedClipLocs.includes(loc));
+      return !p.selected.length && Boolean(loc && p.selectedClipLocs.includes(loc));
     }
-    return p.selected?.clipId === line.clipId && p.selected.loc === line.row.loc;
+    return picked.includes(layerKey(line.clipId, line.row.loc));
+  };
+  /* each line selected ('on'), inside one selected ('in': what it holds, tinted with it), or neither */
+  const tones = selectionTones(lines, isSelected);
+
+  /* the row a Shift-click selects from: the last one clicked, else the last layer selected (on the picture too) */
+  const anchor = React.useRef<string | null>(null);
+  const clickRow = (line: LayerLine, e: React.MouseEvent) => {
+    if (!line.row) {
+      const loc = p.clipOf(line.clipId)?.loc;
+      if (loc) p.onSelectClip(loc);
+      return;
+    }
+    const add = e.metaKey || e.ctrlKey;
+    const from = e.shiftKey ? lines.find((l) => l.key === (anchor.current && picked.includes(anchor.current) ? anchor.current : picked[picked.length - 1])) : null;
+    if (from) {
+      /* the rows shown between the two (a closed group's are not), with ⌘ (Ctrl) added to what is selected */
+      const range = rowsBetween(lines, from, line).map((l) => ({ clipId: l.clipId, loc: l.row!.loc }));
+      const kept = add ? p.selected.flatMap((s) => (s.clipId && s.loc && !range.some((r) => r.clipId === s.clipId && r.loc === s.loc) ? [{ clipId: s.clipId, loc: s.loc }] : [])) : [];
+      p.onSelectLayers([...kept, ...range], false);
+      return;
+    }
+    anchor.current = line.key;
+    p.onSelectLayers([{ clipId: line.clipId, loc: line.row.loc }], add || e.shiftKey);
   };
 
   return (
@@ -196,27 +253,28 @@ export function LayersPanel(p: LayersPanelProps) {
         <div className="relative" style={{ height: lines.length * ROW_H }}>
           {lines.map((line, i) => (
             <LayerLineRow key={line.key} line={line} top={i * ROW_H} t={t} clipOf={p.clipOf}
-              selected={isSelected(line)} dragging={drag?.line.key === line.key || drag?.mover.key === line.key}
+              tone={tones[i]!} joinUp={Boolean(tones[i - 1])} joinDown={Boolean(tones[i + 1])}
+              dragging={drag?.line.key === line.key || drag?.mover.key === line.key}
               onToggleOpen={() => toggleOpen(line)}
               onPress={(e) => {
                 if (e.button !== 0 || !line.row) return;
                 press.current = { line, x: e.clientX, y: e.clientY, id: e.pointerId };
               }}
-              onClick={() => {
-                if (dragRef.current) return;
-                if (line.row) { p.onSelectLayer(line.clipId, line.row.loc); return; }
-                const loc = p.clipOf(line.clipId)?.loc;
-                if (loc) p.onSelectClip(loc);
-              }}
-              onPoint={() => p.onPoint(line.row ? { clipId: line.clipId, loc: line.row.loc } : null)}
+              onClick={(e) => { if (!dragRef.current) clickRow(line, e); }}
+              onPoint={() => p.onPoint({ clipId: line.clipId, loc: line.row ? line.row.loc : '' })}
+              onUnpoint={() => p.onPoint(null)}
               onToggle={(what) => { if (line.row) p.onToggle(line.clipId, line.row, what); }}
-              onDelete={() => { if (line.row) p.onDelete(line.clipId, line.row); }} />
+              onDelete={() => { if (line.row) p.onDelete(line.clipId, line.row); }}
+              onMenu={(e) => {
+                e.preventDefault();
+                p.onMenu({ clipId: line.clipId, ...(line.row ? { loc: line.row.loc } : {}) }, { x: e.clientX, y: e.clientY });
+              }} />
           ))}
           {drag ? (
             <div aria-hidden className="pointer-events-none absolute right-2 h-0.5 rounded-full bg-[var(--accent)]"
               style={{ top: drag.y - 1, left: 8 + drag.mover.depth * INDENT }}>
               {groupMoved ? (
-                <span className="absolute right-0 top-1 max-w-[80%] truncate rounded bg-[var(--accent)] px-1.5 py-px text-[11px] text-[var(--bg)]">
+                <span className="absolute right-0 top-1 max-w-[80%] truncate rounded bg-[var(--accent)] px-1.5 py-px text-[11px] text-[var(--on-accent)]">
                   {t('layers.movesGroup').replace('{name}', groupMoved)}
                 </span>
               ) : null}
@@ -228,32 +286,43 @@ export function LayersPanel(p: LayersPanelProps) {
   );
 }
 
-function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, onPress, onClick, onPoint, onToggle, onDelete }: {
+function LayerLineRow({ line, top, t, clipOf, tone, joinUp, joinDown, dragging, onToggleOpen, onPress, onClick, onPoint, onUnpoint, onToggle, onDelete, onMenu }: {
   line: LayerLine;
   top: number;
   t: ReturnType<typeof useT>;
   clipOf: LayersPanelProps['clipOf'];
-  selected: boolean;
+  /** Selected, inside a selected one, or neither. */
+  tone: RowTone;
+  /** The line above (below) is in the selection too: one block with it, rounded only at the block's ends. */
+  joinUp: boolean;
+  joinDown: boolean;
   dragging: boolean;
   onToggleOpen: () => void;
   onPress: (e: React.PointerEvent) => void;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
   onPoint: () => void;
+  onUnpoint: () => void;
   onToggle: (what: 'hidden' | 'locked') => void;
   onDelete: () => void;
+  onMenu: (e: React.MouseEvent) => void;
 }) {
   const row = line.row;
   const clip = row ? null : clipOf(line.clipId);
-  const Icon = row ? KIND_ICON[row.kind] : clip?.kind === 'mg' ? Globe : clip?.kind === 'video' ? Film : ImageIcon;
+  const Icon = row ? KIND_ICON[row.kind] : clipIcon(clip);
   const label = row ? row.label : (clip?.label ?? line.clipId);
   /* not drawn now, or hidden by the person: the row is there, dimmed (it can be shown or picked from here) */
   const dim = Boolean(row && (row.off || row.hidden));
+  const selected = tone === 'on';
+  const fill = selected ? 'bg-[var(--bg-selected)] text-[var(--text)]'
+    : tone === 'in' ? 'bg-[var(--accent-soft)] text-[var(--text)] hover:shadow-[inset_0_0_0_1px_var(--border-strong)]'
+      : 'text-[var(--text-muted)] hover:shadow-[inset_0_0_0_1px_var(--border-strong)]';
+  const corners = tone ? `${joinUp ? '' : 'rounded-t-[5px]'} ${joinDown ? '' : 'rounded-b-[5px]'}` : 'rounded-[5px]';
   const flag = (what: 'hidden' | 'locked', on: boolean, OnIcon: typeof Eye, OffIcon: typeof Eye, onLabel: string, offLabel: string) => (
     <Tooltip label={on ? onLabel : offLabel} side="bottom">
       <button type="button" aria-label={on ? onLabel : offLabel} aria-pressed={on}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => { e.stopPropagation(); onToggle(what); }}
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${on ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}>
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${on ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}>
         {on ? <OnIcon size={12} /> : <OffIcon size={12} />}
       </button>
     </Tooltip>
@@ -261,10 +330,12 @@ function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, 
   return (
     <div role="treeitem" aria-level={line.depth + 1} aria-selected={selected} aria-expanded={line.canOpen ? line.open : undefined}
       data-layer-key={line.key}
-      className={`group absolute inset-x-1 flex items-center gap-1 rounded-md pr-1 text-[12.5px] ${selected ? 'bg-[var(--bg-active)] text-[var(--text)]' : 'text-[var(--text-dim)] hover:bg-[var(--bg-hover)]'} ${dragging ? 'opacity-50' : ''}`}
+      data-layer-tone={tone ?? undefined}
+      className={`group absolute inset-x-1 flex items-center gap-1 pr-1 text-[12.5px] ${corners} ${fill} ${dragging ? 'opacity-50' : ''}`}
       style={{ top, height: ROW_H, paddingLeft: 4 + line.depth * INDENT }}
       title={row?.off && !row.hidden ? t('layers.notNow') : undefined}
-      onPointerDown={onPress} onClick={onClick} onPointerEnter={onPoint}>
+      /* its outline on the picture while the pointer is on the row, and gone as it leaves (to another row: that one's) */
+      onPointerDown={onPress} onClick={onClick} onPointerEnter={onPoint} onPointerLeave={onUnpoint} onContextMenu={onMenu}>
       {line.canOpen ? (
         <button type="button" aria-label={t(line.open ? 'layers.collapse' : 'layers.expand')}
           onPointerDown={(e) => e.stopPropagation()}
@@ -273,14 +344,14 @@ function LayerLineRow({ line, top, t, clipOf, selected, dragging, onToggleOpen, 
           <ChevronRight size={12} className={`transition-transform ${line.open ? 'rotate-90' : ''}`} />
         </button>
       ) : <span className="w-4 shrink-0" />}
-      <Icon size={13} className={`shrink-0 ${dim ? 'opacity-40' : 'text-[var(--text-muted)]'}`} aria-hidden />
+      <Icon size={13} className={`shrink-0 ${dim ? 'opacity-40' : tone ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} aria-hidden />
       <span className={`min-w-0 flex-1 truncate ${row ? '' : 'font-medium text-[var(--text)]'} ${dim ? 'opacity-45' : ''}`}>{label}</span>
       {row && !row.locked ? (
         <Tooltip label={t('layers.delete')} side="bottom">
           <button type="button" aria-label={t('layers.delete')}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-dim)] opacity-0 hover:bg-[var(--bg-hover)] hover:text-[var(--err)] focus-visible:opacity-100 group-hover:opacity-100">
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-muted)] opacity-0 hover:bg-[var(--bg-hover)] hover:text-[var(--err)] focus-visible:opacity-100 group-hover:opacity-100">
             <Trash2 size={12} />
           </button>
         </Tooltip>

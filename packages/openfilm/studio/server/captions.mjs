@@ -29,9 +29,9 @@ import { TOOL_DIR } from './projects.mjs';
 import { filmSubtitleLanguageOf, filmSubtitleLanguagesIn, isFilmSubtitleLanguage, parseFilmSubtitleStyle, sameFilmSubtitleLanguage } from './film-subtitle.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { inProject } from './files.mjs';
-import { alignTranslation, segmentLine, subtitleEnd } from './subtitle-segments.mjs';
+import { alignTranslation, segmentLine, subtitleEnd, umIsWord } from './subtitle-segments.mjs';
 import { readTranscript, setLine, transcriptIsCurrent, translationsOf, writeTranscript } from './transcripts.mjs';
-import { subtitleEditRoutes } from './subtitle-edits.mjs';
+import { cuePlain, readVtt } from '../../src/captions.mjs';
 
 export { spokenLines, stripAudioTags } from './transcripts.mjs';
 export { SUBTITLE_SEGMENT_RULES } from './subtitle-segments.mjs';
@@ -70,8 +70,10 @@ export const MIN_CAPTION_MS = 300;
 const SLACK_MS = 60;
 const EDGE_PUNCT = /^[\s，,、。．.；;：:！!？?…]+|[\s，,、；;：:]+$/g;
 const LEAD_PUNCT = /^[\s，,、。．.；;：:！!？?…]+/;
-/* standalone fillers (Chinese e, en, e; uh, um) are not printed; sentence particles that carry meaning are */
-const FILLER = /(^|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])(?:\u5443|\u55ef|\u989d|uh|um|erm|mm+|hmm+|mhm)(?=$|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])[\uff0c,\u3001]?/giu;
+/* standalone fillers (Chinese e, en, e; uh, um) are not printed; sentence particles that carry meaning are, and so is
+   "um" where it is a word (umIsWord: Portuguese, German) */
+const FILLER = /(^|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])(?:\u5443|\u55ef|\u989d|uh|erm|mm+|hmm+|mhm)(?=$|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])[\uff0c,\u3001]?/giu;
+const UM = /(^|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])um(?=$|[\s\uff0c,\u3001\u3002.\uff01!\uff1f?])[\uff0c,\u3001]?/giu;
 /* a word broken off and said again ("a- and", "th- the"): the transcript marks it with a trailing hyphen */
 const FALSE_START = /(^|\s)([\p{L}']{1,4})-\s+(?=(\p{L}+))/gu;
 /* half-width punctuation after Chinese (common in text typed for TTS): Chinese subtitles set full-width */
@@ -82,12 +84,13 @@ const FULL_PUNCT = { ',': '\uff0c', ';': '\uff1b', ':': '\uff1a', '?': '\uff1f',
 /**
  * A subtitle as it is printed: no fillers, no false starts, no punctuation it starts with, and its end set by the
  * convention of its script (subtitleEnd: Chinese drops a trailing ，。, Latin keeps its own); '' when nothing is left.
- * @param {string} t
+ * `umWord`: "um" is a word here, not a hesitation (umIsWord; by default, as the text itself reads).
+ * @param {string} t @param {boolean} [umWord]
  */
-export function captionText(t) {
+export function captionText(t, umWord = umIsWord(t)) {
   const out = subtitleEnd(t.replace(FALSE_START, (all, lead, stub, next) => (String(next).toLowerCase().startsWith(String(stub).toLowerCase()) ? lead : all))
     .replace(HALF_PUNCT, (_all, mark) => FULL_PUNCT[mark] ?? mark)
-    .replace(FILLER, '$1').replace(/\s+(?:\.{2,}|…+)\s*$/u, '').replace(/\s{2,}/g, ' ').replace(LEAD_PUNCT, '')).trim();
+    .replace(FILLER, '$1').replace(UM, (all, lead) => (umWord ? all : lead)).replace(/\s+(?:\.{2,}|…+)\s*$/u, '').replace(/\s{2,}/g, ' ').replace(LEAD_PUNCT, '')).trim();
   return /[\p{L}\p{N}]/u.test(out) ? out : '';
 }
 
@@ -121,7 +124,8 @@ export const wholeLine = (line) => ({
  * @param {readonly SpokenLine[]} lines
  * @param {{ fromMs: number, startMs: number, durMs: number, speed: number }} span
  * `cut`: the transcript was cut by hand (transcripts.mjs CUT_NOTE): each line is one subtitle, as it is.
- * @param {{ alt?: AltLines, speaker?: string, clip?: string, src?: string, cut?: boolean }} [extra]
+ * `umWord`: "um" is a word in this transcript (umIsWord of all its lines); without it each piece tells by itself.
+ * @param {{ alt?: AltLines, speaker?: string, clip?: string, src?: string, cut?: boolean, umWord?: boolean }} [extra]
  * @returns {FilmSubtitleCue[]}
  */
 export function clipCues(lines, span, extra = {}) {
@@ -141,7 +145,7 @@ export function clipCues(lines, span, extra = {}) {
       const mine = piece.marks?.length
         ? piece.marks.some((m) => m.startMs >= span.fromMs - SLACK_MS && m.startMs < until - SLACK_MS)
         : (piece.startMs + piece.endMs) / 2 >= span.fromMs && (piece.startMs + piece.endMs) / 2 < until;
-      const said = captionText(trimToWindow(piece, span.fromMs, until));
+      const said = captionText(trimToWindow(piece, span.fromMs, until), extra.umWord);
       /* what a trim leaves of a piece can be a scrap; a piece itself is as long as segmentLine made it */
       const cut = from > piece.startMs || to < piece.endMs;
       if (!mine || !said || to <= from || (cut && (to - from) / speed < MIN_CAPTION_MS)) continue;
@@ -226,7 +230,7 @@ export async function filmCaptions(root, options = {}) {
   const doc = /** @type {import('../../src/film-doc.d.mts').FilmDoc | null} */ (film.doc);
   if (!doc) return empty;
   const duration = options.duration ?? ((/** @type {string} */ src) => probe(root, src).then((p) => p.duration, () => undefined));
-  /** @type {Map<string, { lines: SpokenLine[], speaker?: string, alt: AltLines, cut?: boolean } | null>} */
+  /** @type {Map<string, { lines: SpokenLine[], speaker?: string, alt: AltLines, cut?: boolean, umWord: boolean } | null>} */
   const known = new Map();
   const transcriptOf = async (/** @type {string} */ src) => {
     if (known.has(src)) return known.get(src) ?? null;
@@ -238,7 +242,10 @@ export async function filmCaptions(root, options = {}) {
         for (const line of (await readTranscript(root, src, language))?.lines ?? []) alt.set(line.startMs, { ...alt.get(line.startMs), [language]: line.text });
       }
     }
-    const one = read ? { lines: read.lines, ...(read.speaker ? { speaker: read.speaker } : {}), alt, ...(read.cut ? { cut: true } : {}) } : null;
+    /* a short line tells its language poorly; the whole transcript does */
+    const one = read ? {
+      lines: read.lines, ...(read.speaker ? { speaker: read.speaker } : {}), alt, ...(read.cut ? { cut: true } : {}), umWord: umIsWord(read.lines.map((l) => l.text).join(' ')),
+    } : null;
     known.set(src, one);
     return one;
   };
@@ -256,14 +263,14 @@ export async function filmCaptions(root, options = {}) {
     if (!said) { if (await wantsTranscript(root, clip.src)) untranscribed.add(clip.src); continue; }
     /* a transcript that runs on past the end of its file is not this file's any more (it was made again faster, or
        the transcript's times were moved): its lines would drift later and later and the last ones fall off. It is
-       still shown, and made again with the rest (the CC button) */
+       still shown, and made again with the rest (the timeline's captions button) */
     if (await transcriptOutlasts(said.lines, await lengthOf(clip.src))) untranscribed.add(clip.src);
     const native = clip.time?.length === 2 ? undefined : await lengthOf(clip.src) ?? (said.lines.at(-1)?.endMs ?? 0) / 1000;
     let span;
     try { span = clipSpan(clip, native ?? NaN); } catch { continue; }
     cues.push(...clipCues(said.lines, {
       fromMs: span.from * 1000, startMs: (clip.at ?? 0) * 1000, durMs: span.length * 1000, speed: span.speed,
-    }, { alt: said.alt, ...(said.speaker ? { speaker: said.speaker } : {}), clip: clip.id, src: clip.src, ...(said.cut ? { cut: true } : {}) }));
+    }, { alt: said.alt, ...(said.speaker ? { speaker: said.speaker } : {}), clip: clip.id, src: clip.src, ...(said.cut ? { cut: true } : {}), umWord: said.umWord }));
   }
   cues.sort((a, b) => a.startMs - b.startMs);
   /* a speaker's name tells voices apart; with one voice in the film it tells nothing, and would open every line */
@@ -329,7 +336,7 @@ function wordsOfLines(lines) {
   });
 }
 
-export const CONNECT_TRANSLATOR = 'Connect a service that translates in Studio: Settings (the OpenFilm logo at the top left) → Providers.';
+export const CONNECT_TRANSLATOR = 'Translating subtitles needs your agent (in the app: Settings → Agents) or a service that translates (Settings → Services); the OpenFilm logo at the top left opens Settings.';
 
 /**
  * Translate the film's voices into `language` (one of FILM_SUBTITLE_LANGUAGES): each source heard in the film that has
@@ -386,7 +393,7 @@ export async function translateFilmSubtitles(root, language, options) {
  * @typedef {(root: string, src: string, signal: AbortSignal) => Promise<void>} Transcribe
  */
 
-export const CONNECT_TRANSCRIBER = 'Connect a service that transcribes in Studio: Settings (the OpenFilm logo at the top left) → Providers.';
+export const CONNECT_TRANSCRIBER = 'Connect a service that transcribes in Studio: Settings (the OpenFilm logo at the top left) → Services.';
 
 /**
  * The subtitle routes under /api/projects/:id/ (`rest` is the part after it). Returns whether it answered.
@@ -396,18 +403,16 @@ export const CONNECT_TRANSCRIBER = 'Connect a service that transcribes in Studio
  *                              subtitle of the line (a cue's `part`); empty text takes it out)
  *   GET  subtitles             → { style: FilmSubtitleStyle | null } (null: never changed)
  *   PUT  subtitles             { style } → { style } (as kept)
- *   POST subtitles/transcribe  → { transcribed, failed } for the speech heard with no transcript yet; 409 { error, code:
+ *   POST subtitles/transcribe  { srcs? } → { transcribed, failed } for the speech heard with no transcript yet (of
+ *                              those files alone, when given); 409 { error, code:
  *                              'no-transcriber' } when no service can
  *   POST subtitles/translate   { language } → translateFilmSubtitles' result (502 when every voice failed);
  *                              409 { error, code: 'no-translator' } when no provider can translate
- *   GET  captions/source, PUT captions/source, PUT captions/files: the subtitle row's edits (subtitle-edits.mjs)
  * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string} root @param {string} rest
  * @param {{ translate?: (root: string) => Promise<TranslateLines | null>, transcribe?: Transcribe }} [options] where
  *   translation and transcription come from (none: nowhere)
  */
 export async function captionRoutes(req, res, root, rest, { translate = async () => null, transcribe } = {}) {
-  /* the subtitle row's edits of one source (subtitle-edits.mjs) */
-  if (await subtitleEditRoutes(req, res, root, rest)) return true;
   if (rest === 'captions' && req.method === 'GET') {
     json(res, 200, await filmCaptions(root));
     return true;
@@ -435,9 +440,11 @@ export async function captionRoutes(req, res, root, rest, { translate = async ()
     const controller = new AbortController();
     res.once('close', () => { if (!res.writableEnded) controller.abort(); });
     const { untranscribed } = await filmCaptions(root);
+    const { srcs } = /** @type {{ srcs?: unknown }} */ (await readJson(req).catch(() => ({})));
+    const only = Array.isArray(srcs) ? new Set(srcs.map(String)) : null;
     /** @type {{ transcribed: string[], failed: { src: string, error: string }[] }} */
     const out = { transcribed: [], failed: [] };
-    for (const src of untranscribed) {
+    for (const src of untranscribed.filter((s) => !only || only.has(s))) {
       /* one made since the file changed is kept, unless it outlasts the file (filmCaptions): then it is not its own */
       if (await transcriptIsCurrent(root, src) && !(await outlastsItsFile(root, src))) continue;
       if (!transcribe) throw new HttpError(409, CONNECT_TRANSCRIBER, { code: 'no-transcriber' });
@@ -469,8 +476,25 @@ export async function captionRoutes(req, res, root, rest, { translate = async ()
   return false;
 }
 
-/** For an export: the project's cues and style in one read (the style as the person left it, or the default). @param {string} root */
+/**
+ * For an export: the project's cues and style in one read (the style as the person left it, or the default). A film
+ * with caption tracks (SPEC §1 Captions) has its subtitles there: the first one shown is the subtitle file's, and
+ * `tracks` says they are drawn by the film itself (nothing to burn in). @param {string} root
+ */
 export async function subtitlesForExport(root) {
+  const tracked = await captionTrackCues(root);
+  if (tracked) return { cues: tracked, style: { ...parseFilmSubtitleStyle(null), language: null, bilingual: false }, tracks: true };
   const [{ cues }, style] = await Promise.all([filmCaptions(root), readSubtitleStyle(root)]);
   return { cues, style: style ?? parseFilmSubtitleStyle(null) };
+}
+
+/** The cues of the film's first caption track that is shown, as subtitle lines (film ms, their words); null without one. @param {string} root */
+async function captionTrackCues(root) {
+  const film = await readProjectFilm(root);
+  const track = /** @type {import('../../src/film-doc.d.mts').FilmDoc | null} */ (film.doc)?.tracks.find((t) => t.captions && !t.hidden);
+  if (!track?.captions) return null;
+  const file = inProject(root, track.captions.src);
+  const text = file ? await readFile(file, 'utf8').catch(() => null) : null;
+  if (text == null) return null;
+  return readVtt(text).cues.map((c) => ({ startMs: Math.round(c.start * 1000), durMs: Math.round((c.end - c.start) * 1000), text: cuePlain(c.text).trim() }));
 }

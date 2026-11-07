@@ -130,6 +130,51 @@ async function parseXml(texts, query = () => null) {
 }
 const frameCount = (file) => parseInt(execFileSync('ffprobe', ['-v', 'error', '-count_packets', '-select_streams', 'v:0', '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', file]).toString(), 10);
 
+test('a 16× clip exports its trimmed picture and pitch-preserved sound at the shortened duration', ffmpeg, async () => {
+  const folder = join(scratch, 'Fast');
+  mkdirSync(folder);
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:size=160x90:rate=10:duration=8[a];color=c=red:size=160x90:rate=10:duration=32[b];[a][b]concat=n=2:v=1:a=0',
+    '-f', 'lavfi', '-i', 'sine=frequency=880:duration=8[a];sine=frequency=440:duration=32[b];[a][b]concat=n=2:v=0:a=1', '-shortest', '-pix_fmt', 'yuv420p', '-c:a', 'aac', join(folder, 'source.mp4')]);
+  writeFileSync(join(folder, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+    { clips: [{ src: 'source.mp4', id: 'fast', time: [8, 40], speed: 16 }] },
+  ] }));
+  const done = await exported({ kind: 'video', fps: 10, hardware: false }, 'Fast', folder);
+  assert.equal(frameCount(done.out), 20, '32 source seconds become 2 seconds at 10 fps');
+  const [red, green, blue] = firstFrame(done.out).at(80, 45);
+  assert.ok(red > 200 && green < 80 && blue < 50, `the source's red picture is present: ${red},${green},${blue}`);
+  const pcm = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.05', '-i', done.out, '-t', '1', '-ac', '1', '-ar', '48000', '-f', 's16le', '-']);
+  const samples = new Int16Array(pcm.buffer, pcm.byteOffset, pcm.length / 2);
+  assert.ok(samples.length >= 47000, 'sound lasts through the clip');
+  let crossings = 0;
+  for (let i = 1; i < samples.length; i++) if (samples[i - 1] <= 0 && samples[i] > 0) crossings++;
+  assert.ok(Math.abs(crossings - 440) < 5, `pitch stays 440 Hz: ${crossings}`);
+});
+
+test('the ends of the range: a 100× clip and a 0.1× one export at their length, every frame there, the pitch kept', ffmpeg, async () => {
+  /* 100 source seconds at 100× are 1 s; 1 source second at 0.1× is 10 s */
+  for (const [name, seconds, speed, frames] of [['Fastest', 100, 100, 10], ['Slowest', 1, 0.1, 100]]) {
+    const folder = join(scratch, name);
+    mkdirSync(folder);
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', `color=c=red:size=160x90:rate=10:duration=${seconds}`,
+      '-f', 'lavfi', '-i', `sine=frequency=440:duration=${seconds}`, '-shortest', '-pix_fmt', 'yuv420p', '-c:a', 'aac', join(folder, 'source.mp4')]);
+    writeFileSync(join(folder, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+      { clips: [{ src: 'source.mp4', id: 'clip', time: [0, seconds], speed }] },
+    ] }));
+    const done = await exported({ kind: 'video', fps: 10, hardware: false }, name, folder);
+    assert.equal(frameCount(done.out), frames, `${name}: ${seconds} source seconds at ${speed}× are ${frames / 10} s at 10 fps`);
+    const length = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', done.out], { encoding: 'utf8' }));
+    assert.ok(Math.abs(length - frames / 10) < 0.1, `${name}: ${length} s`);
+    const [red] = firstFrame(done.out).at(80, 45);
+    assert.ok(red > 200, `${name}: the picture is there`);
+    const pcm = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.05', '-i', done.out, '-t', '0.9', '-ac', '1', '-ar', '48000', '-f', 's16le', '-']);
+    const samples = new Int16Array(pcm.buffer, pcm.byteOffset, pcm.length / 2);
+    assert.ok(samples.length >= 0.85 * 48000, `${name}: the sound lasts through the clip`);
+    let crossings = 0;
+    for (let i = 1; i < samples.length; i++) if (samples[i - 1] <= 0 && samples[i] > 0) crossings++;
+    assert.ok(Math.abs(crossings - 396) < 8, `${name}: the pitch stays 440 Hz: ${crossings} in 0.9 s`);
+  }
+});
+
 test('the exports folder: OPENFILM_EXPORTS, else `exports` in OPENFILM_HOME, else the Movies folder', () => {
   const env = { exports: process.env.OPENFILM_EXPORTS, home: process.env.OPENFILM_HOME };
   try {
@@ -271,9 +316,17 @@ test('a cancelled export stops and leaves no file, and a bad ask is refused befo
   for (const bad of [{ kind: 'pdf' }, { kind: 'video', range: [3, 1] }, { kind: 'video', codec: 'av1' }, { kind: 'video', frame: '9:1' }, { kind: 'video', frame: 'wide' },
     { kind: 'audio', mix: false }, { kind: 'stills', range: [0, 1] }, { kind: 'stills', as: 'pdf' }, { kind: 'gif', width: 5000 }, { kind: 'subtitles', format: 'ass' },
     { kind: 'slides', format: 'key' }, { kind: 'slides', range: [0, 1] }, { kind: 'nle', fps: 500 }, { kind: 'nle', audio: 'mix' }, { kind: 'nle', range: [0, 1] },
-    { kind: 'nle', format: 'fcpxml', alpha: 'png' }, { kind: 'nle', alpha: 'auto' }, { kind: 'nle', format: 'jianying', alpha: 'hevc_alpha' }, { kind: 'nle', format: 'jianying', alpha: 'prores4444' }]) {
+    { kind: 'video', loudness: -3 }, { kind: 'video', loudness: '-14' }, { kind: 'nle', format: 'fcpxml', alpha: 'png' }, { kind: 'nle', alpha: 'auto' }, { kind: 'nle', format: 'jianying', alpha: 'hevc_alpha' }, { kind: 'nle', format: 'jianying', alpha: 'prores4444' }]) {
     assert.throws(() => exports.start(project(), bad), ExportError, JSON.stringify(bad));
   }
+});
+
+test('a video exported at a loudness has its sound there, true peaks under -1 dBTP (render --loudness, #323)', ffmpeg, async () => {
+  const { loudnessOf } = await import('../../src/loudness.mjs');
+  const done = await exported({ kind: 'video', loudness: -23 }, 'Loud');
+  const { lufs, peak } = await loudnessOf(/** @type {string} */ (done.out));
+  assert.ok(Math.abs(lufs - -23) <= 0.5, `integrated loudness ${lufs}`);
+  assert.ok(peak <= -1, `true peak ${peak}`);
 });
 
 test('what an export Studio could not finish left behind goes before the next one; what a running Studio is making stays', ffmpeg, async () => {
@@ -352,6 +405,9 @@ test('each codec this machine encodes, at the size asked, transparent where the 
   }
   const hevc = can.hevc ? (await exported({ kind: 'video', codec: 'hevc', fps: 5, range: [0, 0.2] })).out : null;
   if (hevc) assert.equal(probe(hevc, 'stream=codec_tag_string'), 'hvc1', 'HEVC that Apple players open');
+  /* at master, 10 bits: a dark gradient keeps steps 8 bits would band */
+  const master = can.hevc ? (await exported({ kind: 'video', codec: 'hevc', quality: 'master', fps: 5, range: [0, 0.2] })).out : null;
+  if (master) assert.equal(probe(master, 'stream=pix_fmt'), 'yuv420p10le');
 });
 
 test('every codec carries the colors the page draws, tagged BT.709, through the graphics chip and without it', { ...ffmpeg, timeout: 300_000 }, async () => {
@@ -391,6 +447,21 @@ test('footage no browser reads, placed whole (no trim): its length is ffprobe\'s
   const draft = await ended(exports, exports.start(project('Whole ProRes', dir), { kind: 'nle', format: 'jianying', fps: 25 }));
   assert.equal(draft.status, 'done', draft.error);
   assert.equal(JSON.parse(readFileSync(draft.out, 'utf8')).duration, 1_200_000);
+});
+
+test('a trim to the file\'s end, written to the millisecond, exports as a video and as a draft', { ...ffmpeg, timeout: 240_000 }, async () => {
+  const dir = join(scratch, 'Trim to the end');
+  mkdirSync(dir, { recursive: true });
+  /* 65 frames at 30 fps: 2.166667 s, written 2.167 */
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-frames:v', '65', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(dir, 'rain.mp4')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'rain', src: 'rain.mp4', time: [0, 2.167] }] }] }));
+  const video = await exported({ kind: 'video', fps: 30 }, 'Trim to the end', dir);
+  assert.equal(video.status, 'done', video.error);
+  const drafts = join(scratch, 'Trim to the end drafts');
+  mkdirSync(drafts, { recursive: true });
+  const exports = createExports({ captions: subtitles, drafts: () => drafts });
+  const draft = await ended(exports, exports.start(project('Trim to the end', dir), { kind: 'nle', format: 'jianying', fps: 30 }));
+  assert.equal(draft.status, 'done', draft.error);
 });
 
 test('a PNG sequence comes zipped, one PNG with alpha per frame', ffmpeg, async () => {
@@ -1078,6 +1149,30 @@ document.body.style.background=${clearAt === null ? 'false' : `Math.abs(t-${clea
   assert.equal(probe(png('solid.mov'), 'stream=codec_name'), 'png', 'all PNG when asked');
 });
 
+test('剪映: footage drawn with a look of its own and nothing under it is opaque on the film\'s background; over another, with its alpha', { ...ffmpeg, timeout: 240_000 }, async () => {
+  const dir = join(scratch, 'Ground');
+  mkdirSync(dir, { recursive: true });
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=320x180:rate=25:duration=1', '-pix_fmt', 'yuv420p', join(dir, 'red.mp4')]);
+  const corners = 'left: 0; top: 0; width: 320px; height: 180px; border-radius: 60px';
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ src: 'red.mp4', id: 'over', style: corners }] },
+    { clips: [{ src: 'red.mp4', id: 'under', style: corners }, { src: 'red.mp4', id: 'alone', at: 0.9999999, style: corners }] },
+  ] }).replace('</head>', '<style>html, body { background: rgb(32, 64, 160); }</style></head>'));
+  const drafts = join(scratch, 'Ground drafts');
+  mkdirSync(drafts, { recursive: true });
+  const exports = createExports({ captions: subtitles, drafts: (app) => (app === 'jianying' ? drafts : null) });
+  const done = await ended(exports, exports.start(project('Ground', dir), { kind: 'nle', format: 'jianying', fps: 25, subtitles: false }));
+  assert.equal(done.status, 'done', done.error);
+  const media = (name) => join(dirname(done.out), 'media', name);
+  /* `alone` has nothing under it (`under` ends where it starts, give or take a hair): what the film shows there, its round corners on the film's background, as H.264 */
+  assert.equal(probe(media('alone.mov'), 'stream=codec_name,pix_fmt'), 'h264,yuv420p');
+  assert.ok(near(firstFrame(media('alone.mov')).at(2, 2), [32, 64, 160]), `corner: ${firstFrame(media('alone.mov')).at(2, 2)}`);
+  assert.ok(near(firstFrame(media('alone.mov')).at(160, 90), [255, 0, 0], 40), 'the footage itself');
+  /* `under` has `over` on the track above at the same time, yet nothing under it: opaque too; `over` keeps its alpha */
+  assert.equal(probe(media('under.mov'), 'stream=codec_name'), 'h264');
+  assert.equal(probe(media('over.mov'), 'stream=codec_name,pix_fmt'), 'png,rgba');
+});
+
 test('剪映: a page that fails stops the export, its error said, nothing left behind', { ...ffmpeg, timeout: 240_000 }, async () => {
   const dir = join(scratch, 'Broken');
   mkdirSync(dir, { recursive: true });
@@ -1420,7 +1515,7 @@ test('the API: where exports go and what can be made here; several at once; open
     const listed = await (await api(`/projects/${project.id}/exports`)).json();
     assert.deepEqual(listed.exports, []);
     assert.equal(listed.folder, exportsRoot());
-    assert.deepEqual(Object.keys(listed.can).sort(), ['h264', 'hevc', 'hevcAlpha', 'mp3', 'prores', 'vp9']);
+    assert.deepEqual(Object.keys(listed.can).sort(), ['h264', 'hevc', 'hevcAlpha', 'mp3', 'prores', 'proresChip', 'vp9']);
     assert.deepEqual(Object.keys(listed.drafts).sort(), ['capcut', 'jianying'], 'whether 剪映 and CapCut are here, for an editing project');
     assert.equal(listed.subtitles, 0, 'no subtitle cues in a new project');
     const bad = await api(`/projects/${project.id}/exports`, { method: 'POST', body: { jobs: [{ kind: 'audio' }, { kind: 'slides', format: 'key' }] } });

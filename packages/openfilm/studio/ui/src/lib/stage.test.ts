@@ -4,7 +4,7 @@ import { linkedOutlines } from '../components/film-stage-hit.ts';
 import { moveTransform, rotateTransform, snapMove } from './mg-transform.ts';
 import { frameAabb, visibleFrame } from './stage-crop.ts';
 import { clipFieldPart, clipFields, compactBox, transformOf } from './stage-clip.ts';
-import { alignShift, insideFrame, movedOffset, pivotCenter, resizedFrame, scaledLayer, turnedLayer, unionRect, wrapDeg } from './stage-gesture.ts';
+import { alignShift, distributeShifts, insideFrame, movedOffset, pivotCenter, resizedFrame, scaledLayer, turnedLayer, unionRect, wrapDeg } from './stage-gesture.ts';
 import { layerTarget, recoverableLayers, recoverLayer } from './stage-layers.ts';
 import type { FilmDoc } from './film.ts';
 
@@ -164,6 +164,18 @@ test('align and union boxes', () => {
   assert.deepEqual(u, { left: 0, top: 0, width: 80, height: 50 });
   assert.deepEqual(alignShift('right', a, u), { dx: 70, dy: 0 });
   assert.deepEqual(alignShift('vcenter', b, u), { dx: 0, dy: -10 });
+});
+
+test('distributing keeps the first and the last and evens the gaps, in the order given', () => {
+  const boxes = [
+    { left: 300, top: 0, width: 20, height: 10 },
+    { left: 0, top: 0, width: 20, height: 10 },
+    { left: 50, top: 0, width: 20, height: 10 },
+  ];
+  /* span 0..320, 60 of boxes: gaps of 130; the middle one goes to 150 */
+  assert.deepEqual(distributeShifts(boxes, 'x').map((s) => s.dx), [0, 0, 100]);
+  assert.ok(distributeShifts(boxes, 'x').every((s) => s.dy === 0));
+  assert.deepEqual(distributeShifts(boxes.slice(0, 2), 'y').map((s) => s.dy), [0, 0]);
 });
 
 test('a layer\'s override target: its selector, and which match only when it is one of several', () => {

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "social-linkbio.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Text\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Marker\", \"type\": \"var\", \"var\": \"--mark\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--ink\"}]"
+    }
+  },
+  "durationMs": 4000
+}

@@ -7,10 +7,13 @@
  * hundreds of peaks each would be tens of thousands of nodes.
  *
  * Peaks come from the server: GET media?what=wave&path= → `{ duration (s), peaks }`, 40 peaks a second, 0..1;
- * 503 while the file is still being written.
+ * 503 while the file is still being written. Drawn as loud as the clip plays: the file's own level times the clip's
+ * volume, the band's top full scale (lib/waveform-columns `waveBarPx`). A volume that pushes a peak past it caps the
+ * peak at the top and tints its clipped part; a silent clip is a line. A volume in hand redraws the columns already
+ * worked out, at once, without asking the server again.
  */
 import * as React from 'react';
-import { normalizeWavePeaks, waveformColumns } from '@/lib/waveform-columns';
+import { waveBarPx, waveformColumns } from '@/lib/waveform-columns';
 import { mediaFetch } from '@/lib/media-queue';
 import { useThemeChanges } from '@/lib/theme-changes';
 
@@ -51,14 +54,16 @@ function drawSome() {
   if (waiting.size) drawing = requestAnimationFrame(drawSome);
 }
 
-/* the color a waveform is drawn in, read once per color and theme: read from each canvas, each drawing laid out the
-   page's styles again */
+/* the colors a waveform is drawn in, read once per color and theme: read from each canvas, each drawing laid out the
+   page's styles again. A CSS variable is read off the canvas; any other color is its `color`, as the browser has it */
 const colors = new Map<string, string>();
 function colorOf(el: HTMLCanvasElement, color: string, theme: unknown): string {
   const key = `${String(theme)}\0${color}`;
   let c = colors.get(key);
   if (!c) {
-    c = getComputedStyle(el).color || color;
+    const name = /^var\((--[\w-]+)\)$/.exec(color)?.[1];
+    const style = getComputedStyle(el);
+    c = (name ? style.getPropertyValue(name).trim() : '') || style.color || color;
     if (colors.size > 64) colors.clear();
     colors.set(key, c);
   }
@@ -93,7 +98,7 @@ async function loadWave(url: string): Promise<Wave | null> {
       const durationMs = typeof body.durationMs === 'number' ? body.durationMs
         : typeof body.duration === 'number' ? body.duration * 1000
           : (body.peaks.length / PEAKS_PER_SECOND) * 1000;
-      return { peaks: normalizeWavePeaks(body.peaks), durationMs };
+      return { peaks: body.peaks.map((v) => Math.max(0, Math.min(1, Number(v) || 0))), durationMs };
     })
     .catch(() => null)
     .then((wave) => {
@@ -109,16 +114,20 @@ async function loadWave(url: string): Promise<Wave | null> {
 }
 
 export function BlockWaveform({
-  url, width, height, color, inMs = 0, durMs, visiblePx,
+  url, width, height, color, clipColor = color, volume = 1, inMs = 0, durMs, visiblePx,
 }: {
   url: string;
   width: number;
   height: number;
   /**
-   * The waveform's color; may be a CSS variable (`var(--tl-wave)`): a canvas cannot read variables, so it is set as
-   * the element's `color` and read back computed, following the theme.
+   * The waveform's color; may be a CSS variable (`var(--tl-wave)`): a canvas cannot read variables, so it is read
+   * back off the element, following the theme.
    */
   color: string;
+  /** The color of a peak's part that the volume pushes past full scale; a CSS variable, as `color`. */
+  clipColor?: string;
+  /** The clip's volume, linear (1 as is, 0 silent): each peak is drawn that much louder or quieter. */
+  volume?: number;
   /**
    * Draw only this stretch (px within the clip). Zoomed in, a clip can be tens of thousands of pixels wide and only a
    * slice is on screen: a canvas over the whole clip would be stretched past the limit (blurry) or burn memory on what
@@ -153,13 +162,22 @@ export function BlockWaveform({
 
   /* when it was last drawn: a change soon after is part of a burst (a zoom, a scroll) */
   const drawnAt = React.useRef(-Infinity);
+  /* the columns last worked out, and for what stretch of which sound at what size: a volume in hand changes none of
+     it, and only paints them again */
+  const shape = `${inMs}:${durMs}:${width}:${from}:${sliceW}`;
+  const columnsOf = React.useRef<{ wave: Wave; shape: string; columns: number[] } | null>(null);
+  const drawnSize = React.useRef('');
   React.useEffect(() => {
     const el = ref.current;
     if (!el || !wave?.peaks.length || sliceW <= 0 || height <= 0) return undefined;
+    /* only a volume, a color or the theme changed: drawn at the next frame, so a volume line in hand moves the
+       waveform with it */
+    const repaint = columnsOf.current?.wave === wave && columnsOf.current.shape === shape && drawnSize.current === `${shape}:${height}`;
     /* drawn soon (see drawSoon); in a burst of zoom or scroll steps, once the burst stops (the stretched old bitmap
        holds meanwhile): redrawn at every step, the waveforms were most of what a zoom cost */
     const draw = () => {
       drawnAt.current = performance.now();
+      drawnSize.current = `${shape}:${height}`;
       /* capped in device pixels, not CSS pixels: capping CSS pixels would also drop Retina's 2×, and this layer is
          thin enough that blur makes it useless. Full ratio while it fits, down to 1× at the cap. */
       const drawW = Math.min(Math.round(sliceW), MAX_CANVAS_PX);
@@ -170,30 +188,42 @@ export function BlockWaveform({
       if (!ctx) return;
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, drawW, height);
-      ctx.fillStyle = colorOf(el, color, theme);
 
       /* one column per pixel: more peaks than pixels takes the maximum (sampling would miss a drum hit and draw
          silence); fewer peaks than pixels interpolates (nearest-peak steps are the sampling grid, not the sound) */
-      const sliceIn = inMs + (width > 0 ? (from / width) * durMs : 0);
-      const sliceDur = width > 0 ? (sliceW / width) * durMs : durMs;
-      const columns = waveformColumns(wave, sliceIn, sliceDur, drawW);
-      /* one path, one fill: thousands of fillRect calls would be thousands of draws */
+      let columns = columnsOf.current?.wave === wave && columnsOf.current.shape === shape ? columnsOf.current.columns : null;
+      if (!columns) {
+        const sliceIn = inMs + (width > 0 ? (from / width) * durMs : 0);
+        const sliceDur = width > 0 ? (sliceW / width) * durMs : durMs;
+        columns = waveformColumns(wave, sliceIn, sliceDur, drawW);
+        columnsOf.current = { wave, shape, columns };
+      }
+      /* two paths, two fills (the sound, and what of it clips): thousands of fillRect calls would be thousands of
+         draws */
+      const clipped = new Path2D();
+      let clips = false;
       ctx.beginPath();
       for (let x = 0; x < drawW; x += 1) {
-        const v = columns[x]!;
-        const h = Math.max(1, v * height);
-        ctx.rect(x, height - h, 1, h);
+        const { barPx, clipPx } = waveBarPx(columns[x]!, volume, height);
+        ctx.rect(x, height - barPx + clipPx, 1, barPx - clipPx);
+        if (clipPx > 0) { clipped.rect(x, height - barPx, 1, clipPx); clips = true; }
       }
+      ctx.fillStyle = colorOf(el, color, theme);
       ctx.fill();
+      if (clips) {
+        ctx.fillStyle = colorOf(el, clipColor, theme);
+        ctx.fill(clipped);
+      }
     };
-    const timer = window.setTimeout(() => drawSoon(el, draw), performance.now() - drawnAt.current < BURST_MS ? BURST_MS : 0);
+    const timer = window.setTimeout(() => drawSoon(el, draw), !repaint && performance.now() - drawnAt.current < BURST_MS ? BURST_MS : 0);
     return () => { window.clearTimeout(timer); waiting.delete(el); };
-  }, [wave, width, height, color, inMs, durMs, from, sliceW, theme]);
+  }, [wave, width, height, color, clipColor, volume, inMs, durMs, from, sliceW, shape, theme]);
 
   if (!wave?.peaks.length || sliceW <= 0) return null;
   return (
     <canvas
       ref={ref}
+      data-wave-volume={volume}
       className="pointer-events-none absolute bottom-0"
       style={{ left: from, width: sliceW, height, color }}
     />

@@ -7,6 +7,9 @@ import { changeSettings, cleanKey, modelFor, providerKey, providersFile, readSet
 import { listProviders } from './providers/index.mjs';
 import { startStudio } from './server.mjs';
 
+/* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
+process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
+
 const KEY = 'xi-secret-key-abcdef1234';
 let studio;
 const opened = [];
@@ -14,7 +17,7 @@ before(async () => {
   const scratch = mkdtempSync(join(tmpdir(), 'of-keys-'));
   process.env.OPENFILM_HOME = join(scratch, 'home');
   process.env.OPENFILM_LIBRARY = join(scratch, 'library');
-  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY', 'PEXELS_API_KEY', 'PIXABAY_API_KEY', 'BRAVE_API_KEY', 'TAVILY_API_KEY', 'GROQ_API_KEY', 'AZURE_SPEECH_KEY', 'AZURE_SPEECH_REGION']) delete process.env[name];
+  for (const name of ['ELEVENLABS_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'FAL_KEY', 'PEXELS_API_KEY', 'PIXABAY_API_KEY', 'BRAVE_API_KEY', 'TAVILY_API_KEY', 'GROQ_API_KEY', 'AZURE_SPEECH_KEY', 'AZURE_SPEECH_REGION', 'KEENABLE_API_KEY']) delete process.env[name];
   studio = await startStudio({ port: 0, openBrowser: (url) => opened.push(url) });
 });
 after(() => studio.close());
@@ -48,6 +51,16 @@ test('a key pasted in Studio wins over the environment\'s, which counts unless d
   assert.equal(providerKey(google, { keys: {}, use: {}, model: {}, off: [] }, {}), null);
 });
 
+test('a keyless provider connected without a key has the key \'\'; the environment\'s still lifts its limits; others need one', () => {
+  const keenable = { id: 'keenable', env: 'KEENABLE_API_KEY', keyless: true };
+  const connected = { keys: { keenable: '' }, use: {}, model: {}, off: [] };
+  assert.deepEqual(providerKey(keenable, connected, {}), { key: '', source: 'file', env: 'KEENABLE_API_KEY' });
+  assert.deepEqual(providerKey(keenable, connected, { KEENABLE_API_KEY: 'kn-env-0123456789' }), { key: 'kn-env-0123456789', source: 'env', env: 'KEENABLE_API_KEY' });
+  assert.equal(providerKey(keenable, { keys: {}, use: {}, model: {}, off: [] }, {}), null, 'not connected');
+  assert.equal(providerKey(keenable, { ...connected, off: ['keenable'] }, {}), null);
+  assert.equal(providerKey(elevenlabs, { keys: { elevenlabs: '' }, use: {}, model: {}, off: [] }, {}), null);
+});
+
 test('a pasted key is trimmed, and refused when it is not one key', () => {
   assert.equal(cleanKey('  sk-0123456789 \n'), 'sk-0123456789');
   for (const bad of ['', 'short', 'two keys-0123456789', 42, null]) assert.throws(() => cleanKey(bad));
@@ -60,7 +73,7 @@ test('the providers API: keys go in and never come back out; choices for each ki
   assert.ok(!text.includes('sk-test-ABCDEFGH9876') && !text.includes(KEY));
   let state = JSON.parse(text);
   const openai = state.providers.find((p) => p.id === 'openai');
-  assert.deepEqual(openai, { id: 'openai', name: 'OpenAI', verbs: ['voice', 'tts', 'image', 'asr', 'translate'], models: listProviders().find((p) => p.id === 'openai').models, keysUrl: 'https://platform.openai.com/api-keys', env: 'OPENAI_API_KEY', envKey: false, source: 'file', last4: '9876' });
+  assert.deepEqual(openai, { id: 'openai', name: 'OpenAI', verbs: ['voice', 'tts', 'image', 'asr', 'translate'], models: listProviders().find((p) => p.id === 'openai').models, keysUrl: 'https://platform.openai.com/api-keys', pricingUrl: 'https://developers.openai.com/api/docs/pricing', env: 'OPENAI_API_KEY', envKey: false, source: 'file', last4: '9876', signIn: false, account: null });
   /* a new key takes the kinds nothing serves yet, and only those it can do */
   assert.equal(state.use.image, 'openai');
   assert.equal(state.use['image-search'], null);
@@ -71,7 +84,7 @@ test('the providers API: keys go in and never come back out; choices for each ki
   try {
     text = await (await api('/api/providers')).text();
     assert.ok(!text.includes('fal-env-key-00001111'));
-    assert.deepEqual(JSON.parse(text).providers.find((p) => p.id === 'fal'), { id: 'fal', name: 'fal.ai', verbs: ['image', 'video', 'music', 'sfx'], models: listProviders().find((p) => p.id === 'fal').models, keysUrl: 'https://fal.ai/dashboard/keys', env: 'FAL_KEY', envKey: true, source: 'env', last4: '1111' });
+    assert.deepEqual(JSON.parse(text).providers.find((p) => p.id === 'fal'), { id: 'fal', name: 'fal.ai', verbs: ['image', 'video', 'music', 'sfx'], models: listProviders().find((p) => p.id === 'fal').models, keysUrl: 'https://fal.ai/dashboard/keys', pricingUrl: 'https://fal.ai/pricing', env: 'FAL_KEY', envKey: true, source: 'env', last4: '1111', signIn: false, account: null });
     let fal = (await (await api('/api/providers/fal/key', { method: 'DELETE' })).json()).providers.find((p) => p.id === 'fal');
     assert.deepEqual([fal.source, fal.envKey], [null, true]);
     fal = (await (await api('/api/providers/fal/key', { method: 'PUT', body: { env: true } })).json()).providers.find((p) => p.id === 'fal');
@@ -96,6 +109,22 @@ test('the providers API: keys go in and never come back out; choices for each ki
   assert.equal((await api('/api/providers/acme/key', { method: 'PUT', body: { key: 'k-0123456789' } })).status, 404);
   assert.equal((await api('/api/providers/openai/key', { method: 'PUT', body: { key: 'no' } })).status, 400);
   assert.equal((await fetch(`${studio.origin}/api/providers`)).status, 401);
+});
+
+test('a keyless provider connects with one click, no key, and takes a key later; the others still need one', async () => {
+  let state = await (await api('/api/providers/keenable/key', { method: 'PUT', body: { key: '' } })).json();
+  let keenable = state.providers.find((p) => p.id === 'keenable');
+  assert.deepEqual([keenable.keyless, keenable.source, keenable.last4], [true, 'file', null]);
+  assert.equal(state.use['web-search'], 'keenable', 'connecting fills web search, which nothing served');
+  assert.equal(JSON.parse(readFileSync(providersFile(), 'utf8')).keys.keenable, '');
+  state = await (await api('/api/providers/keenable/key', { method: 'PUT', body: { key: 'kn-test-12345678' } })).json();
+  keenable = state.providers.find((p) => p.id === 'keenable');
+  assert.deepEqual([keenable.source, keenable.last4], ['file', '5678']);
+  state = await (await api('/api/providers/keenable/key', { method: 'DELETE' })).json();
+  assert.equal(state.providers.find((p) => p.id === 'keenable').source, null);
+  assert.equal(state.use['web-search'], null);
+  assert.equal((await api('/api/providers/tavily/key', { method: 'PUT', body: { key: '' } })).status, 400);
+  assert.equal(state.providers.find((p) => p.id === 'tavily').keyless, undefined);
 });
 
 test('a provider\'s own page for its balance opens in the person\'s browser, for every provider alike', async () => {
@@ -167,4 +196,15 @@ test('what a newer OpenFilm keeps in providers.json stays when this one writes i
   assert.equal(written.custom[0].askFirst, true);
   assert.equal(written.custom[0].note, 'Transcribes');
   assert.equal(written.keys.openai, 'sk-new-0123456789');
+});
+
+test('the library is searched by meaning at OpenFilm\'s service unless turned off, and the choice is kept', async () => {
+  let state = await (await api('/api/providers')).json();
+  assert.equal(state.librarySearch, 'openfilm', 'on by default');
+  state = await (await api('/api/providers/library-search', { method: 'PUT', body: { on: false } })).json();
+  assert.equal(state.librarySearch, null);
+  assert.equal((await readSettings()).libraryOff, true);
+  assert.equal((await api('/api/providers/library-search', { method: 'PUT', body: { on: 'yes' } })).status, 400);
+  state = await (await api('/api/providers/library-search', { method: 'PUT', body: { on: true } })).json();
+  assert.equal(state.librarySearch, 'openfilm');
 });

@@ -9,6 +9,7 @@
 import { clipKind } from '../../../../src/film-doc.mjs';
 import type { FilmOverride } from './film.ts';
 import { mediaFetch } from './media-queue.ts';
+import type { RecycleRefusal } from './recycle.ts';
 
 export type WorkspaceResourceKind = 'video' | 'image' | 'audio' | 'mg' | 'other';
 
@@ -49,18 +50,33 @@ export interface WorkspaceResource {
 /**
  * What a bundle of Saved is: a clip, a group of `count` clips, or a page; `props`: a component, the properties it offers.
  * A page, or a clip of one: `page`, where its page is in the library (from its top); a clip's `size` (what its page is
- * laid out at) and `overrides` (the changes made in it), so it plays as the film had it.
+ * laid out at) and `overrides` (the changes made in it), so it plays as the film had it. A clip of a sound, a video or
+ * a picture: `file`, its file (a `saved/` path), heard, played and pictured as the file itself.
  */
 export interface SavedBundle {
   kind: 'clip' | 'group' | 'page';
   count?: number;
   props?: number;
   page?: string;
+  file?: string;
   size?: { w: number; h: number };
   overrides?: readonly FilmOverride[];
 }
 
-export interface MediaProxy { state: 'waiting' | 'making' | 'ready' | 'failed'; ratio?: number }
+/** A proxy of footage for the preview: `needed` when this browser does not decode the footage (nothing shows without
+    it); `reason`, why it could not be made. */
+export interface MediaProxy { state: 'waiting' | 'making' | 'ready' | 'failed'; ratio?: number; needed?: boolean; reason?: string }
+
+/** What to say of a proxy (`t`: the UI's words): of one this browser needs, that the footage is being prepared to play. */
+export function proxyText(proxy: MediaProxy, t: (path: string) => string): string {
+  const percent = String(Math.round((proxy.ratio ?? 0) * 100));
+  if (proxy.needed) {
+    return proxy.state === 'making' ? t('media.copyMaking').replace('{p}', percent) : proxy.state === 'waiting' ? t('media.copyWaiting')
+      : proxy.state === 'failed' ? t('media.copyFailed').replace('{reason}', proxy.reason ?? '') : t('media.copyReady');
+  }
+  return proxy.state === 'making' ? t('media.proxyMaking').replace('{p}', percent) : proxy.state === 'waiting' ? t('media.proxyWaiting')
+    : proxy.state === 'failed' ? (proxy.reason ? t('media.proxyFailedWhy').replace('{reason}', proxy.reason) : t('media.proxyFailed')) : t('media.proxyReady');
+}
 
 /** Where a linked file or folder is kept (`to`, a full path); `missing`: it cannot be reached (a NAS that is off). */
 export interface MediaLink { to: string; missing?: boolean }
@@ -100,8 +116,9 @@ export interface MediaSources {
   pageSurface?(file: WorkspaceResource): string | undefined;
 }
 
-/** What a change to the files came to: done, refused because the name is taken, or failed. */
-export type MediaResult = 'ok' | 'taken' | 'failed';
+/** What a change to the files came to: done, refused because the name is taken, left where it is because the Recycle
+ * Bin would not take it (Windows; lib/recycle.ts), or failed. */
+export type MediaResult = 'ok' | 'taken' | 'failed' | RecycleRefusal;
 
 /** What a probe found out about a media file (`media?what=probe`, in ms and px). */
 export interface MediaFacts {
@@ -177,6 +194,7 @@ export function mediaListingOf(
           ...(f.saved.count ? { count: f.saved.count } : {}),
           ...(f.saved.props ? { props: f.saved.props } : {}),
           ...(f.saved.page ? { page: f.saved.page } : {}),
+          ...(f.saved.file ? { file: f.saved.file } : {}),
           ...(f.saved.size ? { size: f.saved.size } : {}),
           ...(f.saved.overrides ? { overrides: f.saved.overrides } : {}),
         },
@@ -190,7 +208,8 @@ export function mediaListingOf(
     dirs: raw.folders.filter((d) => d.startsWith(`${root}/`)).map(rel),
     linkedDirs: Object.fromEntries(Object.entries(raw.links ?? {}).filter(([path]) => raw.folders.includes(path)).map(([path, link]) => [rel(path), link])),
     ...(made ? { made: made.filter((d) => d.startsWith(`${root}/`)).map(rel) } : {}),
-    pages: raw.pages.map((p) => ({
+    /* a compound clip's film (parts/) is placed by making one, not from here */
+    pages: raw.pages.filter((p) => !p.path.startsWith('parts/')).map((p) => ({
       path: p.path,
       name: pageName(p.path),
       dir: '',

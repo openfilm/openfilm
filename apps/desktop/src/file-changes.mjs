@@ -7,10 +7,15 @@
  * Any other file (media, a large file) is compared by its size and time only, and says no lines. Studio's own folder
  * (.film), hidden folders and node_modules are not read.
  *
+ * A turn can be undone (undoTurn): the folder put back as the turn found it. film.html is kept whole whatever its size
+ * (up to FILM_MAX), since the film is the project; any other text from what was kept of it, any other file from a hard
+ * link to it made as the turn began (`hold`, in Studio's folder: no space taken, and the content outlives a delete; a
+ * disk without hard links has none).
+ *
  * Reads no Electron module, so `node --test` can use it.
  */
-import { readdir, readFile, stat } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { link, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, sep } from 'node:path';
 import { structuredPatch } from 'diff';
 
 const TEXT = /\.(html?|css|[cm]?js|jsx|tsx?|json|md|txt|srt|vtt|svg|xml|ya?ml|toml|py|sh|csv)$/i;
@@ -26,17 +31,32 @@ const LINES_MAX = 400;
 const TURN_LINES_MAX = 2000;
 /** a diff that takes longer than this gives up: the file says it changed, with no lines */
 const DIFF_MS = 1500;
+/** the project's film, at its top, and how large a one is kept whole to put back */
+export const FILM = 'film.html';
+const FILM_MAX = 32 * 1024 * 1024;
+
+/** Where a turn's links to the files as it began are kept (`hold`): null for an id that names no folder. */
+export const holdDir = (/** @type {string} */ root, /** @type {unknown} */ turnId) => (
+  typeof turnId === 'string' && /^[\w:-]{1,120}$/.test(turnId) ? join(root, '.film', 'cache', 'turn-files', turnId.replace(/:/g, '-')) : null
+);
+
+/** Let go of a turn's links (`hold`): a file the turn removed is gone for good then. */
+export const dropHold = (/** @type {string | null} */ hold) => (hold ? rm(hold, { recursive: true, force: true }).catch(() => {}) : Promise.resolve());
 
 /**
- * @typedef {{ size: number, mtimeMs: number, text?: string }} Seen
+ * @typedef {{ size: number, mtimeMs: number, text?: string, held?: true }} Seen
  * @typedef {{ files: Map<string, Seen>, cut: boolean }} Snapshot
  * @typedef {{ oldStart: number, oldLines: number, newStart: number, newLines: number, lines: string[] }} Hunk
  * @typedef {{ path: string, change: 'added' | 'removed' | 'changed', added?: number, removed?: number,
  *   hunks?: Hunk[], cut?: boolean }} FileChange
  */
 
-/** The project's files now: each one's size and time, and a text file's text. */
-export async function snapshot(root) {
+/**
+ * The project's files now: each one's size and time, and a text file's text. With `hold`, each other file is linked
+ * there too (`held`), to be put back if it goes.
+ * @param {string} root @param {{ hold?: string | null }} [opts]
+ */
+export async function snapshot(root, { hold = null } = {}) {
   /** @type {Map<string, Seen>} */
   const files = new Map();
   let kept = 0;
@@ -59,10 +79,15 @@ export async function snapshot(root) {
       try { info = await stat(abs); } catch { continue; }
       /** @type {Seen} */
       const seen = { size: info.size, mtimeMs: info.mtimeMs };
-      if (TEXT.test(entry.name) && info.size <= TEXT_MAX && kept + info.size <= KEEP_MAX) {
+      const path = relative(root, abs).split(sep).join('/');
+      if (path === FILM ? info.size <= FILM_MAX : TEXT.test(entry.name) && info.size <= TEXT_MAX && kept + info.size <= KEEP_MAX) {
         try { seen.text = await readFile(abs, 'utf8'); kept += info.size; } catch { /* gone meanwhile */ }
       }
-      files.set(relative(root, abs).split(sep).join('/'), seen);
+      if (hold && seen.text == null) {
+        const to = join(hold, ...path.split('/'));
+        try { await mkdir(dirname(to), { recursive: true }); await link(abs, to); seen.held = true; } catch { /* no hard links here */ }
+      }
+      files.set(path, seen);
     }
   };
   await walk(root, 0);
@@ -123,4 +148,44 @@ export async function changes(root, before) {
     out.push({ path, change, added, removed, hunks: kept, ...(dropped ? { cut: true } : {}) });
   }
   return { files: out, cut: before.cut || after.cut };
+}
+
+/**
+ * Undo a turn: the folder as its snapshot (`before`) found it. A file added since goes to the trash (`trash`, the
+ * system's); one removed or changed is written back, a text from what was kept, any other from its link in `hold`.
+ * What cannot be put back is left as it is and named (`missed`): a file too large to keep, or one written over in its
+ * place, which its link then holds too. → how many came back, and those missed.
+ * @param {string} root @param {Snapshot} before @param {string | null} hold
+ * @param {{ trash: (path: string) => Promise<void> }} o
+ * @returns {Promise<{ restored: number, missed: string[] }>}
+ */
+export async function undoTurn(root, before, hold, { trash }) {
+  const after = await snapshot(root);
+  let restored = 0;
+  /** @type {string[]} */
+  const missed = [];
+  for (const path of [...new Set([...before.files.keys(), ...after.files.keys()])].sort()) {
+    const was = before.files.get(path);
+    const now = after.files.get(path);
+    const to = join(root, ...path.split('/'));
+    if (was && now && was.size === now.size && was.mtimeMs === now.mtimeMs) continue;
+    if (was?.text != null && now?.text != null && was.text === now.text) continue;
+    try {
+      if (!was) { await trash(to); restored += 1; continue; }
+      if (was.text != null) {
+        await mkdir(dirname(to), { recursive: true });
+        await writeFile(to, was.text);
+        restored += 1;
+        continue;
+      }
+      const held = was.held && hold ? join(hold, ...path.split('/')) : null;
+      const kept = held ? await stat(held).catch(() => null) : null;
+      if (!held || !kept || kept.size !== was.size || kept.mtimeMs !== was.mtimeMs) { missed.push(path); continue; }
+      await mkdir(dirname(to), { recursive: true });
+      await rm(to, { force: true });
+      await link(held, to);
+      restored += 1;
+    } catch { missed.push(path); }
+  }
+  return { restored, missed };
 }

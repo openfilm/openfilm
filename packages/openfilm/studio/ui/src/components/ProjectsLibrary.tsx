@@ -19,18 +19,20 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 import { api, ApiError, LIBRARY_EVENT } from '@/api';
+import { recycleRefusalOf, recycleRefusalWords, type RecycleRefusal } from '@/lib/recycle';
 import { useT } from '@/i18n';
 import { folderApi, folderCounts, folderTrail, newProjectIn, type ProjectFolder } from '@/lib/project-folders';
 import { stillThere } from '@/lib/project-delete';
 import { studioHost } from '@/lib/host';
-import { SourceError, sourcesApi } from '@/lib/project-sources';
+import { SourceError, sourcesApi, type Example } from '@/lib/project-sources';
 import { LIST_WAIT_MS, within } from '@/lib/projects-page';
 import { readLastSubtitleStyle } from '@/lib/subtitles';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ProjectsView, type LibraryProject } from './ProjectsView';
 import { FolderBrowserDialog, GitHubDialog } from './ProjectSources';
-import { ExamplesGallery, TitleSwitch } from './ExamplesGallery';
+import { ExamplesGallery, TitleSwitch, type ExamplePart } from './ExamplesGallery';
 import { ProjectCoverContext, posterUrl, useProjectCover } from './ProjectCover';
+import { LARGE_DIALOG_SIZE } from './dialog-chrome';
 
 
 /* each card's picture: its own cover, else the film's middle frame, drawn by Studio (cached until film.html changes);
@@ -131,17 +133,20 @@ function useProjectLibrary(open: boolean) {
     setProjects((list) => list.filter((p) => !drop.has(p.id)));
     /* null: deleted; else why not ('agent-running': an agent started in it since the list was read) */
     /* `lost`: no answer came (the request was cut off, as when the page showing one of them leaves it) */
+    /* `kept` (Windows): the Recycle Bin would not take its folder, so it stays where it is, and the person hears why */
     const results = await Promise.all(ids.map((id) => api.forget(id).then(() => null, (e: unknown) => ({
       id, working: e instanceof ApiError && e.body.code === 'agent-running', lost: !(e instanceof ApiError),
+      kept: e instanceof ApiError ? recycleRefusalOf(e.body) : null,
     }))));
     /* the ones still on the list (lib/project-delete): one gone already, or whose lost answer was a delete, was deleted */
-    const failed = await stillThere(results.filter((r): r is { id: string; working: boolean; lost: boolean } => r !== null),
+    const failed = await stillThere(results.filter((r): r is { id: string; working: boolean; lost: boolean; kept: RecycleRefusal | null } => r !== null),
       () => api.projects().then((list) => list.map((p) => p.id)));
     if (failed.length) {
       const back = new Set(failed.map((f) => f.id));
       setProjects((list) => [...list, ...before.filter((p) => back.has(p.id)).map((p) => (failed.find((f) => f.id === p.id)?.working ? { ...p, working: true } : p))]);
       const working = failed.filter((f) => f.working).length;
-      flash(working ? agentRunning(working, ids.length) : t('project.deleteFailed'));
+      const kept = failed.find((f) => f.kept)?.kept;
+      flash(working ? agentRunning(working, ids.length) : kept ? recycleRefusalWords(t, kept) : t('project.deleteFailed'));
     }
     const gone = new Set(failed.map((f) => f.id));
     return new Set(ids.filter((id) => !gone.has(id)));
@@ -240,6 +245,8 @@ export function ProjectsPopover({
   onOpen,
   onCurrentRemoved,
   onClose,
+  examples,
+  onUseCanvas,
 }: {
   open: boolean;
   /** The project open in the editor ("" when none: Studio has no project to show, and this window is all there is). */
@@ -253,14 +260,19 @@ export function ProjectsPopover({
   onCurrentRemoved: () => void;
   /** Missing: the window cannot be closed (there is no project behind it). */
   onClose?: () => void;
+  /** open on the examples (the app's chat asked for them), and on this one's page */
+  examples?: { example?: string };
+  /** over a film: an example's canvas laid down on its own */
+  onUseCanvas?: (example: Example) => void;
 }) {
   const t = useT();
   const lib = useProjectLibrary(open);
   const { flash } = lib;
   const cover = useProjectCover(lib.coverChanged, React.useCallback(() => flash(t('projects.coverFailed')), [flash, t]));
-  /* each time it opens: the projects (the examples are a switch away) */
+  /* each time it opens: the projects (the examples are a switch away), or the examples when asked for */
   const [view, setView] = React.useState<LauncherView>('projects');
-  React.useEffect(() => { if (open) setView('projects'); }, [open]);
+  const opensOn: LauncherView = examples ? 'examples' : 'projects';
+  React.useEffect(() => { if (open) setView(opensOn); }, [open, opensOn]);
   const showView = setView;
   const [pendingDelete, setPendingDelete] = React.useState<string[] | null>(null);
   const [pendingFolder, setPendingFolder] = React.useState<ProjectFolder | null>(null);
@@ -439,11 +451,7 @@ export function ProjectsPopover({
         role="dialog"
         aria-label={t('project.projects')}
         aria-modal="true"
-        className="fixed left-1/2 top-1/2 z-[10050] flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--app-content-bg)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]"
-        style={{
-          width: 'min(1080px, calc(100vw - 64px))',
-          height: 'min(760px, calc(100vh - 96px))',
-        }}
+        className={`fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-panel)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]`}
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
@@ -451,10 +459,30 @@ export function ProjectsPopover({
           {cover.picker}
           {view === 'examples' ? (
             <ExamplesGallery
-              mode="start"
+              key={examples?.example ?? ''}
               heading={<LauncherSwitch view={view} onView={showView} />}
+              {...(examples?.example ? { initial: examples.example } : {})}
               onClose={onClose}
               onStart={(example) => setGithub({ url: example.url, start: true, title: example.title })}
+              /* over a film: the example pointed at in its chat, for the agent to follow (as the Community does) */
+              {...(currentProjectId && studioHost?.refer ? { onReference: (example: Example, part: ExamplePart) => {
+                void sourcesApi.exampleFolder(example.id).catch(() => {});
+                studioHost?.refer?.({
+                  kind: 'example', id: example.id, title: example.title, url: example.url, ...(example.description ? { description: example.description } : {}),
+                  ...(part ? { start: part.from, end: part.to, ...(part.segment ? { segment: part.segment } : {}) } : {}),
+                });
+                onClose?.();
+              } } : {})}
+              {...(currentProjectId && onUseCanvas ? { onUseCanvas } : {})}
+              /* over a film: how it was made, asked in its chat */
+              {...(currentProjectId && studioHost?.ask ? { onExplain: (example: Example, canvas: boolean) => {
+                void sourcesApi.exampleFolder(example.id).catch(() => {});
+                studioHost?.ask?.({
+                  text: t(canvas ? 'gallery.explainAskCanvas' : 'gallery.explainAsk'),
+                  refs: [{ kind: 'example', id: example.id, title: example.title, url: example.url, ...(example.description ? { description: example.description } : {}), ...(canvas ? { canvas: true } : {}) }],
+                });
+                onClose?.();
+              } } : {})}
             />
           ) : lib.loaded ? (
             <ProjectCoverContext.Provider value={cover.actions}>
@@ -495,7 +523,7 @@ export function ProjectsPopover({
               <button
                 type="button"
                 onClick={lib.retryLoad}
-                className="h-8 rounded-lg bg-[var(--surface-2)] px-3 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]"
+                className="h-8 rounded-lg bg-[var(--bg-field)] px-3 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]"
               >
                 {t('projects.loadRetry')}
               </button>
@@ -507,14 +535,14 @@ export function ProjectsPopover({
           )}
         </div>
         {busy ? (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--app-content-bg)]/70">
-            <div className="flex items-center gap-2 rounded-lg bg-[var(--surface)] px-4 py-3 text-sm shadow-lg">
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--bg-panel)]/70">
+            <div className="flex items-center gap-2 rounded-lg bg-[var(--bg-raised)] px-4 py-3 text-sm shadow-lg">
               <Loader2 size={16} className="animate-spin" />{t(busy === 'creating' ? 'projects.creating' : 'projects.opening')}
             </div>
           </div>
         ) : null}
         {lib.error ? (
-          <div role="alert" className="pointer-events-none absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-[var(--err)]/40 bg-[var(--surface)] px-4 py-2 text-[12.5px] font-medium text-[var(--err)] shadow-[var(--shadow-lg)]">
+          <div role="alert" className="pointer-events-none absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-[var(--err)]/40 bg-[var(--bg-raised)] px-4 py-2 text-[12.5px] font-medium text-[var(--err)] shadow-[var(--shadow-lg)]">
             {lib.error}
           </div>
         ) : null}

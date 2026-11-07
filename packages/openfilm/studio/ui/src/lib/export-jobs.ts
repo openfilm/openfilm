@@ -18,7 +18,7 @@ export type NleAlpha = 'auto' | 'png' | 'prores' | 'prores4444';
 
 export type ExportRequest = { range?: [number, number]; ranges?: [number, number][]; label?: string; name?: string } & (
   | (Framing & { kind: 'video'; codec: ExportVideoCodec; shortEdge?: number; fps: number; quality: ExportQuality; audio: boolean;
-    clip?: string; scale?: number; preset?: string; sidecar?: 'srt' | 'vtt' })
+    clip?: string; scale?: number; preset?: string; sidecar?: 'srt' | 'vtt'; loudness?: number })
   | (Framing & { kind: 'gif'; width: number; fps: number })
   | { kind: 'audio'; format: 'wav' | 'm4a' | 'mp3'; mix: boolean; stems: boolean }
   | (Framing & { kind: 'stills'; as?: 'files' | 'zip'; format: 'png' | 'jpg'; shortEdge: number; at?: number[] })
@@ -84,6 +84,8 @@ export interface ExportCapabilities {
   hevcAlpha: boolean;
   vp9: boolean;
   prores: boolean;
+  /** ProRes encoded by the Mac's media engine, not by ffmpeg's prores_ks */
+  proresChip: boolean;
   mp3: boolean;
 }
 
@@ -103,7 +105,7 @@ async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Pr
  * The project's exports, where they go by default, what this machine encodes, how many subtitle cues the film has, and
  * how big the project and its parts are.
  */
-export function listExports(projectId: string): Promise<{ exports: ExportJob[]; folder: string; can: ExportCapabilities; drafts?: { jianying: boolean; capcut: boolean }; subtitles?: number; project?: ProjectSizes }> {
+export function listExports(projectId: string): Promise<{ exports: ExportJob[]; folder: string; can: ExportCapabilities; drafts?: { jianying: boolean; capcut: boolean }; subtitles?: number; captionTracks?: boolean; project?: ProjectSizes }> {
   return call(endpoint(projectId), { cache: 'no-store' });
 }
 

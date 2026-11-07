@@ -1,6 +1,10 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import google, { polling } from './google.mjs';
 
 const KEY = 'AIza-test-0123456789';
@@ -86,74 +90,83 @@ test('a picture: the ratio and size asked, the extension from what came back, tr
   await assert.rejects(google.run('image', { out: 'x', prompt: 'y' }, ctx()), /no image \(SAFETY\)/);
 });
 
-/** A small MP4 that says it plays `seconds`: a file type, then the movie header. */
-const mp4 = (seconds) => {
-  const mvhd = Buffer.alloc(108);
-  mvhd.writeUInt32BE(108, 0);
-  mvhd.write('mvhd', 4, 'ascii');
-  mvhd.writeUInt32BE(1000, 20);
-  mvhd.writeUInt32BE(seconds * 1000, 24);
-  const moov = Buffer.alloc(8);
-  moov.writeUInt32BE(8 + mvhd.length, 0);
-  moov.write('moov', 4, 'ascii');
-  return Buffer.concat([Buffer.from([0, 0, 0, 12, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]), moov, mvhd]);
-};
-/** A finished interaction with what the model answered. */
-const done = (...content) => ({ id: 'v1_clip', status: 'completed', steps: [{ type: 'user_input', content: [] }, { type: 'model_output', content }] });
-const isStart = (call) => call.method === 'POST' && call.url.pathname === '/v1beta/interactions';
-
-test('a video: pictures named in the prompt, run in the background and asked after until done, its length from the file', async () => {
-  let asks = 0, deleted = 0;
+test('a video: asked through the Interactions API, its file asked after until ready, downloaded with the key', async () => {
+  let asks = 0;
   reply = (call) => {
-    if (isStart(call)) return [200, { id: 'v1_clip', status: 'in_progress' }];
-    if (call.url.pathname !== '/v1beta/interactions/v1_clip') return [404, {}];
-    if (call.method === 'DELETE') { deleted += 1; return [200, {}]; }
-    asks += 1;
-    return [200, asks < 3 ? { id: 'v1_clip', status: 'in_progress' } : done({ type: 'video', mime_type: 'video/mp4', data: mp4(8).toString('base64') })];
+    if (call.url.pathname === '/v1beta/interactions') return [200, { id: 'v1_a', status: 'completed', steps: [
+      { type: 'user_input', content: [{ type: 'text', text: 'a slow push in' }] },
+      { type: 'model_output', content: [{ type: 'video', mime_type: 'video/mp4', uri: `${base}/v1beta/files/clip1:download?alt=media` }] },
+    ] }];
+    if (call.url.pathname === '/v1beta/files/clip1') { asks += 1; return [200, { name: 'files/clip1', state: asks < 3 ? 'PROCESSING' : 'ACTIVE' }]; }
+    if (call.url.pathname === '/v1beta/files/clip1:download') return [call.headers['x-goog-api-key'] === KEY ? 200 : 403, Buffer.from('mp4 bytes')];
+    return [404, {}];
   };
   const first = Buffer.alloc(33);
   first.writeUInt32BE(0x89504e47, 0);
   first.writeUInt32BE(720, 16);
   first.writeUInt32BE(1280, 20);
-  const files = { 'assets/image/first.png': new Uint8Array(first), 'assets/image/last.jpg': new Uint8Array(4), 'assets/image/cat.webp': new Uint8Array(4) };
-  const result = await google.run('video', { out: 'shot', prompt: 'a slow push in', duration: 5, 'first-frame': 'assets/image/first.png',
-    'last-frame': 'assets/image/last.jpg', 'input-reference': 'assets/image/cat.webp' }, ctx(files));
-  const started = JSON.parse(seen.findLast(isStart).body);
-  assert.equal(started.model, 'gemini-omni-1.1-flash');
-  assert.equal(started.background, true);
-  /* a tall first frame makes a tall clip */
-  assert.deepEqual(started.response_format, { type: 'video', aspect_ratio: '9:16', resolution: '720p' });
-  assert.deepEqual(started.input.map((part) => part.mime_type ?? part.type), ['image/png', 'image/jpeg', 'image/webp', 'text']);
-  assert.equal(started.input[3].text, '[# Sources <FIRST_FRAME>@Image1 <LAST_FRAME>@Image2] [# References <IMAGE_REF_0>@Image3] a slow push in');
+  const result = await google.run('video', { out: 'shot', prompt: 'a slow push in', duration: 5, 'first-frame': 'assets/image/first.png' }, ctx({ 'assets/image/first.png': new Uint8Array(first) }));
+  const sent = JSON.parse(seen.findLast((c) => c.url.pathname === '/v1beta/interactions').body);
+  assert.equal(sent.model, 'gemini-omni-1.2-flash');
+  assert.equal(sent.background, true);
+  assert.deepEqual(sent.input.map((/** @type {any} */ p) => p.type), ['image', 'text']);
+  assert.equal(sent.input[0].mime_type, 'image/png');
+  assert.equal(sent.input[1].text, 'a slow push in');
+  /* a tall first frame makes a tall clip, of the length asked; a single frame is the clip's first */
+  assert.deepEqual(sent.response_format, { type: 'video', delivery: 'uri', aspect_ratio: '9:16', resolution: '720p', duration: '5s' });
+  assert.deepEqual(sent.generation_config, { video_config: { task: 'image_to_video' } });
   assert.equal(asks, 3);
-  assert.equal(deleted, 1);
   assert.equal(result.files[0].path, 'assets/video/shot.mp4');
-  assert.deepEqual(Buffer.from(result.files[0].bytes), mp4(8));
-  assert.deepEqual({ ...result.index[0], from: undefined }, { src: 'assets/video/shot.mp4', kind: 'video', w: 720, h: 1280, dur: 8, hasAudio: true, from: undefined });
-  assert.match(result.receipt.notes[0], /length from the prompt .*this one is 8 s/);
+  assert.equal(Buffer.from(result.files[0].bytes).toString(), 'mp4 bytes');
+  assert.deepEqual({ ...result.index[0], from: undefined }, { src: 'assets/video/shot.mp4', kind: 'video', w: 720, h: 1280, dur: 5, hasAudio: true, from: undefined });
+  assert.equal(result.receipt.notes, undefined);
 });
 
-test('a video with only a last frame takes it as a reference; a clip as long as asked says nothing of its length', async () => {
-  reply = (call) => isStart(call) ? [200, done({ type: 'video', data: mp4(5).toString('base64') })] : [200, {}];
-  const result = await google.run('video', { out: 'x', prompt: 'y', duration: 5, 'last-frame': 'assets/image/last.png' }, ctx({ 'assets/image/last.png': new Uint8Array(4) }));
-  const started = JSON.parse(seen.findLast(isStart).body);
-  assert.equal(started.input.at(-1).text, '[# References <IMAGE_REF_0>@Image1] y');
-  assert.deepEqual(result.receipt.notes, ['--last-frame: Gemini Omni Flash ends on a picture only after a first frame: it was a reference']);
+test('a video\'s lengths, sizes and pictures: 3 to 15 s, 10 between two frames; 6 reference pictures; a clip sent inline', async () => {
+  reply = () => [200, { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'video', mime_type: 'video/mp4', data: Buffer.from('inline mp4').toString('base64') }] }] }];
+  const png = new Uint8Array(Buffer.from('89504e470d0a1a0a', 'hex'));
+  const pictures = Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((n) => [`assets/image/${n}.png`, png]));
+  const long = await google.run('video', { out: 'x', prompt: 'y', duration: 20, resolution: '4K', 'aspect-ratio': '1:1' }, ctx());
+  let sent = JSON.parse(seen.at(-1).body);
+  assert.equal(sent.input, 'y');
+  assert.deepEqual(sent.response_format, { type: 'video', delivery: 'uri', aspect_ratio: '16:9', resolution: '4k', duration: '15s' });
+  assert.equal(sent.generation_config, undefined);
+  assert.equal(Buffer.from(long.files[0].bytes).toString(), 'inline mp4');
+  assert.deepEqual([long.index[0].w, long.index[0].h, long.index[0].dur], [3840, 2160, 15]);
+  assert.match(long.receipt.notes.join('\n'), /3 to 15 second clips: 15 s/);
+  assert.match(long.receipt.notes.join('\n'), /16:9 or 9:16 clips: 16:9/);
+
+  const between = await google.run('video', { out: 'x', prompt: 'y', duration: 12, 'first-frame': 'assets/image/a.png', 'last-frame': 'assets/image/b.png', 'input-reference': ['assets/image/c.png'] }, ctx(pictures));
+  sent = JSON.parse(seen.at(-1).body);
+  assert.deepEqual(sent.input.map((/** @type {any} */ p) => p.type), ['image', 'image', 'text']);
+  assert.equal(sent.response_format.duration, '10s');
+  assert.equal(sent.generation_config, undefined, 'two frames are read as a start and an end');
+  assert.match(between.receipt.notes.join('\n'), /frames were used/);
+  assert.match(between.receipt.notes.join('\n'), /3 to 10 second clips between two frames/);
+
+  const refs = await google.run('video', { out: 'x', prompt: 'y', resolution: '1080p', 'input-reference': Object.keys(pictures) }, ctx(pictures));
+  sent = JSON.parse(seen.at(-1).body);
+  assert.equal(sent.input.filter((/** @type {any} */ p) => p.type === 'image').length, 6);
+  assert.deepEqual(sent.generation_config, { video_config: { task: 'reference_to_video' } });
+  assert.equal(sent.response_format.resolution, '1080p');
+  assert.deepEqual(refs.index[0].from.refs, Object.keys(pictures).slice(0, 6));
+  assert.match(refs.receipt.notes[0], /6 reference pictures/);
+
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y', 'last-frame': 'assets/image/b.png' }, ctx(pictures)), /--first-frame too/);
 });
 
-test('a video that fails or is blocked says why; a cancelled run stops asking and cancels the interaction', async () => {
-  reply = (call) => isStart(call) ? [200, { id: 'v1_a', status: 'in_progress' }] : [200, { id: 'v1_a', status: 'failed', error: { message: 'prompt was blocked' } }];
-  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /could not make the clip: prompt was blocked/);
-  reply = (call) => isStart(call) ? [200, done({ type: 'text', text: 'I can not make that.' })] : [200, {}];
-  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /made no clip: I can not make that\./);
-
-  let asks = 0, cancelled = 0;
-  reply = (call) => {
-    if (isStart(call)) return [200, { id: 'v1_b', status: 'in_progress' }];
-    if (call.url.pathname === '/v1beta/interactions/v1_b/cancel') { cancelled += 1; return [200, {}]; }
-    asks += 1;
-    return [200, { id: 'v1_b', status: 'in_progress' }];
-  };
+test('a video that is not made says why; a file that fails says so; a cancelled run stops asking', async () => {
+  reply = () => [200, { status: 'failed', steps: [] }];
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /Gemini Omni could not make the clip \(failed\)/);
+  reply = () => [200, { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: 'I can not make that.' }] }] }];
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /Gemini Omni made no clip: I can not make that\./);
+  reply = () => [400, { error: { message: 'prompt was blocked' } }];
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /400: prompt was blocked/);
+  const made = { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'video', uri: `${base}/v1beta/files/clip2:download?alt=media` }] }] };
+  reply = (call) => [200, call.url.pathname === '/v1beta/interactions' ? made : { state: 'FAILED', error: { message: 'encoding failed' } }];
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /could not finish the clip: encoding failed/);
+  let asks = 0;
+  reply = (call) => { if (call.url.pathname !== '/v1beta/interactions') asks += 1; return [200, call.url.pathname === '/v1beta/interactions' ? made : { state: 'PROCESSING' }]; };
   const stop = new AbortController();
   const run = google.run('video', { out: 'x', prompt: 'y' }, ctx({}, stop.signal));
   await new Promise((done) => setTimeout(done, 40));
@@ -164,8 +177,57 @@ test('a video that fails or is blocked says why; a cancelled run stops asking an
   const after = asks;
   await new Promise((done) => setTimeout(done, 60));
   assert.equal(asks, after);
+});
+
+test('a video run in the background: asked after until done, then deleted; one that fails says why; a stopped run cancels it', async () => {
+  const at = '/v1beta/interactions/v1_bg';
+  const isStart = (call) => call.method === 'POST' && call.url.pathname === '/v1beta/interactions';
+  let asks = 0, deleted = 0;
+  reply = (call) => {
+    if (isStart(call)) return [200, { id: 'v1_bg', status: 'in_progress' }];
+    if (call.url.pathname !== at) return [404, {}];
+    if (call.method === 'DELETE') { deleted += 1; return [200, {}]; }
+    asks += 1;
+    return [200, asks < 3 ? { id: 'v1_bg', status: 'in_progress' }
+      : { id: 'v1_bg', status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'video', data: Buffer.from('inline mp4').toString('base64') }] }] }];
+  };
+  const result = await google.run('video', { out: 'x', prompt: 'y' }, ctx());
+  assert.equal(Buffer.from(result.files[0].bytes).toString(), 'inline mp4');
+  assert.equal(asks, 3);
+  assert.equal(deleted, 1, 'the finished interaction is deleted');
+  assert.equal(seen.findLast((c) => c.method === 'DELETE').headers['x-goog-api-key'], KEY);
+
+  deleted = 0;
+  reply = (call) => {
+    if (isStart(call)) return [200, { id: 'v1_bg', status: 'in_progress' }];
+    if (call.method === 'DELETE') { deleted += 1; return [200, {}]; }
+    return [200, { id: 'v1_bg', status: 'failed', error: { message: 'prompt was blocked' } }];
+  };
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /could not make the clip: prompt was blocked/);
+  assert.equal(deleted, 1, 'a failed interaction is deleted too');
+
+  reply = () => [200, { id: '../files/x', status: 'in_progress' }];
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /did not start the video/);
+
+  asks = 0;
+  let cancelled = 0;
+  reply = (call) => {
+    if (isStart(call)) return [200, { id: 'v1_bg', status: 'in_progress' }];
+    if (call.url.pathname === `${at}/cancel`) { cancelled += 1; return [200, {}]; }
+    asks += 1;
+    return [200, { id: 'v1_bg', status: 'in_progress' }];
+  };
+  const stop = new AbortController();
+  const run = google.run('video', { out: 'x', prompt: 'y' }, ctx({}, stop.signal));
+  await new Promise((done) => setTimeout(done, 40));
+  stop.abort();
+  await assert.rejects(run);
+  await new Promise((done) => setTimeout(done, 20));
+  const after = asks;
+  await new Promise((done) => setTimeout(done, 60));
+  assert.equal(asks, after, 'no polls after the stop');
   assert.equal(cancelled, 1);
-  assert.equal(seen.filter((c) => c.method === 'POST' && c.url.pathname.endsWith('/cancel')).at(-1).headers['x-goog-api-key'], KEY);
+  assert.equal(seen.findLast((c) => c.url.pathname === `${at}/cancel`).headers['x-goog-api-key'], KEY);
 });
 
 test('translation: JSON asked for, the lines back in order', async () => {
@@ -178,22 +240,85 @@ test('translation: JSON asked for, the lines back in order', async () => {
   assert.deepEqual(result.receipt.lines, ['Bonjour.', 'Au revoir.']);
 });
 
-test('a video\'s address elsewhere is not downloaded with the key; its own is', async () => {
+test('a video\'s address elsewhere is not downloaded with the key', async () => {
   const elsewhere = base.replace('127.0.0.1', 'localhost');
   let keyed = 0;
   reply = (call) => {
     if (call.headers.host.startsWith('localhost') && call.headers['x-goog-api-key']) keyed += 1;
-    if (isStart(call)) return [200, done({ type: 'video', uri: `${elsewhere}/v1beta/files/clip:download?alt=media` })];
-    return [200, mp4(4)];
+    if (call.url.pathname === '/v1beta/interactions') return [200, { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'video', uri: `${elsewhere}/v1beta/files/clip.mp4:download` }] }] }];
+    return [200, Buffer.from('mp4 bytes')];
   };
   await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /not its own; your key was not sent there/);
   assert.equal(keyed, 0);
+});
 
+/** A minimal MP4: a movie header of this length and one track of this picture size. */
+function mp4(seconds, w, h) {
+  const box = (type, ...parts) => { const body = Buffer.concat(parts); const head = Buffer.alloc(8); head.writeUInt32BE(8 + body.length); head.write(type, 4, 'ascii'); return Buffer.concat([head, body]); };
+  const mvhd = Buffer.alloc(100);
+  mvhd.writeUInt32BE(1000, 12);
+  mvhd.writeUInt32BE(Math.round(seconds * 1000), 16);
+  const tkhd = Buffer.alloc(84);
+  tkhd.writeUInt32BE(w * 65536, 76);
+  tkhd.writeUInt32BE(h * 65536, 80);
+  return Buffer.concat([box('ftyp', Buffer.from('isom')), box('moov', box('mvhd', mvhd), box('trak', box('tkhd', tkhd)))]);
+}
+
+test('a video from a clip: uploaded, asked after until ready, edited or continued as the prompt says, the upload deleted', async () => {
+  let asks = 0;
   reply = (call) => {
-    if (isStart(call)) return [200, done({ type: 'video', uri: `${base}/v1beta/files/clip:download?alt=media` })];
-    if (call.url.pathname === '/v1beta/files/clip:download') return [call.headers['x-goog-api-key'] === KEY ? 200 : 403, mp4(4)];
-    return [200, {}];
+    if (call.url.pathname === '/upload/v1beta/files') return [200, {}, { 'x-goog-upload-url': `${base}/upload/session-2` }];
+    if (call.url.pathname === '/upload/session-2') {
+      assert.equal(call.headers['content-type'], 'video/mp4');
+      return [200, { file: { name: 'files/clip-1', uri: `${base}/v1beta/files/clip-1`, mimeType: 'video/mp4' } }];
+    }
+    if (call.url.pathname === '/v1beta/files/clip-1' && call.method === 'GET') { asks += 1; return [200, { state: asks < 2 ? 'PROCESSING' : 'ACTIVE' }]; }
+    if (call.url.pathname === '/v1beta/files/clip-1' && call.method === 'DELETE') return [200, {}];
+    if (call.url.pathname === '/v1beta/interactions') {
+      return [200, { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'video', mime_type: 'video/mp4', data: mp4(6.5, 720, 1280).toString('base64') }] }] }];
+    }
+    return [404, {}];
   };
-  const result = await google.run('video', { out: 'x', prompt: 'y' }, ctx());
-  assert.equal(result.index[0].dur, 4);
+  /* a real 4 s clip in a project, so its length can be told */
+  const root = mkdtempSync(join(tmpdir(), 'omni-clip-'));
+  mkdirSync(join(root, 'assets/video'), { recursive: true });
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=gray:s=64x64:d=4', '-pix_fmt', 'yuv420p', join(root, 'assets/video/take.mp4')]);
+  const files = { 'assets/video/take.mp4': new Uint8Array(readFileSync(join(root, 'assets/video/take.mp4'))), 'assets/image/a.png': new Uint8Array(Buffer.from('89504e470d0a1a0a', 'hex')) };
+  const inProject = { ...ctx(files), root };
+  const result = await google.run('video', { out: 'take-2', prompt: 'make the cup red', video: 'assets/video/take.mp4', 'first-frame': 'assets/image/a.png', 'input-reference': ['assets/image/a.png'] }, inProject);
+  const sent = JSON.parse(seen.findLast((c) => c.url.pathname === '/v1beta/interactions').body);
+  assert.deepEqual(sent.input.map((/** @type {any} */ p) => p.type), ['video', 'image', 'text']);
+  assert.deepEqual(sent.input[0], { type: 'video', uri: `${base}/v1beta/files/clip-1`, mime_type: 'video/mp4' });
+  /* the clip keeps its shape, none asked; its own length is said; the prompt says edit or continue */
+  assert.deepEqual(sent.response_format, { type: 'video', delivery: 'uri', resolution: '720p', duration: '4s' });
+  assert.equal(sent.generation_config, undefined);
+  assert.equal(asks, 2);
+  assert.ok(seen.some((c) => c.method === 'DELETE' && c.url.pathname === '/v1beta/files/clip-1'));
+  /* its length and size as the made file says */
+  assert.deepEqual({ ...result.index[0], from: undefined }, { src: 'assets/video/take-2.mp4', kind: 'video', w: 720, h: 1280, dur: 6.5, hasAudio: true, from: undefined });
+  assert.equal(result.index[0].from.clip, 'assets/video/take.mp4');
+  assert.match(result.receipt.notes.join('\n'), /--first-frame: Gemini Omni makes it from the clip/);
+
+  const more = await google.run('video', { out: 'more', prompt: 'continue the scene', video: 'assets/video/take.mp4', duration: 6, 'aspect-ratio': '9:16' }, inProject);
+  assert.deepEqual(JSON.parse(seen.findLast((c) => c.url.pathname === '/v1beta/interactions').body).response_format,
+    { type: 'video', delivery: 'uri', aspect_ratio: '9:16', resolution: '720p', duration: '6s' });
+  assert.equal(more.receipt.notes, undefined);
+  /* a clip whose length cannot be told: none said, unless asked */
+  await google.run('video', { out: 'x', prompt: 'y', video: 'assets/video/take.mp4' }, ctx(files));
+  assert.equal(JSON.parse(seen.findLast((c) => c.url.pathname === '/v1beta/interactions').body).response_format.duration, undefined);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('a clip Gemini cannot take says so and its upload is deleted', async () => {
+  let deleted = 0;
+  reply = (call) => {
+    if (call.url.pathname === '/upload/v1beta/files') return [200, {}, { 'x-goog-upload-url': `${base}/upload/session-3` }];
+    if (call.url.pathname === '/upload/session-3') return [200, { file: { name: 'files/clip-2', uri: `${base}/v1beta/files/clip-2`, mimeType: 'video/mp4' } }];
+    if (call.method === 'DELETE') { deleted += 1; return [200, {}]; }
+    if (call.url.pathname === '/v1beta/files/clip-2') return [200, { state: 'FAILED', error: { message: 'unreadable video' } }];
+    return [404, {}];
+  };
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y', video: 'assets/video/take.mp4' }, ctx({ 'assets/video/take.mp4': new Uint8Array([1]) })), /could not take the clip: unreadable video/);
+  assert.equal(deleted, 1);
+  assert.ok(!seen.some((c) => c.url.pathname === '/v1beta/interactions' && JSON.parse(c.body).input?.[0]?.uri?.endsWith('clip-2')));
 });

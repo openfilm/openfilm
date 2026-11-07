@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyOps } from '../../../server/ops.mjs';
-import { clipboardItemsOf, clipboardNow, copyLinks, pasteEdit, planCopies } from './timeline-clipboard.ts';
+import { clipboardItemsOf, clipboardNow, copyLinks, pasteEdit, pasteLane, planCopies } from './timeline-clipboard.ts';
 import { editModelOf } from './timeline-edit.ts';
 import type { TimelineBlock, TimelineTrack } from './timeline-layout';
 
@@ -31,8 +31,8 @@ const filmOfRows = (rows: readonly TimelineTrack[]): Film => {
   return out;
 };
 /** The film after the copied clips are pasted (put down) at `atMs`, onto `lane` or their own tracks: [id, at] by track. */
-const pasted = (rows: TimelineTrack[], copied: TimelineBlock[], atMs: number, lane: string | null = null) => {
-  const ops = pasteEdit(clipboardItemsOf(copied, rows), rows, editModelOf(rows), atMs, lane, { mode: 'place' })!;
+const pasted = (rows: TimelineTrack[], copied: TimelineBlock[], atMs: number, lane: string | null = null, pointed = false) => {
+  const ops = pasteEdit(clipboardItemsOf(copied, rows), rows, editModelOf(rows), atMs, lane, { mode: 'place', pointed })!;
   return spans(applyOps(filmOfRows(rows) as never, ops as never) as unknown as Film).map((t) => t.map(([id, at]) => [id, at]));
 };
 
@@ -64,14 +64,79 @@ test('the length pasted is the clip as it is now, not as copied', () => {
   assert.equal(clipboardNow(copied, trimmed).items[0]!.durMs, 5000);
 });
 
-test('clips copied from several tracks go back to their own tracks, even when a track was pointed at', () => {
+test('clips copied from several tracks go back to their own tracks, even onto a selected clip\'s track', () => {
   const tracks = [track(0, [blockOf('v', 0, 0, 0, 3000)]), track(1, [blockOf('s', 1, 0, 0, 3000)])];
   for (const lane of [null, 'doc-0', 'doc-1']) {
     assert.deepEqual(pasted(tracks, [tracks[0]!.blocks[0]!, tracks[1]!.blocks[0]!], 6000, lane), [
       [['v', 0], ['v-2', 6]],
       [['s', 0], ['s-2', 6]],
-    ], `pointed at ${lane}`);
+    ], `selected on ${lane}`);
   }
+});
+
+test('⌘V goes onto the row under the pointer, else the selected clip\'s row, else each copy\'s own', () => {
+  const tracks = [
+    track(0, [block('a', 0, 0, 0, 2000)]),
+    track(1, [block('b', 1, 0, 0, 2000)]),
+    track(1, [block('c', 1, 1, 1000, 3000)], { lane: 'doc-1#2' }),
+  ];
+  assert.deepEqual(pasteLane(tracks, 'doc-1#2', 'b-a'), { lane: 'doc-1#2', pointed: true });
+  assert.deepEqual(pasteLane(tracks, null, 'b-b'), { lane: 'doc-1', pointed: false });
+  /* the row pointed at is gone (an undo took its track away), or holds no film.html track: the selection decides */
+  assert.deepEqual(pasteLane(tracks, 'doc-7', 'b-a'), { lane: 'doc-0', pointed: false });
+  assert.deepEqual(pasteLane([...tracks, { lane: 'captions', blocks: [] } as unknown as TimelineTrack], 'captions', 'b-a'), { lane: 'doc-0', pointed: false });
+  assert.deepEqual(pasteLane(tracks, null, null), { lane: null, pointed: false });
+});
+
+test('a clip copied from the first track and pasted with the pointer on the third lands there at the playhead', () => {
+  const tracks = [
+    track(0, [blockOf('a', 0, 0, 0, 2000)]),
+    track(1, [blockOf('b', 1, 0, 0, 6000)]),
+    track(2, [blockOf('c', 2, 0, 0, 1000), blockOf('d', 2, 1, 5000, 6000)]),
+  ];
+  assert.deepEqual(pasted(tracks, [tracks[0]!.blocks[0]!], 1500, 'doc-2', true), [
+    [['a', 0]],
+    [['b', 0]],
+    [['c', 0], ['a-2', 1.5], ['d', 5]],
+  ]);
+  /* taken at the playhead: the time stays, a new track opens beside the one pointed at (above a picture track) */
+  assert.deepEqual(pasted(tracks, [tracks[0]!.blocks[0]!], 500, 'doc-2', true), [
+    [['a', 0]],
+    [['b', 0]],
+    [['a-2', 0.5]],
+    [['c', 0], ['d', 5]],
+  ]);
+});
+
+test('clips copied from several tracks and pasted where pointed keep their rows from the track pointed at down', () => {
+  const tracks = [
+    track(0, [blockOf('v', 0, 0, 0, 3000)]),
+    track(1, [blockOf('s', 1, 0, 0, 3000)]),
+    track(2, [blockOf('x', 2, 0, 0, 500)]),
+    track(3, []),
+  ];
+  const copied = [tracks[0]!.blocks[0]!, tracks[1]!.blocks[0]!];
+  assert.deepEqual(pasted(tracks, copied, 6000, 'doc-2', true), [
+    [['v', 0]],
+    [['s', 0]],
+    [['x', 0], ['v-2', 6]],
+    [['s-2', 6]],
+  ]);
+  /* pointed at the last track: the rows past it are new tracks, in order */
+  assert.deepEqual(pasted(tracks.slice(0, 3), copied, 6000, 'doc-2', true), [
+    [['v', 0]],
+    [['s', 0]],
+    [['x', 0], ['v-2', 6]],
+    [['s-2', 6]],
+  ]);
+  const three = [...tracks.slice(0, 2), track(2, [blockOf('w', 2, 0, 0, 3000)])];
+  const copiedThree = three.map((t) => t.blocks[0]!);
+  assert.deepEqual(pasted(three, copiedThree, 6000, 'doc-1', true), [
+    [['v', 0]],
+    [['s', 0], ['v-2', 6]],
+    [['w', 0], ['s-2', 6]],
+    [['w-2', 6]],
+  ]);
 });
 
 test('clips copied from one track follow the track pointed at', () => {
@@ -140,6 +205,9 @@ test('a locked track refuses a paste', () => {
   const tracks = [track(0, [blockOf('a', 0, 0, 0, 2000)], { locked: true })];
   const copied = clipboardItemsOf([tracks[0]!.blocks[0]!], tracks);
   assert.equal(pasteEdit(copied, tracks, editModelOf(tracks), 3000, 'doc-0', { mode: 'place' }), null);
+  /* pointed at a locked track: refused, not moved to another */
+  const two = [track(0, [blockOf('a', 0, 0, 0, 2000)]), track(1, [], { locked: true })];
+  assert.equal(pasteEdit(clipboardItemsOf([two[0]!.blocks[0]!], two), two, editModelOf(two), 3000, 'doc-1', { mode: 'place', pointed: true }), null);
 });
 
 test('⌥-drag copies: the clips stay and a copy lands where it is let go, or beside the track when that is taken', () => {
@@ -160,6 +228,12 @@ test('⌥-drag copies: the clips stay and a copy lands where it is let go, or be
   assert.deepEqual(run(planCopies(model, { ids: ['b'], deltaMs: 3000 }))[1], [['a', 0, null], ['b', 2, null], ['b-2', 5, null]]);
 });
 
+test('a caption\'s copy stays on its caption track where it lands, over another or not: no track opens', () => {
+  const model = editModelOf([{ ...track(0, [{ ...blockOf('cue:c.vtt#c1', 0, 0, 0, 2000), cue: { src: 'c.vtt', id: 'c1' } }], { role: 'mg' }), captions: { src: 'c.vtt' } }]);
+  const plan = planCopies(model, { ids: ['cue:c.vtt#c1'], deltaMs: 1000 })!;
+  assert.deepEqual(plan.ops, [{ op: 'insert', from: 'cue:c.vtt#c1', at: 1, track: 0 }]);
+});
+
 test('⌥-drag copies of several clips keep their spacing, together on one track', () => {
   const film: Film = { tracks: [{ clips: [filmClip('a', 0, 2), filmClip('b', 2, 2), filmClip('c', 5, 1)] }] };
   const tracks = [track(0, [blockOf('a', 0, 0, 0, 2000), blockOf('b', 0, 1, 2000, 4000), blockOf('c', 0, 2, 5000, 6000)], { role: 'video' })];
@@ -170,15 +244,23 @@ test('⌥-drag copies of several clips keep their spacing, together on one track
     [[['b-2', 4, null], ['c-2', 7, null]], [['a', 0, null], ['b', 2, null], ['c', 5, null]]]);
 });
 
-test('with the magnet a copy of a main-track clip pastes onto a new track right above the main track', () => {
+test('with the magnet a copy of a main-track clip pastes into the main track: at the cut nearest the playhead, what follows moving on', () => {
   const tracks = [
     track(0, [blockOf('t', 0, 0, 0, 1000)], { role: 'mg' }),
     track(1, [blockOf('a', 1, 0, 0, 2000), blockOf('b', 1, 1, 2000, 4000)], { role: 'video' }),
   ];
-  const ops = pasteEdit(clipboardItemsOf([tracks[1]!.blocks[0]!], tracks), tracks, editModelOf(tracks), 9000, null, { mode: 'place', magnet: true, linkage: true })!;
-  const out = spans(applyOps(filmOfRows(tracks) as never, ops as never) as unknown as Film).map((t) => t.map(([id, at]) => [id, at]));
-  /* even where the main track is free (past its end): the main track is only changed by putting clips in between */
-  assert.deepEqual(out, [[['t', 0]], [['a-2', 9]], [['a', 0], ['b', 2]]]);
+  const paste = (atMs: number) => {
+    const ops = pasteEdit(clipboardItemsOf([tracks[1]!.blocks[0]!], tracks), tracks, editModelOf(tracks), atMs, null, { mode: 'place', magnet: true, linkage: true })!;
+    return spans(applyOps(filmOfRows(tracks) as never, ops as never) as unknown as Film).map((t) => t.map(([id, at]) => [id, at]));
+  };
+  /* past the main track's end: right after its last clip */
+  assert.deepEqual(paste(9000), [[['t', 0]], [['a', 0], ['b', 2], ['a-2', 4]]]);
+  /* over the second half of a: after it, b moving on (and the title riding on a staying with it) */
+  assert.deepEqual(paste(1500), [[['t', 0]], [['a', 0], ['a-2', 2], ['b', 4]]]);
+  /* onto a track pointed at that is not the main one: put down there, as before */
+  const ops = pasteEdit(clipboardItemsOf([tracks[1]!.blocks[0]!], tracks), tracks, editModelOf(tracks), 1000, 'doc-0', { mode: 'place', pointed: true, magnet: true, linkage: true })!;
+  assert.deepEqual(spans(applyOps(filmOfRows(tracks) as never, ops as never) as unknown as Film).map((t) => t.map(([id, at]) => [id, at])),
+    [[['t', 0], ['a-2', 1]], [['a', 0], ['b', 2]]]);
 });
 
 test('with the magnet ⌥-drag copies onto the main track go in between, what follows moving on', () => {

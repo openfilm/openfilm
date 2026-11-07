@@ -17,11 +17,13 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
 import { addLinkedPlaces, readableLink } from '../../src/media-links.mjs';
-import { readProjectFilm, writeProjectFilm } from './film.mjs';
+import { changeProjectFilm, readProjectFilm } from './film.mjs';
+import { filesWritten } from './person-edits.mjs';
 import { TOOL_DIR } from './projects.mjs';
 import { moveToTrash } from './trash.mjs';
 import { linkKind, rewriteLinks } from './page-links.mjs';
 import { ffmpeg } from '../../src/shared.mjs';
+import { compoundOuter } from './parts.mjs';
 
 export const ASSETS = 'assets';
 /** Folders that hold tools and builds, not a film's pages. */
@@ -47,12 +49,16 @@ export function inside(root, rel, how = {}) {
   if (typeof rel !== 'string' || !rel || rel.includes('\0')) throw new FileError('which file?');
   const clean = normalize(rel.split('/').join(sep));
   const abs = join(root, clean);
-  const back = relative(root, abs);
+  /* a compound clip's film names the files of the project it is in (`../../assets/a.mp4`): inside that one (parts.mjs) */
+  const base = compoundOuter(root);
+  const back = relative(base, abs);
   const parts = back.split(sep);
+  const own = relative(root, abs).split(sep);
   /* on Windows a `:` in a name is a stream of it (`.film::$INDEX_ALLOCATION` is the folder itself) */
   const streams = process.platform === 'win32' && parts.some((p) => p.includes(':'));
-  if (!back || parts[0] === '..' || isToolDir(parts[0]) || streams || /^[a-zA-Z]:/.test(clean) || clean.startsWith(sep)
-    || !(onDiskInside(root, abs) || (how.read === true && readableLink(root, abs)))) {
+  if (!back || !own[0] || parts[0] === '..' || isToolDir(parts[0]) || (own[0] !== '..' && isToolDir(own[0])) || streams
+    || /^[a-zA-Z]:/.test(clean) || clean.startsWith(sep)
+    || !(onDiskInside(base, abs) || (how.read === true && readableLink(base, abs)))) {
     throw new FileError(`${rel} is not a path inside the project`);
   }
   return abs;
@@ -85,7 +91,9 @@ function entryInside(root, rel) {
  * Windows drops, a stream of it, and its short 8.3 name on Windows (`FILM~1`).
  */
 function isToolDir(/** @type {string | undefined} */ name) {
-  const plain = String(name ?? '').split(':')[0].replace(/[. ]+$/, '').toLowerCase();
+  let plain = String(name ?? '').split(':')[0].toLowerCase();
+  /* Windows drops a name's trailing dots and spaces */
+  while (plain.endsWith('.') || plain.endsWith(' ')) plain = plain.slice(0, -1);
   return plain === TOOL_DIR.toLowerCase() || (process.platform === 'win32' && /^film~\d+$/.test(plain));
 }
 
@@ -366,7 +374,11 @@ async function relinkAfterMove(root, from, to, sidecars = []) {
     const text = await readFile(abs, 'utf8').catch(() => null);
     if (text == null) continue;
     const next = rewriteLinks(text, kind, posix(dirname(was)), posix(dirname(file)), where);
-    if (next.changed) { await writeFile(abs, next.text); changed++; }
+    if (next.changed) {
+      await writeFile(abs, next.text);
+      filesWritten(root, { [file]: text }, { [file]: next.text });
+      changed++;
+    }
   }
   return changed;
 }
@@ -454,17 +466,19 @@ function sameEntry(/** @type {string} */ a, /** @type {string} */ b) {
 
 /** Point every clip whose src is `from` (or inside the folder `from`) at `to`. Returns how many moved. */
 async function repoint(/** @type {string} */ root, /** @type {string} */ from, /** @type {string} */ to) {
-  const film = await readProjectFilm(root);
-  if (!film.value) return 0;
-  let moved = 0;
-  for (const track of film.value.tracks) {
-    for (const clip of track.clips) {
-      if (clip.src === from) { clip.src = to; moved++; }
-      else if (clip.src.startsWith(`${from}/`)) { clip.src = to + clip.src.slice(from.length); moved++; }
+  /* as any edit of Studio's: after a write of the agent's is merged, and kept over the next one */
+  const done = await changeProjectFilm(root, (value, film) => {
+    if (!film.value) return null;
+    let moved = 0;
+    for (const track of value.tracks) {
+      for (const clip of track.clips) {
+        if (clip.src === from) { clip.src = to; moved++; }
+        else if (clip.src.startsWith(`${from}/`)) { clip.src = to + clip.src.slice(from.length); moved++; }
+      }
     }
-  }
-  if (moved) await writeProjectFilm(root, film.value, film.text);
-  return moved;
+    return moved ? { value, moved } : null;
+  });
+  return done?.moved ?? 0;
 }
 
 /**

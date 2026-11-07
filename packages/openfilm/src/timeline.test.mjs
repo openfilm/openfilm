@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -28,6 +28,34 @@ test('a hidden track\'s clips are still placed for an editor, but neither drawn 
     await s.film.seek(1);
     const shown = await s.film.page.evaluate(() => [...document.querySelectorAll('body > section > *')].map((el) => el.style.visibility));
     assert.deepEqual(shown, ['hidden', 'visible']);
+  } finally {
+    await s.close();
+  }
+});
+
+test('a film in a film: its picture is a page\'s, and its sound is heard where the clip plays that part of it', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-nested-'));
+  writeFileSync(join(dir, 'title.html'), page('title', 4));
+  writeFileSync(join(dir, 'hum.wav'), silence(4));
+  mkdirSync(join(dir, 'parts', 'intro'), { recursive: true });
+  /* its own sound from 1 to 4 of its 4 seconds, fading in and out */
+  writeFileSync(join(dir, 'parts', 'intro', 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ id: 'title', src: '../../title.html' }] },
+    { clips: [{ id: 'hum', src: '../../hum.wav', at: 1, time: [0, 3], volume: 0.5, overrides: [{ fade: [0.25, 0.25] }] }] },
+  ] }));
+  /* the clip plays 0.5 to 3.5 of it, from 2 on this film */
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ id: 'intro', src: 'parts/intro/film.html', at: 2, time: [0.5, 3.5] }] },
+  ] }));
+  const s = await open(dir);
+  try {
+    const sounds = await s.film.page.evaluate(() => window.__filmSounds());
+    assert.deepEqual(sounds.map(({ clip, src, at, from, to, volume, fade }) => ({ clip, src, at, from, to, volume, fade })), [
+      /* its part from 1 to 3.5 of it: at 2.5 here, the file's 0 to 2.5, its fade out cut off with the clip's end */
+      { clip: 'intro/hum', src: '/hum.wav', at: 2.5, from: 0, to: 2.5, volume: 0.5, fade: [0.25, 0] },
+    ]);
+    await s.film.seek(3);
+    assert.equal(await s.film.page.evaluate(() => document.querySelector('#intro').style.visibility), 'visible');
   } finally {
     await s.close();
   }
@@ -245,14 +273,16 @@ test('a missing file stops a film, said by its name; an editor\'s preview (film-
   }
 });
 
-test('a video the browser can\'t decode fails an exact frame, said by its clip and file; watched, the film draws on', { timeout: 60_000 }, async () => {
+test('a video the browser can\'t decode fails an exact frame, said by its clip and file; watched, the film draws on, and an editor hears of it once', { timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-undecodable-'));
   writeFileSync(join(dir, 'bad.mp4'), Buffer.alloc(20_000, 'not a video '));
   writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'bad.mp4', time: [0, 2] }] }] }));
   const s = await open(dir);
   try {
+    await s.film.page.evaluate(() => { window.told = []; window.__filmEditor.undecoded = (src) => window.told.push(src); });
     await assert.rejects(s.film.seek(0.5), (e) => e instanceof FrameError && /^clip "v" \(bad\.mp4\): this browser can't play its video/.test(e.message));
     await s.film.page.evaluate(() => window.__filmEditor.watch(1));
+    assert.deepEqual(await s.film.page.evaluate(() => [window.told, window.__filmEditor.unplayed()]), [['bad.mp4'], ['bad.mp4']]);
   } finally {
     await s.close();
     rmSync(dir, { recursive: true, force: true });
@@ -280,7 +310,11 @@ test('an editor\'s preview is up without opening a page whose time is its length
     const preview = await browser.newPage();
     await preview.goto(`${site.url}/film.html?film-missing=skip`);
     await preview.waitForFunction(() => Boolean(window.film));
-    await preview.evaluate(() => { window.learned = 0; window.__filmEditor.learned = () => { window.learned += 1; }; return window.film.ready; });
+    await preview.evaluate(() => {
+      window.learned = 0; window.__filmEditor.learned = () => { window.learned += 1; };
+      window.appeared = 0; window.__filmEditor.appeared = () => { window.appeared += 1; };
+      return window.film.ready;
+    });
     /* `a` has no time: opened for its length. `b`'s time is its length: its place known, the page not opened */
     assert.deepEqual(await opened(preview), [true, false]);
     assert.equal(await preview.evaluate(() => window.film.duration), 5);
@@ -292,6 +326,10 @@ test('an editor\'s preview is up without opening a page whose time is its length
       [['a', 0, 2, 2, 320, 180, false], ['b', 2, 5, 3, 320, 180, false]], 'opened: its own length and size');
     assert.equal(await preview.evaluate(() => window.learned), 1, 'the editor told once');
     assert.equal(await preview.evaluate(() => document.querySelectorAll('iframe')[1].style.visibility), 'visible');
+    /* shown once drawn, and the editor told then too (its Layers panel lists the page only from now on) */
+    assert.equal(await preview.evaluate(() => window.appeared), 1, 'the editor told of the page shown');
+    await preview.evaluate(() => window.__filmEditor.watch(4));
+    assert.equal(await preview.evaluate(() => window.appeared), 1, 'a page already shown is not told again');
   } finally {
     await browser.close();
     await site.close();
@@ -430,7 +468,7 @@ test('a sought frame that is decoded but never presented (a seek just after load
   }
 });
 
-test('a browser that never shows a film\'s video frames: after a few, the film is drawn again where video is shown another way, when there is one', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+test('a browser that never shows a film\'s video frames: after a few, the film is drawn again where video is shown another way, when there is one; else it fails', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async () => {
   const dir = footage('of-never-shown-');
   writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'a.mp4', time: [0, 4] }] }] }));
   const site = await serve(dir);
@@ -445,10 +483,11 @@ test('a browser that never shows a film\'s video frames: after a few, the film i
     assert.equal(asked, 1);
     assert.deepEqual(await film.page.evaluate(() => window.__filmVideos()), { shown: 0, unshown: 3 });
     await film.close();
-    /* with no other way (not Windows, or moved already) it goes on as before */
+    /* with no other way (not Windows, or moved already) it goes on a while, then fails rather than be drawn black */
     const as = await FilmPage.open(browser, site.url, 'film.html', { onVideoNotShown: async () => false });
     await as.page.evaluate(() => { HTMLVideoElement.prototype.requestVideoFrameCallback = () => 0; });
-    for (const t of [0.5, 1.5, 2.5]) await as.seek(t);
+    for (let n = 1; n < 12; n++) await as.seek((n * 0.3) % 4);
+    await assert.rejects(as.seek(3.9), (e) => e instanceof FrameError && !(e instanceof VideoNotShown) && /never showed the film's video frames \(12 sought\), so its picture would be black/.test(e.message));
     await as.close();
   } finally {
     await browser.close();
@@ -993,6 +1032,80 @@ async function playFor(film, seconds, fps = 30) {
   }, [seconds, fps]);
 }
 
+test('fast clips play, preroll and scrub at the correct source time even beyond the browser rate limit', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-fast-roll-'));
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=10:duration=24', '-pix_fmt', 'yuv420p', '-g', '5', join(dir, 'clip.mp4')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+    { clips: [{ id: 'clip', src: 'clip.mp4', at: 1, time: [8, 24], speed: 16 }] },
+  ] }));
+  const s = await open(dir);
+  try {
+    const result = await s.film.page.evaluate(async () => {
+      const v = document.getElementById('clip');
+      const draw = async (t, rate) => {
+        await window.__filmEditor.watch(t, { rate, now: t });
+        if (v.seeking) await new Promise((resolve) => v.addEventListener('seeked', resolve, { once: true }));
+        return { time: v.currentTime, rate: v.playbackRate, paused: v.paused };
+      };
+      await window.__filmEditor.watch(0);
+      /* In the early-start interval: preroll must not try to assign 64×. */
+      await draw(0.6, 4);
+      await draw(1.1, 4);
+      const fast = await draw(1.5, 4);
+      await window.__filmEditor.watch(1.25);
+      const still = { time: v.currentTime, paused: v.paused };
+      /* A video behind by 0.1 s is nudged faster on its second draw: 16 × 1.03 must not throw. */
+      await draw(1.26, 1);
+      await draw(1.26, 1);
+      const boundary = { rate: v.playbackRate };
+      const resumed = await draw(1.4, 0.5);
+      return { fast, still, boundary, resumed };
+    });
+    assert.ok(result.fast.paused && Math.abs(result.fast.time - 16) < 0.05, JSON.stringify(result));
+    assert.ok(result.still.paused && Math.abs(result.still.time - 12) < 0.05, JSON.stringify(result));
+    assert.ok(result.boundary.rate <= 16, JSON.stringify(result));
+    assert.ok(result.resumed.rate <= 8.24 && result.resumed.rate >= 7.76, JSON.stringify(result));
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a clip slower than a browser plays (0.1× at the viewer\'s 0.25×) is followed by its frames; at 1× it rolls at 0.1×', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-slow-roll-'));
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=10:duration=4', '-pix_fmt', 'yuv420p', '-g', '5', join(dir, 'clip.mp4')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+    { clips: [{ id: 'clip', src: 'clip.mp4', time: [1, 3], speed: 0.1 }] },
+  ] }));
+  const s = await open(dir);
+  try {
+    const result = await s.film.page.evaluate(async () => {
+      const v = document.getElementById('clip');
+      const errors = [];
+      window.addEventListener('error', (e) => errors.push(e.message));
+      const draw = async (t, rate) => {
+        await window.__filmEditor.watch(t, { rate, now: t });
+        if (v.seeking) await new Promise((resolve) => v.addEventListener('seeked', resolve, { once: true }));
+        return { time: v.currentTime, rate: v.playbackRate, paused: v.paused };
+      };
+      await window.__filmEditor.watch(0);
+      /* 1/40: no rate the browser takes; sought instead, 5 film seconds into it being half a source second in */
+      await draw(4.9, 0.25);
+      const slow = await draw(5, 0.25);
+      /* at the viewer's 1× it is 0.1×, which a browser plays */
+      await draw(6, 1);
+      const rolling = await draw(6.05, 1);
+      return { slow, rolling, errors };
+    });
+    assert.ok(result.slow.paused && Math.abs(result.slow.time - 1.5) < 0.05, JSON.stringify(result));
+    assert.ok(!result.rolling.paused && result.rolling.rate >= 1 / 16 && Math.abs(result.rolling.rate - 0.1) < 0.01, JSON.stringify(result));
+    assert.deepEqual(result.errors, []);
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('playing, a video plays by itself on the film\'s clock, not sought frame by frame; a still moment stops it there', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-roll-'));
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=30:duration=4', '-pix_fmt', 'yuv420p', '-g', '15', join(dir, 'clip.mp4')]);
@@ -1204,5 +1317,126 @@ test('a frame-duration lookup given up on is not a problem: the frame is drawn f
   } finally {
     await s.close();
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a caption track draws its cues on the film\'s time: its STYLE by ::cue, a cue by its id, its words past and future, placed by its settings', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-captions-'));
+  writeFileSync(join(dir, 'bg.html'), page('bg', 6));
+  mkdirSync(join(dir, 'captions'));
+  writeFileSync(join(dir, 'captions', 'zh.vtt'), `WEBVTT
+
+STYLE
+::cue { color: rgb(255, 255, 255); background: none; }
+::cue(.em) { color: rgb(43, 240, 106); }
+::cue(#c2) { color: rgb(255, 212, 0); }
+::cue(:future) { opacity: 0.5; }
+::cue(v[voice="Ana"]) { font-weight: 900; }
+@keyframes rise { from { translate: 0 20px; } to { translate: 0 0; } }
+::cue(c.pop) { display: inline-block; animation: rise 1s linear both; }
+
+c1
+00:00:00.500 --> 00:00:02.000
+Cut a film in <c.em>three</c> seconds
+
+c2
+00:00:02.000 --> 00:00:04.000 line:20% align:left
+<00:00:02.000>No <00:00:02.500><c.pop>drag</c> <00:00:03.000><v Ana>timeline</v>
+`);
+  writeFileSync(join(dir, 'film.html'), `<!doctype html>
+<html><head><meta name="viewport" content="width=320, height=180"></head><body>
+<section>
+  <track kind="captions" src="captions/zh.vtt" srclang="en" label="Captions">
+</section>
+<section>
+  <iframe id="bg" src="bg.html"></iframe>
+</section>
+</body></html>
+`);
+  const s = await open(dir);
+  try {
+    const at = async (t) => { await s.film.seek(t); return s.film.page.evaluate(() => [...document.querySelectorAll('[data-film-captions] .cue-text')].map((el) => {
+      const box = el.parentElement.getBoundingClientRect();
+      const of = (sel) => { const n = el.querySelector(sel); return n ? { color: getComputedStyle(n).color, opacity: getComputedStyle(n).opacity, weight: getComputedStyle(n).fontWeight, translate: getComputedStyle(n).translate } : null; };
+      return { id: el.dataset.cueId, text: el.textContent, color: getComputedStyle(el).color, top: Math.round(box.top), left: Math.round(box.left), em: of('c.em'), pop: of('c.pop'), ana: of('v[voice="Ana"]') };
+    })); };
+    assert.deepEqual(await at(0.2), [], 'nothing before the first cue');
+    const [one] = await at(1);
+    assert.equal(one.text, 'Cut a film in three seconds');
+    assert.equal(one.color, 'rgb(255, 255, 255)');
+    assert.equal(one.em.color, 'rgb(43, 240, 106)', '::cue(.em)');
+    assert.ok(one.top > 120, 'no line: at the bottom');
+    const [two] = await at(2.6);
+    assert.equal(two.id, 'c2');
+    assert.equal(two.color, 'rgb(255, 212, 0)', '::cue(#c2)');
+    assert.equal(two.top, 36, 'line:20% of 180');
+    assert.equal(two.left, 0, 'align:left');
+    assert.equal(two.pop.opacity, '1', 'said: past');
+    assert.equal(two.ana.opacity, '0.5', 'not said yet: future');
+    assert.equal(two.ana.weight, '900', 'a voice by its name');
+    assert.equal(two.pop.translate, '0px 18px', 'its animation 0.1 s in, from its timestamp');
+    assert.equal((await at(3.5))[0].ana.opacity, '1');
+    assert.deepEqual(await at(4.5), [], 'after its end');
+    assert.equal(s.film.meta.duration, 6, 'a caption track is not the film\'s length');
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a clip that is not on draws none of its filter (Chromium paints a hidden element\'s filter, a mask\'s stroke with it)', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-hidden-filter-'));
+  writeFileSync(join(dir, 'bg.html'), '<!doctype html><body style="margin:0;background:#000"><script>window.film={duration:3,width:320,height:180,frame(){}}</script></body>');
+  writeFileSync(join(dir, 'dot.html'), page('dot', 1));
+  const red = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='f'%3E%3CfeFlood flood-color='red'/%3E%3C/filter%3E%3C/svg%3E#f")`;
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ id: 'dot', src: 'dot.html', box: { x: 0, y: 0, w: 160, h: 90 }, style: `filter: ${red}` }] },
+    { clips: [{ id: 'bg', src: 'bg.html' }] },
+  ] }));
+  const s = await open(dir);
+  try {
+    const at = async (t) => { await s.film.seek(t); return s.film.page.evaluate(() => getComputedStyle(document.getElementById('dot')).filter); };
+    assert.match(await at(0.5), /^url\(/, 'on: its filter as written');
+    assert.equal(await at(2), 'none', 'off: none of it');
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a moving picture (a GIF) shows the frame its own timing has at the clip\'s time, looping as the file says: the same t, the same frame', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-gif-'));
+  /* red for 0.1 s, then blue for 0.1 s, looping; and the same played once, then holding blue */
+  for (const [name, loop] of [['loop.gif', '0'], ['once.gif', '-1']]) {
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=red:s=32x32:d=0.1:r=10', '-f', 'lavfi', '-i', 'color=blue:s=32x32:d=0.1:r=10',
+      '-filter_complex', '[0][1]concat=n=2:v=1', '-loop', loop, join(dir, name)]);
+  }
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ src: 'loop.gif', id: 'loop', at: 1, time: [0, 3], style: 'left: 0px; top: 0px; width: 160px; height: 180px' }] },
+    { clips: [{ src: 'once.gif', id: 'once', at: 1, time: [0, 3], style: 'left: 160px; top: 0px; width: 160px; height: 180px' }] },
+  ] }));
+  const s = await open(dir);
+  try {
+    const colours = async (t) => {
+      await s.film.seek(t);
+      return s.film.page.evaluate(() => [...document.querySelectorAll('img')].map((img) => {
+        const c = document.createElement('canvas');
+        c.width = 4; c.height = 4;
+        const g = c.getContext('2d');
+        g.drawImage(img, 0, 0, 4, 4);
+        const [r, , b] = g.getImageData(2, 2, 1, 1).data;
+        return r > b ? 'red' : 'blue';
+      }));
+    };
+    assert.deepEqual(await colours(1.05), ['red', 'red']);
+    assert.deepEqual(await colours(1.15), ['blue', 'blue']);
+    assert.deepEqual(await colours(1.25), ['red', 'blue'], 'the loop starts again; the one played once holds its last frame');
+    assert.deepEqual(await colours(2.95), ['blue', 'blue']);
+    assert.deepEqual(await colours(1.15), ['blue', 'blue'], 'the same t, the same frame, whatever came before');
+    assert.deepEqual(await colours(1.05), ['red', 'red']);
+    const src = await s.film.page.evaluate(() => document.querySelector('#loop').src);
+    assert.match(src, /^blob:/, 'the clip shows a frame of it, never the file playing by itself');
+  } finally {
+    await s.close();
   }
 });

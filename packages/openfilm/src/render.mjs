@@ -6,12 +6,14 @@ import { availableParallelism, freemem, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { clipKind, FILM_FILE } from './film-doc.mjs';
 import { broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, prores709 } from './encoders.mjs';
+import { memoryError } from './browser-memory.mjs';
 import { FilmPage, launch } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
 import { browserCopies, filmVideos } from './seekable.mjs';
 import { ffmpeg, filmSound, fmt, kill, locate, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
 import { burned } from './burn.mjs';
 import { renderSelection, selectionClips, selectionFrame } from './render-ranges.mjs';
+import { isLoudness, LOUDNESS_RANGE, LOUDNESS_SLACK, loudnessText, toLoudness, TRUE_PEAK } from './loudness.mjs';
 
 const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
 const TAG_709 = ['-bsf:v', 'h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0'];
@@ -79,8 +81,10 @@ export async function render(args, opts = {}) {
   const started = Date.now();
   const { film: target, at, range } = parseTarget(args);
   if (range && opts.ranges) throw new UsageError('choose a range or ranges, not both');
+  if (opts.loudness != null && !isLoudness(opts.loudness)) throw new UsageError(`--loudness is a target from ${LOUDNESS_RANGE[0]} to ${LOUDNESS_RANGE[1]} LUFS, e.g. --loudness=-14 for online video`);
   if (at != null) throw new UsageError(`render takes a range (for example ${at}-${at + 2}), not one time; for one frame use openfilm look ${at}`);
-  /* --subtitles: the project's film drawn around by a page that burns its subtitles in (the export's own, burn.mjs),
+  /* --subtitles: a project's subtitles from before caption tracks (its voices' transcripts in the style Studio kept),
+     the project's film drawn around by a page that burns them in (the export's own, burn.mjs),
      rendered in its place, from the project's folder, named as the film's own render is. Studio burns only the
      project's film, so a page of it is refused */
   if (opts.subtitles) {
@@ -88,6 +92,8 @@ export async function render(args, opts = {}) {
     const own = existsSync(join(loc.root, FILM_FILE)) ? FILM_FILE : 'index.html';
     if (decodeURI(loc.entry) !== own) throw new UsageError(`--subtitles burns the subtitles into the project's film: render the project's folder, not ${decodeURI(loc.entry)}`);
     const { subtitlesForExport } = await import('../studio/server/captions.mjs');
+    /* a film with caption tracks has its subtitles in its picture already: rendered as it is */
+    if ((await subtitlesForExport(loc.root)).tracks) return await render(args, { ...opts, subtitles: false });
     const burn = await burned(loc.root, { burnSubtitles: true }, subtitlesForExport, !!opts.alpha);
     if (!burn) throw new UsageError('--subtitles: the film has no subtitles to burn in');
     try {
@@ -180,7 +186,7 @@ export async function render(args, opts = {}) {
       console.error(`openfilm render: ${shown(file)}: a copy this browser plays could not be made, so it is drawn as it is`);
     };
     try {
-      copies = await browserCopies(browser, site.url, root, files, { signal: opts.signal, slow: total >= fps * 2, failed });
+      copies = await browserCopies(browser, site.url, root, files, { signal: opts.signal, slow: total >= fps * 2, fine: !!opts.fine, failed });
     } catch (e) {
       await probe.close();
       await pool?.give(lent, { retire: true });
@@ -210,6 +216,8 @@ export async function render(args, opts = {}) {
     }
   };
   const problems = [];
+  /** @type {Awaited<ReturnType<typeof toLoudness>> | null} */
+  let loud = null;
   /* cancelled (`signal`): stop now, not once every browser has drawn the frame it is on; the finally closes them */
   const cancelled = opts.signal?.aborted ? Promise.reject(new Error('cancelled'))
     : new Promise((_, fail) => opts.signal?.addEventListener('abort', () => fail(new Error('cancelled')), { once: true }));
@@ -229,7 +237,8 @@ export async function render(args, opts = {}) {
   /** @type {(() => void)[]} */
   const unwatch = [];
   const watch = (/** @type {import('playwright-core').Browser} */ b) => {
-    const closed = () => crash(gone);
+    /* ended for the memory the page took: said so, and not drawn again in new browsers (browserFailed) */
+    const closed = () => crash(memoryError(b) ?? gone);
     b.on('disconnected', closed);
     unwatch.push(() => b.off('disconnected', closed));
     if (!b.isConnected()) closed();
@@ -250,7 +259,7 @@ export async function render(args, opts = {}) {
       const stop = new AbortController();
       const quit = () => stop.abort();
       opts.signal?.addEventListener('abort', quit, { once: true });
-      const runs = parts.map((p) => encode(p, { fps, rate, samples, shutter, duration: end, first: f0, format: f, onFrame: progress, still: alpha ? 'png' : 'jpeg', opaque, signal: stop.signal,
+      const runs = parts.map((p) => encode(p, { fps, rate, samples, shutter, duration: end, first: f0, format: f, onFrame: progress, still: alpha || opts.fine ? 'png' : 'jpeg', opaque, signal: stop.signal,
         sourceFrame: selection ? (frame) => selectionFrame(selection.spans, frame) : (frame) => frame }));
       try {
         await unlessCancelled(Promise.all(runs));
@@ -298,7 +307,13 @@ export async function render(args, opts = {}) {
     const clips = selection ? selectionClips(allClips, selection.spans) : allClips;
     if (opts.signal?.aborted) throw new Error('cancelled');
     const sound = clips.length ? join(work, `sound${extname(out) === '.mp4' ? '.m4a' : extname(out) === '.webm' ? '.webm' : '.wav'}`) : null;
-    if (sound) await mix(clips, to - from, sound, format.audio);
+    /* --loudness: the mix as it is (32-bit float: sounds added together pass full scale), brought to the target as it
+       is encoded; the picture is not touched */
+    if (sound && opts.loudness != null) {
+      const wav = join(work, 'mix.wav');
+      await mix(clips, to - from, wav, ['-c:a', 'pcm_f32le']);
+      loud = await toLoudness(wav, sound, format.audio, { lufs: opts.loudness, signal: opts.signal });
+    } else if (sound) await mix(clips, to - from, sound, format.audio);
     const after = [...format.tag, ...(extname(out) === '.mp4' ? ['-movflags', '+faststart'] : [])];
     /* the parts straight into `out`, with the sound: a page's frames are on the disk twice at most while it is written,
        not three times (a long page drawn as PNG for an editing project is gigabytes). A part with nothing to add is
@@ -330,10 +345,24 @@ export async function render(args, opts = {}) {
     lines: [
       `→ ${shown(out)}`,
       `  ${total} frames · ${fmt(to - from)} at ${Number(fps.toFixed(3))} fps · ${Math.round(meta.width * scale)}×${Math.round(meta.height * scale)}${samples > 1 ? ` · ${samples} samples/frame` : ''}${alpha ? ' · alpha' : ''} · ${workers} worker${workers > 1 ? 's' : ''} · ${encoder} · ${seconds.toFixed(1)} s`,
+      ...loudnessLines(opts.loudness, loud, opts.silent),
       ...uncopied.map((file) => `✗ copy: ${shown(file)}: could not be made, drawn as it is`),
       ...problems.map((p) => `✗ ${p.kind === 'request' ? 'request' : 'page'}: ${p.message}`),
     ],
   };
+}
+
+/**
+ * What --loudness did, as render's lines: the sound before and after, and whether it landed.
+ * @param {number | undefined} lufs @param {{ before: { lufs: number, peak: number }, after: { lufs: number, peak: number } } | null} loud @param {boolean} [silent]
+ */
+function loudnessLines(lufs, loud, silent) {
+  if (lufs == null || silent) return [];
+  if (!loud) return [`! --loudness: the film has no sound to bring to ${lufs} LUFS`];
+  if (!Number.isFinite(loud.before.lufs)) return [`! --loudness: the film's sound is silent, left as it is`];
+  const landed = Math.abs(loud.after.lufs - lufs) <= LOUDNESS_SLACK && loud.after.peak <= TRUE_PEAK;
+  return [`♪ sound at ${lufs} LUFS: ${loudnessText(loud.before)} → ${loudnessText(loud.after)}`,
+    ...(landed ? [] : [`! the sound did not land on ${lufs} LUFS under ${TRUE_PEAK} dBTP: a stretch may be clipped or far louder than the rest; look at the mix`])];
 }
 
 /**

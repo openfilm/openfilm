@@ -13,7 +13,9 @@
  * studio/server/pages.mjs): a video's is a copy of its sound alone, never the whole video. A sound heard at its own
  * speed (its clip's speed by the viewer's is 1) is decoded and played sample-accurate. One heard faster or slower is
  * played by the browser's own media element with its pitch kept (`preservesPitch`), in the same mix: another speed is
- * heard at once, with nothing made for it, and its place is checked against the film as it plays. A sound not here yet
+ * heard at once, with nothing made for it, and its place is checked against the film as it plays. One whose rate is
+ * beyond what a browser plays (faster than 16×, slower than 1/16×) is not heard: its picture goes on alone, by its
+ * frames (src/timeline.mjs), and the export mixes it from the file. A sound not here yet
  * (its copy still being made) is silent until it is, then joins where the film is. Sounds are started a few seconds
  * ahead of the film, not all at once: a film of hundreds of sounds starts as quickly as one of a few.
  *
@@ -23,6 +25,7 @@
  */
 
 import { SPEED_MAX, SPEED_MIN } from '../lib/playback-speed.ts';
+import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, mediaPlays } from '../../../../src/film-doc.mjs';
 
 /** Sounds fetched at once; the others wait, the ones nearest to where the film is first. */
 const FETCHES = 3;
@@ -93,11 +96,12 @@ const lengthOf = (s: Sound) => (s.to - s.from) / s.speed;
 
 /**
  * The rate a sound's media element plays its file at, its pitch kept: its clip's speed by the viewer's, within what a
- * browser plays (1/16 to 16). Null when that is 1: the sound is decoded and played as it is.
+ * browser plays (MEDIA_RATE_MIN to _MAX; a sound beyond them is not heard, see startDue). Null when that is 1: the
+ * sound is decoded and played as it is.
  */
 export function stretchRate(speed: number, rate: number): number | null {
   const v = Math.round(speed * rate * 1e4) / 1e4;
-  return v === 1 ? null : Math.max(1 / 16, Math.min(16, v));
+  return v === 1 ? null : Math.max(MEDIA_RATE_MIN, Math.min(MEDIA_RATE_MAX, v));
 }
 
 /** Where in its file a sound is at film second `t` (s). */
@@ -105,8 +109,21 @@ export function fileTime(s: Sound, t: number): number {
   return s.from + (t - s.at) * s.speed;
 }
 
-/** A sound played by a media element: the element, what it goes through in the mix, and when it was last put back. */
-type Voice = { el: HTMLAudioElement; source: MediaElementAudioSourceNode; gain: GainNode; sound: Sound; timer: number; settled: number };
+/**
+ * A sound played by a media element: the element, what it goes through in the mix, when it was last put back, and
+ * what starts it once its file is ready (`ready`, listened for until then).
+ */
+type Voice = { el: HTMLAudioElement; source: MediaElementAudioSourceNode; gain: GainNode; sound: Sound; timer: number; settled: number; ready?: () => void };
+
+/**
+ * Where a sound joins the film when its file is ready only now (its copy was still being made, the file slow to read):
+ * the film second the mix plays at audio-clock time `ctxNow`, not where it was when loading began; null when the
+ * sound has ended by then.
+ */
+export function joinAt(s: Sound, heard: { t: number; at: number }, ctxNow: number, rate: number, from: number): number | null {
+  const now = Math.max(from, heard.t + (ctxNow - heard.at) * rate);
+  return now >= s.at + lengthOf(s) ? null : now;
+}
 
 /** How far film time `t` is from a sound: 0 while it plays, else until it starts; one already past after all those. */
 function awayFrom(s: Sound, t: number) {
@@ -422,6 +439,9 @@ export class Player {
     for (const i of soundsDue(this.sounds, now, now + AHEAD * this.rate, this.started, this.heard)) {
       this.started.add(i);
       const s = this.sounds[i];
+      /* its clip's speed by the viewer's beyond what a browser plays (MEDIA_RATE_MIN to _MAX): not heard here, the
+         picture alone goes on (by its frames); an export mixes it from its file */
+      if (!mediaPlays(s.speed * this.rate)) continue;
       if (stretchRate(s.speed, this.rate) != null) { this.voice(s, heard); continue; }
       void this.buffers.get(s.src)?.buffer.then((buffer) => {
         if (!buffer || !this.playing || this.heardLine !== heard) return;
@@ -491,10 +511,25 @@ export class Player {
     const gain = this.fades(s, startFilm, when, ctxAt);
     source.connect(gain).connect(this.mix ?? ctx.destination);
     const voice: Voice = { el, source, gain, sound: s, settled: 0, timer: 0 };
-    voice.timer = window.setTimeout(() => {
-      if (!this.voices.includes(voice)) return;
+    /* started once its file is ready, where the film is then (a file not ready in time joins late, in step). Ready
+       now, or on whichever of its events comes first; never twice; let go of with the voice (dropVoice) */
+    const start = () => {
+      if (!this.voices.includes(voice) || voice.ready !== start) return;
+      el.removeEventListener('loadeddata', start);
+      el.removeEventListener('canplay', start);
+      voice.ready = undefined;
+      const now = joinAt(s, heard, ctx.currentTime, r, startFilm);
+      if (now == null) { this.dropVoice(voice); return; }
+      if (Math.abs(el.currentTime - fileTime(s, now)) > DRIFT) el.currentTime = fileTime(s, now);
       el.playbackRate = stretchRate(s.speed, this.rate) ?? 1;
       void el.play().catch(() => {});
+    };
+    voice.timer = window.setTimeout(() => {
+      if (!this.voices.includes(voice)) return;
+      voice.ready = start;
+      if (el.readyState >= 2) { start(); return; }
+      el.addEventListener('loadeddata', start);
+      el.addEventListener('canplay', start);
     }, Math.max(0, (when - ctx.currentTime) * 1000));
     this.voices.push(voice);
   }
@@ -518,6 +553,11 @@ export class Player {
 
   private dropVoice(v: Voice) {
     window.clearTimeout(v.timer);
+    if (v.ready) {
+      v.el.removeEventListener('loadeddata', v.ready);
+      v.el.removeEventListener('canplay', v.ready);
+      v.ready = undefined;
+    }
     v.el.pause();
     v.el.removeAttribute('src');
     v.el.load();

@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeFolder, moveFile } from './files.mjs';
-import { libraryRel, listLibrary, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { bringClip, libraryRel, listLibrary, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 
 let saved;
 let before;
@@ -79,6 +79,11 @@ test('the library lists files of any kind and folders as a project\'s media, a b
     kind: 'clip', props: 1, durationMs: 2000, w: 400, h: 200, page: 'Logos/Lower third/files/pages/title.html',
     size: { w: 1080, h: 1920 }, overrides: [{ at: '#t', text: 'Hello', style: { '--accent': '#00ff00' } }],
   });
+  /* a clip of a video or a sound: its file, which the pane plays and pictures (its waveform) as the file itself */
+  await saveClip(root, 'v', { name: 'Shot' });
+  const shot = (await listLibrary()).files.find((f) => f.path === 'saved/Shot');
+  assert.equal(shot?.kind, 'video');
+  assert.equal(/** @type {any} */ (shot?.saved)?.file, 'saved/Shot/files/assets/v.mp4');
 });
 
 test('a bundle moves and is renamed as a folder; taken into a project, its files go under saved/ there once, its page still finding them', async () => {
@@ -138,4 +143,38 @@ test('a place in the library is named from saved/', () => {
   assert.equal(libraryRel('saved/a/b.png'), 'a/b.png');
   assert.throws(() => libraryRel('assets/a.png'), /a place in Saved/);
   assert.throws(() => libraryRel(7), /a place in Saved/);
+});
+
+test('a clip brought from another project: its page and what it loads copied in under its project\'s name, once', async () => {
+  const from = project();
+  const root = mkdtempSync(join(tmpdir(), 'of-saved-into-'));
+  const clip = { src: 'pages/title.html', overrides: [{ at: '#t', t: [24, 24] }] };
+  const { clip: brought } = await bringClip(root, from, clip, 'Launch: v2');
+  assert.deepEqual(brought, { ...clip, src: 'pasted/Launch-v2/pages/title.html' });
+  for (const f of ['pages/title.html', 'pages/title.css', 'pages/inset.html', 'assets/logo.png']) assert.ok(existsSync(join(root, 'pasted/Launch-v2', f)), f);
+  for (const f of ['pages/other.html', 'assets/unused.png', 'film.html']) assert.ok(!existsSync(join(root, 'pasted/Launch-v2', f)), `${f} is not the clip's`);
+  /* changed here since: brought again, it is used as it is */
+  writeFileSync(join(root, 'pasted/Launch-v2/pages/title.css'), 'h1 { color: red }');
+  await bringClip(root, from, clip, 'Launch: v2');
+  assert.equal(readFileSync(join(root, 'pasted/Launch-v2/pages/title.css'), 'utf8'), 'h1 { color: red }');
+  await assert.rejects(bringClip(root, from, { src: 'pages/gone.html' }, 'Launch'), /not in its project/);
+});
+
+test('the clips of two pages brought from one project: the files of each, under one place for that project', async () => {
+  const from = project();
+  writeFileSync(join(from, 'pages', 'other.html'), '<!doctype html><img src="../assets/v.mp4"><p>Another clip</p>');
+  const root = mkdtempSync(join(tmpdir(), 'of-saved-two-'));
+  const one = await bringClip(root, from, { src: 'pages/title.html' }, 'Launch');
+  const two = await bringClip(root, from, { src: 'pages/other.html' }, 'Launch');
+  assert.deepEqual([one.clip.src, two.clip.src], ['pasted/Launch/pages/title.html', 'pasted/Launch/pages/other.html']);
+  for (const f of ['assets/logo.png', 'assets/v.mp4', 'pages/other.html']) assert.ok(existsSync(join(root, 'pasted/Launch', f)), f);
+});
+
+test('a filter of OpenFilm\'s library is taken as its layer page under the filter\'s own name', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-saved-filter-'));
+  const taken = /** @type {{ clip: { src: string } }} */ (await takeSaved(root, 'openfilm/filters/bw'));
+  assert.equal(taken.clip.src, 'saved/openfilm/filters-bw/layer.html');
+  assert.ok(existsSync(join(root, 'saved/openfilm/filters-bw/layer.html')));
+  /* the layer itself, and a folder of the filters' pictures, are what they are */
+  await assert.rejects(takeSaved(root, 'openfilm/filters/nothing-here/deeper'));
 });

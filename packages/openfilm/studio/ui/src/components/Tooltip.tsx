@@ -34,7 +34,7 @@ const EDGE_PAD = 8;
 const ARROW_INSET = 12;
 
 export function Tooltip({
-  label, shortcut, side = 'top', children,
+  label, shortcut, side = 'top', wrap = false, children,
 }: {
   /** Empty string/undefined = no tooltip right now (e.g. a "Restore" button sitting on the current version); the child is passed through untouched. */
   label: string | undefined;
@@ -42,6 +42,8 @@ export function Tooltip({
   shortcut?: string;
   /** Which side the tooltip appears on. Top-bar buttons use `bottom`; everything else defaults to above. */
   side?: 'top' | 'bottom';
+  /** A sentence rather than a name: it wraps at a reading width instead of staying on one line. */
+  wrap?: boolean;
   /** The element the tooltip attaches to. Must accept a ref and mouse events. */
   children: React.ReactElement;
 }): React.ReactElement {
@@ -137,7 +139,7 @@ export function Tooltip({
           <div
             ref={bubble}
             role="tooltip"
-            className={`pointer-events-none fixed z-[10200] -translate-x-1/2 whitespace-nowrap rounded-[8px] px-2.5 py-[5px] text-[12px] font-medium shadow-md ${
+            className={`pointer-events-none fixed z-[10200] -translate-x-1/2 ${wrap ? 'w-max max-w-[280px] whitespace-normal leading-snug' : 'whitespace-nowrap'} rounded-[8px] px-2.5 py-[5px] text-[12px] font-medium shadow-md ${
               side === 'bottom' ? '' : '-translate-y-full'
             }`}
             style={{
@@ -146,9 +148,9 @@ export function Tooltip({
               top: side === 'bottom' ? at.y + 2 + ARROW_H : at.y - 2 - ARROW_H,
               /* The first frame has not measured the shift yet; do not paint, so it is not seen jumping from the wrong position. */
               visibility: fit ? 'visible' : 'hidden',
-              background: 'var(--tooltip-bg)',
-              color: 'var(--tooltip-text)',
-              border: '1px solid var(--tooltip-border)',
+              background: 'var(--bg-raised)',
+              color: 'var(--text)',
+              border: '1px solid var(--border-strong)',
             }}
           >
             {label}
@@ -163,20 +165,20 @@ export function Tooltip({
                 left: fit?.arrow ?? '50%',
                 width: ARROW_BOX,
                 height: ARROW_BOX,
-                background: 'var(--tooltip-bg)',
+                background: 'var(--bg-raised)',
                 /* A square rotated 45 degrees, with only its two outward-facing edges stroked, overlaps the bubble's border to form one continuous arrow. */
                 ...(side === 'bottom'
                   ? {
                     top: -ARROW_BOX / 2 - 0.5,
                     transform: 'translateX(-50%) rotate(45deg)',
-                    borderTop: '1px solid var(--tooltip-border)',
-                    borderLeft: '1px solid var(--tooltip-border)',
+                    borderTop: '1px solid var(--border-strong)',
+                    borderLeft: '1px solid var(--border-strong)',
                   }
                   : {
                     bottom: -ARROW_BOX / 2 - 0.5,
                     transform: 'translateX(-50%) rotate(45deg)',
-                    borderBottom: '1px solid var(--tooltip-border)',
-                    borderRight: '1px solid var(--tooltip-border)',
+                    borderBottom: '1px solid var(--border-strong)',
+                    borderRight: '1px solid var(--border-strong)',
                   }),
               }}
             />

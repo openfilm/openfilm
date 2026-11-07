@@ -5,8 +5,8 @@
  * places (`film.html#t.c`), and a place copied before then would paste whichever clip sits there now. A paste copies
  * the clip as film.html has it then; a clip that is gone by then is reported, not swapped for another.
  *
- * Start times are kept so several clips keep their spacing; tracks are kept so clips copied from several tracks go
- * back to their own tracks. Only clips copied from one track follow a track the person points at.
+ * Start times are kept so several clips keep their spacing; tracks are kept so clips copied from several tracks keep
+ * their rows: back onto their own tracks, or moved together to the track the person points at.
  */
 import type { Op } from '../api.ts';
 import { newTrackSide } from './timeline-drag.ts';
@@ -30,6 +30,20 @@ export function laneOfBlock(tracks: readonly TimelineTrack[], id: string): strin
     if (track.blocks.some((b) => b.id === id)) return track.lane;
   }
   return null;
+}
+
+/**
+ * The track a paste (⌘V) goes onto: the track row under the pointer (`pointed`), else the selected clip's row, else none
+ * (each copy back onto its own). `pointed` in the answer: the row was pointed at, so copies from several tracks move
+ * there together (pasteEdit); a selected clip's row takes only copies from one track.
+ */
+export function pasteLane(
+  tracks: readonly TimelineTrack[],
+  pointedLane: string | null,
+  pickedId: string | null,
+): { lane: string | null; pointed: boolean } {
+  if (tracks.find((tr) => tr.lane === pointedLane)?.docIndex != null) return { lane: pointedLane, pointed: true };
+  return { lane: pickedId ? laneOfBlock(tracks, pickedId) : null, pointed: false };
 }
 
 /** The row by name; when a spread row is gone, the same film.html track. */
@@ -151,8 +165,9 @@ function placeCopies(
   for (const [index, group] of byTrack) {
     const track = model.find((t) => t.index === index);
     const clips = track?.clips ?? [];
-    const taken = index === keepOff
-      || group.some((s, i) => clips.some((c) => overlap(s, c)) || group.slice(0, i).some((o) => overlap(s, o)));
+    /* a caption track takes its cues' copies where they land: one over another cuts it short (lib/caption-blocks) */
+    const taken = !track?.captions && (index === keepOff
+      || group.some((s, i) => clips.some((c) => overlap(s, c)) || group.slice(0, i).some((o) => overlap(s, o))));
     if (!taken) {
       there.push(...group);
       continue;
@@ -189,10 +204,13 @@ function placeCopies(
 }
 
 /**
- * A paste: copied from one track, the copies go onto the track pointed at (`forceLane`) if any; from several, each
- * back onto its own. The group's earliest clip lands at `atMs`, the rest keep their spacing. Put down (`place`), they
- * never cut or move what is there: a taken spot opens a track beside it (placeCopies), and with the magnet a copy
- * headed for the main track goes to a new track right above it. An insert makes room there instead,
+ * A paste: copied from one track, the copies go onto the track given (`forceLane`) if any. From several, each goes
+ * back onto its own; when that track was pointed at (`pointed`), the group's top track goes onto it instead and the
+ * others keep their distance below it, past the last track on new tracks. The group's earliest clip lands at `atMs`,
+ * the rest keep their spacing. Put down (`place`), they
+ * never cut or move what is there: a taken spot opens a track beside it (placeCopies); but with the magnet, copies
+ * headed for the main track go in there at the insert point nearest `atMs`, what follows moving on (putCopies). An
+ * insert makes room there instead,
  * pushing what follows on, on the tracks they go in on (with linkage, what rides on the main track along). Null when a
  * track it goes onto is locked or gone.
  */
@@ -202,24 +220,34 @@ export function pasteEdit(
   model: EditModel,
   atMs: number,
   forceLane: string | null,
-  opts: { mode: 'place' | 'insert' } & Partial<Switches>,
+  opts: { mode: 'place' | 'insert'; pointed?: boolean } & Partial<Switches>,
 ): Op[] | null {
   if (!clipboard.length) return [];
   const base = Math.min(...clipboard.map((item) => item.startMs));
   const copiedTracks = new Set(clipboard.map((item) => docIndexOfLane(item.lane) ?? item.lane));
   const force = forceLane && copiedTracks.size === 1 ? forceLane : null;
+  /* several tracks moved together onto the track pointed at: by how many tracks */
+  const top = Math.min(...clipboard.map((item) => trackByLane(tracks, item.lane)?.docIndex ?? Infinity));
+  const to = forceLane && !force && opts.pointed ? trackByLane(tracks, forceLane)?.docIndex : undefined;
+  const shift = to != null && Number.isFinite(top) ? to - top : 0;
+  const count = Math.max(-1, ...model.map((t) => t.index)) + 1;
   const spans = clipboard.map((item) => {
-    const row = trackByLane(tracks, force || item.lane);
+    const own = trackByLane(tracks, force || item.lane);
+    const doc = own?.docIndex == null ? undefined : own.docIndex + shift;
+    const row = shift ? tracks.find((tr) => tr.docIndex === doc) : own;
+    const track: TrackDest | undefined = doc != null && doc >= count ? { insert: count } : row?.docIndex;
     const startMs = Math.round(Math.max(0, atMs) + (item.startMs - base));
-    return { item, track: row?.docIndex, locked: Boolean(row?.locked), startMs, endMs: startMs + item.durMs };
+    return { item, track, source: own?.docIndex, locked: Boolean(row?.locked), startMs, endMs: startMs + item.durMs };
   });
   if (spans.some((s) => s.track == null || s.locked)) return null;
   const links = copyLinks(clipboard.map((item) => item.clipId), model);
   if (opts.mode === 'place') {
-    return placeCopies(model, spans.map((s) => ({
-      from: s.item.clipId, startMs: s.startMs, endMs: s.endMs, dest: s.track!, source: s.track!,
-    })), links, opts.magnet ? mainTrackOf(model) : null).ops;
+    return putCopies(model, spans.map((s) => ({
+      from: s.item.clipId, startMs: s.startMs, endMs: s.endMs, dest: s.track!, source: s.source!,
+    })), links, opts).ops;
   }
+  /* insert mode opens no track: copies that would go past the last one are refused */
+  if (spans.some((s) => typeof s.track !== 'number')) return null;
   const insertOf = (s: (typeof spans)[number]): Op => ({
     op: 'insert',
     from: s.item.clipId,
@@ -228,7 +256,7 @@ export function pasteEdit(
     ...(links.has(s.item.clipId) ? { link: links.get(s.item.clipId)! } : {}),
   });
   /* the copies go in first, so a clip pasted inside itself is copied whole before the insert cuts it */
-  const room = planRoom(model, spans.map((s) => ({ track: s.track!, startMs: s.startMs, endMs: s.endMs })), { ...opts, mode: 'insert' });
+  const room = planRoom(model, spans.map((s) => ({ track: s.track as number, startMs: s.startMs, endMs: s.endMs })), { ...opts, mode: 'insert' });
   return [...spans.map(insertOf), ...room.ops];
 }
 
@@ -253,16 +281,29 @@ export function planCopies(
     return { from: c.id, startMs, endMs: startMs + c.endMs - c.startMs, dest: spec.to?.get(c.id) ?? track, source: track };
   });
   if (spans.some((s) => typeof s.dest === 'number' && model.find((t) => t.index === s.dest)?.locked)) return null;
-  const links = copyLinks(spec.ids, model);
+  return putCopies(model, spans, copyLinks(spec.ids, model), spec, spec.pointerMs);
+}
+
+/**
+ * Copies put down (placeCopies); with the magnet, when the first one's goes onto the main track, the copies headed
+ * there go in end to end at the insert point under `pointerMs` (else where the first one starts), what follows moving
+ * on (and what rides on it, with linkage).
+ */
+function putCopies(
+  model: EditModel,
+  spans: readonly CopySpan[],
+  links: ReadonlyMap<string, string | null>,
+  sw: Partial<Switches>,
+  pointerMs?: number,
+): EditPlan {
   const main = mainTrackOf(model);
   const lead = spans[0]!;
-  if (!(spec.magnet && main != null && lead.dest === main && magnetOn(model, main, true))) {
-    const { ops, placed } = placeCopies(model, spans, links, spec.magnet ? main : null);
+  if (!(sw.magnet && main != null && lead.dest === main && magnetOn(model, main, true))) {
+    const { ops, placed } = placeCopies(model, spans, links, sw.magnet ? main : null);
     return { ops, placed, shortMs: 0 };
   }
-  /* onto the main track with the magnet: in end to end at the insert point, what follows (and rides on it) moving on */
   const going = spans.filter((s) => s.dest === main).sort((a, b) => a.startMs - b.startMs);
-  let at = insertPointOn(model, main, spec.pointerMs ?? lead.startMs, lead.startMs);
+  let at = insertPointOn(model, main, pointerMs ?? lead.startMs, lead.startMs);
   const inserts: Op[] = [];
   const placed = new Map<string, Placed>();
   const startAt = at;
@@ -272,7 +313,7 @@ export function planCopies(
     placed.set(s.from, { startMs: at, endMs: at + len, track: main });
     at += len;
   }
-  const room = planRoom(model, [{ track: main, startMs: startAt, endMs: at }], { mode: 'insert', magnet: spec.magnet, linkage: spec.linkage });
+  const room = planRoom(model, [{ track: main, startMs: startAt, endMs: at }], { mode: 'insert', magnet: sw.magnet, linkage: sw.linkage });
   const rest = placeCopies(model, spans.filter((s) => s.dest !== main), links, main);
   for (const [id, p] of rest.placed) placed.set(id, p);
   return { ops: [...inserts, ...room.ops, ...rest.ops], placed, shortMs: room.shortMs };

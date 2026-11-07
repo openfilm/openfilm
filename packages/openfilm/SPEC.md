@@ -42,7 +42,8 @@ where, and CSS that says how each looks. A page draws a shot.
 ```
 
 - The stage, the frame in CSS pixels, is the viewport: `<meta name="viewport" content="width=…, height=…">`;
-  without one, 1920 × 1080. The head is the film's own (styles, fonts), with no script: what moves is a page.
+  without one, 1920 × 1080. The head is the film's own (styles, fonts, the `@keyframes` its clips move by), with no
+  script.
 - The body is the tracks, each a `<section>`, in the order a timeline shows them: the first on top (a host stacks
   them; a page's own paint order does not). A track has no kind: any clip goes on any track. A track's clips do not
   overlap; overlapping pictures (a picture-in-picture, a title over footage) sit on different tracks. A track may be
@@ -55,7 +56,7 @@ where, and CSS that says how each looks. A page draws a shot.
     its `#t=0,length` is required, and is how long it stays.
   - `id`: unique across the film; without it, the file's name.
   - `at`: where it starts on the film, in seconds from 0 (default 0).
-  - `speed` on videos and sounds: the playback rate, 0.25 to 4, sound keeping its pitch. The clip lasts
+  - `speed` on videos and sounds: the playback rate, 0.1 to 100, sound keeping its pitch. The clip lasts
     `(out − in) / speed` on the film.
   - `volume` on videos and sounds: linear gain, 1 the file's own level; `muted` is 0.
   - `size` on pages: `size="1920x1080"`, the CSS pixels a page without its own `width` and `height` (§2) is laid
@@ -70,8 +71,15 @@ where, and CSS that says how each looks. A page draws a shot.
     stage. A page is fitted whole inside its box, centered; without one it is its own size, centered, so a page
     without a size covers the stage.
   - How a picture looks is CSS: its `class` and the rest of its `style` (`border-radius`, `clip-path`, `mask`,
-    `filter`, `opacity`, `mix-blend-mode`…), and the film's `<style>`. The film's CSS has no time: what moves is a
-    page.
+    `filter`, `opacity`, `mix-blend-mode`…), and the film's `<style>`.
+  - How a picture moves is CSS animation: its `animation` (in its `style` or by its `class`), by `@keyframes` in the
+    film's `<style>`. An animation runs on the clip's own time, 0 at its `at`, and a host holds it at each frame as it
+    holds a page's (§4). Keyframes move a picture with `translate` (stage px, `vw` and `vh` of the stage), `rotate` and
+    `scale`, on top of its box: about its box's center, its box unchanged. They may change any other property of its
+    look (`opacity`, `filter`, `clip-path`…), never what places it. On every picture a host sets `--clip-length`, how
+    long the clip is on the film (`4.2s`), so a way out can be timed from its end:
+    `animation: out .6s ease-in calc(var(--clip-length) - .6s) both`. A `transition`, whose progress is history, is an
+    error.
   - `overrides` are the person's changes made in Studio, as JSON, a list of entries. An entry with `at` (a CSS
     selector), on a page clip only, tweaks an element of the page, applied by the host after each frame: optional `n`
     (which match, from 1), `t` (translate px), `s` (scale), `r` (rotate degrees) as the independent CSS transform
@@ -82,7 +90,7 @@ where, and CSS that says how each looks. A page draws a shot.
     nothing in the picture). An entry without `at`, at most one, on any clip, is the clip's own: `fade: [in, out]`,
     seconds (0 or more, to the millisecond, together no longer than the clip): its picture's opacity and its sound's
     gain ramp linearly from 0 to 1 over its first `in` seconds and from 1 to 0 over its last `out` seconds, times its
-    own opacity and volume.
+    own opacity and volume (as its animation has its opacity at that moment).
   - `alt`, `title`, `lang`, `dir`, `data-*` and `aria-*` are kept and say nothing to the film.
 - Times (`at`, the fragment's) are seconds to the millisecond: a host rounds them to three decimals as it reads them,
   and an editor writes no more (no frame shows a finer difference). Each is rounded alone, so clips on a track that
@@ -111,6 +119,10 @@ trimmed, muted and set in volume on the timeline like any clip. A sound that bel
 second the shot plays it; moving the page clip does not move it. The host mixes and encodes the sound; it never
 records it from the page.
 
+A film can be a clip of another: `<iframe src="parts/intro/film.html">`, a film.html in a folder of its own, its
+`src` relative to it. Its picture is a page's; its sound is heard in the film that holds it, each of its sounds where
+the clip plays that part of it, at its volume times the clip's, the clip's fades on the ones at its edges.
+
 Timing that follows sound (beats, onsets, word timings) is data, not API: precompute it into files the page reads
 during `ready`. Hosts MAY provide tools that write such files.
 
@@ -122,7 +134,19 @@ Its translations are beside it as `1.<language>.vtt`, the same lines at the same
 `NOTE Each cue is one subtitle, as cut by hand in OpenFilm Studio.` has its cues as the person cut them: each is shown
 as one subtitle as it is, where an editor would otherwise cut long lines into subtitles. An editor's subtitles are the
 lines of the clips that can be heard, placed by each clip's `at`, its `#t=` fragment and `speed`; a host draws none
-of them into the picture.
+of them into the picture. Words on the picture are a caption track.
+
+### Captions
+
+A track may hold, instead of clips, one `<track kind="captions">` (or `kind="subtitles"`): a caption track. Its `src`
+is a WebVTT file relative to film.html; `srclang` and `label` say its language and name. Its cues are on the film's
+time, 0 at the film's start, and a host draws each over the tracks below it while it is on, laid out by its settings
+(`line`, `position`, `size`, `align`, `region`) and the file's REGION blocks as WebVTT lays out cues over a video.
+How they look is the CSS of the file's STYLE blocks, by `::cue` and `::cue(…)`: a cue by its id (`::cue(#c3)`), its
+spans by tag, class and voice (`<c.em>`, `<v Ana>`), a cue's words after its timestamps by `:past` and `:future`.
+Every CSS property applies there, `@keyframes` included; an animation runs on the cue's own time, 0 at its start, or
+on an element after a timestamp from that timestamp. A caption track has no sound, can be `hidden` or `locked` like
+any track, and is not part of the film's length.
 
 ## 2. The page
 
@@ -138,6 +162,7 @@ window.film = {
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `frame(t)` | function | Draw the complete picture for time `t ≥ 0` (below `duration` when there is one). If it returns a Promise, the picture is complete when it resolves. |
+| `frameReadsOverrides` | boolean | Optional. When true, the host also applies the clip's overrides before `frame`, so drawing code can read values such as CSS custom properties. |
 | `duration` | number | Optional. The page's own length in seconds. Without it a page has no end, like a still: its clip's media fragment (`title.html#t=0,4`) says how long it plays, and a range is given to check or render it alone. |
 | `ready` | Promise \| () => Promise | Optional. Resolves when fonts, images, models and data are loaded. The host calls `frame` only after it settles. For web fonts, load each face used (`document.fonts.load('700 64px Fraunces')`), not only `document.fonts.ready`. |
 | `width`, `height` | number | Optional. The page's size in CSS pixels, for a page that is part of the picture (a chart in a corner). Without them the page is its clip's `size` (§1), else the size of the stage, or 1920 × 1080 opened on its own. The host sizes the viewport to it; higher resolutions use device pixel ratio. |

@@ -225,14 +225,36 @@ function askVersion(/** @type {string} */ file) {
 }
 
 /**
+ * A program inside a macOS app bundle (`Some.app/Contents/…`): what the app keeps beside it can say another version
+ * than the program it runs (an old label never removed), so there the program is asked, not the files around it.
+ */
+function inAppBundle(/** @type {string} */ real) {
+  const parts = real.split(/[\\/]/);
+  const app = parts.findIndex((part) => /^[\w .+()-]+\.app$/.test(part));
+  return app >= 0 && parts[app + 1] === 'Contents';
+}
+
+/**
  * Which version a program is: npm's says it in its package.json (`ours`: the package's names), a folder can be named
  * for it (Homebrew's `Caskroom/codex/0.163.0/…`), an app can keep it in a file beside it (`opencode-cli.version`);
- * else it says when asked (`--version`), once. Null when it can't be told.
- * @param {string} file @param {{ ours: (name: string) => boolean, ask: (file: string) => string | null }} o
+ * else it says when asked (`--version`), once. Inside an app bundle (`inApp`: a copy in Codex.app or ChatGPT.app,
+ * where the files beside the program can name an older build than the one it runs), it is asked first. Null when it
+ * can't be told.
+ * @param {string} file @param {{ ours: (name: string) => boolean, ask: (file: string) => string | null, inApp?: boolean }} o
  */
-function programVersion(file, { ours, ask }) {
+function programVersion(file, { ours, ask, inApp = false }) {
   let real;
   try { real = realpathSync(file); } catch { return null; }
+  const askIt = () => {
+    let key;
+    try { key = `${real}\0${statSync(real).mtimeMs}`; } catch { return null; }
+    if (!versionsAsked.has(key)) versionsAsked.set(key, ask(real));
+    return versionsAsked.get(key) ?? null;
+  };
+  if (inApp && inAppBundle(real)) {
+    const told = askIt();
+    if (told) return told;
+  }
   for (let dir = dirname(real), up = 0; up < 6; dir = dirname(dir), up += 1) {
     try {
       const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
@@ -241,26 +263,24 @@ function programVersion(file, { ours, ask }) {
   }
   const named = real.split(/[\\/]/).reverse().find((part) => /^\d+\.\d+\.\d+$/.test(part));
   if (named) return named;
-  for (const file of new Set([`${real}.version`, `${real.replace(/\.exe$/i, '')}.version`])) {
+  for (const beside of new Set([`${real}.version`, `${real.replace(/\.exe$/i, '')}.version`])) {
     try {
-      const beside = readFileSync(file, 'utf8').trim();
-      if (/^\d+\.\d+\.\d+$/.test(beside)) return beside;
+      const told = readFileSync(beside, 'utf8').trim();
+      if (/^\d+\.\d+\.\d+$/.test(told)) return told;
     } catch { /* none */ }
   }
-  let key;
-  try { key = `${real}\0${statSync(real).mtimeMs}`; } catch { return null; }
-  if (!versionsAsked.has(key)) versionsAsked.set(key, ask(real));
-  return versionsAsked.get(key) ?? null;
+  return askIt();
 }
 
 /**
  * Which Codex a program is: npm's says it in its package.json (`@openai/codex`, or the platform package its program
  * is in), Homebrew's folder is named for it (`Caskroom/codex/0.163.0/…`); a copy inside an app (Codex.app,
- * ChatGPT.app, a Store app) says it when asked (`--version`), once. Null when it can't be told.
+ * ChatGPT.app, a Store app) says it when asked (`--version`), once — the files such an app keeps beside its copy can
+ * name an older build than the one it runs (issue #290). Null when it can't be told.
  * @param {string} file @param {{ ask?: (file: string) => string | null }} [o]
  */
 export function codexVersion(file, { ask = askVersion } = {}) {
-  return programVersion(file, { ours: (name) => name.startsWith('@openai/codex'), ask });
+  return programVersion(file, { ours: (name) => name.startsWith('@openai/codex'), ask, inApp: true });
 }
 
 /**
@@ -326,8 +346,9 @@ const isCmdScript = (path) => /\.(?:cmd|bat)$/i.test(path);
  * file, yet starts like one: there, being there is enough.
  */
 function presentFile(path) {
-  try { return statSync(path).isFile(); } catch { /* maybe a Store app's command */ }
-  try { const s = lstatSync(path); return s.isFile() || s.isSymbolicLink(); } catch { return false; }
+  /* most of the files looked for are not there: told without an error to make (thousands of them a look) */
+  try { const s = statSync(path, { throwIfNoEntry: false }); if (s) return s.isFile(); } catch { /* maybe a Store app's command */ }
+  try { const s = lstatSync(path, { throwIfNoEntry: false }); return Boolean(s && (s.isFile() || s.isSymbolicLink())); } catch { return false; }
 }
 
 /** each folder once (on Windows whatever its case), as first spelled */

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { anchorTime, EASE_STEP, easedLead, fadeSteps, fileTime, JUMP, soundsDue, stretchRate } from './player.ts';
+import { anchorTime, EASE_STEP, easedLead, fadeSteps, fileTime, joinAt, JUMP, soundsDue, stretchRate } from './player.ts';
+import { mediaPlays } from '../../../../src/film-doc.mjs';
 
 test('a sound\'s fades as ramps: where it is now, then each corner after it', () => {
   /* 4 s long, 1 s in, 2 s out */
@@ -54,10 +55,36 @@ test('a sound heard at another speed is played by a media element at its rate, p
   assert.equal(stretchRate(0.1, 0.25), 1 / 16);
 });
 
+test('a sound is heard here only at a rate a browser plays: past 16× or under 1/16×, the picture goes on alone', () => {
+  /* a clip's speed by the viewer's */
+  assert.equal(mediaPlays(16 * 1), true);
+  assert.equal(mediaPlays(4 * 4), true);
+  assert.equal(mediaPlays(0.25 * 0.25), true);
+  assert.equal(mediaPlays(0.1 * 1), true);
+  assert.equal(mediaPlays(100 * 1), false);
+  assert.equal(mediaPlays(16 * 1.5), false);
+  assert.equal(mediaPlays(0.1 * 0.25), false);
+});
+
 test('where in its file a sound is at a film second', () => {
   /* a clip at 2× of the file's seconds 10–20, at film second 4 */
   const s = { src: 'a.wav', at: 4, from: 10, to: 20, volume: 1, speed: 2 };
   assert.equal(fileTime(s, 4), 10);
   assert.equal(fileTime(s, 5), 12);
   assert.equal(fileTime({ ...s, speed: 1 }, 6.5), 12.5);
+});
+
+test('a sound whose file is ready only late joins where the film is then, not where loading began; ended, not at all', () => {
+  /* 4 s long from film second 2, at 2×; the line: film second 1 heard at audio time 10, the film at the viewer's 1× */
+  const s = { src: 'a.wav', at: 2, from: 10, to: 18, volume: 1, speed: 2, clip: 'a' };
+  const heard = { t: 1, at: 10 };
+  /* due at film second 2 (audio 11), ready at audio 12.5: film second 3.5, its file 13 s in */
+  assert.equal(joinAt(s, heard, 12.5, 1, 2), 3.5);
+  assert.equal(fileTime(s, 3.5), 13);
+  /* ready on time: from its start */
+  assert.equal(joinAt(s, heard, 10.5, 1, 2), 2);
+  /* the viewer at 2×: twice as far on */
+  assert.equal(joinAt(s, heard, 12, 2, 2), 5);
+  /* ready after it ended (film second 6) */
+  assert.equal(joinAt(s, heard, 15.5, 1, 2), null);
 });

@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { hasAlpha } from '../../src/seekable.mjs';
 import { readable } from './files.mjs';
 import { TOOL_DIR } from './projects.mjs';
 import { writeAtomic } from './atomic.mjs';
@@ -70,15 +71,17 @@ async function cached(/** @type {string} */ root, /** @type {string} */ kind, /*
 }
 
 /**
- * Length and picture size of a media file: `{ duration (s), width, height, fps, audio, codec, pixfmt }`; a still has no
- * duration. The size is the picture as it is shown: a video turned a quarter (a phone's portrait video) has its sides
- * swapped. `codec` and `pixfmt` are its picture's (proxies.mjs tells heavy footage by them).
+ * Length and picture size of a media file: `{ duration (s), width, height, fps, audio, codec, pixfmt, profile, level }`;
+ * a still has no duration. The size is the picture as it is shown: a video turned a quarter (a phone's portrait video)
+ * has its sides swapped. `codec`, `pixfmt`, `profile` and `level` are its picture's (proxies.mjs tells heavy footage by
+ * them, and asks the editor whether its browser decodes it).
  * @param {string} root @param {string} rel
  */
 export async function probe(root, rel) {
   const { abs, key } = await source(root, rel);
-  /* `.3`: since the size is as shown (an older answer has a turned video's sides as stored), with the codec */
-  const bytes = await cached(root, 'probe', `${key}.3.json`, async () => {
+  /* `.4`: since the size is as shown (an older answer has a turned video's sides as stored), with the codec, its
+     profile and level */
+  const bytes = await cached(root, 'probe', `${key}.4.json`, async () => {
     const out = JSON.parse((await tool('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', abs])).toString());
     const video = out.streams?.find((/** @type {{ codec_type: string }} */ s) => s.codec_type === 'video');
     const audio = out.streams?.some((/** @type {{ codec_type: string }} */ s) => s.codec_type === 'audio');
@@ -91,17 +94,24 @@ export async function probe(root, rel) {
       ...(video ? (quarter ? { width: video.height, height: video.width } : { width: video.width, height: video.height }) : {}),
       ...(d && n ? { fps: Math.round((n / d) * 100) / 100 } : {}),
       ...(video?.codec_name ? { codec: String(video.codec_name), pixfmt: String(video.pix_fmt ?? '') } : {}),
+      ...(video?.profile ? { profile: String(video.profile) } : {}),
+      ...(Number(video?.level) > 0 ? { level: Number(video.level) } : {}),
       audio: Boolean(audio),
     }));
   });
   return JSON.parse(bytes.toString());
 }
 
-/** A video's poster: one frame a second in (or its first), 480 px wide, as JPEG. */
+/**
+ * A video's or a picture's poster: one frame a second in (or its first), 480 px wide, as JPEG; as PNG when it has an
+ * alpha in its pixels (a ProRes 4444, a PNG), so what it leaves clear stays clear.
+ */
 export async function poster(/** @type {string} */ root, /** @type {string} */ rel) {
   const { abs, key } = await source(root, rel);
-  return cached(root, 'posters', `${key}.jpg`, async () => {
-    const grab = (/** @type {string} */ at) => tool('ffmpeg', ['-v', 'error', '-ss', at, '-i', abs, '-frames:v', '1', '-vf', 'scale=480:-2', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-q:v', '4', '-']);
+  const clear = hasAlpha({ pix_fmt: (await probe(root, rel).catch(() => null))?.pixfmt });
+  const as = clear ? ['-pix_fmt', 'rgba', '-vcodec', 'png'] : ['-vcodec', 'mjpeg', '-q:v', '4'];
+  return cached(root, 'posters', `${key}.${clear ? 'png' : 'jpg'}`, async () => {
+    const grab = (/** @type {string} */ at) => tool('ffmpeg', ['-v', 'error', '-ss', at, '-i', abs, '-frames:v', '1', '-vf', 'scale=480:-2', '-f', 'image2pipe', ...as, '-']);
     const frame = await grab('1').catch(() => Buffer.alloc(0));
     return frame.length ? frame : grab('0');
   });
