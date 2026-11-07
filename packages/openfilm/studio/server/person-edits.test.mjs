@@ -107,6 +107,30 @@ test('in Studio: the person edits while the agent writes film.html whole from an
   shown.close();
 });
 
+test('a chat turn undone: the film goes back as the turn found it, with what the turn added and any edit made on it gone', { timeout: 30_000 }, async () => {
+  const { project: made } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Undone') } })).json();
+  const found = filmHtml(F());
+  writeFileSync(join(made.path, 'film.html'), found);
+  const shown = watch(made.id);
+  await new Promise((r) => { shown.onopen = r; });
+  await pause(300);
+  writeFileSync(join(made.path, 'film.html'), filmHtml(F([page('title')])));
+  await pause(400);
+  assert.deepEqual(clips(made.path).map((c) => c.id), ['title']);
+  const now = await (await api(`/api/projects/${made.id}`)).json();
+  const edited = await api(`/api/projects/${made.id}/edit`, { method: 'POST', body: { base: now.rev, ops: [{ op: 'props', edits: [{ clip: 'title', prop: 'at', value: 2 }] }] } });
+  assert.equal(edited.status, 200);
+  await pause(300);
+
+  assert.equal((await api(`/api/projects/${made.id}/history/put-back`, { method: 'POST' })).status, 200);
+  writeFileSync(join(made.path, 'film.html'), found);
+  await settleProjectFilm(made.path);
+  await pause(500);
+  shown.close();
+  assert.deepEqual(clips(made.path), [], 'the film as the turn found it');
+  assert.equal(readFileSync(join(made.path, 'film.html'), 'utf8'), found, 'the file itself, not merged and written again');
+});
+
 test('A, B: a clip the agent renamed is not doubled; one the person changed and an older copy lacks stays, and the agent is told', async () => {
   const root = await project(F([page('c1', { at: 0 }), page('b', { at: 5 }), page('c', { at: 9 })]));
   write(root, F([{ ...page('title', { at: 0 }), src: 'c1.html' }, page('b', { at: 5 }), page('c', { at: 9 })]));
