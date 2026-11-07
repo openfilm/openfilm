@@ -13,7 +13,7 @@ import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
 import { arch, homedir, platform, release, version as osVersion } from 'node:os';
 import { join } from 'node:path';
 import { freeSpace, libraryProjects, libraryRoot, studioHomeDir } from './locations.mjs';
-import { problemLines, problemsFile } from './problems.mjs';
+import { problemLines, problemsFile, redact } from './problems.mjs';
 import { folderSizeAsync } from './skills.mjs';
 
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -236,7 +236,9 @@ export async function doctor({ run = 'openfilm', env = process.env, studio = nul
   }
 
   const log = join(data, 'logs', 'studio.log');
-  const trouble = existsSync(log) ? logTrouble(readFileSync(log, 'utf8')).map((line) => (home.length > 1 ? line.replaceAll(home, '~') : line)) : [];
+  /* the report promises no keys or accounts: a log line is tidied the way a recorded problem is (home as ~, keys and
+     email addresses taken out), not only its paths. */
+  const trouble = existsSync(log) ? logTrouble(redact(readFileSync(log, 'utf8'), home)) : [];
   const recent = problemLines({ file: problemsFile(data) });
   const extra = [
     ...recent,
