@@ -913,7 +913,8 @@ const AUTH_REQUIRED = -32000;
 
 /** The oldest Codex the chat was tried with: an older one may have an app server the adapter can't talk to. */
 export const CODEX_TESTED = '0.132.0';
-export const ANTIGRAVITY_TESTED = '1.5.0';
+/* 1.5.1 offers the account's models to every ACP client and fixes session cancellation. */
+export const ANTIGRAVITY_TESTED = '1.5.1';
 
 /**
  * The oldest Claude Code the chat was tried with. An older one lists only the models it knows: 2.1.288 has no Haiku
@@ -950,7 +951,7 @@ export function codexTooOld(agent, path, e, versionOf = codexVersion) {
 }
 
 /**
- * An Antigravity older than 1.5.0, which introduced ACP.
+ * An Antigravity older than the ACP release tried with OpenFilm.
  * @param {string} agent @param {string | undefined} path @param {any} e @param {(file: string) => string | null} [versionOf]
  */
 export function antigravityTooOld(agent, path, e, versionOf = antigravityVersion) {
