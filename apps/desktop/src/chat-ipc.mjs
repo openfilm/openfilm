@@ -69,7 +69,7 @@ const SNAPSHOTS_MAX = 8;
  * @param {import('electron').IpcMain} ipcMain
  * @param {{ trusted: (event: any) => boolean, projects: () => Promise<string[]>, dataDir: string,
  *           reveal: (path: string) => void, tell: (channel: string, value: unknown) => void, log: (line: string) => void,
- *           filmPutBack: (dir: string) => Promise<unknown> }} opts
+ *           filmPutBack: (dir: string, done?: boolean) => Promise<unknown> }} opts
  */
 export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, trash, tell, log, filmPutBack }) {
   /* the projects Studio has, asked again when a path is not among them (a project opened a moment ago) */
@@ -120,7 +120,7 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
     let left = [];
     try { left = readdirSync(turnFiles); } catch { /* none */ }
     await Promise.all(left.map((name) => join(turnFiles, name)).filter((p) => !known.has(p)).map(dropHold));
-    const taken = await snapshot(dir, { hold });
+    const taken = await snapshot(dir, { hold, canvas: true });
     forget(snapshots, turnId);
     snapshots.set(turnId, { dir, taken, hold });
     while (snapshots.size > SNAPSHOTS_MAX) forget(snapshots, snapshots.keys().next().value);
@@ -133,7 +133,7 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
     if (!kept || kept.dir !== dir) { void dropHold(kept?.hold ?? null); return null; }
     const found = await changes(dir, kept.taken);
     /* a folder too large to read whole is never undone: what lies past the reading would look added */
-    if (!found.files.length || kept.taken.cut) { void dropHold(kept.hold); return found; }
+    if (!found.files.length || found.cut) { void dropHold(kept.hold); return found; }
     forget(undoable, turnId);
     undoable.set(turnId, kept);
     while (undoable.size > SNAPSHOTS_MAX) forget(undoable, undoable.keys().next().value);
@@ -146,6 +146,9 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
     /* Studio told first: else it takes the film put back for a write of the agent's, and merges the turn's clips into it */
     await filmPutBack(dir).catch((e) => log(`undo: Studio was not told the film goes back: ${e.message}`));
     const done = await undoTurn(dir, kept.taken, kept.hold, { trash });
+    /* The canvas files are outside the filesystem watcher: reload their restored state and forget undo steps
+       whose media may have just gone to the trash with the turn. */
+    await filmPutBack(dir, true).catch((e) => log(`undo: Studio was not told the canvas went back: ${e.message}`));
     forget(undoable, turnId);
     return { ok: true, ...done };
   });

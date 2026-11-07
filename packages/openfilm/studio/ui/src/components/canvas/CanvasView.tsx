@@ -223,17 +223,21 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   /* what an agent changed (`openfilm canvas apply`) comes onto the board at once, and ⌘Z takes it back as any change */
   React.useEffect(() => projectEvents(projectId, (event) => {
     if (event.type !== 'canvas') return;
+    if (event.reset) {
+      history.current = emptyHistory();
+      void loadBoards();
+    }
     void api.canvas(projectId, boardRef.current).then((raw) => {
       const doc = readCanvasDoc(raw);
       const key = canvasKey(doc);
       saved.current = key;
       if (key === canvasKey(docNow())) return;
-      willChange();
+      if (!event.reset) willChange();
       const before = new Set(now.current.nodes.map((n) => n.id));
       show(doc, selectedIds());
       /* what it added, brought into view */
       const added = doc.nodes.filter((n) => !before.has(n.id) && !n.parent).map((n) => ({ id: n.id }));
-      if (added.length) requestAnimationFrame(() => requestAnimationFrame(() => { void flow.fitView({ nodes: added, padding: 0.15, maxZoom: 1, duration: 300 }); }));
+      if (added.length && !event.reset) requestAnimationFrame(() => requestAnimationFrame(() => { void flow.fitView({ nodes: added, padding: 0.15, maxZoom: 1, duration: 300 }); }));
     }, () => {});
   }), [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 

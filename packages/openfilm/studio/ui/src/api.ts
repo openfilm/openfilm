@@ -284,7 +284,7 @@ export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths
   | { type: 'history-progress'; op: string; phase: string; done: number; total: number }
   | { type: 'ask'; ask: SpendAsk } | { type: 'asked'; id: string } | { type: 'notice'; notice: StudioNotice } | { type: 'project'; project: Project }
   /* an agent changed the canvas (`openfilm canvas apply`) */
-  | { type: 'canvas' }
+  | { type: 'canvas', reset?: boolean }
   /* its folder is there but film.html is not (an agent writing it again, or it lost): the project stays open and
      says so, until a `film` event says it is back */
   | { type: 'film-missing' }
