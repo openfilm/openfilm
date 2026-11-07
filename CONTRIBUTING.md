@@ -37,6 +37,7 @@ From the root:
 ```
 packages/openfilm/   npm `openfilm`: the format, the CLI and Studio
   SPEC.md, MANUAL.md   the film format; the manual `openfilm` prints for agents
+  manual/              OpenFilm's own skills, which the manual names: how a film is made, its media, its canvas
   bin/                 the `openfilm` command
   src/                 reading film.html, the host that draws frames in a headless browser, look and render
   studio/server/       Studio's server: projects, edits, history, exports, media providers
@@ -115,7 +116,7 @@ distribute one, read [TRADEMARK.md](TRADEMARK.md): a fork published as its own n
 `packages/openfilm/product.json` says where the desktop app looks for updates. It is empty in the repository, so a
 desktop build of your own never looks for them. The official feed is in `product.official.json`; the package npm
 publishes and the official desktop app carry it. Media services are connected with your own keys: in Studio,
-Settings → Providers, or each service's variable in the environment (`ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, …).
+Settings → Services, or each service's variable in the environment (`ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, …).
 
 ## Releases
 
@@ -139,9 +140,11 @@ that you are taking it, and open one before starting a large change, so nobody d
 
 ## What we keep small
 
-- **The manual** ([MANUAL.md](packages/openfilm/MANUAL.md)), what `openfilm` prints for agents, holds three things:
-  what a film is, the one rule (the picture depends only on t), and how the tools are used. No style advice or
-  methods. If an agent gets something wrong, a word is added only when the manual was ambiguous; if a tool behaved
+- **The manual** ([MANUAL.md](packages/openfilm/MANUAL.md)), what `openfilm` prints for agents, is a page: what a
+  film is and OpenFilm's own skills ([manual/](packages/openfilm/manual)), which hold the rest: how a film is made and
+  seen (the one rule: the picture depends only on t), its media, its canvas. A new part of OpenFilm an agent works with
+  gets a skill of its own there, never more words in the manual. No style advice or methods. If an agent gets
+  something wrong, a word is added only when the manual or a skill was ambiguous; if a tool behaved
   oddly, the tool is fixed.
 - **The format** ([SPEC.md](packages/openfilm/SPEC.md)): a new attribute of `film.html` is read in one place,
   [src/film-doc.mjs](packages/openfilm/src/film-doc.mjs), and described in the spec in the same pull request.
@@ -166,7 +169,7 @@ footage. So we hold one standard for every one:
 - **A service that resells or routes other companies' models** is not built in, however good its API: those models
   reach OpenFilm through their makers, or through a provider that is already built in.
 
-Every service, built in or not, works with OpenFilm today through **Settings › Providers › Custom services**: any
+Every service, built in or not, works with OpenFilm today through **Settings › Services › Custom services**: any
 HTTP service with its address, a key if it has one, and a few words about it; the agent calls it from there, and the
 key stays on the computer.
 
@@ -184,6 +187,8 @@ is a small one to start from. Its pull request comes with:
 - **Its mark** in [lib/provider-marks.ts](packages/openfilm/studio/ui/src/lib/provider-marks.ts), from
   [Lobe Icons](https://github.com/lobehub/lobe-icons) or [Simple Icons](https://simpleicons.org) (a test holds every
   provider to having one).
+- **Its pricing page**, as `pricingUrl` in its file: the service's own page, which Settings › Providers links as
+  "Pricing". No price words or numbers of ours: they change on the service's side.
 - **Every word it shows in Studio** in all five languages: en, zh-CN, ja, ko and es. A key in a format of its own
   (a region with it, say) says so where it is pasted.
 - **A changeset**.

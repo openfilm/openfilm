@@ -6,9 +6,12 @@
  * stays full-frame in any shape, a portrait photo on another clip fits by its own height, a title halfway up stays
  * halfway up, and shapes picked one after another never shrink anything.
  *
- * A video or still without a box is the canvas whatever its shape (its picture fitted inside by CSS): it is left
- * without one. A page is written its box. A page that sets no size of its own is laid out at the canvas's: it is
- * given the old canvas as its `size`, so it is scaled as a video is rather than laid out again in the new shape.
+ * A video or still without a box is the canvas (its picture fitted inside by CSS). Fitted whole (`contain`), it is
+ * given a box of its picture's shape once the canvas is another, as it would be if dropped on that canvas: else its
+ * box would be the whole canvas, bars and all, and what is done in % of the box (faded edges, a crop, a mask, round
+ * corners) would land on the bars. Filling the canvas (`cover`, `fill`), it is left without one. A page is written its
+ * box. A page that sets no size of its own is laid out at the canvas's: it is given the old canvas as its `size`, so
+ * it is scaled as a video is rather than laid out again in the new shape.
  */
 import { pictureRect } from '../../../../src/film-doc.mjs';
 import { customFilmFrame, frameRatioOf, type FilmFrameId } from './film-frame.ts';
@@ -42,10 +45,14 @@ export function canvasFor(stage: Size, frame: FilmFrameId): Size {
 }
 
 /**
- * A picture clip as the fit needs it: its kind, its picture's own size (unknown: the old canvas), its box if any, and
- * for a page, whether it sets no size of its own (`reflows`) and the `size` its clip gives it.
+ * A picture clip as the fit needs it: its kind, its picture's own size (unknown: the old canvas), its box if any, for
+ * a page, whether it sets no size of its own (`reflows`) and the `size` its clip gives it, and for a video or still,
+ * its `object-fit` and `object-position` as the film's CSS makes them.
  */
-export interface CanvasClip { id: string; kind: FilmSrcKind | null; own?: Size | null; box?: FilmBox | null; reflows?: boolean; size?: Size | null }
+export interface CanvasClip {
+  id: string; kind: FilmSrcKind | null; own?: Size | null; box?: FilmBox | null; reflows?: boolean; size?: Size | null;
+  fit?: string | null; position?: readonly [number, number] | null;
+}
 
 /** A clip on the new canvas: its box, and for a page laid out at the old canvas, that size. */
 export interface CanvasFit { id: string; box: FilmBox; size?: Size }
@@ -55,18 +62,27 @@ const fitted = (ratio: number, canvas: Size): Size => (
   canvas.w / canvas.h > ratio ? { w: canvas.h * ratio, h: canvas.h } : { w: canvas.w, h: canvas.w / ratio }
 );
 
+/** Where `contain` puts a picture `own` in size on the whole `canvas`, `position` its `object-position` in %. */
+const contained = (own: Size, canvas: Size, [px, py]: readonly [number, number] = [50, 50]) => {
+  const { w, h } = fitted(own.w / own.h, canvas);
+  return { x: ((canvas.w - w) * px) / 100, y: ((canvas.h - h) * py) / 100, w, h, r: 0 };
+};
+
 /**
  * Each picture clip's box on the new canvas `to` (the old one is `from`), each clip fitted on its own: the same
- * share of its fitted size, its center the same share of the canvas from the canvas's center. Sounds, and videos and
- * stills without a box (they are the canvas), are left out.
+ * share of its fitted size, its center the same share of the canvas from the canvas's center. Sounds are left out,
+ * and so are videos and stills without a box that fill the canvas whatever its shape (cover, fill) or whose picture
+ * is the new canvas's shape: they stay the canvas.
  */
 export function fitToCanvas(clips: readonly CanvasClip[], from: Size, to: Size): CanvasFit[] {
   const out: CanvasFit[] = [];
   for (const clip of clips) {
     if (!clip.kind || clip.kind === 'sound') continue;
-    if (clip.kind !== 'page' && !clip.box) continue;
+    /* a video or still that is the canvas: its picture where contain puts it, if its own size is known */
+    const free = clip.kind !== 'page' && !clip.box;
+    if (free && (!(clip.own && clip.own.w > 0 && clip.own.h > 0) || (clip.fit ?? 'contain') !== 'contain')) continue;
     const own = clip.own && clip.own.w > 0 && clip.own.h > 0 ? clip.own : from;
-    const at = pictureRect(clip.kind, own, from, clip.box ?? undefined);
+    const at = free ? contained(own, from, clip.position ?? undefined) : pictureRect(clip.kind, own, from, clip.box ?? undefined);
     if (!(at.w > 0 && at.h > 0)) continue;
     /* the box's shape; its picture's own when they differ only by rounding (a box written in whole px), so shapes
        picked one after another do not drift */
@@ -81,6 +97,7 @@ export function fitToCanvas(clips: readonly CanvasClip[], from: Size, to: Size):
     const near = (v: number, edge: number) => (Math.abs(v - edge) <= 2 ? edge : Math.round(v));
     const left = near(cx - w / 2, 0), top = near(cy - h / 2, 0);
     const box: FilmBox = { x: left, y: top, w: near(cx + w / 2, to.w) - left, h: near(cy + h / 2, to.h) - top };
+    if (free && box.x === 0 && box.y === 0 && box.w === to.w && box.h === to.h) continue;
     if (at.r) box.r = at.r;
     out.push(clip.kind === 'page' && clip.reflows && !clip.size ? { id: clip.id, box, size: { w: from.w, h: from.h } } : { id: clip.id, box });
   }

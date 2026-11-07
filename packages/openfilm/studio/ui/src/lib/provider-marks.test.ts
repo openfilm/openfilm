@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { listProviders } from '../../../server/providers/index.mjs';
 import { MARKS } from './provider-marks.ts';
 
-/* Settings → Providers shows each service by its mark: a new provider comes with one (from Lobe Icons or Simple Icons,
+/* Settings → Services shows each service by its mark: a new provider comes with one (from Lobe Icons or Simple Icons,
    which name their license), or it reads as a bare letter beside the others' logos */
 test('every provider has its mark', () => {
   const missing = listProviders().map((p: { id: string }) => p.id).filter((id: string) => !MARKS[id]);

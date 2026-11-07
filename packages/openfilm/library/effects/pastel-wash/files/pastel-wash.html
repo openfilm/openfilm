@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pastel wash</title>
+<style>
+  /* what a clip of it may change: how strong the wash is (0 to 1), how fast its colors drift */
+  :root { --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A pastel wash: big soft clouds of candy color (pink, lilac, sky, mint, peach) wandering round the edges of the
+ * picture and mixing where they meet, with a milky haze that lifts the shadows like a dream. A page of OpenFilm's
+ * library (CC0): the wash at t comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+const hsl = (h, s, l) => {
+  const a = s * Math.min(l, 1 - l), f = (n) => { const k = (n + h / 30) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  return [f(0), f(8), f(4)].map((v) => Math.round(v * 255));
+};
+const BLOBS = [330, 275, 200, 155, 28, 300, 220].map((hue, i) => {
+  const r = (k) => hash(i * 19.3 + k);
+  return { hue, fx: 0.05 + r(1) * 0.07, fy: 0.04 + r(2) * 0.06, px: r(3) * 6.283, py: r(4) * 6.283, size: 0.45 + r(5) * 0.3 };
+});
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, M = Math.max(w, h);
+    const amount = Math.max(0, num('--amount', 1)), tt = t * num('--speed', 1);
+    // the milky haze first, a little brighter toward the top
+    const haze = ctx.createLinearGradient(0, 0, 0, h);
+    haze.addColorStop(0, `rgba(255,248,252,${0.12 * amount})`); haze.addColorStop(1, `rgba(255,245,250,${0.05 * amount})`);
+    ctx.fillStyle = haze; ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'screen';
+    for (const b of BLOBS) {
+      // each wanders round the edge of the frame, in and out a little
+      const a = tt * b.fx * 6.283 + b.px, d = 0.5 + 0.12 * Math.sin(tt * b.fy * 6.283 + b.py);
+      const x = w * (0.5 + Math.cos(a) * d), y = h * (0.5 + Math.sin(a) * d);
+      const hue = b.hue + 18 * Math.sin(tt * 0.15 + b.px);
+      const c = hsl(hue, 1, 0.74), R = M * b.size;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, R);
+      g.addColorStop(0, `rgba(${c},${0.5 * amount})`); g.addColorStop(0.5, `rgba(${c},${0.2 * amount})`); g.addColorStop(1, `rgba(${c},0)`);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    }
+    // and the middle cleared a little, so faces stay clean
+    ctx.globalCompositeOperation = 'destination-out';
+    const clear = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.min(w, h) * 0.6);
+    clear.addColorStop(0, 'rgba(0,0,0,0.5)'); clear.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = clear; ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Glitch</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+.l { position: fixed; inset: 0; pointer-events: none; }
+.l { animation: g 0.6s steps(1) both; background: repeating-linear-gradient(0deg, rgba(255, 0, 90, 0.8) 0 3px, transparent 3px 9px, rgba(0, 220, 255, 0.75) 9px 12px, #050505 12px 22px); }
+@keyframes g { 0% { opacity: 0; } 25% { opacity: 1; transform: translateX(-6%); } 35% { transform: translateX(8%) scaleY(1.4); } 45% { transform: translateX(-3%); background: #050505; } 55% { transform: translateX(5%); } 70% { opacity: 1; transform: none; } 80%, 100% { opacity: 0; } }
+</style>
+</head>
+<body>
+<div class="l"></div>
+<script>
+/*
+ * The signal breaks up around the cut: colored bars and a dark frame that hides it. It lasts 0.6 s and covers the
+ * cut at its middle: put its middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from
+ * t alone; its CSS animations are held at t by the host.
+ */
+window.film = { duration: 0.6, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

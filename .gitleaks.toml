@@ -11,3 +11,7 @@ condition = "AND"
 paths = ['''(^|/)packages/openfilm/studio/server/(providers/)?[\w-]+\.test\.mjs$''']
 regexTarget = "secret"
 regexes = ['''0123456789|12345678|123456|abcdef1234|ABCDEFGH9876''', '''^dGhlIHNhbXBsZSBub25jZQ==$''']
+
+[[allowlists]]
+description = "the library's ids in the order of its vectors, and numbers: nothing else is in the file (the emoji keycap-… reads as a key)"
+paths = ['''(^|/)packages/openfilm/library/vectors\.json$''']

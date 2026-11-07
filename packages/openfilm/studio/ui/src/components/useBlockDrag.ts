@@ -66,6 +66,9 @@ export type GestureMode = DragMode | 'speed-start' | 'speed-end';
  * The tracks as places to drop. `except` are the clips in hand (the dragged one and the selection moving with it):
  * they are not obstacles — the group is leaving.
  */
+/** A sound's clip (a voice, an effect, music): it goes on sound tracks alone. */
+const isSound = (b: { kind: string }) => b.kind === 'voice' || b.kind === 'sfx' || b.kind === 'music';
+
 function dropLanesOf(lanes: readonly TimelineTrack[], except: readonly string[]): DropLane[] {
   const skip = new Set(except);
   const occupied = new Map<number, { startMs: number; endMs: number }[]>();
@@ -78,6 +81,7 @@ function dropLanesOf(lanes: readonly TimelineTrack[], except: readonly string[])
   return lanes.map((lane) => ({
     ...(lane.docIndex != null ? { docIndex: lane.docIndex } : {}),
     ...(lane.locked ? { locked: true } : {}),
+    ...(lane.role === 'audio' ? { sound: true } : {}),
     occupied: lane.docIndex == null ? [] : occupied.get(lane.docIndex) ?? [],
   }));
 }
@@ -243,8 +247,8 @@ export function useBlockDrag(opts: {
     );
     const writable = Boolean(latest.current.onCommit) && !locked && Boolean(block.clipId);
     return {
-      move: writable && Boolean(block.loc && block.anchor?.move),
-      resize: writable && Boolean(block.loc && block.anchor?.resize),
+      move: writable && Boolean((block.loc || block.cue) && block.anchor?.move),
+      resize: writable && Boolean((block.loc || block.cue) && block.anchor?.resize),
     };
   }, []);
 
@@ -456,7 +460,7 @@ export function useBlockDrag(opts: {
         ? { ok: true, delta: 0, moves: [] as { id: string; trackIndex: number }[] }
         : grouped
         ? groupLaneShift([
-          { id: block.id, laneIndex: homeLaneIndex, startMs: out.startMs, endMs: out.endMs },
+          { id: block.id, laneIndex: homeLaneIndex, startMs: out.startMs, endMs: out.endMs, sound: isSound(block) },
           ...crowd.map((b) => {
             const mv = out.moves.find((x) => x.id === b.id);
             return {
@@ -464,11 +468,12 @@ export function useBlockDrag(opts: {
               laneIndex: latest.current.lanes.findIndex((lane) => lane.blocks.some((x) => x.id === b.id)),
               startMs: mv?.startMs ?? b.startMs,
               endMs: mv?.endMs ?? b.endMs,
+              sound: isSound(b),
             };
           }),
         ], groupLanes, hit.lane - homeLaneIndex)
         : { ok: true, delta: 0, moves: [] as { id: string; trackIndex: number }[] };
-      const drop = grouped ? { action: 'stay' as const } : moveDestFor(homeLane?.docIndex, singleLanes, hit.lane);
+      const drop = grouped ? { action: 'stay' as const } : moveDestFor(homeLane?.docIndex, singleLanes, hit.lane, isSound(block));
       /*
        * Looks flush: make it flush. The nearest snap target is often the playhead a few ms off a neighbor's edge —
        * under a pixel on screen, but those ms would put it on a new track (flushShiftMs). Only with snapping on, for

@@ -17,7 +17,8 @@
  * the person, in the Studio pages showing the project (a `notice` event, with where to top it up), and to the agent,
  * which stops. Nothing anyone reads here carries an amount: that is on each provider's own page.
  *
- * Subtitle translation goes through the provider chosen for `translate` too (`subtitleTranslator`, for captions.mjs).
+ * Subtitle translation (`subtitleTranslator`, for captions.mjs) is the person's agent's own model's work in an app with
+ * a chat (`askAgent`), else it goes through the provider chosen for `translate`.
  *
  * Web search and reading web pages (WEB_VERBS) are listed only for an agent without web tools of its own: the app's
  * own agents say so with OPENFILM_GET_WEB=1 (the CLI asks for them); an agent like Claude Code or Codex searches with
@@ -29,13 +30,16 @@ import { realpathSync } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
 import { spokenLines } from './captions.mjs';
 import { dropTranscripts, readTranscript, transcriptIsCurrent, transcriptPath, writeTranscript } from './transcripts.mjs';
 import { inside } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { kindOf, modelFor, providerKey } from './keys.mjs';
-import { chooseProvider, listProviders, providerSettings } from './providers/index.mjs';
+import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
+import { addedDir } from './providers/added.mjs';
+import { mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
 
 /**
@@ -51,7 +55,7 @@ import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.m
  * An option: `value` names what it takes in the help (none: a switch). `path`: a project file it names, which must be
  * a recording (`speech`) or a picture.
  * @typedef {{ value?: string, required?: boolean, repeat?: boolean, choices?: string[], min?: number, max?: number,
- *   integer?: boolean, default?: string | number, alias?: string, path?: 'speech' | 'picture' }} Option
+ *   integer?: boolean, default?: string | number, alias?: string, path?: 'speech' | 'picture' | 'clip' }} Option
  * @typedef {{ help: string, dir?: string, timeoutSec: number, options: Record<string, Option> }} VerbSpec
  */
 
@@ -86,24 +90,41 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
     timeoutSec: 900,
     options: { src: { value: 'path', required: true, path: 'speech' }, force: {} },
   },
+  cutout: {
+    help: 'Take the background out of a picture in the project: the same picture as a PNG, what it is of kept and the rest transparent. Returns its path and size.',
+    dir: 'assets/image', timeoutSec: 300,
+    options: { src: { value: 'path', required: true, path: 'picture' }, out },
+  },
   'image-search': {
     help: 'Find pictures on the web and download them (1 to 8). Returns their paths and sizes.',
     dir: 'assets/image', timeoutSec: 300,
     options: { out, prompt, n: { value: 'n', min: 1, max: 8, integer: true, default: 1, alias: 'limit' } },
   },
+  'video-search': {
+    help: 'Find video clips on the web and download them (1 to 4), each with who made it and its page, the credit the film gives it; --orientation landscape, portrait or square. Returns their paths, lengths and sizes.',
+    dir: 'assets/video', timeoutSec: 600,
+    options: { out, prompt, n: { value: 'n', min: 1, max: 4, integer: true, default: 1, alias: 'limit' },
+      orientation: { value: 'orientation', choices: ['landscape', 'portrait', 'square'] } },
+  },
   image: {
-    help: 'Make one picture. Returns its path and size.',
+    help: 'Make one picture, or a new one from pictures in the project (--ref, up to 16; with --mask, a PNG whose transparent part is what is redrawn of the first; or --markup, a transparent PNG the size of the first with what to change drawn or written on it). --quality low is quick and costs least, max is finest and slowest; --size 1k, 2k or 4k. --format gif makes a looping animation of --frames (2 to 16) frames of --frame-ms each: a GIF clip plays its frames by the film\'s time, looping, so one round lasts frames × frame-ms. --format svg makes a vector picture from the prompt alone, its shapes elements a page can change. Returns its path and size.',
     dir: 'assets/image', timeoutSec: 300,
-    options: { out, prompt, ratio: { value: 'ratio', choices: ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3'], default: '3:2' },
-      quality: { value: 'level', choices: ['low', 'high'], default: 'low' }, transparent: {} },
+    options: { out, prompt, ratio: { value: 'ratio', choices: ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9'], default: '3:2' },
+      quality: { value: 'level', choices: ['low', 'medium', 'high', 'xhigh', 'max'], default: 'low' },
+      size: { value: 'size', choices: ['1k', '2k', '4k'], default: '1k' }, transparent: {},
+      ref: { value: 'path', path: 'picture', repeat: true }, mask: { value: 'path', path: 'picture' }, markup: { value: 'path', path: 'picture' },
+      format: { value: 'format', choices: ['png', 'gif', 'svg'], default: 'png' },
+      frames: { value: 'n', min: 2, max: 16, integer: true, default: 9 }, 'frame-ms': { value: 'ms', min: 20, max: 2000, integer: true, default: 200 } },
   },
   video: {
-    help: 'Make one video clip. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one.',
+    help: 'Make one video clip. --resolution 480p to 4K, as the model makes them (720p, or its nearest, when not asked): a bigger one costs more. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one. A person who speaks on screen speaks in the clip, the voice and the lips made together, never a voice laid over a clip made without it: write the words in the prompt, in quotes, and keep the clip\'s own sound (--voice gives a recording of whose voice it is, the same across clips); or give a recording with --audio and the lips follow it word for word (at fal: omnihuman-v2 or kling-avatar-v2 from a picture of the person, --first-frame; sync-3 for a clip, --video). --video makes it from a clip in the project, trimmed to the part to make again (references/ is the place for another\'s footage); what it keeps is the model\'s way, chosen with --model: at fal, kling-o3-edit changes what the prompt names and keeps the rest; kling-o3-reference makes a new clip with its camera and motion; seedance-2.0 takes it as a reference (@Video1 in the prompt); luma-ray-3.2 redraws it, its performance kept; minimax-h3-max-recast puts the people of --input-reference in place of its own, one picture each; at OpenRouter, a Seedance model takes it as a reference too, given a web address (OpenFilm\'s service gives one; your own key cannot); at Google and OpenRouter, gemini-omni-1.2-flash edits it as the prompt says, or continues it when the prompt asks (a clip of 15 s at most to edit, 30 s in all once continued; --duration: the 3 to 10 s a continuation adds, else the clip\'s own length).',
     dir: 'assets/video', timeoutSec: 1200,
-    options: { out, prompt, force: {}, duration: { value: 'seconds', min: 4, max: 30, integer: true, default: 5 },
+    options: { out, prompt, force: {}, duration: { value: 'seconds', min: 2, max: 30, integer: true, default: 5 },
+      resolution: { value: 'size', choices: ['480p', '720p', '768p', '1080p', '2K', '4K'] },
       'aspect-ratio': { value: 'ratio', choices: ['16:9', '9:16', '4:3', '3:4', '1:1', '21:9', '9:21', '3:2', '2:3', 'adaptive'] },
       'first-frame': { value: 'path', path: 'picture' }, 'last-frame': { value: 'path', path: 'picture' },
-      'input-reference': { value: 'path', path: 'picture', repeat: true } },
+      'input-reference': { value: 'path', path: 'picture', repeat: true }, video: { value: 'path', path: 'clip' },
+      audio: { value: 'path', path: 'speech' }, voice: { value: 'path', path: 'speech' } },
   },
   'web-search': {
     help: 'Search the web (up to 3 --query at once). Returns the pages that match: title, URL and an excerpt of each. web-fetch reads a whole page.',
@@ -129,8 +150,8 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
 export const WEB_VERBS = ['web-search', 'web-fetch'];
 
 /** Where the person connects a service and picks its models, said the same way everywhere. */
-export const WHERE_TO_CONNECT = 'In Studio, the OpenFilm logo at the top left opens Settings: connect a service under Providers, '
-  + 'with the person\'s own key, then choose the model for each kind of media under Services.';
+export const WHERE_TO_CONNECT = 'In Studio, the OpenFilm logo at the top left opens Settings: under Services the person chooses the model '
+  + 'for each kind of media, and connects its service there (signing in, or with their own key).';
 /** The services that make `verb`, by name: "fal.ai, Google or OpenAI". @param {string} verb */
 const makers = (verb) => {
   const names = listProviders().filter((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));
@@ -143,22 +164,31 @@ const notConnected = (verbs) => `Not connected here: ${verbs.map((v) => `${v} ($
 const offered = (/** @type {string} */ verb) => listProviders().some((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb));
 /** The whole of `openfilm get` when nothing is connected. */
 const nothing = () => 'Nothing is connected for media here: each kind works only once the person connects a service that makes it (below). '
-  + 'Until then, make sound and pictures in code, or use a service the person has a key for (with its API docs), and save them under assets/. '
+  + 'Until then, take what OpenFilm\'s own library has (its verbs are free and need nothing connected), make sound and pictures in code, '
+  + 'or use a service the person has a key for (with its API docs), and save them under assets/. '
   + `\`openfilm get <what> --help\` shows what one kind takes (${Object.keys(VERBS).filter((v) => !WEB_VERBS.includes(v) && offered(v)).join(', ')}).`;
 
 /** What `call` says when the person has added no service of their own. */
 const NO_OWN_SERVICES = 'The person has added no services of their own. In Studio, the OpenFilm logo at the top left opens Settings: '
-  + 'they add one under Providers (its address, its key if it takes one, and what it does).';
+  + 'they add one under Services (its address, its key if it takes one, and what it does).';
 
 /** Each kind of media, in words (finding voices is part of voice-over). */
 const WORDS = /** @type {Record<string, string>} */ ({
-  tts: 'voice-over', music: 'music', sfx: 'sound effects', asr: 'transcripts', image: 'images', 'image-search': 'image search',
+  tts: 'voice-over', music: 'music', sfx: 'sound effects', asr: 'transcripts', cutout: 'backgrounds taken out', image: 'images', 'image-search': 'image search', 'video-search': 'video search',
   video: 'video', translate: 'subtitle translation', 'web-search': 'web search',
 });
 /** The media services `get` can use, by name (none comes first), what each makes, and where the person connects them. */
 export const services = () => `Media services, each used with the person's own key: ${listProviders()
   .map((p) => ({ name: p.name, makes: p.verbs.filter((v) => WORDS[v]).map((v) => WORDS[v]).join(', ') }))
-  .sort((a, b) => a.name.localeCompare(b.name)).map((p) => `${p.name} (${p.makes})`).join(', ')}. ${WHERE_TO_CONNECT}`;
+  /* Local services, with no model installed, make nothing yet */
+  .filter((p) => p.makes)
+  .sort((a, b) => a.name.localeCompare(b.name)).map((p) => `${p.name} (${p.makes})`).join(', ')}. ${WHERE_TO_CONNECT} ${ADD_ONE()}`;
+
+/** How a service that is not built in is added: a provider module of its own, read like the built-in ones. */
+const ADD_ONE = () => `A service not listed is added as a provider: ${join(addedDir(), '<id>', 'provider.mjs')}, whose default export follows `
+  + `${fileURLToPath(new URL('./providers/contract.mjs', import.meta.url))} (as ${fileURLToPath(new URL('./providers/openrouter.mjs', import.meta.url))} does), `
+  + 'written from the service\'s API docs; once the person adds its key in Settings → Services, it makes media like the others, on the canvas too. '
+  + 'Try it with `openfilm get <verb> --via <id>`.';
 
 /** How long the person has to answer a question about spending. */
 const ASK_WAIT_MS = 15 * 60_000;
@@ -169,10 +199,11 @@ const BILLING = new Set(['budget', 'balance', 'spent', 'plan', 'planName', 'pric
 
 /** Why a get did not run; `code` is the CLI's exit status (2: not a project or a wrong command, 1: it did not run). */
 export class GetError extends Error {
-  /** @param {string} message @param {1 | 2} [code] */
-  constructor(message, code = 1) {
+  /** @param {string} message @param {1 | 2} [code] @param {'balance'} [reason] why it did not run, for a page to say in its own words */
+  constructor(message, code = 1, reason) {
     super(message);
     this.code = code;
+    this.reason = reason;
   }
 }
 const usage = (/** @type {string} */ message) => new GetError(message, 2);
@@ -236,14 +267,14 @@ export async function checkArgs(root, verb, given) {
   return args;
 }
 
-/** A file of the project the option names, of the kind it wants. @param {string} root @param {string} rel @param {string} name @param {'speech' | 'picture'} want */
+/** A file of the project the option names, of the kind it wants. @param {string} root @param {string} rel @param {string} name @param {'speech' | 'picture' | 'clip'} want */
 async function projectFile(root, rel, name, want) {
   let abs;
   try { abs = inside(root, rel); } catch { throw usage(`--${name} ${rel} is not a path inside the project`); }
   if (!(await stat(abs).catch(() => null))?.isFile()) throw usage(`--${name} ${rel} is not in the project`);
   const kind = clipKind(rel);
-  if (want === 'speech' ? kind !== 'sound' && kind !== 'video' : kind !== 'still') {
-    throw usage(`--${name} wants ${want === 'speech' ? 'a sound or video file' : 'a picture'}; ${basename(rel)} is not one`);
+  if (want === 'speech' ? kind !== 'sound' && kind !== 'video' : want === 'clip' ? kind !== 'video' : kind !== 'still') {
+    throw usage(`--${name} wants ${want === 'speech' ? 'a sound or video file' : want === 'clip' ? 'a video file' : 'a picture'}; ${basename(rel)} is not one`);
   }
   /* a recording's transcript is written beside it, and files and folders starting with a dot are the tools' (.git) */
   if (want === 'speech' && relative(root, abs).split(sep).some((part) => part.startsWith('.'))) {
@@ -320,7 +351,9 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     if (verb === 'video' && !yes) {
       const words = typeof args.prompt === 'string' ? args.prompt : '';
       const named = offered.find((m) => m.id === runModel)?.name ?? runModel;
-      await approve({ kind: 'video', provider: provider.name, ...(named ? { model: named } : {}), seconds: Number(args.duration),
+      /* a clip that speaks a recording is as long as it; one made from another, about as long as that one */
+      const from = typeof args.audio === 'string' ? await mediaSeconds(root, args.audio) : typeof args.video === 'string' ? await mediaSeconds(root, args.video) : null;
+      await approve({ kind: 'video', provider: provider.name, ...(named ? { model: named } : {}), seconds: from !== null ? Math.round(from) : Number(args.duration),
         ...(words ? { prompt: words.length > 200 ? `${words.slice(0, 199).trimEnd()}…` : words } : {}) });
     }
     const result = await provider.run(/** @type {Verb} */ (verb), args, ctx);
@@ -328,10 +361,14 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     return [...said, show(await receiptFor(root, verb, args, result.receipt))].join('\n');
   } catch (e) {
     if (clock.timedOut()) throw new GetError(`${provider.name} did not finish within ${spec.timeoutSec + 60} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
+    if (/** @type {{ code?: string, limit?: boolean }} */ (e)?.code === 'balance' && /** @type {{ limit?: boolean }} */ (e).limit) {
+      throw new GetError(`This did not run: the ${provider.name} key reached the spending limit set on it. The person can raise or remove that limit where `
+        + `the key was made (${provider.keysUrl}), or use another key. Nothing was made. Stop and tell them; do not run it again until they say so.`, 1, 'balance');
+    }
     if (/** @type {{ code?: string }} */ (e)?.code === 'balance') {
       tell?.({ kind: 'balance', provider: provider.name, providerId: provider.id });
       throw new GetError(`This did not run: ${provider.name} doesn't have enough balance. The person can top it up at ${provider.billingUrl}, `
-        + 'or switch to another service. Nothing was made. Stop and tell them; do not run it again until they say so.');
+        + 'or switch to another service. Nothing was made. Stop and tell them; do not run it again until they say so.', 1, 'balance');
     }
     throw e;
   } finally {
@@ -527,6 +564,8 @@ function show(receipt) {
  */
 export async function catalog(only, { web = false } = {}) {
   if (only !== undefined && !VERBS[only]) throw new HttpError(400, `there is no ${only}; there is ${Object.keys(VERBS).join(', ')}`);
+  /* what each service offers now, to name the ones that would make what is not connected */
+  await freshProviders();
   const settings = await providerSettings();
   /* the person's own services: `call`, listed with each of them, whenever there is one */
   const own = settings.custom;
@@ -549,10 +588,42 @@ export async function catalog(only, { web = false } = {}) {
 }
 
 /**
- * Subtitle translation for captions.mjs, through the provider chosen for `translate`; null when none can.
- * @param {string} root @returns {Promise<TranslateLines | null>}
+ * One question answered by the person's agent's own model, with no chat (an app with a chat, studio-process.mjs):
+ * its words, whole. Throws `code: 'no-agent'` when no agent is ready.
+ * @typedef {(text: string, signal?: AbortSignal) => Promise<string>} AskAgent
  */
-export async function subtitleTranslator(root) {
+
+/** The JSON in an agent's answer: all of it, or from its first `{` to its last `}` when the agent wrapped it in words. */
+const jsonIn = (/** @type {string} */ answer) => {
+  const from = answer.indexOf('{'), to = answer.lastIndexOf('}');
+  return from >= 0 && to > from ? answer.slice(from, to + 1) : answer;
+};
+
+/**
+ * Subtitle translation for captions.mjs: by the person's agent's own model when Studio is in an app with a chat
+ * (`askAgent`), else through the provider chosen for `translate`; null when neither can. With no agent ready, the
+ * provider does it when there is one, else it is `code: 'not-connected'`.
+ * @param {string} root @param {{ askAgent?: AskAgent | null }} [options] @returns {Promise<TranslateLines | null>}
+ */
+export async function subtitleTranslator(root, { askAgent = null } = {}) {
+  const byProvider = await providerTranslator(root);
+  if (!askAgent) return byProvider;
+  return async (job) => {
+    const ask = translationAsk(job.lines, job.language);
+    let answer;
+    try {
+      answer = await askAgent(`${ask.system}\n\n${ask.user}`, job.signal);
+    } catch (e) {
+      if (/** @type {{ code?: unknown }} */ (e)?.code !== 'no-agent') throw e;
+      if (byProvider) return byProvider(job);
+      throw Object.assign(new Error('No agent is connected to translate the subtitles.'), { code: 'not-connected' });
+    }
+    return translatedLines(jsonIn(answer), ask.count);
+  };
+}
+
+/** Subtitle translation through the provider chosen for `translate`; null when none can. @param {string} root */
+async function providerTranslator(root) {
   const settings = await providerSettings();
   const provider = await chooseProvider('translate', { settings });
   if (!provider) return null;
@@ -562,6 +633,7 @@ export async function subtitleTranslator(root) {
       key, model: modelFor(settings, provider, 'translate'), root, signal, say: () => {}, read: (path) => readInput(root, path, false, signal),
     }).catch((e) => {
       /* the person asked for it in Studio: said to them, with where to top it up */
+      if (e?.code === 'balance' && e.limit) throw new Error(`The ${provider.name} key reached the spending limit set on it. Raise or remove that limit at ${provider.keysUrl}, or use another key, then try again.`);
       if (e?.code === 'balance') throw new Error(`${provider.name} doesn't have enough balance for this. Top it up at ${provider.billingUrl}, or switch to another service, then try again.`);
       throw e;
     });
@@ -647,8 +719,11 @@ export function createAsks(pages) {
  *   GET  /api/get[?verb=][&web=1] → { verbs: [{ verb, help, dir?, options }], note, services }: what can be got here now
  *                           (see catalog; `web=1` for an agent without web tools of its own)
  *   POST /api/get           { folder, verb, args, via?, model?, yes? } → { ok: true, text } once it is done, or
- *                           { ok: false, code, text }: code 2, not a project or a wrong command; 1, it did not run
+ *                           { ok: false, code, text, reason? }: code 2, not a project or a wrong command; 1, it did not run
+ *                           (`reason` 'balance': the service's account had too little left)
  *   POST /api/get/asks/:id  { allow } → { answered }: the person's answer to a question about spending
+ *   POST /api/get/library   { verb, args } → { code, lines }: a search of OpenFilm's own library (src/library-search.mjs),
+ *                           answered with the library and its model kept loaded here, so it takes milliseconds
  * @param {Req} req @param {Res} res @param {string[]} parts the path after /api/get @param {ReturnType<typeof createAsks>} asks
  */
 export async function getRoute(req, res, parts, asks) {
@@ -659,6 +734,13 @@ export async function getRoute(req, res, parts, asks) {
   if (parts[0] === 'asks' && parts[1] && req.method === 'POST') {
     const { allow } = /** @type {{ allow?: unknown }} */ (await readJson(req));
     return json(res, 200, { answered: asks.answer(parts[1], allow === true) });
+  }
+  if (parts[0] === 'library' && parts.length === 1 && req.method === 'POST') {
+    const { verb, args } = /** @type {{ verb?: unknown, args?: unknown }} */ (await readJson(req));
+    const { LIBRARY_VERBS, libraryGet } = await import('../../src/library-search.mjs');
+    const given = args && typeof args === 'object' && !Array.isArray(args) ? /** @type {Record<string, string | true>} */ (args) : {};
+    if (typeof verb !== 'string' || !(verb in LIBRARY_VERBS) || 'take' in given) throw new HttpError(400, 'a search of the library, please');
+    return json(res, 200, await libraryGet(verb, given));
   }
   if (parts.length || req.method !== 'POST') throw new HttpError(404, 'no such API');
   const body = /** @type {{ folder?: unknown, verb?: unknown, args?: unknown, via?: unknown, model?: unknown, yes?: unknown }} */ (await readJson(req));
@@ -680,6 +762,6 @@ export async function getRoute(req, res, parts, asks) {
     json(res, 200, { ok: true, text });
   } catch (e) {
     if (controller.signal.aborted) return;
-    json(res, 200, { ok: false, code: e instanceof GetError ? e.code : 1, text: e instanceof Error ? e.message : String(e) });
+    json(res, 200, { ok: false, code: e instanceof GetError ? e.code : 1, text: e instanceof Error ? e.message : String(e), ...(e instanceof GetError && e.reason ? { reason: e.reason } : {}) });
   }
 }

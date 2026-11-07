@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "shock.html"
+  },
+  "durationMs": 600
+}

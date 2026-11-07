@@ -1,12 +1,12 @@
 /**
- * The person's own keys for media services and who makes each kind of media, with which model ("fal.ai · Seedance 2.0"), as Settings → Providers and Models show them.
+ * The person's own keys for media services and who makes each kind of media, with which model ("fal.ai · Seedance 2.0"), as Settings → Services shows them.
  *
  * Studio's server keeps the keys (studio/server/keys.mjs): this page sends a key once, when it is added, and only ever
  * gets back where a key comes from and its last four characters.
  */
 import React from 'react';
 
-export type ProviderVerb = 'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'image-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch';
+export type ProviderVerb = 'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'cutout' | 'image-search' | 'video-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch';
 
 
 export interface OwnProvider {
@@ -14,9 +14,11 @@ export interface OwnProvider {
   name: string;
   verbs: ProviderVerb[];
   /** the models it can make each kind of media with, its default first, each with the name people know it by */
-  models: Partial<Record<ProviderVerb, { id: string; name: string }[]>>;
+  models: Partial<Record<ProviderVerb, { id: string; name: string; spec?: import('./canvas').ModelSpec }[]>>;
   /** the provider's page for making a key */
   keysUrl: string;
+  /** the provider's own pricing page */
+  pricingUrl: string;
   /** the environment variable a key is (or would be) read from */
   env: string;
   /** it works without a key: connected with one click, a key added for higher limits (then it has `last4`) */
@@ -26,6 +28,10 @@ export interface OwnProvider {
   /** the environment has a key for it, connected or not: connecting can use that one */
   envKey: boolean;
   last4: string | null;
+  /** connected by signing in on its website instead of pasting a key (OpenFilm) */
+  signIn: boolean;
+  /** signed in: the account's email */
+  account: string | null;
 }
 
 /**
@@ -52,24 +58,30 @@ export interface ProvidersState {
   use: Record<string, string | null>;
   /** the model each kind of media is made with */
   model: Record<string, string | null>;
+  /** a sign-in waiting for the person's browser (`provider`), and why the last one failed */
+  signingIn: { provider: string | null; error: string | null; errorFor: string | null };
+  /** who searches the library by meaning: OpenFilm's service ('openfilm', the default), or none (its words alone) */
+  librarySearch: string | null;
 }
 
-/** The providers, not connected, that would make `verb` once connected, by name (as every list of providers is). */
-export function couldMake(state: ProvidersState, verb: ProviderVerb): string[] {
-  return state.providers.filter((p) => !p.source && p.verbs.includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));
-}
-
-/** The providers Settings › Providers shows first, in this order: the large media services. */
-export const RECOMMENDED_PROVIDERS = ['openai', 'azure', 'google', 'elevenlabs'];
+/** The providers Settings › Services shows first, in this order: OpenFilm's own, then the large media services. */
+export const RECOMMENDED_PROVIDERS = ['openfilm', 'openai', 'google', 'azure', 'elevenlabs', 'openrouter'];
 
 /**
- * Settings › Providers' two groups: the recommended ones in RECOMMENDED_PROVIDERS' order, then the rest by name.
- * `open` says whether More starts open: when one of its providers is connected, so a connection is never hidden.
+ * The providers in the order Services lists them: the connected ones first, then the others; within each, the
+ * recommended ones in RECOMMENDED_PROVIDERS' order, then the rest by name. `more`: the others not recommended, which
+ * wait behind "N more".
  */
-export function providerGroups<P extends Pick<OwnProvider, 'id' | 'name' | 'source'>>(providers: readonly P[]) {
-  const recommended = RECOMMENDED_PROVIDERS.map((id) => providers.find((p) => p.id === id)).filter((p): p is P => Boolean(p));
-  const more = providers.filter((p) => !RECOMMENDED_PROVIDERS.includes(p.id)).sort((a, b) => a.name.localeCompare(b.name));
-  return { recommended, more, open: more.some((p) => p.source) };
+export function providerOrder<P extends Pick<OwnProvider, 'id' | 'name' | 'source'>>(providers: readonly P[]) {
+  const rank = (p: P) => { const at = RECOMMENDED_PROVIDERS.indexOf(p.id); return at === -1 ? RECOMMENDED_PROVIDERS.length : at; };
+  const sorted = [...providers].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  const connected = sorted.filter((p) => p.source);
+  const others = sorted.filter((p) => !p.source);
+  return {
+    connected,
+    recommended: others.filter((p) => RECOMMENDED_PROVIDERS.includes(p.id)),
+    more: others.filter((p) => !RECOMMENDED_PROVIDERS.includes(p.id)),
+  };
 }
 
 /**
@@ -88,7 +100,19 @@ export function azureKey(region: string, key: string): string | null {
 export const offered = (state: ProvidersState, verb: ProviderVerb) => state.providers.some((p) => p.verbs.includes(verb));
 
 /** The kinds of media the person chooses a provider for, in the order they are listed. */
-export const USE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search'];
+export const USE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'video-search', 'translate', 'web-search'];
+/**
+ * Every kind Settings › Services lets the person choose what makes: media, and web search for an agent that has none
+ * of its own. Translating subtitles is the agent's model's work.
+ */
+export const SERVICE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video', 'video-search', 'web-search'];
+
+/** Each provider's website, as its card links it. */
+export const PROVIDER_SITES: Readonly<Record<string, string>> = {
+  openfilm: 'openfilm.dev', openai: 'openai.com', google: 'ai.google.dev', azure: 'azure.microsoft.com', elevenlabs: 'elevenlabs.io',
+  inworld: 'inworld.ai', cartesia: 'cartesia.ai', openrouter: 'openrouter.ai', fal: 'fal.ai', groq: 'groq.com', mimo: 'platform.xiaomimimo.com',
+  doubao: 'volcengine.com', pexels: 'pexels.com', pixabay: 'pixabay.com', brave: 'brave.com/search/api', tavily: 'tavily.com', keenable: 'keenable.ai',
+};
 
 async function call<T = ProvidersState>(path: string, init?: { method: string; json?: unknown }): Promise<T> {
   const res = await fetch(`/api/providers${path}`, {
@@ -113,14 +137,21 @@ export interface ProvidersHook {
   saveKey: (id: string, key: string) => Promise<boolean>;
   removeKey: (id: string) => Promise<void>;
   useEnvKey: (id: string) => Promise<boolean>;
+  /** a provider with `signIn`: its website opened in the person's browser to sign in; `cancelSignIn` drops it */
+  signIn: (id: string) => Promise<void>;
+  cancelSignIn: (id: string) => Promise<void>;
   /** who makes that kind of media: a provider id with its model, or '' (none) */
   choose: (verb: ProviderVerb, provider: string, pick?: { model?: string }) => Promise<void>;
+  /** the library searched by meaning at OpenFilm's service, or by its words alone */
+  setLibrarySearch: (on: boolean) => Promise<void>;
+  /** the state asked again (what Local services makes changed) */
+  reload: () => Promise<void>;
   /** one of the person's own services added (id null) or changed; resolves whether it was kept */
   saveService: (id: string | null, fields: OwnServiceFields) => Promise<boolean>;
   removeService: (id: string) => Promise<void>;
 }
 
-/** The providers while Settings → Providers or Models is shown. */
+/** The providers while Settings → Services is shown. */
 export function useProviders(): ProvidersHook {
   const [state, setState] = React.useState<ProvidersState | null>(null);
   const [problem, setProblem] = React.useState<string | null>(null);
@@ -145,6 +176,14 @@ export function useProviders(): ProvidersHook {
     return () => { live = false; window.clearTimeout(timer); };
   }, []);
 
+  /* a sign-in finishes in the browser: asked again every couple of seconds while it waits */
+  const waiting = state?.signingIn?.provider ?? null;
+  React.useEffect(() => {
+    if (!waiting) return;
+    const timer = window.setInterval(() => { void call('').then(setState, () => {}); }, 2000);
+    return () => window.clearInterval(timer);
+  }, [waiting]);
+
   const change = React.useCallback(async (what: string, path: string, init: { method: string; json?: unknown }) => {
     setBusy(what);
     setProblem(null);
@@ -158,8 +197,13 @@ export function useProviders(): ProvidersHook {
     saveKey: (id, key) => change(id, `/${encodeURIComponent(id)}/key`, { method: 'PUT', json: { key } }),
     removeKey: async (id) => { await change(id, `/${encodeURIComponent(id)}/key`, { method: 'DELETE' }); },
     useEnvKey: (id) => change(id, `/${encodeURIComponent(id)}/key`, { method: 'PUT', json: { env: true } }),
+    signIn: async (id) => { await change(id, `/${encodeURIComponent(id)}/sign-in`, { method: 'POST' }); },
+    cancelSignIn: async (id) => { await change(id, `/${encodeURIComponent(id)}/sign-in/cancel`, { method: 'POST' }); },
     choose: async (verb, provider, pick) => { await change(verb, '/use', { method: 'PUT', json: { verb, provider: provider || null, ...pick } }); },
+    setLibrarySearch: async (on) => { await change('library-search', '/library-search', { method: 'PUT', json: { on } }); },
     saveService: (id, fields) => change(id ?? 'custom', id ? `/custom/${encodeURIComponent(id)}` : '/custom', { method: id ? 'PUT' : 'POST', json: fields }),
     removeService: async (id) => { await change(id, `/custom/${encodeURIComponent(id)}`, { method: 'DELETE' }); },
+    /* asked again: what Local services makes changed (a model came, went, or was turned on or off) */
+    reload: async () => { await call('').then(setState, () => {}); },
   };
 }

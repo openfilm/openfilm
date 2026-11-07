@@ -186,9 +186,9 @@ export const firstFrame = (url) => new Promise((done) => {
  * ones too. A map from a file to its copy; it never fails: a video that can't be copied stays as it is, and is told
  * to `failed`.
  * @param {import('playwright-core').Browser} browser @param {string} origin @param {string} root @param {string[]} files
- * @param {{ signal?: AbortSignal, slow?: boolean, failed?: (file: string) => void }} [options]
+ * @param {{ signal?: AbortSignal, slow?: boolean, fine?: boolean, failed?: (file: string) => void }} [options]
  */
-export async function browserCopies(browser, origin, root, files, { signal, slow = false, failed } = {}) {
+export async function browserCopies(browser, origin, root, files, { signal, slow = false, fine = false, failed } = {}) {
   if (!files.length) return new Map();
   /** @type {Promise<import('playwright-core').Page> | null} */
   let tester = null;
@@ -198,7 +198,7 @@ export async function browserCopies(browser, origin, root, files, { signal, slow
     return (await tester).evaluate(firstFrame, url).catch(() => false);
   };
   try {
-    return await seekableCopies(files, root, { signal, plays, slow, failed });
+    return await seekableCopies(files, root, { signal, plays, slow, fine, failed });
   } catch {
     return new Map();
   } finally {
@@ -210,11 +210,12 @@ export async function browserCopies(browser, origin, root, files, { signal, slow
  * The copy of each of `files` that needs one (copyNeed), made in `root`'s cache (or found there from before): a map
  * from a file to its copy. A file that is fine as it is, or whose copy fails, is not in it; one whose copy fails is
  * told to `failed`. `plays`: whether the render's browser decodes a file; `slow`: whether slow-seeking ones get a copy
- * too (a render of more than a moment).
+ * too (a render of more than a moment). `fine`: copies for a master export, kept apart from the preview's: as near the
+ * file as a browser plays, so a dark gradient keeps its grain instead of breaking into bands.
  * @param {string[]} files @param {string} root
- * @param {{ signal?: AbortSignal, plays?: (file: string) => Promise<boolean>, slow?: boolean, failed?: (file: string) => void }} [options]
+ * @param {{ signal?: AbortSignal, plays?: (file: string) => Promise<boolean>, slow?: boolean, fine?: boolean, failed?: (file: string) => void }} [options]
  */
-export async function seekableCopies(files, root, { signal, plays, slow = true, failed } = {}) {
+export async function seekableCopies(files, root, { signal, plays, slow = true, fine = false, failed } = {}) {
   const copies = new Map();
   outDir(root, 'seek');
   /* two at a time: on the processor each one keeps several cores busy; on the graphics chip it leaves them free */
@@ -226,19 +227,19 @@ export async function seekableCopies(files, root, { signal, plays, slow = true, 
       try { stat = statSync(file); } catch { continue; }
       const base = copyBase(file, root, stat);
       /* madeCopy finds it from now on, without waiting out a miss it remembers */
-      const known = (/** @type {string} */ copy) => { copies.set(file, copy); found.set(`${root}\0${file}\0${stat.size}\0${stat.mtimeMs}`, { copy, at: Date.now() }); };
-      const made = [`${base}.mp4`, `${base}.webm`].find((f) => existsSync(f));
+      const known = (/** @type {string} */ copy) => { copies.set(file, copy); if (!copy.endsWith(FINE)) found.set(`${root}\0${file}\0${stat.size}\0${stat.mtimeMs}`, { copy, at: Date.now() }); };
+      const made = [fine ? `${base}${FINE}` : `${base}.mp4`, `${base}.webm`].find((f) => existsSync(f));
       if (made) { known(made); continue; }
       const need = await copyNeed(file, { plays, slow });
       if (!need) continue;
       /* with an alpha to keep: VP9, which every Chromium decodes with its alpha; else H.264 */
-      const out = `${base}${need.alpha ? '.webm' : '.mp4'}`;
+      const out = need.alpha ? `${base}.webm` : fine ? `${base}${FINE}` : `${base}.mp4`;
       /* one copy of a file at a time in this process (pages drawn at once may share a source): a render asking for one
          being made waits for it, and makes it itself when the render making it was cancelled */
       const shared = () => {
         let job = making.get(out);
         if (!job) {
-          job = makeCopy(file, out, need, signal).finally(() => making.delete(out));
+          job = makeCopy(file, out, need, signal, fine && !need.alpha).finally(() => making.delete(out));
           making.set(out, job);
         }
         return job;
@@ -253,6 +254,9 @@ export async function seekableCopies(files, root, { signal, plays, slow = true, 
   return copies;
 }
 
+/** The end of a master export's copy's name, beside the preview's `.mp4`. */
+const FINE = '-fine.mp4';
+
 /** @type {Map<string, Promise<'made' | 'failed' | 'cancelled'>>} the copies being made in this process, by their path */
 const making = new Map();
 
@@ -260,10 +264,13 @@ const making = new Map();
  * `file`'s copy written to `out`, under a name of its own until it is whole: another process making the same copy
  * never writes the same file, and the one renamed last is kept (the same picture). One that cannot replace a copy
  * already there (Windows, while a browser reads it) uses that copy.
+ * `fine`: x264 on the processor at a quality near lossless, its grain kept (the chip's encoder at its bitrate smooths a
+ * dark gradient's dither into bands).
  * @param {string} file @param {string} out @param {{ fps: number, w: number, h: number, alpha: boolean, scaled?: true }} need @param {AbortSignal} [signal]
+ * @param {boolean} [fine]
  * @returns {Promise<'made' | 'failed' | 'cancelled'>}
  */
-async function makeCopy(file, out, need, signal) {
+async function makeCopy(file, out, need, signal, fine = false) {
   if (signal?.aborted) return 'cancelled';
   const gop = Math.max(1, Math.round(need.fps * COPY_GOP_S));
   const part = `${out}.part-${process.pid}-${randomBytes(4).toString('hex')}${extname(out)}`;
@@ -282,7 +289,7 @@ async function makeCopy(file, out, need, signal) {
       ...(need.alpha ? ['-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '18', '-row-mt', '1', '-deadline', 'realtime', '-cpu-used', '8',
         '-g', String(gop), '-keyint_min', String(gop), '-auto-alt-ref', '0']
         : encoder ? ['-pix_fmt', 'nv12', ...hardwareOptions(encoder, bits, { gop }), ...h264ColorTags(await colorTagsOf(file))]
-          : ['-c:v', 'libx264', '-preset', 'superfast', '-crf', '16', '-g', String(gop), '-keyint_min', String(gop), '-pix_fmt', 'yuv420p']), part]);
+          : ['-c:v', 'libx264', ...(fine ? ['-preset', 'veryfast', '-crf', '8', '-tune', 'grain'] : ['-preset', 'superfast', '-crf', '16']), '-g', String(gop), '-keyint_min', String(gop), '-pix_fmt', 'yuv420p']), part]);
     /* its whole tree: an ffmpeg that is a shim (Windows' package managers) runs the real one as its child */
     const stop = () => kill(run.proc);
     signal?.addEventListener('abort', stop, { once: true });
@@ -312,7 +319,7 @@ async function makeCopy(file, out, need, signal) {
   try {
     /* one with an alpha all on the processor: the chip's decoding (VideoToolbox) drops an HEVC's alpha layer, and says
        nothing */
-    if (need.alpha) await make(null, []);
+    if (need.alpha || fine) await make(null, []);
     else await onTheChip(await hardwareEncoder('h264', await encoders()), make, signal);
   } catch {
     drop();

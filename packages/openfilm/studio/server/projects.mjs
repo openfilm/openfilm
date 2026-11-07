@@ -26,6 +26,7 @@ import { writeAtomic } from './atomic.mjs';
 import { coverAt } from './cover.mjs';
 import { libraryProjects, libraryRoot } from '../../src/locations.mjs';
 import { projectMissing } from './project-presence.mjs';
+import { compoundOuter } from './parts.mjs';
 
 export const TOOL_DIR = '.film';
 
@@ -253,8 +254,9 @@ export async function listProjects() {
     const state = await readState();
     if (await followLibrary(state)) await writeState(state);
     const folders = new Set(state.folders.map((f) => f.id));
-    /* a project in a folder that was deleted is back at the top level */
-    return state.recent.map((r) => describe(r.folderId && !folders.has(r.folderId) ? { ...r, folderId: undefined } : r));
+    /* a project in a folder that was deleted is back at the top level; a compound clip's film is reached through
+       its project, not listed (parts.mjs) */
+    return state.recent.filter((r) => compoundOuter(r.path) === resolve(r.path)).map((r) => describe(r.folderId && !folders.has(r.folderId) ? { ...r, folderId: undefined } : r));
   });
 }
 
@@ -452,7 +454,9 @@ export async function forgetProject(/** @type {string} */ id) {
  * Move the library: from now on new projects go to `to` (null: the default), and with `move`, the projects in the old
  * library go with it, each folder whole (to "Name 2" when the new library already has a "Name"). Across disks a project
  * is copied, then its old folder goes to the Trash. Anything else in the old folder stays. A project that cannot move
- * stays where it is, in the list, and is named in `failed`.
+ * stays where it is, in the list, and is named in `failed`. Across disks a project is copied whole and the old folder
+ * sent to the trash; an old folder the trash will not take (the Recycle Bin refusing one bigger than it holds, a
+ * trash on another disk) stays on the old disk and is named in `left`: the project has moved, the copy being whole.
  * @param {string | null} to @param {{ move?: boolean, choose: (folder: string | null) => void }} options
  */
 export async function moveLibrary(to, { move = false, choose }) {
@@ -461,8 +465,10 @@ export async function moveLibrary(to, { move = false, choose }) {
   const into = libraryRoot();
   /** @type {{ name: string, error: string }[]} */
   const failed = [];
+  /** @type {{ name: string, path: string, error: string }[]} */
+  const left = [];
   let moved = 0;
-  if (!move || resolve(from) === resolve(into) || !existsSync(from)) return { moved, failed };
+  if (!move || resolve(from) === resolve(into) || !existsSync(from)) return { moved, failed, left };
   await mkdir(into, { recursive: true });
   return exclusive(async () => {
     const state = await readState();
@@ -482,7 +488,9 @@ export async function moveLibrary(to, { move = false, choose }) {
             if (existsSync(target)) await moveToTrash(target).catch(() => {});
             throw copying;
           }
-          await moveToTrash(folder);
+          /* the copy whole, the project is moved; an old folder the trash refuses stays, and is said */
+          try { await moveToTrash(folder); }
+          catch (e) { left.push({ name: basename(folder), path: folder, error: /** @type {Error} */ (e).message }); }
         }
       } catch (e) {
         failed.push({ name: basename(folder), error: /** @type {Error} */ (e).message });
@@ -494,6 +502,6 @@ export async function moveLibrary(to, { move = false, choose }) {
       for (const r of state.recent) if (r.path === folder || r.path === was) r.path = real;
     }
     await writeState(state);
-    return { moved, failed };
+    return { moved, failed, left };
   });
 }

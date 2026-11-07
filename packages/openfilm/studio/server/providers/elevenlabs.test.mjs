@@ -40,7 +40,7 @@ test('voice-over: timed per character, landed as words, the length from the MP3\
   assert.equal(call.url.pathname, '/v1/text-to-speech/voice%201/with-timestamps');
   assert.equal(call.url.searchParams.get('output_format'), 'mp3_44100_128');
   assert.equal(call.headers['xi-api-key'], KEY);
-  assert.deepEqual(JSON.parse(call.body), { text: said, model_id: 'eleven_multilingual_v2' });
+  assert.deepEqual(JSON.parse(call.body), { text: said, model_id: 'eleven_v4' });
   assert.equal(result.files[0].path, 'assets/audio/vo/intro.mp3');
   assert.equal(result.files[0].bytes.length, 16000);
   const [row] = result.index;

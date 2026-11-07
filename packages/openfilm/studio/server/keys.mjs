@@ -1,11 +1,12 @@
 // @ts-check
 /**
- * The person's own keys for media services (Settings → Providers), which service makes each kind of media and with
- * which model (Settings → Services).
+ * The person's own keys for media services, which service makes each kind of media and with which model
+ * (Settings → Services).
  *
  * Kept in ~/.openfilm/providers.json, readable by this user only (0600, in a 0700 folder), written whole and atomically:
  *   { "keys": { "<provider id>": "<key>" }, "use": { "<verb>": "<provider id>" }, "model": { "<verb>": "<model id>" },
- *     "custom": [ the person's own services (custom-services.mjs), each with its key ] }
+ *     "custom": [ the person's own services (custom-services.mjs), each with its key ],
+ *     "accounts": { "<provider id>": "<email>" } (who a provider signed in to, sign-in.mjs, is connected as) }
  * A keyless provider connected without a key keeps '' as its key. A kind of media with no model (or one its provider no
  * longer has) is made with the provider's first. Listing voices goes with voice-over: same provider, same model.
  *
@@ -26,9 +27,10 @@ import { keptServices } from './custom-services.mjs';
 /** @typedef {import('./providers/contract.mjs').Provider} Provider */
 /**
  * `off`: the providers disconnected while the environment has a key for them (that key is not used). `custom`: the
- * person's own services.
+ * person's own services. `libraryOff`: the library is searched by its words alone, not by meaning at OpenFilm's
+ * service (src/library-semantic.mjs).
  * @typedef {{ keys: Record<string, string>, use: Record<string, string>, model: Record<string, string>, off: string[],
- *   custom: import('./custom-services.mjs').CustomService[] }} ProviderSettings
+ *   custom: import('./custom-services.mjs').CustomService[], accounts: Record<string, string>, libraryOff: boolean }} ProviderSettings
  */
 
 /** Where the keys and choices are kept: ~/.openfilm/providers.json. */
@@ -50,8 +52,8 @@ export async function readSettings(file = providersFile()) {
     /* 'auto' was a choice once: it means none now */
     const use = Object.fromEntries(Object.entries(strings(raw.use)).filter(([, id]) => id !== 'auto'));
     const off = Array.isArray(raw.off) ? raw.off.filter((id) => typeof id === 'string') : [];
-    return /** @type {ProviderSettings} */ ({ keys: strings(raw.keys), use, model: strings(raw.model), off, custom: keptServices(raw.custom) });
-  } catch { return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [], custom: [] }); }
+    return /** @type {ProviderSettings} */ ({ keys: strings(raw.keys), use, model: strings(raw.model), off, custom: keptServices(raw.custom), accounts: strings(raw.accounts), libraryOff: raw.libraryOff === true });
+  } catch { return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [], custom: [], accounts: {}, libraryOff: false }); }
 }
 
 /**
@@ -99,6 +101,8 @@ export function changeSettings(/** @type {(s: ProviderSettings) => void} */ edit
  * @returns {{ key: string, source: 'env' | 'file', env: string } | null}
  */
 export function providerKey(provider, settings, env = process.env) {
+  /* one that takes no key (Local services): connected while it can run */
+  if (provider.ready) return provider.ready() ? { key: '', source: 'file', env: '' } : null;
   const kept = settings.keys[provider.id];
   if (kept) return { key: kept, source: 'file', env: provider.env };
   if (settings.off?.includes(provider.id)) return null;

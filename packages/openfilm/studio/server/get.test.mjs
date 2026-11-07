@@ -15,6 +15,10 @@ import { changeSettings, kindOf, providersFile } from './keys.mjs';
 import { listProviders } from './providers/index.mjs';
 import { startStudio } from './server.mjs';
 import { filmHtml } from '../../src/film-doc.mjs';
+import { libraryGet, libraryVerbs } from '../../src/library-search.mjs';
+
+/* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
+process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
 
 /**
  * A fake ElevenLabs, fal.ai and OpenAI on 127.0.0.1 (each provider's OPENFILM_<NAME>_URL points here), answering as
@@ -126,7 +130,7 @@ test('tts: the file lands, its timed words a WebVTT beside it, and the receipt s
   const [run] = calls;
   assert.equal(run.path, '/v1/text-to-speech/v-1/with-timestamps');
   assert.equal(run.headers['xi-api-key'], 'elevenlabs-test-0123456789');
-  assert.deepEqual(JSON.parse(run.body), { text: SAID, model_id: 'eleven_multilingual_v2' });
+  assert.deepEqual(JSON.parse(run.body), { text: SAID, model_id: 'eleven_v4' });
 
   assert.match(readFileSync(join(root, 'assets/audio/vo/intro.vtt'), 'utf8'), /00:00:01\.800 --> 00:00:02\.800\nHow <00:00:02\.050>are <00:00:02\.250>you\?/);
   const transcript = await readTranscript(root, 'assets/audio/vo/intro.mp3');
@@ -175,6 +179,16 @@ test('wrong options are refused before anything is sent (exit 2)', async () => {
   assert.equal(calls.length, 0);
 });
 
+test('a key at the spending limit set on it: the agent is told to stop and that the key\'s limit is what to change', async () => {
+  const root = project();
+  refuse = () => [403, { error: { message: 'Key limit exceeded (total limit). $200.03 of $200.00 used; does not reset.' } }];
+  const told = [];
+  await assert.rejects(runGet(root, 'music', { out: 'bed', prompt: 'calm pad', sec: '30' }, { tell: (n) => told.push(n), ask: async () => 'allow' }),
+    (/** @type {any} */ e) => /the ElevenLabs key reached the spending limit set on it/.test(e.message) && /raise or remove that limit/.test(e.message) && !/did not accept your key/.test(e.message));
+  assert.deepEqual(told, [], 'not a balance to top up');
+  assert.ok(!existsSync(join(root, 'assets')));
+});
+
 test('not enough balance: the agent is told to stop and where the person tops it up, the person is told in Studio, nothing landed', async () => {
   const root = project();
   refuse = () => [402, { detail: { status: 'quota_exceeded', message: 'This request exceeds your quota.' } }];
@@ -193,12 +207,12 @@ test('not enough balance: the agent is told to stop and where the person tops it
 
 test('the model: the person\'s choice for each kind of media, the provider\'s first otherwise, --model for one run', async () => {
   const root = project();
-  await changeSettings((s) => { s.model = { tts: 'eleven_v4', music: 'music_v2' }; });
+  await changeSettings((s) => { s.model = { tts: 'eleven_v4_turbo', music: 'music_v2' }; });
   const modelOf = async (verb, args, options) => {
     await runGet(root, verb, args, options);
     return JSON.parse(calls.at(-1).body).model_id;
   };
-  assert.equal(await modelOf('tts', { out: 'intro', text: SAID, voice: 'v-1' }), 'eleven_v4');
+  assert.equal(await modelOf('tts', { out: 'intro', text: SAID, voice: 'v-1' }), 'eleven_v4_turbo');
   assert.equal(await modelOf('music', { out: 'bed', prompt: 'calm pad' }), 'music_v2');
   assert.equal(await modelOf('sfx', { out: 'ding', prompt: 'a chime' }), 'eleven_text_to_sound_v2', 'the first');
   assert.equal(await modelOf('music', { out: 'bed', prompt: 'calm pad' }, { model: 'music_v2_5' }), 'music_v2_5');
@@ -342,6 +356,28 @@ test('subtitles translate through the provider chosen for it: each line its own,
   assert.equal(await subtitleTranslator(root), null);
 });
 
+test('in the app, the agent translates subtitles with its own model: the lines asked as JSON, its answer read even with words around it', async () => {
+  const root = project({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [{ id: 'vo', src: 'assets/audio/vo/intro.mp3' }] }] });
+  await runGet(root, 'tts', { out: 'intro', text: SAID, voice: 'v-1' });
+  const asked = [];
+  const askAgent = async (text) => { asked.push(text); return 'Here they are:\n```json\n{"lines": ["Hallo.", "Wie geht es dir?"]}\n```'; };
+  const result = await translateFilmSubtitles(root, 'de', { translate: await subtitleTranslator(root, { askAgent }) });
+  assert.deepEqual(result.translated, ['assets/audio/vo/intro.mp3']);
+  assert.match(asked[0], /"de"/);
+  assert.match(asked[0], /"lines":\["Hello there.","How are you\?"\]/);
+  const { cues } = await filmCaptions(root, { duration: async () => 2.8 });
+  assert.deepEqual(cues.map((c) => c.alt?.de), ['Hallo.', 'Wie geht es dir?']);
+
+  /* no agent ready: the service connected for translating does it; with none, the route says to connect one */
+  const none = async () => { throw Object.assign(new Error('No agent is connected.'), { code: 'no-agent' }); };
+  await changeSettings((s) => { s.keys.openai = 'openai-test-0123456789'; s.use.translate = 'openai'; });
+  const before = calls.length;
+  assert.deepEqual((await translateFilmSubtitles(root, 'fr', { translate: await subtitleTranslator(root, { askAgent: none }) })).translated, ['assets/audio/vo/intro.mp3']);
+  assert.equal(calls.length, before + 1);
+  await changeSettings((s) => { delete s.keys.openai; });
+  await assert.rejects(translateFilmSubtitles(root, 'es', { translate: await subtitleTranslator(root, { askAgent: none }) }), (e) => e.status === 409 && e.code === 'no-translator');
+});
+
 test('Studio: GET /api/get lists what can be got, never who makes it; a video run asks the page showing the project', async () => {
   const studio = await startStudio({ port: 0, openBrowser: () => {}, quietMs: 150 });
   try {
@@ -396,21 +432,28 @@ const freePort = () => new Promise((done) => { const probe = netServer().listen(
 
 test('openfilm get: what can be got here, connected, partly or not at all; wrong commands exit 2', { timeout: 60_000 }, async () => {
   const bin = fileURLToPath(new URL('../../bin/openfilm.mjs', import.meta.url));
+  /* the library's model, where this checkout has none, fetched from nowhere into a cache of the test's own */
+  Object.assign(process.env, { OPENFILM_LIBRARY_CACHE: mkdtempSync(join(tmpdir(), 'get-library-')), OPENFILM_LIBRARY_URL: 'http://127.0.0.1:9/library' });
   const env = { ...process.env, OPENFILM_STUDIO_PORT: String(await freePort()) };
   const get = (cwd, ...args) => spawnSync(process.execPath, [bin, 'get', ...args], { cwd, env, encoding: 'utf8' });
   const run = (cwd, ...args) => new Promise((done) => execFile(process.execPath, [bin, 'get', ...args], { cwd, env, encoding: 'utf8' }, (error, stdout) => done({ status: error?.code ?? 0, stdout })));
   const root = project();
   /* the listing as the CLI prints it: the verbs' names padded to the longest shown */
-  const listing = (verbs, width = Math.max(...verbs.map((v) => v.length))) => [
-    'openfilm get <what> [--option value …]   media for this project, saved under assets/',
-    '  --yes              the person already agreed to what it spends',
-    '',
-    ...verbs.flatMap((verb) => {
-      const spec = VERBS[verb];
-      return [`  ${verb.padEnd(width)}  ${spec.help}${spec.dir ? ` Saved under ${spec.dir}/.` : ''}`,
-        `${' '.repeat(width + 4)}${Object.entries(spec.options).map(([n, o]) => flagHelp(n, o)).join(' ')}`];
-    }),
-  ];
+  /* OpenFilm's own library first (src/library-search.mjs), but for one verb's help */
+  const free = libraryVerbs();
+  const lines = (list, width) => list.flatMap((v) => [`  ${v.verb.padEnd(width)}  ${v.help}${v.dir ? ` Saved under ${v.dir}/.` : ''}`,
+    `${' '.repeat(width + 4)}${Object.entries(v.options).map(([n, o]) => flagHelp(n, o)).join(' ')}`]);
+  const library = (width) => ['Free, offline, from OpenFilm\'s own library (CC0): search it first, and make only what it does not have.', ...lines(free, width), ''];
+  const listing = (verbs, { one = false } = {}) => {
+    const width = Math.max(...[...(one ? [] : free.map((v) => v.verb)), ...verbs].map((v) => v.length));
+    return [
+      'openfilm get <what> [--option value …]   media for this project, saved under assets/',
+      '  --yes              the person already agreed to what it spends',
+      '',
+      ...(one ? [] : [...library(width), 'From a connected service:']),
+      ...lines(verbs.map((verb) => ({ verb, ...VERBS[verb] })), width),
+    ];
+  };
   const media = Object.keys(VERBS).filter((verb) => !WEB_VERBS.includes(verb) && made(verb));
   try {
     /* everything connected: the verbs, and nothing else */
@@ -435,10 +478,12 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
     rmSync(providersFile());
     const nothing = get(scratch);
     assert.equal(nothing.status, 0, nothing.stderr);
-    assert.equal(nothing.stdout, 'Nothing is connected for media here: each kind works only once the person connects a service that makes it (below). '
-      + 'Until then, make sound and pictures in code, or use a service the person has a key for (with its API docs), and save them under assets/. '
+    assert.equal(nothing.stdout, `${library(Math.max(...free.map((v) => v.verb.length))).join('\n')}\n`
+      + 'Nothing is connected for media here: each kind works only once the person connects a service that makes it (below). '
+      + 'Until then, take what OpenFilm\'s own library has (its verbs are free and need nothing connected), make sound and pictures in code, '
+      + 'or use a service the person has a key for (with its API docs), and save them under assets/. '
       + `\`openfilm get <what> --help\` shows what one kind takes (${media.join(', ')}).\n\n${services()}\n`);
-    assert.match(services(), /^Media services, each used with the person's own key: Brave Search \(web search\), Doubao \(transcripts\), ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video, music, sound effects\), .*, Microsoft Azure \(voice-over\), .*, Tavily \(web search\), Xiaomi MiMo \(voice-over, transcripts\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
+    assert.match(services(), /^Media services, each used with the person's own key: Brave Search \(web search\), Cartesia \(voice-over\), Doubao \(transcripts\), ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video, music, sound effects\), .*, Microsoft Azure \(voice-over\), .*, Tavily \(web search\), Xiaomi MiMo \(voice-over, transcripts\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
 
     /* partly: what is connected, then one line for the rest with the services that make each, then the services there
        are; never who makes what is connected */
@@ -450,13 +495,22 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
       `Not connected here: ${rest.map(unconnected).join(', ')}. ${CONNECT_ONE}`, '', services()].join('\n')}\n`);
     assert.doesNotMatch(partly.stdout.replace(services(), ''), /ElevenLabs|made by/i);
     const image = get(root, 'image', '--help');
-    assert.equal(image.stdout, `${[...listing(['image']), '',
+    assert.equal(image.stdout, `${[...listing(['image'], { one: true }), '',
       `Not connected here: ${unconnected('image')}. ${CONNECT_ONE}`].join('\n')}\n`);
     const unavailable = get(root, 'image', '--out', 'hero', '--prompt', 'a key');
     assert.equal(unavailable.status, 1);
-    assert.match(unavailable.stdout, /^Not connected here: image \(fal\.ai, Google or OpenAI\)\. .*with the person's own key/);
+    assert.match(unavailable.stdout, /^Not connected here: image \(fal\.ai, Google, OpenAI or OpenRouter\)\. .*with their own key/);
     assert.equal(unavailable.stdout, `Not connected here: ${unconnected('image')}. ${CONNECT_ONE} Tell the person. `
       + 'Until then, make it in code, or use a service the person has a key for (with its API docs), and save it under assets/.\n');
+
+    /* a search of the library: answered by the Studio running, which keeps it loaded, as the CLI answers it itself */
+    const studio = JSON.parse(readFileSync(join(process.env.OPENFILM_HOME, 'run.json'), 'utf8'));
+    const ask = (body) => fetch(`${studio.origin}/api/get/library`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-studio-key': studio.key }, body: JSON.stringify(body) });
+    const searched = await (await ask({ verb: 'transition', args: { prompt: 'glitch', limit: '3' } })).json();
+    assert.deepEqual(searched, await libraryGet('transition', { prompt: 'glitch', limit: '3' }));
+    assert.equal(get(scratch, 'transition', '--prompt', 'glitch', '--limit', '3').stdout, `${searched.lines.join('\n')}\n`);
+    assert.equal((await ask({ verb: 'transition', args: { take: 'openfilm/transitions/glitch' } })).status, 400, 'taking one is the CLI\'s, in its project');
+    assert.equal((await ask({ verb: 'music', args: { prompt: 'calm' } })).status, 400);
 
     assert.equal(get(scratch, 'tts', '--out', 'x').status, 2, 'not in a project');
     assert.match(get(scratch, 'tts').stdout, /is not in a project; `openfilm open` makes one/);

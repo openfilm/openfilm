@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "social-follow.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Handle\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Count\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Initial\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Button\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Clicked\", \"type\": \"text\", \"at\": \".t5\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Button\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Pill\", \"type\": \"var\", \"var\": \"--glass\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 4000
+}

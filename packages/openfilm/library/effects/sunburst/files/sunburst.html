@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sunburst</title>
+<style>
+  /* what a clip of it may change: the light's color, how strong it is (0 to 1), how fast the rays turn */
+  :root { --color: #ffe2a8; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A sunburst: soft rays of warm light fanning down from a sun just above the top corner, slowly turning, each ray
+ * breathing at its own pace, over a glow where the sun is. A page of OpenFilm's library (CC0): what it shows at t
+ * comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+const N = 22;
+const RAYS = Array.from({ length: N }, (_, i) => ({
+  at: (i + hash(i + 0.2) * 0.7) / N,            // its place around the sun, 0 to 1
+  width: 0.012 + hash(i + 0.4) * 0.035,          // in turns
+  reach: 0.75 + hash(i + 0.6) * 0.6,             // how far it reaches, in frame diagonals
+  pace: 0.4 + hash(i + 0.8) * 0.9, phase: hash(i + 0.9) * 6.283,
+}));
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100, diag = Math.hypot(w, h);
+    const amount = num('--amount', 1), tt = t * num('--speed', 1), c = rgb('--color', '#ffe2a8');
+    const sx = w * 0.18, sy = -h * 0.08;
+    const turn = tt * 0.035;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.filter = `blur(${1.1 * u}px)`;
+    for (const r of RAYS) {
+      const breathe = 0.5 + 0.5 * Math.sin(tt * r.pace + r.phase);
+      const a0 = (r.at + turn) * 6.283, a1 = a0 + r.width * 6.283 * (0.7 + 0.5 * breathe);
+      const len = r.reach * diag;
+      const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, len);
+      const k = (0.12 + 0.3 * breathe) * amount;
+      g.addColorStop(0, `rgba(${c},${k})`); g.addColorStop(0.45, `rgba(${c},${k * 0.55})`); g.addColorStop(1, `rgba(${c},0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.arc(sx, sy, len, a0, a1); ctx.closePath(); ctx.fill();
+    }
+    ctx.filter = 'none';
+    // the sun's glow, and a warm wash fading from it
+    const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 0.55 * diag);
+    glow.addColorStop(0, `rgba(255,255,245,${0.85 * amount})`); glow.addColorStop(0.08, `rgba(${c},${0.5 * amount})`);
+    glow.addColorStop(0.35, `rgba(${c},${0.12 * amount})`); glow.addColorStop(1, `rgba(${c},0)`);
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
+    // motes floating in the rays
+    for (let i = 0; i < 60; i++) {
+      const p = (hash(i + 0.11) + tt * (0.004 + hash(i + 0.33) * 0.01)) % 1;
+      const ang = (hash(i + 0.55) * 0.3 + 0.1) * 6.283 * 0.5, d = (0.1 + p * 0.8) * diag * 0.7;
+      const x = sx + Math.cos(ang) * d + Math.sin(tt * 0.7 + i) * u, y = sy + Math.sin(ang) * d;
+      const tw = 0.5 + 0.5 * Math.sin(tt * (1 + hash(i + 0.77) * 3) + i);
+      const s = (0.15 + hash(i + 0.99) * 0.35) * u;
+      ctx.fillStyle = `rgba(255,248,225,${(0.15 + 0.5 * tw) * amount * Math.sin(Math.PI * p)})`;
+      ctx.beginPath(); ctx.arc(x, y, s, 0, 6.283); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

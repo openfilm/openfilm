@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>DV camcorder</title>
+<style>
+  /* what a clip of it may change: the color of the screen's lettering */
+  :root { --color: #ffffff; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  body { color: var(--color); font: 600 4.2vmin/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.08em; }
+  .fx { position: fixed; inset: 0; pointer-events: none; }
+  /* the camera's screen: fine scan lines, a cool cast, dark soft edges */
+  .lines { background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px); }
+  .cast { background: rgba(60, 90, 140, 0.07); }
+  .edge { background: radial-gradient(ellipse 75% 75% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.42) 100%); }
+  .osd { position: fixed; text-shadow: 0 0 0.25vmin rgba(0, 0, 0, 0.9), 0.2vmin 0.2vmin 0 rgba(0, 0, 0, 0.55); white-space: nowrap; }
+  .rec { left: 7vw; top: 7vh; display: flex; align-items: center; gap: 1.4vmin; }
+  .dot { width: 3vmin; height: 3vmin; border-radius: 50%; background: #ff2a2a; box-shadow: 0 0 1.4vmin rgba(255, 40, 40, 0.8); }
+  .tc { right: 7vw; top: 7vh; text-align: right; }
+  .bat { right: 7vw; top: calc(7vh + 6vmin); display: flex; align-items: center; gap: 1.2vmin; font-size: 3.2vmin; }
+  .cell { width: 7vmin; height: 3.2vmin; border: 0.45vmin solid currentColor; border-radius: 0.5vmin; padding: 0.4vmin; box-sizing: border-box; display: flex; gap: 0.4vmin; position: relative; box-shadow: 0 0 0.3vmin rgba(0, 0, 0, 0.8); }
+  .cell::after { content: ''; position: absolute; right: -1.2vmin; top: 0.6vmin; width: 0.6vmin; height: 1.2vmin; background: currentColor; }
+  .cell i { flex: 1; background: currentColor; }
+  .mode { left: 7vw; top: calc(7vh + 6vmin); font-size: 3.2vmin; opacity: 0.9; }
+  .when { left: 7vw; bottom: 7vh; line-height: 1.35; }
+  .zoom { right: 7vw; bottom: 7vh; font-size: 3vmin; display: flex; align-items: center; gap: 1vmin; }
+  .bar { width: 16vmin; height: 0.6vmin; background: rgba(255, 255, 255, 0.45); position: relative; box-shadow: 0 0 0.3vmin rgba(0, 0, 0, 0.8); }
+  .bar b { position: absolute; top: -0.9vmin; width: 0.7vmin; height: 2.4vmin; background: currentColor; }
+  /* the corner marks of the frame */
+  .corner { position: fixed; width: 6vmin; height: 6vmin; border: 0 solid currentColor; filter: drop-shadow(0 0 0.25vmin rgba(0, 0, 0, 0.8)); }
+  .corner.a { left: 4vw; top: 4vh; border-width: 0.5vmin 0 0 0.5vmin; }
+  .corner.b { right: 4vw; top: 4vh; border-width: 0.5vmin 0.5vmin 0 0; }
+  .corner.c { left: 4vw; bottom: 4vh; border-width: 0 0 0.5vmin 0.5vmin; }
+  .corner.d { right: 4vw; bottom: 4vh; border-width: 0 0.5vmin 0.5vmin 0; }
+  .cross { position: fixed; left: 50%; top: 50%; width: 5vmin; height: 5vmin; transform: translate(-50%, -50%); opacity: 0.7;
+    background: linear-gradient(currentColor, currentColor) center / 100% 0.3vmin no-repeat, linear-gradient(currentColor, currentColor) center / 0.3vmin 100% no-repeat; }
+</style>
+</head>
+<body>
+<div class="fx cast"></div><div class="fx lines"></div><div class="fx edge"></div>
+<div class="corner a"></div><div class="corner b"></div><div class="corner c"></div><div class="corner d"></div><div class="cross"></div>
+<div class="osd rec"><span class="dot"></span><span>REC</span></div>
+<div class="osd mode">SP</div>
+<div class="osd tc">00:00:00:00</div>
+<div class="osd bat"><span class="cell"><i></i><i></i><i></i></span></div>
+<div class="osd when"><span class="clock">PM 3:42:07</span><br>OCT 31 2026</div>
+<div class="osd zoom">W<span class="bar"><b></b></span>T</div>
+<script>
+/*
+ * A DV camcorder's screen: the red REC light blinking, the tape's timecode running, the time of day ticking, the
+ * date, the battery, the zoom bar and the frame's corner marks, over fine scan lines. A page of OpenFilm's library
+ * (CC0): what it shows at t comes from t alone.
+ */
+const $ = (s) => document.querySelector(s);
+const pad = (n) => String(n).padStart(2, '0');
+window.film = {
+  frame(t) {
+    $('.dot').style.opacity = t % 1 < 0.6 ? '1' : '0';
+    const fr = Math.floor(t * 25);
+    $('.tc').textContent = `${pad(Math.floor(fr / 90000))}:${pad(Math.floor(fr / 1500) % 60)}:${pad(Math.floor(fr / 25) % 60)}:${pad(fr % 25)}`;
+    const s = 15 * 3600 + 42 * 60 + 7 + Math.floor(t);
+    $('.clock').textContent = `PM ${Math.floor(s / 3600) - 12}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`;
+    // the last bar of the battery blinks, the zoom eases in and out slowly
+    $('.cell i:last-child').style.opacity = t % 1.2 < 0.8 ? '1' : '0.15';
+    const z = 0.5 - 0.5 * Math.cos(t * 0.5);
+    $('.bar b').style.left = `${(0.08 + z * 0.3) * 100}%`;
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

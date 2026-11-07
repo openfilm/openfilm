@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "shop-specs.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Label\", \"type\": \"text\", \"at\": \".t0\"}, {\"name\": \"Product\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Row 1\", \"type\": \"text\", \"at\": \".k1\"}, {\"name\": \"Value 1\", \"type\": \"text\", \"at\": \".v1\"}, {\"name\": \"Row 2\", \"type\": \"text\", \"at\": \".k2\"}, {\"name\": \"Value 2\", \"type\": \"text\", \"at\": \".v2\"}, {\"name\": \"Row 3\", \"type\": \"text\", \"at\": \".k3\"}, {\"name\": \"Value 3\", \"type\": \"text\", \"at\": \".v3\"}, {\"name\": \"Row 4\", \"type\": \"text\", \"at\": \".k4\"}, {\"name\": \"Value 4\", \"type\": \"text\", \"at\": \".v4\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Card\", \"type\": \"var\", \"var\": \"--card\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 4000
+}

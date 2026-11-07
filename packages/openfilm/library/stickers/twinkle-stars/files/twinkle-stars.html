@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Twinkling stars</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #ffd60a; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0 1.4vmin var(--color)); }
+.s { animation: in 0.45s cubic-bezier(.34, 1.56, .64, 1) var(--d) both; }
+@keyframes in { from { transform: scale(0) rotate(-90deg); } }
+.s > * { animation: tw var(--p) ease-in-out calc(var(--d) + 0.45s) infinite; }
+@keyframes tw { 50% { transform: scale(0.6) rotate(25deg); opacity: 0.5; } }
+.a { fill: var(--color); } .b { fill: #ffffff; } .c { fill: color-mix(in srgb, var(--color), #ffffff 50%); }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 500 300">
+<g transform="translate(99 244) scale(1.79)"><g class="s" style="--d: 0.42s; --p: 1.07s"><polygon class="a" points="0.0,-28.0 7.3,-10.1 26.6,-8.7 11.9,3.9 16.5,22.7 0.0,12.5 -16.5,22.7 -11.9,3.9 -26.6,-8.7 -7.3,-10.1" stroke="var(--color)" stroke-width="4" stroke-linejoin="round"/></g></g>
+<g transform="translate(280 163) scale(1.34)"><g class="s" style="--d: 0.16s; --p: 1.86s"><path class="b" d="M0 -30 C5.3999999999999995 -5.3999999999999995 5.3999999999999995 -5.3999999999999995 30 0 C5.3999999999999995 5.3999999999999995 5.3999999999999995 5.3999999999999995 0 30 C-5.3999999999999995 5.3999999999999995 -5.3999999999999995 5.3999999999999995 -30 0 C-5.3999999999999995 -5.3999999999999995 -5.3999999999999995 -5.3999999999999995 0 -30 Z"/></g></g>
+<g transform="translate(315 255) scale(0.85)"><g class="s" style="--d: 0.45s; --p: 1.51s"><circle class="c" r="7"/></g></g>
+<g transform="translate(176 77) scale(1.32)"><g class="s" style="--d: 0.02s; --p: 1.42s"><polygon class="a" points="0.0,-28.0 7.3,-10.1 26.6,-8.7 11.9,3.9 16.5,22.7 0.0,12.5 -16.5,22.7 -11.9,3.9 -26.6,-8.7 -7.3,-10.1" stroke="var(--color)" stroke-width="4" stroke-linejoin="round"/></g></g>
+<g transform="translate(262 150) scale(1.01)"><g class="s" style="--d: 0.35s; --p: 2.01s"><path class="b" d="M0 -30 C5.3999999999999995 -5.3999999999999995 5.3999999999999995 -5.3999999999999995 30 0 C5.3999999999999995 5.3999999999999995 5.3999999999999995 5.3999999999999995 0 30 C-5.3999999999999995 5.3999999999999995 -5.3999999999999995 5.3999999999999995 -30 0 C-5.3999999999999995 -5.3999999999999995 -5.3999999999999995 -5.3999999999999995 0 -30 Z"/></g></g>
+<g transform="translate(332 197) scale(1.78)"><g class="s" style="--d: 0.44s; --p: 2.02s"><circle class="c" r="7"/></g></g>
+<g transform="translate(47 260) scale(0.85)"><g class="s" style="--d: 0.13s; --p: 1.57s"><polygon class="a" points="0.0,-28.0 7.3,-10.1 26.6,-8.7 11.9,3.9 16.5,22.7 0.0,12.5 -16.5,22.7 -11.9,3.9 -26.6,-8.7 -7.3,-10.1" stroke="var(--color)" stroke-width="4" stroke-linejoin="round"/></g></g>
+<g transform="translate(161 36) scale(0.93)"><g class="s" style="--d: 0.37s; --p: 1.02s"><path class="b" d="M0 -30 C5.3999999999999995 -5.3999999999999995 5.3999999999999995 -5.3999999999999995 30 0 C5.3999999999999995 5.3999999999999995 5.3999999999999995 5.3999999999999995 0 30 C-5.3999999999999995 5.3999999999999995 -5.3999999999999995 5.3999999999999995 -30 0 C-5.3999999999999995 -5.3999999999999995 -5.3999999999999995 -5.3999999999999995 0 -30 Z"/></g></g>
+<g transform="translate(273 35) scale(1.71)"><g class="s" style="--d: 0.47s; --p: 1.19s"><circle class="c" r="7"/></g></g>
+<g transform="translate(373 76) scale(1.02)"><g class="s" style="--d: 0.37s; --p: 1.66s"><polygon class="a" points="0.0,-28.0 7.3,-10.1 26.6,-8.7 11.9,3.9 16.5,22.7 0.0,12.5 -16.5,22.7 -11.9,3.9 -26.6,-8.7 -7.3,-10.1" stroke="var(--color)" stroke-width="4" stroke-linejoin="round"/></g></g>
+<g transform="translate(172 133) scale(1.22)"><g class="s" style="--d: 0.13s; --p: 1.02s"><path class="b" d="M0 -30 C5.3999999999999995 -5.3999999999999995 5.3999999999999995 -5.3999999999999995 30 0 C5.3999999999999995 5.3999999999999995 5.3999999999999995 5.3999999999999995 0 30 C-5.3999999999999995 5.3999999999999995 -5.3999999999999995 5.3999999999999995 -30 0 C-5.3999999999999995 -5.3999999999999995 -5.3999999999999995 -5.3999999999999995 0 -30 Z"/></g></g>
+<g transform="translate(195 59) scale(1.10)"><g class="s" style="--d: 0.13s; --p: 1.45s"><circle class="c" r="7"/></g></g>
+<g transform="translate(335 46) scale(1.55)"><g class="s" style="--d: 0.06s; --p: 1.34s"><polygon class="a" points="0.0,-28.0 7.3,-10.1 26.6,-8.7 11.9,3.9 16.5,22.7 0.0,12.5 -16.5,22.7 -11.9,3.9 -26.6,-8.7 -7.3,-10.1" stroke="var(--color)" stroke-width="4" stroke-linejoin="round"/></g></g>
+<g transform="translate(395 28) scale(0.85)"><g class="s" style="--d: 0.30s; --p: 1.92s"><path class="b" d="M0 -30 C5.3999999999999995 -5.3999999999999995 5.3999999999999995 -5.3999999999999995 30 0 C5.3999999999999995 5.3999999999999995 5.3999999999999995 5.3999999999999995 0 30 C-5.3999999999999995 5.3999999999999995 -5.3999999999999995 5.3999999999999995 -30 0 C-5.3999999999999995 -5.3999999999999995 -5.3999999999999995 -5.3999999999999995 0 -30 Z"/></g></g>
+<g transform="translate(332 26) scale(1.21)"><g class="s" style="--d: 0.06s; --p: 1.99s"><circle class="c" r="7"/></g></g>
+<g transform="translate(301 115) scale(0.83)"><g class="s" style="--d: 0.49s; --p: 1.56s"><polygon class="a" points="0.0,-28.0 7.3,-10.1 26.6,-8.7 11.9,3.9 16.5,22.7 0.0,12.5 -16.5,22.7 -11.9,3.9 -26.6,-8.7 -7.3,-10.1" stroke="var(--color)" stroke-width="4" stroke-linejoin="round"/></g></g>
+<g transform="translate(86 241) scale(1.48)"><g class="s" style="--d: 0.09s; --p: 1.98s"><path class="b" d="M0 -30 C5.3999999999999995 -5.3999999999999995 5.3999999999999995 -5.3999999999999995 30 0 C5.3999999999999995 5.3999999999999995 5.3999999999999995 5.3999999999999995 0 30 C-5.3999999999999995 5.3999999999999995 -5.3999999999999995 5.3999999999999995 -30 0 C-5.3999999999999995 -5.3999999999999995 -5.3999999999999995 -5.3999999999999995 0 -30 Z"/></g></g>
+</svg>
+<script>
+/*
+ * A scatter of little stars and glints that pop in here and there and keep twinkling, each in its own time. Its
+ * color is the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS
+ * animations are held at t by the host.
+ */
+window.film = { width: 500, height: 300, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

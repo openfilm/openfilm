@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Gold dust</title>
+<style>
+  /* what a clip of it may change: the dust's color, how much of it shows (0 to 1), how fast it falls */
+  :root { --color: #ffc86b; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Gold dust drifting down through the picture: fine specks that catch the light and twinkle, a few glinting with a
+ * four-point star, and large soft flecks out of focus near the lens. A page of OpenFilm's library (CC0): every
+ * speck's place is worked out from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// a soft round glow, drawn once for each color: a hot white core fading out through the color
+const sprites = new Map();
+function sprite(c) {
+  const key = c.join();
+  if (sprites.has(key)) return sprites.get(key);
+  const g = document.createElement('canvas'); g.width = g.height = 128;
+  const x = g.getContext('2d'), r = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  const hot = c.map((v) => Math.round(v + (255 - v) * 0.7));
+  r.addColorStop(0, `rgba(${hot},1)`); r.addColorStop(0.18, `rgba(${c},0.85)`); r.addColorStop(0.45, `rgba(${c},0.22)`); r.addColorStop(1, `rgba(${c},0)`);
+  x.fillStyle = r; x.fillRect(0, 0, 128, 128);
+  sprites.set(key, g);
+  return g;
+}
+const N = 340;
+const specks = Array.from({ length: N }, (_, i) => {
+  const r = (k) => hash(i * 9.17 + k);
+  const depth = r(1);                             // 0 far, 1 near the lens
+  return {
+    x: r(2), y: r(3), depth, order: r(4),
+    size: depth > 0.94 ? 4 + r(5) * 7 : 0.22 + depth * depth * 1.1,   // in vmin
+    fall: 0.025 + depth * 0.07 + r(6) * 0.02,     // screen heights a second
+    sway: 0.6 + r(7) * 2.4, swayF: 0.25 + r(8) * 0.6, phase: r(9) * 6.283,
+    tw: 1.5 + r(10) * 5, twPhase: r(11) * 6.283, glint: r(12) > 0.84,
+    hue: r(13),
+  };
+});
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), speed = num('--speed', 1), base = rgb('--color', '#ffc86b');
+    ctx.globalCompositeOperation = 'lighter';
+    for (const s of specks) {
+      if (s.order > amount) continue;
+      // a warmer or paler gold for each speck
+      const c = base.map((v, k) => Math.max(0, Math.min(255, Math.round(v + (s.hue - 0.5) * [30, 20, -40][k]))));
+      const img = sprite(c);
+      const tt = t * speed;
+      const y = (((s.y + tt * s.fall) % 1) * 1.1 - 0.05) * h;
+      const x = s.x * w + (Math.sin(tt * s.swayF + s.phase) + 0.4 * Math.sin(tt * s.swayF * 2.3 + s.phase * 1.7)) * s.sway * u;
+      const twinkle = 0.5 + 0.5 * Math.sin(t * s.tw + s.twPhase);
+      const near = s.size > 2;
+      const a = near ? 0.22 + 0.14 * twinkle : 0.3 + 0.7 * Math.pow(twinkle, 3);
+      const d = s.size * u * (near ? 1 : 6);
+      ctx.globalAlpha = a;
+      ctx.drawImage(img, x - d / 2, y - d / 2, d, d);
+      if (s.glint && twinkle > 0.75) {
+        // the light catches it: a thin four-point star
+        const k = (twinkle - 0.75) / 0.25, L = (2 + s.depth * 5) * u * k;
+        ctx.globalAlpha = 0.85 * k;
+        ctx.fillStyle = `rgba(${c.map((v) => Math.round(v + (255 - v) * 0.6))},1)`;
+        ctx.beginPath();
+        ctx.moveTo(x - L, y); ctx.lineTo(x, y - 0.12 * u); ctx.lineTo(x + L, y); ctx.lineTo(x, y + 0.12 * u); ctx.closePath();
+        ctx.moveTo(x, y - L); ctx.lineTo(x + 0.12 * u, y); ctx.lineTo(x, y + L); ctx.lineTo(x - 0.12 * u, y); ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

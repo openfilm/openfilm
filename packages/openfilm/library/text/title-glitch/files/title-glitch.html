@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Glitch title</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #effcff; --accent: #00e5ff; --accent2: #ff2bd6; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--color); }
+.frame { position: relative; padding: 4vh 7vh; }
+.frame b { position: absolute; width: 6vh; height: 6vh; border: 0 solid var(--accent); animation: corner 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.frame b:nth-child(1) { left: 0; top: 0; border-width: 0.7vh 0 0 0.7vh; --x: 8vh; --y: 6vh; }
+.frame b:nth-child(2) { right: 0; top: 0; border-width: 0.7vh 0.7vh 0 0; --x: -8vh; --y: 6vh; }
+.frame b:nth-child(3) { left: 0; bottom: 0; border-width: 0 0 0.7vh 0.7vh; --x: 8vh; --y: -6vh; }
+.frame b:nth-child(4) { right: 0; bottom: 0; border-width: 0 0.7vh 0.7vh 0; --x: -8vh; --y: -6vh; }
+.k { font: 800 calc(18vh * var(--k, 1))/1 var(--font); letter-spacing: 0.02em; }
+.k .fx { -webkit-text-fill-color: transparent; }
+.k .fx span { position: absolute; left: 0; top: 0; -webkit-text-fill-color: currentColor; }
+.k .fx .r { color: var(--accent2); mix-blend-mode: screen; }
+.k .fx .b { color: var(--accent); mix-blend-mode: screen; }
+.k .fx .m { color: var(--color); }
+.row { display: flex; justify-content: center; }
+.k .fx .m { -webkit-mask-image: repeating-linear-gradient(0deg, #000 0 0.8vh, rgba(0, 0, 0, 0.72) 0.8vh 1.2vh); mask-image: repeating-linear-gradient(0deg, #000 0 0.8vh, rgba(0, 0, 0, 0.72) 0.8vh 1.2vh); }
+.t2wrap { margin-top: 2.4vh; font: 500 5.4vh/1.2 'SF Mono', Menlo, Consolas, ui-monospace, 'PingFang SC', 'Microsoft YaHei', monospace; color: var(--accent); white-space: pre; }
+.t2wrap::before { content: "> "; opacity: 0.7; }
+.cur { display: inline-block; width: 0.6em; height: 1em; vertical-align: -0.15em; background: var(--accent); margin-left: 0.15em; }
+@keyframes corner { from { opacity: 0; transform: translate(var(--x), var(--y)); } }
+@keyframes type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="frame"><b></b><b></b><b></b><b></b><div class="row"><span class="ln k"><span class="t1 src">SYSTEM ONLINE</span></span></div></div>
+  <div class="t2wrap"><span class="ln"><span class="t2 src">all signals clear</span></span></div>
+</div>
+<script>
+/*
+ * A tech title that flickers in split into colors, within corner marks, a line typed under it with a cursor. A page
+ * of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the host.
+ */
+/* moves drawn from t: each layer's place at t comes from t alone */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, at, len) => clamp((t - at) / len);
+const easeOut = (x) => 1 - (1 - x) ** 3;
+const easeBack = (x, s = 1.9) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 + (s + 1) * (x - 1) ** 3 + s * (x - 1) ** 2);
+const hash = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const draws = [];
+let now = 0;
+/* an element's words, a line break for each <br> (as the editor writes them) */
+const linesOf = (el) => [...el.childNodes].map((n) => (n.nodeType === 3 ? n.data : n.localName === 'br' ? '\n' : '')).join('');
+/*
+ * An editable layer drawn again on a copy over it (letter by letter, a number counting): the layer itself stays, its
+ * words see-through, so the editor still finds, moves and changes it; the copy follows its words and its tweaks.
+ */
+function overlay(sel, build, paint) {
+  const src = document.querySelector(sel);
+  const fx = document.createElement('span');
+  fx.className = 'fx';
+  fx.setAttribute('aria-hidden', 'true');
+  src.after(fx);
+  let text = null;
+  let state = null;
+  const sync = () => {
+    fx.style.cssText = src.style.cssText;
+    const words = linesOf(src);
+    if (words !== text) { text = words; state = build(fx, words); }
+    paint(state, now);
+  };
+  new MutationObserver(sync).observe(src, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+  sync();
+  draws.push((t) => paint(state, t));
+}
+/* the layer's letters, each moved by `move(letter, t, i, n)` */
+function letters(sel, move) {
+  overlay(sel, (fx, words) => {
+    const out = [];
+    fx.replaceChildren();
+    words.split('\n').forEach((line, k) => {
+      if (k) fx.append(document.createElement('br'));
+      for (const ch of Array.from(line)) {
+        const c = document.createElement('span');
+        c.className = 'ch';
+        c.textContent = ch;
+        fx.append(c);
+        out.push(c);
+      }
+    });
+    return out;
+  }, (out, t) => out.forEach((c, i) => move(c, t, i, out.length)));
+}
+/* the number in the layer's words, counted up from 0 between `at` and `at + len` seconds (its words around it kept) */
+function countUp(sel, at, len) {
+  overlay(sel, (fx, words) => {
+    const m = words.match(/^([^\d]*?)(\d[\d,]*(?:\.\d+)?)([\s\S]*)$/);
+    if (!m) { fx.textContent = words; return null; }
+    const [, pre, num, post] = m;
+    return { fx, pre, post, value: Number(num.replace(/,/g, '')), places: (num.split('.')[1] ?? '').length, commas: num.includes(',') };
+  }, (s, t) => {
+    if (!s) return;
+    const v = s.value * easeOut(prog(t, at, len));
+    let str = v.toFixed(s.places);
+    if (s.commas) { const [a, b] = str.split('.'); str = a.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (b ? '.' + b : ''); }
+    s.fx.textContent = s.pre + str + s.post;
+  });
+}
+/* the layer's words typed from `at`, `cps` letters a second, a cursor after them blinking once they are all there */
+function typed(sel, at, cps) {
+  overlay(sel, (fx, words) => {
+    fx.replaceChildren();
+    const out = [];
+    words.split('\n').forEach((line, k) => {
+      if (k) { const br = document.createElement('br'); fx.append(br); out.push(br); }
+      for (const ch of Array.from(line)) { const c = document.createElement('span'); c.textContent = ch; fx.append(c); out.push(c); }
+    });
+    const cur = document.createElement('span');
+    cur.className = 'cur';
+    fx.append(cur);
+    return { out, cur };
+  }, ({ out, cur }, t) => {
+    const n = Math.floor((t - at) * cps);
+    out.forEach((c, i) => { c.style.display = i < n ? '' : 'none'; });
+    cur.style.opacity = t < at || (n >= out.length && (t * 1.8) % 1 > 0.5) ? 0 : 1;
+  });
+}
+/* a layer made smaller when its words grow wider than `room` (an element, or a share of the page's width): its --k */
+function autofit(sel, room) {
+  const el = document.querySelector(sel);
+  const box = typeof room === 'string' ? document.querySelector(room) : null;
+  const fit = () => {
+    el.style.setProperty('--k', '1');
+    const w = el.scrollWidth;
+    const limit = box ? box.clientWidth : innerWidth * room;
+    if (w > limit) el.style.setProperty('--k', (limit / w).toFixed(3));
+  };
+  new MutationObserver(fit).observe(el, { childList: true, characterData: true, subtree: true });
+  fit();
+}
+overlay('.t1', (fx, words) => {
+  fx.replaceChildren();
+  const parts = ['r', 'b', 'm'].map((k) => { const s = document.createElement('span'); s.className = k; s.textContent = words; fx.append(s); return s; });
+  return parts;
+}, ([r, b, m], t) => {
+  /* hard glitches while it comes in, then a short one every 2.2 s */
+  const step = Math.floor(t * 20);
+  const later = t > 1 && (t % 2.2) < 0.18;
+  const g = t < 0.75 || later ? 1 : 0;
+  const n = (k) => (hash(step * 3 + k) - 0.5) * 2;
+  const on = t < 0.75 ? hash(step + 99) > 0.25 : 1;
+  m.style.opacity = on;
+  r.style.opacity = b.style.opacity = on * (g ? 0.95 : 0.55);
+  r.style.transform = `translate(${g ? n(1) * 3 : -0.5}vh, ${g ? n(2) * 1 : 0}vh)`;
+  b.style.transform = `translate(${g ? n(3) * 3 : 0.5}vh, ${g ? n(4) * 1 : 0}vh)`;
+  const cut = g ? hash(step + 7) * 70 : 0;
+  m.style.clipPath = g && hash(step + 13) > 0.4 ? `inset(${cut}% 0 ${Math.max(0, 80 - cut - 12)}% 0)` : 'none';
+  m.style.transform = g ? `translateX(${n(5) * 1.6}vh)` : 'none';
+});
+typed('.t2', 0.8, 26);
+autofit('.k', 0.8);
+window.film = { frame(t) { now = t; for (const d of draws) d(t); } };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

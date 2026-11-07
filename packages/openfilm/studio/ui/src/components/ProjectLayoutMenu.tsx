@@ -58,7 +58,7 @@ export function ProjectLayoutMenu({ className, assets, layers, timeline, inspect
         }}><PanelsRightBottom size={16} /></button>
     </Tooltip>
     {anchor && createPortal(<div ref={panel} id={id} role="dialog" aria-label={t('layout.title')}
-      style={anchor} className="fixed z-[110] w-52 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-[0_18px_48px_-12px_rgba(0,0,0,0.45),0_2px_8px_rgba(0,0,0,0.12)]">
+      style={anchor} className="fixed z-[110] w-52 rounded-[14px] border border-[var(--border)] bg-[var(--bg-raised)] p-1.5 shadow-[0_18px_48px_-12px_rgba(0,0,0,0.45),0_2px_8px_rgba(0,0,0,0.12)]">
       <div className="px-2 pb-1 pt-1 text-[11px] font-medium text-[var(--text-faint)]">{t('layout.title')}</div>
       {[
         /* the app's own panel first: in an app with a chat, the chat is the pane people switch most */
@@ -70,11 +70,11 @@ export function ProjectLayoutMenu({ className, assets, layers, timeline, inspect
       ].map(([key, label, checked, change, Icon]) => <button key={key} type="button" role="switch"
         aria-checked={checked} onClick={() => change(!checked)}
         className="flex w-full items-center gap-2.5 rounded-[7px] px-2 py-1.5 text-[13px] text-[var(--text)] hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-[var(--border-strong)]">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--surface-2)] text-[var(--text-muted)]"><Icon size={13} aria-hidden /></span>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--bg-field)] text-[var(--text-muted)]"><Icon size={13} aria-hidden /></span>
         <span className="flex-1 text-left">{label}</span>
         {/* a switch, not a tick: each pane is open or closed, not one picked from a set. Ink-colored, not blue. */}
-        <span aria-hidden className={`relative h-[18px] w-[30px] shrink-0 rounded-full transition-colors ${checked ? 'bg-[var(--text)]' : 'bg-[var(--surface-2)] ring-1 ring-inset ring-[var(--border)]'}`}>
-          <span className={`absolute top-[3px] h-3 w-3 rounded-full transition-all ${checked ? 'left-[15px] bg-[var(--bg)]' : 'left-[3px] bg-[var(--text-faint)]'}`} />
+        <span aria-hidden className={`relative h-[18px] w-[30px] shrink-0 rounded-full transition-colors ${checked ? 'bg-[var(--switch-on)]' : 'bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)]'}`}>
+          <span className={`absolute top-[3px] h-3 w-3 rounded-full transition-all ${checked ? 'left-[15px] bg-white' : 'left-[3px] bg-[var(--text-faint)]'}`} />
         </span>
       </button>)}
     </div>, document.body)}

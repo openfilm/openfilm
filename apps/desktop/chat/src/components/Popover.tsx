@@ -172,7 +172,7 @@ export function Popover({
             : {
                 minWidth: 140,
                 ...panelStyle,
-                background: 'var(--bg-surface)',
+                background: 'var(--bg-raised)',
                 border: '1px solid var(--border-strong)',
                 borderRadius: 16,
                 boxShadow: '0 16px 40px -8px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.18)',

@@ -1,0 +1,193 @@
+{
+ "version": 2,
+ "kind": "group",
+ "clips": [
+  {
+   "track": 0,
+   "at": 0.3,
+   "clip": {
+    "src": "new-tag.html",
+    "time": [
+     0,
+     2.2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Text\", \"type\": \"text\", \"at\": \".label\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-place": "{\"x\":0.82,\"y\":0.22,\"fit\":0.2}"
+    },
+    "size": {
+     "w": 360,
+     "h": 200
+    }
+   }
+  },
+  {
+   "track": 0,
+   "at": 2.8,
+   "clip": {
+    "src": "shop-specs.html",
+    "time": [
+     0,
+     4.4
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Label\", \"type\": \"text\", \"at\": \".t0\"}, {\"name\": \"Product\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Row 1\", \"type\": \"text\", \"at\": \".k1\"}, {\"name\": \"Value 1\", \"type\": \"text\", \"at\": \".v1\"}, {\"name\": \"Row 2\", \"type\": \"text\", \"at\": \".k2\"}, {\"name\": \"Value 2\", \"type\": \"text\", \"at\": \".v2\"}, {\"name\": \"Row 3\", \"type\": \"text\", \"at\": \".k3\"}, {\"name\": \"Value 3\", \"type\": \"text\", \"at\": \".v3\"}, {\"name\": \"Row 4\", \"type\": \"text\", \"at\": \".k4\"}, {\"name\": \"Value 4\", \"type\": \"text\", \"at\": \".v4\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Card\", \"type\": \"var\", \"var\": \"--card\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-place": "{\"x\":0.76,\"y\":0.5,\"fit\":0.46}"
+    },
+    "size": {
+     "w": 700,
+     "h": 500
+    },
+    "overrides": [
+     {
+      "fade": [
+       0,
+       0.3
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "track": 0,
+   "at": 7.6,
+   "clip": {
+    "src": "shop-strike.html",
+    "time": [
+     0,
+     2.8
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Label\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Price\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Old price\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Price\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Tag\", \"type\": \"var\", \"var\": \"--tag\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-place": "{\"x\":0.3,\"y\":0.42,\"fit\":0.3}"
+    },
+    "size": {
+     "w": 800,
+     "h": 400
+    }
+   }
+  },
+  {
+   "track": 1,
+   "at": 8.2,
+   "clip": {
+    "src": "shop-buy.html",
+    "time": [
+     0,
+     2.2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Button\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color from\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Color to\", \"type\": \"var\", \"var\": \"--accent2\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-place": "{\"x\":0.3,\"y\":0.78,\"fit\":0.15}"
+    },
+    "size": {
+     "w": 700,
+     "h": 220
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 2.2,
+   "clip": {
+    "src": "stripes.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.8
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 4.7,
+   "clip": {
+    "src": "swipe-blur.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 7,
+   "clip": {
+    "src": "stripes.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.8
+    ]
+   }
+  },
+  {
+   "track": 3,
+   "at": 0,
+   "clip": {
+    "src": "example-1.jpg",
+    "time": [
+     0,
+     2.6
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "1"
+    }
+   }
+  },
+  {
+   "track": 3,
+   "at": 2.6,
+   "clip": {
+    "src": "example-2.jpg",
+    "time": [
+     0,
+     2.4
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "2"
+    }
+   }
+  },
+  {
+   "track": 3,
+   "at": 5,
+   "clip": {
+    "src": "example-3.jpg",
+    "time": [
+     0,
+     2.4
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "3"
+    }
+   }
+  },
+  {
+   "track": 3,
+   "at": 7.4,
+   "clip": {
+    "src": "example-4.jpg",
+    "time": [
+     0,
+     3.2
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "4"
+    }
+   }
+  }
+ ],
+ "durationMs": 10600
+}

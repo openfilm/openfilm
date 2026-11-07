@@ -110,7 +110,7 @@ export function MenuSelect({
         /* the popover keeps focus where it was on a press: the keys need it here */
         onClick={(e) => e.currentTarget.focus()}
         onKeyDown={onKeyDown}
-        className={`flex min-w-0 flex-1 items-center gap-1.5 border border-[var(--border)] bg-[var(--fill-tsp)] text-left text-[var(--text)] ${size === 'md' ? 'h-9 rounded-lg pl-3 pr-2 text-[13px]' : 'h-7 rounded-md pl-2 pr-1.5 text-[11px]'} outline-none transition hover:border-[var(--text-faint)] focus-visible:border-[var(--accent)] disabled:opacity-50 ${open ? 'border-[var(--accent)]' : ''} ${className}`}
+        className={`flex min-w-0 flex-1 items-center gap-1.5 border border-[var(--border)] bg-[var(--bg-field)] text-left text-[var(--text)] ${size === 'md' ? 'h-9 rounded-lg pl-3 pr-2 text-[13px]' : 'h-7 rounded-md pl-2 pr-1.5 text-[11px]'} outline-none transition hover:border-[var(--text-faint)] focus-visible:border-[var(--accent)] disabled:opacity-50 ${open ? 'border-[var(--accent)]' : ''} ${className}`}
       >
         {prefix ? <span className="shrink-0 whitespace-nowrap text-[10.5px] text-[var(--text-faint)]">{prefix}</span> : null}
         <span className="min-w-0 flex-1 truncate">{current?.label ?? value}</span>
@@ -124,7 +124,7 @@ export function MenuSelect({
         aria-label={label}
         onKeyDown={onKeyDown}
         onMouseLeave={() => show(undefined)}
-        className="relative overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[var(--panel)] p-1 shadow-[var(--shadow-lg)]"
+        className="relative overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[var(--bg-raised)] p-1 shadow-[var(--shadow-lg)]"
         style={{
           width: menuWidth === 'content' ? 'max-content' : Math.max(width, 160),
           minWidth: Math.max(width, 160),

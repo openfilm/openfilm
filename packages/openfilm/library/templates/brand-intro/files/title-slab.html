@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Color slab title</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; --slab: #ff4d3d; --slab2: #ffd23f; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: var(--font); }
+.s { position: relative; display: inline-block; transform: rotate(-4deg); }
+.s::before, .s::after { content: ""; position: absolute; inset: -3vh -7vh; border-radius: 1.2vh; }
+.s::before { background: var(--slab2); translate: 3.6vh 3.2vh; animation: slab 0.55s 0.08s cubic-bezier(0.3, 1.45, 0.5, 1) both, drift 3s 1s ease-in-out infinite; transform-origin: left; }
+.s::after { background: var(--slab); animation: slab 0.55s cubic-bezier(0.3, 1.45, 0.5, 1) both; transform-origin: left; }
+.k { position: relative; z-index: 1; font-size: calc(21vh * var(--k, 1)); font-weight: 800; line-height: 1.02; color: var(--color); letter-spacing: 0.01em; }
+.row { width: 80vw; display: flex; justify-content: center; }
+.tag { margin-top: 11vh; font-size: 5vh; font-weight: 800; letter-spacing: 0.22em; color: #fff; background: #111; padding: 1vh 2.6vh 1vh 3.2vh; transform: rotate(-4deg); white-space: pre; animation: tag 0.5s 0.7s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.tag::before { content: ""; display: inline-block; width: 1.6vh; height: 1.6vh; border-radius: 50%; background: var(--slab); margin-right: 1.6vh; vertical-align: 0.4vh; animation: blink 1.2s 1.2s steps(1) infinite; }
+@keyframes slab { from { transform: scaleX(0); } }
+@keyframes drift { 50% { translate: 2vh 4.4vh; } }
+@keyframes tag { from { opacity: 0; transform: rotate(-4deg) translateY(4vh) scale(0.6); } }
+@keyframes blink { 50% { opacity: 0.2; } }
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="row"><div class="s"><span class="ln k"><span class="t1 src">GAME DAY</span></span></div></div>
+  <div class="tag t2">LIVE · 8 PM</div>
+</div>
+<script>
+/*
+ * A heavy title on a tilted slab of color with a second slab behind it, its letters popping in, a tag under it. A
+ * page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the
+ * host.
+ */
+/* moves drawn from t: each layer's place at t comes from t alone */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, at, len) => clamp((t - at) / len);
+const easeOut = (x) => 1 - (1 - x) ** 3;
+const easeBack = (x, s = 1.9) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 + (s + 1) * (x - 1) ** 3 + s * (x - 1) ** 2);
+const hash = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const draws = [];
+let now = 0;
+/* an element's words, a line break for each <br> (as the editor writes them) */
+const linesOf = (el) => [...el.childNodes].map((n) => (n.nodeType === 3 ? n.data : n.localName === 'br' ? '\n' : '')).join('');
+/*
+ * An editable layer drawn again on a copy over it (letter by letter, a number counting): the layer itself stays, its
+ * words see-through, so the editor still finds, moves and changes it; the copy follows its words and its tweaks.
+ */
+function overlay(sel, build, paint) {
+  const src = document.querySelector(sel);
+  const fx = document.createElement('span');
+  fx.className = 'fx';
+  fx.setAttribute('aria-hidden', 'true');
+  src.after(fx);
+  let text = null;
+  let state = null;
+  const sync = () => {
+    fx.style.cssText = src.style.cssText;
+    const words = linesOf(src);
+    if (words !== text) { text = words; state = build(fx, words); }
+    paint(state, now);
+  };
+  new MutationObserver(sync).observe(src, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+  sync();
+  draws.push((t) => paint(state, t));
+}
+/* the layer's letters, each moved by `move(letter, t, i, n)` */
+function letters(sel, move) {
+  overlay(sel, (fx, words) => {
+    const out = [];
+    fx.replaceChildren();
+    words.split('\n').forEach((line, k) => {
+      if (k) fx.append(document.createElement('br'));
+      for (const ch of Array.from(line)) {
+        const c = document.createElement('span');
+        c.className = 'ch';
+        c.textContent = ch;
+        fx.append(c);
+        out.push(c);
+      }
+    });
+    return out;
+  }, (out, t) => out.forEach((c, i) => move(c, t, i, out.length)));
+}
+/* the number in the layer's words, counted up from 0 between `at` and `at + len` seconds (its words around it kept) */
+function countUp(sel, at, len) {
+  overlay(sel, (fx, words) => {
+    const m = words.match(/^([^\d]*?)(\d[\d,]*(?:\.\d+)?)([\s\S]*)$/);
+    if (!m) { fx.textContent = words; return null; }
+    const [, pre, num, post] = m;
+    return { fx, pre, post, value: Number(num.replace(/,/g, '')), places: (num.split('.')[1] ?? '').length, commas: num.includes(',') };
+  }, (s, t) => {
+    if (!s) return;
+    const v = s.value * easeOut(prog(t, at, len));
+    let str = v.toFixed(s.places);
+    if (s.commas) { const [a, b] = str.split('.'); str = a.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (b ? '.' + b : ''); }
+    s.fx.textContent = s.pre + str + s.post;
+  });
+}
+/* the layer's words typed from `at`, `cps` letters a second, a cursor after them blinking once they are all there */
+function typed(sel, at, cps) {
+  overlay(sel, (fx, words) => {
+    fx.replaceChildren();
+    const out = [];
+    words.split('\n').forEach((line, k) => {
+      if (k) { const br = document.createElement('br'); fx.append(br); out.push(br); }
+      for (const ch of Array.from(line)) { const c = document.createElement('span'); c.textContent = ch; fx.append(c); out.push(c); }
+    });
+    const cur = document.createElement('span');
+    cur.className = 'cur';
+    fx.append(cur);
+    return { out, cur };
+  }, ({ out, cur }, t) => {
+    const n = Math.floor((t - at) * cps);
+    out.forEach((c, i) => { c.style.display = i < n ? '' : 'none'; });
+    cur.style.opacity = t < at || (n >= out.length && (t * 1.8) % 1 > 0.5) ? 0 : 1;
+  });
+}
+/* a layer made smaller when its words grow wider than `room` (an element, or a share of the page's width): its --k */
+function autofit(sel, room) {
+  const el = document.querySelector(sel);
+  const box = typeof room === 'string' ? document.querySelector(room) : null;
+  const fit = () => {
+    el.style.setProperty('--k', '1');
+    const w = el.scrollWidth;
+    const limit = box ? box.clientWidth : innerWidth * room;
+    if (w > limit) el.style.setProperty('--k', (limit / w).toFixed(3));
+  };
+  new MutationObserver(fit).observe(el, { childList: true, characterData: true, subtree: true });
+  fit();
+}
+letters('.t1', (c, t, i) => {
+  const p = prog(t, 0.22 + i * 0.05, 0.45);
+  const s = easeBack(p, 2.6);
+  c.style.transform = `scale(${s}) rotate(${(1 - easeOut(p)) * 20}deg)`;
+  c.style.opacity = clamp(p * 5);
+});
+autofit('.k', '.row');
+window.film = { frame(t) { now = t; for (const d of draws) d(t); } };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

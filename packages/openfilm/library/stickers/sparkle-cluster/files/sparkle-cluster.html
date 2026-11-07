@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sparkles</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #ffd60a; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0 2.4vmin var(--color)); }
+.g { animation: in 0.5s cubic-bezier(.34, 1.56, .64, 1) var(--d) both; }
+@keyframes in { from { transform: scale(0) rotate(-120deg); } }
+.g path { animation: tw var(--p) ease-in-out calc(var(--d) + 0.5s) infinite; }
+@keyframes tw { 50% { transform: scale(0.72) rotate(15deg); opacity: 0.8; } }
+.dot { fill: #ffffff; animation: dot 1.3s ease-in-out infinite; }
+@keyframes dot { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 400 400">
+<defs><radialGradient id="gl"><stop offset="0" stop-color="#ffffff"/><stop offset="0.45" stop-color="#ffffff"/><stop offset="1" style="stop-color: var(--color)"/></radialGradient></defs>
+<g transform="translate(200 196)"><g class="g" style="--d: 0s; --p: 1.6s"><path d="M0 -96 C17.28 -17.28 17.28 -17.28 96 0 C17.28 17.28 17.28 17.28 0 96 C-17.28 17.28 -17.28 17.28 -96 0 C-17.28 -17.28 -17.28 -17.28 0 -96 Z" fill="url(#gl)"/></g></g>
+<g transform="translate(306 104)"><g class="g" style="--d: 0.08s; --p: 1.2s"><path d="M0 -42 C7.56 -7.56 7.56 -7.56 42 0 C7.56 7.56 7.56 7.56 0 42 C-7.56 7.56 -7.56 7.56 -42 0 C-7.56 -7.56 -7.56 -7.56 0 -42 Z" fill="url(#gl)"/></g></g>
+<g transform="translate(104 286)"><g class="g" style="--d: 0.14s; --p: 1.4s"><path d="M0 -36 C6.4799999999999995 -6.4799999999999995 6.4799999999999995 -6.4799999999999995 36 0 C6.4799999999999995 6.4799999999999995 6.4799999999999995 6.4799999999999995 0 36 C-6.4799999999999995 6.4799999999999995 -6.4799999999999995 6.4799999999999995 -36 0 C-6.4799999999999995 -6.4799999999999995 -6.4799999999999995 -6.4799999999999995 0 -36 Z" fill="url(#gl)"/></g></g>
+<g transform="translate(318 296)"><g class="g" style="--d: 0.2s; --p: 1.1s"><path d="M0 -26 C4.68 -4.68 4.68 -4.68 26 0 C4.68 4.68 4.68 4.68 0 26 C-4.68 4.68 -4.68 4.68 -26 0 C-4.68 -4.68 -4.68 -4.68 0 -26 Z" fill="url(#gl)"/></g></g>
+<g transform="translate(92 104)"><g class="g" style="--d: 0.26s; --p: 1.7s"><path d="M0 -22 C3.96 -3.96 3.96 -3.96 22 0 C3.96 3.96 3.96 3.96 0 22 C-3.96 3.96 -3.96 3.96 -22 0 C-3.96 -3.96 -3.96 -3.96 0 -22 Z" fill="url(#gl)"/></g></g>
+<circle class="dot" cx="268" cy="184" r="6" style="animation-delay: 0.3s"/><circle class="dot" cx="150" cy="140" r="5" style="animation-delay: 0.8s"/><circle class="dot" cx="230" cy="320" r="5" style="animation-delay: 0.5s"/>
+</svg>
+<script>
+/*
+ * A cluster of glints that spin in one after another and then twinkle each in its own time, glowing in their color.
+ * Its color is the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its
+ * CSS animations are held at t by the host.
+ */
+window.film = { width: 400, height: 400, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

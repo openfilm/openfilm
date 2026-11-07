@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "news-breaking.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Headline\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Strip\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Bar\", \"type\": \"var\", \"var\": \"--bar\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--ink\"}]"
+    }
+  },
+  "durationMs": 4000
+}

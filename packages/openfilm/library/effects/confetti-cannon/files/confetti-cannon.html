@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Confetti cannon</title>
+<style>
+  /* what a clip of it may change: how much confetti each shot fires (0 to 1), seconds between shots */
+  :root { --amount: 1; --speed: 2.6; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Confetti cannons firing from the two bottom corners every few seconds: paper squares, strips and dots fly up fast,
+ * slow in the air, then flutter down turning over and over, catching the light on one face and not the other. Every
+ * piece follows a closed-form flight (launch speed, air drag, gravity), so its place comes from t alone, and the
+ * shots before t = 0 are already in the air at the start. A page of OpenFilm's library (CC0).
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+const PALETTE = [[255, 77, 109], [255, 209, 102], [6, 214, 160], [76, 201, 240], [155, 93, 229], [241, 91, 181], [254, 228, 64], [255, 255, 255], [255, 140, 66]];
+const PER = 130, K = 3.6, LIFE = 9;
+function shot(k, side, t, w, h, u, amount) {
+  const t0 = k * period + side * 0.12, tau = t - t0;
+  if (tau < 0 || tau > LIFE) return;
+  const ox = side ? w + u : -u, oy = h + u, dir = side ? -1 : 1;
+  // the muzzle flash: a burst of light and a few streaks in the first moments
+  if (tau < 0.4) {
+    const f = 1 - tau / 0.4;
+    ctx.globalCompositeOperation = 'lighter';
+    const R = 26 * u * (0.6 + 0.4 * (1 - f));
+    const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, R);
+    g.addColorStop(0, `rgba(255,240,200,${0.75 * f})`); g.addColorStop(0.4, `rgba(255,170,90,${0.3 * f})`); g.addColorStop(1, 'rgba(255,120,60,0)');
+    ctx.fillStyle = g; ctx.fillRect(ox - R, oy - R, 2 * R, 2 * R);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  for (let i = 0; i < PER; i++) {
+    const r = (q) => hash(k * 977.3 + side * 401.1 + i * 7.13 + q);
+    if (r(0) > amount) continue;
+    const spread = r(1), power = 0.55 + 0.45 * Math.sqrt(r(2));
+    const vx = dir * w * K * (0.08 + 0.45 * spread) * power, vy = -h * K * (0.6 + 0.55 * (1 - spread)) * power;
+    const term = h * (0.09 + 0.07 * r(3));                    // the falling speed once the air has slowed it
+    const e = 1 - Math.exp(-K * tau);
+    let x = ox + vx / K * e, y = oy + (vy - term) / K * e + term * tau;
+    // once slow, the paper sways side to side as it falls
+    const sway = (2 + 3 * r(4)) * u * Math.min(1, tau / 1.2);
+    x += Math.sin(tau * (2 + 2.5 * r(5)) + r(6) * 6.28) * sway;
+    if (y > h + 4 * u || x < -6 * u || x > w + 6 * u) continue;
+    const kind = r(7), c = PALETTE[Math.floor(r(8) * PALETTE.length)];
+    const flip = Math.cos(tau * (5 + 9 * r(9)) + r(10) * 6.28), spin = r(11) * 6.28 + tau * (r(12) - 0.5) * 8;
+    const light = 0.55 + 0.45 * Math.abs(flip) + (flip > 0 ? 0.08 : -0.08);
+    ctx.fillStyle = `rgb(${c.map((v) => Math.min(255, Math.round(v * light + (flip > 0.85 ? 60 : 0))))})`;
+    ctx.globalAlpha = tau > LIFE - 1 ? LIFE - tau : 1;
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(spin);
+    const s = (0.6 + 0.6 * r(13) + (r(14) > 0.9 ? 0.7 : 0)) * u;
+    if (kind < 0.62) { ctx.scale(1, Math.max(0.08, Math.abs(flip))); ctx.fillRect(-s, -s * 0.6, s * 2, s * 1.2); }
+    else if (kind < 0.85) { ctx.scale(Math.max(0.15, Math.abs(flip)), 1); ctx.fillRect(-s * 0.22, -s * 1.7, s * 0.44, s * 3.4); }
+    else { ctx.scale(1, Math.max(0.2, Math.abs(flip))); ctx.beginPath(); ctx.arc(0, 0, s * 0.7, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+let period = 2.6;
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = Math.max(0, Math.min(1, num('--amount', 1)));
+    period = Math.max(0.8, num('--speed', 2.6));
+    // the shots still in the air at t, oldest first; the first one fires just after t = 0
+    const t1 = t - 0.25, last = Math.floor(t1 / period);
+    for (let k = Math.floor((t1 - LIFE) / period); k <= last; k++) for (const side of [0, 1]) shot(k, side, t1, w, h, u, amount);
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

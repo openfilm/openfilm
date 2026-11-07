@@ -105,7 +105,7 @@ async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Pr
  * The project's exports, where they go by default, what this machine encodes, how many subtitle cues the film has, and
  * how big the project and its parts are.
  */
-export function listExports(projectId: string): Promise<{ exports: ExportJob[]; folder: string; can: ExportCapabilities; drafts?: { jianying: boolean; capcut: boolean }; subtitles?: number; project?: ProjectSizes }> {
+export function listExports(projectId: string): Promise<{ exports: ExportJob[]; folder: string; can: ExportCapabilities; drafts?: { jianying: boolean; capcut: boolean }; subtitles?: number; captionTracks?: boolean; project?: ProjectSizes }> {
   return call(endpoint(projectId), { cache: 'no-store' });
 }
 

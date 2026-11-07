@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "film-burn.html"
+  },
+  "durationMs": 800
+}

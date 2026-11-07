@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "social-actions.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Likes\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Comments\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Shares\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Heart\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Circles\", \"type\": \"var\", \"var\": \"--disc\"}]"
+    }
+  },
+  "durationMs": 4000
+}

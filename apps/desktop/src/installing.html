@@ -7,13 +7,13 @@
 <style>
   :root { color-scheme: light dark; }
   html, body { height: 100%; margin: 0; }
-  body { display: grid; place-items: center; background: #f2f2f2; color: #1f1f1f; font: 13px/1.5 -apple-system, system-ui, sans-serif; -webkit-app-region: drag; user-select: none; cursor: default; }
-  @media (prefers-color-scheme: dark) { body { background: #111; color: #dadada; } }
+  body { display: grid; place-items: center; background: #e9e9eb; color: #161619; font: 13px/1.5 -apple-system, system-ui, sans-serif; -webkit-app-region: drag; user-select: none; cursor: default; }
+  @media (prefers-color-scheme: dark) { body { background: #111114; color: #ebebed; } }
   main { width: 100%; padding: 0 28px; box-sizing: border-box; }
   h1 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
   p { margin: 0 0 14px; opacity: .65; }
   .bar { position: relative; height: 4px; border-radius: 2px; overflow: hidden; background: color-mix(in srgb, currentColor 12%, transparent); }
-  .bar::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 35%; border-radius: 2px; background: #1a93fe; animation: slide 1.2s ease-in-out infinite; }
+  .bar::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 35%; border-radius: 2px; background: #007d72; animation: slide 1.2s ease-in-out infinite; }
   @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
   @media (prefers-reduced-motion: reduce) { .bar::after { animation-duration: 3.6s; } }
 </style>

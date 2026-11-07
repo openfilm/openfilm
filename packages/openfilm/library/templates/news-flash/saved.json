@@ -1,0 +1,150 @@
+{
+ "version": 2,
+ "kind": "group",
+ "clips": [
+  {
+   "track": 0,
+   "at": 0.3,
+   "clip": {
+    "src": "news-breaking.html",
+    "time": [
+     0,
+     3
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Headline\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Strip\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Bar\", \"type\": \"var\", \"var\": \"--bar\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--ink\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.78,\"fit\":0.15}"
+    },
+    "size": {
+     "w": 1600,
+     "h": 260
+    },
+    "overrides": [
+     {
+      "fade": [
+       0,
+       0.3
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "track": 0,
+   "at": 3.8,
+   "clip": {
+    "src": "lower-news.html",
+    "time": [
+     0,
+     2.8
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Name\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Role\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Text on white\", \"type\": \"var\", \"var\": \"--ink\"}]",
+     "data-place": "{\"x\":0.36,\"y\":0.78,\"fit\":0.18}"
+    },
+    "size": {
+     "w": 1200,
+     "h": 300
+    },
+    "overrides": [
+     {
+      "fade": [
+       0,
+       0.3
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 0,
+   "clip": {
+    "src": "news-ticker.html",
+    "time": [
+     0,
+     10
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Label\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"News\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Label\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Bar\", \"type\": \"var\", \"var\": \"--bar\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.965,\"fit\":0.07}"
+    },
+    "size": {
+     "w": 1920,
+     "h": 110
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 3.1,
+   "clip": {
+    "src": "scan-tear.html",
+    "time": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 6.15,
+   "clip": {
+    "src": "slats.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.9
+    ]
+   }
+  },
+  {
+   "track": 3,
+   "at": 0,
+   "clip": {
+    "src": "example-1.jpg",
+    "time": [
+     0,
+     3.4
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "1"
+    }
+   }
+  },
+  {
+   "track": 3,
+   "at": 3.4,
+   "clip": {
+    "src": "example-2.jpg",
+    "time": [
+     0,
+     3.2
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "2"
+    }
+   }
+  },
+  {
+   "track": 3,
+   "at": 6.6,
+   "clip": {
+    "src": "example-3.jpg",
+    "time": [
+     0,
+     3.4
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "3"
+    }
+   }
+  }
+ ],
+ "durationMs": 10000
+}

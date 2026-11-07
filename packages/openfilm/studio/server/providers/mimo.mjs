@@ -131,6 +131,7 @@ export default {
   env: 'MIMO_API_KEY',
   keysUrl: 'https://platform.xiaomimimo.com/console/api-keys',
   billingUrl: 'https://platform.xiaomimimo.com/console/recharge',
+  pricingUrl: 'https://mimo.mi.com/docs/price',
   verbs: ['voice', 'tts', 'asr'],
   models: MODELS,
   speechFormat: 'mp3',

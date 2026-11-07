@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Rainbow leak</title>
+<style>
+  /* what a clip of it may change: how strong the light is (0 to 1), how fast it sweeps */
+  :root { --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A rainbow light leak: a tall slanted band of light that splits into its colors at the edges, sweeping across the
+ * picture, with warm light breathing in from the side the band comes from. A page of OpenFilm's library (CC0): what
+ * it shows at t comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// the spectrum the band splits into, red at the leading edge
+// (light ones: laid over the picture with plain alpha, a color darker than the picture would dim it)
+const HUES = [[255, 90, 70], [255, 170, 60], [255, 235, 110], [140, 255, 160], [110, 225, 255], [140, 160, 255], [220, 140, 255]];
+// a soft elongated blob of one color, centered at x, as tall as the frame and more
+function blob(x, y, rx, ry, c, a) {
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(-0.32); ctx.scale(rx / 100, ry / 100);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 100);
+  g.addColorStop(0, `rgba(${c},${a})`); g.addColorStop(0.5, `rgba(${c},${a * 0.45})`); g.addColorStop(1, `rgba(${c},0)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 100, 0, 6.283); ctx.fill();
+  ctx.restore();
+}
+const smooth = (x) => x * x * (3 - 2 * x);
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), tt = t * num('--speed', 1);
+    ctx.globalCompositeOperation = 'lighter';
+    // two bands, half a sweep apart, each a little different every time; at t = 0 the first is already on its way
+    for (const [lane, off, strength] of [[0, 1.6, 1], [1, 4.4, 0.6]]) {
+      const P = 5.6, k = Math.floor((tt + off) / P) * 2 + lane, p = ((tt + off) % P) / P;
+      const spread = 6 + hash(k + 0.4) * 5;
+      const x = -0.4 * w + smooth(p) * 1.8 * w, y = h * (0.35 + hash(k + 0.7) * 0.3);
+      const fade = Math.sin(Math.PI * p) * amount * strength;
+      HUES.forEach((c, i) => blob(x + (i - 3) * spread * u, y, (12 + spread) * u, 0.95 * Math.max(w, h), c, 0.2 * fade));
+      blob(x, y, 9 * u, 0.75 * Math.max(w, h), [255, 250, 235], 0.3 * fade);
+    }
+    // warm light leaking in from the left edge, breathing
+    const breathe = 0.65 + 0.35 * Math.sin(tt * 1.1) * Math.sin(tt * 0.37 + 1);
+    const g = ctx.createRadialGradient(-0.05 * w, h * 0.35, 0, -0.05 * w, h * 0.35, 0.75 * Math.max(w, h));
+    g.addColorStop(0, `rgba(255,120,40,${0.55 * breathe * amount})`); g.addColorStop(0.35, `rgba(255,60,80,${0.22 * breathe * amount})`); g.addColorStop(1, 'rgba(255,40,80,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    const g2 = ctx.createRadialGradient(1.05 * w, h * 0.9, 0, 1.05 * w, h * 0.9, 0.5 * Math.max(w, h));
+    g2.addColorStop(0, `rgba(255,200,90,${0.35 * (1.3 - breathe) * amount})`); g2.addColorStop(1, 'rgba(255,200,90,0)');
+    ctx.fillStyle = g2; ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

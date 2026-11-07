@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "fest-xmas.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Greeting\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Second line\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Tree\", \"type\": \"var\", \"var\": \"--tree\"}, {\"name\": \"Star\", \"type\": \"var\", \"var\": \"--star\"}]"
+    }
+  },
+  "durationMs": 4000
+}

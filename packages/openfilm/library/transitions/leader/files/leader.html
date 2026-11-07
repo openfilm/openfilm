@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Leader</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A film leader flickers in and counts down, its hand sweeping round, 2 before the cut and 1 after it; then a
+ * white flash and the next shot. It lasts 1.2 s and covers the cut at its middle: put its middle on the cut. A
+ * page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame so it fits
+ * a stage of any shape.
+ */
+const D = 1.2;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const outQuad = (x) => 1 - (1 - x) * (1 - x);
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+function draw(u) {
+  const n = Math.floor(u * D * 24), cx = W / 2, cy = H / 2, R = Math.hypot(W, H);
+  /* the leader flickers in, and is gone in a flash */
+  const flick = [0, 0.5, 0.2, 0.85, 0.6, 1];
+  const inA = u < 0.25 ? flick[Math.min(5, Math.floor(seg(u, 0.12, 0.25) * 6))] : 1;
+  const a = u < 0.75 ? inA : 0;
+  if (a > 0) {
+    g.globalAlpha = a;
+    const bg = g.createRadialGradient(cx, cy, 0, cx, cy, R * 0.6);
+    const b = 1 - 0.06 * hash(n);
+    bg.addColorStop(0, `rgb(${Math.round(196 * b)}, ${Math.round(189 * b)}, ${Math.round(176 * b)})`);
+    bg.addColorStop(1, `rgb(${Math.round(92 * b)}, ${Math.round(88 * b)}, ${Math.round(80 * b)})`);
+    g.fillStyle = bg;
+    g.fillRect(0, 0, W, H);
+    /* the sweep: one turn for each number */
+    const p = u < 0.5 ? seg(u, 0.2, 0.5) : seg(u, 0.5, 0.75);
+    g.fillStyle = 'rgba(30, 26, 22, 0.32)';
+    g.beginPath();
+    g.moveTo(cx, cy);
+    g.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + p * TAU);
+    g.closePath();
+    g.fill();
+    /* cross hairs and two rings */
+    g.strokeStyle = 'rgba(25, 22, 18, 0.85)';
+    g.lineWidth = Math.max(1.5, H * 0.006);
+    g.beginPath();
+    g.moveTo(0, cy); g.lineTo(W, cy);
+    g.moveTo(cx, 0); g.lineTo(cx, H);
+    g.stroke();
+    g.lineWidth = Math.max(2, H * 0.01);
+    for (const r of [H * 0.3, H * 0.4]) { g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.stroke(); }
+    /* the number */
+    g.fillStyle = 'rgba(20, 18, 15, 0.92)';
+    g.font = `700 ${Math.round(H * 0.42)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(u < 0.5 ? '2' : '1', cx, cy + H * 0.015);
+    /* grain and a scratch */
+    for (let i = 0; i < 160; i++) {
+      g.fillStyle = hash(n * 7 + i) > 0.5 ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.3)';
+      g.fillRect(hash(n * 11 + i) * W, hash(n * 13 + i) * H, 1.5, 1.5);
+    }
+    g.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    g.fillRect(hash(Math.floor(n / 4)) * W, 0, 1, H);
+    g.globalAlpha = 1;
+  }
+  /* the white flash at the end */
+  const f = u < 0.75 ? 0 : 1 - outQuad(seg(u, 0.75, 0.95));
+  if (f > 0) {
+    g.fillStyle = `rgba(255, 252, 244, ${f})`;
+    g.fillRect(0, 0, W, H);
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

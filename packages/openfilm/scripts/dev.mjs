@@ -18,12 +18,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DEV = join(ROOT, '.dev');
-/* the official skills from a checkout of openfilm/skills beside this repository, when there is one, so a change to a
-   skill shows at once; without one, the copy this package releases */
-const SKILLS = join(ROOT, '..', '..', '..', 'skills', 'skills');
 const env = {
   ...process.env,
-  ...(existsSync(SKILLS) && !process.env.OPENFILM_OFFICIAL_SKILLS ? { OPENFILM_OFFICIAL_SKILLS: SKILLS } : {}),
   OPENFILM_HOME: join(DEV, 'home'),
   OPENFILM_EXPORTS: join(DEV, 'exports'),
   /* the person's library, wherever they chose to keep it (src/locations.mjs) */
@@ -54,7 +50,7 @@ process.on('exit', () => {
 const BIN = join(DEV, 'bin');
 mkdirSync(BIN, { recursive: true });
 const CLI = join(ROOT, 'bin', 'openfilm.mjs');
-const SHARED = ['OPENFILM_HOME', 'OPENFILM_LIBRARY', 'OPENFILM_SHARED_HOME', 'OPENFILM_EXPORTS', 'OPENFILM_STUDIO_PORT', 'OPENFILM_NO_UPDATE_CHECK', 'OPENFILM_OFFICIAL_SKILLS'].filter((k) => env[k]);
+const SHARED = ['OPENFILM_HOME', 'OPENFILM_LIBRARY', 'OPENFILM_SHARED_HOME', 'OPENFILM_EXPORTS', 'OPENFILM_STUDIO_PORT', 'OPENFILM_NO_UPDATE_CHECK', 'OPENFILM_SKILLS_INDEX'].filter((k) => env[k]);
 const sh = join(BIN, 'openfilm');
 writeFileSync(sh, `#!/bin/sh\n${SHARED.map((k) => `export ${k}='${env[k]}'`).join('\n')}\nOPENFILM_RUN="${sh}" exec '${process.execPath}' '${CLI}' "$@"\n`);
 chmodSync(sh, 0o755);

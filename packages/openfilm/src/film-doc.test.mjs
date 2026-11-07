@@ -150,10 +150,37 @@ test('a film runs no script, and holds nothing but tracks of clips', () => {
   assert.match(said('<p>Title</p>'), /<p> — a film's body is its tracks/);
   assert.match(said('<section><video src="a.mp4"></section>'), /<video src="a\.mp4"> has no <\/video>/);
   assert.match(said('<section><video src="a.mp4#start=2"></video></section>'), /src's fragment says which seconds of the file it plays, like src="a\.mp4#t=2,6"/);
-  assert.match(said(page([[]], '<style>.card { transition: opacity 1s }</style>')), /film\.html:4: a film's CSS holds still/);
-  assert.match(said('<section><img src="a.png#t=0,1" style="animation: spin 2s"></section>'), /a film's CSS holds still/);
+  assert.match(said(page([[]], '<style>.card { transition: opacity 1s }</style>')), /film\.html:4: a transition's progress is history/);
+  assert.match(said('<section><img src="a.png#t=0,1" style="transition: opacity 1s"></section>'), /a transition's progress is history/);
   assert.equal(said(page([[]], '<style>.card { border-radius: 8px }</style>')), '');
   assert.match(said('<section><iframe src="a.html" volume="0.5"></iframe><img src="b.png#t=0,1" speed="2"></section>'), /a page has no sound: a sound is a clip of its own[\s\S]*a still has no speed/);
+});
+
+test('a clip moves by CSS animation on its own time: keyframes in the film\'s style move it on top of its box, never place it', () => {
+  const css = '<style>@keyframes push { from { translate: 100vw 0; opacity: 0 } to { translate: 0 0; opacity: 1 } } @keyframes zoom { to { scale: 1.1; rotate: 4deg } }</style>';
+  const text = page([['<video src="a.mp4#t=0,4" style="left: 0px; top: 0px; width: 1080px; animation: push .6s ease-out both, zoom var(--clip-length) linear both"></video>']], css);
+  assert.equal(said(text), '');
+  const { doc } = readFilmFile(text);
+  assert.equal(doc.tracks[0].clips[0].style, 'animation: push .6s ease-out both, zoom var(--clip-length) linear both');
+  assert.match(said(page([[]], '<style>@keyframes slide { to { left: 200px } }</style>')), /@keyframes slide: left would place the clip — keyframes move a picture with translate/);
+  assert.match(said(page([[]], '<style>@keyframes spin { to { transform: rotate(90deg) } }</style>')), /@keyframes spin: transform would place the clip/);
+  /* still, a clip is placed only by its box */
+  assert.match(said('<section><img src="a.png#t=0,1" style="translate: 10px 0"></section>'), /translate would move the clip/);
+});
+
+test('the film\'s keyframes are read, and written back only where they changed', () => {
+  const text = page([['<img id="a" src="a.png#t=0,2" style="animation: a--scale 2s linear both">']], '<meta name="viewport" content="width=1080, height=1920">\n<style>\n  .card { border-radius: 8px }\n  @keyframes a--scale { 0% { scale: 1 } 100% { scale: 1.2 } }\n  @keyframes old { to { opacity: 0 } }\n</style>');
+  const { value } = readFilmFile(text);
+  assert.deepEqual(value.keyframes, { 'a--scale': '0% { scale: 1 } 100% { scale: 1.2 }', old: 'to { opacity: 0 }' });
+  /* not said: as the file has them */
+  assert.equal(filmHtml({ stage: value.stage, tracks: value.tracks }, text), text);
+  const next = filmHtml({ ...value, keyframes: { 'a--scale': '0% { scale: 1 } 100% { scale: 1.5 }', 'a--rotate': '0% { rotate: 0deg } 100% { rotate: 8deg }' } }, text);
+  assert.match(next, /\.card \{ border-radius: 8px \}\n  @keyframes a--scale \{ 0% \{ scale: 1 \} 100% \{ scale: 1\.5 \} \}\n  @keyframes a--rotate \{ 0% \{ rotate: 0deg \} 100% \{ rotate: 8deg \} \}\n<\/style>/);
+  assert.doesNotMatch(next, /@keyframes old/);
+  assert.deepEqual(readFilmFile(next).problems, []);
+  /* a film without a <style> gets one */
+  const bare = page([['<img id="a" src="a.png#t=0,2">']]);
+  assert.match(filmHtml({ ...readFilmFile(bare).value, keyframes: { k: 'to { scale: 2 }' } }, bare), /<style>\n  @keyframes k \{ to \{ scale: 2 \} \}\n<\/style>\n/);
 });
 
 test('what the value says wrong is said at the clip\'s line', () => {
@@ -220,7 +247,7 @@ test('ids: missing ones are named after their source, duplicates refused', () =>
 });
 
 test('the value has only stage and tracks', () => {
-  assert.match(readFilm({ tracks: [], subtitles: { language: 'en' } }).problems[0], /is a stage and its tracks; there is nothing else: subtitles/);
+  assert.match(readFilm({ tracks: [], subtitles: { language: 'en' } }).problems[0], /is a stage, its tracks and the keyframes its clips move by; there is nothing else: subtitles/);
   assert.throws(() => parseFilm({ stage: { w: 0, h: 1 }, tracks: [] }), /^Error: film\.html wants a picture size of positive whole numbers: <meta name="viewport"/);
   assert.deepEqual(parseFilm({ tracks: [] }).stage, { w: 1920, h: 1080 });
 });
@@ -238,6 +265,13 @@ test('clipSpan: trims, speed, stills and pages', () => {
   assert.deepEqual(clipSpan({ src: 'a.png', time: [1, 5] }, undefined), { from: 1, to: 5, speed: 1, length: 4 });
   assert.throws(() => clipSpan({ src: 'a.png', time: [4] }, undefined, 'w'), /a still has no length of its own/);
   assert.throws(() => clipSpan({ src: 'a.mp4', time: [2, 12] }, 10, 'w'), /#t=2,12 ends past the file's length of 10 s/);
+  /* a trim to the end, written to the millisecond (65 frames at 30 fps): the file's end, not past it */
+  assert.deepEqual(clipSpan({ src: 'a.mp4', time: [0, 2.167] }, 65 / 30), { from: 0, to: 2.167, speed: 1, length: 2.167 });
+  assert.equal(clipSpan({ src: 'a.mp4', time: [2.167, 2.167] }, 65 / 30).length, 0);
+  assert.throws(() => clipSpan({ src: 'a.mp4', time: [0, 2.168] }, 65 / 30, 'w'), /#t=0,2.168 ends past the file's length/);
+  /* a length the timeline reads as 8.063 (whole milliseconds, rounded down), its end written 8.064: 0.8 ms past, the file's end */
+  assert.equal(clipSpan({ src: 'a.mp4', time: [0, 8.064] }, 8.0632).to, 8.064);
+  assert.equal(clipSpan({ src: 'a.mp4', time: [0, 8.064] }, 8.063991).to, 8.064);
   /* a page without a duration has no end: its #t= is its length, and without one it is said */
   assert.deepEqual(clipSpan({ src: 'p.html', time: [1, 5] }, undefined), { from: 1, to: 5, speed: 1, length: 4 });
   assert.throws(() => clipSpan({ src: 'p.html', time: [1] }, undefined, 'clip "p" (p.html)'), /clip "p" \(p\.html\): this page has no duration, so it has no end of its own/);

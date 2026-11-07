@@ -7,6 +7,9 @@ import { changeSettings, cleanKey, modelFor, providerKey, providersFile, readSet
 import { listProviders } from './providers/index.mjs';
 import { startStudio } from './server.mjs';
 
+/* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
+process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
+
 const KEY = 'xi-secret-key-abcdef1234';
 let studio;
 const opened = [];
@@ -70,7 +73,7 @@ test('the providers API: keys go in and never come back out; choices for each ki
   assert.ok(!text.includes('sk-test-ABCDEFGH9876') && !text.includes(KEY));
   let state = JSON.parse(text);
   const openai = state.providers.find((p) => p.id === 'openai');
-  assert.deepEqual(openai, { id: 'openai', name: 'OpenAI', verbs: ['voice', 'tts', 'image', 'asr', 'translate'], models: listProviders().find((p) => p.id === 'openai').models, keysUrl: 'https://platform.openai.com/api-keys', env: 'OPENAI_API_KEY', envKey: false, source: 'file', last4: '9876' });
+  assert.deepEqual(openai, { id: 'openai', name: 'OpenAI', verbs: ['voice', 'tts', 'image', 'asr', 'translate'], models: listProviders().find((p) => p.id === 'openai').models, keysUrl: 'https://platform.openai.com/api-keys', pricingUrl: 'https://developers.openai.com/api/docs/pricing', env: 'OPENAI_API_KEY', envKey: false, source: 'file', last4: '9876', signIn: false, account: null });
   /* a new key takes the kinds nothing serves yet, and only those it can do */
   assert.equal(state.use.image, 'openai');
   assert.equal(state.use['image-search'], null);
@@ -81,7 +84,7 @@ test('the providers API: keys go in and never come back out; choices for each ki
   try {
     text = await (await api('/api/providers')).text();
     assert.ok(!text.includes('fal-env-key-00001111'));
-    assert.deepEqual(JSON.parse(text).providers.find((p) => p.id === 'fal'), { id: 'fal', name: 'fal.ai', verbs: ['image', 'video', 'music', 'sfx'], models: listProviders().find((p) => p.id === 'fal').models, keysUrl: 'https://fal.ai/dashboard/keys', env: 'FAL_KEY', envKey: true, source: 'env', last4: '1111' });
+    assert.deepEqual(JSON.parse(text).providers.find((p) => p.id === 'fal'), { id: 'fal', name: 'fal.ai', verbs: ['image', 'video', 'music', 'sfx'], models: listProviders().find((p) => p.id === 'fal').models, keysUrl: 'https://fal.ai/dashboard/keys', pricingUrl: 'https://fal.ai/pricing', env: 'FAL_KEY', envKey: true, source: 'env', last4: '1111', signIn: false, account: null });
     let fal = (await (await api('/api/providers/fal/key', { method: 'DELETE' })).json()).providers.find((p) => p.id === 'fal');
     assert.deepEqual([fal.source, fal.envKey], [null, true]);
     fal = (await (await api('/api/providers/fal/key', { method: 'PUT', body: { env: true } })).json()).providers.find((p) => p.id === 'fal');
@@ -193,4 +196,15 @@ test('what a newer OpenFilm keeps in providers.json stays when this one writes i
   assert.equal(written.custom[0].askFirst, true);
   assert.equal(written.custom[0].note, 'Transcribes');
   assert.equal(written.keys.openai, 'sk-new-0123456789');
+});
+
+test('the library is searched by meaning at OpenFilm\'s service unless turned off, and the choice is kept', async () => {
+  let state = await (await api('/api/providers')).json();
+  assert.equal(state.librarySearch, 'openfilm', 'on by default');
+  state = await (await api('/api/providers/library-search', { method: 'PUT', body: { on: false } })).json();
+  assert.equal(state.librarySearch, null);
+  assert.equal((await readSettings()).libraryOff, true);
+  assert.equal((await api('/api/providers/library-search', { method: 'PUT', body: { on: 'yes' } })).status, 400);
+  state = await (await api('/api/providers/library-search', { method: 'PUT', body: { on: true } })).json();
+  assert.equal(state.librarySearch, 'openfilm');
 });

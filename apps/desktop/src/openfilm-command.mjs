@@ -39,8 +39,18 @@ export function commandScriptWindows(node, cli, { ffmpeg = null, env = {} } = {}
 }
 
 /**
+ * The command in `bin` as an agent's shell types it: its whole path, quoted. Some agents' shells read the person's
+ * shell profile again (Codex, Cursor, CodeBuddy), and a PATH set there can put another `openfilm` before the app's: an
+ * older one installed globally, on the person's own Studio. Null on Windows, where the name on the PATH is kept.
+ */
+export function openfilmCommand(bin, platform = process.platform) {
+  return platform === 'win32' ? null : sq(`${bin}/openfilm`);
+}
+
+/**
  * Write the command into `<dir>/bin` and answer that folder, for PATH. `ffmpeg`: the app's ffmpeg folder, first on the
- * command's PATH; `env`: what else it runs with.
+ * command's PATH; `env`: what else it runs with. It names itself by its whole path (OPENFILM_RUN, openfilmCommand) in
+ * all it prints, the manual too.
  */
 export function installOpenfilmCommand(dir, { node = nodeBinary(), platform = process.platform, ffmpeg = null, env = {} } = {}) {
   const bin = join(dir, 'bin');
@@ -50,7 +60,7 @@ export function installOpenfilmCommand(dir, { node = nodeBinary(), platform = pr
     return bin;
   }
   const file = join(bin, 'openfilm');
-  writeFileSync(file, commandScript(node, openfilmCli(), { ffmpeg, env }));
+  writeFileSync(file, commandScript(node, openfilmCli(), { ffmpeg, env: { ...env, OPENFILM_RUN: openfilmCommand(bin, platform) } }));
   chmodSync(file, 0o755);
   return bin;
 }

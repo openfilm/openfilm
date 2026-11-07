@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "fest-newyear.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Greeting\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Year\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Year\", \"type\": \"var\", \"var\": \"--gold\"}, {\"name\": \"Fireworks\", \"type\": \"var\", \"var\": \"--c1\"}, {\"name\": \"Second fireworks\", \"type\": \"var\", \"var\": \"--c2\"}]"
+    }
+  },
+  "durationMs": 4000
+}

@@ -12,9 +12,8 @@ const NAME = 'ElevenLabs';
 /** the models it makes each kind of media with, the default first (https://elevenlabs.io/docs/models) */
 const MODELS = {
   tts: [
-    { id: 'eleven_multilingual_v2', name: 'Multilingual v2' },
     { id: 'eleven_v4', name: 'Eleven v4' },
-    { id: 'eleven_flash_v2_5', name: 'Flash v2.5' },
+    { id: 'eleven_v4_turbo', name: 'Eleven v4 Turbo' },
   ],
   sfx: [{ id: 'eleven_text_to_sound_v2', name: 'Sound Effects v2' }],
   music: [{ id: 'music_v2_5', name: 'Music v2.5' }, { id: 'music_v2', name: 'Music v2' }],
@@ -29,6 +28,7 @@ export default {
   env: 'ELEVENLABS_API_KEY',
   keysUrl: 'https://elevenlabs.io/app/settings/api-keys',
   billingUrl: 'https://elevenlabs.io/app/subscription',
+  pricingUrl: 'https://elevenlabs.io/pricing/api',
   verbs: ['voice', 'tts', 'sfx', 'music', 'asr'],
   models: MODELS,
   async run(verb, args, ctx) {

@@ -1,0 +1,313 @@
+{
+ "version": 2,
+ "kind": "group",
+ "clips": [
+  {
+   "track": 0,
+   "at": 0.3,
+   "clip": {
+    "src": "chapter-number.html",
+    "time": [
+     0,
+     2.2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Number\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Title\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.32}"
+    },
+    "size": {
+     "w": 1000,
+     "h": 450
+    },
+    "overrides": [
+     {
+      "at": ".t1",
+      "text": "01"
+     },
+     {
+      "at": ".t2",
+      "text": "HOW TO"
+     },
+     {
+      "at": ".t3",
+      "text": "A perfect breakfast"
+     },
+     {
+      "fade": [
+       0,
+       0.3
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "track": 0,
+   "at": 2.8,
+   "clip": {
+    "src": "callout-step.html",
+    "time": [
+     0,
+     2.7
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Number\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Step\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
+     "data-place": "{\"x\":0.4,\"y\":0.82,\"fit\":0.18}"
+    },
+    "size": {
+     "w": 800,
+     "h": 250
+    },
+    "overrides": [
+     {
+      "at": ".t1",
+      "text": "1"
+     },
+     {
+      "at": ".t2",
+      "text": "STEP ONE"
+     },
+     {
+      "at": ".t3",
+      "text": "Get everything ready"
+     },
+     {
+      "fade": [
+       0,
+       0.25
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "track": 0,
+   "at": 5.8,
+   "clip": {
+    "src": "callout-step.html",
+    "time": [
+     0,
+     2.7
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Number\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Step\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
+     "data-place": "{\"x\":0.4,\"y\":0.82,\"fit\":0.18}"
+    },
+    "size": {
+     "w": 800,
+     "h": 250
+    },
+    "overrides": [
+     {
+      "at": ".t1",
+      "text": "2"
+     },
+     {
+      "at": ".t2",
+      "text": "STEP TWO"
+     },
+     {
+      "at": ".t3",
+      "text": "Take it slowly"
+     },
+     {
+      "fade": [
+       0,
+       0.25
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "track": 0,
+   "at": 8.8,
+   "clip": {
+    "src": "callout-step.html",
+    "time": [
+     0,
+     2.7
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Number\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Step\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
+     "data-place": "{\"x\":0.4,\"y\":0.82,\"fit\":0.18}"
+    },
+    "size": {
+     "w": 800,
+     "h": 250
+    },
+    "overrides": [
+     {
+      "at": ".t1",
+      "text": "3"
+     },
+     {
+      "at": ".t2",
+      "text": "STEP THREE"
+     },
+     {
+      "at": ".t3",
+      "text": "Enjoy it"
+     },
+     {
+      "fade": [
+       0,
+       0.25
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "track": 0,
+   "at": 11.8,
+   "clip": {
+    "src": "social-subscribe.html",
+    "time": [
+     0,
+     2.4
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Button\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Clicked\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Button\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Clicked button\", \"type\": \"var\", \"var\": \"--done\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.2}"
+    },
+    "size": {
+     "w": 900,
+     "h": 250
+    }
+   }
+  },
+  {
+   "track": 1,
+   "at": 2.15,
+   "clip": {
+    "src": "slats.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.9
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 5.2,
+   "clip": {
+    "src": "pixels.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.8
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 8.15,
+   "clip": {
+    "src": "slats.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.9
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 11.2,
+   "clip": {
+    "src": "pixels.html",
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    },
+    "time": [
+     0,
+     0.8
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 0,
+   "clip": {
+    "src": "example-1.jpg",
+    "time": [
+     0,
+     2.6
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "1"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 2.6,
+   "clip": {
+    "src": "example-2.jpg",
+    "time": [
+     0,
+     3
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "2"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 5.6,
+   "clip": {
+    "src": "example-3.jpg",
+    "time": [
+     0,
+     3
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "3"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 8.6,
+   "clip": {
+    "src": "example-4.jpg",
+    "time": [
+     0,
+     3
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "4"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 11.6,
+   "clip": {
+    "src": "example-5.jpg",
+    "time": [
+     0,
+     2.6
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "5"
+    }
+   }
+  }
+ ],
+ "durationMs": 14200
+}

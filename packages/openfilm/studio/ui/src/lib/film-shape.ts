@@ -5,7 +5,7 @@
  * its source's own length and picture size (`spans`); media facts (whether a video has sound) come from probing.
  */
 import type { ClipLook } from './clip-look.ts';
-import { fileStem, filmAudioRoleOf, filmClipKind, filmDocLoc, filmSrcIsStill, filmTrackKind, type FilmDoc, type FilmTrack } from './film.ts';
+import { fileStem, filmAudioRoleOf, filmClipKind, filmDocLoc, filmSrcIsLibrary, filmSrcIsStill, filmTrackKind, type FilmDoc, type FilmTrack } from './film.ts';
 import type { TimelineFilm, TimelineBlock } from './timeline-layout.ts';
 
 /** Where the preview says a clip is: seconds on the film, and its source's own length (none for a still) and size. */
@@ -101,7 +101,8 @@ export function filmShape(
       const durMs = ms(span.end - span.at);
       const { from, speed } = trimOf(raw);
       const inMs = from ? ms(from) : undefined;
-      const still = filmSrcIsStill(clip.src);
+      /* a still, or a thing of the library: its left edge changes its length, never skipping into it */
+      const still = filmSrcIsStill(clip.src) || (kind === 'mg' && filmSrcIsLibrary(clip.src));
       const anchor: TimelineBlock['anchor'] = { move: 'at', resize: 'end', trimFrom: from, ...(still ? { still } : {}), parentStartMs: 0 };
       const volume = typeof raw.volume === 'number' ? raw.volume : undefined;
       const silent = volume != null && volume <= 0;

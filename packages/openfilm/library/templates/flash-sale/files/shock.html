@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Shock</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Shock waves ring out from the middle as the frame darkens, then it strobes black, white and red over the cut,
+ * and a ring blasts open onto the next shot. It lasts 0.6 s and covers the cut at its middle: put its middle on
+ * the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame
+ * so it fits a stage of any shape.
+ */
+const D = 0.6;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const inQuad = (x) => x * x;
+const outCubic = (x) => 1 - (1 - x) ** 3;
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+function draw(u) {
+  const cx = W / 2, cy = H / 2, R = Math.hypot(W, H) / 2, n = Math.floor(u * D * 30);
+  if (u < 0.3) {
+    /* darkening, with rings running out from the middle */
+    g.fillStyle = `rgba(0, 0, 0, ${0.65 * inQuad(seg(u, 0, 0.3))})`;
+    g.fillRect(0, 0, W, H);
+    for (let k = 0; k < 3; k++) {
+      const p = seg(u, k * 0.07, k * 0.07 + 0.2);
+      if (p <= 0 || p >= 1) continue;
+      g.strokeStyle = `rgba(255, 255, 255, ${0.9 * (1 - p)})`;
+      g.lineWidth = H * 0.04 * (1 - p) + 1;
+      g.beginPath();
+      g.arc(cx, cy, R * 1.1 * outCubic(p), 0, TAU);
+      g.stroke();
+    }
+    return;
+  }
+  if (u < 0.62) {
+    /* the strobe */
+    const seq = ['#000', '#fff', '#000', '#ff2a2a', '#fff', '#000', '#ff2a2a', '#000'];
+    g.fillStyle = seq[n % seq.length];
+    g.fillRect(0, 0, W, H);
+    /* impact lines through it */
+    g.strokeStyle = g.fillStyle === '#000000' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.35)';
+    g.lineWidth = 2;
+    for (let i = 0; i < 16; i++) {
+      const a = hash(i + n * 17) * TAU;
+      g.beginPath();
+      g.moveTo(cx + R * 0.2 * Math.cos(a), cy + R * 0.2 * Math.sin(a));
+      g.lineTo(cx + R * 1.2 * Math.cos(a), cy + R * 1.2 * Math.sin(a));
+      g.stroke();
+    }
+    return;
+  }
+  /* the blast: a hole that rushes open, a white ring on its edge */
+  const p = outCubic(seg(u, 0.62, 0.95)), r = R * 1.15 * p;
+  g.fillStyle = `rgba(0, 0, 0, ${1 - seg(u, 0.8, 1)})`;
+  g.beginPath();
+  g.rect(0, 0, W, H);
+  g.arc(cx, cy, r, 0, TAU, true);
+  g.fill('evenodd');
+  g.strokeStyle = `rgba(255, 255, 255, ${1 - p})`;
+  g.lineWidth = H * 0.05 * (1 - p) + 1;
+  g.beginPath();
+  g.arc(cx, cy, r, 0, TAU);
+  g.stroke();
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

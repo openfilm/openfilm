@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Notification bell</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ffd60a; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.in { transform-origin: 180px 200px; animation: in 0.5s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes in { from { transform: scale(0) rotate(-30deg); } }
+.sw { transform-origin: 180px 62px; animation: sw 1.6s ease-in-out 0.45s infinite; }
+@keyframes sw { 0%, 55%, 100% { transform: none; } 8% { transform: rotate(18deg); } 16% { transform: rotate(-16deg); } 24% { transform: rotate(12deg); } 32% { transform: rotate(-8deg); } 40% { transform: rotate(4deg); } 48% { transform: rotate(-1deg); } }
+.cl { transform-origin: 180px 62px; animation: cl 1.6s ease-in-out 0.5s infinite; }
+@keyframes cl { 0%, 55%, 100% { transform: none; } 8% { transform: rotate(-10deg); } 16% { transform: rotate(10deg); } 24% { transform: rotate(-7deg); } 32% { transform: rotate(5deg); } 40% { transform: rotate(-2deg); } }
+.wv path { fill: none; stroke: var(--color); stroke-width: 10; stroke-linecap: round; opacity: 0; animation: wv 1.6s cubic-bezier(.2, .8, .2, 1) 0.45s infinite; }
+@keyframes wv { 0%, 45%, 100% { opacity: 0; transform: none; } 6% { opacity: 1; } 30% { opacity: 0.9; transform: scale(1.08); } }
+.wv .l { transform-origin: 120px 150px; } .wv .r { transform-origin: 240px 150px; }
+.badge { transform-origin: 262px 98px; animation: b 0.45s cubic-bezier(.34, 1.56, .64, 1) 0.3s both; }
+@keyframes b { from { transform: scale(0); } }
+.label { font: 800 50px var(--font); fill: #ffffff; }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 360 360"><g class="in">
+<g class="wv"><path class="l" d="M74 104 Q56 150 74 196"/><path class="l" d="M44 84 Q16 150 44 216"/><path class="r" d="M286 104 Q304 150 286 196"/><path class="r" d="M316 84 Q344 150 316 216"/></g>
+<g class="cl"><circle cx="180" cy="268" r="26" fill="var(--color)"/><circle cx="180" cy="268" r="26" fill="#000000" opacity="0.2"/></g>
+<g class="sw">
+<path d="M180 68 C126 68 106 114 106 164 L106 212 L80 244 L280 244 L254 212 L254 164 C254 114 234 68 180 68 Z" fill="var(--color)" stroke="var(--color)" stroke-width="12" stroke-linejoin="round"/>
+<path d="M142 96 C124 110 118 134 118 160" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="10" stroke-linecap="round"/>
+<circle cx="180" cy="60" r="16" fill="var(--color)"/>
+</g>
+<g class="badge"><circle cx="262" cy="98" r="44" fill="#ff3b30" stroke="#ffffff" stroke-width="8"/><text class="label" x="262" y="116" text-anchor="middle">3</text></g>
+</g></svg>
+<script>
+/*
+ * A bell that pops in and keeps ringing, swinging on its top with waves of sound, a badge with a number on it. Its
+ * number and color are the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t
+ * alone; its CSS animations are held at t by the host.
+ */
+window.film = { width: 360, height: 360, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

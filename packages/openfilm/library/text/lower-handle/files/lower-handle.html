@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Account card</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff3b5c; --card: rgba(255, 255, 255, 0.96); --ink: #15161a; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; padding-left: 5vh; font-family: var(--font); }
+.c { display: flex; align-items: center; gap: 5vh; background: var(--card); color: var(--ink); border-radius: 40vh; padding: 5vh 6vh 5vh 5vh; box-shadow: 0 3vh 7vh rgba(0, 0, 0, 0.3); transform-origin: 15% 50%; animation: pop 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.av { position: relative; width: 62vh; height: 62vh; flex: none; border-radius: 50%; background: conic-gradient(from 200deg, #ffb347, var(--accent), #7a5cff, #ffb347); padding: 1.2vh; animation: spin 0.8s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.av span { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; border-radius: 50%; background: #23242b; color: #fff; font-size: 28vh; font-weight: 700; border: 1.6vh solid var(--card); }
+.tx { display: flex; flex-direction: column; gap: 1.6vh; animation: side 0.6s 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.nm { display: flex; align-items: center; gap: 2.4vh; font-size: 19vh; font-weight: 700; line-height: 1.05; white-space: pre; }
+.ok { width: 11vh; height: 11vh; border-radius: 50%; background: #1d9bf0; position: relative; flex: none; animation: ok 0.5s 0.6s cubic-bezier(0.3, 1.8, 0.5, 1) both; }
+.ok::after { content: ""; position: absolute; left: 3.7vh; top: 1.9vh; width: 3vh; height: 5.6vh; border: solid #fff; border-width: 0 1.4vh 1.4vh 0; transform: rotate(45deg); }
+.t2 { font-size: 11vh; font-weight: 500; opacity: 0.55; white-space: pre; }
+.bt { margin-left: 3vh; background: var(--accent); color: #fff; font-size: 11vh; font-weight: 700; padding: 4vh 8vh; border-radius: 12vh; white-space: pre; animation: btn 0.5s 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both, nudge 2.4s 1.4s ease-in-out infinite; }
+@keyframes pop { from { opacity: 0; transform: scale(0.4); } }
+@keyframes spin { from { transform: rotate(-120deg) scale(0.5); } }
+@keyframes side { from { opacity: 0; transform: translateX(-4vh); } }
+@keyframes ok { from { transform: scale(0); } }
+@keyframes btn { from { opacity: 0; transform: scale(0.3); } }
+@keyframes nudge { 0%, 70%, 100% { transform: scale(1); } 80% { transform: scale(1.08); } 90% { transform: scale(0.97); } }
+</style>
+</head>
+<body>
+<div class="w"><div class="c">
+  <div class="av"><span class="t3">K</span></div>
+  <div class="tx"><div class="nm"><span class="t1">Kai Walker</span><i class="ok"></i></div><span class="t2">@kai.outdoors</span></div>
+  <span class="bt t4">Follow</span>
+</div></div>
+<script>
+/*
+ * A rounded account card: a round badge with an initial, a name with a verified mark, a handle and a follow button.
+ * A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by
+ * the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

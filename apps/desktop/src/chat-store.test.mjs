@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { attachmentsDir, chatDir, describePaths, loadChat, logsDir, openLog, readLog, refsDir, saveAttachment, saveRefImage, saveSessions, saveTurn, unsavedTurns } from './chat-store.mjs';
+import { attachmentsDir, chatDir, describePaths, loadChat, logsDir, openLog, readLog, refsDir, saveAttachment, saveRefImage, saveSessions, saveTurn, unsavedTurns, writeModelLog } from './chat-store.mjs';
 
 const project = () => mkdtempSync(join(tmpdir(), 'of-chat-'));
 const turn = (id, createdAt) => ({ turn: { id, createdAt, sessionId: 's1', prompt: id }, items: [{ kind: 'text', text: id }] });
@@ -134,16 +134,134 @@ test('a path dragged in is said to be a file (with its size) or a folder, where 
   assert.deepEqual(describePaths('not a list'), []);
 });
 
-test('a log not grown since the sizes a reader has is not read again', async () => {
+test('a log read again from where a read stopped gives only what was written after; nothing new, nothing read', async () => {
   const dir = project();
   const log = openLog(dir, 't2');
   log.write('prompt', { text: 'hello' });
   const first = await logOnDisk(dir, 't2', 1);
-  assert.deepEqual(readLog(dir, 't2', { unless: { size: first.size, callsSize: first.callsSize } }), { same: true });
+  assert.equal(first.whole, true);
+  assert.deepEqual(readLog(dir, 't2', { since: first.at }), { same: true });
+  log.write('update', { update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'hi' } } });
   log.write('done', { ok: true });
   log.end();
-  await logOnDisk(dir, 't2', 2);
-  assert.deepEqual(readLog(dir, 't2', { unless: { size: first.size, callsSize: first.callsSize } }).events.map((e) => e.kind), ['prompt', 'done']);
+  const second = await until(() => readLog(dir, 't2', { since: first.at }), (r) => Boolean(r && !r.same && r.events.length >= 2));
+  assert.equal(second.whole, false);
+  assert.deepEqual(second.events.map((e) => e.kind), ['update', 'done'], 'only what came after');
+  /* a line being written waits for the next read, whole */
+  const file = join(logsDir(dir), 't2.jsonl');
+  appendFileSync(file, '{"t":9,"kind":"ex');
+  const half = readLog(dir, 't2', { since: second.at });
+  assert.deepEqual(half.events, []);
+  assert.equal(half.at.events, second.at.events, 'the half line is not passed');
+  appendFileSync(file, 'it"}\n');
+  assert.deepEqual(readLog(dir, 't2', { since: half.at }).events.map((e) => e.kind), ['exit']);
+});
+
+test('a long log is read as its first line and its end; a reader far behind is given it so again', () => {
+  const dir = project();
+  mkdirSync(logsDir(dir), { recursive: true });
+  const file = join(logsDir(dir), 'local-long.jsonl');
+  const filler = 'x'.repeat(200);
+  const lines = [JSON.stringify({ t: 0, kind: 'prompt', text: 'go' })];
+  for (let i = 1; i <= 60_000; i += 1) lines.push(JSON.stringify({ t: i, kind: 'update', update: { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: `${i} ${filler}` } } }));
+  lines.push(JSON.stringify({ t: 60_001, kind: 'done', ok: true }));
+  writeFileSync(file, `${lines.join('\n')}\n`);
+  const size = statSync(file).size;
+  assert.ok(size > 12 * 1024 * 1024);
+
+  const read = readLog(dir, 'local:long');
+  assert.equal(read.cut, true);
+  assert.equal(read.events[0].kind, 'prompt', 'the prompt, from the first line');
+  assert.equal(read.events.at(-1).kind, 'done', 'how it ended, from the end');
+  assert.ok(read.events.length < 45_000, `only the end is read: ${read.events.length}`);
+  const ts = read.events.slice(1).map((e) => e.t);
+  assert.ok(ts.every((t, i) => i === 0 || t === ts[i - 1] + 1), 'the end, whole lines in order, none broken');
+  assert.equal(read.at.events, size);
+
+  const behind = readLog(dir, 'local:long', { since: { events: 100, calls: 0, callsFile: 0 } });
+  assert.equal(behind.whole, true, 'too far behind: started over');
+  assert.equal(behind.events[0].kind, 'prompt');
+  assert.equal(behind.events.length, read.events.length);
+});
+
+test('a log from before pictures were kept as files is read whole: its pictures\' bytes do not crowd out its events', () => {
+  const dir = project();
+  mkdirSync(logsDir(dir), { recursive: true });
+  const picture = Buffer.alloc(768 * 1024, 3).toString('base64');
+  const lines = [JSON.stringify({ t: 0, kind: 'prompt', text: 'go' })];
+  for (let i = 1; i <= 3000; i += 1) {
+    lines.push(JSON.stringify(i % 100 === 0
+      ? { t: i, kind: 'update', update: { sessionUpdate: 'tool_call_update', toolCallId: `c${i}`, content: [{ type: 'content', content: { type: 'image', mimeType: 'image/png', data: picture } }] } }
+      : { t: i, kind: 'update', update: { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: `${i} ` } } }));
+  }
+  writeFileSync(join(logsDir(dir), 'local-old.jsonl'), `${lines.join('\n')}\n`);
+  assert.ok(statSync(join(logsDir(dir), 'local-old.jsonl')).size > 30 * 1024 * 1024);
+  const read = readLog(dir, 'local:old');
+  assert.equal(read.cut, false);
+  assert.equal(read.events.length, 3001, 'every event');
+  assert.deepEqual(read.events[100].update.content[0].content, { type: 'image', mimeType: 'image/png', bytes: 768 * 1024 });
+});
+
+test('a log keeps a picture as a file and cuts a very long text; past its most it keeps no more of the agent\'s updates', async () => {
+  const dir = project();
+  const data = Buffer.alloc(300 * 1024, 7).toString('base64');
+  const log = openLog(dir, 'local:big');
+  log.write('prompt', { text: 'look' });
+  log.write('update', { update: { sessionUpdate: 'tool_call_update', toolCallId: 'c1', status: 'completed', content: [{ type: 'content', content: { type: 'image', mimeType: 'image/png', data } }] } });
+  log.write('update', { update: { sessionUpdate: 'tool_call_update', toolCallId: 'c2', rawOutput: 'y'.repeat(2 * 1024 * 1024) } });
+  /* past 32 MB: more updates are counted, not kept; the turn's own end is */
+  const chunk = 'z'.repeat(900 * 1024);
+  for (let i = 0; i < 40; i += 1) log.write('update', { update: { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: chunk } } });
+  log.write('done', { ok: true });
+  log.end();
+  const file = join(logsDir(dir), 'local-big.jsonl');
+  await until(() => readLog(dir, 'local:big'), (r) => Boolean(r?.events.some((e) => e.kind === 'done') && r.events.at(-1).kind === 'cut'));
+  /* the file itself, line by line (a reader is given only its end) */
+  const read = { events: readFileSync(file, 'utf8').trim().split('\n').map((line) => JSON.parse(line)) };
+
+  const picture = read.events[1].update.content[0].content;
+  assert.equal(picture.data, undefined, 'no bytes in the line');
+  assert.equal(picture.bytes, 300 * 1024);
+  assert.match(picture.file, /^\.film\/logs\/images\/[0-9a-f]{40}\.png$/);
+  assert.ok(existsSync(join(dir, picture.file)));
+  const long = read.events[2].update.rawOutput;
+  assert.ok(long.length < 70 * 1024 && long.endsWith('more characters not kept]'), 'a 2 MB text cut');
+
+  assert.ok(statSync(file).size <= 32 * 1024 * 1024 + 4096, `bounded: ${statSync(file).size}`);
+  const kinds = read.events.map((e) => e.kind);
+  assert.equal(kinds.filter((k) => k === 'cut').length, 2, 'where it stopped keeping updates, and as it ended how many');
+  assert.ok(kinds.indexOf('done') > kinds.indexOf('cut'), 'the end kept after the cut');
+  const thoughts = kinds.filter((k) => k === 'update').length - 2;
+  assert.equal(read.events.at(-1).dropped, 40 - thoughts);
+});
+
+test('a model log is read without its pictures\' bytes, again only what is new, and whole once written again', async () => {
+  const dir = project();
+  const events = openLog(dir, 'local:m2');
+  events.write('prompt', { text: 'hi' });
+  events.end();
+  /* a log from before pictures were kept as files: the bytes in the line */
+  mkdirSync(logsDir(dir), { recursive: true });
+  const data = Buffer.alloc(100 * 1024, 1).toString('base64');
+  const call = (n, prefix) => JSON.stringify({ t: n, kind: 'call', startedAt: n, ms: 1, prefix, messages: [{ role: 'toolResult', toolName: 'read', content: [{ type: 'text', text: 'shot' }, { type: 'image', mimeType: 'image/png', data }] }], answer: null });
+  writeFileSync(join(logsDir(dir), 'local-m2.model.jsonl'), `${call(1, 0)}\n`);
+  const first = await until(() => readLog(dir, 'local:m2'), (r) => Boolean(r?.events.length));
+  const picture = first.calls[0].messages[0].content[1];
+  assert.deepEqual(picture, { type: 'image', mimeType: 'image/png', bytes: 100 * 1024 });
+  assert.equal(first.callsWhole, true);
+
+  appendFileSync(join(logsDir(dir), 'local-m2.model.jsonl'), `${call(2, 1)}\n`);
+  const more = readLog(dir, 'local:m2', { since: first.at });
+  assert.equal(more.callsWhole, false);
+  assert.deepEqual(more.calls.map((c) => c.startedAt), [2]);
+  assert.deepEqual(more.events, []);
+
+  writeModelLog(dir, 'local:m2', [{ startedAt: 3, ms: 1, prefix: 0, messages: [{ role: 'toolResult', content: [{ type: 'image', mimeType: 'image/png', data }] }], answer: null }]);
+  const again = readLog(dir, 'local:m2', { since: more.at });
+  assert.equal(again.callsWhole, true, 'written again: whole');
+  assert.deepEqual(again.calls.map((c) => c.startedAt), [3]);
+  assert.match(again.calls[0].messages[0].content[0].file, /\.png$/, 'written with its picture as a file');
+  assert.ok(statSync(join(logsDir(dir), 'local-m2.model.jsonl')).size < 2048);
 });
 
 test('a turn with a log and no saved record is found with its events; a saved one, one running, one with no meta are not', async () => {

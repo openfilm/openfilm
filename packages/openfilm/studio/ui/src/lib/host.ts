@@ -38,6 +38,11 @@ export interface StudioHost {
    */
   refer?: (ref: StudioRef) => void;
   /**
+   * A question for the chat, written for the person: `text` in the message being written, `refs` as its references
+   * (the examples' "Explain how it's made"). Sent only when the person sends it.
+   */
+  ask?: (request: { text: string; refs: StudioRef[] }) => void;
+  /**
    * What is selected in the project shown and where the playhead is, each time either changes (the time a few times
    * a second while playing): what a chat's "@current selection" and "@current time" point at.
    */
@@ -48,7 +53,7 @@ export interface StudioHost {
    */
   onHover?: (ref: StudioRef | null) => void;
   /**
-   * A panel of the app's own on Studio's right, under the top bar (its chat), drawn by the app in Studio's page: Studio's
+   * A panel of the app's own on Studio's left, under the top bar (its chat), drawn by the app in Studio's page: Studio's
    * top bar runs over it; below the bar Studio leaves `width` px free for it while it is open, and its Layout menu
    * shows and hides it as it does its own panes. The panel's element carries `data-studio-host-panel`, so Studio's
    * shortcuts leave the keys pressed in it alone. `onChange` tells Studio of a new width, or of the panel opened or
@@ -70,12 +75,12 @@ export interface StudioHost {
     onChange: (listener: (state: { open: boolean; width: number; assets?: { open: boolean; bottom: number } }) => void) => void;
   };
   /**
-   * The app's chat names a skill in the message being written: the skills (opened from the chat, `show-examples`)
-   * call this for one tried there, `newConversation` true (Try now: a new conversation with it named).
+   * The app's chat names a skill in the message being written: the library's skills call this for one tried there,
+   * `newConversation` true (Try now: a new conversation with it named).
    */
-  useSkill?: (skill: { name: string; description: string; newConversation?: boolean }) => void;
+  useSkill?: (skill: { name: string; description: string; title?: string; newConversation?: boolean }) => void;
   /** The person's own skills, where the app keeps them: one added, the app's own way (from a link, a folder, or made
-      with the agent). The Community's skills offer it. */
+      with the agent). */
   skills?: { add: () => void };
   /** Let the app ask Studio to show something: Studio calls this once with its listener. */
   onCommand?: (listener: (command: StudioCommand) => void) => void;
@@ -157,9 +162,9 @@ export interface StudioHost {
     onChange: (listener: (prefs: HostDeveloper) => void) => () => void;
   };
   /**
-   * The app shows each project in a tab of its own window and draws no tab strip of its own: Studio draws the tabs in
-   * its top bar (where the projects button and the title are otherwise), with a `+` that opens the projects window to
-   * pick the project a new tab shows (`open`; one open already is shown). With no tab open the page is at `/`, and
+   * The app keeps each open project in a tab of its own window, one shown at a time, and draws nothing of them: Studio
+   * names the one in front at its top bar's left, the way to the others and to the recent ones (ProjectSwitcher,
+   * `open`: one open already is shown). With no tab open the page is at `/`, and
    * Studio shows the projects there. `list` gives the tabs and which is this page's (`self`); `onChange` every change.
    * A page `report`s what it shows (its title, an export's progress, its project gone: its tab closes), and `retitle`s
    * another tab whose project it renamed. Studio's
@@ -329,10 +334,17 @@ export interface StudioRefImage { src?: string; viewer?: boolean; crop?: StageBo
  *   · file    a file of the project (the media pane): its path, kind, and length / size when known
  *   · example  an example film (ExamplesGallery), or a part of it (`start`–`end`, a `segment` it names): where it comes
  *             from (`url`), and its folder on this computer to read how it is made (`folder`: fetched by the app
- *             when the message is sent, if not yet)
+ *             when the message is sent, if not yet); `canvas` when its folder has the canvas it was made on
+ *   · node     a node of the project's canvas (components/canvas): its id there, what it is (`nodeKind`: note, file,
+ *             group, or what it makes: image, video, sfx, music), its words (a note's `text`, a making node's
+ *             `prompt`), its file (`path`: a file, or the version a making node shows) and how many versions it made
  *   · subtitle a line of the film's subtitles (the subtitle panel), or words picked inside one: their span on the film,
  *             the words, the language they are in when a translation is shown (`lang`), the line's number in the panel
  *             (`index`, from 1), and each word's own span when the transcript has word times (`words`)
+ *
+ *   · voice    a voice of the library (the assets drawer's Voices) to speak a voice-over in: its service (`provider`,
+ *             named `service`), its `id` there, and how the agent speaks in it now (`via`: the provider `openfilm get tts`
+ *             runs, `models`: those it may name; none: not connected yet)
  *
  * `image` is the picture its pill shows and the agent is given (see StudioRefImage): a clip's own frame, the viewer as
  * it is for a moment, a region and a layer, none for a range or a subtitle line.
@@ -345,8 +357,10 @@ export type StudioRef = (
   | { kind: 'range'; start: number; end: number; clipIds: string[] }
   | { kind: 'track'; track: number; label: string; clipIds: string[] }
   | { kind: 'file'; path: string; fileKind: string; duration?: number; w?: number; h?: number }
+  | { kind: 'node'; id: string; nodeKind: string; label: string; text?: string; prompt?: string; path?: string; versions?: number }
   | { kind: 'subtitle'; start: number; end: number; text: string; lang?: string | null; index?: number; words?: Array<{ text: string; start: number; end: number }> }
-  | { kind: 'example'; id: string; title: string; url: string; folder?: string; start?: number; end?: number; segment?: string; description?: string }
+  | { kind: 'example'; id: string; title: string; url: string; folder?: string; start?: number; end?: number; segment?: string; description?: string; canvas?: boolean }
+  | { kind: 'voice'; provider: string; service: string; id: string; name: string; via: string | null; models: string[]; language?: string | null; description?: string | null }
 ) & { image?: StudioRefImage };
 
 /**
@@ -385,20 +399,22 @@ export type StudioCommand =
   | { type: 'show-box'; time: number; box: StageBox }
   | { type: 'show-track'; track: number }
   | { type: 'show-file'; path: string }
+  /* a node of the canvas: the canvas opened, the node selected and in view */
+  | { type: 'show-node'; id: string }
   | { type: 'show-subtitle'; start: number; end: number }
   | { type: 'highlight'; ref: StudioRef | null }
   | { type: 'draft-refs'; refs: StudioRef[] }
   /* the app's chat sends the person to Settings (an agent to set up) */
   | { type: 'settings'; section?: 'agents' | 'providers' }
-  /* the app's chat opens the examples over the film, to point at one or a part of one, or name a skill; `open`: on
-     that skill's or example's page (a pill of one clicked) */
-  | { type: 'show-examples'; open?: CommunityItem }
-  /* the app's chat closes the examples it opened (show-examples): its "Use it" and "make one with the agent" land the
-     person in the conversation; a skill only added keeps the Skills page, where the person sees it */
-  | { type: 'close-examples' };
+  /* the app's chat shows the library's skills (on Discover, or a skill's page) or the projects window's examples
+     (an example's page); none: the examples */
+  | { type: 'show-examples'; open?: CommunityItem };
 
-/** A skill or an example in the Community, to open on its page. */
-export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string };
+/**
+ * A skill or an example to open on its page (a pill of one clicked); or `discover`, OpenFilm's skills to install (an
+ * empty project's "More skills"); or `examples`, the examples to start from (its "Start from an example").
+ */
+export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string } | { kind: 'discover' } | { kind: 'examples' };
 
 export const studioHost: StudioHost | null = (globalThis as { openfilmHost?: StudioHost }).openfilmHost ?? null;
 
@@ -426,6 +442,15 @@ export type HostPanel = {
   setWidth: (width: number, done?: boolean) => void;
 };
 
+/**
+ * The panel's width as --host-panel-width on the page, set the moment the app tells it: what sits beside the panel
+ * reads it from there, so while the panel's seam is dragged the two move in the same frame, before Studio renders.
+ */
+export const HOST_PANEL_WIDTH = 'var(--host-panel-width, 0px)';
+function keepPanelWidth({ open, width }: { open: boolean; width: number }) {
+  document.documentElement.style.setProperty('--host-panel-width', `${open ? width : 0}px`);
+}
+
 export function useHostPanel(): HostPanel | null {
   const panel = studioHost?.panel;
   const read = (next: { open: boolean; width: number; assets?: { open: boolean; bottom: number } }) => ({
@@ -435,7 +460,15 @@ export function useHostPanel(): HostPanel | null {
     bottom: Math.max(0, Number(next.assets?.bottom) || 0),
   });
   const [state, setState] = React.useState(() => (panel ? read(panel) : null));
-  React.useEffect(() => { panel?.onChange((next) => setState(read(next))); }, [panel]);
+  React.useEffect(() => {
+    if (!panel) return;
+    keepPanelWidth(read(panel));
+    panel.onChange((next) => {
+      const now = read(next);
+      keepPanelWidth(now);
+      setState(now);
+    });
+  }, [panel]);
   if (!panel || !state) return null;
   const setAssetsOpen = panel.setAssetsOpen;
   return {

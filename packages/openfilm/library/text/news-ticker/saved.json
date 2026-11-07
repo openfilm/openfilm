@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "news-ticker.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Label\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"News\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Label\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Bar\", \"type\": \"var\", \"var\": \"--bar\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 4000
+}

@@ -263,7 +263,7 @@ export function MomentPicker(props: MomentPickerProps) {
                 <Framed box={box} src={frames.get(url(ms))} />
               </button>
               <div className="flex min-w-0 items-center gap-1.5 text-[11px] tabular-nums">
-                <span className={`min-w-5 shrink-0 rounded-md px-1 py-0.5 text-center text-[10px] font-medium ${on ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'}`}>
+                <span className={`min-w-5 shrink-0 rounded-md px-1 py-0.5 text-center text-[10px] font-medium ${on ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'}`}>
                   {i + 1}
                 </span>
                 <span className={`min-w-0 truncate ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{formatTimecode(ms, { fps })}</span>
@@ -488,7 +488,7 @@ function Strip({ stripRef, stripW, view, setView, msPerPx, cells, cellStep, tota
           <span
             role="button"
             aria-label={formatTimecode(pin, { fps })}
-            className="absolute bottom-0 z-10 h-3.5 w-3.5 -translate-x-1/2 cursor-ew-resize rounded-full border-2 border-[var(--surface)] bg-[var(--accent)] shadow-[var(--shadow-sm)]"
+            className="absolute bottom-0 z-10 h-3.5 w-3.5 -translate-x-1/2 cursor-ew-resize rounded-full border-2 border-[var(--bg-raised)] bg-[var(--accent)] shadow-[var(--shadow-sm)]"
             style={{ left: x(pin) }}
             onPointerDown={(e) => {
               e.preventDefault();
@@ -542,7 +542,7 @@ function Strip({ stripRef, stripW, view, setView, msPerPx, cells, cellStep, tota
           </span>
         ))}
         {/* past the film's end */}
-        {x(totalMs) < stripW && <span className="absolute inset-y-0 right-0 bg-[var(--surface-2)]" style={{ left: x(totalMs) }} />}
+        {x(totalMs) < stripW && <span className="absolute inset-y-0 right-0 bg-[var(--bg-field)]" style={{ left: x(totalMs) }} />}
         {overlay}
         {pin != null && inSight(pin) && (
           <span className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-[var(--accent)]" style={{ left: x(pin) }} />

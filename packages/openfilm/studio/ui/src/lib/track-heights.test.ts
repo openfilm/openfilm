@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampTrackHeight, sizeOf, trackHeightsOf, withTrackHeight, TRACK_MAX_H, TRACK_MIN_H } from './track-heights.ts';
+import { clampTrackHeight, ownTrackHeight, sizeOf, trackHeightsOf, withTrackHeight, MAIN_TRACK_H, OVERLAY_TRACK_H, TRACK_MAX_H, TRACK_MIN_H } from './track-heights.ts';
 
 const tracks = (...ids: string[][]) => ids.map((clips) => ({ clips: clips.map((id) => ({ id })) }));
 
@@ -25,7 +25,13 @@ test('heights are kept between the least and the most a track can be', () => {
   assert.equal(clampTrackHeight(4), TRACK_MIN_H);
   assert.equal(clampTrackHeight(999), TRACK_MAX_H);
   assert.equal(clampTrackHeight(60.4), 60);
-  assert.equal(sizeOf(56, 'visual'), 'medium');
+  assert.equal(sizeOf(64, 'visual'), 'medium');
   assert.equal(sizeOf(30, 'audio'), 'small');
   assert.equal(sizeOf(57, 'visual'), null);
+});
+
+test('a track of the film is taller than one of things laid over it', () => {
+  assert.equal(ownTrackHeight({ kind: 'visual', main: true }), MAIN_TRACK_H);
+  assert.equal(ownTrackHeight({ kind: 'visual', main: true, overlay: true }), OVERLAY_TRACK_H);
+  assert.ok(ownTrackHeight({ kind: 'visual' }) > OVERLAY_TRACK_H * 2);
 });

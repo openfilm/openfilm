@@ -155,8 +155,48 @@ function newTrackSpot(tracks: readonly TimelineTrack[], docAt: number): AssetDro
   return { action: 'new-track', laneIndex: i >= 0 ? i : tracks.length, docAt };
 }
 
+/** A text of the library (a line of words, a name card, a callout…): it goes on a row of text (TimelineTrack `text`). */
+const libraryText = (file: { saved?: string | undefined }) => Boolean(file.saved?.startsWith('openfilm/text/'));
+
+/**
+ * A thing of the library laid over the film (a sticker, a text, an effect): never on the main track, where it would
+ * cut the film it goes over; on a track above it.
+ */
+export const libraryOverlay = (file: { saved?: string | undefined }) => /^openfilm\/(stickers|text|effects)\//.test(file.saved ?? '');
+
+/** A track with no film on it: things of the library laid over it only (stickers, text, effects), or nothing yet. */
+const overlayOnly = (track: TimelineTrack) => Boolean(track.overlay || track.text) || !track.blocks.length;
+
+/**
+ * A sound goes on a sound track (A), a picture (a page, a video, a still) on a picture track (V), as the timeline names
+ * them: let go over a track of the other kind, or above or below every row, onto the nearest track of its own kind
+ * free there (a text only on a row of text), else a new one where its kind's tracks are: a sound track under the
+ * last one, a picture track right above V1 (which stays the main track).
+ */
+function ownKindSpot(
+  tracks: readonly TimelineTrack[],
+  sound: boolean,
+  text: boolean,
+  range: { startMs: number; endMs: number },
+  near: number,
+  /** Not on the main track (a thing laid over the film: libraryOverlay). */
+  overMain = false,
+): AssetDropSpot {
+  const own = (tr: TimelineTrack) => tr.docIndex != null && !tr.captions && (tr.role === 'audio') === sound && !(overMain && tr.main && !overlayOnly(tr));
+  const free = tracks
+    .map((tr, laneIndex) => ({ tr, laneIndex }))
+    .filter(({ tr, laneIndex }) => own(tr) && !tr.locked && (!text || tr.text) && !rangeOverlaps(range, occupiedOf(tracks, tr.docIndex ?? null, laneIndex)))
+    .sort((a, b) => Math.abs(a.laneIndex - near) - Math.abs(b.laneIndex - near))[0];
+  if (free) return { action: 'into', laneIndex: free.laneIndex, lane: free.tr.lane, docIndex: free.tr.docIndex ?? null, locked: false };
+  const sounds = tracks.filter((tr) => tr.docIndex != null && tr.role === 'audio').map((tr) => tr.docIndex!);
+  const pictures = tracks.filter((tr) => tr.docIndex != null && tr.role !== 'audio' && !tr.captions).map((tr) => tr.docIndex!);
+  const docEnd = tracks.reduce((m, tr) => (tr.docIndex != null ? Math.max(m, tr.docIndex + 1) : m), 0);
+  if (sound) return newTrackSpot(tracks, sounds.length ? Math.max(...sounds) + 1 : pictures.length ? Math.max(...pictures) + 1 : docEnd);
+  return newTrackSpot(tracks, pictures.length ? Math.max(...pictures) : sounds.length ? Math.min(...sounds) : docEnd);
+}
+
 export function assetDropSpot(
-  file: Pick<ResourceDragItem, 'path' | 'kind' | 'durationMs'>,
+  file: Pick<ResourceDragItem, 'path' | 'kind' | 'durationMs' | 'saved'>,
   tracks: readonly TimelineTrack[],
   hit: AssetLaneHit | null,
   atMs: number,
@@ -168,14 +208,25 @@ export function assetDropSpot(
   const startMs = Math.max(0, atMs);
   const range = { startMs, endMs: startMs + durMs };
   const onFilm = tracks.filter((tr) => tr.docIndex != null);
+  const sound = assetClipKindOf(file) === 'audio';
 
-  /* pointing at a row: any track takes any clip (SPEC), so it goes onto the row under the pointer */
+  /* pointing at a row: it goes onto the row under the pointer, when it is a track of its kind (ownKindSpot) */
   if (hit && hit.lane >= 0 && hit.lane < tracks.length) {
     const target = tracks[hit.lane]!;
+    if (target.docIndex != null && !target.captions && (target.role === 'audio') !== sound) {
+      return ownKindSpot(tracks, sound, libraryText(file), range, hit.lane, libraryOverlay(file));
+    }
+    /* a sticker, text or effect let go on the main track: over it, on a track above (never cutting the film); onto
+       it when it holds no film, only things laid over it */
+    if (target.main && target.docIndex != null && libraryOverlay(file) && !overlayOnly(target)) return ownKindSpot(tracks, false, libraryText(file), range, hit.lane, true);
     /* its top or bottom edge = a new track above / below (without an edit mode) */
     if (target.docIndex != null && hit.band !== 'body' && !edit) {
       return newTrackSpot(tracks, hit.band === 'above' ? target.docIndex : target.docIndex + 1);
     }
+    /* a caption track takes its cues alone: anything dropped on it gets a row of its own, just above it */
+    if (target.captions && target.docIndex != null) return newTrackSpot(tracks, target.docIndex);
+    /* a text of the library onto a row of another kind: a row of text of its own, just above it */
+    if (libraryText(file) && target.docIndex != null && !target.text && !edit) return newTrackSpot(tracks, target.docIndex);
     if (target.locked) {
       return { action: 'into', laneIndex: hit.lane, lane: target.lane, docIndex: target.docIndex ?? null, locked: true };
     }
@@ -188,7 +239,9 @@ export function assetDropSpot(
     return { action: 'into', laneIndex: hit.lane, lane: target.lane, docIndex: null, locked: false };
   }
 
-  /* above or below every row: a new track at the top / bottom, like dragging a clip there (moveDestFor) */
+  /* above or below every row: a new track at the top / bottom, like dragging a clip there (moveDestFor); a sound where
+     the sound tracks are */
+  if (sound && onFilm.length) return ownKindSpot(tracks, true, false, range, hit && hit.lane < 0 ? 0 : tracks.length);
   if (hit && hit.lane < 0 && onFilm.length) return newTrackSpot(tracks, onFilm[0]!.docIndex!);
   const docEnd = onFilm.reduce((m, tr) => Math.max(m, tr.docIndex! + 1), 0);
   return { action: 'new-track', laneIndex: tracks.length, docAt: docEnd };
@@ -311,10 +364,12 @@ export type AssetDropPreview = {
   /** The row's lane name; null for a new track. */
   lane: string | null;
   error: 'locked' | null;
+  /** What it is drawn as once put in, when not by its kind: a line of words, or a sticker of the library. */
+  look?: 'text' | 'sticker';
 };
 
 export function assetDropPreview(
-  file: Pick<ResourceDragItem, 'path' | 'kind' | 'name' | 'durationMs'>,
+  file: Pick<ResourceDragItem, 'path' | 'kind' | 'name' | 'durationMs' | 'saved' | 'words'>,
   tracks: readonly TimelineTrack[],
   hit: AssetLaneHit | null,
   atMs: number,
@@ -326,7 +381,9 @@ export function assetDropPreview(
   if (!spot || !kind || !blockKind) return null;
   const durMs = dropDurMsOf(file);
   const startMs = Math.max(0, atMs);
-  const base = { kind, blockKind, title: clipTitleOf(file), startMs, endMs: startMs + durMs };
+  /* drawn as it will be: a line of words its words, a sticker as a sticker (the timeline's own looks for them) */
+  const look = file.words ? 'text' as const : file.saved?.startsWith('openfilm/stickers/') ? 'sticker' as const : undefined;
+  const base = { kind, blockKind, title: file.words ?? clipTitleOf(file), startMs, endMs: startMs + durMs, ...(look ? { look } : {}) };
   if (spot.action === 'new-track') {
     return { ...base, laneIndex: spot.laneIndex, newTrack: true, docAt: spot.docAt, lane: null, error: null };
   }

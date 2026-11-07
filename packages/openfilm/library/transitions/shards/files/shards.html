@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Shards</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #e63946; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Triangle shards fly in spinning, corner to corner, and lock together over the cut; then they break apart and
+ * fall away onto the next shot. It lasts 0.9 s and covers the cut at its middle: put its middle on the cut. A page
+ * of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame so it fits a
+ * stage of any shape.
+ */
+const D = 0.9;
+const DEFAULT = '#e63946';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const inCubic = (x) => x * x * x;
+const outCubic = (x) => 1 - (1 - x) ** 3;
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+const rgbOf = (c) => { g.fillStyle = '#000'; g.fillStyle = c; const s = String(g.fillStyle); return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number); };
+/* a colour made lighter (k > 0, toward white) or darker (k < 0, toward black), at an opacity */
+const tone = (c, k, a = 1) => `rgba(${rgbOf(c).map((x) => Math.round(k > 0 ? x + (255 - x) * k : x * (1 + k))).join(', ')}, ${a})`;
+
+function draw(u) {
+  const c = color(), cs = Math.min(W, H) / 3.5;
+  const cols = Math.ceil(W / cs), rows = Math.ceil(H / cs);
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      for (let half = 0; half < 2; half++) {
+        const x = i * cs, y = j * cs, id = (j * cols + i) * 2 + half;
+        const pts = half ? [[x, y], [x + cs, y], [x + cs, y + cs]] : [[x, y], [x + cs, y + cs], [x, y + cs]];
+        const mx = (pts[0][0] + pts[1][0] + pts[2][0]) / 3, my = (pts[0][1] + pts[1][1] + pts[2][1]) / 3;
+        /* corner to corner, a little scattered */
+        const k = clamp((mx / W + my / H) / 2) * 0.75 + hash(id) * 0.25;
+        let p, dx, dy, rot;
+        if (u < 0.5) {
+          p = outCubic(seg(u, k * 0.22, k * 0.22 + 0.2));
+          dx = (hash(id + 1) - 0.5) * W * 0.6 * (1 - p); dy = -H * 0.5 * (1 - p); rot = (hash(id + 2) - 0.5) * 4 * (1 - p);
+        } else {
+          const o = inCubic(seg(u, 0.56 + k * 0.22, k * 0.22 + 0.78));
+          p = 1 - o; dx = (hash(id + 3) - 0.5) * W * 0.4 * o; dy = H * 0.8 * o; rot = (hash(id + 4) - 0.5) * 4 * o;
+        }
+        if (p <= 0) continue;
+        g.save();
+        g.translate(mx + dx, my + dy);
+        g.rotate(rot);
+        g.scale(p * 1.04, p * 1.04);
+        g.beginPath();
+        pts.forEach(([px, py]) => g.lineTo(px - mx, py - my));
+        g.closePath();
+        g.fillStyle = tone(c, (hash(id + 6) - 0.6) * 0.4);
+        g.fill();
+        g.restore();
+      }
+    }
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

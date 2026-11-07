@@ -1,292 +1,301 @@
 'use client';
 
 import React from 'react';
-import { createPortal } from 'react-dom';
-import { History, Plus } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronDown, ChevronRight, MessageCircle, Pencil, Pin, PinOff, Plus, Search } from 'lucide-react';
 import { limitTitleWidth, SESSION_TITLE_MAX_WIDTH } from '@openfilm/shared';
+import { Popover, keepFocus } from './Popover';
 import { Tooltip } from './Tooltip';
 import { useT } from '@/i18n';
-import {
-  groupSessionsByRecency,
-  type ProjectSessionItem,
-  type SessionRecencyKey,
-} from '@/lib/project-sessions';
-import { PANE_BAR, PANE_BTN, PANE_BTN_ON, PANE_ICON, PANE_TITLE } from './dock-pane-bar';
-import { chatLayer } from '@/lib/chat-layer';
+import type { ProjectSessionItem } from '@/lib/project-sessions';
+import { useLocalAgentTurn } from '@/lib/local-agent-run';
+import { PANE_BAR, PANE_TITLE } from './dock-pane-bar';
+import { useHoverOpen } from 'openfilm/studio-ui/lib/hover-open.ts';
+import menu from 'openfilm/studio-ui/components/WorkspaceMenu.module.css';
 
-const RECENCY_I18N: Record<SessionRecencyKey, 'sidebar.searchToday' | 'sidebar.searchYesterday' | 'sidebar.searchPrevious7Days' | 'sidebar.searchEarlier'> = {
-  today: 'sidebar.searchToday',
-  yesterday: 'sidebar.searchYesterday',
-  week: 'sidebar.searchPrevious7Days',
-  earlier: 'sidebar.searchEarlier',
-};
+/** What a conversation's menus do: rename, pin, archive. */
+interface SessionActions {
+  onRenameSession?: (id: string, title: string) => void;
+  onPinSession?: (id: string, pinned: boolean) => void;
+  onArchiveSession?: (id: string, archived: boolean) => void;
+}
 
-/**
- * The title cell's maximum width.
- *
- * The title itself is already capped (SESSION_TITLE_MAX_WIDTH: 15 CJK or 30 Latin characters); this only keeps it
- * from filling the bar. So it must be a little wider than those 30 characters, or a title within the cap gets cut
- * while the bar has room to spare.
- */
-const TITLE_MAX = 'max-w-[15rem]';
-
-/**
- * The bar at the top of the conversation: the session's title on the left (none drawn without one), new and
- * history on the right.
- *
- * The title comes from the first message, so it appears once something has been said. Clicking it renames, no
- * separate pencil. The history popover has search on top and groups for today, yesterday, the past 7 days and
- * earlier.
- */
-export function ConversationSessionBar({
-  sessions,
-  currentSessionId,
-  onNewSession,
-  onSelectSession,
-  onRenameSession,
-  busy = false,
-}: {
-  sessions: ProjectSessionItem[];
-  currentSessionId: string;
-  /**
-   * A turn is running. A project runs one conversation at a time, so new and switch are off meanwhile; otherwise
-   * two agents would edit the same film.json in the same project folder. Both work again once the turn ends.
-   */
-  busy?: boolean;
-  onNewSession?: () => void;
-  onSelectSession?: (sessionId: string) => void;
-  onRenameSession?: (title: string) => Promise<void>;
+/** A title being renamed, in place: Enter or leaving keeps it, Esc lets it go (`onDone(null)`). */
+function TitleInput({ initial, placeholder, className, onDone }: {
+  initial: string; placeholder?: string; className: string; onDone: (title: string | null) => void;
 }) {
   const t = useT();
-  const current = sessions.find((item) => item.id === currentSessionId);
-  const label = current?.title.trim() ?? '';
-  const [renaming, setRenaming] = React.useState(false);
-  const [draft, setDraft] = React.useState(label);
-  const [historyPos, setHistoryPos] = React.useState<{ x: number; y: number } | null>(null);
-  const [query, setQuery] = React.useState('');
-  const searchRef = React.useRef<HTMLInputElement>(null);
-  const panelRef = React.useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = React.useState(initial);
+  const done = React.useRef(false);
+  const finish = (title: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    const clean = title?.replace(/\s+/g, ' ').trim();
+    onDone(clean && clean !== initial ? clean : null);
+  };
+  return (
+    <input
+      autoFocus
+      aria-label={t('projectMenu.rename')}
+      value={draft}
+      onFocus={(event) => event.currentTarget.select()}
+      onChange={(event) => {
+        const next = event.target.value;
+        setDraft((event.nativeEvent as InputEvent).isComposing ? next : limitTitleWidth(next, SESSION_TITLE_MAX_WIDTH));
+      }}
+      onCompositionEnd={(event) => setDraft(limitTitleWidth(event.currentTarget.value, SESSION_TITLE_MAX_WIDTH))}
+      onBlur={() => finish(draft)}
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) return;
+        if (event.key === 'Enter' || event.key === 'Escape') {
+          event.preventDefault(); event.stopPropagation();
+          finish(event.key === 'Enter' ? draft : null);
+        }
+      }}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
 
-  React.useEffect(() => {
-    setDraft(label);
-    setRenaming(false);
-  }, [label, currentSessionId]);
+/** How a conversation stands, as a dot beside its title, unless it is at rest and seen. */
+export type SessionStatus = 'working' | 'asking' | 'done' | 'error';
 
-  React.useEffect(() => {
-    if (!historyPos) return;
-    const close = () => setHistoryPos(null);
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setHistoryPos(null);
-    };
-    const onScroll = (event: Event) => {
-      if (panelRef.current?.contains(event.target as Node)) return;
-      close();
-    };
-    window.addEventListener('click', close);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('resize', close);
-    const focus = window.setTimeout(() => searchRef.current?.focus(), 0);
-    return () => {
-      window.clearTimeout(focus);
-      window.removeEventListener('click', close);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', close);
-    };
-  }, [historyPos]);
+/**
+ * A conversation's light, as a chat app's sessions have one: breathing while its agent works, amber while it waits
+ * for an answer, and once it has stopped where nobody was looking, blue (done) or red (failed) until it is shown.
+ */
+function StatusLight({ turnId, unseen }: { turnId: string | null; unseen?: 'done' | 'error' }) {
+  const t = useT();
+  const live = useLocalAgentTurn(turnId);
+  const status: SessionStatus | null = turnId
+    ? (live && (live.state.question || live.state.permission) ? 'asking' : 'working')
+    : unseen ?? null;
+  const words: Record<SessionStatus, string> = {
+    working: t('projectMenu.running'),
+    asking: t('projectMenu.asking'),
+    done: t('projectMenu.done'),
+    error: t('projectMenu.failed'),
+  };
+  if (!status) return null;
+  return (
+    <span aria-label={words[status]} title={words[status]} className="flex h-[13px] w-[13px] shrink-0 items-center justify-center">
+      <span className={`h-1.5 w-1.5 rounded-full ${LIGHT[status]}`} />
+    </span>
+  );
+}
 
-  React.useEffect(() => {
-    if (!historyPos) setQuery('');
-  }, [historyPos]);
+const LIGHT: Record<SessionStatus, string> = {
+  working: 'status-breathe bg-[var(--text-muted)]',
+  asking: 'bg-[var(--warn)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--warn)_18%,transparent)]',
+  done: 'bg-[var(--accent)]',
+  error: 'bg-[var(--err)]',
+};
 
-  /* A turn started while history is open: close it, none of its rows can be picked now. */
-  React.useEffect(() => {
-    if (busy) setHistoryPos(null);
-  }, [busy]);
-
-  const titleBoxRef = React.useRef<HTMLButtonElement | null>(null);
-  const [titleEditWidth, setTitleEditWidth] = React.useState<number | null>(null);
-
-  function startRename() {
-    if (!onRenameSession || !label) return;
-    const width = titleBoxRef.current?.getBoundingClientRect().width;
-    setTitleEditWidth(width && width > 0 ? width : null);
-    setDraft(label);
-    setRenaming(true);
-  }
-
-  async function commitRename() {
-    if (!onRenameSession) {
-      setRenaming(false);
-      return;
-    }
-    const clean = draft.replace(/\s+/g, ' ').trim();
-    setRenaming(false);
-    if (!clean || clean === label) {
-      setDraft(label);
-      return;
-    }
-    await onRenameSession(clean);
-  }
-
-  const listed = sessions.filter((item) => item.turns > 0);
+/** The conversation's hover card: a new one, the search and the history, each row with its own actions; double clicking renames in place. */
+export function ConversationBar({
+  sessions,
+  currentSessionId,
+  running,
+  unseen,
+  onSelectSession,
+  onNewSession,
+  onRenameSession,
+  onPinSession,
+  onArchiveSession,
+}: SessionActions & {
+  sessions: ProjectSessionItem[];
+  currentSessionId: string;
+  running: Map<string, string>;
+  unseen: Map<string, 'done' | 'error'>;
+  onSelectSession: (sessionId: string) => void;
+  onNewSession: () => boolean;
+}) {
+  const t = useT();
+  const hover = useHoverOpen();
   const untitled = t('project.untitledSession');
-  const labelOf = (item: ProjectSessionItem) => item.title.trim() || untitled;
-  const needle = query.trim().toLowerCase();
-  const visible = needle
-    ? listed.filter((item) => labelOf(item).toLowerCase().includes(needle))
-    : listed;
-  const groups = groupSessionsByRecency(visible);
+  const current = sessions.find((s) => s.id === currentSessionId);
+  const label = current?.title.trim() || untitled;
+  const [renaming, setRenaming] = React.useState(false);
+  React.useEffect(() => { setRenaming(false); hover.dismiss(); }, [currentSessionId, hover.dismiss]);
+  const [alreadyNew, setAlreadyNew] = React.useState(false);
+  React.useEffect(() => {
+    if (!alreadyNew) return;
+    const timer = setTimeout(() => setAlreadyNew(false), 1800);
+    return () => clearTimeout(timer);
+  }, [alreadyNew]);
+  const otherRunning = [...running].find(([id]) => id !== currentSessionId)?.[1] ?? null;
+  const otherUnseen = [...unseen].find(([id]) => id !== currentSessionId)?.[1];
+  const go = (run: () => void) => { hover.dismiss(); run(); };
 
   return (
     <div className={PANE_BAR}>
-      {label ? (
-        renaming ? (
-          <input
-            autoFocus
-            value={draft}
-            onChange={(event) => {
-              const next = event.target.value;
-              if ((event.nativeEvent as InputEvent).isComposing) {
-                setDraft(next);
-                return;
-              }
-              setDraft(limitTitleWidth(next, SESSION_TITLE_MAX_WIDTH));
-            }}
-            onCompositionEnd={(event) => {
-              setDraft(limitTitleWidth(event.currentTarget.value, SESSION_TITLE_MAX_WIDTH));
-            }}
-            onBlur={() => void commitRename()}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') void commitRename();
-              if (event.key === 'Escape') {
-                setDraft(label);
-                setRenaming(false);
-              }
-            }}
-            style={titleEditWidth ? { width: titleEditWidth } : undefined}
-            className={`${TITLE_MAX} ${PANE_TITLE} box-border h-[22px] max-w-[min(15rem,calc(100%-52px))] bg-transparent px-1 outline-none`}
+      <div data-conversation-title className="relative inline-flex min-w-0 max-w-full">
+        <Popover open={hover.open && !renaming} onOpenChange={(next) => { if (next) hover.setOpen(true); else hover.dismiss(); }} bare
+          trigger={(
+            <button {...hover.trigger} type="button" aria-haspopup="dialog" aria-expanded={hover.open && !renaming}
+              aria-hidden={renaming || undefined} tabIndex={renaming ? -1 : undefined}
+              onClick={(event) => { event.stopPropagation(); hover.toggle(); }}
+              onDoubleClick={() => { if (onRenameSession) { hover.dismiss(); setRenaming(true); } }}
+              className={`flex h-[22px] min-w-0 max-w-[16rem] items-center gap-1.5 rounded px-1.5 outline-none transition-colors hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)] ${renaming ? 'invisible' : ''}`}
+            >
+              <span className={`${PANE_TITLE} ${current?.title.trim() ? '' : 'text-[var(--text-faint)]'}`}>{label}</span>
+              {otherRunning || otherUnseen ? <StatusLight turnId={otherRunning} unseen={otherUnseen} /> : null}
+              <ChevronDown size={12} className="shrink-0 text-[var(--text-faint)]" />
+            </button>
+          )}
+        >
+          <div {...hover.card} data-conversation-menu role="dialog" aria-label={t('project.sessionHistory')} className={`${menu.menu} ${menu.chatMenu}`}>
+            <SessionHistory sessions={sessions} currentSessionId={currentSessionId} running={running} unseen={unseen}
+              onSelectSession={(id) => go(() => onSelectSession(id))}
+              onRenameSession={onRenameSession} onPinSession={onPinSession} onArchiveSession={onArchiveSession}>
+              <button type="button" onClick={() => { if (onNewSession()) hover.dismiss(); else setAlreadyNew(true); }} className={menu.newButton}>
+                <Plus size={13} strokeWidth={2} /><span>{t('projectMenu.newSession')}</span>
+              </button>
+              {alreadyNew ? <div role="status" className={menu.notice}>{t('project.alreadyNew')}</div> : null}
+            </SessionHistory>
+          </div>
+        </Popover>
+        {/* Keep the hidden title's size while its input is in front of it. */}
+        {renaming ? (
+          <TitleInput initial={current?.title.trim() ?? ''} placeholder={untitled}
+            onDone={(title) => { setRenaming(false); if (title) onRenameSession?.(currentSessionId, title); }}
+            className={`${PANE_TITLE} absolute inset-0 box-border h-[22px] w-full bg-transparent py-0 pl-1.5 ${otherRunning || otherUnseen ? 'pr-[43px]' : 'pr-6'} leading-[18px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]`}
           />
-        ) : onRenameSession ? (
-          <Tooltip label={t('projectMenu.rename')} side="bottom">
-            <button
-              ref={titleBoxRef}
-              type="button"
-              onClick={startRename}
-              className={`${TITLE_MAX} flex h-[22px] w-fit min-w-0 items-center rounded-md px-1 text-left transition hover:bg-[var(--bg-hover)]`}
-            >
-              <span title={label} className={PANE_TITLE}>
-                {label}
-              </span>
-            </button>
-          </Tooltip>
-        ) : (
-          <span
-            title={label}
-            className={`${TITLE_MAX} ${PANE_TITLE} px-1`}
-          >
-            {label}
-          </span>
-        )
-      ) : null}
-      <span className="min-w-0 flex-1" />
-      <div className="flex shrink-0 items-center gap-1">
-        {/* These buttons sit at the top edge, so tooltips open downwards. */}
-        {onNewSession ? (
-          <Tooltip label={busy ? t('project.sessionBusy') : t('projectMenu.newSession')} side="bottom">
-            <button
-              type="button"
-              aria-label={t('projectMenu.newSession')}
-              aria-disabled={busy || undefined}
-              onClick={busy ? undefined : onNewSession}
-              className={`${PANE_BTN} ${busy ? 'cursor-not-allowed opacity-40' : ''}`}
-            >
-              <Plus size={PANE_ICON} />
-            </button>
-          </Tooltip>
-        ) : null}
-        {onSelectSession ? (
-          <Tooltip label={busy ? t('project.sessionBusy') : t('project.sessionHistory')} side="bottom">
-            <button
-              type="button"
-              aria-label={t('project.sessionHistory')}
-              aria-expanded={historyPos != null}
-              aria-disabled={busy || undefined}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                if (busy) return;
-                const rect = event.currentTarget.getBoundingClientRect();
-                setHistoryPos((cur) => (cur ? null : { x: rect.right, y: rect.bottom + 4 }));
-              }}
-              className={`${PANE_BTN} ${historyPos ? PANE_BTN_ON : ''} ${busy ? 'cursor-not-allowed opacity-40' : ''}`}
-            >
-              <History size={PANE_ICON} />
-            </button>
-          </Tooltip>
         ) : null}
       </div>
+      <span className="min-w-0 flex-1" />
+    </div>
+  );
+}
 
-      {historyPos &&
-        typeof document !== 'undefined' &&
-        createPortal(
-          <div
-            ref={panelRef}
-            className="fixed z-[110] w-[216px] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
-            style={{
-              right: Math.max(window.innerWidth - historyPos.x, 12),
-              top: historyPos.y,
-              animation: 'openfilm-rise 0.14s ease-out both',
-            }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="px-2 pt-1">
-              <input
-                ref={searchRef}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t('project.sessionSearchPlaceholder')}
-                className="h-5 w-full bg-transparent text-[11px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
-              />
-            </div>
-            <div className="max-h-[min(320px,50vh)] overflow-y-auto pb-1">
-              {groups.length === 0 ? (
-                <div className="px-2 py-5 text-left text-[11px] text-[var(--text-faint)]">
-                  {t('project.sessionHistoryEmpty')}
-                </div>
-              ) : (
-                groups.map((group) => (
-                  <div key={group.key}>
-                    <div className="px-2 pb-0.5 pt-1 text-left text-[10px] font-medium text-[var(--text-faint)]">
-                      {t(RECENCY_I18N[group.key])}
-                    </div>
-                    {group.items.map((item) => {
-                      const active = item.id === currentSessionId;
-                      const name = labelOf(item);
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => {
-                            setHistoryPos(null);
-                            if (!active) onSelectSession?.(item.id);
-                          }}
-                          className={`mx-1 flex w-[calc(100%-8px)] items-center rounded-md px-1 py-[5px] text-left text-[12px] leading-tight transition hover:bg-[var(--bg-hover)] ${
-                            active ? 'bg-[var(--bg-hover)] text-[var(--text)]' : 'text-[var(--text-muted)]'
-                          }`}
-                        >
-                          <span className="min-w-0 flex-1 truncate">{name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>,
-          chatLayer(),
-        )}
+/** A conversation's own buttons in the history, on hover: pin, rename, archive. */
+const ROW_BTN = menu.iconButton;
+
+/** One conversation in the history: its title, a running one turning; on hover its buttons. */
+function SessionRow({ item, label, active, turnId, unseen, onSelect, onRenameSession, onPinSession, onArchiveSession }: SessionActions & {
+  item: ProjectSessionItem; label: string; active: boolean; turnId: string | null; unseen?: 'done' | 'error'; onSelect: () => void;
+}) {
+  const running = Boolean(turnId);
+  const t = useT();
+  const [renaming, setRenaming] = React.useState(false);
+  const icon = item.pinned ? <Pin size={13} className={menu.rowIcon} /> : <MessageCircle size={13} className={menu.rowIcon} />;
+  return (
+    <div className={`group ${menu.row} ${active ? menu.active : ''} ${renaming ? menu.editing : ''}`}>
+      {renaming ? (
+        <>{icon}<TitleInput
+          initial={item.title.trim()}
+          onDone={(title) => { setRenaming(false); if (title) onRenameSession?.(item.id, title); }}
+          className="h-full min-w-0 flex-1 bg-transparent text-[12px] text-[var(--text)] outline-none"
+        /></>
+      ) : (
+        <button type="button" aria-current={active || undefined} onClick={onSelect}
+          className={menu.primary}>
+          {icon}<span className={menu.rowName}>{label}</span>
+        </button>
+      )}
+      {turnId || unseen ? (
+        <span className={menu.rowStatus}><StatusLight turnId={turnId} unseen={unseen} /></span>
+      ) : null}
+      {renaming ? null : (
+        <div className={menu.rowActions}>
+          {onPinSession && !item.archived ? (
+            <Tooltip label={t(item.pinned ? 'projectMenu.unpin' : 'projectMenu.pin')} side="bottom">
+              <button type="button" aria-label={t(item.pinned ? 'projectMenu.unpin' : 'projectMenu.pin')} onMouseDown={keepFocus}
+                onClick={() => onPinSession(item.id, !item.pinned)} className={ROW_BTN}>
+                {item.pinned ? <PinOff size={13} /> : <Pin size={13} />}
+              </button>
+            </Tooltip>
+          ) : null}
+          {onRenameSession ? (
+            <Tooltip label={t('projectMenu.rename')} side="bottom">
+              <button type="button" aria-label={t('projectMenu.rename')} onClick={() => setRenaming(true)} className={ROW_BTN}>
+                <Pencil size={13} />
+              </button>
+            </Tooltip>
+          ) : null}
+          {onArchiveSession ? (
+            <Tooltip label={t(item.archived ? 'projectMenu.unarchive' : 'projectMenu.archive')} side="bottom">
+              <button type="button" aria-label={t(item.archived ? 'projectMenu.unarchive' : 'projectMenu.archive')} onMouseDown={keepFocus}
+                disabled={running && !item.archived} onClick={() => onArchiveSession(item.id, !item.archived)} className={ROW_BTN}>
+                {item.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+              </button>
+            </Tooltip>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The project's conversations: search, then each that said something, pinned first, then
+ * the latest; those archived folded at the foot (opened by the search too). Picking one shows it, as a tab.
+ */
+function SessionHistory({
+  sessions,
+  currentSessionId,
+  running,
+  unseen,
+  onSelectSession,
+  children,
+  ...actions
+}: SessionActions & {
+  sessions: ProjectSessionItem[];
+  currentSessionId: string;
+  running: Map<string, string>;
+  unseen: Map<string, 'done' | 'error'>;
+  onSelectSession: (sessionId: string) => void;
+  /** what goes above the search: a new conversation */
+  children?: React.ReactNode;
+}) {
+  const t = useT();
+  const [query, setQuery] = React.useState('');
+  /* folded, unless the conversation shown is one of them */
+  const [archivedOpen, setArchivedOpen] = React.useState(() => Boolean(sessions.find((s) => s.id === currentSessionId)?.archived));
+  const untitled = t('project.untitledSession');
+  const labelOf = (item: ProjectSessionItem) => item.title.trim() || untitled;
+  const needle = query.trim().toLowerCase();
+  const at = (s: ProjectSessionItem) => Date.parse(s.updatedAt || s.createdAt) || 0;
+  const listed = sessions
+    .filter((item) => item.turns > 0 && (!needle || labelOf(item).toLowerCase().includes(needle)))
+    .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || at(b) - at(a));
+  const live = listed.filter((item) => !item.archived);
+  const archived = listed.filter((item) => item.archived);
+  const showArchived = archivedOpen || Boolean(needle);
+
+  const row = (item: ProjectSessionItem) => (
+    <SessionRow key={item.id} item={item} label={labelOf(item)} active={item.id === currentSessionId}
+      turnId={running.get(item.id) ?? null} unseen={unseen.get(item.id)} onSelect={() => onSelectSession(item.id)} {...actions} />
+  );
+
+  return (
+    <div className="flex min-h-0 flex-col">
+      <div className={menu.chatTop}>
+        {children}
+        <label className={menu.search}>
+          <Search size={13} strokeWidth={1.75} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t('project.sessionSearchPlaceholder')}
+            aria-label={t('project.sessionSearchPlaceholder')}
+          />
+        </label>
+      </div>
+      <div className={menu.history}>
+        {live.map(row)}
+        {!listed.length ? <div className={menu.empty}><MessageCircle size={20} strokeWidth={1.5} /><span>{t(needle ? 'project.sessionHistoryEmpty' : 'project.sessionHistoryNoChats')}</span></div> : null}
+        {archived.length ? (
+          <>
+            <button type="button" aria-expanded={showArchived} onClick={() => setArchivedOpen((open) => !open)}
+              className={`${menu.row} ${menu.archivedToggle}`}>
+              <ChevronRight size={13} className={`shrink-0 transition ${showArchived ? 'rotate-90' : ''}`} />
+              <span className={menu.rowName}>{t('projectMenu.archived')}</span><span className="text-[11px] text-[var(--text-faint)]">{archived.length}</span>
+            </button>
+            {showArchived ? archived.map(row) : null}
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

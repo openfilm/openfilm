@@ -29,8 +29,8 @@ export function Popover({
   trigger: React.ReactNode;
   children: React.ReactNode;
   placement?: 'top' | 'bottom' | 'auto';
-  /** end: align the panel's right edge to the trigger's right edge (avoids overflow for triggers near the right side of the screen). */
-  align?: 'start' | 'end';
+  /** end: align the panel's right edge to the trigger's right edge (avoids overflow for triggers near the right side of the screen); center: under its middle. */
+  align?: 'start' | 'end' | 'center';
   /** its z-index: above a dialog it opens in */
   layer?: number;
   /** the trigger takes the width it is given (a field), not only its own */
@@ -60,10 +60,10 @@ export function Popover({
     const openUp = placement === 'top'
       || (placement === 'auto' && below < need && above > below);
     const room = Math.max(0, openUp ? above : below);
-    const x = align === 'end' ? '-100%' : '0%';
+    const x = align === 'end' ? '-100%' : align === 'center' ? '-50%' : '0%';
     setPanelStyle({
       position: 'fixed',
-      left: align === 'end' ? r.right : r.left,
+      left: align === 'end' ? r.right : align === 'center' ? r.left + r.width / 2 : r.left,
       top: openUp ? r.top - gap : r.bottom + gap,
       transform: `translate(${x}, ${openUp ? '-100%' : '0%'})`,
       zIndex: layer,
