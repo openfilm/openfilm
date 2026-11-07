@@ -17,10 +17,10 @@ function trashBeside(dir) {
 }
 
 /** The chat's IPC as the window's page calls it, on a project of Studio's. */
-function chatIpc(dir, trash) {
+function chatIpc(dir, trash, filmPutBack = async () => {}) {
   const handlers = new Map();
   registerChatIpc({ handle: (channel, fn) => handlers.set(channel, fn) }, {
-    trusted: () => true, projects: async () => [dir], dataDir: join(dir, '.app'), reveal: () => {}, trash, tell: () => {}, log: () => {},
+    trusted: () => true, projects: async () => [dir], dataDir: join(dir, '.app'), reveal: () => {}, trash, tell: () => {}, filmPutBack, log: () => {},
   });
   return (channel, opts) => handlers.get(channel)({}, opts);
 }
@@ -91,6 +91,29 @@ test('the chat: a turn that changed files can be undone once; one that changed n
     assert.deepEqual(await invoke('desktop:chat:undo', { project: dir, turnId: 't2' }), { ok: false, code: 'gone' }, 'spent');
     await new Promise((done) => setTimeout(done, 50));
     assert.ok(!existsSync(holdDir(dir, 't2')));
+  } finally { rmSync(dir, { recursive: true, force: true }); rmSync(bin, { recursive: true, force: true }); }
+});
+
+test('the chat tells Studio the film goes back before it writes it, and undoes the turn if Studio cannot be told', async () => {
+  const dir = filled();
+  const { bin, trash } = trashBeside(dir);
+  try {
+    const told = [];
+    let answer = async (at) => { told.push([at, readFileSync(join(dir, 'film.html'), 'utf8')]); };
+    const invoke = chatIpc(dir, trash, (at) => answer(at));
+    const turn = async (id, film) => {
+      await invoke('desktop:chat:snapshot', { project: dir, turnId: id });
+      writeFileSync(join(dir, 'film.html'), film);
+      await invoke('desktop:chat:changes', { project: dir, turnId: id });
+      return invoke('desktop:chat:undo', { project: dir, turnId: id });
+    };
+    const found = readFileSync(join(dir, 'film.html'), 'utf8');
+    assert.deepEqual(await turn('t1', '<section></section>'), { ok: true, restored: 1, missed: [] });
+    assert.deepEqual(told, [[dir, '<section></section>']], "told while the turn's film is still there");
+    assert.equal(readFileSync(join(dir, 'film.html'), 'utf8'), found);
+    answer = async () => { throw new Error('Studio is restarting'); };
+    assert.deepEqual(await turn('t2', '<section></section>'), { ok: true, restored: 1, missed: [] });
+    assert.equal(readFileSync(join(dir, 'film.html'), 'utf8'), found);
   } finally { rmSync(dir, { recursive: true, force: true }); rmSync(bin, { recursive: true, force: true }); }
 });
 

@@ -848,6 +848,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         historyChanged(project.path, { moved: true });
         return json(res, 200, { ...done, ...(await readProjectFilm(project.path)) });
       }
+      if (history[0] === 'put-back' && history.length === 1 && req.method === 'POST') {
+        /* about to go back as a chat turn found it (the desktop app writes the files): the person's edits since go with it */
+        personEdits.filmReplaced(project.path);
+        return json(res, 200, {});
+      }
       if (history[0] === 'copy' && req.method === 'POST') {
         const { commit: target, name } = /** @type {{ commit?: string, name?: string }} */ (await readJson(req));
         const copy = await createProject(String(name ?? '').trim() || `${project.name} copy`);
