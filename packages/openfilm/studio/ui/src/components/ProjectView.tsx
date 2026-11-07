@@ -4815,8 +4815,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           {/* the canvas in the panes' place: they stay laid out as they were, hidden under it; the gaps round it are the
               panes' lines (the one under the top bar, the one by the chat) */}
           {canvasKept ? (
+            /* hidden with opacity too: the canvas's library writes `visibility: visible` on each of its nodes */
             <div className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]" aria-hidden={!canvasOpen} inert={!canvasOpen}
-              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null), ...(canvasOpen ? null : { visibility: 'hidden', zIndex: 0 }) }}>
+              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(hostPanel?.open ? { marginLeft: HOST_PANEL_WIDTH, paddingLeft: DOCK_GAP } : null), ...(canvasOpen ? null : { visibility: 'hidden', opacity: 0, zIndex: 0 }) }}>
               <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
                 <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
                   <React.Suspense fallback={null}>
