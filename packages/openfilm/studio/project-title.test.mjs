@@ -41,6 +41,17 @@ test('the project title opens Projects immediately, keeps its hover card, and re
         },
       };
     }, { id: project.id });
+    /* This test exercises a loaded cover's layout and actions. A first poster may correctly answer 503 while it
+       is drawn; wait for that fixture here. The pending-poster retry path has its own browser regression. */
+    let posterReady = false;
+    for (let i = 0; i < 30; i++) {
+      const response = await fetch(`${studio.origin}/api/projects/${project.id}/poster`, { headers: { 'x-studio-key': studio.key } });
+      if (response.ok) { await response.arrayBuffer(); posterReady = true; break; }
+      assert.equal(response.status, 503, 'only a poster still being drawn is waited for');
+      await response.body?.cancel();
+      await new Promise((done) => setTimeout(done, 500));
+    }
+    assert.equal(posterReady, true, 'the cover fixture finished drawing');
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
     const title = page.locator('[data-project-title]');
     const button = title.locator('[data-project-title-name]');
