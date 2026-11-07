@@ -38,7 +38,7 @@ const WRITING = /(^|[/\\])([^/\\]+\.[0-9a-f-]{8,}\.tmp|\.\d+\.\d+\.importing)$/;
  * @typedef {{ type: 'film', rev: string } | { type: 'files', paths?: string[] } | { type: 'history', moved?: boolean } | { type: 'export', job: object }
  *   | { type: 'history-progress', op: string, phase: string, done: number, total: number } | { type: 'project', project: object }
  *   | { type: 'ask', ask: object } | { type: 'asked', id: string } | { type: 'notice', notice: object }
- *   | { type: 'canvas' } | { type: 'film-missing' } | { type: 'gone' }} FolderEvent   `gone`: the project was deleted, or
+ *   | { type: 'canvas', reset?: boolean } | { type: 'film-missing' } | { type: 'gone' }} FolderEvent   `gone`: the project was deleted, or
  *   its folder is missing. `film-missing`: its folder is there but film.html is not (being written again, or lost): the
  *   project stays open, and its pages hear of the film (`film`) once it is back
  */
