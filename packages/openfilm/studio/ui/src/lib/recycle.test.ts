@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { recycleRefusalOf, recycleRefusalWords } from './recycle.ts';
+import { recycleRefusalOf, recycleRefusalWords, recycleWhyWords } from './recycle.ts';
 import { en } from '../i18n/en.ts';
 import { zhCN } from '../i18n/zh-CN.ts';
 
@@ -25,6 +25,8 @@ test('the refusal is said whole, in the language of the UI, with the item, the d
   /* a name that would mean something to a replacement string stays as it is */
   assert.match(recycleRefusalWords(t, { code: 'recycle', why: 'nuke', name: 'take $& $1 $$.wav', drive: 'E:' }), /^“take \$& \$1 \$\$\.wav” stays where it is: the Recycle Bin of drive E:/);
   assert.match(recycleRefusalWords(t, { code: 'recycle', why: 'too-big', name: 'a.mp4', drive: 'C:\\mnt\\x', size: '2 MB', holds: '1 MB' }), /drive C:\\mnt\\x holds \(1 MB\)/);
+  /* why alone, for a list of files (a restore's files kept) */
+  assert.equal(recycleWhyWords(t, { code: 'recycle', why: 'too-big', name: 'a.mp4', drive: 'D:', size: '12.4 GB', holds: '5 GB' }), 'it is 12.4 GB, more than the Recycle Bin of drive D: holds (5 GB)');
   const zh = recycleRefusalWords(tOf(zhCN), { code: 'recycle', why: 'too-big', name: 'render.mp4', drive: 'D:', size: '12.4 GB', holds: '5 GB' });
   assert.match(zh, /render\.mp4/);
   assert.match(zh, /12\.4 GB/);

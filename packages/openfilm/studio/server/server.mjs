@@ -838,7 +838,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         personEdits.filmReplaced(project.path);
         const done = await checkoutVersion(project.path, String(target ?? ''), { discard: discard === true, onProgress: onProgress('checkout') });
         historyChanged(project.path, { moved: true });
-        /* `missing`: media of that version history no longer has (left as it is in the folder) */
+        /* `missing`: media of that version history no longer has (left as it is in the folder); `kept`: files the
+           trash would not take (left where they are, the version checked out around them) */
         return json(res, 200, { ...done, ...(await readProjectFilm(project.path)) });
       }
       if (history[0] === 'film' && history.length === 1 && req.method === 'POST') {
