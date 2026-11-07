@@ -68,9 +68,10 @@ const SNAPSHOTS_MAX = 8;
 /**
  * @param {import('electron').IpcMain} ipcMain
  * @param {{ trusted: (event: any) => boolean, projects: () => Promise<string[]>, dataDir: string,
- *           reveal: (path: string) => void, tell: (channel: string, value: unknown) => void, log: (line: string) => void }} opts
+ *           reveal: (path: string) => void, tell: (channel: string, value: unknown) => void, log: (line: string) => void,
+ *           filmPutBack: (dir: string) => Promise<unknown> }} opts
  */
-export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, trash, tell, log }) {
+export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, trash, tell, log, filmPutBack }) {
   /* the projects Studio has, asked again when a path is not among them (a project opened a moment ago) */
   let known = new Set();
   const project = async (path) => {
@@ -142,6 +143,8 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
     const dir = await project(path);
     const kept = undoable.get(turnId);
     if (!kept || kept.dir !== dir) return { ok: false, code: 'gone' };
+    /* Studio told first: else it takes the film put back for a write of the agent's, and merges the turn's clips into it */
+    await filmPutBack(dir).catch((e) => log(`undo: Studio was not told the film goes back: ${e.message}`));
     const done = await undoTurn(dir, kept.taken, kept.hold, { trash });
     forget(undoable, turnId);
     return { ok: true, ...done };
