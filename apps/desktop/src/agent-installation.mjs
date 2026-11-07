@@ -40,6 +40,11 @@ export const AGENT_PROGRAMS = Object.freeze({
   deepseek: { names: ['dsh'], dirs: (home, win, apps = ['/Applications', join(home, 'Applications')]) => (win
     ? [join(localAppData(home), 'Programs', 'DeepSeek Harness', 'resources', 'runtime', 'cli', 'bin')]
     : apps.map((dir) => dirname(join(dir, 'DeepSeek Harness.app', DSH_IN_APP)))) },
+  /* Google Antigravity keeps agy in %LOCALAPPDATA%\agy\bin on Windows */
+  antigravity: {
+    names: ['agy'],
+    dirs: (home, win) => (win ? [join(localAppData(home), 'agy', 'bin')] : []),
+  },
 });
 
 /* where DeepSeek Harness is inside DeepSeek Harness.app, its desktop app (macOS) */
@@ -295,6 +300,16 @@ export function opencodeVersion(file, { ask = askVersion } = {}) {
 /** The desktop SDK's Copilot CLI, or a standalone npm installation. */
 export function copilotVersion(file, { ask = askVersion } = {}) {
   return programVersion(file, { ours: (name) => name === '@github/copilot', ask });
+}
+
+/** The Antigravity CLI (`agy`), read from `agy --version`. */
+export function antigravityVersion(file, { ask = askVersion } = {}) {
+  let real;
+  try { real = realpathSync(file); } catch { return null; }
+  let key;
+  try { key = `${real}\0${statSync(real).mtimeMs}`; } catch { return null; }
+  if (!versionsAsked.has(key)) versionsAsked.set(key, ask(real));
+  return versionsAsked.get(key) ?? null;
 }
 
 /** Whether version `a` is later than `b` (dotted numbers); false when either is unknown. */

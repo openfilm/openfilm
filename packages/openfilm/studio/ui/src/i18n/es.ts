@@ -2448,6 +2448,7 @@ export const es: Words = {
       switchWhere: {
         codex: 'la app de Codex, o con codex login en una terminal',
         copilot: 'el propio Copilot: ejecuta copilot en una terminal y usa /user',
+        antigravity: 'el propio Google Antigravity: ejecuta agy en una terminal y usa /logout',
         opencode: 'la app de OpenCode, o con opencode auth switch en una terminal',
         codebuddy: 'el propio CodeBuddy: ejecuta codebuddy en una terminal',
         qwen: 'el propio Qwen Code: ejecuta qwen en una terminal y usa /auth',
