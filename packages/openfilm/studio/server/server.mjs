@@ -849,9 +849,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         historyChanged(project.path, { moved: true });
         return json(res, 200, { ...done, ...(await readProjectFilm(project.path)) });
       }
-      if (history[0] === 'put-back' && history.length === 1 && req.method === 'POST') {
-        /* about to go back as a chat turn found it (the desktop app writes the files): the person's edits since go with it */
-        personEdits.filmReplaced(project.path);
+      if (history[0] === 'put-back' && req.method === 'POST' && (history.length === 1 || (history.length === 2 && history[1] === 'done'))) {
+        /* The desktop app restores a turn's files: before, nothing of the person's is merged over them; after,
+           every open board reads its restored document, including when the turn changed no film.html. */
+        if (history.length === 1) personEdits.filmReplaced(project.path);
+        else watchers.emit(project.path, { type: 'canvas', reset: true });
         return json(res, 200, {});
       }
       if (history[0] === 'copy' && req.method === 'POST') {
