@@ -28,3 +28,14 @@ test('a transcript drifting between simplified and traditional Chinese is kept i
   assert.equal(oneScript('說不清的地方，視頻也一樣，说')('说'), '說');
   assert.equal(oneScript('give ideas a place')('a place'), 'a place');
 });
+
+test('the runtime is told its folder as a path its threads read, and on Windows as a file: address on one thread', async () => {
+  const { folderAddress, threads } = await import('./local-asr.mjs');
+  assert.equal(folderAddress('/home/me/models/ort.mjs', 'linux'), '/home/me/models/');
+  if (process.platform === 'win32') {
+    const url = new URL(folderAddress('C:\\Users\\me\\models\\ort.mjs'));
+    assert.equal(url.protocol, 'file:');
+    assert.ok(url.pathname.endsWith('/models/'));
+    assert.equal(threads(), 1);
+  } else assert.ok(threads() >= 1);
+});
