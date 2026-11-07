@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "lens-flare.html",
+    "time": [
+      0,
+      4
+    ]
+  },
+  "durationMs": 4000
+}

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "confetti-cannon.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Amount\", \"type\": \"var\", \"var\": \"--amount\"}, {\"name\": \"Speed\", \"type\": \"var\", \"var\": \"--speed\"}]"
+    }
+  },
+  "durationMs": 4000
+}

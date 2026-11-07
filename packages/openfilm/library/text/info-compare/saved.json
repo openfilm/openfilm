@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "info-compare.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Left heading\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Left value\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Right heading\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Right value\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Middle\", \"type\": \"text\", \"at\": \".t5\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Left\", \"type\": \"var\", \"var\": \"--left\"}, {\"name\": \"Right\", \"type\": \"var\", \"var\": \"--right\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 4000
+}

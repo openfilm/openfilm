@@ -38,9 +38,22 @@ export type FetchJob = {
   code?: string;
   project?: { id: string };
 };
+/** Whose a skill is: its uid's owner (`openfilm` for OpenFilm's own, else the account its repository is under). */
+export const ownerOf = (skill: { uid: string }) => skill.uid.split('/')[0] ?? '';
+/** Who made it, as they write their name: its repository's account (GitHub keeps its case there), else its uid's owner. */
+export const makerOf = (skill: { uid: string; repository?: string }) => /^https:\/\/github\.com\/([\w.-]+)\//i.exec(skill.repository ?? '')?.[1] ?? ownerOf(skill);
+/** One of Discover's, installed or not, made by someone other than OpenFilm: the community's, under its owner's name. */
+export const communityOf = (skill: { uid: string; source: string; core?: true }) => skill.source === 'official' && !skill.core && ownerOf(skill) !== 'openfilm';
+
 /** a skill a project can be made with (openfilm/src/skills.mjs): the project's own, the person's, or official */
 export type SkillEntry = {
+  /** whose it is and its name, `owner/name` (openfilm/src/skills.mjs SKILL_UID): how it is told apart, shared and searched */
+  uid: string;
   name: string; description: string; source: 'project' | 'mine' | 'official'; scripts: number;
+  /** the name agents are given it by: its own, or `owner-name` beside another of that name (none: turned off) */
+  as?: string;
+  /** OpenFilm's own (how a film is made, its media, its canvas): in every agent's hands, and only turned off */
+  core?: true;
   /** how people see it (its openfilm.json): a title and a one-line summary, by language */
   shown?: { title: Record<string, string>; summary: Record<string, string>; details?: Record<string, string> };
   /** its openfilm.json's (else its front matter's) */
@@ -51,10 +64,14 @@ export type SkillEntry = {
   cover?: string; preview?: string;
   /** where its source can be read (a repository's address) */
   repository?: string;
+  /** what it needs beyond OpenFilm, by language; the computers it runs on (none: every one), and whether this one is not among them */
+  needs?: Record<string, string>; platforms?: Array<'macos' | 'windows' | 'linux'>; elsewhere?: true;
   /** the person's own: where it came from (a link, a folder), or made where it is */
   origin?: { from: 'link' | 'folder'; address: string } | { from: 'made' };
-  /** an official one: installed to be used (the person's own and a project's are installed already) */
+  /** one of Discover's: installed to be used (the person's own and a project's are installed already) */
   installed?: boolean;
+  /** an installed one of Discover's: a newer version there, or no longer there at all (it still works here) */
+  update?: { version: string; commit: string }; retired?: true;
   /** turned off: offered to no agent until it is turned on again */
   off?: true;
 };
@@ -86,9 +103,11 @@ async function call<T>(path: string, method = 'GET', json?: unknown): Promise<T>
 }
 
 /* what the galleries read last: shown at once when one opens, and asked for again behind it */
-const seen: { examples: Example[] | null; skills: Map<string, SkillEntry[]> } = { examples: null, skills: new Map() };
+const seen: { examples: Example[] | null; skills: Map<string, SkillEntry[]>; catalog: string | null } = { examples: null, skills: new Map(), catalog: null };
 /** The examples read last, or null. */
 export const seenExamples = (): Example[] | null => seen.examples;
+/** When Discover's index was last read (ISO time), as the skills read last say; null: never. */
+export const seenCatalog = (): string | null => seen.catalog;
 /** The skills read last for a project (else for no project: the official ones and the person's own), or null. */
 export const seenSkills = (projectId?: string | null): SkillEntry[] | null => seen.skills.get(projectId ?? '') ?? seen.skills.get('') ?? null;
 
@@ -117,32 +136,47 @@ export const sourcesApi = {
   examples: () => call<{ examples: Example[] }>('examples').then((r) => (seen.examples = r.examples), () => seen.examples ?? []),
   /** an example's folder on this computer, fetched when needed (for an agent to read how it is made) */
   exampleFolder: (id: string) => call<{ folder: string }>(`examples/${encodeURIComponent(id)}/folder`, 'POST').then((r) => r.folder),
-  skills: (projectId?: string | null) => call<{ skills: SkillEntry[] }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`)
-    .then((r) => { seen.skills.set(projectId ?? '', r.skills); return r.skills; }, () => seenSkills(projectId) ?? []),
-  setSkillCover: async (name: string, cover: string | null, projectId?: string | null): Promise<string | null> => {
-    const path = `skills/${encodeURIComponent(name)}/cover${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`;
+  /** an example's canvas, the steps it was made with (null: it has none), fetched with its folder */
+  exampleCanvas: (id: string) => call<{ canvas: unknown }>(`examples/${encodeURIComponent(id)}/canvas`).then((r) => r.canvas),
+  skills: (projectId?: string | null) => call<{ skills: SkillEntry[]; catalog?: { read: string } | null }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`)
+    .then((r) => { seen.skills.set(projectId ?? '', r.skills); seen.catalog = r.catalog?.read ?? null; return r.skills; }, () => seenSkills(projectId) ?? []),
+  /** Discover's index read again from GitHub, unless read less than `fresh` ms ago (the skills it names fetched): → when,
+   *  or throws when it cannot be read */
+  readDiscover: async (fresh = 0): Promise<string> => {
+    const r = await call<{ catalog: { read: string } }>('skills/catalog', 'POST', { fresh });
+    seen.catalog = r.catalog.read;
+    window.dispatchEvent(new Event(SKILLS_CHANGED));
+    return r.catalog.read;
+  },
+  /** an installed skill updated to the version Discover has; whoever lists skills reads them again */
+  updateSkill: async (uid: string): Promise<void> => {
+    await call<object>(`skills/${encodeURIComponent(uid)}/update`, 'POST');
+    window.dispatchEvent(new Event(SKILLS_CHANGED));
+  },
+  setSkillCover: async (uid: string, cover: string | null, projectId?: string | null): Promise<string | null> => {
+    const path = `skills/${encodeURIComponent(uid)}/cover${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`;
     const result = await call<{ cover: string | null }>(path, cover === null ? 'DELETE' : 'PUT', cover === null ? undefined : { cover });
-    for (const [key, skills] of seen.skills) seen.skills.set(key, skills.map((skill) => skill.source === 'mine' && skill.name === name ? { ...skill, cover: result.cover ?? undefined } : skill));
+    for (const [key, skills] of seen.skills) seen.skills.set(key, skills.map((skill) => skill.uid === uid ? { ...skill, cover: result.cover ?? undefined } : skill));
     return result.cover;
   },
   /** a skill turned on or off for every project; whoever lists skills (the gallery, the desktop's chat) reads them again */
-  setSkillOn: async (name: string, on: boolean): Promise<void> => {
-    await call<{ on: boolean }>(`skills/${encodeURIComponent(name)}/on`, 'PUT', { on });
+  setSkillOn: async (uid: string, on: boolean): Promise<void> => {
+    await call<{ on: boolean }>(`skills/${encodeURIComponent(uid)}/on`, 'PUT', { on });
     for (const [key, skills] of seen.skills) seen.skills.set(key, skills.map((skill) => {
-      if (skill.name !== name) return skill;
+      if (skill.uid !== uid) return skill;
       const { off: _was, ...rest } = skill;
       return on ? rest : { ...rest, off: true as const };
     }));
     window.dispatchEvent(new Event(SKILLS_CHANGED));
   },
-  /** an official skill installed (it starts on) or uninstalled; whoever lists skills reads them again */
-  setSkillInstalled: async (name: string, installed: boolean): Promise<void> => {
-    await call<{ installed: boolean }>(`skills/${encodeURIComponent(name)}/installed`, 'PUT', { installed });
+  /** one of Discover's installed (downloaded, at the version it shows) or uninstalled; whoever lists skills reads them again */
+  setSkillInstalled: async (uid: string, installed: boolean): Promise<void> => {
+    await call<{ installed: boolean }>(`skills/${encodeURIComponent(uid)}/installed`, 'PUT', { installed });
     window.dispatchEvent(new Event(SKILLS_CHANGED));
   },
   /** one of the person's own skills, or a project's, moved to the trash */
-  removeSkill: async (name: string, projectId?: string | null): Promise<void> => {
-    await call<object>(`skills/${encodeURIComponent(name)}${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'DELETE');
+  removeSkill: async (uid: string, projectId?: string | null): Promise<void> => {
+    await call<object>(`skills/${encodeURIComponent(uid)}${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'DELETE');
     window.dispatchEvent(new Event(SKILLS_CHANGED));
   },
   /** asked as Studio opens, so a gallery opened later shows its examples and skills at once */

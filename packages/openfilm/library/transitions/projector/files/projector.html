@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Projector</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * An old projector flickers, dust and hairs flash in the gate and the lamp flares up to a warm white over the cut,
+ * then flickers back down onto the next shot. It lasts 1 s and covers the cut at its middle: put its middle on the
+ * cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame so
+ * it fits a stage of any shape.
+ */
+const D = 1;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const inQuad = (x) => x * x;
+const outQuad = (x) => 1 - (1 - x) * (1 - x);
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+function draw(u) {
+  const n = Math.floor(u * D * 24), R = Math.hypot(W, H) / 2;
+  const env = u < 0.5 ? inQuad(seg(u, 0, 0.42)) : 1 - outQuad(seg(u, 0.58, 1));
+  /* a vignette darkens the edges as the lamp heats up */
+  const vig = g.createRadialGradient(W / 2, H / 2, R * 0.35, W / 2, H / 2, R);
+  vig.addColorStop(0, 'rgba(20, 10, 0, 0)');
+  vig.addColorStop(1, `rgba(20, 10, 0, ${0.55 * env})`);
+  g.fillStyle = vig;
+  g.fillRect(0, 0, W, H);
+  /* the lamp: warm light that flickers each frame */
+  const flick = (hash(n) - 0.5) * 0.5 * Math.sin(Math.PI * Math.min(1, env * 1.2));
+  const wash = u > 0.42 && u < 0.58 ? 1 : clamp(env * 0.95 + flick);
+  const hot = g.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, R);
+  hot.addColorStop(0, `rgba(255, 252, 240, ${wash})`);
+  hot.addColorStop(0.6, `rgba(255, 238, 205, ${wash})`);
+  hot.addColorStop(1, `rgba(245, 215, 170, ${wash})`);
+  g.fillStyle = hot;
+  g.fillRect(0, 0, W, H);
+  /* dust, hairs and scratches, new on each frame */
+  const k = Math.sin(Math.PI * u);
+  g.fillStyle = `rgba(30, 20, 10, ${0.75 * k})`;
+  for (let i = 0; i < 14; i++) {
+    if (hash(n * 17 + i) > k) continue;
+    const r = 1 + hash(n * 19 + i) * H * 0.012;
+    g.beginPath();
+    g.ellipse(hash(n * 23 + i) * W, hash(n * 29 + i) * H, r, r * (0.5 + hash(i + n)), hash(i) * 3, 0, TAU);
+    g.fill();
+  }
+  g.strokeStyle = `rgba(30, 20, 10, ${0.6 * k})`;
+  g.lineWidth = 1;
+  for (let i = 0; i < 2; i++) {
+    if (hash(n * 31 + i) > 0.5) continue;
+    const x = hash(n * 37 + i) * W, y = hash(n * 41 + i) * H, s = H * 0.12;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.bezierCurveTo(x + s * 0.5, y - s * 0.4, x + s * 0.2, y + s * 0.6, x + s, y + s * 0.3);
+    g.stroke();
+  }
+  for (let i = 0; i < 3; i++) {
+    g.fillStyle = `rgba(255, 250, 235, ${0.5 * k * hash(n * 43 + i)})`;
+    g.fillRect(hash(i * 7 + Math.floor(n / 3)) * W, 0, 1, H);
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

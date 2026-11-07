@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Emoji</title>
+<style>
+/*
+ * A sticker: one picture (emoji.png beside it), whole inside its clip's box, and how it comes in and moves while it
+ * shows, as CSS variables (a component's properties). A page of OpenFilm's library (CC0); the picture is Microsoft's
+ * Fluent Emoji (MIT).
+ */
+:root {
+  --in: pop;
+  --in-time: 0.45s;
+  --loop: none;
+  --loop-time: 1.6s;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+img {
+  position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain;
+  animation:
+    var(--in) var(--in-time) cubic-bezier(.2, .8, .2, 1) both,
+    var(--loop) var(--loop-time) ease-in-out var(--in-time) infinite;
+}
+@keyframes pop { 0% { opacity: 0; transform: scale(0.3); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
+@keyframes fade { from { opacity: 0; } }
+@keyframes float { 50% { transform: translateY(-4%); } }
+@keyframes pulse { 50% { transform: scale(1.08); } }
+@keyframes wiggle { 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
+</style>
+</head>
+<body>
+<img src="emoji.png" alt="">
+<script>
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

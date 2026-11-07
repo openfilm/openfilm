@@ -30,6 +30,9 @@ export const MEDIA_RATE_MAX = 16;
 /** Whether a browser plays media at `rate`. @param {number} rate */
 export const mediaPlays = (rate) => rate >= MEDIA_RATE_MIN - 1e-9 && rate <= MEDIA_RATE_MAX + 1e-9;
 const TRIM_EPS = 1e-6;
+/* film.html's seconds are written to the millisecond, and Studio's timeline counts a file's length in whole
+   milliseconds rounded down: a trim one millisecond past a file's length is its end */
+const PAST_END_EPS = 0.001 + TRIM_EPS;
 
 const STILL_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'avif', 'gif', 'bmp', 'svg']);
 
@@ -137,7 +140,10 @@ const BOX_FIELDS = ['x', 'y', 'w', 'h', 'r'];
 const PAGE_SIZE_MAX = 8192;
 /** A copy of `row` with only `fields`, in that order: what is written back reads the same every time. */
 const ordered = (row, fields) => Object.fromEntries(fields.filter((k) => row[k] !== undefined).map((k) => [k, row[k]]));
-const TRACK_FIELDS = ['clips', 'locked', 'hidden', 'muted', 'attrs'];
+const TRACK_FIELDS = ['clips', 'locked', 'hidden', 'muted', 'attrs', 'captions'];
+/** A caption track's `<track>` (SPEC §1 Captions): what it may say. */
+const CAPTION_KINDS = ['captions', 'subtitles'];
+const CAPTION_FIELDS = ['src', 'kind', 'srclang', 'label'];
 
 function unknownKeys(row, allowed, where, problems) {
   const extra = Object.keys(row).filter((k) => !allowed.includes(k));
@@ -320,8 +326,11 @@ export function readFilm(value) {
   if ('clips' in value && !('tracks' in value)) {
     return fail(`${FILM_FILE} holds its clips in tracks: each <section> is a track.`);
   }
-  const extra = Object.keys(value).filter((k) => !['stage', 'tracks'].includes(k));
-  if (extra.length) return fail(`${FILM_FILE} is a stage and its tracks; there is nothing else: ${extra.join(' · ')}`);
+  const extra = Object.keys(value).filter((k) => !['stage', 'tracks', 'keyframes'].includes(k));
+  if (extra.length) return fail(`${FILM_FILE} is a stage, its tracks and the keyframes its clips move by; there is nothing else: ${extra.join(' · ')}`);
+  if (value.keyframes !== undefined && !(isObject(value.keyframes) && Object.entries(value.keyframes).every(([k, v]) => KEYFRAMES_NAME.test(k) && typeof v === 'string'))) {
+    return fail(`${FILM_FILE}'s keyframes are named CSS @keyframes, each name its body's.`);
+  }
   const stage = value.stage ?? DEFAULT_STAGE;
   if (!isObject(stage) || !(Number.isInteger(stage.w) && stage.w > 0) || !(Number.isInteger(stage.h) && stage.h > 0)) {
     return fail(`${FILM_FILE} wants a picture size of positive whole numbers: <meta name="viewport" content="width=1920, height=1080"> (without one, it is 1920 × 1080).`);
@@ -358,10 +367,29 @@ export function readFilm(value) {
       problems.push(`tracks[${ti}]: attrs has to be text attributes: id, class, title, lang, dir, data-* or aria-*.`);
       return;
     }
-    tracks.push({ clips, ...(row.locked === true ? { locked: true } : {}), ...(row.hidden === true ? { hidden: true } : {}), ...(row.muted === true ? { muted: true } : {}), ...(row.attrs && Object.keys(row.attrs).length ? { attrs: row.attrs } : {}) });
+    const captions = row.captions === undefined ? null : readCaptions(row.captions, `tracks[${ti}]`, problems);
+    if (row.captions !== undefined && !captions) return;
+    if (captions && row.clips.length) { problems.push(`tracks[${ti}]: a caption track holds its <track> alone — its clips go on a track of their own.`); return; }
+    tracks.push({ clips, ...(row.locked === true ? { locked: true } : {}), ...(row.hidden === true ? { hidden: true } : {}), ...(row.muted === true ? { muted: true } : {}), ...(row.attrs && Object.keys(row.attrs).length ? { attrs: row.attrs } : {}), ...(captions ? { captions } : {}) });
   });
   if (problems.length) return { doc: null, problems };
-  return { doc: { stage: { w: stage.w, h: stage.h }, tracks }, problems };
+  const keyframes = value.keyframes && Object.keys(value.keyframes).length ? { keyframes: { ...value.keyframes } } : {};
+  return { doc: { stage: { w: stage.w, h: stage.h }, tracks, ...keyframes }, problems };
+}
+
+/**
+ * A caption track's `<track>` as read (SPEC §1 Captions): its WebVTT file (`src`), `kind` captions or subtitles, and
+ * optionally `srclang` and `label`. Null, with what is wrong said in `problems`, when it is not one.
+ */
+function readCaptions(raw, where, problems) {
+  if (!isObject(raw)) { problems.push(`${where}: a caption track is a <track kind="captions" src="captions/….vtt">.`); return null; }
+  const extra = Object.keys(raw).filter((k) => !CAPTION_FIELDS.includes(k));
+  if (extra.length) { problems.push(`${where}: a caption track's <track> takes kind, src, srclang and label: ${extra.join(' · ')}`); return null; }
+  if (typeof raw.src !== 'string' || !/\.vtt$/i.test(raw.src.split(/[?#]/, 1)[0])) { problems.push(`${where}: a caption track's src is a WebVTT file (captions/….vtt).`); return null; }
+  const kind = raw.kind ?? 'captions';
+  if (!CAPTION_KINDS.includes(kind)) { problems.push(`${where}: a caption track's kind is captions or subtitles.`); return null; }
+  for (const k of ['srclang', 'label']) if (raw[k] !== undefined && typeof raw[k] !== 'string') { problems.push(`${where}: ${k} is text.`); return null; }
+  return { src: raw.src, kind, ...(raw.srclang ? { srclang: raw.srclang } : {}), ...(raw.label ? { label: raw.label } : {}) };
 }
 
 /** The edit, or an Error that lists every problem in it. */
@@ -416,8 +444,8 @@ export function clipSpan(clip, native, where = 'clip') {
   if (from < -TRIM_EPS) throw new Error(`${where}: #t=${from},… starts below 0 (#t= is a part of the file, within [0, its length]).`);
   if (to + TRIM_EPS < from) throw new Error(`${where}: #t=${from},${to} has to end after it starts.`);
   if (kind !== 'page' && isFinite(native) && native > 0) {
-    if (to > native + TRIM_EPS) throw new Error(`${where}: #t=${from},${to} ends past the file's length of ${native} s (#t= is a part of the file, within [0, its length]).`);
-    if (from > native + TRIM_EPS) throw new Error(`${where}: #t=${from},${to} starts past the file's length of ${native} s (#t= is a part of the file, within [0, its length]).`);
+    if (to > native + PAST_END_EPS) throw new Error(`${where}: #t=${from},${to} ends past the file's length of ${native} s (#t= is a part of the file, within [0, its length]).`);
+    if (from > native + PAST_END_EPS) throw new Error(`${where}: #t=${from},${to} starts past the file's length of ${native} s (#t= is a part of the file, within [0, its length]).`);
   }
   const speed = clipSpeed(clip);
   return { from, to, speed, length: (to - from) / speed };
@@ -503,9 +531,69 @@ const BOX_OF_PROP = { left: 'x', top: 'y', width: 'w', height: 'h', rotate: 'r' 
 /** What the film sets itself (BOX_OF_PROP does the placing): written in a clip's style, it would fight the film. */
 const PLACING = new Set(['position', 'inset', 'right', 'bottom', 'margin', 'transform', 'translate', 'scale', 'z-index', 'visibility', 'display']);
 const TRACK_FLAGS = ['hidden', 'muted', 'locked'];
-/** CSS that moves in time: a film's styles hold still (they would run on the film's clock, not a clip's). */
-const TIMED = /^(animation|transition)(-|$)/;
-const STILL_CSS = 'a film\'s CSS holds still — what moves is a web page of its own, a clip (its animation runs on the clip\'s time; in film.html it would run on the film\'s).';
+/** A CSS transition: its progress is history, so no frame of it is a function of t. */
+const TRANSITION = /^transition(-|$)/;
+const NO_TRANSITION = 'a transition\'s progress is history, so no frame of it is a function of t — move a clip with an animation (its time starts at its at): animation: rise .5s ease-out both, its @keyframes in the film\'s <style>.';
+/** What keyframes may not change: what places a clip (it moves by translate, scale and rotate, on top of its box). */
+const KEYFRAME_PLACING = new Set([...PLACING, 'left', 'top', 'width', 'height'].filter((p) => p !== 'translate' && p !== 'scale'));
+
+/** CSS without its comments: each from its `/*` to the next `*\/` (to the end, unclosed), found in one pass. */
+function withoutComments(/** @type {string} */ css) {
+  let out = '';
+  let at = 0;
+  for (let open = css.indexOf('/*'); open !== -1; open = css.indexOf('/*', at)) {
+    out += css.slice(at, open);
+    const close = css.indexOf('*/', open + 2);
+    if (close === -1) return out;
+    at = close + 2;
+  }
+  return out + css.slice(at);
+}
+
+/**
+ * What is wrong with the film's own CSS (its <style>): a transition, or keyframes that would place a clip rather than
+ * move it on top of its box.
+ * @param {string} css
+ */
+export function filmCssProblems(css) {
+  const problems = [];
+  const text = withoutComments(css);
+  if (/(^|[;{\s])transition(-[a-z-]+)?\s*:/i.test(text)) problems.push(NO_TRANSITION);
+  for (const m of text.matchAll(/@keyframes\s+([^\s{]+)\s*\{/gi)) {
+    let depth = 1, i = m.index + m[0].length;
+    const start = i;
+    for (; i < text.length && depth > 0; i++) { if (text[i] === '{') depth++; else if (text[i] === '}') depth--; }
+    const body = text.slice(start, i - 1);
+    for (const d of body.matchAll(/([a-z-]+)\s*:/gi)) {
+      const prop = d[1].toLowerCase();
+      if (KEYFRAME_PLACING.has(prop)) {
+        problems.push(`@keyframes ${m[1]}: ${prop} would place the clip — keyframes move a picture with translate (px, vw, vh), scale and rotate, on top of its box.`);
+        break;
+      }
+    }
+  }
+  return problems;
+}
+
+/**
+ * The `@keyframes` blocks of a film's CSS: each one's name, its body (what is between its braces) and where the whole
+ * block is in `css`.
+ * @param {string} css
+ */
+export function keyframeBlocks(css) {
+  const out = [];
+  for (const m of css.matchAll(/@keyframes\s+([^\s{]+)\s*\{/gi)) {
+    let depth = 1, i = m.index + m[0].length;
+    const open = i;
+    for (; i < css.length && depth > 0; i++) { if (css[i] === '{') depth++; else if (css[i] === '}') depth--; }
+    out.push({ name: m[1], body: css.slice(open, i - 1).trim(), start: m.index, end: i });
+  }
+  return out;
+}
+/** A keyframes block as the film writes it. */
+const keyframesText = (/** @type {string} */ name, /** @type {string} */ body) => `@keyframes ${name} { ${body} }`;
+/** A keyframes name: one CSS identifier. */
+const KEYFRAMES_NAME = /^-?[A-Za-z_][\w-]*$/;
 /** A clip's attributes, each with what it says. */
 const CLIP_ATTRIBUTES = new Set(['id', 'src', 'at', 'speed', 'volume', 'muted', 'size', 'class', 'style', 'overrides']);
 
@@ -734,8 +822,8 @@ function clipOfTag(tag, where, problems) {
           else (raw.box ??= {})[BOX_OF_PROP[prop]] = n;
         } else if (PLACING.has(prop)) {
           problems.push(`${where}: ${prop} would move the clip — a picture is placed by left, top, width, height and rotate in its style.`);
-        } else if (TIMED.test(prop)) {
-          problems.push(`${where}: ${STILL_CSS}`);
+        } else if (TRANSITION.test(prop)) {
+          problems.push(`${where}: ${NO_TRANSITION}`);
         } else rest.push(`${prop}: ${v}`);
       }
       if (rest.length) raw.style = rest.join('; ');
@@ -770,17 +858,32 @@ export function readFilmFile(text) {
   let stage;
   let bodyStart = -1;
   let viewport = null;
+  /* its CSS: where each <style>'s text is, the keyframes in it, where the head ends */
+  const styles = [];
+  /** @type {Record<string, string>} */
+  const keyframes = {};
+  /** @type {Record<string, { start: number, end: number }>} */
+  const keyframesAt = {};
+  let headEnd = -1;
   let i = 0;
   /* the head: anything a page's head holds, but no script (a film is not code: code is a page's), and the stage */
   for (; i < marks.length; i++) {
     const m = marks[i];
+    if (m.type === 'close' && m.name === 'head') headEnd = m.start;
     if (m.type === 'open' && m.name === 'body') { bodyStart = m.end; i++; break; }
     /* an element of the body begins it, <body> written or not (as a browser reads it) */
     if (m.type === 'open' && !HEAD_TAGS.has(m.name)) { bodyStart = m.start; break; }
     if (m.type === 'text' && !m.raw && m.text.trim()) { bodyStart = m.start; break; }
     if (m.type !== 'open') continue;
-    if (m.name === 'script') problems.push(`${at(m)}: a film runs no script — what moves is a web page of its own, a clip (<iframe src="title.html">).`);
-    if (m.name === 'style' && /@keyframes|(^|[;{\s])(animation|transition)(-[a-z-]+)?\s*:/i.test(marks[i + 1]?.raw ? marks[i + 1].text : '')) problems.push(`${at(m)}: ${STILL_CSS}`);
+    if (m.name === 'script') problems.push(`${at(m)}: a film runs no script — code goes in a web page of its own, a clip (<iframe src="title.html">); a clip moves by CSS animation.`);
+    if (m.name === 'style') {
+      const inner = marks[i + 1]?.raw ? marks[i + 1] : null;
+      for (const p of filmCssProblems(inner ? inner.text : '')) problems.push(`${at(m)}: ${p}`);
+      if (inner) {
+        styles.push({ start: inner.start, end: inner.end });
+        for (const k of keyframeBlocks(inner.text)) { keyframes[k.name] = k.body; keyframesAt[k.name] = { start: inner.start + k.start, end: inner.start + k.end }; }
+      }
+    }
     if (m.name === 'base') problems.push(`${at(m)}: a film has no <base>: its clips' files are relative to ${FILM_FILE}.`);
     if (m.name === 'meta' && m.attrs.find((a) => a.name === 'name')?.value.toLowerCase() === 'viewport') {
       viewport = m;
@@ -795,7 +898,7 @@ export function readFilmFile(text) {
   /* the body: tracks, each a <section> of clips */
   const tracks = [];
   const lines = [];
-  const layout = { bodyStart, bodyEnd: text.length, viewport: viewport ? { start: viewport.start, end: viewport.end } : null, tracks: [], tail: [] };
+  const layout = { bodyStart, bodyEnd: text.length, viewport: viewport ? { start: viewport.start, end: viewport.end } : null, styles, keyframesAt, headEnd, tracks: [], tail: [] };
   let track = null;
   let pending = [];
   /** Where an element that has no place here ends (said once: its content and end tag are passed over with it). */
@@ -809,7 +912,7 @@ export function readFilmFile(text) {
     }
     return marks.length;
   };
-  const stray = (m) => m.type === 'open' && m.name === 'script' ? 'a film runs no script — what moves is a web page of its own, a clip (<iframe src="title.html">).'
+  const stray = (m) => m.type === 'open' && m.name === 'script' ? 'a film runs no script — code goes in a web page of its own, a clip (<iframe src="title.html">); a clip moves by CSS animation.'
     : m.type === 'open' && (m.name === 'style' || m.name === 'link') ? 'styles go in <head>.'
       : `<${m.type === 'close' ? '/' : ''}${m.name}> — a film's body is its tracks, each a <section> of clips (<iframe>, <video>, <img>, <audio>); anything else on screen is a web page of its own, a clip.`;
   for (; i < marks.length; i++) {
@@ -848,6 +951,15 @@ export function readFilmFile(text) {
       track = null;
       continue;
     }
+    if (m.type === 'open' && m.name === 'track') {
+      /* a caption track: its one <track> (SPEC §1 Captions); readFilm says what is wrong with it */
+      const raw = {};
+      for (const a of m.attrs) raw[a.name] = a.value;
+      if (track.raw.captions) problems.push(`${at(m)}: a caption track holds one <track>.`);
+      else track.raw.captions = raw;
+      pending = [];
+      continue;
+    }
     if (m.type === 'open' && KIND_OF_TAG[m.name]) {
       const where = `${at(m)}: ${named(m)}`;
       let end = m.end;
@@ -876,7 +988,7 @@ export function readFilmFile(text) {
   }
   if (track) problems.push(`${at(track.open)}: this <section> has no </section>.`);
   layout.tail = pending;
-  const value = { stage: stage ?? { ...DEFAULT_STAGE }, tracks };
+  const value = { stage: stage ?? { ...DEFAULT_STAGE }, tracks, ...(Object.keys(keyframes).length ? { keyframes } : {}) };
   if (problems.length) return { value: null, doc: null, problems, layout: null };
   const read = readFilm(value);
   /* the value's places (tracks[1].clips[0]) said as the file's lines */
@@ -933,6 +1045,8 @@ export function clipTag(clip) {
   return `<${tag} ${parts.join(' ')}>${tag === 'img' ? '' : `</${tag}>`}`;
 }
 
+/** A caption track's `<track>`: kind, src, then its language and name. */
+const captionsTag = (c) => `<track kind="${escapeAttr(c.kind ?? 'captions')}" src="${escapeAttr(srcHref(c.src))}"${c.srclang ? ` srclang="${escapeAttr(c.srclang)}"` : ''}${c.label ? ` label="${escapeAttr(c.label)}"` : ''}>`;
 const sectionTag = (track) => `<section${Object.entries(track.attrs ?? {}).map(([k, v]) => ` ${k}="${escapeAttr(v)}"`).join('')}${TRACK_FLAGS.filter((f) => track[f]).map((f) => ` ${f}`).join('')}>`;
 const viewportTag = (stage) => `<meta name="viewport" content="width=${stage.w}, height=${stage.h}">`;
 /** Two values read alike: what a reader makes of them is the same. */
@@ -967,6 +1081,7 @@ export function filmHtml(value, before = '') {
     const sameTrack = wasTrack && TRACK_FLAGS.every((f) => Boolean(wasTrack[f]) === Boolean(track[f])) && same(wasTrack.attrs ?? {}, track.attrs ?? {});
     body += was && sameTrack ? piece(was.open) : sectionTag(track);
     body += '\n';
+    if (track.captions) body += `  ${captionsTag(track.captions)}\n`;
     (track.clips ?? []).forEach((clip, ci) => {
       const now = checked?.tracks[ti]?.clips[ci] ?? clip;
       const k = kept.get(now.id);
@@ -977,19 +1092,50 @@ export function filmHtml(value, before = '') {
     body += '</section>\n';
   });
   if (old) body += comments(old.layout.tail, '');
+  const keyframes = Object.entries(value.keyframes ?? {});
   if (!old) {
-    return `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n${viewportTag(stage)}\n</head>\n<body>${body}</body>\n</html>\n`;
+    const css = keyframes.length ? `<style>\n${keyframes.map(([n, b]) => `  ${keyframesText(n, b)}\n`).join('')}</style>\n` : '';
+    return `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n${viewportTag(stage)}\n${css}</head>\n<body>${body}</body>\n</html>\n`;
   }
   let head = old.text.slice(0, old.layout.bodyStart);
+  /* what changes in the head, each a stretch of it and what goes there, written from the last back */
+  const edits = [];
   const sameStage = old.doc.stage.w === stage.w && old.doc.stage.h === stage.h;
   if (!sameStage) {
     const v = old.layout.viewport;
-    if (v) head = head.slice(0, v.start) + viewportTag(stage) + head.slice(v.end);
+    if (v) edits.push({ start: v.start, end: v.end, text: viewportTag(stage) });
     else {
       const open = /<head\b[^>]*>/i.exec(head) ?? /^\s*<!doctype[^>]*>/i.exec(head);
       const at = open ? open.index + open[0].length : 0;
-      head = `${head.slice(0, at)}\n${viewportTag(stage)}${head.slice(at)}`;
+      edits.push({ start: at, end: at, text: `\n${viewportTag(stage)}` });
     }
   }
+  /* the keyframes the value says (none said: the file's as they are): each changed one in its place, each gone taken
+     out with its line, each new one at the end of the last <style> (a new one if there is none) */
+  if (value.keyframes !== undefined) {
+    const was = old.doc.keyframes ?? {};
+    const now = value.keyframes ?? {};
+    for (const [name, at] of Object.entries(old.layout.keyframesAt)) {
+      if (!(name in was)) continue;
+      if (!(name in now)) {
+        const line = /\n[ \t]*$/.exec(head.slice(0, at.start));
+        const end = head[at.end] === '\n' && line ? at.end + 1 : at.end;
+        edits.push({ start: line ? line.index + 1 : at.start, end, text: '' });
+      } else if (now[name] !== was[name]) edits.push({ start: at.start, end: at.end, text: keyframesText(name, now[name]) });
+    }
+    const added = Object.entries(now).filter(([name]) => !(name in was));
+    if (added.length) {
+      const last = old.layout.styles[old.layout.styles.length - 1];
+      const lines = added.map(([n, b]) => `  ${keyframesText(n, b)}\n`).join('');
+      if (last) {
+        const tail = /\s*$/.exec(head.slice(last.start, last.end))?.[0].length ?? 0;
+        edits.push({ start: last.end - tail, end: last.end - tail, text: `\n${lines.replace(/\n$/, '')}` });
+      } else {
+        const at = old.layout.headEnd >= 0 ? old.layout.headEnd : head.length;
+        edits.push({ start: at, end: at, text: `<style>\n${lines}</style>\n` });
+      }
+    }
+  }
+  for (const e of edits.sort((a, b) => b.start - a.start)) head = head.slice(0, e.start) + e.text + head.slice(e.end);
   return head + body + old.text.slice(old.layout.bodyEnd);
 }

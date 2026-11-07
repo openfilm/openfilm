@@ -161,6 +161,8 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   /** @type {Map<string, { session: AgentSession, sender: import('electron').WebContents, pending: Map<string, (answer: any) => void>, agent: string, cwd: string, turn: any }>} */
   const sessions = new Map();
   let activePrompts = 0;
+  /** the agent the chat last started a conversation with: the one Studio's own questions go to (`ask`) */
+  let lastAgent = null;
   /** the folders a turn is running in now: what a project cannot be deleted from under */
   const working = () => [...new Set([...sessions.values()].filter((entry) => entry.running > 0).map((entry) => entry.cwd))];
   /** the folders where an agent waits for the person's answer (a permission, a question): told on each change */
@@ -247,6 +249,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     const meta = opts?.meta && typeof opts.meta === 'object' ? opts.meta : null;
     if (!isChatAgent(agent)) return { ok: false, error: `Unknown agent: ${String(agent)}` };
     if (typeof cwd !== 'string' || !cwd) return { ok: false, error: 'Missing project folder.' };
+    lastAgent = agent;
     /* the conversation still open here (the page was reloaded): taken up as it is, no second process */
     const open = resume ? [...sessions].find(([, e]) => e.agent === agent && e.cwd === cwd && e.info?.sessionId === resume && e.sender === event.sender) : null;
     if (open) {
@@ -471,6 +474,34 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   return {
     isBusy: () => activePrompts > 0,
     working,
+    /** the agent the chat last started a conversation with, or null */
+    lastAgent: () => lastAgent,
+    /**
+     * One question answered by `agent`'s own model, with no chat: Studio's own work that needs a model (translating
+     * subtitles). A session of its own in an empty folder, where the agent may do nothing but answer (`answerOnly`: every
+     * permission refused; every question skipped); its words, whole. `signal` stops it.
+     * @param {string} agent @param {string} text @param {AbortSignal} [signal] @returns {Promise<string>}
+     */
+    ask: async (agent, text, signal) => {
+      if (!isChatAgent(agent)) throw new Error(`Unknown agent: ${String(agent)}`);
+      let said = '';
+      const session = new AgentSession({
+        agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent), answerOnly: true,
+        onUpdate: (update) => { if (update?.sessionUpdate === 'agent_message_chunk' && update.content?.type === 'text') said += update.content.text ?? ''; },
+        onQuestion: async () => null,
+      });
+      const stop = () => { void session.cancel().catch(() => {}); session.close(); };
+      signal?.addEventListener('abort', stop, { once: true });
+      try {
+        await session.start();
+        signal?.throwIfAborted();
+        await session.prompt([{ type: 'text', text }]);
+        return said;
+      } finally {
+        signal?.removeEventListener('abort', stop);
+        session.close();
+      }
+    },
     closeAll: () => [...sessions.keys()].forEach(close),
     /** an agent disconnected in Settings: its sessions close */
     closeAgent: (agent) => { for (const [key, entry] of [...sessions]) if (entry.agent === agent) close(key); },

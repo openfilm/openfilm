@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { attrsOf, groupsOf, pasteAttrs, type AttrClip, type AttrGroup } from './clip-attrs.ts';
+import { declared, withDeclarations } from './clip-look.ts';
+import { maskCss, maskDefault, maskOf, maskStrokeOf } from './clip-mask.ts';
 
 const ALL = new Set<AttrGroup>(['place', 'blend', 'volume', 'fade']);
 const video = (id: string, more: Partial<AttrClip> = {}): AttrClip => ({ id, src: `${id}.mp4`, ...more } as AttrClip);
@@ -12,7 +14,7 @@ test('a clip\'s attributes: its place, its blending, its volume and its fades', 
   assert.deepEqual(attrs.blend, { opacity: '0.5', mode: 'screen' });
   assert.equal(attrs.volume, 0.4);
   assert.deepEqual(attrs.fade, [0.5, 1]);
-  assert.deepEqual(groupsOf(attrs), ['place', 'blend', 'volume', 'fade']);
+  assert.deepEqual(groupsOf(attrs), ['place', 'blend', 'volume', 'fade'], 'no mask, none offered');
   assert.deepEqual(groupsOf(attrsOf({ id: 'bed', src: 'bed.wav' } as AttrClip)), ['volume', 'fade'], 'a sound has no picture');
 });
 
@@ -34,4 +36,29 @@ test('pasted: the ticked groups, onto clips that can take them; the rest of a st
   ]);
   /* a clip with no place of its own copied: the target's goes too (it is back to its default) */
   assert.deepEqual(pasteAttrs(attrsOf(video('plain')), new Set(['place']), [blue]), [{ loc: 'film.html#0.2', prop: 'box', value: null }]);
+});
+
+test('a mask and its stroke are pasted, drawn again in the target\'s box; its faded edges and the rest of its style stay', () => {
+  const box = { x: 0, y: 0, w: 960, h: 540 };
+  const shape = { ...maskDefault('ellipse', box), x: 30, feather: 10 };
+  const stroke = { position: 'outside' as const, width: 4, color: '#ffffff' };
+  const masked = withDeclarations('opacity: 0.8', maskCss(() => undefined, shape, box, stroke) as Record<string, string | null>);
+  const attrs = attrsOf(video('red', { box, style: masked }));
+  assert.deepEqual(groupsOf(attrs), ['place', 'blend', 'mask', 'volume', 'fade']);
+  /* the target, square, with faded edges of its own */
+  const edges = withDeclarations('filter: blur(2px)', { 'mask-image': 'linear-gradient(to right, transparent 0%, #000 10%)', 'mask-composite': null });
+  const blue = { loc: 'film.html#0.2', clip: video('blue', { box: { x: 0, y: 0, w: 500, h: 500 }, style: edges }), lengthS: 6 };
+  const [edit] = pasteAttrs(attrs, new Set(['mask']), [blue]);
+  assert.equal(edit?.prop, 'style');
+  const style = String(edit!.value);
+  const read = (prop: string) => declared(style, prop);
+  const got = maskOf(read('mask-image'), read('mask-composite'), { w: 500, h: 500 })!;
+  for (const [k, v] of Object.entries(shape)) {
+    if (typeof v === 'number') assert.ok(Math.abs((got as unknown as Record<string, number>)[k]! - v) < 0.05, `${k}: the same, in % of its box`);
+    else assert.equal((got as unknown as Record<string, unknown>)[k], v);
+  }
+  assert.deepEqual(maskStrokeOf(read('filter')), stroke);
+  assert.match(read('filter') ?? '', /^blur\(2px\) /, 'its own filter kept');
+  assert.match(read('mask-image') ?? '', /^linear-gradient\(to right, transparent 0%, #000 10%\), /, 'its faded edges kept, above the mask');
+  assert.equal(read('opacity'), undefined, 'blending not ticked');
 });

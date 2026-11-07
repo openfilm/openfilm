@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "light-sweep.html",
+    "attrs": {
+      "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 800
+}

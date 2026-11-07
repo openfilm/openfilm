@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Circle zoom</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #f4f1ea; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A circle grows from the middle behind a softer one and fills the frame over the cut; then a hole opens from the
+ * middle and grows until the next shot is all there. It lasts 0.8 s and covers the cut at its middle: put its
+ * middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of
+ * the frame so it fits a stage of any shape.
+ */
+const D = 0.8;
+const DEFAULT = '#f4f1ea';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+const rgbOf = (c) => { g.fillStyle = '#000'; g.fillStyle = c; const s = String(g.fillStyle); return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number); };
+/* a colour made lighter (k > 0, toward white) or darker (k < 0, toward black), at an opacity */
+const tone = (c, k, a = 1) => `rgba(${rgbOf(c).map((x) => Math.round(k > 0 ? x + (255 - x) * k : x * (1 + k))).join(', ')}, ${a})`;
+
+/* a ring between radii r0 and r1 around the middle (r0 = 0: a disc) */
+const ring = (r0, r1, style) => {
+  if (r1 <= r0) return;
+  g.fillStyle = style;
+  g.beginPath();
+  g.arc(W / 2, H / 2, r1, 0, TAU);
+  if (r0 > 0) g.arc(W / 2, H / 2, r0, 0, TAU, true);
+  g.fill('evenodd');
+};
+
+function draw(u) {
+  const c = color(), R = Math.hypot(W, H) / 2 + 2;
+  if (u < 0.5) {
+    const lead = R * inOut(seg(u, 0, 0.34)), main = R * inOut(seg(u, 0.07, 0.42));
+    ring(main, lead, tone(c, 0, 0.45));
+    ring(0, main, c);
+  } else {
+    const hole = R * inOut(seg(u, 0.56, 0.92)), trail = R * inOut(seg(u, 0.62, 1));
+    ring(hole, R, c);
+    ring(trail, hole, tone(c, 0, 0.45));
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

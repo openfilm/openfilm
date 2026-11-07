@@ -188,6 +188,8 @@ await builder.build({
       gatekeeperAssess: false,
       entitlements: join(desktop, 'build/entitlements.mac.plist'),
       entitlementsInherit: join(desktop, 'build/entitlements.mac.plist'),
+      /* what macOS says when Studio's record button first asks for the microphone (the entitlement above lets it) */
+      extendInfo: { NSMicrophoneUsageDescription: 'OpenFilm records sound from the microphone when you press Record.' },
       ...(unsigned ? { identity: null } : { identity: IDENTITY, notarize: true }),
     },
     /* the downloads keep one name from version to version: the website links the latest release's by it */

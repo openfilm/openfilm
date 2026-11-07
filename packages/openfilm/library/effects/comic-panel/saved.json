@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "comic-panel.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Caption\", \"type\": \"var\", \"var\": \"--caption\"}, {\"name\": \"Dots\", \"type\": \"var\", \"var\": \"--dots\"}]"
+    }
+  },
+  "durationMs": 4000
+}

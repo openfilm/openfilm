@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  familiesIn, fontFamiliesUsed, parseFontFaces, projectFamilies, projectFonts, resolveIn, stylesheetsOf, weightRange,
+  addTextFont, familiesIn, fontFamiliesUsed, isFontFile, parseFontFaces, projectFamilies, projectFonts, resolveIn, stylesheetsOf, weightRange,
 } from './project-fonts.mjs';
 
 test('@font-face rules: family, weight range, style, sources resolved from the file', () => {
@@ -78,4 +78,28 @@ test('a project\'s fonts are read again only for files that changed', async () =
   const later = new Date(Date.now() + 5000);
   utimesSync(join(root, 'page.html'), later, later);
   assert.deepEqual((await projectFonts(root)).fonts.map((f) => f.family), ['Two']);
+});
+
+test('a font file added for the lines of words: declared in the text component\'s own.css by its name table, once', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-add-font-'));
+  const dir = join(root, 'saved/openfilm/text-text/fonts');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'own.css'), '/* the project\'s own fonts */\n');
+  const library = new URL('../../library/text/text/files/fonts/', import.meta.url);
+  writeFileSync(join(dir, 'My Font.ttf'), readFileSync(new URL('ZCOOLKuaiLe.ttf', library)));
+  writeFileSync(join(dir, 'Smile.woff2'), readFileSync(new URL('SmileySans.woff2', library)));
+  const css = 'saved/openfilm/text-text/fonts/own.css';
+  assert.equal(await addTextFont(root, css, 'saved/openfilm/text-text/fonts/My Font.ttf'), 'ZCOOL KuaiLe');
+  /* a WOFF's name table is compressed: its family is its file's name */
+  assert.equal(await addTextFont(root, css, 'saved/openfilm/text-text/fonts/Smile.woff2'), 'Smile');
+  assert.equal(await addTextFont(root, css, 'saved/openfilm/text-text/fonts/My Font.ttf'), 'ZCOOL KuaiLe');
+  const sheet = readFileSync(join(root, css), 'utf8');
+  assert.match(sheet, /^\/\* the project's own fonts \*\//);
+  assert.equal(sheet.match(/@font-face/g)?.length, 2);
+  assert.deepEqual(parseFontFaces(sheet, css).map((f) => [f.family, f.src[0]?.path]), [
+    ['Smile', 'saved/openfilm/text-text/fonts/Smile.woff2'],
+    ['ZCOOL KuaiLe', 'saved/openfilm/text-text/fonts/My Font.ttf'],
+  ]);
+  assert.equal(isFontFile('a.OTF'), true);
+  assert.equal(isFontFile('a.exe'), false);
 });

@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Name card, vlog</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #1d1d24; --accent: #ff7aa8; --pill: #ffffff; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding-left: 6vh; font-family: var(--font); }
+.pill { position: relative; display: flex; align-items: center; gap: 3vh; background: var(--pill); color: var(--color); border-radius: 30vh; padding: 5vh 10vh 5vh 6vh; box-shadow: 0 2vh 5vh rgba(0, 0, 0, 0.25); transform-origin: 10% 50%; animation: pop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
+.dot { width: 10vh; height: 10vh; border-radius: 50%; background: var(--accent); animation: bounce 1.6s 0.8s ease-in-out infinite; }
+.t1 { font-size: 28vh; font-weight: 800; line-height: 1; white-space: pre; }
+.tag { margin: -2vh 0 0 12vh; background: var(--accent); color: #fff; font-size: 12vh; font-weight: 700; padding: 1.8vh 4.6vh; border-radius: 2vh; transform: rotate(-3deg); white-space: pre; box-shadow: 0 1.4vh 3vh rgba(0, 0, 0, 0.2); animation: tag 0.55s 0.35s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
+svg { position: absolute; right: -19vh; top: -8vh; width: 18vh; height: 13vh; overflow: visible; }
+path { fill: none; stroke: var(--accent); stroke-width: 11; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.6s 0.6s ease-out forwards; }
+@keyframes pop { from { transform: scale(0.2); opacity: 0; } }
+@keyframes tag { from { transform: rotate(-12deg) scale(0.3); opacity: 0; } }
+@keyframes bounce { 0%, 100% { transform: translateY(0); } 30% { transform: translateY(-2.4vh); } 55% { transform: translateY(0); } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="pill"><div class="dot"></div><span class="t1">Mia Chen</span><svg viewBox="0 0 100 60"><path pathLength="1" d="M5 40 Q 20 10, 35 35 T 65 30 T 95 15"/></svg></div>
+  <div class="tag t2">travel diary · day 12</div>
+</div>
+<script>
+/*
+ * A name on a white pill that pops in with a bounce, a tilted tag of color under it and a wavy line drawn beside. A
+ * page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the
+ * host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

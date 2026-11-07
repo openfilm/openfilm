@@ -77,7 +77,7 @@ test('a click or a box in the dark around the picture selects no text: the pictu
     await page.mouse.move(film.x + 800 * scale, film.y + 640 * scale, { steps: 4 });
     assert.notEqual(await selection(), 'Range', 'drawing the box selects no text');
     await page.mouse.up();
-    await page.getByText('2 layers selected').waitFor({ state: 'visible' });
+    await until(async () => (await pickedLayers()).length === 2, 'the box selects both layers');
     assert.equal(await page.locator('[data-group-kind]').count() > 0, true, 'their box, each outlined inside it');
     assert.equal(await wholeClip(), 0, 'not the whole clip');
     assert.notEqual(await selection(), 'Range');

@@ -1,0 +1,125 @@
+{
+ "version": 2,
+ "kind": "group",
+ "clips": [
+  {
+   "track": 0,
+   "at": 5.6,
+   "clip": {
+    "src": "fest-newyear.html",
+    "time": [
+     0,
+     3.6
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Greeting\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Year\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Year\", \"type\": \"var\", \"var\": \"--gold\"}, {\"name\": \"Fireworks\", \"type\": \"var\", \"var\": \"--c1\"}, {\"name\": \"Second fireworks\", \"type\": \"var\", \"var\": \"--c2\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.38}"
+    },
+    "size": {
+     "w": 1000,
+     "h": 500
+    }
+   }
+  },
+  {
+   "track": 1,
+   "at": 0.4,
+   "clip": {
+    "src": "firework.html",
+    "time": [
+     0,
+     2.6
+    ],
+    "size": {
+     "w": 400,
+     "h": 400
+    },
+    "attrs": {
+     "data-place": "{\"x\":0.8,\"y\":0.28,\"fit\":0.36}"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 2.4,
+   "clip": {
+    "src": "exposure.html",
+    "time": [
+     0,
+     0.8
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 4.9,
+   "clip": {
+    "src": "sun-rays.html",
+    "time": [
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "track": 3,
+   "at": 0,
+   "clip": {
+    "src": "sparkles.html",
+    "time": [
+     0,
+     9.2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+   }
+  },
+  {
+   "track": 4,
+   "at": 0,
+   "clip": {
+    "src": "example-1.jpg",
+    "time": [
+     0,
+     2.8
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "1"
+    }
+   }
+  },
+  {
+   "track": 4,
+   "at": 2.8,
+   "clip": {
+    "src": "example-2.jpg",
+    "time": [
+     0,
+     2.6
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "2"
+    }
+   }
+  },
+  {
+   "track": 4,
+   "at": 5.4,
+   "clip": {
+    "src": "example-3.jpg",
+    "time": [
+     0,
+     3.8
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "3"
+    }
+   }
+  }
+ ],
+ "durationMs": 9200
+}

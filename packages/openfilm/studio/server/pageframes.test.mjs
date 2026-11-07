@@ -109,6 +109,21 @@ test('a page\'s thumbnail follows the files the page loads: a stylesheet it shar
   assert.ok(!blue.body.equals(red.body), 'the page drawn again with its new style');
 });
 
+test('a page\'s poster is drawn clear, what it leaves unpainted transparent; its frames on the timeline, on black', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Clear') } })).json();
+  writeFileSync(join(project.path, 'p.html'), '<!doctype html><body style="margin:0"><div style="margin:40px;width:200px;height:200px;background:#fc0"></div><script>window.film = { duration: 2, frame() {} };</script></body>');
+  const media = async (q) => {
+    const res = await api(`/api/projects/${project.id}/media?path=p.html&${q}`);
+    assert.equal(res.status, 200);
+    return { type: res.headers.get('content-type'), body: Buffer.from(await res.arrayBuffer()) };
+  };
+  const poster = await media('what=poster');
+  assert.equal(poster.type, 'image/webp');
+  assert.ok(poster.body.includes(Buffer.from('ALPH')), 'it keeps an alpha channel');
+  const frame = await media('what=frame&ms=500&w=160');
+  assert.equal(frame.type, 'image/jpeg');
+});
+
 test('a page clip\'s thumbnail shows the changes made in it (its overrides): another change, another picture', async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Tweaked') } })).json();
   writeFileSync(join(project.path, 'p.html'), '<!doctype html><body style="margin:0;background:#fff"><div id="box" style="width:960px;height:1080px;background:#f00"></div><script>window.film = { duration: 2, frame() {} };</script></body>');
@@ -161,6 +176,23 @@ test('a page that never gets ready (a loop that never ends) fails in its own tim
   const t1 = Date.now();
   assert.equal((await frame('loop.html', 1500)).status, 422);
   assert.ok(Date.now() - t1 < 2000);
+});
+
+test('a thumbnails browser that is ended (it crashed, or took too much memory) is let go: the next frame starts another', { skip: process.platform === 'win32' && 'no ps', timeout: 120_000 }, async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Ended') } })).json();
+  writeFileSync(join(project.path, 'p.html'), '<!doctype html><body style="background:#06c"><script>window.film = { duration: 4, frame() {} };</script></body>');
+  writeFileSync(join(project.path, 'film.html'), filmHtml({ tracks: [{ clips: [{ src: 'p.html' }] }] }));
+  const frame = (ms) => api(`/api/projects/${project.id}/media?what=frame&path=p.html&ms=${ms}&w=160`);
+  assert.equal((await frame(500)).status, 200);
+  /* the browsers this process started (the host marks each), ended as the system or the memory guard ends one */
+  const ours = execFileSync('/bin/ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8' }).split('\n')
+    .map((r) => r.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)).filter((m) => m && Number(m[2]) === process.pid && m[3].includes('--openfilm-browser='));
+  assert.ok(ours.length >= 1);
+  for (const m of ours) process.kill(Number(m[1]), 'SIGKILL');
+  await new Promise((r) => setTimeout(r, 500));
+  const t0 = Date.now();
+  assert.equal((await frame(1500)).status, 200, 'drawn by a new browser');
+  assert.ok(Date.now() - t0 < 20_000, 'at once, not after the old one is given up on');
 });
 
 test('a page asked for by a path out of the project (`../`) is not there: never opened, probed or drawn', async () => {

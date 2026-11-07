@@ -489,7 +489,13 @@ export function mergeWrite({ ours, write, versions, over = [], gaps = [], added 
         return { index: at, doubt: new Set([...unsure(at, keys.filter((k) => !again.includes(k))), ...again, ...gapped(at)]), note: n, tied };
       }
     }
-    return { index, doubt: new Set([...unsure(index), ...gapped(index)]), note: -1, tied };
+    /* a write exactly as an older version, or with only what Studio's film changed since (its copy was newer): a
+       return to it made from the latest, not an old copy sent again: what writes changed since is the writer's to put
+       back (the person's still stands) */
+    const since = compare(keepFilm(ours), versions[index]).apart;
+    const has = new Set(compare(w, keepFilm(ours)).apart);
+    const back = all[index].distance === 0 || all[index].apart.some((k) => since.includes(k) && !has.has(k)) ? since.filter((k) => !owns(k)) : [];
+    return { index, doubt: new Set([...unsure(index), ...gapped(index), ...back]), note: -1, tied };
   };
   /* clips the write may have renamed (one with an id no version has, one of the same file a version has under an id the
      write lacks) are left out of the first guess, as either id would pull it to versions with or without it */
@@ -559,10 +565,11 @@ export function mergeWrite({ ours, write, versions, over = [], gaps = [], added 
 /**
  * One unit merged: `b` the base's, `o` ours, `w` the writer's. `conflict`: both changed it differently: ours stands
  * where it is the person's (`mine`), the writer's where it came from a write (only the person's edits outrank one).
- * `unsure`: the bases the write is as near to differ here, so the person may have changed it since: the person's.
+ * `unsure`: the bases the write is as near to differ here, so the person may have changed it since: the person's;
+ * where ours came from a write, the writer's (only the person's edits outrank one).
  */
 function pick(/** @type {unknown} */ b, /** @type {unknown} */ o, /** @type {unknown} */ w, unsure = false, mine = true) {
-  if (unsure && mine) return { v: o, from: 'o', conflict: !alike(o, w) };
+  if (unsure) return mine ? { v: o, from: 'o', conflict: !alike(o, w) } : { v: w, from: 'w', conflict: false };
   if (alike(o, b)) return { v: w, from: 'w', conflict: false };
   if (alike(w, b) || alike(w, o)) return { v: o, from: 'o', conflict: false };
   return mine ? { v: o, from: 'o', conflict: true } : { v: w, from: 'w', conflict: true };

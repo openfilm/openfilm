@@ -17,8 +17,8 @@
  * has an official installer is installed from here: Install shows the exact command, which runs in a terminal window
  * once the person agrees; the row says when only the maker's desktop app is here.
  *
- * Under a connected agent: the skills and the MCP servers the person added to it themselves, each off in the app until
- * let in (its maker's own are always on).
+ * Under a connected agent: the MCP servers the person added to it themselves, each off in the app until let in
+ * (its maker's own are always on). Skills are managed in Community.
  */
 import React from 'react';
 import { Check, CircleHelp, Download, KeyRound, Loader2, Plus, RefreshCw, X } from 'lucide-react';
@@ -106,8 +106,8 @@ function UsageBar({ window: w }: { window: HostAgentUsage['windows'][number] }) 
   return (
     <div className="flex items-center gap-3 text-[13px]">
       <span className="w-[92px] shrink-0 text-[var(--text-muted)]">{label}</span>
-      <div className="h-1.5 min-w-[80px] flex-1 overflow-hidden rounded-full bg-[var(--fill-tsp)]" role="progressbar" aria-label={label} aria-valuenow={used} aria-valuemin={0} aria-valuemax={100}>
-        <div className={`h-full rounded-full ${used >= 90 ? 'bg-[var(--danger,#e5484d)]' : used >= 70 ? 'bg-[var(--warn,#f5a524)]' : 'bg-[var(--text)]'}`} style={{ width: `${Math.max(used, 1.5)}%` }} />
+      <div className="h-1.5 min-w-[80px] flex-1 overflow-hidden rounded-full bg-[var(--bg-field)]" role="progressbar" aria-label={label} aria-valuenow={used} aria-valuemin={0} aria-valuemax={100}>
+        <div className={`h-full rounded-full ${used >= 90 ? 'bg-[var(--err)]' : used >= 70 ? 'bg-[var(--warn)]' : 'bg-[var(--accent)]'}`} style={{ width: `${Math.max(used, 1.5)}%` }} />
       </div>
       <span className="w-[64px] shrink-0 text-right tabular-nums text-[var(--text)]">{t('settings.agents.usageUsed').replace('{percent}', String(used))}</span>
       <span className="w-[120px] shrink-0 truncate text-[var(--text-faint)]">{resets ?? ''}</span>
@@ -328,7 +328,7 @@ export function AgentsSection() {
           </>
         )}
       >
-        {agent.status === 'waiting' || open || said || asking || switchHow || agent.chosen || meter || outdated || notice?.id === agent.id || (chosen && agent.status === 'ready' && (host.mcp || host.skills)) ? (
+        {agent.status === 'waiting' || open || said || asking || switchHow || agent.chosen || meter || outdated || notice?.id === agent.id || (chosen && agent.status === 'ready' && host.mcp) ? (
           <div className="flex flex-col gap-1.5 pl-[34px]">
             {notice?.id === agent.id ? <p role="status" className="text-[13.5px] leading-relaxed text-[var(--text-muted)]">{notice.text}</p> : null}
             {said ? <p role="alert" className={settingsError}>{said}</p> : null}
@@ -338,7 +338,7 @@ export function AgentsSection() {
                   {t(outdated.update ? 'settings.agents.outdated' : outdated.app ? 'settings.agents.outdatedApp' : 'settings.agents.outdatedOther')
                     .replace('{name}', agent.name).replace('{version}', outdated.version).replace('{tested}', outdated.tested)}
                 </p>
-                {outdated.update ? <code className="block break-all rounded-[6px] bg-[var(--fill-tsp)] px-2.5 py-2 font-mono text-[12.5px] text-[var(--text)]">{outdated.update}</code> : null}
+                {outdated.update ? <code className="block break-all rounded-[6px] bg-[var(--bg-field)] px-2.5 py-2 font-mono text-[12.5px] text-[var(--text)]">{outdated.update}</code> : null}
               </div>
             ) : null}
             {meter ? (
@@ -348,8 +348,7 @@ export function AgentsSection() {
                 ) : plan?.windows.map((w) => <UsageBar key={w.kind + (w.minutes ?? '')} window={w} />)}
               </div>
             ) : null}
-            {chosen && agent.status === 'ready' && host.skills ? <AgentOwn agent={agent} kind="skills" /> : null}
-            {chosen && agent.status === 'ready' && host.mcp ? <AgentOwn agent={agent} kind="mcp" /> : null}
+            {chosen && agent.status === 'ready' && host.mcp ? <AgentMcp agent={agent} /> : null}
             {agent.chosen ? (
               <p className="break-all text-[13.5px] leading-relaxed text-[var(--text-muted)]">
                 {t('settings.agents.chosenAt').replace('{path}', agent.chosen)}{' '}
@@ -361,7 +360,7 @@ export function AgentsSection() {
             {asking ? (
               <SettingsInset>
                 <p className="text-[14px] leading-relaxed text-[var(--text)]">{t('settings.agents.installConfirm').replace('{name}', agent.name)}</p>
-                <code className="block break-all rounded-[6px] bg-[var(--fill-tsp)] px-2.5 py-2 font-mono text-[12.5px] text-[var(--text)]">{asking}</code>
+                <code className="block break-all rounded-[6px] bg-[var(--bg-field)] px-2.5 py-2 font-mono text-[12.5px] text-[var(--text)]">{asking}</code>
                 <div className="flex justify-end gap-1.5">
                   <SettingsButton variant="quiet" onClick={() => setConfirming(null)}>{t('settings.agents.cancel')}</SettingsButton>
                   <SettingsButton variant="primary" onClick={() => { setConfirming(null); act(agent.id, () => host.install!(agent.id)); }}>{t('settings.agents.installRun')}</SettingsButton>
@@ -430,27 +429,25 @@ export function AgentsSection() {
 }
 
 /**
- * What the person added to an agent themselves, its skills or its MCP servers: how many are used in the app, and on
+ * The MCP servers the person added to an agent themselves: how many are used in the app, and on
  * asking, a switch for each (its maker's own are always on). An agent that cannot be told says it uses them all.
  * None: nothing shown.
  */
-function AgentOwn({ agent, kind }: { agent: HostAgent; kind: 'skills' | 'mcp' }) {
+function AgentMcp({ agent }: { agent: HostAgent }) {
   const t = useT();
   const host = studioHost?.agents;
   type Item = { name: string; detail: string; allowed: boolean };
   const [listing, setListing] = React.useState<{ filtered: boolean; items: Item[] } | null>(null);
   const [open, setOpen] = React.useState(false);
   const load = React.useCallback(() => {
-    const read = kind === 'skills'
-      ? host?.skills?.(agent.id).then((r) => ({ filtered: r.filtered, items: r.skills.map((s) => ({ name: s.name, detail: s.description, allowed: s.allowed })) }))
-      : host?.mcp?.(agent.id).then((r) => ({ filtered: r.filtered, items: r.servers }));
+    const read = host?.mcp?.(agent.id).then((r) => ({ filtered: r.filtered, items: r.servers }));
     void read?.then(setListing).catch(() => {});
-  }, [host, agent.id, kind]);
+  }, [host, agent.id]);
   React.useEffect(load, [load]);
-  const allowIt = kind === 'skills' ? host?.allowSkill : host?.allowMcp;
+  const allowIt = host?.allowMcp;
   if (!allowIt || !listing?.items.length) return null;
   const name = agent.id === 'byok' ? t('settings.agents.byokName') : agent.name;
-  const key = (k: string) => t(`settings.agents.${kind}${k}`);
+  const key = (k: string) => t(`settings.agents.mcp${k}`);
   if (!listing.filtered) {
     return <p className="text-[13.5px] leading-relaxed text-[var(--text-muted)]">{key('Unfiltered').replace('{agent}', name).replace('{n}', String(listing.items.length))}</p>;
   }
@@ -653,7 +650,7 @@ function EffortPicker({ value, onChange }: { value: HostByokEffort; onChange: (v
           return (
             <button key={level} type="button" aria-pressed={on} onClick={() => toggle(level)}
               className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[12.5px] transition ${
-                on ? 'border-[var(--text-muted)] bg-[var(--fill-tsp)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text)]'
+                on ? 'border-[var(--text-muted)] bg-[var(--bg-field)] text-[var(--text)]' : 'border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text)]'
               }`}>
               {on ? <Check size={12} aria-hidden /> : null}
               {name(level)}

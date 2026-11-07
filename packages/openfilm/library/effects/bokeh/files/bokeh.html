@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Bokeh</title>
+<style>
+  /* what a clip of it may change: the lights' main color, how many show (0 to 1), how fast they drift */
+  :root { --color: #ffb85c; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Bokeh: city lights far out of focus, round discs with a brighter rim drifting slowly across the lens, swelling and
+ * fading as they pass, warm with a few cool ones among them. A page of OpenFilm's library (CC0): every disc's place
+ * is worked out from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// a disc as a lens draws it out of focus: an even body, a brighter rim, a soft edge
+const discs = new Map();
+function disc(c) {
+  const key = c.join();
+  if (discs.has(key)) return discs.get(key);
+  const g = document.createElement('canvas'); g.width = g.height = 160;
+  const x = g.getContext('2d');
+  x.filter = 'blur(2px)';
+  const r = x.createRadialGradient(80, 80, 0, 80, 80, 72);
+  r.addColorStop(0, `rgba(${c},0.42)`); r.addColorStop(0.7, `rgba(${c},0.5)`); r.addColorStop(0.9, `rgba(${c},0.85)`);
+  r.addColorStop(0.97, `rgba(${c},0.55)`); r.addColorStop(1, `rgba(${c},0)`);
+  x.fillStyle = r; x.beginPath(); x.arc(80, 80, 72, 0, 6.283); x.fill();
+  discs.set(key, g);
+  return g;
+}
+const N = 70;
+const orbs = Array.from({ length: N }, (_, i) => {
+  const r = (k) => hash(i * 7.77 + k);
+  return { order: r(1), life: 5 + r(2) * 5, offset: r(3), size: 3 + Math.pow(r(4), 2) * 17, i };
+});
+// warm lights, with one in five a cool one
+const tint = (base, k) => (k < 0.2 ? [150, 200, 255] : k < 0.35 ? [255, 150, 170] : base.map((v, j) => Math.max(0, Math.min(255, Math.round(v + (k - 0.6) * [20, 50, 60][j])))));
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), speed = num('--speed', 1), base = rgb('--color', '#ffb85c');
+    const tt = t * speed;
+    ctx.globalCompositeOperation = 'lighter';
+    for (const o of orbs) {
+      if (o.order > amount) continue;
+      // each disc lives one cycle in a place of its own, then comes back elsewhere
+      const cyc = tt / o.life + o.offset, k = Math.floor(cyc), p = cyc - k;
+      const r = (j) => hash(o.i * 31.1 + k * 17.3 + j);
+      const x = (r(1) * 1.1 - 0.05 + (r(2) - 0.5) * 0.12 * p) * w;
+      const y = (r(3) * 1.1 - 0.05 - (0.04 + r(4) * 0.08) * p) * h;
+      const fade = Math.pow(Math.sin(Math.PI * p), 1.6);
+      const d = o.size * u * (0.92 + 0.16 * p);
+      ctx.globalAlpha = fade * (0.55 + 0.3 * r(5)) * (o.size > 14 ? 0.6 : 1);
+      ctx.drawImage(disc(tint(base, r(6))), x - d / 2, y - d / 2, d, d);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

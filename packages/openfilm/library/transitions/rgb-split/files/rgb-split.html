@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>RGB split</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * The signal breaks into slices: bands of the frame drop to black and bars split into red, green and blue, until
+ * the frame is black and torn over the cut; then it snaps back. It lasts 0.6 s and covers the cut at its middle:
+ * put its middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in
+ * parts of the frame so it fits a stage of any shape.
+ */
+const D = 0.6;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+function draw(u) {
+  /* the glitch changes 24 times a second, not smoothly */
+  const n = Math.floor(u * D * 24);
+  const k = Math.sin(Math.PI * u);
+  /* bands of the frame drop out to black, more of them toward the cut */
+  if (u > 0.38 && u < 0.62) {
+    g.fillStyle = '#050508';
+    g.fillRect(0, 0, W, H);
+  } else {
+    let y = 0;
+    for (let b = 0; y < H; b++) {
+      const h = H * (0.02 + 0.1 * hash(n * 31 + b));
+      if (hash(n * 13 + b + 5) < k * 1.1 - 0.15) {
+        g.fillStyle = '#050508';
+        g.fillRect((hash(n + b) - 0.5) * W * 0.1 * k, y, W * 1.2, h);
+      }
+      y += h;
+    }
+  }
+  /* bars split into red, green and blue, which add up to white where they meet */
+  g.globalCompositeOperation = 'lighter';
+  const split = W * (0.01 + 0.03 * k);
+  for (let m = 0; m < 10; m++) {
+    if (hash(n * 7 + m + 50) > 0.3 + k * 0.7) continue;
+    const y = hash(n * 7 + m) * H, h = H * (0.006 + 0.07 * hash(n * 5 + m + 1) ** 2);
+    const x = (hash(n * 3 + m + 2) - 0.3) * W, len = W * (0.3 + 0.9 * hash(n * 11 + m + 3));
+    const a = 0.55 + 0.45 * k;
+    g.fillStyle = `rgba(255, 0, 40, ${a})`;
+    g.fillRect(x - split, y, len, h);
+    g.fillStyle = `rgba(0, 255, 90, ${a})`;
+    g.fillRect(x, y, len, h);
+    g.fillStyle = `rgba(30, 60, 255, ${a})`;
+    g.fillRect(x + split, y, len, h);
+  }
+  g.globalCompositeOperation = 'source-over';
+  /* fine scanlines over the black */
+  if (u > 0.38 && u < 0.62) {
+    g.fillStyle = 'rgba(255, 255, 255, 0.05)';
+    for (let y = 0; y < H; y += 4) g.fillRect(0, y, W, 1);
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -40,6 +40,30 @@ test('the report lists each check, then what to fix', () => {
   assert.match(formatReport([{ label: 'Node', text: 'v22' }]), /Nothing to fix\./);
 });
 
+test('doctor: the report says how much the projects\' .film folders hold', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'openfilm-doctor-usage-'));
+  const projects = join(home, 'Projects');
+  mkdirSync(join(projects, 'Alpha', '.film', 'cache'), { recursive: true });
+  writeFileSync(join(projects, 'Alpha', 'film.html'), '{"stage":{"w":1920,"h":1080},"tracks":[]}');
+  writeFileSync(join(projects, 'Alpha', '.film', 'cache', 'frame.bin'), Buffer.alloc(1_500_000));
+  mkdirSync(join(projects, 'Beta', '.film'), { recursive: true });
+  writeFileSync(join(projects, 'Beta', 'film.html'), '{"stage":{"w":1920,"h":1080},"tracks":[]}');
+  writeFileSync(join(projects, 'Beta', '.film', 'id'), 'beta');
+  const before = { home: process.env.OPENFILM_HOME, library: process.env.OPENFILM_LIBRARY };
+  process.env.OPENFILM_HOME = join(home, '.openfilm');
+  process.env.OPENFILM_LIBRARY = projects;
+  try {
+    const report = await doctor({ studio: { origin: 'http://127.0.0.1:4848', version: '0.2.7' }, browser: false, network: false, home });
+    assert.match(report.text, /Film files +1\.5 MB in 2 projects' \.film folders/);
+    assert.ok(!report.text.includes(home), 'no full home path, and no project names');
+  } finally {
+    for (const [name, value] of [['OPENFILM_HOME', before.home], ['OPENFILM_LIBRARY', before.library]]) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('doctor: the folders and the log, paths under home as ~', async () => {
   const home = mkdtempSync(join(tmpdir(), 'openfilm-doctor-'));
   const data = join(home, '.openfilm');

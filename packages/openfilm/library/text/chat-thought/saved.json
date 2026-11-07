@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "chat-thought.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Thought\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Cloud\", \"type\": \"var\", \"var\": \"--cloud\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--ink\"}]"
+    }
+  },
+  "durationMs": 4000
+}
