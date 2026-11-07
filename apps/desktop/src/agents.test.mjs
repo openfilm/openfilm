@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentSession, CLIENT_CAPABILITIES, INSTRUCTIONS, agentDefaults, agentInstructions, closeEverySession, planProblem, probeFolder, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, codexSessionConfig, distinctOptions, errorCause, legacyOptions, optionsForModel, powerShellScript, powerShellLine, powerShellWindowLaunch, terminalScript, checkAgentProgram, readAgentStatus, setChosenPaths, signInScript, turnError, signInError, codexTooOld, AGENTS, ownSignIn, codexServiceError, codexRefusal, codexNotice, explainFailure, stderrReason, withToolKind, OWN_GROUP, stopTree, winArg, CLAUDE_TESTED, claudeOutdated } from './agents.mjs';
+import { AgentSession, CLIENT_CAPABILITIES, INSTRUCTIONS, agentDefaults, agentInstructions, closeEverySession, planProblem, probeFolder, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, codexSessionConfig, distinctOptions, errorCause, legacyOptions, optionsForModel, powerShellScript, powerShellLine, powerShellWindowLaunch, terminalScript, checkAgentProgram, readAgentStatus, setChosenPaths, signInScript, turnError, signInError, codexTooOld, ANTIGRAVITY_TESTED, antigravityTooOld, AGENTS, ownSignIn, codexServiceError, codexRefusal, codexNotice, explainFailure, stderrReason, withToolKind, OWN_GROUP, stopTree, winArg, CLAUDE_TESTED, claudeOutdated } from './agents.mjs';
 import { spawn } from 'node:child_process';
 import { acpSignedIn, signOutAgent } from './agents.mjs';
 import { openfilmCommand } from './openfilm-command.mjs';
@@ -142,7 +142,7 @@ test('the agents that sign out with a command of their own, run with no window, 
   assert.deepEqual(logouts, {
     claude: ['auth', 'logout'], cursor: ['logout'], minimax: ['logout'],
     /* Codex signs in in Codex (its app shares the sign-in); OpenCode's asks which account; the others have none */
-    codex: null, copilot: null, opencode: null, codebuddy: null, qwen: null, kimi: null, deepseek: null,
+    codex: null, copilot: null, opencode: null, codebuddy: null, qwen: null, kimi: null, deepseek: null, antigravity: null,
   });
 });
 
@@ -512,6 +512,19 @@ test('a Codex older than the ones tried, that did not start, is said to need an 
   const signIn = Object.assign(new Error('Codex is not signed in.'), { code: 'sign-in' });
   assert.equal(codexTooOld('codex', '/usr/local/bin/codex', signIn, () => '0.104.0'), signIn);
   assert.equal(codexTooOld('claude', '/usr/local/bin/claude', failed, () => '0.104.0'), failed);
+});
+
+test('an Antigravity older than 1.5.1, that did not start, is said to need an update; a later one as it was', () => {
+  const failed = new Error('Process exited with code 2');
+  const old = antigravityTooOld('antigravity', '/usr/local/bin/agy', failed, () => '1.4.2');
+  assert.equal(old.code, 'outdated');
+  assert.match(old.message, /^Google Antigravity 1\.4\.2 is older than OpenFilm needs \(1\.5\.1 or later\): update agy, then try again\./);
+  assert.equal(antigravityTooOld('antigravity', '/usr/local/bin/agy', failed, () => '1.5.0').code, 'outdated');
+  assert.equal(antigravityTooOld('antigravity', '/usr/local/bin/agy', failed, () => '1.5.1'), failed);
+  assert.equal(antigravityTooOld('antigravity', '/usr/local/bin/agy', failed, () => '1.5.3'), failed);
+  const signIn = Object.assign(new Error('Authentication required'), { code: 'sign-in' });
+  assert.equal(antigravityTooOld('antigravity', '/usr/local/bin/agy', signIn, () => '1.5.0'), signIn);
+  assert.equal(antigravityTooOld('antigravity', '/usr/local/bin/agy', failed, () => null), failed);
 });
 
 test("Codex's reconnects and retries, which it says where the chat does not look, are notices in its words", () => {

@@ -13,9 +13,13 @@
  * constructors, so a cross-document instanceof is always false.
  */
 export function isTypingTarget(target: EventTarget | null): boolean {
+  return inHostPanel(target) || isTextField(target);
+}
+
+/** Whether `target` is a field that takes typing (a text field, a select, editable text): not a slider or a button. */
+export function isTextField(target: EventTarget | null): boolean {
   const el = elementOf(target);
   if (!el) return false;
-  if (inHostPanel(el)) return true;
   const field = typeof el.closest === 'function' ? el.closest('input, textarea, select') : null;
   if (field) {
     /* A focused slider, color swatch or checkbox is not typing: after dragging a volume or

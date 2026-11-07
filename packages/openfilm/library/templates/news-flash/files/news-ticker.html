@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>News ticker</title>
 <style>
-:root { --accent: #ffcc00; --bar: rgba(12, 14, 20, 0.88); --color: #ffffff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ffcc00; --bar: rgba(12, 14, 20, 0.88); --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: stretch; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; animation: open 0.5s cubic-bezier(0.7, 0, 0.2, 1) both; }
+.w { position: fixed; inset: 0; display: flex; align-items: stretch; font-family: var(--font); animation: open 0.5s cubic-bezier(0.7, 0, 0.2, 1) both; }
 .lb { position: relative; z-index: 1; display: flex; align-items: center; background: var(--accent); color: #111; padding: 0 30vh 0 26vh; font-size: 50vh; font-weight: 800; letter-spacing: 0.08em; white-space: pre; clip-path: polygon(0 0, 100% 0, calc(100% - 20vh) 100%, 0 100%); }
 .bar { flex: 1; margin-left: -20vh; background: var(--bar); color: var(--color); overflow: hidden; display: flex; align-items: center; }
 .trk { display: flex; white-space: pre; font-size: 48vh; font-weight: 600; padding-left: 50vh; will-change: transform; }

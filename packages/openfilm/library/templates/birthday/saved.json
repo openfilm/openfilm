@@ -12,7 +12,7 @@
      3.4
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Greeting\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Name\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"First color\", \"type\": \"var\", \"var\": \"--c1\"}, {\"name\": \"Second color\", \"type\": \"var\", \"var\": \"--c2\"}, {\"name\": \"Third color\", \"type\": \"var\", \"var\": \"--c3\"}, {\"name\": \"Ribbon\", \"type\": \"var\", \"var\": \"--ribbon\"}]",
+     "data-props": "[{\"name\": \"Greeting\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Name\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"First color\", \"type\": \"var\", \"var\": \"--c1\"}, {\"name\": \"Second color\", \"type\": \"var\", \"var\": \"--c2\"}, {\"name\": \"Third color\", \"type\": \"var\", \"var\": \"--c3\"}, {\"name\": \"Ribbon\", \"type\": \"var\", \"var\": \"--ribbon\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.38}"
     },
     "size": {
@@ -80,63 +80,45 @@
    "track": 4,
    "at": 0,
    "clip": {
-    "src": "slot.html",
+    "src": "example-1.jpg",
     "time": [
      0,
      2.8
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'1'",
-       "--tone": "#4a2c55"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "1"
+    }
    }
   },
   {
    "track": 4,
    "at": 2.8,
    "clip": {
-    "src": "slot.html",
+    "src": "example-2.jpg",
     "time": [
      0,
      2.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'2'",
-       "--tone": "#4a2c55"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "2"
+    }
    }
   },
   {
    "track": 4,
    "at": 5.4,
    "clip": {
-    "src": "slot.html",
+    "src": "example-3.jpg",
     "time": [
      0,
      3.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'3'",
-       "--tone": "#4a2c55"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "3"
+    }
    }
   }
  ],

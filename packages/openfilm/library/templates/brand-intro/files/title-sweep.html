@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Sweep box title</title>
 <style>
-:root { --color: #ffffff; --accent: #2ee6a6; --box: rgba(10, 12, 18, 0.88); }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; --accent: #2ee6a6; --box: rgba(10, 12, 18, 0.88); }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding-left: 8vw; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding-left: 8vw; font-family: var(--font); color: var(--color); }
 .tag { font-size: 4.8vh; font-weight: 800; letter-spacing: 0.16em; color: #0b0d12; background: var(--accent); padding: 0.5vh 2.2vh; margin: 0 0 0 3vh; position: relative; z-index: 2; animation: tagin 0.5s 0.55s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
 .box { position: relative; display: inline-block; padding: 3.4vh 6vh 4vh; background: var(--box); overflow: hidden; animation: open 0.4s 0.2s steps(1) both; }
 .box::before { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.16) 50%, transparent 70%); background-size: 300% 100%; animation: shine 2.6s 1s ease-in-out infinite; }

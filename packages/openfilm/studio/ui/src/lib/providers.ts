@@ -6,7 +6,7 @@
  */
 import React from 'react';
 
-export type ProviderVerb = 'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'cutout' | 'image-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch';
+export type ProviderVerb = 'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'cutout' | 'image-search' | 'video-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch';
 
 
 export interface OwnProvider {
@@ -14,9 +14,11 @@ export interface OwnProvider {
   name: string;
   verbs: ProviderVerb[];
   /** the models it can make each kind of media with, its default first, each with the name people know it by */
-  models: Partial<Record<ProviderVerb, { id: string; name: string }[]>>;
+  models: Partial<Record<ProviderVerb, { id: string; name: string; spec?: import('./canvas').ModelSpec }[]>>;
   /** the provider's page for making a key */
   keysUrl: string;
+  /** the provider's own pricing page */
+  pricingUrl: string;
   /** the environment variable a key is (or would be) read from */
   env: string;
   /** it works without a key: connected with one click, a key added for higher limits (then it has `last4`) */
@@ -58,6 +60,8 @@ export interface ProvidersState {
   model: Record<string, string | null>;
   /** a sign-in waiting for the person's browser (`provider`), and why the last one failed */
   signingIn: { provider: string | null; error: string | null; errorFor: string | null };
+  /** who searches the library by meaning: OpenFilm's service ('openfilm', the default), or none (its words alone) */
+  librarySearch: string | null;
 }
 
 /** The providers Settings › Services shows first, in this order: OpenFilm's own, then the large media services. */
@@ -96,12 +100,12 @@ export function azureKey(region: string, key: string): string | null {
 export const offered = (state: ProvidersState, verb: ProviderVerb) => state.providers.some((p) => p.verbs.includes(verb));
 
 /** The kinds of media the person chooses a provider for, in the order they are listed. */
-export const USE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'translate', 'web-search'];
+export const USE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'image', 'image-search', 'video', 'video-search', 'translate', 'web-search'];
 /**
  * Every kind Settings › Services lets the person choose what makes: media, and web search for an agent that has none
  * of its own. Translating subtitles is the agent's model's work.
  */
-export const SERVICE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video', 'web-search'];
+export const SERVICE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video', 'video-search', 'web-search'];
 
 /** Each provider's website, as its card links it. */
 export const PROVIDER_SITES: Readonly<Record<string, string>> = {
@@ -138,7 +142,9 @@ export interface ProvidersHook {
   cancelSignIn: (id: string) => Promise<void>;
   /** who makes that kind of media: a provider id with its model, or '' (none) */
   choose: (verb: ProviderVerb, provider: string, pick?: { model?: string }) => Promise<void>;
-  /** the state asked again (what Local models makes changed) */
+  /** the library searched by meaning at OpenFilm's service, or by its words alone */
+  setLibrarySearch: (on: boolean) => Promise<void>;
+  /** the state asked again (what Local services makes changed) */
   reload: () => Promise<void>;
   /** one of the person's own services added (id null) or changed; resolves whether it was kept */
   saveService: (id: string | null, fields: OwnServiceFields) => Promise<boolean>;
@@ -194,9 +200,10 @@ export function useProviders(): ProvidersHook {
     signIn: async (id) => { await change(id, `/${encodeURIComponent(id)}/sign-in`, { method: 'POST' }); },
     cancelSignIn: async (id) => { await change(id, `/${encodeURIComponent(id)}/sign-in/cancel`, { method: 'POST' }); },
     choose: async (verb, provider, pick) => { await change(verb, '/use', { method: 'PUT', json: { verb, provider: provider || null, ...pick } }); },
+    setLibrarySearch: async (on) => { await change('library-search', '/library-search', { method: 'PUT', json: { on } }); },
     saveService: (id, fields) => change(id ?? 'custom', id ? `/custom/${encodeURIComponent(id)}` : '/custom', { method: id ? 'PUT' : 'POST', json: fields }),
     removeService: async (id) => { await change(id, `/custom/${encodeURIComponent(id)}`, { method: 'DELETE' }); },
-    /* asked again: what Local models makes changed (a model came, went, or was turned on or off) */
+    /* asked again: what Local services makes changed (a model came, went, or was turned on or off) */
     reload: async () => { await call('').then(setState, () => {}); },
   };
 }

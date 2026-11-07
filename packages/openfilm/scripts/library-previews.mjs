@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 /**
  * The pictures of the library's pages (library/index.json): for each page, a poster (poster.jpg) and a two-second
- * preview (preview.mp4) beside its saved.json, drawn by the renderer itself over the sample stills in
- * scripts/library-samples/ (made by the OpenFilm contributors). A transition is drawn on a cut from one still to the
- * other, its middle on the cut, and so is each of the timeline's fades; a sticker in the middle of a still; a template
- * whole, its places for pictures filled with the filters' sample photos. And the
- * picture the looks are shown on (library/filters/sample.jpg), and each sound's waveform (library/sounds/waves/).
+ * preview (preview.mp4) beside its saved.json, drawn by the renderer itself, each over pictures of its own: an effect
+ * over its scene (library/effects/samples/<name>.jpg), a transition on a cut from one picture to another, a pair of its
+ * own from the effects' scenes and the filters' photos (library/filters/samples), its middle on the cut, and so each of
+ * the timeline's fades and a cut's camera move; a template whole, its example pictures in its places; a sticker in the
+ * middle of a plain ground. Never all of them over the same stills. A template's poster and preview are drawn larger
+ * (its card is wider), and it gets its example too: the whole of it at 1280×720 with its music, what a click on it plays
+ * in the viewer (library/examples/<its id>.mp4, a published part: studio/server/library.mjs). And the picture the looks
+ * are shown on (library/filters/sample.jpg), and each sound's waveform (library/sounds/waves/).
  *
  *   node scripts/library-previews.mjs [id …]
  */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,11 +28,32 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const LIB = join(HERE, '..', 'library');
 const SAMPLES = join(HERE, 'library-samples');
 const W = 640, H = 360;
+/* a template's film, drawn for its example */
+const TW = 1280, TH = 720;
 
 /* every thing of the library: its index and its other catalogs, as Studio shows them */
 const index = /** @type {{ items: any[] }} */ (libraryIndex());
 const asked = process.argv.slice(2);
 const ffmpeg = (...args) => { const r = spawnSync('ffmpeg', ['-v', 'error', '-y', ...args], { stdio: 'inherit' }); if (r.status !== 0) throw new Error(`ffmpeg ${args.join(' ')}`); };
+
+/* the pictures each is drawn over: an effect its scene; a transition a pair of its own from all of them */
+const SCENES = join(LIB, 'effects', 'samples');
+const POOL = [join(LIB, 'filters', 'samples'), SCENES].filter((d) => existsSync(d))
+  .flatMap((d) => readdirSync(d).filter((f) => f.endsWith('.jpg')).map((f) => join(d, f))).sort();
+const cutIds = index.items.filter((i) => i.cat === 'transition').map((i) => i.id).sort();
+/** The two pictures a thing of the library is drawn over (`a` before a cut, `b` after it, or under it), else null. */
+function stillsFor(item) {
+  const scene = join(SCENES, `${item.id.split('/').pop()}.jpg`);
+  if (item.cat === 'effect' && existsSync(scene)) return { a: scene, b: scene };
+  const i = cutIds.indexOf(item.id);
+  return i >= 0 && POOL.length > 1 ? { a: POOL[i % POOL.length], b: POOL[(i + 37) % POOL.length] } : null;
+}
+/** The stills of a work folder: the samples, then the thing's own pictures over them. */
+function stills(item, work) {
+  for (const s of ['a.jpg', 'b.jpg', 'c.jpg']) cpSync(join(SAMPLES, s), join(work, s));
+  const own = stillsFor(item);
+  if (own) { cpSync(own.a, join(work, 'a.jpg')); cpSync(own.b, join(work, 'b.jpg')); }
+}
 
 /** The film a page is drawn in: its clip over the stills, and when its picture is best seen. */
 function filmFor(item, about) {
@@ -76,22 +100,11 @@ function fadeFilm(item) {
   return { html, posterAt: 0.95 };
 }
 
-/* the templates' photos for the places of the person's pictures (library-templates.json names them, the filters' samples) */
-const templateDefs = new Map(JSON.parse(readFileSync(join(HERE, 'library-templates.json'), 'utf8')).templates.map((d) => [`templates/${d.id}`, d]));
-
-/** A template (a group): its clips laid out on the preview's picture, its places filled with photos, all of its length. */
-function groupFilm(item, about, work) {
-  const photos = templateDefs.get(item.id)?.photos ?? ['film', 'fresh', 'scenery', 'portrait'];
+/** A template (a group): its clips laid out on the preview's picture, its example pictures in its places, all of its length. */
+function groupFilm(item, about, W = TW, H = TH) {
   const tracks = [];
-  let slot = 0;
   for (const { track, at, clip } of about.clips) {
     let c = { ...clip, at, src: `item/${clip.src}` };
-    if (clip.src === 'slot.html') {
-      const photo = `p${slot}.jpg`;
-      cpSync(join(LIB, 'filters', 'samples', `${photos[slot % photos.length]}.jpg`), join(work, photo));
-      c = { at, src: photo, time: clip.time, style: 'object-fit: cover' };
-      slot += 1;
-    }
     const place = clip.attrs?.['data-place'];
     if (place && clip.size) {
       /* as Studio lays it out (lib/library placedGroup) */
@@ -110,13 +123,20 @@ function groupFilm(item, about, work) {
 }
 
 /**
- * A motion preset (library/catalogs/motions.json) on the stills: a camera move across a cut from one to the other, else
- * the way in, out or the loop of one still two seconds long.
+ * A motion preset (library/catalogs/motions.json, transitions-move.json) on the stills: a camera move across a cut from
+ * one to the other, two shots moving at once over it, else the way in, out or the loop of one still two seconds long.
  */
 function motionFilm(item) {
   const m = item.motion;
   const style = (slots) => slots.reduce((s, slot) => (m[slot] ? withPreset(s, slot, m[slot]) : s), 'object-fit: cover');
   const keyframes = Object.fromEntries(Object.values(m).map((p) => [p.name, p.body]));
+  /* two shots moving at once (a push, a wipe): the next one over the last, overlapping it by the move's length around 1 s */
+  if (item.lap) {
+    const d = m.in.secs;
+    const tracks = [{ clips: [{ id: 'b', src: 'b.jpg', at: 1 - d / 2, time: [0, 1 + d / 2], style: style(['in']) }] }, { clips: [{ id: 'a', src: 'a.jpg', time: [0, 1 + d / 2], style: style(['out']) }] }];
+    /* a little before the middle (a turn about its axis further before: edge on there) */
+    return { html: filmHtml({ stage: { w: W, h: H }, tracks, keyframes }), posterAt: 1 - d * (/rotate: y/.test(m.in.body) ? 0.4 : 0.15) };
+  }
   const clips = item.place === 'cut'
     ? [{ id: 'a', src: 'a.jpg', time: [0, 1], style: style(['out']) }, { id: 'b', src: 'b.jpg', at: 1, time: [0, 1], style: style(['in']) }]
     : [{ id: 'a', src: 'b.jpg', time: [0, 2], style: style(['in', 'out', 'loop']) }];
@@ -130,7 +150,7 @@ for (const item of index.items) {
     mkdirSync(dir, { recursive: true });
     const work = mkdtempSync(join(tmpdir(), 'openfilm-library-'));
     try {
-      for (const s of ['a.jpg', 'b.jpg']) cpSync(join(SAMPLES, s), join(work, s));
+      stills(item, work);
       const { html, posterAt } = motionFilm(item);
       writeFileSync(join(work, 'film.html'), html);
       const out = join(work, 'out.mp4');
@@ -149,12 +169,19 @@ for (const item of index.items) {
     const work = mkdtempSync(join(tmpdir(), 'openfilm-library-'));
     try {
       cpSync(join(dir, 'files'), join(work, 'item'), { recursive: true });
-      const { html, posterAt, length } = groupFilm(item, about, work);
+      const { html, posterAt, length } = groupFilm(item, about);
       writeFileSync(join(work, 'film.html'), html);
       const out = join(work, 'out.mp4');
       await render([work, `0-${length}`], { out, fps: 30, quiet: true });
-      ffmpeg('-i', out, '-vf', 'scale=320:180', '-c:v', 'libx264', '-crf', '30', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', join(dir, 'preview.mp4'));
-      ffmpeg('-ss', String(posterAt), '-i', out, '-frames:v', '1', '-vf', 'scale=320:180', '-q:v', '5', join(dir, 'poster.jpg'));
+      ffmpeg('-i', out, '-vf', 'scale=480:270', '-c:v', 'libx264', '-crf', '28', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-an', '-movflags', '+faststart', join(dir, 'preview.mp4'));
+      ffmpeg('-ss', String(posterAt), '-i', out, '-frames:v', '1', '-vf', 'scale=480:270', '-q:v', '4', join(dir, 'poster.jpg'));
+      /* its example: all of it, with its music fading out at its end as it does put in */
+      const example = join(LIB, 'examples', `${item.id}.mp4`);
+      mkdirSync(dirname(example), { recursive: true });
+      const music = item.music ? join(LIB, item.music) : null;
+      const fadeAt = Math.max(0, length - 1.5).toFixed(2);
+      ffmpeg('-i', out, ...(music && existsSync(music) ? ['-i', music, '-map', '0:v', '-map', '1:a', '-af', `afade=t=out:st=${fadeAt}:d=1.5`, '-c:a', 'aac', '-b:a', '128k'] : ['-an']),
+        '-t', String(length), '-c:v', 'libx264', '-crf', '23', '-preset', 'slow', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', example);
       console.log(`→ library/${item.id}`);
     } finally {
       rmSync(work, { recursive: true, force: true });
@@ -169,7 +196,7 @@ for (const item of index.items) {
   mkdirSync(dir, { recursive: true });
   try {
     if (about) cpSync(join(dir, 'files'), join(work, 'item'), { recursive: true });
-    for (const s of ['a.jpg', 'b.jpg', 'c.jpg']) cpSync(join(SAMPLES, s), join(work, s));
+    stills(item, work);
     writeFileSync(join(work, 'ground.html'), GROUND);
     writeFileSync(join(work, 'white.html'), '<!doctype html><style>html,body{margin:0;height:100%;background:#fff}</style><script>window.film={frame(){}}</script>');
     const { html, posterAt } = about ? filmFor(item, about) : fadeFilm(item);

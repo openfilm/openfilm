@@ -91,7 +91,9 @@ function entryInside(root, rel) {
  * Windows drops, a stream of it, and its short 8.3 name on Windows (`FILM~1`).
  */
 function isToolDir(/** @type {string | undefined} */ name) {
-  const plain = String(name ?? '').split(':')[0].replace(/[. ]+$/, '').toLowerCase();
+  let plain = String(name ?? '').split(':')[0].toLowerCase();
+  /* Windows drops a name's trailing dots and spaces */
+  while (plain.endsWith('.') || plain.endsWith(' ')) plain = plain.slice(0, -1);
   return plain === TOOL_DIR.toLowerCase() || (process.platform === 'win32' && /^film~\d+$/.test(plain));
 }
 

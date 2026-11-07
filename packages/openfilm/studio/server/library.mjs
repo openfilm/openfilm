@@ -33,7 +33,10 @@ import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'no
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import { communityCatalog, communityReady, fetchCommunity, isCommunity, refreshCommunity } from './community-library.mjs';
 import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
+
+export { refreshCommunity };
 
 /** What a path names the library by (`openfilm/<id>`), as `saved/` names Saved. */
 export const BUILT_IN = 'openfilm';
@@ -43,12 +46,14 @@ export const builtInRoot = () => process.env.OPENFILM_BUILT_IN_LIBRARY || fileUR
 
 /**
  * The library's parts too big to come with the package (git-ignored, left out of npm): its sounds and music (`audio/`),
- * its voices' samples (`voices/`), its emoji stickers (`stickers/emoji/`), the model semantic search runs (`models/`,
- * src/library-semantic.mjs). Each is fetched on first use from the
- * library's host and kept in the shared home, once for every OpenFilm on this computer; a bundle (a sticker) comes with
- * the list of its files, `files.json` beside it there, written when the library is published.
+ * its voices' samples (`voices/`), its emoji stickers (`stickers/emoji/`), the models Local services runs (`models/`,
+ * src/local-models.mjs), each template's example with its music (`examples/`). Each is fetched on first use from the
+ * library's host and kept in the shared home, once for every OpenFilm on this computer; a bundle (a sticker) comes
+ * with the list of its files, `files.json` beside it there, written when the library is published.
  */
-const PUBLISHED = ['audio/', 'voices/', 'stickers/emoji/', 'models/'];
+const PUBLISHED = ['audio/', 'voices/', 'stickers/emoji/', 'models/', 'examples/'];
+/** A place in the library: names of letters, digits, dots, dashes and underscores, between slashes. */
+const SAFE_PLACE = /^[\w.-]+(?:\/[\w.-]+)*$/;
 
 /** Where the published parts come from: openfilm.dev's library, which sends each person to the copy nearest them. */
 const libraryHost = () => (process.env.OPENFILM_LIBRARY_URL || 'https://openfilm.dev/library').replace(/\/+$/, '');
@@ -106,7 +111,8 @@ async function fetchFile(/** @type {string} */ rel) {
  * not fetched yet; null when it is neither here nor fetchable (offline, or no such thing).
  */
 export function fetchLibrary(/** @type {unknown} */ rel) {
-  if (typeof rel !== 'string' || !rel) return Promise.resolve(null);
+  if (typeof rel !== 'string' || !rel || !SAFE_PLACE.test(rel) || rel.split('/').some((part) => part === '..' || part === '.')) return Promise.resolve(null);
+  if (isCommunity(rel)) return fetchCommunity(libraryCache(), rel);
   const here = located(rel);
   if (here || !PUBLISHED.some((part) => rel.startsWith(part))) return Promise.resolve(here);
   const was = fetching.get(rel);
@@ -116,7 +122,7 @@ export function fetchLibrary(/** @type {unknown} */ rel) {
       /* a file has a name with a dot; a bundle is a folder, its files listed beside it */
       if (/\.[a-z0-9]+$/i.test(rel)) await fetchFile(rel);
       else {
-        const res = await fetch(`${libraryHost()}/${rel}/files.json`, { signal: AbortSignal.timeout(30_000) });
+        const res = await fetch(`${libraryHost()}/${rel.split('/').map(encodeURIComponent).join('/')}/files.json`, { signal: AbortSignal.timeout(30_000) });
         if (!res.ok) return null;
         const files = /** @type {unknown} */ (await res.json());
         if (!Array.isArray(files)) return null;
@@ -131,6 +137,31 @@ export function fetchLibrary(/** @type {unknown} */ rel) {
   })();
   fetching.set(rel, job);
   return job;
+}
+
+/**
+ * What of the library a thing needs here before it can be put in: its own file or bundle when that is a published part
+ * (a sound, a piece of music, an emoji), and a template's music. None for what comes with the package.
+ * @param {{ id: string, music?: string }} item
+ */
+export function partsOf(item) {
+  return [...((isCommunity(item.id) || PUBLISHED.some((part) => item.id.startsWith(part))) ? [item.id] : []), ...(typeof item.music === 'string' ? [item.music] : [])];
+}
+
+/** Of the things `ids`, those not all here yet (to be fetched before they are put in). @param {unknown} ids */
+export function notHere(ids) {
+  if (!Array.isArray(ids)) return [];
+  const byId = new Map((/** @type {{ items: { id: string, music?: string }[] }} */ (libraryIndex())).items.map((i) => [i.id, i]));
+  return ids.filter((id) => { const item = typeof id === 'string' ? byId.get(id) : undefined; return Boolean(item && partsOf(item).some((rel) => isCommunity(rel) ? !communityReady(libraryCache(), rel) : !located(rel))); });
+}
+
+/** Fetch what a thing of the library needs (partsOf); whether it is all here now. @param {unknown} id */
+export async function fetchItem(id) {
+  if (typeof id === 'string' && isCommunity(id)) await refreshCommunity();
+  const item = (/** @type {{ items: { id: string, music?: string }[] }} */ (libraryIndex())).items.find((i) => i.id === id);
+  if (!item) return false;
+  for (const rel of partsOf(item)) if (!(await fetchLibrary(rel))) return false;
+  return true;
 }
 
 /** @type {Map<string, { mtime: number, value: unknown }>} */
@@ -166,6 +197,7 @@ let merged = null;
 export function libraryIndex() {
   const own = /** @type {{ version: number, groups: Record<string, unknown[]>, items: unknown[] }} */ (read('index.json', { version: 1, groups: {}, items: [] }));
   const more = /** @type {({ groups?: Record<string, { id: string }[]>, items?: unknown[] } | null)[]} */ (catalogFiles().map((name) => read(name, null)));
+  more.push(communityCatalog());
   const parts = [own, ...more];
   if (merged && merged.parts.length === parts.length && merged.parts.every((p, i) => p === parts[i])) return merged.index;
   const groups = { ...own.groups };

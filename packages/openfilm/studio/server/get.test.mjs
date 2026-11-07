@@ -179,6 +179,16 @@ test('wrong options are refused before anything is sent (exit 2)', async () => {
   assert.equal(calls.length, 0);
 });
 
+test('a key at the spending limit set on it: the agent is told to stop and that the key\'s limit is what to change', async () => {
+  const root = project();
+  refuse = () => [403, { error: { message: 'Key limit exceeded (total limit). $200.03 of $200.00 used; does not reset.' } }];
+  const told = [];
+  await assert.rejects(runGet(root, 'music', { out: 'bed', prompt: 'calm pad', sec: '30' }, { tell: (n) => told.push(n), ask: async () => 'allow' }),
+    (/** @type {any} */ e) => /the ElevenLabs key reached the spending limit set on it/.test(e.message) && /raise or remove that limit/.test(e.message) && !/did not accept your key/.test(e.message));
+  assert.deepEqual(told, [], 'not a balance to top up');
+  assert.ok(!existsSync(join(root, 'assets')));
+});
+
 test('not enough balance: the agent is told to stop and where the person tops it up, the person is told in Studio, nothing landed', async () => {
   const root = project();
   refuse = () => [402, { detail: { status: 'quota_exceeded', message: 'This request exceeds your quota.' } }];

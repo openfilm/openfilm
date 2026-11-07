@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Bouncing title</title>
 <style>
-:root { --color: #ffffff; --accent: #ffcf3f; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; --accent: #ffcf3f; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-family: var(--font); color: var(--color); }
 .eb { display: flex; align-items: center; gap: 3vh; font-size: 4.6vh; font-weight: 700; letter-spacing: 0.42em; color: var(--accent); margin-bottom: 2vh; animation: track 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .eb::before, .eb::after { content: ""; width: 7vh; height: 0.6vh; border-radius: 1vh; background: var(--accent); }
 .eb::before { animation: line 0.7s 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) both; transform-origin: right; }

@@ -1,30 +1,26 @@
 // @ts-check
 /**
  * Semantic search of the library: what is asked and what each thing is, as vectors of one small multilingual sentence
- * model (multilingual-e5-small, int8), compared by cosine, so `sad goodbye at a train station` finds a farewell on
- * strings with no word in common. library-search.mjs merges its order with the keyword search's, by reciprocal rank.
+ * model (multilingual-e5-small, int8, src/sentence-model.mjs), compared by cosine, so `sad goodbye at a train station`
+ * finds a farewell on strings with no word in common. library-search.mjs merges its order with the keyword search's,
+ * by reciprocal rank.
  *
- *   library/vectors.i8, vectors.json   each thing's vector, made offline with the same model (scripts/library-vectors.mjs)
- *                                      from what it is (passageOf): int8, a scale each, in the order of vectors.json's ids
- *   library/models.json                the model, its vocabulary packed (vocab.bin) and its runtime (onnxruntime-web,
- *                                      WebAssembly, one thread): published parts of the library (library.mjs
- *                                      fetchLibrary), each file with its size and sha256
+ * The comparing is OpenFilm's service's (`POST /v1/library/search` on openfilm.dev, or OPENFILM_API_URL: free, no
+ * account, the words of the search and nothing else): it keeps the model and every thing's vector, so this computer
+ * keeps only the library's catalog and its keyword index, and downloads and runs no model. Offline, the service not
+ * answering, or turned off in Settings → Services (Library search: None): the keyword search alone.
  *
- * A search in a CLI of its own loads the model each time (a few hundred milliseconds: the runtime starting, then the
- * model); a Studio running keeps it loaded, and the CLI asks it first (studio/client.mjs getMedia).
- *
- * Only the vectors come with the package. The first search fetches the rest in the background, in a process of its own
- * (local-models.mjs), so that search answers at once with keywords; each file is checked against models.json and kept
- * in the library's cache for every OpenFilm here. Offline, or a file that does not check: keyword
- * search, and another try an hour later. Nothing is sent anywhere: the question is turned into a vector here.
- * Settings → Services → Local models can turn it off (kept, not used: keyword search) or remove it (thrown away, and
- * off, so that no search fetches it again); turning it on again fetches it at once.
+ *   library/vectors.i8, vectors.json   each thing's vector, made with the model (scripts/library-vectors.mjs) from
+ *                                      what it is (passageOf), as the service searches them: published with the
+ *                                      library, not part of the package
+ *   library/models.json                the model's files and its runtime, for making them
  */
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { readSettings } from '../studio/server/keys.mjs';
+import { serviceUrl } from '../studio/server/providers/common.mjs';
 import { builtInRoot, libraryFile } from '../studio/server/library.mjs';
-import { fetchModel as fetchEntry, modelOn, modelReady, modelState, setModelOn } from './local-models.mjs';
+import { loadEmbedder } from './sentence-model.mjs';
 
 /** @typedef {{ path: string, bytes: number, sha256: string }} ModelFile */
 /** @typedef {{ version: number, model: string, dims: number, onnx: string, tokenizer: string, runtime: string, files: ModelFile[] }} Manifest */
@@ -34,177 +30,13 @@ export function manifest() {
   try { return JSON.parse(readFileSync(join(builtInRoot(), 'models.json'), 'utf8')); } catch { return null; }
 }
 
-/** The model as Local models lists it (local-models.mjs): its id and files. */
-const entry = (/** @type {Manifest} */ m) => ({ id: m.model, files: m.files });
-
-/** Whether the model is to be used (and fetched when it is not here): not turned off. */
-export const semanticOn = (m = manifest()) => Boolean(m) && modelOn(entry(/** @type {Manifest} */ (m)));
-
-/** The model turned on (fetched now when it is not here) or off (kept, not used). */
-export function setSemanticOn(/** @type {boolean} */ on, m = manifest()) {
-  if (m) setModelOn(on, entry(m));
-}
-
-/** Whether the model can run here: every file of it on this computer, and checked (or part of this checkout's library). */
-export const semanticReady = (m = manifest()) => Boolean(m) && modelReady(entry(/** @type {Manifest} */ (m)));
-
-/**
- * Whether the model is coming: 'ready', 'fetching' (begun now, or still running), or 'off' (no model listed, turned
- * off, or it failed lately: keyword search, said nothing of). Starts the fetch when it is due: `start` runs it (a
- * process of its own by default).
- * @param {{ start?: () => void }} [o]
- * @returns {'ready' | 'fetching' | 'off'}
- */
-export function semanticState(o = {}) {
-  const m = manifest();
-  return m ? modelState(entry(m), o) : 'off';
-}
-
-/** Every file of the model fetched and checked (local-models.mjs fetchModel). Returns whether it is ready. */
-export const fetchModel = async (m = manifest()) => Boolean(m) && await fetchEntry(entry(/** @type {Manifest} */ (m)));
-
-/* ── the tokenizer: SentencePiece's unigram model, as the model's tokenizer.json has it ───────────────────────── */
-
-/**
- * A text's token ids as the model was trained on them: NFKC, spaces as `▁` (one before the first word too), each word
- * cut into the pieces of the vocabulary whose scores add up highest (Viterbi); a character no piece has is `<unk>`.
- * Between `<s>` and `</s>`, at most 512.
- * @param {Vocabulary} vocab @param {string} text
- */
-export function tokenize(vocab, text) {
-  const ids = [0];
-  const normal = text.normalize('NFKC').replace(/\s+/g, ' ').trim();
-  for (const word of `▁${normal.replaceAll(' ', '▁')}`.split(/(?=▁)/)) {
-    const chars = [...word];
-    const n = chars.length;
-    const best = new Float64Array(n + 1).fill(-Infinity);
-    const from = new Int32Array(n + 1);
-    const id = new Int32Array(n + 1);
-    best[0] = 0;
-    for (let i = 0; i < n; i++) {
-      if (best[i] === -Infinity) continue;
-      let piece = '';
-      for (let j = i; j < Math.min(n, i + vocab.longest); j++) {
-        piece += chars[j];
-        const k = vocab.id(piece);
-        /* the first four are <s>, <pad>, </s>, <unk>: never pieces of a text */
-        if (k === undefined || k < 4) continue;
-        const score = best[i] + vocab.scores[k];
-        if (score > best[j + 1]) { best[j + 1] = score; from[j + 1] = i; id[j + 1] = k; }
-      }
-      if (best[i + 1] === -Infinity) { best[i + 1] = best[i] + vocab.unknown; from[i + 1] = i; id[i + 1] = 3; }
-    }
-    const out = [];
-    for (let end = n; end > 0; end = from[end]) out.push(id[end]);
-    ids.push(...out.reverse());
-  }
-  return [...ids.slice(0, 511), 2];
-}
-
-/**
- * A vocabulary as tokenize reads it: the id of a piece (undefined: none), each id's score, the longest piece (in
- * characters), and the score of a character no piece has.
- * @typedef {{ id: (piece: string) => number | undefined, scores: Float32Array, longest: number, unknown: number }} Vocabulary
- */
-
-/** The vocabulary of a tokenizer.json. @param {string} file @returns {Vocabulary} */
-export function readVocabulary(file) {
-  /** @type {{ model: { vocab: [string, number][] } }} */
-  const json = JSON.parse(readFileSync(file, 'utf8'));
-  const pieces = new Map();
-  let longest = 0;
-  let lowest = 0;
-  json.model.vocab.forEach(([piece, score], i) => { pieces.set(piece, i); longest = Math.max(longest, [...piece].length); lowest = Math.min(lowest, score); });
-  return { id: (piece) => pieces.get(piece), scores: Float32Array.from(json.model.vocab, ([, s]) => s), longest, unknown: lowest - 10 };
-}
-
-/*
- * A vocabulary packed (vocab.bin, made from tokenizer.json when the library is published): read in a few
- * milliseconds where the JSON takes a hundred, a piece found by binary search over its UTF-8 bytes. Little-endian:
- *   u32 count, u32 longest, f32 unknown, then count × f32 score (by id), count × u32 id (in the order of the pieces'
- *   bytes), (count + 1) × u32 offset (by id, into the text), and the text: every piece's UTF-8, by id.
- */
-
-/** tokenizer.json's vocabulary, packed. @param {string} file @returns {Buffer} */
-export function packVocabulary(file) {
-  /** @type {{ model: { vocab: [string, number][] } }} */
-  const json = JSON.parse(readFileSync(file, 'utf8'));
-  const { scores, longest, unknown } = readVocabulary(file);
-  const bytes = json.model.vocab.map(([piece]) => Buffer.from(piece, 'utf8'));
-  const n = bytes.length;
-  const order = Uint32Array.from(bytes.keys()).sort((a, b) => Buffer.compare(bytes[a], bytes[b]));
-  const offsets = new Uint32Array(n + 1);
-  for (let i = 0; i < n; i++) offsets[i + 1] = offsets[i] + bytes[i].length;
-  const head = Buffer.alloc(12);
-  head.writeUInt32LE(n, 0);
-  head.writeUInt32LE(longest, 4);
-  head.writeFloatLE(unknown, 8);
-  return Buffer.concat([head, Buffer.from(scores.buffer), Buffer.from(order.buffer), Buffer.from(offsets.buffer), ...bytes]);
-}
-
-/** A packed vocabulary (packVocabulary). @param {Buffer} buf @returns {Vocabulary} */
-export function readPacked(buf) {
-  const data = new Uint8Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length));
-  const view = new DataView(data.buffer);
-  const n = view.getUint32(0, true);
-  const scores = new Float32Array(data.buffer, 12, n);
-  const order = new Uint32Array(data.buffer, 12 + 4 * n, n);
-  const offsets = new Uint32Array(data.buffer, 12 + 8 * n, n + 1);
-  const text = data.subarray(12 + 12 * n + 4);
-  const encoder = new TextEncoder();
-  /** the piece of id `k` against `want`, as Buffer.compare: by bytes */
-  const compare = (/** @type {number} */ k, /** @type {Uint8Array} */ want) => {
-    const from = offsets[k];
-    const length = offsets[k + 1] - from;
-    for (let i = 0; i < Math.min(length, want.length); i++) if (text[from + i] !== want[i]) return text[from + i] - want[i];
-    return length - want.length;
-  };
-  return {
-    id: (piece) => {
-      const want = encoder.encode(piece);
-      let lo = 0;
-      let hi = n - 1;
-      while (lo <= hi) {
-        const mid = (lo + hi) >> 1;
-        const c = compare(order[mid], want);
-        if (c === 0) return order[mid];
-        if (c < 0) lo = mid + 1; else hi = mid - 1;
-      }
-      return undefined;
-    },
-    scores, longest: view.getUint32(4, true), unknown: view.getFloat32(8, true),
-  };
-}
-
-/* ── the model ───────────────────────────────────────────────────────────────────────────────────────────────── */
-
 /** @type {Promise<(text: string) => Promise<Float32Array>> | null} */
 let loading = null;
 
-/**
- * The model, loaded once: a text (with its `query: ` or `passage: `, as the model was trained) to its vector, the mean
- * of its tokens' last states, of length 1.
- */
+/** The model run here, from the library's files on this computer (scripts/library-vectors.mjs makes the vectors with it). */
 export function embedder(m = /** @type {Manifest} */ (manifest())) {
-  loading ??= (async () => {
-    const at = (/** @type {string} */ rel) => /** @type {string} */ (libraryFile(rel));
-    const ort = await import(pathToFileURL(at(m.runtime)).href);
-    ort.env.wasm.numThreads = 1;
-    ort.env.wasm.wasmPaths = pathToFileURL(`${dirname(at(m.runtime))}/`).href;
-    ort.env.logLevel = 'error';
-    const vocab = readPacked(readFileSync(at(m.tokenizer)));
-    const session = await ort.InferenceSession.create(readFileSync(at(m.onnx)));
-    const int64 = (/** @type {number[]} */ v) => new ort.Tensor('int64', BigInt64Array.from(v, BigInt), [1, v.length]);
-    return async (/** @type {string} */ text) => {
-      const ids = tokenize(vocab, text);
-      const out = (await session.run({ input_ids: int64(ids), attention_mask: int64(ids.map(() => 1)), token_type_ids: int64(ids.map(() => 0)) }))[session.outputNames[0]];
-      const dims = out.dims[2];
-      const v = new Float32Array(dims);
-      for (let i = 0; i < ids.length; i++) for (let k = 0; k < dims; k++) v[k] += out.data[i * dims + k];
-      const norm = Math.hypot(...v) || 1;
-      return v.map((x) => x / norm);
-    };
-  })();
+  const at = (/** @type {string} */ rel) => /** @type {string} */ (libraryFile(rel));
+  loading ??= loadEmbedder({ runtime: at(m.runtime), onnx: at(m.onnx), tokenizer: at(m.tokenizer) });
   return loading;
 }
 
@@ -225,44 +57,34 @@ export function passageOf(item, vocab, group) {
     [lively, item.bpm ? `${item.bpm} bpm` : ''].filter(Boolean).join(', ')].filter(Boolean).join(' ');
 }
 
-/** @type {{ ids: string[], scales: Float32Array, values: Int8Array, dims: number, model: string } | null | undefined} */
-let vectors;
-
-/** The things' vectors as the package has them; null without them. */
-export function itemVectors() {
-  if (vectors !== undefined) return vectors;
-  try {
-    const about = JSON.parse(readFileSync(join(builtInRoot(), 'vectors.json'), 'utf8'));
-    const bytes = readFileSync(join(builtInRoot(), 'vectors.i8'));
-    vectors = { ids: about.ids, scales: Float32Array.from(about.scales), values: new Int8Array(bytes.buffer, bytes.byteOffset, bytes.length), dims: about.dims, model: about.model };
-  } catch {
-    vectors = null;
-  }
-  return vectors;
-}
+/** How long a search waits for the service before it goes on with keywords alone. */
+export const SEARCH_TIMEOUT_MS = 2500;
+/** What was asked lately, and what the service said (a Studio running asks the same again as the person types). */
+const asked = new Map();
 
 /**
- * The things that `keep` lets through, nearest to what was asked first, at most `limit`: [id, cosine]. Null when
- * the model is not ready, or the vectors are not of it.
- * @param {string} query @param {(id: string) => boolean} keep @param {number} [limit]
+ * The things of the category `cat` nearest in meaning to what was asked, the nearest first, at most `limit`: [id,
+ * cosine], as OpenFilm's service ranks them. Null when it does not answer in time, or answers something else.
+ * @param {string} query @param {string} cat @param {number} [limit]
  * @returns {Promise<[string, number][] | null>}
  */
-export async function nearest(query, keep, limit = 50) {
-  const m = manifest();
-  const v = itemVectors();
-  if (!m || !v || v.model !== m.model || !semanticReady(m)) return null;
-  let embed;
-  try { embed = await embedder(m); } catch { return null; }
-  const q = await embed(`query: ${query}`);
-  /** @type {[string, number][]} */
-  const scored = [];
-  for (let i = 0; i < v.ids.length; i++) {
-    if (!keep(v.ids[i])) continue;
-    let dot = 0;
-    const at = i * v.dims;
-    for (let k = 0; k < v.dims; k++) dot += v.values[at + k] * q[k];
-    scored.push([v.ids[i], dot * v.scales[i]]);
+export async function nearest(query, cat, limit = 50) {
+  /* turned off in Settings → Services: words alone */
+  if ((await readSettings()).libraryOff) return null;
+  const key = `${cat}\n${limit}\n${query}`;
+  if (asked.has(key)) return asked.get(key);
+  try {
+    const res = await fetch(`${serviceUrl('API', 'https://openfilm.dev')}/v1/library/search`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: query, cat, limit }),
+      signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const { found } = /** @type {{ found?: unknown }} */ (await res.json());
+    if (!Array.isArray(found) || !found.every((f) => Array.isArray(f) && typeof f[0] === 'string' && typeof f[1] === 'number')) return null;
+    if (asked.size >= 200) asked.delete(asked.keys().next().value);
+    asked.set(key, found);
+    return /** @type {[string, number][]} */ (found);
+  } catch {
+    return null;
   }
-  return scored.sort((a, b) => b[1] - a[1]).slice(0, limit);
 }
-

@@ -1,12 +1,13 @@
 /**
- * The models that run on this computer, as Settings → Services → Local models shows them (studio/server/local-models.mjs):
- * each installed or not, an installed one on or off, and one coming with how much of it is here.
+ * The models that run on this computer, as Settings → Services → Local services shows them
+ * (studio/server/local-models.mjs): each installed or not, an installed one on or off, and one coming with how much of
+ * it is here.
  */
 import React from 'react';
 
 /** What a local model is for, wherever they are grouped. */
-export type LocalKind = 'asr' | 'cutout' | 'search';
-export const LOCAL_KINDS: LocalKind[] = ['asr', 'cutout', 'search'];
+export type LocalKind = 'asr' | 'cutout';
+export const LOCAL_KINDS: LocalKind[] = ['asr', 'cutout'];
 
 export interface LocalModel {
   id: string;

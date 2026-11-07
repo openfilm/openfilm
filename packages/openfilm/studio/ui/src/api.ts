@@ -23,7 +23,9 @@ export type Clip = { src: string; id: string; at?: number; time?: [number] | [nu
   sound?: true;
   /** its look: class names for the film's styles, and its own CSS */
   class?: string; style?: string; attrs?: Record<string, string> };
-export type Track = { clips: Clip[]; locked?: boolean; hidden?: boolean; muted?: boolean; attrs?: Record<string, string> };
+/** A caption track's `<track>` (SPEC §1 Captions): its WebVTT file on the film's time, its language and name. */
+export type TrackCaptions = { src: string; kind: 'captions' | 'subtitles'; srclang?: string; label?: string };
+export type Track = { clips: Clip[]; locked?: boolean; hidden?: boolean; muted?: boolean; attrs?: Record<string, string>; captions?: TrackCaptions };
 /** `keyframes`: the film's @keyframes by name (its clips' own, Studio's: src/clip-motion.mjs). */
 export type Film = { stage?: { w: number; h: number }; tracks: Track[]; keyframes?: Record<string, string> };
 /** `value`: film.html as read, every clip named (a clip with no id takes its file's name, as the server and preview do). */
@@ -32,7 +34,8 @@ export type Film = { stage?: { w: number; h: number }; tracks: Track[]; keyframe
 export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[]; filmMissing?: boolean; outer?: { id: string; name: string; folder: string } };
 export type MediaFile = { path: string; kind: 'video' | 'image' | 'audio' | 'page' | 'other'; size: number; mtime: number; added?: number };
 /** A project's editor settings (studio/server/project-settings.mjs). */
-export type ProjectSettings = { fps?: number; trackNames?: { name: string; index: number; clips: string[] }[]; trackHeights?: { height: number; index: number; clips: string[] }[] };
+export type MotionBlur = { enabled: boolean; samples: number; shutter: number };
+export type ProjectSettings = { fps?: number; trackNames?: { name: string; index: number; clips: string[] }[]; trackHeights?: { height: number; index: number; clips: string[] }[]; motionBlur?: MotionBlur };
 export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: string; size: number; mtime: number }[] };
 export type Op =
   | { op: 'set'; clip: string; field: string; value?: unknown }
@@ -42,7 +45,10 @@ export type Op =
   | { op: 'split'; clip: string; at: number; time: [number, number]; restTime: [number, number] }
   | { op: 'split'; clip: string; left: Record<string, PropValue>; right: Record<string, PropValue>; rightId?: string }
   | { op: 'track'; track: number; field: 'locked' | 'hidden' | 'muted'; value: boolean }
-  | { op: 'reorder'; from: number; to: number }
+  | { op: 'reorder'; from: number; to: number; clip?: string; below?: string; above?: string }
+  /** a caption track put in at track `at`, known by its WebVTT file (SPEC §1 Captions); `uncaptions` takes one out */
+  | { op: 'captions'; at: number; captions: { src: string; kind?: 'captions' | 'subtitles'; srclang?: string; label?: string } }
+  | { op: 'uncaptions'; src: string }
   | { op: 'props'; edits: PropEdit[] }
   | { op: 'stage'; w: number; h: number }
   | { op: 'fields'; clip: string; fields: Record<string, unknown> }
@@ -52,6 +58,13 @@ export type Op =
 export type PropValue = number | string | boolean | readonly number[] | Record<string, unknown> | null;
 /** One property of one clip, by the clip's id (see studio/server/ops.mjs). */
 export type PropEdit = { clip: string; prop: string; value: PropValue };
+
+/** one of a project's canvases: the first is `main`; `nodes`, how many it has */
+export interface CanvasBoard { id: string; name?: string; nodes: number }
+/** one of the person's characters: its pictures by what they show */
+export interface CanvasCharacter { id: string; name: string; about?: string; created: number; pictures: Array<{ role: 'face' | 'body' | 'expressions' | 'turnaround' | 'other'; url: string }> }
+/** one thing a canvas made: in this project, or (`project`) another */
+export interface CanvasMade { path: string; make: 'image' | 'video' | 'sfx' | 'music'; prompt?: string; via?: string; model?: string; at: number; project?: string; projectName?: string }
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly body: Record<string, unknown>) {
@@ -92,6 +105,8 @@ export interface StudioPrefs {
   keys?: unknown;
   /** whether open projects save versions on their own (studio/server/auto-versions.mjs) */
   autoVersions?: boolean;
+  /** the library drawer's categories as arranged in Settings › Advanced (lib/library-categories), null: OpenFilm's */
+  libraryCategories?: { order: string[]; off: string[] } | null;
 }
 /** Where the projects library is (src/locations.mjs): the folder, its default, whether the person chose it, the free space on its disk, how many projects are in it. */
 export interface StudioLocation { path: string; default: string; chosen: boolean; free: number | null; count: number }
@@ -126,7 +141,8 @@ export const api = {
   /** where new projects and exports go, and the free space there */
   locations: () => call<StudioLocations>('locations'),
   /** move the library to `path` (null: the default); with `move`, its projects go too (those that could not are in `failed`) */
-  moveLibrary: (path: string | null, move: boolean) => call<{ moved: number; failed: { name: string; error: string }[]; locations: StudioLocations }>('locations/projects', { method: 'PUT', json: { path, move } }).then((done) => {
+  /** `failed`: projects that stay where they were; `left`: moved across disks, their old folder left there (the trash would not take it) */
+  moveLibrary: (path: string | null, move: boolean) => call<{ moved: number; failed: { name: string; error: string }[]; left: { name: string; path: string; error: string }[]; locations: StudioLocations }>('locations/projects', { method: 'PUT', json: { path, move } }).then((done) => {
     window.dispatchEvent(new Event(LIBRARY_EVENT));
     return done;
   }),
@@ -134,7 +150,7 @@ export const api = {
   revealProject: (id: string) => call<object>(`projects/${encodeURIComponent(id)}/reveal`, { method: 'POST', json: {} }),
   /** one of them in the system's file manager */
   openLocation: (which: keyof StudioLocations) => call<{ ok: true }>(`locations/${which}`, { method: 'POST', json: {} }),
-  setPrefs: (patch: { proxies?: Partial<StudioPrefs['proxies']>; seenVersion?: string; projectsFolder?: string | null; keys?: unknown; autoVersions?: boolean }) => call<StudioPrefs>('prefs', { method: 'PATCH', json: patch }).then((prefs) => {
+  setPrefs: (patch: { proxies?: Partial<StudioPrefs['proxies']>; seenVersion?: string; projectsFolder?: string | null; keys?: unknown; autoVersions?: boolean; libraryCategories?: StudioPrefs['libraryCategories'] }) => call<StudioPrefs>('prefs', { method: 'PATCH', json: patch }).then((prefs) => {
     window.dispatchEvent(new Event(PREFS_EVENT));
     return prefs;
   }),
@@ -164,15 +180,34 @@ export const api = {
   /** the editor's settings of the project (`.film/settings.json`): its frame rate, its tracks' names */
   settings: (id: string) => call<{ settings: ProjectSettings }>(`${p(id)}/settings`).then((r) => r.settings),
   /** change some of them (null takes one away); answers them all as kept */
-  patchSettings: (id: string, patch: { fps?: number | null; trackNames?: ProjectSettings['trackNames'] | null; trackHeights?: ProjectSettings['trackHeights'] | null }) => (
+  patchSettings: (id: string, patch: { fps?: number | null; trackNames?: ProjectSettings['trackNames'] | null; trackHeights?: ProjectSettings['trackHeights'] | null; motionBlur?: MotionBlur | null }) => (
     call<{ settings: ProjectSettings }>(`${p(id)}/settings`, { method: 'PATCH', json: patch }).then((r) => r.settings)
   ),
   /** its markers (`.film/markers.json`, lib/markers): the whole list, read and written */
   markers: (id: string) => call<{ markers: unknown }>(`${p(id)}/markers`).then((r) => r.markers),
   putMarkers: (id: string, markers: unknown[]) => call<{ markers: unknown }>(`${p(id)}/markers`, { method: 'PUT', json: { markers } }).then((r) => r.markers),
   /** its canvas (`.film/canvas.json`, components/canvas): the whole board, read and written */
-  canvas: (id: string) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas`),
-  putCanvas: (id: string, canvas: { nodes: unknown[]; edges: unknown[] }) => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas`, { method: 'PUT', json: canvas }),
+  canvas: (id: string, board = 'main') => call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas${board === 'main' ? '' : `/${encodeURIComponent(board)}`}`),
+  putCanvas: (id: string, canvas: { nodes: unknown[]; edges: unknown[] }, board = 'main') =>
+    call<{ nodes: unknown; edges: unknown }>(`${p(id)}/canvas${board === 'main' ? '' : `/${encodeURIComponent(board)}`}`, { method: 'PUT', json: canvas }),
+  /** a project's boards (studio/server/canvas.mjs): listed, made (empty or a copy), renamed, deleted into the trash */
+  canvasBoards: (id: string) => call<{ boards: CanvasBoard[] }>(`${p(id)}/canvases`).then((r) => r.boards),
+  newCanvasBoard: (id: string, body: { name?: string; from?: string }) => call<{ id: string; name?: string }>(`${p(id)}/canvases`, { method: 'POST', json: body }),
+  renameCanvasBoard: (id: string, board: string, name: string) => call<{ id: string; name?: string }>(`${p(id)}/canvases/${encodeURIComponent(board)}`, { method: 'PATCH', json: { name } }),
+  /** what the project's canvases made (studio/server/canvas-history.mjs), or every project's; one brought over from another */
+  canvasMade: (id: string, all = false) => call<{ made: CanvasMade[] }>(`${p(id)}/canvas-made${all ? '?all=1' : ''}`).then((r) => r.made),
+  canvasMadeFile: (id: string, made: CanvasMade) => `/api/${p(id)}/canvas-made/file?path=${encodeURIComponent(made.path)}${made.project ? `&project=${encodeURIComponent(made.project)}` : ''}`,
+  bringMade: (id: string, made: CanvasMade) => call<{ path: string }>(`${p(id)}/canvas-made/bring`, { method: 'POST', json: { project: made.project, path: made.path } }).then((r) => r.path),
+  /** the person's characters (studio/server/canvas-characters.mjs): listed, kept from this project's pictures, changed, removed, brought in */
+  canvasCharacters: () => call<{ characters: CanvasCharacter[] }>('canvas-characters').then((r) => r.characters),
+  saveCanvasCharacter: (id: string, body: { name: string; about?: string; pictures: Array<{ role: string; path: string }> }) =>
+    call<{ character: CanvasCharacter }>(`${p(id)}/canvas-characters`, { method: 'POST', json: body }).then((r) => r.character),
+  updateCanvasCharacter: (id: string, body: { name?: string; about?: string }) => call<{ character: CanvasCharacter }>(`canvas-characters/${encodeURIComponent(id)}`, { method: 'PATCH', json: body }),
+  removeCanvasCharacter: (id: string) => call<Record<string, never>>(`canvas-characters/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  useCanvasCharacter: (project: string, id: string) => call<{ name: string; about?: string; pictures: Array<{ role: string; path: string }> }>(`${p(project)}/canvas-characters/${encodeURIComponent(id)}`, { method: 'POST' }),
+  removeCanvasBoard: (id: string, board: string) => call<{ boards: CanvasBoard[] }>(`${p(id)}/canvases/${encodeURIComponent(board)}`, { method: 'DELETE' }).then((r) => r.boards),
+  /** a text node's words written by the person's own agent (studio/server/canvas.mjs canvasWriteRoute); 409 without one */
+  canvasWrite: (id: string, prompt: string, inputs: string[]) => call<{ text: string }>(`${p(id)}/canvas-write`, { method: 'POST', json: { prompt, inputs } }),
   /** the person's canvas templates (studio/server/canvas-templates.mjs): listed, kept from a project's board, laid down on one, removed */
   canvasTemplates: () => call<{ templates: Array<{ id: string; name: string; nodes: number; created: number }> }>('canvas-templates').then((r) => r.templates),
   saveCanvasTemplate: (id: string, name: string, board: { nodes: unknown[]; edges: unknown[] }) =>
@@ -196,13 +231,13 @@ export const api = {
    * Something made with the person's services, as `openfilm get <verb>` makes it (studio/server/get.mjs): answered
    * once it is made, with its receipt (JSON, as text), or why not. A video asks the person first (SpendAsks), unless
    * `yes`: the person asked for it themselves (a node's Make). Not a write a reload waits for: it may take minutes,
-   * and aborting it (`signal`) stops it.
+   * and aborting it (`signal`) stops it. A run the service's account had too little for throws with `reason: 'balance'`.
    */
   make: async (folder: string, verb: string, args: Record<string, unknown>, pick: { via?: string; model?: string; yes?: boolean }, signal?: AbortSignal) => {
     const res = await fetch('/api/get', { method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ folder, verb, args, ...pick }) });
     if (res.status === 401) markLocked();
-    const body = await res.json().catch(() => ({})) as { ok?: boolean; text?: string; error?: string };
-    if (!res.ok || !body.ok) throw new Error(body.text ?? body.error ?? `Studio answered ${res.status}`);
+    const body = await res.json().catch(() => ({})) as { ok?: boolean; text?: string; error?: string; reason?: string };
+    if (!res.ok || !body.ok) throw Object.assign(new Error(body.text ?? body.error ?? `Studio answered ${res.status}`), body.reason ? { reason: body.reason } : {});
     return body.text ?? '';
   },
   answerAsk: (askId: string, allow: boolean) => call<{ answered: boolean }>(`get/asks/${encodeURIComponent(askId)}`, { method: 'POST', json: { allow } }),
@@ -249,7 +284,7 @@ export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths
   | { type: 'history-progress'; op: string; phase: string; done: number; total: number }
   | { type: 'ask'; ask: SpendAsk } | { type: 'asked'; id: string } | { type: 'notice'; notice: StudioNotice } | { type: 'project'; project: Project }
   /* an agent changed the canvas (`openfilm canvas apply`) */
-  | { type: 'canvas' }
+  | { type: 'canvas', reset?: boolean }
   /* its folder is there but film.html is not (an agent writing it again, or it lost): the project stays open and
      says so, until a `film` event says it is back */
   | { type: 'film-missing' }

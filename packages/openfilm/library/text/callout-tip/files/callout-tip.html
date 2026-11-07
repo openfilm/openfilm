@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Tip card</title>
 <style>
-:root { --accent: #ffc93c; --card: rgba(18, 20, 28, 0.86); --color: #ffffff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ffc93c; --card: rgba(18, 20, 28, 0.86); --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; padding: 0 5vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; align-items: center; padding: 0 5vh; font-family: var(--font); color: var(--color); }
 .c { position: relative; display: flex; align-items: center; gap: 7vh; background: var(--card); border-radius: 5vh; padding: 10vh 12vh 10vh 9vh; overflow: hidden; box-shadow: 0 3vh 8vh rgba(0, 0, 0, 0.35); clip-path: inset(0 100% 0 0 round 5vh); animation: open 0.6s cubic-bezier(0.7, 0, 0.2, 1) forwards; }
 .c::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2.6vh; background: var(--accent); }
 .b { position: relative; width: 44vh; height: 44vh; flex: none; border-radius: 50%; background: var(--accent); display: flex; justify-content: center; transform-origin: 50% 0; animation: pop 0.5s 0.35s cubic-bezier(0.3, 1.8, 0.5, 1) both, swing 2.8s 1s ease-in-out infinite; }

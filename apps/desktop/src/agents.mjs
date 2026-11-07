@@ -37,7 +37,7 @@ import { Readable, Writable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as acp from '@agentclientprotocol/sdk';
 import { PATH_SEP, childEnvironment, lastPathSource, loginShellEnvironment, loginShellVariables, shellSubset } from './environment.mjs';
-import { AGENT_PROGRAMS, HOME_BIN_CANDIDATES, chosenProgram, claudeUpdate, claudeVersion, codexAppCopies, codexVersion, desktopApp, detectAgentInstallation, installCommand, laterVersion, notTheAgent, searchReport } from './agent-installation.mjs';
+import { AGENT_PROGRAMS, HOME_BIN_CANDIDATES, antigravityVersion, chosenProgram, claudeUpdate, claudeVersion, codexAppCopies, codexVersion, desktopApp, detectAgentInstallation, installCommand, laterVersion, notTheAgent, searchReport } from './agent-installation.mjs';
 import { logSwitches } from './agent-logs.mjs';
 import { afterFirstReading, firstWindowsApps, refreshWindowsApps } from './windows-apps.mjs';
 import { mergeConfig, sessionSkills } from './agent-skills.mjs';
@@ -105,6 +105,13 @@ export const AGENTS = Object.freeze({
       grep: 'search', glob: 'search',
       web_search: 'fetch', web_fetch: 'fetch',
     } },
+  /* Google Antigravity: speaks ACP; logs in with `agy acp --login` */
+  antigravity: {
+    label: AGENT_DEFINITIONS.antigravity.name,
+    args: ['acp'],
+    login: ['acp', '--login'],
+    approve: true,
+  },
 });
 
 /**
@@ -130,15 +137,11 @@ export const HARNESS_AGENTS = Object.freeze(['byok']);
 export const isChatAgent = (id) => isAgentId(id) || HARNESS_AGENTS.includes(id);
 
 /** How the person points at things in Studio, and how the agent points back: told to every agent, the app's own too. */
-export const STUDIO_REFERENCES = `When the person mentions something in Studio, they may name a clip, a page or a moment (as seconds); find it in
-film.html and the project's files.
+export const STUDIO_REFERENCES = `The person may name a clip, a page or a moment (in seconds) of Studio: find it in film.html and the project's
+files.
 
-In your replies you can point at things in Studio for the person: [[clip:ID]] (a clip, by its id in film.html),
-[[t:SECONDS]] (a moment), [[range:START-END]] (a stretch, in seconds), [[track:N]] (a track, 0 is the first) and
-[[file:PATH]] (a file of the project). They show as links that open it in Studio.
-
-A canvas node the person points at (\`canvas node \`ID\`\`) is on the project's canvas, beside the film and not in it:
-read the board with \`openfilm canvas\` and change it with \`openfilm canvas apply\`.`;
+In your replies, [[clip:ID]] (by its id in film.html), [[t:SECONDS]], [[range:START-END]] (in seconds), [[track:N]]
+(0 is the first) and [[file:PATH]] (a file of the project) show as links that open it in Studio.`;
 
 /**
  * What the agent is told about where it is, on top of its own instructions. `command`: the app's `openfilm` by its
@@ -157,9 +160,8 @@ the video editor, showing the project in your working directory; it updates live
 
 The project is an OpenFilm film: pages with window.film, cut together by film.html. Before you change anything, run
 \`${run}\` with no arguments and read the manual it prints; follow it. ${which} Studio is already open on this
-project: you never need \`${run} open\` and never open Studio in a browser. Run \`${run} look\` after each change
-to see what you made. Render the MP4 only when the person asks for it; they can also export from Studio. Reply in the
-language the person writes in.
+project: you never need \`${run} open\` and never open Studio in a browser, and the person exports the film from it.
+Run \`${run} look\` after each change to see what you made. Reply in the language the person writes in.
 
 ${STUDIO_REFERENCES}`;
 }
@@ -168,15 +170,15 @@ export const INSTRUCTIONS = agentInstructions();
 
 /**
  * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): who it is,
- * where it is and how it works with the person (agent-prompt.md: written for it, so not INSTRUCTIONS, which tell
- * another agent to go and read the manual), how the person points at Studio (STUDIO_REFERENCES), and the manual
- * `openfilm` prints, so it starts knowing it. Each thing is said once: what the manual says (`openfilm get`'s
- * services, rendering, the person's changes) and what Pi's tools say of themselves are not said again.
+ * where it is and how it talks with the person (agent-prompt.md: written for it, so not INSTRUCTIONS, which tell
+ * another agent to go and read the manual), and how the person points at Studio (STUDIO_REFERENCES). How a film is
+ * made is OpenFilm's skills' (openfilm/skills coreSkills), which Pi lists after it and the agent reads when a task
+ * needs one. `edit` false: the person turned OpenFilm's `edit` off, so the prompt does not send the agent to it.
  */
-export function ownAgentPrompt() {
-  const prompt = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
-  const manual = readFileSync(join(dirname(require.resolve('openfilm/package.json')), 'MANUAL.md'), 'utf8').replaceAll('npx openfilm', 'openfilm').trim();
-  return `${prompt}\n\n## Pointing at Studio\n\n${STUDIO_REFERENCES}\n\n<manual>\n${manual}\n</manual>`;
+export function ownAgentPrompt({ edit = true } = {}) {
+  const read = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
+  const prompt = edit ? read : read.replace(/: read `edit` before you make or change a film\./, '.');
+  return `${prompt}\n\n## Pointing at Studio\n\n${STUDIO_REFERENCES}`;
 }
 
 /**
@@ -911,6 +913,8 @@ const AUTH_REQUIRED = -32000;
 
 /** The oldest Codex the chat was tried with: an older one may have an app server the adapter can't talk to. */
 export const CODEX_TESTED = '0.132.0';
+/* 1.5.1 offers the account's models to every ACP client and fixes session cancellation. */
+export const ANTIGRAVITY_TESTED = '1.5.1';
 
 /**
  * The oldest Claude Code the chat was tried with. An older one lists only the models it knows: 2.1.288 has no Haiku
@@ -944,6 +948,18 @@ export function codexTooOld(agent, path, e, versionOf = codexVersion) {
   if (!version || !laterVersion(CODEX_TESTED, version)) return e;
   const why = e instanceof Error ? e.message : String(e);
   return Object.assign(new Error(`Codex ${version} is older than OpenFilm needs (${CODEX_TESTED} or later): update Codex, then try again. ${why}`.trim()), { code: 'outdated' });
+}
+
+/**
+ * An Antigravity older than the ACP release tried with OpenFilm.
+ * @param {string} agent @param {string | undefined} path @param {any} e @param {(file: string) => string | null} [versionOf]
+ */
+export function antigravityTooOld(agent, path, e, versionOf = antigravityVersion) {
+  if (agent !== 'antigravity' || !path || e?.code === 'sign-in' || e?.code === 'not-installed') return e;
+  const version = versionOf(path);
+  if (!version || !laterVersion(ANTIGRAVITY_TESTED, version)) return e;
+  const why = e instanceof Error ? e.message : String(e);
+  return Object.assign(new Error(`Google Antigravity ${version} is older than OpenFilm needs (${ANTIGRAVITY_TESTED} or later): update agy, then try again. ${why}`.trim()), { code: 'outdated' });
 }
 
 /** ACP's internal error: what an agent's own failures come as. */
@@ -1189,7 +1205,7 @@ export class AgentSession {
       this.step = null;
       return info;
     } catch (e) {
-      throw await this.explain(codexTooOld(this.opts.agent, this.cli?.path, e));
+      throw await this.explain(antigravityTooOld(this.opts.agent, this.cli?.path, codexTooOld(this.opts.agent, this.cli?.path, e)));
     }
   }
 
@@ -1243,7 +1259,7 @@ export class AgentSession {
     /* its skills and MCP servers: its maker's, OpenFilm's skills, and the person's own only those let in (agent-skills.mjs) */
     const skills = this.opts.skills
       ? await sessionSkills(this.opts.agent, { cwd: this.opts.cwd, env: shell, ...this.opts.skills }).catch(() => null) : null;
-    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt(), skills: skills?.piSkills ?? null });
+    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt({ edit: skills?.piSkills?.names.includes('edit') ?? true }), skills: skills?.piSkills ?? null });
     /* Developer mode: the agent's own logging switch, so the turn log has what its model got; none when the person
        set its telemetry themselves (agent-logs.mjs) */
     this.logging = this.opts.logDir && cli && !this.spec.adapter

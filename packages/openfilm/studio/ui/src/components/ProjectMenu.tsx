@@ -48,7 +48,7 @@ export function ProjectMenu({
           aria-label={t('projectMenu.more')}
           className={
             className ??
-            'flex h-[26px] w-[26px] items-center justify-center rounded-md text-[var(--text-dim)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
+            'flex h-[26px] w-[26px] items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
           }
         >
           <MoreHorizontal size={size} />

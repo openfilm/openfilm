@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AGENT_INSTALLERS, chosenProgram, claudeAppCli, claudeUpdate, codexAppCopies, claudeVersion, cmdTarget, codexVersion, consoleProgram, desktopApp, detectAgentInstallation, findExecutable, installCommand, laterVersion, notTheAgent, opencodeVersion, searchReport, windowsBinDirs } from './agent-installation.mjs';
+import { AGENT_INSTALLERS, antigravityVersion, chosenProgram, claudeAppCli, claudeUpdate, codexAppCopies, claudeVersion, cmdTarget, codexVersion, consoleProgram, desktopApp, detectAgentInstallation, findExecutable, installCommand, laterVersion, notTheAgent, opencodeVersion, searchReport, windowsBinDirs } from './agent-installation.mjs';
 
 test("an npm .cmd shim (Windows) runs its package's script: that is what gets started", () => {
   const npm = mkdtempSync(join(tmpdir(), 'of-npm-'));
@@ -281,6 +281,25 @@ test('which Codex a program is: npm\'s package, Homebrew\'s folder, else what it
   assert.equal(codexVersion(join(home, 'gone')), null);
 });
 
+test("a Codex inside an app says its version when asked, not the old label the app keeps around it (issue #290)", () => {
+  const home = mkdtempSync(join(tmpdir(), 'of-home-'));
+  /* the copy the Codex app runs, with an npm-style package.json left beside it naming an older build */
+  const beside = join(home, 'Applications', 'Codex.app', 'Contents', 'Resources', 'codex-cli');
+  put(join(beside, 'package.json'), JSON.stringify({ name: '@openai/codex', version: '0.137.0' }));
+  const inApp = put(join(beside, 'bin', 'codex'));
+  assert.equal(codexVersion(inApp, { ask: () => '0.165.0' }), '0.165.0', "the program's own words, not the label");
+  /* an app copy that cannot be asked falls back to the label rather than nothing */
+  const quiet = put(join(beside, 'bin', 'codex-quiet'));
+  utimesSync(quiet, new Date(0), new Date(0));
+  assert.equal(codexVersion(quiet, { ask: () => null }), '0.137.0', 'the label when the program says nothing');
+  /* outside an app, the label keeps saying it without asking: npm's own package */
+  const npm = put(join(home, 'npm', 'codex.js'));
+  put(join(home, 'npm', 'package.json'), JSON.stringify({ name: '@openai/codex', version: '0.42.0' }));
+  let askedOutside = 0;
+  assert.equal(codexVersion(npm, { ask: () => { askedOutside += 1; return '9.9.9'; } }), '0.42.0', 'the package.json, not asked');
+  assert.equal(askedOutside, 0, 'never asked outside an app while the label answers');
+});
+
 test('Codex installed long ago beside the copy an app keeps up to date: the later one is used', () => {
   if (process.platform === 'win32') return;
   const home = mkdtempSync(join(tmpdir(), 'of-home-'));
@@ -374,6 +393,20 @@ test('on Windows a window program (a desktop app) is never an agent; one whose h
   /* a Store app's command cannot be read as a file: it is not refused for that */
   writeFileSync(join(dir, 'codex.exe'), '');
   assert.equal(notTheAgent('codex', join(dir, 'codex.exe'), { win: true }), null);
+});
+
+test('Antigravity version is read from agy --version; an older copy is detected as installed', () => {
+  const home = mkdtempSync(join(tmpdir(), 'of-home-'));
+  const bin = join(home, 'AppData', 'Local', 'agy', 'bin');
+  mkdirSync(bin, { recursive: true });
+  const exe = put(join(bin, 'agy.exe'), peProgram(3));
+  let asked = 0;
+  const ask = () => { asked += 1; return '1.4.2'; };
+  assert.equal(antigravityVersion(exe, { ask }), '1.4.2');
+  assert.equal(antigravityVersion(exe, { ask }), '1.4.2');
+  assert.equal(asked, 1, 'asked once while the program is the same');
+  assert.equal(notTheAgent('antigravity', exe, { win: true }), null);
+  assert.equal(detectAgentInstallation('antigravity', { home, win: true, env: { LOCALAPPDATA: join(home, 'AppData', 'Local') }, pathDirs: [] }).cli, exe);
 });
 
 test("Cursor's agent counts only in its own folder (or Homebrew's cursor-cli), whatever it is called", () => {

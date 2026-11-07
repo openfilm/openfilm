@@ -5,7 +5,7 @@
 <title>Checklist</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #34c759; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #34c759; }
 svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
 svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .box { fill: rgba(255, 255, 255, 0.14); stroke: #ffffff; stroke-width: 6; }
@@ -15,7 +15,7 @@ svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .row .tick { stroke-dasharray: 1 2; stroke-dashoffset: 1.01; animation: draw 0.26s cubic-bezier(.6, .05, .3, 1) calc(var(--d) + 0.2s) both, bump 2.4s ease-in-out calc(var(--d) + 1s) infinite; }
 @keyframes draw { from { stroke-dashoffset: 1.01; opacity: 0; } 1% { opacity: 1; } to { stroke-dashoffset: 0; opacity: 1; } }
 @keyframes bump { 0%, 12%, 100% { transform: none; } 6% { transform: scale(1.15); } }
-.row text { fill: #ffffff; font: 700 46px 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; animation: txt 0.4s cubic-bezier(.2, .8, .2, 1) calc(var(--d) + 0.12s) both; }
+.row text { fill: #ffffff; font: 700 46px var(--font); animation: txt 0.4s cubic-bezier(.2, .8, .2, 1) calc(var(--d) + 0.12s) both; }
 @keyframes txt { from { opacity: 0; transform: translateX(-24px); } }
 </style>
 </head>

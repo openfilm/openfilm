@@ -8,7 +8,7 @@
       3
     ],
     "attrs": {
-      "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".x\"}, {\"name\": \"Chapter\", \"type\": \"text\", \"at\": \".n\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+      "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".x\"}, {\"name\": \"Chapter\", \"type\": \"text\", \"at\": \".n\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
     }
   },
   "durationMs": 3000

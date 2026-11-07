@@ -16,13 +16,15 @@ import type { Film } from '../api';
 import { useT } from '@/i18n';
 import type { ClipSpan } from '@/lib/film-shape';
 import type { Anchor, Sound } from './player';
-import { heldNext, reloaded, shownAfter, updateKeys, zoomedPageScale, type Frame } from './preview-frames';
+import { heldNext, left, reloaded, shownAfter, shownOf, updateKeys, zoomedPageScale, type Frame } from './preview-frames';
 import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { chromiumBased } from '@/lib/browser';
 import { PictureZoom } from '@/lib/viewer-zoom';
 
 /** How far the film's frame reaches past the picture's box on each side, in px (see the `stage-frames` clip). */
 const BLEED = 1;
+/** How long a load replaced stays over the new one when that never says it is on screen, ms. */
+const LEAVING_MAX_MS = 1000;
 
 export type FilmInfo = { duration: number; width: number; height: number; sounds: Sound[]; spans: ClipSpan[] };
 /** What is selected in the picture: an element of a page (named by selector and match), or a whole clip. */
@@ -38,6 +40,8 @@ export type PreviewHandle = {
   /** Stretches rendered to play in place of the film while it plays (studio/server/preview-cache.mjs); [] none. */
   renders?(list: PreviewRender[]): void;
   update(film: Film, head?: string): void;
+  /** The caption tracks' files read again (one was written) and the moment shown drawn again. */
+  captions?(): void;
   preview(clip: string, overrides: unknown[] | null): void;
   pick(x: number, y: number): Promise<Target | null>;
   /*
@@ -71,7 +75,8 @@ export type PlayedReport = { frames: number; drawn: number; late: number; render
  * of the film is shown (its handles are new).
  */
 export type StageEvent =
-  | { event: 'typing'; handle: number; value: string }
+  /* `size`: a line of words' box as the picture fitted it to the words typed (stage.js fitTyped) */
+  | { event: 'typing'; handle: number; value: string; size?: { w: number; h: number } }
   /* `hold`: what kept the other layers in place as the words were typed (style for the same override, null takes a key away) */
   | { event: 'text'; handle: number; commit: boolean; value?: string; before?: string; hold?: Record<string, string | null> }
   | { event: 'key'; key: KeyboardEvent }
@@ -93,10 +98,19 @@ type Props = {
   onKey?(e: KeyboardEvent): void;
   /** The film could not be drawn (the message), or it is drawn again (null). */
   onError?(message: string | null): void;
+  /**
+   * An agent is changing the film (lib/agent-working): a load that cannot be drawn is on its way, not broken. The
+   * picture drawn last stays, dimmed and said to be updating, or, with none, the viewer says it is updating.
+   */
+  waiting?: boolean;
   /** How playing went, about once a second while it plays. */
   onPlayed?(report: PlayedReport): void;
   /** The clips as placed, again: a page opened for the first time said its own length and size (the rest is as it was). */
   onSpans?(spans: ClipSpan[]): void;
+  /** A video this browser could not play (its src as film.html writes it): it shows nothing until it has a copy that plays. */
+  onUndecoded?(src: string): void;
+  /** A page that came on is shown (its first frame drawn): it is in the picture, and in the stage's tree, only now. */
+  onShown?(): void;
   children?: ReactNode;
 };
 
@@ -107,7 +121,7 @@ const RESCALE_MS = 600;
 /** How often a load held back for a drag or a line typed in place looks whether it may be shown, ms. */
 const HOLD_POLL_MS = 100;
 
-export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, children }, ref) {
+export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onUndecoded, onShown, waiting = false, children }, ref) {
   const t = useT();
   const origin = new URL(folder).origin;
   const [frames, setFrames] = useState<Frame[]>([{ key: 1, ready: false }]);
@@ -137,7 +151,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   const scaleOf = useRef(new Map<number, number | null>());
   const framesRef = useRef(frames);
   framesRef.current = frames;
-  const shown = frames.find((f) => f.ready) ?? null;
+  const shown = shownOf(frames);
   const shownRef = useRef(shown);
   shownRef.current = shown;
   /** what failed in the frame being loaded, else in the one shown */
@@ -150,6 +164,10 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   onPlayedRef.current = onPlayed;
   const onSpansRef = useRef(onSpans);
   onSpansRef.current = onSpans;
+  const onUndecodedRef = useRef(onUndecoded);
+  onUndecodedRef.current = onUndecoded;
+  const onShownRef = useRef(onShown);
+  onShownRef.current = onShown;
   /* the stretches rendered to play in the film's place: told to each load of the film once it is up */
   const rendered = useRef<PreviewRender[]>([]);
   useEffect(() => { onErrorRef.current?.(failed); }, [failed]);
@@ -165,6 +183,8 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
    * taken from the one answered soonest (the time a message takes is the error, a fraction of a millisecond).
    */
   const line = useRef<Anchor | null>(null);
+  /* the still frame asked for last: drawn again when a page opens after it (see the stage's `woke`) */
+  const lastSeek = useRef<number | null>(null);
   const fpsRef = useRef(fps);
   fpsRef.current = fps;
   const clocks = useRef(new Map<number, { offset: number; rtt: number }>());
@@ -210,6 +230,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   useImperativeHandle(ref, () => ({
     seek(t) {
       line.current = null;
+      lastSeek.current = t;
       post(shownRef.current?.key, { type: 'seek', t, seq: ++seq.current });
     },
     play(anchor) {
@@ -230,6 +251,9 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         updateSeq.current.set(key, ++seq.current);
         post(key, { type: 'update', film, head: latestHead.current, seq: seq.current });
       }
+    },
+    captions() {
+      for (const key of up.current) post(key, { type: 'captions' });
     },
     preview(clip, overrides) {
       post(shownRef.current?.key, { type: 'preview', clip, overrides });
@@ -276,6 +300,18 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
     if (firstShown.current) { firstShown.current = false; return; }
     tell({ event: 'reset' });
   }, [shownKey]);
+  /* another load shown over the one it replaced: that one stays on top, told nothing more, until the new one says it
+     has been put on screen (its `painted`, a refresh later), else for a second at most (a page in the background
+     draws nothing) */
+  const going = frames.find((f) => f.leaving)?.key;
+  useEffect(() => {
+    if (going == null || shownKey == null) return undefined;
+    up.current.delete(going);
+    post(shownKey, { type: 'shown' });
+    const timer = setTimeout(() => setFrames(left), LEAVING_MAX_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [going, shownKey]);
 
   /**
    * Show the frame `key`, drawn at `t`: the film playing, it plays on from the line; still, the playhead may have moved
@@ -342,6 +378,12 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
       const key = [...elements.current].find(([, el]) => el.contentWindow === e.source)?.[0];
       if (key == null) return;
       const m = e.data;
+      /* the frame going says nothing more; the one shown over it says when it is on screen */
+      if (framesRef.current.find((f) => f.key === key)?.leaving) return;
+      if (m.type === 'painted') {
+        if (key === shownRef.current?.key) requestAnimationFrame(() => setFrames(left));
+        return;
+      }
       if (m.type === 'ready') {
         onInfo(m as FilmInfo);
         up.current.add(key);
@@ -384,6 +426,10 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         else reload();
       } else if (m.type === 'spans') {
         if (key === shownRef.current?.key && Array.isArray(m.spans)) onSpansRef.current?.(m.spans);
+      } else if (m.type === 'undecoded') {
+        if (typeof m.src === 'string' && m.src) onUndecodedRef.current?.(m.src);
+      } else if (m.type === 'shown') {
+        if (key === shownRef.current?.key) onShownRef.current?.();
       } else if (m.type === 'picked') {
         const resolve = picks.current.get(m.seq);
         picks.current.delete(m.seq);
@@ -413,8 +459,13 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
             ctrlKey: Boolean(m.ctrlKey), metaKey: Boolean(m.metaKey), shiftKey: Boolean(m.shiftKey), buttons: Number(m.buttons) || 0,
             bubbles: true, cancelable: true,
           }));
+        } else if (m.event === 'woke') {
+          /* a page opened after the still frame was drawn: that frame drawn again, now with it */
+          if (!line.current && lastSeek.current != null) post(key, { type: 'seek', t: lastSeek.current, seq: ++seq.current });
         } else if (m.event === 'typing') {
-          tell({ event: 'typing', handle: Number(m.handle), value: String(m.value ?? '') });
+          const size = m.size && typeof m.size === 'object' && Number.isFinite(Number(m.size.w)) && Number.isFinite(Number(m.size.h))
+            ? { w: Number(m.size.w), h: Number(m.size.h) } : undefined;
+          tell({ event: 'typing', handle: Number(m.handle), value: String(m.value ?? ''), ...(size ? { size } : {}) });
         } else if (m.event === 'text') {
           tell({
             event: 'text', handle: Number(m.handle), commit: Boolean(m.commit),
@@ -463,6 +514,9 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   }, [pageScale, shownScale, shown?.key, frames.length]);
 
   const error = failed;
+  /* while an agent changes the film: the picture drawn last, dimmed (a load behind it failed), else a word */
+  const updating = Boolean(error && waiting);
+  const stale = updating && shown != null && !shown.error;
   return (
     <div className="stage-box" ref={box}>
       <div className="stage" style={{ width: fit.w, height: fit.h }}>
@@ -484,24 +538,37 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
             /* the one loading is all but transparent, not hidden: the film is on another site, in a process of its own,
                and a frame hidden from there is not drawn at all, so a page that waits to draw (an image's decode()) would
                never be ready; nor quite 0, or it is not put on screen at all, and is blank for a moment when it is shown */
-            data-loading={f === shown ? undefined : ''}
+            data-loading={f === shown || f.leaving ? undefined : ''}
+            data-leaving={f.leaving ? '' : undefined}
             style={{
               width: stage.w, height: stage.h,
               transform: `translate(${-BLEED}px, ${-BLEED}px) scale(${(fit.w + 2 * BLEED) / stage.w}, ${(fit.h + 2 * BLEED) / stage.h})`,
-              ...(f === shown ? {} : { opacity: 0.001, pointerEvents: 'none' }),
+              /* the one replaced: over the new one until that is on screen */
+              ...(f === shown ? {} : f.leaving ? { zIndex: 1, pointerEvents: 'none' } : { opacity: 0.001, pointerEvents: 'none' }),
             }}
           />
         ))}
         </div>
         {shown && !error ? children : null}
         {!shown && !error ? <div className="cover"><span role="status" className="text-sweep">{t('project.previewStageMount')}</span></div> : null}
-        {error ? (
+        {stale ? <div aria-hidden className="pointer-events-none absolute inset-0 z-[2] bg-black/50" /> : null}
+        {stale ? (
+          <span role="status" data-preview-updating="" className="pointer-events-none absolute bottom-2 right-2 z-[3] rounded-[4px] bg-black/70 px-2 py-1 text-[11px] text-white/85">
+            <span className="text-sweep">{t('project.previewUpdating')}</span>
+          </span>
+        ) : updating ? (
+          <div className="cover" role="status" data-preview-updating=""><span className="text-sweep">{t('project.previewUpdating')}</span></div>
+        ) : error ? (
           <div className="cover" role="alert">
             <div className="max-w-[420px] text-[13px] leading-relaxed text-white/70">
               <p>{t('project.previewFailed')}</p>
               {/* in Safari or Firefox the likely reason is the browser: films are drawn and exported in Chromium */}
               {!chromiumBased() ? <p className="mt-1.5">{t('project.previewBrowser')}</p> : null}
-              <p className="mt-1.5 text-[11.5px] text-white/45">{error}</p>
+              {/* what went wrong as the film said it, for whoever wants it */}
+              <details className="mt-1.5 text-[11.5px] text-white/45">
+                <summary className="cursor-pointer select-none hover:text-white/70">{t('project.previewDetails')}</summary>
+                <p className="mt-1 break-words text-left">{error}</p>
+              </details>
             </div>
           </div>
         ) : null}

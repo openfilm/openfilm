@@ -50,21 +50,26 @@ import { npmOpenfilm, olderThanThis } from '../client.mjs';
 import { createWatchers } from './watch.mjs';
 import { projectMissing } from './project-presence.mjs';
 import { installedFonts } from './fonts.mjs';
-import { projectFonts, resolveIn } from './project-fonts.mjs';
+import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
-import { libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, setLibraryFavorites } from './library.mjs';
-import { SavedError, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
+import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
+import { listenLocal } from '../../src/host.mjs';
+import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { listSkills, removeSkill, setSkillCover, setSkillInstalled, setSkillOn, skillOrigins, skillsInstalled, skillsOff } from '../../src/skills.mjs';
-import { providersRoute } from './providers/index.mjs';
+import { coreSkills, keeps, listSkills, offeredSkills, removeSkill, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
+import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, uninstallSkill } from './skill-catalog.mjs';
+import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
-import { projectSettingsRoute } from './project-settings.mjs';
+import { projectSettingsRoute, readProjectSettings } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
-import { CANVAS_FILE, agentCanvasRoute, canvasRoute, readCanvas } from './canvas.mjs';
+import { CANVAS_FILE, agentCanvasRoute, canvasRoute, canvasWriteRoute, readCanvas } from './canvas.mjs';
 import { copyBoardInto, projectTemplatesRoute, templatesRoute } from './canvas-templates.mjs';
+import { canvasMadeRoute } from './canvas-history.mjs';
+import { charactersRoute, projectCharactersRoute } from './canvas-characters.mjs';
 import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
 import { LOCATION_KEYS, chooseFolder, locations, usableFolder } from '../../src/locations.mjs';
@@ -114,6 +119,7 @@ export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
  * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent }} [options]
  */
 export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent } = {}) {
+  void refreshCommunity();
   let COOKIE = cookieName(port);
   let FRAMED = framedCookieName(port);
   /** The key from either session cookie. */
@@ -322,7 +328,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* ── own keys and who makes each kind of media (Settings → Services): never a key back; see providers/index.mjs ── */
     if (parts[0] === 'providers') return providersRoute(req, res, parts.slice(1), { openBrowser });
-    /* the models that run on this computer (Settings → Services → Local models; local-models.mjs) */
+    /* the models that run on this computer (Settings → Services → Local services; local-models.mjs) */
     if (parts[0] === 'local-models') return localModelsRoute(req, res, parts.slice(1));
     /* what the person changed in a project while an agent worked, kept over its writes: the note for the agent named
        `agent`, which its `openfilm` command prints, answered at once ({ id, line }, line null when nothing); it counts
@@ -349,6 +355,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'canvas' && parts.length === 1) return agentCanvasRoute(req, res, (root) => watchers.emit(root, { type: 'canvas' }));
     /* the person's canvas templates, the same for every project (canvas-templates.mjs) */
     if (parts[0] === 'canvas-templates') return templatesRoute(req, res, parts.slice(1));
+    /* the person's characters, the same for every project (canvas-characters.mjs) */
+    if (parts[0] === 'canvas-characters') return charactersRoute(req, res, parts.slice(1));
 
     /* the system's folder dialog, opened here for a page in a browser (folder-picker.mjs): { path } (null: cancelled);
        501 when this system has none Studio can open */
@@ -408,16 +416,23 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           : what === 'frame' && !isPage(file) ? await frame(lib, file, Number(url.searchParams.get('ms')), Number(url.searchParams.get('w')))
           : null;
         if (!jpeg) throw new HttpError(400, 'what: probe, poster, frame or wave, of a media file');
-        res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
+        res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
         return res.end(jpeg);
       }
     }
     /* OpenFilm's library (library.mjs): what is in it, its voices, its files (a poster, a preview, a page, a sound, a waveform, a voice's sample), and
        the things the person starred */
     if (parts[0] === 'library') {
-      if (parts.length === 1 && req.method === 'GET') return json(res, 200, libraryIndex());
+      if (parts.length === 1 && req.method === 'GET') {
+        await refreshCommunity();
+        return json(res, 200, libraryIndex());
+      }
       if (parts[1] === 'voices' && parts.length === 2 && req.method === 'GET') return json(res, 200, libraryVoices());
       if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, await libraryFileFetched(url.searchParams.get('path')), { check: true });
+      /* which of these things still need fetching before they go in (a sound, an emoji, a template's music): { ids } */
+      if (parts[1] === 'missing' && parts.length === 2 && req.method === 'POST') return json(res, 200, { ids: notHere((/** @type {{ ids?: unknown }} */ (await readJson(req) ?? {})).ids) });
+      /* one of them fetched now: { ok } */
+      if (parts[1] === 'fetch' && parts.length === 2 && req.method === 'POST') return json(res, 200, { ok: await fetchItem((/** @type {{ id?: unknown }} */ (await readJson(req) ?? {})).id) });
       /* a page of it, as a page: what a click tries over the viewer's picture */
       if (parts[1] === 'pages' && parts.length > 2 && req.method === 'GET') {
         /* a page of it, as a page, and what it loads beside it by its own place (its fonts, its pictures): what a click
@@ -501,76 +516,112 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const folder = await exampleFolderHere(decodeURIComponent(parts[1]));
       return sendMedia(req, res, inside(folder, parts.slice(3).map(decodeURIComponent).join('/')), { keep: true });
     }
-    /* the skills a project can be made with (../../src/skills.mjs): its own, the person's, the official ones */
+    /* the skills a project can be made with (../../src/skills.mjs): OpenFilm's own first (`core`, which can only be
+       turned off), then the project's, the person's, those installed, then Discover's not installed (skill-catalog.mjs,
+       `installed: false`). Each is told by its uid (owner/name) here and in every route below, so two of the same name
+       are both there; `as` is the name agents are given it by. An installed one says when Discover has a newer commit
+       of it (`update`) or no longer has it (`retired`); `catalog`: when Discover's index was last read */
     if (parts[0] === 'skills' && parts.length === 1 && req.method === 'GET') {
       const id = url.searchParams.get('project');
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
       const skills = listSkills({ project: project?.path ?? null });
+      const catalog = readCatalog();
+      const standing = installedStanding(catalog);
+      const had = new Set(skills.map((k) => k.uid));
+      const offered = catalogSkills(catalog).filter((k) => !had.has(k.uid));
       const origins = skillOrigins();
       const off = new Set(skillsOff());
-      const installed = new Set(skillsInstalled());
-      const media = (/** @type {string} */ name, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(name)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
+      const agentsCall = new Map(offeredSkills({ project: project?.path ?? null }).named.map((k) => [k.uid, k.as]));
+      const media = (/** @type {string} */ uid, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(uid)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
+      const all = [...coreSkills().map((k) => ({ ...k, core: true, installed: true })), ...skills.map((k) => ({ ...k, core: false, installed: true })),
+        ...offered.map((k) => ({ ...k, core: false, installed: false }))];
       return json(res, 200, {
-        skills: skills.map((k) => ({
-          name: k.name, description: k.description, source: k.source, scripts: k.scripts.length,
+        catalog: catalog ? { read: catalog.read } : null,
+        skills: all.map((k) => ({
+          ...(k.core ? { core: true } : {}), uid: k.uid, name: k.name, description: k.description, source: k.source, scripts: k.scripts.length,
+          ...(agentsCall.has(k.uid) ? { as: agentsCall.get(k.uid) } : {}),
           ...(k.shown ? { shown: k.shown } : {}), ...(k.version ? { version: k.version } : {}), ...(k.kind ? { kind: k.kind } : {}),
           ...(k.order != null ? { order: k.order } : {}), ...(k.icon ? { icon: k.icon } : {}), ...(k.repository ? { repository: k.repository } : {}),
-          ...(k.cover ? { cover: `${media(k.name, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.name, 'preview') } : {}),
+          /* what it needs beyond OpenFilm, the computers it runs on, and whether this one is not among them */
+          ...(k.needs ? { needs: k.needs } : {}), ...(k.platforms ? { platforms: k.platforms, ...(k.platforms.includes(thisPlatform()) ? {} : { elsewhere: true }) } : {}),
+          ...(k.cover ? { cover: `${media(k.uid, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.uid, 'preview') } : {}),
           /* the person's own: where it came from (none kept: made where it is) */
           ...(k.source === 'mine' ? { origin: origins[basename(k.folder)] ?? { from: 'made' } } : {}),
-          /* an official one is installed to be used; the person's own and a project's are theirs already */
-          installed: k.source !== 'official' || installed.has(k.name),
+          /* in Discover only, installed to be used; the person's own and a project's are theirs already */
+          installed: k.installed,
+          ...(k.installed && k.source === 'official' && !k.core ? standing.get(k.uid) ?? {} : {}),
           /* turned off: offered to no agent until it is turned on again */
-          ...(off.has(k.name) ? { off: true } : {}),
+          ...(k.installed && keeps(off, k) ? { off: true } : {}),
         })),
       });
     }
-    /* an official skill installed or uninstalled (PUT { installed }) */
+    /* Discover's index read again (POST { fresh? }: unless read less than `fresh` ms ago), the skills it names fetched
+       at their commits: → { catalog }, or 502 saying why, what was read before staying */
+    if (parts[0] === 'skills' && parts.length === 2 && parts[1] === 'catalog' && req.method === 'POST') {
+      const fresh = Number((await readJson(req).catch(() => ({})))?.fresh) || 0;
+      try {
+        const catalog = await readDiscover({ fresh });
+        return json(res, 200, { catalog: { read: catalog.read } });
+      } catch (e) {
+        throw new HttpError(502, `Discover could not be read now: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    /* a skill of the project shown (`?project=`), or the library's, by its uid; OpenFilm's own with `core` */
+    const skillAt = async (/** @type {string} */ uid, { core = false } = {}) => {
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
+      return [...(core ? coreSkills() : []), ...listSkills({ project: project?.path ?? null })].find((k) => k.uid === uid)
+        ?? (core ? catalogSkills().find((k) => k.uid === uid) ?? null : null);
+    };
+    /* one of Discover's installed, at the commit it shows, or uninstalled to the trash (PUT { installed }); updated to
+       Discover's commit (POST `update`), the old one to the trash */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'installed' && req.method === 'PUT') {
       const installed = (await readJson(req))?.installed;
       if (typeof installed !== 'boolean') throw new HttpError(400, 'installed: true or false');
-      const skill = listSkills().find((k) => k.name === decodeURIComponent(parts[1]));
-      if (!skill || skill.source !== 'official') throw new HttpError(404, 'no such official skill');
-      setSkillInstalled(skill.name, installed);
+      const uid = decodeURIComponent(parts[1]);
+      if (installed) {
+        try { await installSkill(uid); } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 500, e instanceof Error ? e.message : String(e)); }
+      } else if (!(await uninstallSkill(uid))) throw new HttpError(404, 'no such installed skill');
       return json(res, 200, { installed });
+    }
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'update' && req.method === 'POST') {
+      const uid = decodeURIComponent(parts[1]);
+      if (!installedStanding().get(uid)?.update) throw new HttpError(404, 'no newer commit of that skill in Discover');
+      const skill = await installSkill(uid);
+      return json(res, 200, { version: skill.version ?? null });
     }
     /* one of the person's own skills, or a project's, moved to the trash (an official one is uninstalled instead) */
     if (parts[0] === 'skills' && parts.length === 2 && req.method === 'DELETE') {
-      const id = url.searchParams.get('project');
-      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
-      const skill = listSkills({ project: project?.path ?? null }).find((k) => k.name === decodeURIComponent(parts[1]));
+      const skill = await skillAt(decodeURIComponent(parts[1]));
       if (!skill) throw new HttpError(404, 'no such skill');
       if (skill.source === 'official') throw new HttpError(400, 'An official skill is uninstalled, not removed.');
-      if (skill.source === 'mine') await removeSkill(skill.name);
+      if (skill.source === 'mine') await removeSkill(skill.uid);
       else await moveToTrash(skill.folder);
       return json(res, 200, {});
     }
-    /* a skill turned on or off, by name, for every project (PUT { on }) */
+    /* a skill turned on or off, by uid, for every project (PUT { on }) */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'on' && req.method === 'PUT') {
       const on = (await readJson(req))?.on;
       if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
-      try { setSkillOn(decodeURIComponent(parts[1]), on); } catch (e) { throw new HttpError(400, e instanceof Error ? e.message : String(e)); }
+      const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
+      if (!skill) throw new HttpError(404, 'no such skill');
+      setSkillOn(skill.uid, on);
       return json(res, 200, { on });
     }
     /* Only the person's own skill can be changed; a project override must not edit a hidden personal skill. */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'cover' && (req.method === 'PUT' || req.method === 'DELETE')) {
-      const id = url.searchParams.get('project');
-      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
-      const name = decodeURIComponent(parts[1]);
-      const skill = listSkills({ project: project?.path ?? null }).find((s) => s.name === name);
+      const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
       if (!skill) throw new HttpError(404, 'no such skill');
       if (skill.source !== 'mine') throw new HttpError(403, 'Only your own skills can have their cover changed.');
       const cover = req.method === 'DELETE' ? null : (await readJson(req, 7 << 20))?.cover;
       try {
-        const updated = setSkillCover(name, cover);
-        return json(res, 200, { cover: updated?.cover ? `/api/skills/${encodeURIComponent(name)}/cover?v=${encodeURIComponent(updated.cover)}` : null });
+        const updated = setSkillCover(skill.uid, cover);
+        return json(res, 200, { cover: updated?.cover ? `/api/skills/${encodeURIComponent(skill.uid)}/cover?v=${encodeURIComponent(updated.cover)}` : null });
       } catch (e) { throw new HttpError(400, e instanceof Error ? e.message : String(e)); }
     }
     /* a skill's cover picture or preview video (its openfilm.json's `cover`, `preview`) */
     if (parts[0] === 'skills' && parts.length === 3 && (parts[2] === 'cover' || parts[2] === 'preview') && req.method === 'GET') {
-      const id = url.searchParams.get('project');
-      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
-      const skill = listSkills({ project: project?.path ?? null }).find((k) => k.name === decodeURIComponent(parts[1]));
+      const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
       const file = skill?.[parts[2]];
       return sendMedia(req, res, skill && file ? join(skill.folder, file) : null, { keep: true });
     }
@@ -642,6 +693,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* ── subtitles: the film's lines, the person's subtitle style, translation (see captions.mjs) ── */
     if (await captionRoutes(req, res, project.path, rest, { translate: (root) => subtitleTranslator(root, { askAgent }), transcribe: await subtitleTranscriber() })) return;
+    /* caption tracks: a track's WebVTT file, read and written whole (caption-tracks.mjs) */
+    if (await captionTrackRoutes(req, res, project.path, rest, url, { translate: (root) => subtitleTranslator(root, { askAgent }) })) return;
     /* ── end subtitles ── */
     /* the editor's settings of the project: its frame rate, its tracks' names (see project-settings.mjs) */
     if (await projectSettingsRoute(req, res, project.path, rest)) return;
@@ -649,6 +702,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (await markersRoute(req, res, project.path, rest)) return;
     /* its canvas (canvas.mjs): Studio's own board beside the edit */
     if (await canvasRoute(req, res, project.path, rest)) return;
+    if (await canvasWriteRoute(req, res, rest, askAgent)) return;
+    if (await canvasMadeRoute(req, res, project.path, rest, url)) return;
+    if (await projectCharactersRoute(req, res, project.path, rest)) return;
     if (await projectTemplatesRoute(req, res, project.path, rest)) return;
     /* an example's canvas laid down on this one: its files copied into assets/examples/<id>/ (canvas-templates.mjs) */
     if (rest.startsWith('example-canvas/') && req.method === 'POST') {
@@ -711,6 +767,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const page = url.searchParams.get('page');
       return json(res, 200, await projectFonts(project.path, page ? resolveIn('', page) : null));
     }
+    /* a font file the person adds for the lines of words (`?name=` its file's name, the body the file): put in the text
+       component's folder in the project (brought in first when it is not there), declared in its fonts/own.css, which
+       its page loads; so it goes with the project. → { family, path } */
+    if (rest === 'fonts' && req.method === 'POST') {
+      const name = basename(url.searchParams.get('name') ?? '');
+      if (!isFontFile(name)) throw new HttpError(400, 'a font file, please (.ttf, .otf, .woff or .woff2)');
+      const taken = /** @type {{ path?: string, clip?: { src: string } }} */ (await takeSaved(project.path, `${BUILT_IN}/${TEXT_COMPONENT}`));
+      const folder = dirname(taken.clip?.src ?? taken.path ?? '');
+      const { path } = await importFile(project.path, `${folder}/fonts/${name}`, req);
+      const family = await addTextFont(project.path, `${folder}/${TEXT_OWN_FONTS}`, path);
+      return json(res, 200, { family, path });
+    }
     /* ── version history (history.mjs) ──
          GET    history[?limit=n]                → { status, versions, more }: the version checked out and the changes
                                                    against it, and the versions, newest first, with their parents
@@ -770,7 +838,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         personEdits.filmReplaced(project.path);
         const done = await checkoutVersion(project.path, String(target ?? ''), { discard: discard === true, onProgress: onProgress('checkout') });
         historyChanged(project.path, { moved: true });
-        /* `missing`: media of that version history no longer has (left as it is in the folder) */
+        /* `missing`: media of that version history no longer has (left as it is in the folder); `kept`: files the
+           trash would not take (left where they are, the version checked out around them) */
         return json(res, 200, { ...done, ...(await readProjectFilm(project.path)) });
       }
       if (history[0] === 'film' && history.length === 1 && req.method === 'POST') {
@@ -779,6 +848,13 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const done = await restoreFilm(project.path, String(target ?? ''), { onProgress: onProgress('restore') });
         historyChanged(project.path, { moved: true });
         return json(res, 200, { ...done, ...(await readProjectFilm(project.path)) });
+      }
+      if (history[0] === 'put-back' && req.method === 'POST' && (history.length === 1 || (history.length === 2 && history[1] === 'done'))) {
+        /* The desktop app restores a turn's files: before, nothing of the person's is merged over them; after,
+           every open board reads its restored document, including when the turn changed no film.html. */
+        if (history.length === 1) personEdits.filmReplaced(project.path);
+        else watchers.emit(project.path, { type: 'canvas', reset: true });
+        return json(res, 200, {});
       }
       if (history[0] === 'copy' && req.method === 'POST') {
         const { commit: target, name } = /** @type {{ commit?: string, name?: string }} */ (await readJson(req));
@@ -983,8 +1059,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
          frame (`clip`, its id) with the person's changes in it, as the film shows them */
       const clipId = what === 'frame' ? url.searchParams.get('clip') : null;
       const look = clipId && isPage(at) ? await pageClipLook(project.path, clipId) : null;
+      /* a page's poster is drawn clear (what it leaves unpainted transparent), a frame on the timeline on black */
       const page = isPage(at) && (what === 'poster' || what === 'frame')
-        ? () => pageFrame(project.path, pages.folderUrl(project), at, what === 'poster' ? -1 : Number(url.searchParams.get('ms')), what === 'poster' ? 480 : Number(url.searchParams.get('w')), look?.overrides ?? null, look?.size ?? null).catch((e) => {
+        ? () => pageFrame(project.path, pages.folderUrl(project), at, what === 'poster' ? -1 : Number(url.searchParams.get('ms')), what === 'poster' ? 480 : Number(url.searchParams.get('w')), look?.overrides ?? null, look?.size ?? null, what === 'poster').catch((e) => {
           throw new HttpError(e instanceof PageFrameError ? 404 : 422, String(e?.message ?? e));
         })
         : null;
@@ -999,24 +1076,31 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (page) {
         const tag = `"${createHash('sha1').update(jpeg).digest('hex').slice(0, 16)}"`;
         if (req.headers['if-none-match'] === tag) { res.writeHead(304, { etag: tag, 'cache-control': 'private, no-cache' }); return res.end(); }
-        res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, no-cache', etag: tag, 'content-length': jpeg.length });
+        res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, no-cache', etag: tag, 'content-length': jpeg.length });
         return res.end(jpeg);
       }
-      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
+      res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
       return res.end(jpeg);
     }
     /* exports (what one asks: see exports.mjs). GET also says where they go by default, what this machine encodes and
        how many subtitle cues the film has (the subtitle choices need some), and how big the project and its parts are */
     if (rest === 'exports') {
       if (req.method === 'GET') {
-        return json(res, 200, { exports: exports.list(project.id), folder: exportsRoot(), can: await exportCapabilities(), drafts: draftApps(), subtitles: await exports.subtitles(project.path), project: await projectSizes(project.path) });
+        return json(res, 200, { exports: exports.list(project.id), folder: exportsRoot(), can: await exportCapabilities(), drafts: draftApps(), subtitles: await exports.subtitles(project.path), captionTracks: await exports.captionTracks(project.path), project: await projectSizes(project.path) });
       }
       if (req.method === 'POST') {
         exportRoots.set(project.id, project.path);
         const body = /** @type {any} */ (await readJson(req));
+        const blur = (await readProjectSettings(project.path)).motionBlur;
+        const withSampling = (/** @type {any} */ ask) => blur?.enabled && ask?.kind === 'video' && !ask.clip && ask.samples === undefined
+          ? { ...ask, samples: blur.samples, shutter: ask.shutter ?? blur.shutter }
+          : ask;
         /* several at once: `{ jobs: [ask…], folder? }` → `{ exports }`; one: the ask itself → `{ export }` */
-        if (body && typeof body === 'object' && 'jobs' in body) return json(res, 200, { exports: exports.startAll(project, body) });
-        return json(res, 200, { export: exports.start(project, body) });
+        if (body && typeof body === 'object' && 'jobs' in body) {
+          const request = Array.isArray(body.jobs) ? { ...body, jobs: body.jobs.map(withSampling) } : body;
+          return json(res, 200, { exports: exports.startAll(project, request) });
+        }
+        return json(res, 200, { export: exports.start(project, withSampling(body)) });
       }
     }
     if (parts[2] === 'exports' && parts[3] && req.method === 'DELETE') {
@@ -1147,9 +1231,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       refuse('404 Not Found');
     })().catch(() => refuse('500 Internal Server Error'));
   });
-  await new Promise((done, fail) => { editor.once('error', fail); editor.listen(port, '127.0.0.1', () => done(undefined)); });
+  await listenLocal(editor, port);
   /* the examples index is asked for as Studio starts, so the Examples tab has GitHub's newest when it opens */
   void listExamples().catch(() => {});
+  /* and what each service offers (OpenFilm's models are its service's to say), so Settings → Services opens with them */
+  void freshProviders().catch(() => {});
   const address = /** @type {import('node:net').AddressInfo} */ (editor.address());
   origin = `http://127.0.0.1:${address.port}`;
   COOKIE = cookieName(address.port);
@@ -1163,6 +1249,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   });
   filmOrigin = pages.origin;
   if (advertise) {
+    /* Discover read as Studio starts, so its skills are there when it first opens (and on an empty conversation) */
+    readDiscover({ fresh: 60_000 }).catch(() => { /* offline: what was read before, said so when Discover opens */ });
     mkdirSync(studioHome(), { recursive: true });
     /* `supervisor`: the process that starts this one again if it ends unexpectedly (main.mjs), stopped with it */
     const supervisor = Number(process.env.OPENFILM_STUDIO_SUPERVISOR) || undefined;
@@ -1379,11 +1467,18 @@ async function exampleFolderHere(id) {
   }
 }
 
+/** A poster's or frame's type by its first bytes: a page's poster drawn clear is a WebP, a clear picture's a PNG. */
+function pictureType(/** @type {Buffer} */ bytes) {
+  const head = bytes.subarray(0, 4).toString('latin1');
+  return head === 'RIFF' ? 'image/webp' : head === '\x89PNG' ? 'image/png' : 'image/jpeg';
+}
+
 /**
  * A picture or a video from this computer, a range answered as one (a preview is seeked in); none: 404.
  * @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res @param {string | null | undefined} file
  */
 function sendMedia(req, res, file, { keep = false, check = false } = {}) {
+  if (res.destroyed) return;
   if (!file || !existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, 'no such file');
   const { size, mtimeMs } = statSync(file);
   /* `keep`: a picture that changes only with its file (a skill's cover, an example's poster) is kept by the browser
@@ -1395,7 +1490,7 @@ function sendMedia(req, res, file, { keep = false, check = false } = {}) {
   const type = {
     '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif', '.svg': 'image/svg+xml',
     '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
-    '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.flac': 'audio/flac',
+    '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.flac': 'audio/flac', '.weba': 'audio/webm',
   }[extname(file).toLowerCase()] ?? 'application/octet-stream';
   const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''));
   const [from, to] = range ? [range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2])), range[2] && range[1] ? Math.min(size - 1, Number(range[2])) : size - 1] : [0, size - 1];

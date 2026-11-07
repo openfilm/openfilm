@@ -8,7 +8,7 @@
       4
     ],
     "attrs": {
-      "data-props": "[{\"name\": \"Part\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Title\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]"
+      "data-props": "[{\"name\": \"Part\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Title\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]"
     }
   },
   "durationMs": 4000

@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <title>Cinematic title</title>
 <style>
-:root { --color: #ffffff; }
+:root { --font: Georgia, serif; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 .w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; }
-.w.low { align-items: flex-end; justify-content: flex-start; text-align: left; padding: 0 0 9vh 6vw; }
+.w.low { text-align: left; }
 .t { color: var(--color); font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; line-height: 1.12; }
 .s { display: block; font-size: 0.42em; font-weight: 500; opacity: 0.85; margin-top: 0.3em; }
-.t { font: 300 8vw/1 Georgia, serif; letter-spacing: 0.35em; padding-left: 0.35em; }
+.t { font: 300 11.412vw/1 var(--font); letter-spacing: 0.35em; padding-left: 0.35em; }
 .t { animation: in 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @keyframes in { from { transform: translateY(40%); opacity: 0; } to { transform: none; opacity: 1; } }
 </style>

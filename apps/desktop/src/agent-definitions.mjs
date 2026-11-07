@@ -12,6 +12,7 @@ const definitions = {
   kimi: { name: 'Kimi', install: 'https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started.html' },
   minimax: { name: 'MiniMax Code', install: 'https://www.npmjs.com/package/@minimax-ai/code' },
   deepseek: { name: 'DeepSeek Harness', install: 'https://www.deepseek.com/harness/' },
+  antigravity: { name: 'Google Antigravity', install: 'https://antigravity.google/' },
   byok: { name: 'Own key', install: null },
 };
 

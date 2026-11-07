@@ -8,7 +8,7 @@
       4
     ],
     "attrs": {
-      "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Second line\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Second accent\", \"type\": \"var\", \"var\": \"--accent2\"}]"
+      "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Second line\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Second accent\", \"type\": \"var\", \"var\": \"--accent2\"}]"
     }
   },
   "durationMs": 4000

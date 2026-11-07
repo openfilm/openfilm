@@ -8,7 +8,7 @@
       4
     ],
     "attrs": {
-      "data-props": "[{\"name\": \"Button\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Clicked\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Button\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Clicked button\", \"type\": \"var\", \"var\": \"--done\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+      "data-props": "[{\"name\": \"Button\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Clicked\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Button\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Clicked button\", \"type\": \"var\", \"var\": \"--done\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
     }
   },
   "durationMs": 4000

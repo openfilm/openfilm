@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Before and after</title>
 <style>
-:root { --left: #5f6b7a; --right: #ff7a3d; --color: #ffffff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --left: #5f6b7a; --right: #ff7a3d; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 22vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 22vh; font-family: var(--font); color: var(--color); }
 .c { position: relative; width: 88vh; height: 70vh; border-radius: 5vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2vh; box-shadow: 0 3vh 7vh rgba(0, 0, 0, 0.35); overflow: hidden; }
 .c::before { content: ""; position: absolute; inset: 0; background: linear-gradient(160deg, rgba(255, 255, 255, 0.18), transparent 55%); }
 .l { background: var(--left); animation: fromL 0.65s cubic-bezier(0.3, 1.35, 0.5, 1) both; }

@@ -8,7 +8,7 @@
       3
     ],
     "attrs": {
-      "data-props": "[{\"name\": \"First\", \"type\": \"text\", \"at\": \".l1\"}, {\"name\": \"Second\", \"type\": \"text\", \"at\": \".l2\"}, {\"name\": \"Third\", \"type\": \"text\", \"at\": \".l3\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+      "data-props": "[{\"name\": \"First\", \"type\": \"text\", \"at\": \".l1\"}, {\"name\": \"Second\", \"type\": \"text\", \"at\": \".l2\"}, {\"name\": \"Third\", \"type\": \"text\", \"at\": \".l3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
     }
   },
   "durationMs": 3000,

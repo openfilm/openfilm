@@ -24,7 +24,7 @@ import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { mkdir, rename } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
-import { HOST_FLAG, folderFiles } from '../../src/host.mjs';
+import { HOST_FLAG, folderFiles, listenLocal } from '../../src/host.mjs';
 import { readableLink } from '../../src/media-links.mjs';
 import { clipKind } from '../../src/film-doc.mjs';
 import { readPrefs } from './prefs.mjs';
@@ -211,7 +211,7 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
     }
     if (!entry.files(req, res, path, url.searchParams)) res.writeHead(403, headers).end();
   });
-  await new Promise((done, fail) => { server.once('error', fail); server.listen(port, '127.0.0.1', () => done(undefined)); });
+  await listenLocal(server, port);
   /* named `localhost`, not 127.0.0.1 as the editor is: another site to the browser, not only another origin, so it puts
      the film (footage decoding, pages drawing) in a process of its own, away from the editor's */
   const origin = `http://localhost:${/** @type {import('node:net').AddressInfo} */ (server.address()).port}`;

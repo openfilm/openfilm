@@ -12,7 +12,7 @@
      2.5
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.34}"
     },
     "size": {
@@ -47,7 +47,7 @@
      2.6
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Place\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Region\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Coordinates\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Pin\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-props": "[{\"name\": \"Place\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Region\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Coordinates\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Pin\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
      "data-place": "{\"x\":0.3,\"y\":0.82,\"fit\":0.2}"
     },
     "size": {
@@ -74,7 +74,7 @@
      2.4
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Text\", \"type\": \"text\", \"at\": \".label\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-props": "[{\"name\": \"Text\", \"type\": \"text\", \"at\": \".label\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
      "data-place": "{\"x\":0.72,\"y\":0.3,\"fit\":0.2}"
     },
     "size": {
@@ -134,84 +134,60 @@
    "track": 3,
    "at": 0,
    "clip": {
-    "src": "slot.html",
+    "src": "example-1.jpg",
     "time": [
      0,
      3
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'1'",
-       "--tone": "#36506b"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "1"
+    }
    }
   },
   {
    "track": 3,
    "at": 3,
    "clip": {
-    "src": "slot.html",
+    "src": "example-2.jpg",
     "time": [
      0,
      2.4
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'2'",
-       "--tone": "#36506b"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "2"
+    }
    }
   },
   {
    "track": 3,
    "at": 5.4,
    "clip": {
-    "src": "slot.html",
+    "src": "example-3.jpg",
     "time": [
      0,
      2.4
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'3'",
-       "--tone": "#36506b"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "3"
+    }
    }
   },
   {
    "track": 3,
    "at": 7.8,
    "clip": {
-    "src": "slot.html",
+    "src": "example-4.jpg",
     "time": [
      0,
      3.2
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'4'",
-       "--tone": "#36506b"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "4"
+    }
    }
   }
  ],

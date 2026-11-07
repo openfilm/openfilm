@@ -16,7 +16,6 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "audit:public": "node scripts/audit-public.mjs",
     "check:pack": "node scripts/check-pack.mjs",
-    "skills:sync": "node scripts/sync-skills.mjs",
     "changeset": "changeset",
     "examples:sync": "node scripts/sync-examples.mjs"
   },
@@ -27,7 +26,8 @@
   "pnpm": {
     "overrides": {
       "zod@>=4 <4.6.6": "^4.6.6",
-      "undici@>=8 <8.12.2": "^8.12.2"
+      "undici@>=8 <8.12.2": "^8.12.2",
+      "minimatch@>=7 <11.0.1": "^11.0.1"
     }
   }
 }

@@ -70,8 +70,8 @@ interface AppBridge {
     load(project: string): Promise<{ sessions: unknown[]; last: string | null; turns: unknown[] }>;
     saveSessions(project: string, sessions: unknown[], last: string | null): Promise<unknown>;
     saveTurn(project: string, turn: unknown, items: unknown[]): Promise<unknown>;
-    /** `unless`: the sizes of the log already read; when it has not grown, `{ same: true }` */
-    log(project: string, turnId: string, unless?: { size: number; callsSize: number }): Promise<TurnLog | { same: true } | null>;
+    /** `since`: where an earlier read stopped (its `at`): only what was written after; nothing new, `{ same: true }` */
+    log(project: string, turnId: string, since?: TurnLogAt): Promise<TurnLog | { same: true } | null>;
     reveal(project: string, turnId?: string): Promise<unknown>;
     /** a picture a message's reference points at, kept for its agent: .film/refs/<turn>-<n>.jpg (its path in the project) */
     saveRefImage(project: string, turnId: string, n: number, bytes: ArrayBuffer): Promise<{ path: string }>;
@@ -82,10 +82,10 @@ interface AppBridge {
     /** the turns with a log and no saved record (src/chat-store.mjs unsavedTurns), but those of `except` */
     unsaved?(project: string, except?: string[]): Promise<Array<{ turnId: string; events: TurnLog['events'] }>>;
     /** the project's files as a turn starts, kept by the app; then what the turn changed in them (src/file-changes.mjs).
-        `filmLost`: the turn ended with film.html gone, which `restoreFilm` puts back as the turn found it */
+        `undoable`: the app keeps how the turn found them, which `undo` puts back (while it runs) */
     snapshot(project: string, turnId: string): Promise<unknown>;
-    changes(project: string, turnId: string): Promise<{ files: FileChange[]; cut: boolean; filmLost?: boolean } | null>;
-    restoreFilm?(project: string, turnId: string): Promise<{ ok: true } | { ok: false; code: 'exists' | 'gone' }>;
+    changes(project: string, turnId: string): Promise<{ files: FileChange[]; cut: boolean; undoable?: boolean } | null>;
+    undo?(project: string, turnId: string): Promise<{ ok: true; restored: number; missed: string[] } | { ok: false; code: 'gone' }>;
   };
   /** what an agent's command asks before it spends (a video clip), and what it tells the person (a provider with no
       balance left), worded by Studio: shown above the composer until answered; the command waits for a question */
@@ -148,16 +148,26 @@ export interface SkillListing {
 /** A question about spending, as Studio words it. */
 export interface SpendAsk { id: string; title: string; body: string | null; allowLabel: string; denyLabel: string }
 
-/** A turn's log as the app wrote it (src/chat-store.mjs): one event a line, each with its time `t` (ms). */
+/** Where a read of a turn's log stopped: bytes into its events and its model requests, and which model log it was. */
+export interface TurnLogAt { events: number; calls: number; callsFile: number }
+
+/**
+ * A turn's log as the app wrote it (src/chat-store.mjs readLog): one event a line, each with its time `t` (ms); the
+ * pictures' bytes left out (a picture: its type, size and file). Read with `since`: only what is new, unless `whole`.
+ */
 export interface TurnLog {
   file: string;
-  /** too long to read whole: these are its last events */
+  /** too long to read whole: its first event and its last ones */
   cut: boolean;
-  size: number;
-  callsSize?: number;
+  /** the events are the log's (not only those after `since`), and so (`callsWhole`) the requests */
+  whole: boolean;
   events: Array<{ t: number; kind: string; [field: string]: unknown }>;
   /** the requests the model got and its answers, each only what is new since the one before (lib/model-calls.ts) */
-  calls?: unknown[];
+  calls: unknown[];
+  callsWhole: boolean;
+  /** the model log grew too long: its later requests were not kept */
+  callsCut: boolean;
+  at: TurnLogAt;
 }
 
 export const app = (window as unknown as { openfilmDesktop: AppBridge }).openfilmDesktop;

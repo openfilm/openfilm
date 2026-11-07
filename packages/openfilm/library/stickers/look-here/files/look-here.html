@@ -5,7 +5,7 @@
 <title>Look here</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ff3b30; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ff3b30; }
 svg { position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; overflow: visible; }
 .w { position: absolute; inset: 0; filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .in { position: absolute; inset: 0; animation: in 0.55s cubic-bezier(.34, 1.56, .64, 1) both; }
@@ -14,7 +14,7 @@ svg { position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; overflow
 @keyframes jab { 0%, 100% { transform: none; } 18% { transform: translateX(-16px); } }
 .b path { opacity: 0; fill: none; stroke: var(--color); stroke-width: 8; stroke-linecap: round; stroke-dasharray: 1 2; stroke-dashoffset: 1.01; animation: b 1s cubic-bezier(.2, .8, .2, 1) 0.62s infinite; }
 @keyframes b { 0% { stroke-dashoffset: 1.01; opacity: 0; } 1%, 43% { opacity: 1; } 20% { stroke-dashoffset: 0; } 45%, 100% { stroke-dashoffset: -1; opacity: 0; } }
-.label { position: absolute; left: 46vw; top: 50%; transform: translateY(-50%); height: 35vh; line-height: 35vh; padding: 0 5.5vw; border-radius: 17.5vh; background: var(--color); color: #fff; font: 800 18vh 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; white-space: nowrap; }
+.label { position: absolute; left: 46vw; top: 50%; transform: translateY(-50%); height: 35vh; line-height: 35vh; padding: 0 5.5vw; border-radius: 17.5vh; background: var(--color); color: #fff; font: 800 18vh var(--font); white-space: nowrap; }
 </style>
 </head>
 <body>

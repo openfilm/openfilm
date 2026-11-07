@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Discount burst</title>
 <style>
-:root { --accent: #ff3b30; --accent2: #ffd23f; --color: #ffffff; }
+:root { --font: 'DIN Alternate', 'Bahnschrift', 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff3b30; --accent2: #ffd23f; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -18,7 +18,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .s::after { background: var(--accent); clip-path: polygon(50.0% 0.0%, 57.3% 8.6%, 67.1% 3.0%, 71.0% 13.6%, 82.1% 11.7%, 82.2% 23.0%, 93.3% 25.0%, 89.5% 35.6%, 99.2% 41.3%, 92.0% 50.0%, 99.2% 58.7%, 89.5% 64.4%, 93.3% 75.0%, 82.2% 77.0%, 82.1% 88.3%, 71.0% 86.4%, 67.1% 97.0%, 57.3% 91.4%, 50.0% 100.0%, 42.7% 91.4%, 32.9% 97.0%, 29.0% 86.4%, 17.9% 88.3%, 17.8% 77.0%, 6.7% 75.0%, 10.5% 64.4%, 0.8% 58.7%, 8.0% 50.0%, 0.8% 41.3%, 10.5% 35.6%, 6.7% 25.0%, 17.8% 23.0%, 17.9% 11.7%, 29.0% 13.6%, 32.9% 3.0%, 42.7% 8.6%); animation: spin 10s linear infinite; box-shadow: inset 0 0 0 2vh rgba(0, 0, 0, 0.08); }
 .ring { position: absolute; inset: 15vh; border-radius: 50%; border: 0.9vh dashed rgba(255, 255, 255, 0.6); z-index: 1; animation: spin 8s linear infinite; }
 .t1, .t2 { position: relative; z-index: 2; white-space: pre; }
-.t1 { font: 800 27vh/0.95 'DIN Alternate', 'Bahnschrift', 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; letter-spacing: -0.02em; text-shadow: 0 1vh 0 rgba(0, 0, 0, 0.18); animation: pop 0.5s 0.3s cubic-bezier(0.3, 1.9, 0.5, 1) both; }
+.t1 { font: 800 27vh/0.95 var(--font); letter-spacing: -0.02em; text-shadow: 0 1vh 0 rgba(0, 0, 0, 0.18); animation: pop 0.5s 0.3s cubic-bezier(0.3, 1.9, 0.5, 1) both; }
 .t2 { font-size: 11vh; font-weight: 800; letter-spacing: 0.24em; padding-left: 0.24em; animation: pop 0.5s 0.42s cubic-bezier(0.3, 1.9, 0.5, 1) both; }
 @keyframes pop { from { transform: scale(0) rotate(-120deg); } }
 @keyframes spin { to { transform: rotate(360deg); } }

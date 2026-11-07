@@ -4,7 +4,8 @@
  *     one deleted or taken off it closes up after it, a trim or a new speed there moves what follows. Off, the main
  *     track is like the others (lib/timeline-edit);
  *   · `snap` (自动吸附): drags line up with edges and the playhead; off means "it lands exactly where I let go";
- *   · `linkage` (联动): titles, overlays and sounds riding on a main-track clip move with it and go with it.
+ *   · `linkage` (联动): titles, overlays and sounds riding on a main-track clip move with it, and the titles and
+ *     overlays go with it (a sound stays).
  *
  * Clips sharing a `data-link` (a video and its detached sound) are always selected and edited together; ⌥-click picks
  * one alone. The inspector reads the switches too (a slower speed pushes the next clip only with the magnet on), so a

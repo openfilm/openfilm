@@ -13,6 +13,46 @@
     }
    },
    {
+    "id": "camera",
+    "name": {
+     "en": "Camera moves",
+     "zh-CN": "运镜",
+     "ja": "カメラワーク",
+     "ko": "카메라 무브",
+     "es": "Movimientos de cámara"
+    }
+   },
+   {
+    "id": "slide",
+    "name": {
+     "en": "Slides",
+     "zh-CN": "幻灯片",
+     "ja": "スライド",
+     "ko": "슬라이드",
+     "es": "Diapositivas"
+    }
+   },
+   {
+    "id": "mask",
+    "name": {
+     "en": "Masks",
+     "zh-CN": "遮罩",
+     "ja": "マスク",
+     "ko": "마스크",
+     "es": "Máscaras"
+    }
+   },
+   {
+    "id": "blur",
+    "name": {
+     "en": "Blur",
+     "zh-CN": "模糊",
+     "ja": "ブラー",
+     "ko": "블러",
+     "es": "Desenfoque"
+    }
+   },
+   {
     "id": "light",
     "name": {
      "en": "Light",
@@ -2905,7 +2945,10 @@
     "cinematic-look",
     "elegant",
     "intro"
-   ]
+   ],
+   "w": 1346,
+   "h": 230,
+   "fit": 0.213
   },
   {
    "id": "text/title-bold",
@@ -2927,7 +2970,10 @@
     "confident",
     "intense",
     "zoom"
-   ]
+   ],
+   "w": 1664,
+   "h": 290,
+   "fit": 0.269
   },
   {
    "id": "text/title-outline",
@@ -2948,7 +2994,10 @@
     "title",
     "minimal",
     "slide"
-   ]
+   ],
+   "w": 1152,
+   "h": 290,
+   "fit": 0.269
   },
   {
    "id": "text/title-neon",
@@ -2969,7 +3018,10 @@
     "title",
     "neon",
     "night"
-   ]
+   ],
+   "w": 582,
+   "h": 290,
+   "fit": 0.269
   },
   {
    "id": "text/title-gradient",
@@ -2991,7 +3043,10 @@
     "vivid",
     "happy",
     "zoom"
-   ]
+   ],
+   "w": 1460,
+   "h": 324,
+   "fit": 0.3
   },
   {
    "id": "text/typewriter",
@@ -3013,7 +3068,10 @@
     "title",
     "tech",
     "retro"
-   ]
+   ],
+   "w": 574,
+   "h": 192,
+   "fit": 0.178
   },
   {
    "id": "text/chapter",
@@ -3034,7 +3092,10 @@
     "title",
     "intro",
     "slide"
-   ]
+   ],
+   "w": 778,
+   "h": 378,
+   "fit": 0.35
   },
   {
    "id": "text/quote",
@@ -3056,7 +3117,10 @@
     "elegant",
     "soft",
     "calm"
-   ]
+   ],
+   "w": 1160,
+   "h": 206,
+   "fit": 0.191
   },
   {
    "id": "text/lower-simple",
@@ -3077,7 +3141,11 @@
     "lowerthird",
     "minimal",
     "slide"
-   ]
+   ],
+   "w": 422,
+   "h": 226,
+   "fit": 0.209,
+   "low": true
   },
   {
    "id": "text/lower-block",
@@ -3098,7 +3166,11 @@
     "lowerthird",
     "news",
     "slide"
-   ]
+   ],
+   "w": 518,
+   "h": 270,
+   "fit": 0.25,
+   "low": true
   },
   {
    "id": "text/location",
@@ -3119,7 +3191,11 @@
     "lowerthird",
     "map",
     "travel"
-   ]
+   ],
+   "w": 1028,
+   "h": 116,
+   "fit": 0.107,
+   "low": true
   },
   {
    "id": "text/bubble",
@@ -3140,7 +3216,10 @@
     "speech",
     "playful",
     "zoom"
-   ]
+   ],
+   "w": 932,
+   "h": 254,
+   "fit": 0.235
   },
   {
    "id": "text/follow",
@@ -3161,7 +3240,10 @@
     "social",
     "ui",
     "zoom"
-   ]
+   ],
+   "w": 618,
+   "h": 230,
+   "fit": 0.213
   },
   {
    "id": "text/price",
@@ -3182,7 +3264,10 @@
     "title",
     "vivid",
     "zoom"
-   ]
+   ],
+   "w": 486,
+   "h": 266,
+   "fit": 0.246
   },
   {
    "id": "text/countdown",
@@ -3203,7 +3288,10 @@
     "countdown",
     "intro",
     "trailer"
-   ]
+   ],
+   "w": 360,
+   "h": 440,
+   "fit": 0.407
   },
   {
    "id": "text/progress",
@@ -3224,7 +3312,11 @@
     "countdown",
     "ui",
     "wipe"
-   ]
+   ],
+   "w": 1720,
+   "h": 34,
+   "fit": 0.031,
+   "low": true
   },
   {
    "id": "text/subtitle-box",
@@ -3244,7 +3336,11 @@
    "tags": [
     "subtitle",
     "minimal"
-   ]
+   ],
+   "w": 1002,
+   "h": 150,
+   "fit": 0.139,
+   "low": true
   },
   {
    "id": "stickers/arrow-down",

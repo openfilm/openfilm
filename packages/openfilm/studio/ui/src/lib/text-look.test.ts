@@ -32,6 +32,10 @@ test('variables set and taken away; an entry left empty goes; words set and clea
   assert.deepEqual(withVars(undefined, { '--size': '5vw' }), [{ at: ':root', style: { '--size': '5vw' } }]);
   assert.equal(textWords(withWords(clip, 'Bye')), 'Bye');
   assert.equal(textWords(withWords(clip, '')), null);
+  /* the line named by its path (typed in place on the picture): read as its words, and given up when they are set */
+  const typed = [{ at: 'body > div.stage > div.box > span.t', text: 'Typed' }, { at: '.t', text: 'Default text' }];
+  assert.equal(textWords(typed.slice(0, 1)), 'Typed');
+  assert.deepEqual(withWords(typed, 'New'), [{ at: '.t', text: 'New' }]);
   assert.deepEqual(withWords([], 'New'), [{ at: '.t', text: 'New' }]);
 });
 

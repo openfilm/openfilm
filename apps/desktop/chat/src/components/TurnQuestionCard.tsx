@@ -79,13 +79,13 @@ export function TurnQuestionCard({
                 onChange={(event) => setOther(event.target.value)}
                 onKeyDown={(event) => { if (event.key === 'Escape' && !freeTextOnly) setOtherOpen(false); }}
                 placeholder={t('turnAsk.otherPlaceholder')}
-                className="h-7 min-w-0 flex-1 rounded-lg bg-[var(--surface-2)] px-2.5 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)]"
+                className="h-7 min-w-0 flex-1 rounded-lg bg-[var(--bg-field)] px-2.5 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)]"
               />
               <button
                 type="submit"
                 disabled={!other.trim()}
                 aria-label={t('turnAsk.send')}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--text)] text-[var(--panel)] transition hover:opacity-90 disabled:opacity-30"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)] text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-30"
               >
                 <ArrowUp size={14} />
               </button>

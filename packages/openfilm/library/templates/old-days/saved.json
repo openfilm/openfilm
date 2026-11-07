@@ -12,7 +12,7 @@
      2.6
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Credit\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Credit\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.28}"
     },
     "size": {
@@ -51,7 +51,7 @@
      2.8
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Month\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Day\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Weekday\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Year\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Band\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Paper\", \"type\": \"var\", \"var\": \"--paper\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--ink\"}]",
+     "data-props": "[{\"name\": \"Month\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Day\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Weekday\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Year\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Band\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Paper\", \"type\": \"var\", \"var\": \"--paper\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--ink\"}]",
      "data-place": "{\"x\":0.82,\"y\":0.72,\"fit\":0.28}"
     },
     "size": {
@@ -160,84 +160,60 @@
    "track": 5,
    "at": 0,
    "clip": {
-    "src": "slot.html",
+    "src": "example-1.jpg",
     "time": [
      0,
      3.2
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'1'",
-       "--tone": "#4a3b2c"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "1"
+    }
    }
   },
   {
    "track": 5,
    "at": 3.2,
    "clip": {
-    "src": "slot.html",
+    "src": "example-2.jpg",
     "time": [
      0,
      3
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'2'",
-       "--tone": "#4a3b2c"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "2"
+    }
    }
   },
   {
    "track": 5,
    "at": 6.2,
    "clip": {
-    "src": "slot.html",
+    "src": "example-3.jpg",
     "time": [
      0,
      3
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'3'",
-       "--tone": "#4a3b2c"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "3"
+    }
    }
   },
   {
    "track": 5,
    "at": 9.2,
    "clip": {
-    "src": "slot.html",
+    "src": "example-4.jpg",
     "time": [
      0,
      3.4
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'4'",
-       "--tone": "#4a3b2c"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "4"
+    }
    }
   }
  ],

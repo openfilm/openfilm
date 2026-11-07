@@ -81,7 +81,7 @@ export function AudioMeters({ levels, playing }: {
     const h = size.h - TOP - BOTTOM;
     const y = (db: number) => TOP + h * (1 - meterPosition(db));
     const styles = getComputedStyle(canvas);
-    const faint = styles.getPropertyValue('--tl-faint').trim() || 'rgba(128,128,128,0.6)';
+    const faint = styles.getPropertyValue('--text-faint').trim() || 'rgba(128,128,128,0.6)';
     const lane = styles.getPropertyValue('--tl-lane').trim() || 'rgba(128,128,128,0.15)';
     /* the scale: a line and a number every 6 dB, a number every 12 */
     ctx.font = '8px ui-sans-serif, system-ui, sans-serif';
@@ -153,12 +153,12 @@ export function AudioMeters({ levels, playing }: {
   return (
     <div
       className="flex h-full shrink-0 flex-col border-l"
-      style={{ width: METERS_W, borderColor: 'var(--tl-line)', background: 'var(--tl-head)' }}
+      style={{ width: METERS_W, borderColor: 'var(--border)', background: 'var(--bg-panel)' }}
       data-audio-meters=""
       aria-label={t('editorTools.meters')}
       role="group"
     >
-      <div className="flex h-[34px] shrink-0 items-center justify-center font-mono text-[9px] tabular-nums" style={{ color: peakText >= -0.05 ? '#e5484d' : 'var(--tl-faint)' }}
+      <div className="flex h-[34px] shrink-0 items-center justify-center font-mono text-[9px] tabular-nums" style={{ color: peakText >= -0.05 ? '#e5484d' : 'var(--text-faint)' }}
         title={t('editorTools.metersPeak')}>
         {formatDb(peakText)}
       </div>

@@ -5,11 +5,11 @@
 <title>NEW</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ff2d55; }
+:root { --font: 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ff2d55; }
 .w { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .tag { position: relative; display: grid; place-items: center; height: 56vh; padding: 0 10vw; border-radius: 16vh; background: linear-gradient(115deg, var(--color), color-mix(in srgb, var(--color), #ffb300 60%)); border: 1.6vh solid #ffffff; animation: pop 0.5s cubic-bezier(.34, 1.56, .64, 1) both; transform: rotate(-6deg); }
 @keyframes pop { from { transform: scale(0) rotate(-30deg); } }
-.label { color: #ffffff; font: italic 900 36vh/1 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; letter-spacing: 0.02em; text-shadow: 0 0.8vh 0 rgba(0, 0, 0, 0.18); }
+.label { color: #ffffff; font: italic 900 36vh/1 var(--font); letter-spacing: 0.02em; text-shadow: 0 0.8vh 0 rgba(0, 0, 0, 0.18); }
 .sh { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
 .sh::after { content: ''; position: absolute; top: -20%; bottom: -20%; left: 0; width: 30%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent); transform: translateX(-120%) skewX(-20deg); animation: sweep 2.2s ease-in-out 0.6s infinite; }
 @keyframes sweep { 0% { transform: translateX(-120%) skewX(-20deg); } 45%, 100% { transform: translateX(420%) skewX(-20deg); } }

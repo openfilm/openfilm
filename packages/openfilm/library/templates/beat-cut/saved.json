@@ -12,7 +12,7 @@
      1.6
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Second line\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Second accent\", \"type\": \"var\", \"var\": \"--accent2\"}]",
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Second line\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Second accent\", \"type\": \"var\", \"var\": \"--accent2\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.3}"
     },
     "size": {
@@ -119,189 +119,135 @@
    "track": 2,
    "at": 0,
    "clip": {
-    "src": "slot.html",
+    "src": "example-1.jpg",
     "time": [
      0,
      0.8
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'1'",
-       "--tone": "#3a2140"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "1"
+    }
    }
   },
   {
    "track": 2,
    "at": 0.8,
    "clip": {
-    "src": "slot.html",
+    "src": "example-2.jpg",
     "time": [
      0,
      0.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'2'",
-       "--tone": "#3a2140"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "2"
+    }
    }
   },
   {
    "track": 2,
    "at": 1.4,
    "clip": {
-    "src": "slot.html",
+    "src": "example-3.jpg",
     "time": [
      0,
      0.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'3'",
-       "--tone": "#3a2140"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "3"
+    }
    }
   },
   {
    "track": 2,
    "at": 2,
    "clip": {
-    "src": "slot.html",
+    "src": "example-4.jpg",
     "time": [
      0,
      0.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'4'",
-       "--tone": "#3a2140"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "4"
+    }
    }
   },
   {
    "track": 2,
    "at": 2.6,
    "clip": {
-    "src": "slot.html",
+    "src": "example-5.jpg",
     "time": [
      0,
      0.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'5'",
-       "--tone": "#3a2140"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "5"
+    }
    }
   },
   {
    "track": 2,
    "at": 3.2,
    "clip": {
-    "src": "slot.html",
+    "src": "example-6.jpg",
     "time": [
      0,
      0.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'6'",
-       "--tone": "#3a2140"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "6"
+    }
    }
   },
   {
    "track": 2,
    "at": 3.8,
    "clip": {
-    "src": "slot.html",
+    "src": "example-7.jpg",
     "time": [
      0,
      0.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'7'",
-       "--tone": "#3a2140"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "7"
+    }
    }
   },
   {
    "track": 2,
    "at": 4.4,
    "clip": {
-    "src": "slot.html",
+    "src": "example-8.jpg",
     "time": [
      0,
      0.8
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'8'",
-       "--tone": "#3a2140"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "8"
+    }
    }
   },
   {
    "track": 2,
    "at": 5.2,
    "clip": {
-    "src": "slot.html",
+    "src": "example-9.jpg",
     "time": [
      0,
      1.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'9'",
-       "--tone": "#3a2140"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "9"
+    }
    }
   }
  ],

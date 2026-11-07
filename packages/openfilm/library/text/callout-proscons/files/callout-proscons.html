@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Pros and cons</title>
 <style>
-:root { --good: #2fd27a; --bad: #ff5b5b; --card: rgba(16, 18, 24, 0.82); --color: #ffffff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --good: #2fd27a; --bad: #ff5b5b; --card: rgba(16, 18, 24, 0.82); --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 4vh; padding: 0 4vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 4vh; padding: 0 4vh; font-family: var(--font); color: var(--color); }
 .col { flex: 1; max-width: 94vh; background: var(--card); border-radius: 4vh; padding: 6vh 6vh 7vh; box-shadow: 0 2.4vh 6vh rgba(0, 0, 0, 0.3); animation: up 0.6s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
 .col + .col { animation-delay: 0.12s; }
 .hd { display: flex; align-items: center; gap: 2.4vh; font-size: 9vh; font-weight: 800; letter-spacing: 0.14em; padding-bottom: 3.4vh; margin-bottom: 3.4vh; border-bottom: 0.6vh solid rgba(255, 255, 255, 0.14); white-space: pre; }

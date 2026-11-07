@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Numbered list</title>
 <style>
-:root { --accent: #5b8cff; --color: #ffffff; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #5b8cff; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; padding-left: 10vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); text-shadow: 0 0.6vh 2vh rgba(0, 0, 0, 0.45); }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; padding-left: 10vh; font-family: var(--font); color: var(--color); text-shadow: 0 0.6vh 2vh rgba(0, 0, 0, 0.45); }
 .t0 { align-self: flex-start; font-size: 10vh; font-weight: 800; letter-spacing: 0.08em; white-space: pre; padding-bottom: 2vh; margin-bottom: 4vh; border-bottom: 1.2vh solid var(--accent); animation: side 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .ls { position: relative; display: flex; flex-direction: column; gap: 5vh; }
 .ls::before { content: ""; position: absolute; left: 7vh; top: 7vh; bottom: 7vh; width: 0.8vh; margin-left: -0.4vh; background: rgba(255, 255, 255, 0.35); transform-origin: top; animation: down 1s 0.3s cubic-bezier(0.4, 0, 0.2, 1) both; }

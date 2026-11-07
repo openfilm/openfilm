@@ -5,7 +5,7 @@
 <title>Like</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ff2d55; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ff2d55; }
 .w { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .pill { display: flex; align-items: center; gap: 3.5vw; height: 46vh; padding: 0 6.5vw 0 5vw; border-radius: 23vh; background: #ffffff; animation: pop 0.45s cubic-bezier(.34, 1.56, .64, 1) both; }
 @keyframes pop { from { transform: scale(0.3); opacity: 0; } 40% { opacity: 1; } }
@@ -19,9 +19,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 @keyframes ring { 0% { transform: scale(0.3); opacity: 1; stroke-width: 18; } 100% { transform: scale(1.5); opacity: 0; stroke-width: 1; } }
 .p { fill: var(--color); opacity: 0; animation: p 0.55s cubic-bezier(.2, .8, .2, 1) 0.32s both; }
 @keyframes p { 0% { transform: rotate(var(--a)) translateX(30px) scale(1); opacity: 1; } 100% { transform: rotate(var(--a)) translateX(78px) scale(0); opacity: 1; } }
-.plus { position: absolute; left: 50%; top: -6vh; transform: translateX(-50%); color: var(--color); font: 800 15vh 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; opacity: 0; animation: plus 0.9s cubic-bezier(.2, .8, .2, 1) 0.35s both; }
+.plus { position: absolute; left: 50%; top: -6vh; transform: translateX(-50%); color: var(--color); font: 800 15vh var(--font); opacity: 0; animation: plus 0.9s cubic-bezier(.2, .8, .2, 1) 0.35s both; }
 @keyframes plus { 0% { opacity: 0; transform: translate(-50%, 10vh) scale(0.6); } 25% { opacity: 1; transform: translate(-50%, -4vh) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -14vh); } }
-.label { color: #16161a; font: 800 21vh 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; letter-spacing: -0.02em; white-space: nowrap; }
+.label { color: #16161a; font: 800 21vh var(--font); letter-spacing: -0.02em; white-space: nowrap; }
 </style>
 </head>
 <body>

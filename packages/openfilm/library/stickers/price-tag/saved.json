@@ -8,7 +8,7 @@
       3
     ],
     "attrs": {
-      "data-props": "[{\"name\": \"Price\", \"type\": \"text\", \"at\": \".label\"}, {\"name\": \"Word\", \"type\": \"text\", \"at\": \".label2\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+      "data-props": "[{\"name\": \"Price\", \"type\": \"text\", \"at\": \".label\"}, {\"name\": \"Word\", \"type\": \"text\", \"at\": \".label2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
     }
   },
   "durationMs": 3000,

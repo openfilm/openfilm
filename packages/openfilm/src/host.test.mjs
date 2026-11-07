@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import fs from 'node:fs';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { get } from 'node:http';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { launch, presentsVideo, serve, vulkanFirst } from './host.mjs';
+import { launch, listenLocal, presentsVideo, serve, vulkanFirst } from './host.mjs';
 import { locate } from './shared.mjs';
 
 test('cancelled media requests close their files so the project can be renamed', { timeout: 10000 }, async (t) => {
@@ -61,6 +61,28 @@ test('cancelled media requests close their files so the project can be renamed',
   }
 });
 
+test('a port the OS hands out that browsers refuse (ERR_UNSAFE_PORT) is let go for another; a port asked for is kept', async () => {
+  const fake = (/** @type {number[]} */ handed) => {
+    const server = Object.assign(new EventEmitter(), {
+      asked: /** @type {number[]} */ ([]), port: 0,
+      listen(/** @type {number} */ port, /** @type {string} */ _host, /** @type {() => void} */ done) {
+        server.asked.push(port);
+        server.port = port || /** @type {number} */ (handed.shift());
+        setImmediate(done);
+      },
+      address: () => ({ port: server.port }),
+      close(/** @type {() => void} */ done) { setImmediate(done); },
+    });
+    return server;
+  };
+  const any = fake([3659, 6000, 51234]);
+  assert.equal(await listenLocal(/** @type {any} */ (any)), 51234);
+  assert.deepEqual(any.asked, [0, 0, 0]);
+  const chosen = fake([]);
+  assert.equal(await listenLocal(/** @type {any} */ (chosen), 3659), 3659);
+  assert.deepEqual(chosen.asked, [3659]);
+});
+
 test('an open-ended media range returns at most 2 MiB', async () => {
   const cap = 2 * 1024 * 1024;
   const dir = mkdtempSync(join(tmpdir(), 'of-host-range-'));
@@ -90,7 +112,9 @@ test('the served folder is all a page reads: no way out through .., a link or a 
   symlinkSync(scratch, join(root, 'assets', 'up'));
   /* a link that stays inside is followed */
   symlinkSync(join(root, 'assets', 'a.txt'), join(root, 'same.txt'));
-  const site = await serve(root);
+  /* what a page asked for and did not get, for a render to key its chunks on: a file not there, a link refused */
+  const missed = [];
+  const site = await serve(root, { missed: (file) => missed.push(file) });
   try {
     const get = async (path) => { const r = await fetch(site.url + path); return [r.status, await r.text()]; };
     assert.deepEqual(await get('/assets/a.txt'), [200, 'mine']);
@@ -100,7 +124,11 @@ test('the served folder is all a page reads: no way out through .., a link or a 
     assert.notEqual((await get('/%2e%2e/secret.txt'))[1], 'secret');
     assert.notEqual((await get('/assets/..%2f..%2fsecret.txt'))[1], 'secret');
     assert.equal((await get('/%E0%A4%A'))[0], 400);
+    assert.equal((await get('/assets/logo.png'))[0], 404);
     assert.deepEqual(await get('/assets/a.txt'), [200, 'mine'], 'and it still serves');
+    /* (`/../secret.txt` is the folder's own secret.txt, asked for and not there) */
+    assert.deepEqual(missed, [join(root, 'assets', 'notes.txt'), join(root, 'assets', 'up', 'secret.txt'), join(root, 'secret.txt'), join(root, 'assets', 'logo.png')],
+      'the links refused and the files not there; never a file served, nor an address out of the folder');
   } finally {
     await site.close();
   }

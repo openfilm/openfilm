@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import inworld, { parts } from './inworld.mjs';
 
-const KEY = 'aW53b3JsZC10ZXN0OnNlY3JldA==';
+const KEY = 'inworld_test_0123456789';
 /** A fake Inworld on 127.0.0.1: `reply` answers each request; `seen` keeps them. */
 let server;
 let reply = () => [404, {}];

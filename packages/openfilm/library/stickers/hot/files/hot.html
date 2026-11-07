@@ -5,12 +5,12 @@
 <title>HOT</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ff3b30; }
+:root { --font: 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ff3b30; }
 .w { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); animation: in 0.5s cubic-bezier(.34, 1.56, .64, 1) both; }
 @keyframes in { from { transform: translateX(-30vw) scale(0.5); opacity: 0; } 40% { opacity: 1; } }
 .pill { position: relative; display: flex; align-items: center; height: 56vh; padding: 0 8vw 0 21vw; border-radius: 28vh; background: linear-gradient(100deg, color-mix(in srgb, var(--color), #ff9500 55%), var(--color)); animation: glow 1.2s ease-in-out 0.5s infinite; }
 @keyframes glow { 50% { box-shadow: 0 0 6vh color-mix(in srgb, var(--color), #ff9500 40%); } }
-.label { color: #ffffff; font: italic 900 34vh/1 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; letter-spacing: 0.04em; }
+.label { color: #ffffff; font: italic 900 34vh/1 var(--font); letter-spacing: 0.04em; }
 .fl { position: absolute; left: 1vw; bottom: 4vh; width: 20vw; height: 76vh; overflow: visible; }
 .fl g { transform-origin: 50px 116px; animation: fl 0.5s ease-in-out infinite alternate; }
 .fl g + g { animation-duration: 0.36s; animation-delay: -0.2s; }

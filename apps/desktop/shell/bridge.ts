@@ -166,7 +166,7 @@ projectReady = follow();
 /* ── between Studio and the chat: what is selected, what is referenced, what Studio is asked to show ── */
 const selection = signal<StudioSelection | null>(null);
 const refer = events<StudioRef>();
-/* a skill picked in the examples (Studio's ExamplesDialog), to be named in the message; and "Add a skill" there */
+/* a skill tried in Studio's library, to be named in the message; and "Add a skill" */
 const skillPicked = events<{ name: string; description: string; title?: string; newConversation?: boolean }>();
 const skillAdd = events<void>();
 const asked = events<{ text: string; refs: StudioRef[] }>();
@@ -223,7 +223,7 @@ const asks = signal<HostAsk[]>([]);
 let answerAsk: (id: string, allow: boolean) => void = () => {};
 
 /* ── Settings → Developer (kept by the app): Studio switches it, the chat shows each turn's log and changes by it ── */
-interface AppPrefs { developer: boolean; changes: boolean }
+interface AppPrefs { developer: boolean; changes: boolean; notify?: boolean }
 const developerOf = (prefs: AppPrefs) => ({ logs: prefs.developer === true, changes: prefs.changes !== false });
 const developer = {
   get: async () => developerOf(await native.prefs.get()),
@@ -232,6 +232,13 @@ const developer = {
     ...(typeof next.changes === 'boolean' ? { changes: next.changes } : {}),
   }),
   onChange: (listener: Listener<{ logs: boolean; changes: boolean }>) => native.prefs.onChange((prefs) => listener(developerOf(prefs))),
+};
+
+/* ── Settings → General (kept by the app): the system's notifications of a turn done, stopped or waiting ── */
+const notifications = {
+  get: async () => (await native.prefs.get()).notify !== false,
+  set: (on: boolean) => native.prefs.set({ notify: on }),
+  onChange: (listener: Listener<boolean>) => native.prefs.onChange((prefs) => listener(prefs.notify !== false)),
 };
 
 /* ── the app's update, for Studio's top bar: a version downloaded and ready (src/updates.mjs), Restart to install it ── */
@@ -296,6 +303,7 @@ const host: StudioHost = {
   agents: native.agents,
   asks: { show: (list, answer) => { answerAsk = answer; asks.set(list); } },
   developer,
+  notifications,
   update,
   folders: { pick: native.pickFolder, pathOf: native.pathForFile },
   tabs: native.tabs,
@@ -398,12 +406,15 @@ function commandFor(ref: StudioRef): StudioCommand {
     if (!id) return { files: [] };
     try { return await (await fetch(`/api/projects/${encodeURIComponent(id)}/files`)).json(); } catch { return { files: [] }; }
   },
-  /* Studio's skills (its own listing, with their covers), for the cards of an empty conversation */
+  /* Studio's skills (its own listing, with their covers), Discover's among them, for the cards of an empty conversation:
+     Discover read first unless it was in the last ten minutes (Studio reads it as it starts), a few seconds at most */
   async starterSkills() {
     const id = project.get()?.id;
     if (!id) return [];
     type Listed = { name: string; description: string; cover?: string; order?: number; off?: true; shown?: { title: Record<string, string> } };
     try {
+      await fetch('/api/skills/catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fresh: 10 * 60 * 1000 }), signal: AbortSignal.timeout(5000) })
+        .catch(() => { /* offline or slow: what Discover read before */ });
       const body = await (await fetch(`/api/skills?project=${encodeURIComponent(id)}`)).json() as { skills?: Listed[] };
       return (body.skills ?? [])
         .filter((s): s is Listed & { cover: string } => Boolean(s.cover) && !s.off)

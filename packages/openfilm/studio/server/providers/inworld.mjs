@@ -47,6 +47,7 @@ export default {
   name: NAME,
   env: 'INWORLD_API_KEY',
   keysUrl: 'https://platform.inworld.ai/api-keys',
+  pricingUrl: 'https://inworld.ai/pricing',
   billingUrl: 'https://platform.inworld.ai/billing',
   verbs: ['voice', 'tts'],
   models: MODELS,

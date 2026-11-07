@@ -54,6 +54,21 @@ test('track flags and order', () => {
   roundTrip(f, [{ op: 'track', track: 1, field: 'hidden', value: true }]);
 });
 
+test('a track order undone after the agent added a track above: the track that moved goes back, not the one now there', () => {
+  const f = film([{ src: 'a.html', id: 'a' }], [{ src: 'b.html', id: 'b' }], [{ src: 'c.html', id: 'c' }]);
+  const edit = props(['c', 'trackOrder', { from: 2, to: 0 }]);
+  const after = apply(f, edit);
+  assert.deepEqual(ids(after), [['c@0'], ['a@0'], ['b@0']]);
+  const undo = inverse(f, after, edit);
+  /* the agent writes a new track on top meanwhile */
+  const written = structuredClone(after);
+  written.tracks.unshift({ clips: [{ src: 'n.html', id: 'n' }] } as Film['tracks'][number]);
+  assert.deepEqual(ids(apply(written, undo)), [['n@0'], ['a@0'], ['b@0'], ['c@0']]);
+  /* and redone */
+  const back = apply(written, undo);
+  assert.deepEqual(ids(apply(back, inverse(written, back, undo))), [['n@0'], ['c@0'], ['a@0'], ['b@0']]);
+});
+
 test('split, delete (with a ripple), paste, drop, duplicate', () => {
   const f = film([{ src: 'v.mp4', id: 'v', at: 1, time: [2, 8] }, { src: 'b.html', id: 'b', at: 9 }], [{ src: 's.wav', id: 's' }]);
   const split = roundTrip(f, [{ op: 'split', clip: 'v', left: { end: 4 }, right: { start: 4, end: 8, at: 3 } }]);
@@ -121,4 +136,16 @@ test('a clip\'s keyframes set, changed, cut and taken away come back exactly', (
   const halves = apply(keyed, cut);
   assert.ok(halves.keyframes?.['w--scale']);
   assert.deepEqual(apply(halves, inverse(keyed, halves, cut)), keyed);
+});
+
+test('a caption track put in is taken out by undo; one taken out comes back where it was, hidden as it was', () => {
+  const base: Film = { tracks: [{ clips: [{ id: 'v', src: 'v.mp4' }] }] };
+  const zh = { src: 'captions/zh.vtt', kind: 'captions' as const };
+  const add: Op[] = [{ op: 'captions', at: 0, captions: zh }];
+  const added = applyOps(structuredClone(base), add) as Film;
+  assert.deepEqual(applyOps(structuredClone(added), inverse(base, added, add)), base);
+  const hidden: Film = { tracks: [{ clips: [{ id: 'v', src: 'v.mp4' }] }, { clips: [], hidden: true, captions: zh }] };
+  const drop: Op[] = [{ op: 'uncaptions', src: zh.src }];
+  const dropped = applyOps(structuredClone(hidden), drop) as Film;
+  assert.deepEqual(applyOps(structuredClone(dropped), inverse(hidden, dropped, drop)), hidden);
 });

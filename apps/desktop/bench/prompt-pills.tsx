@@ -39,7 +39,7 @@ function Fixture() {
           placeholder="Ask"
           minHeight={22}
           maxHeight={158}
-          contentClassName="text-[14px] leading-[22px] text-[var(--chat-text)]"
+          contentClassName="text-[14px] leading-[22px] text-[var(--text)]"
           showsDropCaret={(data) => [...data.types].includes('Files')}
         />
       </div>

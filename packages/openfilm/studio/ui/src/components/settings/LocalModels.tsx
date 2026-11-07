@@ -1,19 +1,19 @@
 /**
- * Local models in Settings → Services: the service of the models that run on this computer (lib/local-models), its
- * chip second, after OpenFilm. Unlike the others it is not connected: its card lists its models by what they are for,
+ * Local services in Settings → Services: the service of the models that run on this computer (lib/local-models), its
+ * chip last, before adding one. Unlike the others it is not connected: its card lists its models by what they are for,
  * each with where it stands, in its own color: not installed (Install; its last download failed, in red), coming (how
  * far), on, or off. A model opens its
  * own page in the card: who made it, what it does, its size, memory and license, where it is used, and managing it
  * (install, turn on or off, uninstall).
  */
 import React from 'react';
-import { ArrowLeft, Captions, ChevronRight, Cpu, ExternalLink, ScanSearch, Scissors } from 'lucide-react';
+import { ArrowLeft, Captions, ChevronRight, Cpu, ExternalLink, Scissors } from 'lucide-react';
 import { useT } from '@/i18n';
 import { LOCAL_KINDS, sizeText, type LocalKind, type LocalModel, type LocalModelsHook } from '@/lib/local-models';
 import { Card } from './ProvidersSection';
 import { SettingsButton, SettingsSwitch, settingsError } from './ui';
 
-const KIND_ICON: Record<LocalKind, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>> = { asr: Captions, cutout: Scissors, search: ScanSearch };
+const KIND_ICON: Record<LocalKind, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>> = { asr: Captions, cutout: Scissors };
 
 const chipClass = 'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14px] transition hover:border-[var(--border-strong)] hover:text-[var(--text)]';
 
@@ -40,8 +40,8 @@ function Status({ model }: { model: LocalModel }) {
   if (model.installing) {
     const p = progressOf(model);
     return (
-      <span className="flex items-center gap-2 text-[13px] text-[var(--tl-accent)]">
-        <span className="h-1.5 w-20 overflow-hidden rounded-full bg-[var(--surface-3)]"><span className="block h-full rounded-full bg-[var(--tl-accent)] transition-[width]" style={{ width: `${Math.round(p * 100)}%` }} /></span>
+      <span className="flex items-center gap-2 text-[13px] text-[var(--accent)]">
+        <span className="h-1.5 w-20 overflow-hidden rounded-full bg-[var(--bg-pressed)]"><span className="block h-full rounded-full bg-[var(--accent)] transition-[width]" style={{ width: `${Math.round(p * 100)}%` }} /></span>
         {t('settings.local.installing').replace('{n}', String(Math.round(p * 100)))}
       </span>
     );
@@ -63,7 +63,7 @@ export function LocalModelsDialog({ hook, onClose }: { hook: LocalModelsHook; on
   return (
     <Card label={t('settings.local.name')} onClose={onClose}>
       <div className="flex items-start gap-4 pr-8">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] bg-[var(--fill-tsp)] text-[var(--text)]"><Cpu size={24} strokeWidth={1.75} /></span>
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] bg-[var(--bg-field)] text-[var(--text)]"><Cpu size={24} strokeWidth={1.75} /></span>
         <div className="min-w-0 flex-1">
           <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{t('settings.local.name')}</h2>
           <div className="mt-1 text-[13.5px] text-[var(--text-faint)]">
@@ -117,7 +117,7 @@ function ModelPage({ model, hook, onBack }: { model: LocalModel; hook: LocalMode
         <ArrowLeft size={14} />{t('settings.local.name')}
       </button>
       <div className="flex items-start gap-4 pr-8">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] bg-[var(--fill-tsp)] text-[var(--text)]"><Icon size={22} strokeWidth={1.75} /></span>
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] bg-[var(--bg-field)] text-[var(--text)]"><Icon size={22} strokeWidth={1.75} /></span>
         <div className="min-w-0 flex-1">
           <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{model.name}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px]">
@@ -135,7 +135,7 @@ function ModelPage({ model, hook, onBack }: { model: LocalModel; hook: LocalMode
       </div>
       {model.installing ? (
         <div className="mt-5">
-          <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]"><div className="h-full rounded-full bg-[var(--tl-accent)] transition-[width]" style={{ width: `${Math.round(progressOf(model) * 100)}%` }} /></div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-[var(--bg-pressed)]"><div className="h-full rounded-full bg-[var(--accent)] transition-[width]" style={{ width: `${Math.round(progressOf(model) * 100)}%` }} /></div>
           <p className="mt-1.5 text-[12.5px] text-[var(--text-faint)]">{t('settings.local.downloaded').replace('{done}', sizeText(model.installing.bytes)).replace('{size}', sizeText(model.bytes))}</p>
         </div>
       ) : null}

@@ -48,6 +48,13 @@ const DRAWN: Record<string, Draw> = {
       <path d="M15.6 10.6h4.8M15.6 14.6h4.8M13.6 18.6h6.8" />
     </>
   ),
+  /* captions: a picture, two lines of words along its foot */
+  captions: ({ fill, ink }) => (
+    <>
+      <path d="M5.6 4.6h12.8A2.6 2.6 0 0 1 21 7.2v9.6a2.6 2.6 0 0 1-2.6 2.6H5.6A2.6 2.6 0 0 1 3 16.8V7.2a2.6 2.6 0 0 1 2.6-2.6Z" {...fill} />
+      <path d="M7 12.4h5.2M14.6 12.4H17M7 15.6h2.6M12 15.6h5" {...ink} />
+    </>
+  ),
   /* a sticker: its corner peeling */
   sticker: ({ fill, ink }) => (
     <>
@@ -78,13 +85,9 @@ const DRAWN: Record<string, Draw> = {
       <path d="M17 9.6l-1.6 4.8" />
     </>
   ),
-  /* a skill: a wand, and the spark it makes */
+  /* a skill: a bolt, what it adds at once */
   skill: ({ fill }) => (
-    <>
-      <path d="M4 20 14.6 9.4" />
-      <path d="m12.8 7.6 3.6 3.6" />
-      <path d="M17.6 3.4 18.6 6l2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1Z" {...fill} />
-    </>
+    <path d="M13.4 3 5.6 13.2h5.6L10.4 21l8-10.4h-5.6Z" {...fill} />
   ),
   /* a template: a picture laid out, one big place and two small */
   template: ({ fill, ink }) => (
@@ -96,7 +99,7 @@ const DRAWN: Record<string, Draw> = {
 };
 
 /* the marks inside a solid shape are cut out of it in the panel's own color */
-const SOLID: Paint = { fill: { fill: 'currentColor' }, ink: { stroke: 'var(--dock-pane)' }, cut: { fill: 'var(--dock-pane)', stroke: 'var(--dock-pane)' } };
+const SOLID: Paint = { fill: { fill: 'currentColor' }, ink: { stroke: 'var(--bg-panel)' }, cut: { fill: 'var(--bg-panel)', stroke: 'var(--bg-panel)' } };
 const LINE: Paint = { fill: {}, ink: {}, cut: { fill: 'currentColor' } };
 
 export function CategoryIcon({ id, on, size = 22 }: { id: string; on: boolean; size?: number }) {
@@ -129,7 +132,7 @@ export function Empty({ icon, text, action, onAction }: { icon: 'star' | 'music'
       <EmptyIcon kind={icon} />
       <p className="text-[12.5px] leading-relaxed">
         {text}
-        {action ? <> <button type="button" onClick={onAction} className="font-medium text-[var(--tl-accent)] hover:underline">{action}</button></> : null}
+        {action ? <> <button type="button" onClick={onAction} className="font-medium text-[var(--accent)] hover:underline">{action}</button></> : null}
       </p>
     </div>
   );

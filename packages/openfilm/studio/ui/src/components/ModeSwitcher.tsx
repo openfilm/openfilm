@@ -34,14 +34,14 @@ export function ModeSwitcher({ mode, modes, onMode, onSettings }: {
   return (
     <Popover open={open} onOpenChange={setOpen} align="end"
       trigger={(
-        <button type="button" aria-haspopup="menu" aria-expanded={open} aria-label={t('canvas.modes')} data-work-mode={mode}
+        <button type="button" aria-haspopup="menu" aria-expanded={open} aria-label={t('canvas.workspaceLabel')} data-work-mode={mode}
           onClick={() => setOpen(!open)}
           className={`ml-1 flex h-[26px] shrink-0 items-center gap-1.5 rounded-[7px] border border-[var(--border-strong)] px-2.5 text-[12px] font-medium text-[var(--text)] outline-none transition focus-visible:shadow-[inset_0_0_0_1px_var(--accent)] ${open ? 'bg-[var(--bg-active)]' : 'bg-[var(--fill-tsp)] hover:bg-[var(--bg-active)]'}`}>
           <Now size={14} className="text-[var(--accent)]" />
           {t(MODES[mode].title)}
         </button>
       )}>
-      <div role="menu" aria-label={t('canvas.modes')}
+      <div role="menu" aria-label={t('canvas.workspaceLabel')}
         className="flex w-[248px] flex-col rounded-[9px] border border-[var(--border-strong)] bg-[var(--panel)] p-1 text-[12px] text-[var(--text)] shadow-[0_10px_28px_rgb(0_0_0/.24),0_2px_6px_rgb(0_0_0/.12)]">
         {modes.map((m) => {
           const on = m === mode;

@@ -14,3 +14,5 @@ library/audio/
 library/stickers/emoji/
 # the model semantic search runs, and its runtime: published with the library likewise (library/models.json)
 library/models/
+# each template's example, with its music (scripts/library-previews.mjs): published with the library likewise
+library/examples/

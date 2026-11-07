@@ -12,7 +12,7 @@
      2.6
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Label\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.34}"
     },
     "size": {
@@ -66,7 +66,7 @@
      3.2
     ],
     "attrs": {
-     "data-props": "[{\"name\": \"Line 1\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Line 2\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Author\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Card\", \"type\": \"var\", \"var\": \"--card\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-props": "[{\"name\": \"Line 1\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Line 2\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Author\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Card\", \"type\": \"var\", \"var\": \"--card\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
      "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.32}"
     },
     "size": {
@@ -146,84 +146,60 @@
    "track": 4,
    "at": 0,
    "clip": {
-    "src": "slot.html",
+    "src": "example-1.jpg",
     "time": [
      0,
      3
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'1'",
-       "--tone": "#5a3242"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "1"
+    }
    }
   },
   {
    "track": 4,
    "at": 3,
    "clip": {
-    "src": "slot.html",
+    "src": "example-2.jpg",
     "time": [
      0,
      2.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'2'",
-       "--tone": "#5a3242"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "2"
+    }
    }
   },
   {
    "track": 4,
    "at": 5.6,
    "clip": {
-    "src": "slot.html",
+    "src": "example-3.jpg",
     "time": [
      0,
      2.6
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'3'",
-       "--tone": "#5a3242"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "3"
+    }
    }
   },
   {
    "track": 4,
    "at": 8.2,
    "clip": {
-    "src": "slot.html",
+    "src": "example-4.jpg",
     "time": [
      0,
      3.4
     ],
     "style": "object-fit: cover",
-    "overrides": [
-     {
-      "at": ":root",
-      "style": {
-       "--n": "'4'",
-       "--tone": "#5a3242"
-      }
-     }
-    ]
+    "attrs": {
+     "data-slot": "4"
+    }
    }
   }
  ],

@@ -1,10 +1,9 @@
 /**
- * Settings → Services: the services there are, as chips that open each one's card (ServicesBar; Local models, second,
- * opens its own: LocalModels), and what makes each
- * kind of media: one of the models of a connected service (its mark and the model's name), or none. A kind's menu
- * lists every service that makes it with its models: the connected ones to choose from, then the others, whose
- * models are shown as what connecting would bring, each opening that service's card. Connecting a service fills the
- * kinds that have none, with its first model.
+ * Settings → Services: the services there are, as chips that open each one's card (ServicesBar; Local services, last,
+ * opens its own: LocalModels), and what makes each kind of media: one of the models of a connected service (its mark
+ * and the model's name), or none. A kind's menu lists every service that makes it with its models: the connected ones
+ * to choose from, then the others, whose models are shown as what connecting would bring, each opening that service's
+ * card. Connecting a service fills the kinds that have none, with its first model.
  *
  * Media, and web search (for an agent that has none of its own), in one list. Writing, translating subtitles and
  * looking at pictures are the agent's own work, with its own model.
@@ -12,7 +11,7 @@
  * Under them, the person's custom services, which their agent calls itself (CustomServices).
  */
 import React from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, FolderSearch } from 'lucide-react';
 import { useT } from '@/i18n';
 import { SERVICE_VERBS, offered, providerOrder, useProviders, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { Popover } from '@/components/Popover';
@@ -34,18 +33,18 @@ interface Choice {
 export function ModelsSection() {
   const t = useT();
   const got = useProviders();
-  /* Local models' name said in the person's language (the server's is English) */
+  /* Local services' name said in the person's language (the server's is English) */
   const hook = { ...got, state: got.state && { ...got.state, providers: got.state.providers.map((p) => (p.id === 'local' ? { ...p, name: t('settings.local.name') } : p)) } };
   const local = useLocalModels();
   /* a Local model that came, went, or was turned on or off changes what can make each kind */
   const usable = (local.models ?? []).filter((m) => m.on).map((m) => m.id).join();
   React.useEffect(() => { if (local.models) void got.reload(); }, [usable]); // eslint-disable-line react-hooks/exhaustive-deps
   const state = hook.state;
-  /* the card open over the page: a provider's id, 'local' (Local models), or 'add' */
+  /* the card open over the page: a provider's id, 'local' (Local services), or 'add' */
   const [card, setCard] = React.useState<string | null>(null);
   /* asks the custom services to open their form (counted, so asking again opens it again) */
   const [addCustom, setAddCustom] = React.useState(0);
-  /* Local models opens its own card (LocalModelsDialog), not a service's */
+  /* Local services opens its own card (LocalModelsDialog), not a service's */
   const shown = card === 'local' ? null : state?.providers.find((p) => p.id === card) ?? null;
   const row = (verb: ProviderVerb) => <ModelRow key={verb} verb={verb} hook={hook} onConnect={setCard} />;
 
@@ -53,8 +52,11 @@ export function ModelsSection() {
     <SettingsPage note={t('settings.models.desc')}>
       {state ? (
         <>
-          <ServicesBar hook={hook} onOpen={setCard} second={<LocalModelsChip hook={local} onOpen={() => setCard('local')} />} />
-          <SettingsGroup>{SERVICE_VERBS.filter((verb) => offered(state, verb)).map(row)}</SettingsGroup>
+          <ServicesBar hook={hook} onOpen={setCard} local={<LocalModelsChip hook={local} onOpen={() => setCard('local')} />} />
+          <SettingsGroup>
+            {SERVICE_VERBS.filter((verb) => offered(state, verb)).map(row)}
+            <LibraryRow hook={hook} />
+          </SettingsGroup>
         </>
       ) : null}
       <CustomServices hook={hook} adding={addCustom} />
@@ -62,6 +64,38 @@ export function ModelsSection() {
       {card === 'local' ? <LocalModelsDialog hook={local} onClose={() => setCard(null)} /> : null}
       {card === 'add' ? <AddProviderDialog onClose={() => setCard(null)} onCustom={() => { setCard(null); setAddCustom((n) => n + 1); }} /> : null}
     </SettingsPage>
+  );
+}
+
+/**
+ * OpenFilm's library searched by what is meant: OpenFilm's service (src/library-semantic.mjs, free, no account), on
+ * by default, or none (the library's words alone).
+ */
+function LibraryRow({ hook }: { hook: ProvidersHook }) {
+  const t = useT();
+  const openfilm = hook.state?.providers.find((p) => p.id === 'openfilm');
+  if (!openfilm) return null;
+  const label = t('settings.models.library.title');
+  const only: Choice = { value: 'openfilm:library', provider: 'openfilm', name: t('settings.models.library.engine'), model: '' };
+  return (
+    <SettingsItem
+      mark={<FolderSearch size={17} strokeWidth={1.75} />}
+      title={label}
+      description={t('settings.models.library.about')}
+      control={(
+        <ModelPicker
+          label={label}
+          connected={[openfilm]}
+          waiting={[]}
+          choicesOf={() => [only]}
+          current={hook.state?.librarySearch ? only : null}
+          busy={hook.busy === 'library-search'}
+          empty={t('settings.models.none')}
+          onPick={(choice) => void hook.setLibrarySearch(choice !== null)}
+          onConnect={() => {}}
+        />
+      )}
+    />
   );
 }
 
@@ -107,13 +141,15 @@ function ModelRow({ verb, hook, onConnect }: { verb: ProviderVerb; hook: Provide
  * The connected ones first, to choose from (and None); then the others, their models shown as what connecting brings,
  * each opening its card to connect it.
  */
-function ModelPicker({ label, connected, waiting, choicesOf, current, busy, onPick, onConnect }: {
+function ModelPicker({ label, connected, waiting, choicesOf, current, busy, empty, onPick, onConnect }: {
   label: string;
   connected: OwnProvider[];
   waiting: OwnProvider[];
   choicesOf: (p: OwnProvider) => Choice[];
   current: Choice | null;
   busy: boolean;
+  /** what the button says when nothing is chosen (else "Choose a model") */
+  empty?: string;
   onPick: (choice: Choice | null) => void;
   onConnect: (provider: string) => void;
 }) {
@@ -169,7 +205,7 @@ function ModelPicker({ label, connected, waiting, choicesOf, current, busy, onPi
       className={`flex h-10 w-[300px] items-center gap-2.5 rounded-[9px] border px-3 text-left text-[14.5px] text-[var(--text)] transition disabled:opacity-60 ${open ? 'border-[var(--text-muted)]' : 'border-[var(--border)] hover:border-[var(--border-strong)]'}`}>
       {current ? <ProviderMark id={current.provider} size={15} /> : null}
       <span className={`min-w-0 flex-1 truncate ${current ? '' : 'text-[var(--text-muted)]'}`}>
-        {current ? current.name : t('settings.models.choose')}
+        {current ? current.name : empty ?? t('settings.models.choose')}
       </span>
       <ChevronDown size={15} className="shrink-0 text-[var(--text-muted)]" />
     </button>
@@ -179,7 +215,7 @@ function ModelPicker({ label, connected, waiting, choicesOf, current, busy, onPi
     <div className="shrink-0">
       <Popover open={open} onOpenChange={setOpen} placement="auto" align="end" layer={10060} trigger={trigger}>
         <div ref={list} role="listbox" aria-label={label} onKeyDown={onKeyDown}
-          className="max-h-[min(480px,var(--popover-max-h))] w-[340px] overflow-y-auto rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-[var(--shadow-lg)]">
+          className="max-h-[min(480px,var(--popover-max-h))] w-[340px] overflow-y-auto rounded-[12px] border border-[var(--border)] bg-[var(--bg-raised)] p-1.5 shadow-[var(--shadow-lg)]">
           {connected.map((p) => (
             <div key={p.id} role="group" aria-label={p.name} className="pb-1">
               {heading(p, false)}
@@ -188,7 +224,7 @@ function ModelPicker({ label, connected, waiting, choicesOf, current, busy, onPi
           ))}
           {connected.length ? option(null, t('settings.models.none')) : null}
           {waiting.length ? (
-            <div className={connected.length ? 'mt-1.5 border-t border-[var(--border-soft)] pt-1.5' : ''}>
+            <div className={connected.length ? 'mt-1.5 border-t border-[var(--border)] pt-1.5' : ''}>
               <div className="px-2.5 pb-1 pt-1.5 text-[12px] text-[var(--text-faint)]">{t('settings.models.notConnected')}</div>
               {waiting.map((p) => (
                 <div key={p.id} role="group" aria-label={`${p.name}: ${t('settings.providers.connect')}`} className="pb-1">

@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Chat bubbles</title>
 <style>
-:root { --me: #2f80ff; --them: #f1f1f4; --ink: #16171c; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --me: #2f80ff; --them: #f1f1f4; --ink: #16171c; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 4vh; padding: 0 8vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 4vh; padding: 0 8vh; font-family: var(--font); }
 .b { max-width: 84%; font-size: 8.6vh; font-weight: 600; line-height: 1.25; padding: 3.4vh 5.4vh; border-radius: 6vh; white-space: pre; box-shadow: 0 1.6vh 4vh rgba(0, 0, 0, 0.25); animation: pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
 .l { align-self: flex-start; background: var(--them); color: var(--ink); border-bottom-left-radius: 1.4vh; transform-origin: 0 100%; }
 .r { align-self: flex-end; background: var(--me); color: #fff; border-bottom-right-radius: 1.4vh; transform-origin: 100% 100%; }

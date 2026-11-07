@@ -2,20 +2,20 @@
 /**
  * The library's verbs of `openfilm get` (LIBRARY_VERBS: music-search, sfx-search, transition, effect, filter, sticker,
  * text, template): OpenFilm's own library (studio/server/library.mjs) searched, so a film uses a sound, a music bed, a
- * transition, an effect, a filter, a sticker, a text or a template that is already there before anything is made or
- * paid for; and the one chosen taken into the project, as Studio's assets drawer takes it.
+ * transition, an effect, a filter, a sticker, a text or a template that is already there, free, where it fits; and the
+ * one chosen taken into the project, as Studio's assets drawer takes it.
  *
- * Search runs here, offline: what was asked is read for the library's tags (src/library-words.mjs) and its other
- * words, and each thing of the kind asked is scored by what it shares with it — a tag its names say counts most, then
- * a tag it carries, a word of its names, a word of what it is about — each the more the fewer things have it. Music
- * and sounds are also matched on how lively they are (`calm`, `soft`, `energetic` against their energy), a tempo
- * asked (`120 bpm`) and the length asked (--sec).
+ * The keyword search runs here, offline: what was asked is read for the library's tags (src/library-words.mjs) and
+ * its other words, and each thing of the kind asked is scored by what it shares with it — a tag its names say counts
+ * most, then a tag it carries, a word of its names, a word of what it is about — each the more the fewer things have
+ * it. Music and sounds are also matched on how lively they are (`calm`, `soft`, `energetic` against their energy), a
+ * tempo asked (`120 bpm`) and the length asked (--sec). Online, what is meant counts too (library-semantic.mjs).
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { BUILT_IN, builtInRoot, catalogFiles, fetchLibrary, libraryIndex } from '../studio/server/library.mjs';
-import { CJK, fold, readText, tagsIn, vocabulary, wordsOf } from './library-words.mjs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { BUILT_IN, builtInRoot, catalogFiles, fetchLibrary, libraryIndex, refreshCommunity } from '../studio/server/library.mjs';
+import { CJK, fold, readText, stem, tagsIn, vocabulary, wordsOf } from './library-words.mjs';
 
 /** What can be looked for, and the library's category of each. */
 export const KINDS = /** @type {const} */ ({ music: 'music', sound: 'sound', transition: 'transition', effect: 'effect', filter: 'filter', sticker: 'sticker', text: 'text', template: 'template' });
@@ -90,7 +90,8 @@ function library() {
     const file = JSON.parse(readFileSync(join(builtInRoot(), 'search.json'), 'utf8'));
     if (file.inputs === searchInputs()) rows = file.rows;
   } catch { /* none: worked out here */ }
-  rows ??= searchRows(library, vocab);
+  if (rows) rows = [...rows, ...searchRows({ ...library, items: library.items.filter((item) => item.id.startsWith('community/')) }, vocab)];
+  else rows = searchRows(library, vocab);
   const made = { index, vocab, items: new Map(library.items.map((item) => [item.id, item])), rows: new Map(rows.map((r) => [r[0], r])), docs: new Map() };
   kept = made;
   return made;
@@ -115,15 +116,12 @@ function docOf(at, id) {
 const rarity = (/** @type {number} */ n, /** @type {number} */ count) => Math.log(1 + n / (1 + count));
 
 /**
- * The things of the library of `kind` (all kinds when null) that fit `query` best, the best first.
- * @param {keyof typeof KINDS | null} kind @param {string} query
- * @param {{ duration?: number, limit?: number }} [o] duration: the seconds it is wanted for
- * @returns {Found[]}
+ * What a query asks for, as the keyword search reads it: the library's tags it names (a mood's energy apart), its
+ * other words, the words a tag took (still looked for in names), CJK left over in pairs of characters, the energy a
+ * mood asks for, a tempo.
+ * @param {ReturnType<typeof vocabulary>} vocab @param {string} query
  */
-export function findInLibrary(kind, query, o = {}) {
-  const at = library();
-  const { vocab } = at;
-  const all = [...at.items.values()].filter((item) => !kind || item.cat === KINDS[kind]).map((item) => docOf(at, item.id)).filter((d) => d !== null);
+function askedIn(vocab, query) {
   const asked = readText(vocab, query, { asked: true });
   const bpm = Number(/(\d{2,3})\s*bpm/i.exec(query)?.[1]) || null;
   const words = asked.words.filter((w) => !vocab.plain.has(w) && !/^\d+$/.test(w) && w !== 'bpm');
@@ -139,6 +137,20 @@ export function findInLibrary(kind, query, o = {}) {
   const tags = [...asked.tags].filter((t) => !lively.includes(t));
   /* a mood asks for its energy too */
   const wants = lively.includes('intense') ? 5 : lively.includes('soft') || tags.some((t) => ['calm', 'meditation', 'dreamy'].includes(t)) ? 1 : null;
+  return { bpm, words, tagged, pairs, tags, wants };
+}
+
+/**
+ * The things of the library of `kind` (all kinds when null) that fit `query` best, the best first.
+ * @param {keyof typeof KINDS | null} kind @param {string} query
+ * @param {{ duration?: number, limit?: number }} [o] duration: the seconds it is wanted for
+ * @returns {Found[]}
+ */
+export function findInLibrary(kind, query, o = {}) {
+  const at = library();
+  const { vocab } = at;
+  const all = [...at.items.values()].filter((item) => !kind || item.cat === KINDS[kind]).map((item) => docOf(at, item.id)).filter((d) => d !== null);
+  const { bpm, words, tagged, pairs, tags, wants } = askedIn(vocab, query);
   const said = wordsOf(query).filter((w) => !vocab.plain.has(w)).join(' ');
   const folded = fold(query);
   const n = all.length;
@@ -199,6 +211,40 @@ export function findInLibrary(kind, query, o = {}) {
 
 /** @typedef {{ item: Item, score: number, tags: string[], named: boolean, short: boolean }} Found */
 
+/**
+ * What of a query a thing has and what it has not, word by word as it was asked (a tempo as one): a word it has when
+ * its names or what it is about say it, or it carries a tag the word names; a word of energy (`fast`, `gentle`) when
+ * it is about that lively; CJK in runs, between the words that ask for nothing. So whoever chooses sees how well it fits.
+ * @param {Item} item @param {string} query
+ * @returns {{ has: string[], lacks: string[] }}
+ */
+export function fitOf(item, query) {
+  const at = library();
+  const { vocab } = at;
+  const d = docOf(at, item.id);
+  /** @type {{ has: string[], lacks: string[] }} */
+  const fit = { has: [], lacks: [] };
+  if (!d) return fit;
+  const carries = (/** @type {string} */ text) => [...readText(vocab, text, { asked: true }).tags].some((t) => {
+    if (vocab.byId.get(t)?.kind !== 'energy') return d.tags.has(t);
+    return item.energy ? Math.abs((t === 'intense' ? 5 : 1) - item.energy) <= 1 : d.tags.has(t);
+  });
+  const bpm = /(\d{2,3})\s*bpm/i.exec(query);
+  if (bpm) (item.bpm && Math.abs(item.bpm - Number(bpm[1])) <= 8 ? fit.has : fit.lacks).push(`${bpm[1]} bpm`);
+  const rest = bpm ? query.replace(bpm[0], ' ') : query;
+  for (const word of new Set(fold(rest).match(/[a-z0-9]+/g) ?? [])) {
+    const w = stem(word);
+    if (vocab.plain.has(w) || /^\d+$/.test(w)) continue;
+    (d.nameWords.has(w) || d.words.has(w) || carries(word) ? fit.has : fit.lacks).push(word);
+  }
+  const cjk = (fold(rest).match(new RegExp(`${CJK.source}+`, 'gu')) ?? []).join(' ');
+  for (const run of vocab.plainCjk.reduce((text, w) => text.replaceAll(w, ' '), cjk).split(/\s+/).filter(Boolean)) {
+    const pairs = run.length === 1 ? [run] : Array.from({ length: run.length - 1 }, (_, i) => run.slice(i, i + 2));
+    (carries(run) || pairs.filter((x) => d.cjk.includes(x)).length * 2 >= pairs.length ? fit.has : fit.lacks).push(run);
+  }
+  return fit;
+}
+
 /** Music shorter than asked, and no loop: after all that is long enough. @param {Item} item @param {number} [duration] */
 const tooShort = (item, duration) => Boolean(duration && item.cat === 'music' && item.durationMs && item.durationMs / 1000 < duration && !item.loop);
 
@@ -219,17 +265,20 @@ const RRF_K = 60;
  * @returns {Promise<{ found: Found[], worded: boolean }>}
  */
 export async function searchLibrary(kind, query, o = {}) {
+  await refreshCommunity();
   const words = findInLibrary(kind, query, { ...o, limit: DEPTH });
   const at = library();
   const { nearest } = await import('./library-semantic.mjs');
-  const near = await nearest(query, (id) => at.items.get(id)?.cat === KINDS[kind], DEPTH);
+  /* what the service has that this catalog has not (a newer library's) is left out */
+  const near = (await nearest(query, KINDS[kind], DEPTH))?.filter(([id]) => at.items.get(id)?.cat === KINDS[kind]);
   if (!near) return { found: words.slice(0, o.limit ?? 8), worded: words.length > 0 };
   /** @type {Map<string, Found & { fused: number }>} */
   const all = new Map(words.map((r, i) => [r.item.id, { ...r, fused: 1 / (RRF_K + i) }]));
   near.forEach(([id], i) => {
     const was = all.get(id);
     if (was) { was.fused += 1 / (RRF_K + i); return; }
-    const d = /** @type {Doc} */ (docOf(at, id));
+    const d = docOf(at, id);
+    if (!d) return;
     all.set(id, { item: d.item, score: 0, tags: [...d.tags], named: false, short: tooShort(d.item, o.duration), fused: 1 / (RRF_K + i) });
   });
   return { found: [...all.values()].sort(inOrder((r) => /** @type {Found & { fused: number }} */ (r).fused)).slice(0, o.limit ?? 8), worded: words.length > 0 };
@@ -266,16 +315,16 @@ const LIMIT = { value: 'n', min: 1, max: 50, default: 8, alias: 'n' };
 const SEC = { value: 'seconds' };
 
 /**
- * The library's verbs of `openfilm get`: free, offline, and searched before anything is made. `music-search` and
- * `sfx-search` sit beside `music` and `sfx`, as `image-search` sits beside `image`; what only the library has is a verb
+ * The library's verbs of `openfilm get`: free and offline. `music-search` and `sfx-search` sit beside `music` and
+ * `sfx` (what is there, or one made to the prompt: the agent chooses), as `image-search` sits beside `image`; what only the library has is a verb
  * of its own name. Each searches with --prompt, and takes one into the project with --take.
  * @type {Record<string, { kind: keyof typeof KINDS, makes?: string, help: string, options: Record<string, object> }>}
  */
 export const LIBRARY_VERBS = {
   'music-search': { kind: 'music', makes: 'music', options: { prompt: PROMPT, sec: SEC, limit: LIMIT, take: TAKE },
-    help: 'Free and offline: OpenFilm\'s own music (CC0), searched in any words and language. Search it before making music. Returns the best matches: id, name, length, tempo, energy 1–5, whether it loops, a file to hear it; --sec puts what is at least that long first. --take <id> copies one into assets/.' },
+    help: 'Free and offline: OpenFilm\'s own music (CC0), searched in any words and language. Returns the best matches: id, name, length, tempo, energy 1–5, whether it loops, what of the prompt it has and lacks, a file to hear it; --sec puts what is at least that long first. --take <id> copies one into assets/. Music of the film\'s own, made to the prompt and length: `get music`.' },
   'sfx-search': { kind: 'sound', makes: 'sfx', options: { prompt: PROMPT, sec: SEC, limit: LIMIT, take: TAKE },
-    help: 'Free and offline: OpenFilm\'s own sound effects (CC0), about 5,400, searched in any words and language. Search them before making one. Returns the best matches: id, name, length, a file to hear it; --sec puts those near that long first. --take <id> copies one into assets/.' },
+    help: 'Free and offline: OpenFilm\'s own sound effects (CC0), about 5,400, searched in any words and language. Returns the best matches: id, name, length, what of the prompt it has and lacks, a file to hear it; --sec puts those near that long first. --take <id> copies one into assets/. A sound of the film\'s own, made to the prompt and length: `get sfx`.' },
   transition: { kind: 'transition', options: { prompt: PROMPT, limit: LIMIT, take: TAKE },
     help: 'Free and offline: OpenFilm\'s transitions over a cut (light, glitch, shapes, film, ink, wipes, camera moves). Search them before writing one. --take <id> copies it into the project and says where it goes in film.html.' },
   effect: { kind: 'effect', options: { prompt: PROMPT, limit: LIMIT, take: TAKE },
@@ -310,22 +359,25 @@ export async function libraryGet(verb, flags) {
   if (unknown) return wrong(`there is no --${unknown}; it takes ${Object.keys(spec.options).map((o) => `--${o}`).join(', ')}`);
   for (const [name, value] of Object.entries(given)) if (typeof value !== 'string') return wrong(`--${name} takes a value, once`);
   const { prompt, sec, limit, take } = /** @type {Record<string, string | undefined>} */ (given);
-  if (take !== undefined) return takeOne(verb, take);
+  if (take !== undefined) {
+    if (take.startsWith('community/') || take.startsWith(`${BUILT_IN}/community/`)) await refreshCommunity();
+    return takeOne(verb, take);
+  }
   if (!prompt?.trim()) return wrong(`what to look for, please: \`openfilm get ${verb} --prompt "${EXAMPLES[verb]}"\``);
   const seconds = sec === undefined ? undefined : Number(sec);
   if (seconds !== undefined && !(seconds > 0 && seconds <= 3600)) return wrong(`--sec is seconds, from 0 to 3600, not ${sec}`);
   const count = limit === undefined ? 8 : Number(limit);
   if (!(Number.isInteger(count) && count >= 1 && count <= 50)) return wrong(`--limit is a whole number from 1 to 50, not ${limit}`);
   const query = prompt.trim();
-  const { semanticState, manifest } = await import('./library-semantic.mjs');
-  const state = semanticState();
   const { found, worded } = await searchLibrary(spec.kind, query, { duration: seconds, limit: count });
   const make = spec.makes ? `make one with \`openfilm get ${spec.makes}\`` : 'write it yourself, as a page or CSS';
-  const mb = Math.round((manifest()?.files ?? []).reduce((sum, f) => sum + f.bytes, 0) / 1e6);
-  const coming = state === 'fetching' ? [`(Semantic search is being set up in the background, about ${mb} MB, once: until then, words are matched.)`] : [];
-  if (!found.length) return { code: 0, lines: [`Nothing in OpenFilm's library for “${query}”: ${make}.`, ...coming] };
+  if (!found.length) return { code: 0, lines: [`Nothing in OpenFilm's library for “${query}”: ${make}.`] };
   const lang = languageOf(query);
   const { vocab } = library();
+  /* what the film around here has already: a sound or music the library gave keeps its file's name in assets/ */
+  const root = projectAround('.');
+  let film = '';
+  try { if (root) film = readFileSync(join(root, 'film.html'), 'utf8'); } catch { /* no film yet */ }
   const lines = [worded ? `${found.length} in OpenFilm's library for “${query}”, the best first (free to use in any film):`
     : `No words of “${query}” are in OpenFilm's library; the ${found.length} nearest in meaning, which may not fit:`, ''];
   found.forEach(({ item, tags }, i) => {
@@ -342,11 +394,14 @@ export async function libraryGet(verb, flags) {
     if (item.about) lines.push(`    ${item.about}`);
     const shown = tags.filter((t) => vocab.byId.get(t)?.kind !== 'energy').slice(0, 8).map((t) => vocab.byId.get(t)?.name[lang] ?? t);
     if (shown.length) lines.push(`    ${shown.join(', ')}`);
+    const fit = fitOf(item, query);
+    if (fit.has.length || fit.lacks.length) lines.push(`    has: ${fit.has.join(', ') || 'none of the words asked'}${fit.lacks.length ? ` · lacks: ${fit.lacks.join(', ')}` : ''}`);
+    if (item.kind === 'sound' && film.includes(basename(item.id))) lines.push('    in this film already');
     const preview = previewOf(item);
     lines.push(`    ${preview ? `${item.kind === 'sound' ? 'hear' : 'see'} it: ${preview}` : item.kind === 'sound' ? 'its file is not on this computer' : 'no preview'}`);
   });
   lines.push('', `Take one into the film: \`openfilm get ${verb} --take <id>\` (it says what to put in film.html).`);
-  lines.push(`Only when none of these fits, ${make}.`, ...coming);
+  lines.push(spec.makes ? `None fits well enough, or the film needs its own? ${make[0].toUpperCase()}${make.slice(1)}, made to the prompt (it costs).` : `None fits? ${make[0].toUpperCase()}${make.slice(1)}.`);
   return { code: 0, lines };
 }
 
@@ -402,7 +457,7 @@ async function takeOne(verb, asked) {
   if ('clips' in taken) {
     const lines = [`In film.html, on ${new Set(taken.clips.map((c) => c.track)).size} tracks of their own, top first, from the second it starts (add it to each \`at\`):`];
     for (const c of taken.clips) lines.push(`  track ${c.track + 1}: ${clipTag(/** @type {any} */ ({ ...c.clip, at: c.at }))}`);
-    if (item.slots) lines.push(`Its ${item.slots} slot.html clips are places for pictures: put the film's own there.`);
+    if (item.slots) lines.push(`Its ${item.slots} clips with data-slot are places for pictures, each its example: put the film's own there.`);
     return { code: 0, lines };
   }
   const where = item.place === 'cut'

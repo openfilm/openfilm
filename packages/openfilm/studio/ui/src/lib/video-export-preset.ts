@@ -14,8 +14,8 @@ export interface VideoExportSettings {
   audio: boolean;
   burn: boolean;
   sidecar: 'none' | 'srt' | 'vtt';
-  /** Motion blur: off, or the shutter's angle in degrees (180 a film camera's). */
-  blur: number | null;
+  /** The whole film's loudness in LUFS, true peaks under -1 dBTP; null: as mixed. */
+  loudness: number | null;
 }
 
 export const DEFAULT_VIDEO_EXPORT: VideoExportSettings = {
@@ -29,7 +29,7 @@ export const DEFAULT_VIDEO_EXPORT: VideoExportSettings = {
   audio: true,
   burn: true,
   sidecar: 'none',
-  blur: null,
+  loudness: null,
 };
 
 export function videoExportPreset(id: string, projectFps: number): VideoExportSettings {

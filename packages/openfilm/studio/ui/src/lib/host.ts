@@ -75,12 +75,12 @@ export interface StudioHost {
     onChange: (listener: (state: { open: boolean; width: number; assets?: { open: boolean; bottom: number } }) => void) => void;
   };
   /**
-   * The app's chat names a skill in the message being written: the skills (opened from the chat, `show-examples`)
-   * call this for one tried there, `newConversation` true (Try now: a new conversation with it named).
+   * The app's chat names a skill in the message being written: the library's skills call this for one tried there,
+   * `newConversation` true (Try now: a new conversation with it named).
    */
   useSkill?: (skill: { name: string; description: string; title?: string; newConversation?: boolean }) => void;
   /** The person's own skills, where the app keeps them: one added, the app's own way (from a link, a folder, or made
-      with the agent). The Community's skills offer it. */
+      with the agent). */
   skills?: { add: () => void };
   /** Let the app ask Studio to show something: Studio calls this once with its listener. */
   onCommand?: (listener: (command: StudioCommand) => void) => void;
@@ -162,6 +162,15 @@ export interface StudioHost {
     onChange: (listener: (prefs: HostDeveloper) => void) => () => void;
   };
   /**
+   * The app's notifications, for Settings → General: the system's notification of a chat's turn done, stopped by an
+   * error, or waiting for an answer, while the window is not in front (on, until switched off).
+   */
+  notifications?: {
+    get: () => Promise<boolean>;
+    set: (on: boolean) => Promise<unknown>;
+    onChange: (listener: (on: boolean) => void) => () => void;
+  };
+  /**
    * The app keeps each open project in a tab of its own window, one shown at a time, and draws nothing of them: Studio
    * names the one in front at its top bar's left, the way to the others and to the recent ones (ProjectSwitcher,
    * `open`: one open already is shown). With no tab open the page is at `/`, and
@@ -224,7 +233,7 @@ export interface HostUpdateState {
 /** An update of the app, ready to install or installing; `waiting`: why the last Restart did not go ahead. */
 export type HostUpdate = { status: 'ready' | 'installing'; version: string; waiting?: 'agent-busy' | 'exporting' | 'install-failed' | null };
 
-export type HostAgentId = 'codex' | 'claude' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'minimax' | 'deepseek' | 'byok';
+export type HostAgentId = 'codex' | 'claude' | 'antigravity' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'minimax' | 'deepseek' | 'byok';
 /**
  * What was searched for an agent (`agents.diagnose`): the report to copy, the program's name, where it was found, and
  * when it was not, why: chosen-missing (the program chosen is gone) · wsl (only inside WSL, which the app cannot use) ·
@@ -406,13 +415,13 @@ export type StudioCommand =
   | { type: 'draft-refs'; refs: StudioRef[] }
   /* the app's chat sends the person to Settings (an agent to set up) */
   | { type: 'settings'; section?: 'agents' | 'providers' }
-  /* the app's chat opens the examples over the film, to point at one or a part of one, or name a skill; `open`: on
-     that skill's or example's page (a pill of one clicked) */
+  /* the app's chat shows the library's skills (on Discover, or a skill's page) or the projects window's examples
+     (an example's page); none: the examples */
   | { type: 'show-examples'; open?: CommunityItem };
 
 /**
- * A skill or an example in the Community, to open on its page; or `discover`, OpenFilm's skills to install; or
- * `examples`, the examples to start from (an empty project's "Start from an example").
+ * A skill or an example to open on its page (a pill of one clicked); or `discover`, OpenFilm's skills to install (an
+ * empty project's "More skills"); or `examples`, the examples to start from (its "Start from an example").
  */
 export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string } | { kind: 'discover' } | { kind: 'examples' };
 

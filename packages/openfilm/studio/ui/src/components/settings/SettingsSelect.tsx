@@ -66,7 +66,7 @@ export function SettingsSelect<T extends string>({ label, value, options, onChan
     >
       <div ref={list} role="listbox" aria-label={label} onKeyDown={onKeyDown}
         style={{ minWidth: width ?? 160 }}
-        className="max-h-[min(320px,var(--popover-max-h))] overflow-y-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-lg)]">
+        className="max-h-[min(320px,var(--popover-max-h))] overflow-y-auto rounded-[10px] border border-[var(--border)] bg-[var(--bg-raised)] p-1 shadow-[var(--shadow-lg)]">
         {options.map((option) => {
           const on = option.value === value;
           return (

@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Color slab title</title>
 <style>
-:root { --color: #ffffff; --slab: #ff4d3d; --slab2: #ffd23f; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; --slab: #ff4d3d; --slab2: #ffd23f; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; }
+.w { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: var(--font); }
 .s { position: relative; display: inline-block; transform: rotate(-4deg); }
 .s::before, .s::after { content: ""; position: absolute; inset: -3vh -7vh; border-radius: 1.2vh; }
 .s::before { background: var(--slab2); translate: 3.6vh 3.2vh; animation: slab 0.55s 0.08s cubic-bezier(0.3, 1.45, 0.5, 1) both, drift 3s 1s ease-in-out infinite; transform-origin: left; }

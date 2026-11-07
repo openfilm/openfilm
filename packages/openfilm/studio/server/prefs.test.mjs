@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { prefsOf, writePrefs } from './prefs.mjs';
+import { libraryCategoriesOf, prefsOf, writePrefs } from './prefs.mjs';
 
 test('the version whose notes were last shown: a version, else none', () => {
   assert.equal(prefsOf(null).seenVersion, null, 'a new install has none');
@@ -63,4 +63,10 @@ test('auto versions are off, and not listed, unless the person turned them on', 
   assert.equal(prefsOf({ showAutoVersions: true }).showAutoVersions, true);
   assert.equal(prefsOf({ autoVersions: 'yes' }).autoVersions, false);
   assert.equal(prefsOf({ autoVersions: true }).autoVersions, true);
+});
+
+test('the library\'s categories are kept in shape: names once each, nothing else', () => {
+  assert.equal(prefsOf({}).libraryCategories, null);
+  assert.deepEqual(libraryCategoriesOf({ order: ['text', 'text', 'Bad Name', 3, 'sticker'], off: 'skill' }), { order: ['text', 'sticker'], off: [] });
+  assert.equal(libraryCategoriesOf(['text']), null);
 });

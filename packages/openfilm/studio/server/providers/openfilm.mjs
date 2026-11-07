@@ -10,6 +10,10 @@
  */
 import { randomUUID } from 'node:crypto';
 import { billedBy, call, serviceUrl, sleep } from './common.mjs';
+import openai from './openai.mjs';
+import google from './google.mjs';
+import fal from './fal.mjs';
+import openrouter from './openrouter.mjs';
 
 /**
  * @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext
@@ -17,8 +21,11 @@ import { billedBy, call, serviceUrl, sleep } from './common.mjs';
  */
 
 const NAME = 'OpenFilm';
-/** How often a run that is still going is asked about (tests make it short). */
-export const polling = { ms: 3000 };
+/**
+ * How often a run that is still going is asked about, at most (tests make it short): first soon after it began, as
+ * most runs (a voice found, a line spoken) are done in a second, then less and less often.
+ */
+export const polling = { ms: 3000, first: 250 };
 
 /** The kinds of media the service may offer; listing voices goes with voice-over. */
 const KINDS = /** @type {Verb[]} */ (['tts', 'sfx', 'music', 'asr', 'image-search', 'image', 'video']);
@@ -27,10 +34,20 @@ const FRESH_MS = 5 * 60_000;
 const RETRY_MS = 30_000;
 
 /** What it makes each kind of media with, its default first, as the service last said (changed in place). */
-const MODELS = /** @type {Partial<Record<Verb, { id: string, name: string }[]>>} */ ({});
+const MODELS = /** @type {Partial<Record<Verb, { id: string, name: string, spec?: import('./contract.mjs').ModelSpec }[]>>} */ ({});
+/** The providers the service runs models of, whose own models say what each makes. */
+const RUNS = [openai, google, fal, openrouter];
+/** What a model of the service makes: as the provider it is run at says for it (`openrouter/bytedance/seedance-2.0`). */
+function specOf(/** @type {Verb} */ kind, /** @type {string} */ id) {
+  const at = id.indexOf('/');
+  const provider = RUNS.find((p) => p.id === id.slice(0, at));
+  return provider?.models?.[kind]?.find((m) => m.id === id.slice(at + 1))?.spec;
+}
 /** The verbs of those kinds (changed in place). */
 const VERBS = /** @type {Verb[]} */ ([]);
 let askAfter = 0;
+/** Whether the service has answered once: from then on what it said is shown while it is asked again. */
+let answered = false;
 /** @type {Promise<void> | null} */
 let asking = null;
 
@@ -42,7 +59,7 @@ function take(/** @type {unknown} */ offer) {
   for (const kind of KINDS) {
     const list = (Array.isArray(models[kind]) ? models[kind] : [])
       .filter((m) => m && typeof m.id === 'string' && typeof m.name === 'string')
-      .map((m) => ({ id: m.id, name: m.name }));
+      .map((m) => { const spec = specOf(kind, m.id); return { id: m.id, name: m.name, ...(spec ? { spec } : {}) }; });
     if (!list.length) continue;
     MODELS[kind] = list;
     VERBS.push(kind, ...(kind === 'tts' ? /** @type {Verb[]} */ (['voice']) : []));
@@ -91,6 +108,7 @@ export default {
         const res = await fetch(`${service()}/v1/media/models`, { signal: AbortSignal.timeout(5000) });
         if (!res.ok) throw new Error(String(res.status));
         take((/** @type {{ models?: unknown }} */ (await res.json())).models);
+        answered = true;
         askAfter = Date.now() + FRESH_MS;
       } catch {
         /* unreachable: what it offered last stays, and it is asked again soon */
@@ -99,7 +117,8 @@ export default {
         asking = null;
       }
     })();
-    return asking;
+    /* no one waits on the network for a list they already have (Settings opening, the agent asking what there is) */
+    return answered && !force ? Promise.resolve() : asking;
   },
   /* every model it runs takes MP3 speech, and it is the smallest to send */
   speechFormat: 'mp3',
@@ -117,8 +136,8 @@ export default {
       headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': runKey, prefer: 'respond-async' },
       body: JSON.stringify(body),
     }, ctx);
-    while (res.status === 202) {
-      await sleep(polling.ms, ctx.signal);
+    for (let wait = Math.min(polling.first, polling.ms); res.status === 202; wait = Math.min(polling.ms, wait * 2)) {
+      await sleep(wait, ctx.signal);
       res = await call(NAME, `${base}/v1/media/run?key=${encodeURIComponent(runKey)}`, { headers }, ctx);
     }
     const done = /** @type {{ files?: { path: string, base64: string }[], index?: import('./contract.mjs').IndexRow[], receipt?: Record<string, unknown> }} */ (await res.json());

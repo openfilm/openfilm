@@ -7,9 +7,10 @@
  * The inspector's font menu lists them first, "In this project", set in their own faces. Read from the folder's
  * .css and .html files; each file's reading is kept until its mtime or size changes, so asking again is cheap.
  */
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join, posix } from 'node:path';
+import { readFaces } from './fonts.mjs';
 
 /**
  * One `@font-face` rule. `weight`: its range (one weight: both the same); `src`: the files it loads, by their path in
@@ -260,4 +261,35 @@ export async function projectFonts(root, page = null) {
   }
   const declared = [...new Set(faces.filter((f) => reach.has(f.file)).map((f) => f.family))];
   return { fonts, page: { path: page, declared, used: [...used] } };
+}
+
+/* ── a font file added for the lines of words ── */
+
+const FONT_FORMATS = /** @type {Record<string, string>} */ ({ '.ttf': 'truetype', '.otf': 'opentype', '.woff': 'woff', '.woff2': 'woff2' });
+
+/** Whether a file of that name can be added as a font. */
+export const isFontFile = (/** @type {string} */ name) => extname(name).toLowerCase() in FONT_FORMATS;
+
+/**
+ * A font file the person added (`file`, a project path beside `css`, the text component's fonts/own.css) declared in
+ * `css`, which the text component's page loads: by its family as its name table says (a WOFF's, or one that cannot be
+ * read, by its file's name), its weight and style as it says. A file declared there already is declared again.
+ * @param {string} root @param {string} css @param {string} file @returns {Promise<string>} the family
+ */
+export async function addTextFont(root, css, file) {
+  const abs = join(root, ...file.split('/'));
+  const name = posix.basename(file);
+  const bytes = await readFile(abs);
+  const sfnt = !/^(wOFF|wOF2)/.test(bytes.toString('latin1', 0, 4));
+  const face = sfnt
+    ? (await readFaces(async (at, len) => bytes.subarray(at, at + len)).catch(() => []))[0]
+    : null;
+  const family = (face?.family ?? name.replace(/\.[^.]+$/, '')).replace(/["'\;{}<>]/g, '').trim() || 'Font';
+  const rule = `@font-face { font-family: '${family}'; src: url('${encodeURI(name)}') format('${FONT_FORMATS[extname(name).toLowerCase()]}');`
+    + ` font-weight: ${face?.wght ? `${face.wght[0]} ${face.wght[1]}` : face?.weight ?? 400}; font-style: ${face?.italic ? 'italic' : 'normal'}; font-display: block; }`;
+  const at = join(root, ...css.split('/'));
+  const was = await readFile(at, 'utf8').catch(() => '');
+  const kept = was.split('\n').filter((line) => !line.includes(`url('${encodeURI(name)}')`));
+  await writeFile(at, `${kept.join('\n').replace(/\n*$/, '\n')}${rule}\n`);
+  return family;
 }

@@ -1,16 +1,46 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { builtInRoot, libraryIndex } from '../studio/server/library.mjs';
 import { LIBRARY_VERBS, findInLibrary, languageOf, libraryGet, libraryVerbs, searchFile, searchLibrary } from './library-search.mjs';
-import { semanticReady } from './library-semantic.mjs';
+import { embedder, manifest } from './library-semantic.mjs';
 
-/* the model, when it is not in this checkout's library, is fetched from nowhere into a cache of the tests' own */
-process.env.OPENFILM_LIBRARY_CACHE = mkdtempSync(join(tmpdir(), 'library-search-cache-'));
-process.env.OPENFILM_LIBRARY_URL = 'http://127.0.0.1:9/library';
-const semantic = semanticReady();
+/* OpenFilm's service searching the library by meaning, as `POST /v1/library/search` does (the model and the things'
+   vectors): here, when this checkout's library has the model (published with the library, not in git); else no
+   service, and words alone */
+/* the Services settings of the tests' own (Library search on, as it is by default) */
+process.env.OPENFILM_HOME = mkdtempSync(join(tmpdir(), 'library-search-home-'));
+const model = manifest();
+const semantic = Boolean(model?.files.every((f) => existsSync(join(builtInRoot(), f.path))));
+const vectors = JSON.parse(readFileSync(join(builtInRoot(), 'vectors.json'), 'utf8'));
+const values = new Int8Array(readFileSync(join(builtInRoot(), 'vectors.i8')).buffer.slice(0));
+const service = createServer((req, res) => {
+  let body = '';
+  req.on('data', (c) => { body += c; });
+  req.on('end', async () => {
+    const { text, cat, limit } = JSON.parse(body);
+    const q = await (await embedder())(`query: ${text}`);
+    const found = [];
+    vectors.ids.forEach((/** @type {string} */ id, /** @type {number} */ i) => {
+      if (vectors.cats[i] !== cat) return;
+      let dot = 0;
+      for (let k = 0; k < vectors.dims; k++) dot += values[i * vectors.dims + k] * q[k];
+      found.push([id, dot * vectors.scales[i]]);
+    });
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ found: found.sort((x, y) => y[1] - x[1]).slice(0, limit) }));
+  });
+});
+if (semantic) {
+  /* loaded before the first search, as the service loads it when it starts */
+  await embedder();
+  await new Promise((done) => service.listen(0, '127.0.0.1', () => done(undefined)));
+  process.env.OPENFILM_API_URL = `http://127.0.0.1:${/** @type {import('node:net').AddressInfo} */ (service.address()).port}`;
+  after(() => service.close());
+} else process.env.OPENFILM_API_URL = 'http://127.0.0.1:9';
 
 test('library/search.json is of the library as it is (after changing the library, run scripts/library-search-index.mjs)', () => {
   assert.equal(readFileSync(join(builtInRoot(), 'search.json'), 'utf8'), searchFile(/** @type {any} */ (libraryIndex())));
@@ -68,7 +98,7 @@ test('nothing that fits is nothing found, and said so', async () => {
   }
 });
 
-test('with the model here, what is meant is found with no word in common, and what is named stays first', { skip: !semantic && 'the model is not in this library' }, async () => {
+test('with OpenFilm\'s service, what is meant is found with no word in common, and what is named stays first', { skip: !semantic && 'the model is not in this library' }, async () => {
   const goodbye = (await searchLibrary('music', 'sad goodbye at a train station', { limit: 5 })).found;
   assert.ok(goodbye.filter(({ item }) => /farewell|grief|goodbye|lament|elegiac/i.test(`${item.name.en} ${item.about ?? ''}`)).length >= 3, goodbye.map((f) => f.item.name.en).join());
   assert.ok(!goodbye.some(({ item }) => /training|gym/i.test(item.name.en)), 'no word taken for what it is not');
@@ -102,11 +132,17 @@ test('a search prints each match\'s id to take, what it is like and where to see
   assert.match(text, /^3 in OpenFilm's library for “glitch”, the best first/);
   assert.match(text, /^ {4}openfilm\/transitions\/glitch$/m);
   assert.match(text, /over a cut/);
-  assert.match(text, /see it: .*transitions\/glitch\/preview\.mp4/);
+  assert.match(text, /see it: .*transitions[\\/]glitch[\\/]preview\.mp4/);
   assert.match(text, /`openfilm get transition --take <id>`/);
   assert.equal((await libraryGet('transition', { prompt: 'glitch', n: '2' })).lines.filter((l) => /^ {4}openfilm\//.test(l)).length, 2, '--n is --limit');
   const music = (await libraryGet('music-search', { prompt: 'calm piano', sec: '50' })).lines.join('\n');
-  assert.match(music, /Only when none of these fits, make one with `openfilm get music`\./);
+  assert.match(music, /^ {4}has: calm, piano$/m, 'what of the prompt each has');
+  assert.match(music, /None fits well enough, or the film needs its own\? Make one with `openfilm get music`, made to the prompt \(it costs\)\./);
+  /* by meaning, the cave comes first though no dragon roars in it; by words alone, a roar would */
+  if (semantic) {
+    const roar = (await libraryGet('sfx-search', { prompt: 'dragon roar in a cave', limit: '1' })).lines.join('\n');
+    assert.match(roar, /^ {4}has: cave · lacks: dragon, roar$/m, 'and what it lacks');
+  }
   const zh = (await libraryGet('sfx-search', { prompt: '雨声' })).lines.join('\n');
   assert.match(zh, /雨声 \(Rain\)/);
   for (const [flags, said] of [[{}, /what to look for, please: `openfilm get music-search --prompt "/], [{ prompt: 'calm', limit: '0' }, /--limit is a whole number/],
@@ -131,6 +167,10 @@ test('--take copies a thing into the project and says what to write in film.html
     const sound = await libraryGet('sfx-search', { take: 'sounds/whoosh.m4a' });
     assert.ok(existsSync(join(root, 'assets/whoosh.m4a')));
     assert.match(sound.lines.join('\n'), /<audio src="assets\/whoosh\.m4a"><\/audio>/);
+    /* once the film has it, a search says so */
+    writeFileSync(join(root, 'film.html'), '<!doctype html><html><body><section><audio src="assets/whoosh.m4a"></audio></section></body></html>');
+    const again = (await libraryGet('sfx-search', { prompt: 'whoosh' })).lines.join('\n');
+    assert.match(again, /^ {4}openfilm\/sounds\/whoosh\.m4a\n(?: {4}.*\n)*? {4}in this film already$/m);
     const motion = await libraryGet('effect', { take: 'openfilm/motions/in-fade' });
     assert.match(motion.lines.join('\n'), /@keyframes motion-in-fade \{ from \{ opacity: 0 \} \}[\s\S]*animation: motion-in-fade 0\.5s ease-out backwards/);
     const look = await libraryGet('filter', { take: 'openfilm/filters/warm-film' });

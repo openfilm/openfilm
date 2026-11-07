@@ -111,4 +111,3 @@
 .howSteps li { display:flex; gap:10px; align-items:flex-start; }
 .howN { flex:none; display:grid; place-items:center; width:18px; height:18px; border-radius:50%; background:var(--bg-hover); color:var(--text); font-size:11px; font-variant-numeric:tabular-nums; }
 .howMore { margin:14px 0 0; color:var(--text-faint); font-size:11px; }
-

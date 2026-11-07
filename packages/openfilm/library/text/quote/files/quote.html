@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <title>Quote</title>
 <style>
-:root { --color: #ffffff; }
+:root { --font: Georgia, serif; --color: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 .w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; }
-.w.low { align-items: flex-end; justify-content: flex-start; text-align: left; padding: 0 0 9vh 6vw; }
+.w.low { text-align: left; }
 .t { color: var(--color); font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; line-height: 1.12; }
 .s { display: block; font-size: 0.42em; font-weight: 500; opacity: 0.85; margin-top: 0.3em; }
-.t { font: italic 400 5.5vw/1.3 Georgia, serif; max-width: 70vw; }
+.t { font: italic 400 9.103vw/1.3 var(--font); max-width: 115.862vw; }
 .t { animation: in 1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @keyframes in { from { transform: translateY(40%); opacity: 0; } to { transform: none; opacity: 1; } }
 </style>

@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>LOL</title>
 <style>
-:root { --c1: #ff5fa2; --c2: #3fd0ff; --c3: #ffd23f; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --c1: #ff5fa2; --c2: #3fd0ff; --c3: #ffd23f; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font); }
 .k { font-size: calc(48vh * var(--k, 1)); font-weight: 800; letter-spacing: 0.04em; }
 .k .fx { -webkit-text-stroke: 1.6vh #1a1420; paint-order: stroke fill; color: #fff; text-shadow: 3.00vh 0.00vh 0 #ffffff, 2.90vh 0.78vh 0 #ffffff, 2.60vh 1.50vh 0 #ffffff, 2.12vh 2.12vh 0 #ffffff, 1.50vh 2.60vh 0 #ffffff, 0.78vh 2.90vh 0 #ffffff, 0.00vh 3.00vh 0 #ffffff, -0.78vh 2.90vh 0 #ffffff, -1.50vh 2.60vh 0 #ffffff, -2.12vh 2.12vh 0 #ffffff, -2.60vh 1.50vh 0 #ffffff, -2.90vh 0.78vh 0 #ffffff, -3.00vh 0.00vh 0 #ffffff, -2.90vh -0.78vh 0 #ffffff, -2.60vh -1.50vh 0 #ffffff, -2.12vh -2.12vh 0 #ffffff, -1.50vh -2.60vh 0 #ffffff, -0.78vh -2.90vh 0 #ffffff, -0.00vh -3.00vh 0 #ffffff, 0.78vh -2.90vh 0 #ffffff, 1.50vh -2.60vh 0 #ffffff, 2.12vh -2.12vh 0 #ffffff, 2.60vh -1.50vh 0 #ffffff, 2.90vh -0.78vh 0 #ffffff, 0 5.4vh 0 #1a1420; }
 .k .fx .ch:nth-child(3n+1) { color: var(--c1); } .k .fx .ch:nth-child(3n+2) { color: var(--c2); } .k .fx .ch:nth-child(3n) { color: var(--c3); }

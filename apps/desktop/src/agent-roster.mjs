@@ -1,9 +1,9 @@
 /**
  * The agents the chat can use, as Settings → Agents shows them, and the person's choices about them:
  *
- *   · codex, claude, copilot, cursor, opencode, codebuddy, qwen, kimi, minimax, deepseek — the person's own agents
- *     (agents.mjs): Codex, Claude Code, GitHub Copilot, Cursor, OpenCode, CodeBuddy, Qwen Code, Kimi, MiniMax Code and
- *     DeepSeek Harness. Each uses the account its own program is signed in to: connecting opens Terminal for its own
+ *   · codex, claude, copilot, cursor, opencode, codebuddy, qwen, kimi, minimax, deepseek, antigravity — the person's own agents
+ *     (agents.mjs): Codex, Claude Code, GitHub Copilot, Cursor, OpenCode, CodeBuddy, Qwen Code, Kimi, MiniMax Code,
+ *     DeepSeek Harness and Google Antigravity. Each uses the account its own program is signed in to: connecting opens Terminal for its own
  *     sign-in command only when it is signed out (never Codex's or DeepSeek Harness's: each is signed in in its own
  *     app, so one found is connected), disconnecting only stops OpenFilm using it, and connecting again uses whichever
  *     account is signed in then. `account` says whose it is. One with a sign-out command (`signOut`) switches account

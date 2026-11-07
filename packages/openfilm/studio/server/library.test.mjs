@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { builtInRoot, libraryFavorites, libraryFile, libraryIndex, libraryVoices, setLibraryFavorites, voiceKey } from './library.mjs';
@@ -38,11 +38,14 @@ test('every thing of the library is there, named in each language, in a group of
       for (const c of ['all', 'r', 'g', 'b']) if (item.grade[c]) assert.ok(item.grade[c].every((v) => v >= 0 && v <= 1), `${item.id}: ${c} within 0–1`);
       if (item.sample) assert.ok(libraryFile(item.sample), `${item.id}: its sample`);
     }
-    /* a motion preset: each slot's keyframes named for it, read as CSS, drawn */
+    /* a motion preset: each slot's keyframes named for it, read as CSS, drawn; a move of two shots at once (`lap`) its
+       halves named for the cut's edges, the way in at least (a wipe leaves the last shot as it is) */
     if (item.kind === 'motion') {
       const slots = Object.entries(item.motion ?? {});
-      assert.ok(slots.length && slots.every(([slot, p]) => ['in', 'out', 'loop'].includes(slot) && p.name.startsWith(`motion-${slot}-`) && /\{[^}]*:[^}]*\}/.test(p.body) && p.secs > 0), `${item.id}: its motion`);
-      if (item.place === 'cut') assert.ok(item.motion.in && item.motion.out, `${item.id}: a camera move goes out of one clip and into the next`);
+      const named = (slot, name) => name.startsWith(item.lap ? `motion-cut-${slot}-` : `motion-${slot}-`);
+      assert.ok(slots.length && slots.every(([slot, p]) => (item.lap ? ['in', 'out'] : ['in', 'out', 'loop']).includes(slot) && named(slot, p.name) && /\{[^}]*:[^}]*\}/.test(p.body) && p.secs > 0), `${item.id}: its motion`);
+      if (item.lap) assert.ok(item.place === 'cut' && item.motion.in, `${item.id}: a move of two shots comes in on a cut`);
+      else if (item.place === 'cut') assert.ok(item.motion.in && item.motion.out, `${item.id}: a camera move goes out of one clip and into the next`);
       for (const f of ['poster.jpg', 'preview.mp4']) assert.ok(libraryFile(`${item.id}/${f}`), `${item.id}: ${f}`);
     }
     /* a template: its clips' pages there, its places for pictures counted, its music one of the library's */
@@ -50,7 +53,8 @@ test('every thing of the library is there, named in each language, in a group of
       const about = JSON.parse(readFileSync(join(builtInRoot(), item.id, 'saved.json'), 'utf8'));
       assert.equal(about.kind, 'group');
       for (const c of about.clips) assert.ok(existsSync(join(builtInRoot(), item.id, 'files', c.clip.src)), `${item.id}: ${c.clip.src}`);
-      assert.equal(about.clips.filter((c) => c.clip.src === 'slot.html').length, item.slots);
+      /* its places, each its example picture, for the person's own */
+      assert.equal(about.clips.filter((c) => c.clip.attrs?.['data-slot']).length, item.slots);
       if (item.music) assert.equal(index.items.find((i) => i.id === item.music)?.cat, 'music', `${item.id}: its music`);
       for (const f of ['poster.jpg', 'preview.mp4']) assert.ok(libraryFile(`${item.id}/${f}`), `${item.id}: ${f}`);
     }
@@ -77,6 +81,21 @@ test('a page of the library is taken into a project as a copy under saved/openfi
   const sound = await takeSaved(root, 'openfilm/sounds/whoosh.m4a');
   assert.deepEqual(sound, { path: 'assets/whoosh.m4a' });
   await assert.rejects(() => takeSaved(root, 'openfilm/../package.json'));
+});
+
+test('a project\'s copy of the line of words follows the library\'s; another thing\'s copy is kept as it is', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-library-text-'));
+  await takeSaved(root, 'openfilm/text/text');
+  const page = join(root, 'saved/openfilm/text-text/text.html');
+  const now = readFileSync(page, 'utf8');
+  writeFileSync(page, 'an older text page');
+  await takeSaved(root, 'openfilm/text/text');
+  assert.equal(readFileSync(page, 'utf8'), now, 'written again as the library has it');
+  await takeSaved(root, 'openfilm/effects/snow');
+  const snow = join(root, 'saved/openfilm/effects-snow/snow.html');
+  writeFileSync(snow, 'changed here');
+  await takeSaved(root, 'openfilm/effects/snow');
+  assert.equal(readFileSync(snow, 'utf8'), 'changed here', 'kept');
 });
 
 test('the starred things are kept in the shared prefs, those of the library only, each once', () => {

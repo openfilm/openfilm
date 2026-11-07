@@ -34,6 +34,7 @@ import mimo from './mimo.mjs';
 import keenable from './keenable.mjs';
 import openfilm from './openfilm.mjs';
 import local from './local.mjs';
+import { addedProblems, addedProviders } from './added.mjs';
 
 /**
  * @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').Verb} Verb
@@ -41,16 +42,26 @@ import local from './local.mjs';
  * @typedef {import('../http.mjs').Req} Req @typedef {import('../http.mjs').Res} Res
  */
 
-/** The providers paid with the person's own key, and Local models, which takes none. */
-const OWN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm, local];
+/** The providers paid with the person's own key, and Local services, which takes none. */
+const BUILT_IN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm, local];
+/** Those, then the ones the person added (added.mjs), as last read (changed in place). */
+const OWN = [...BUILT_IN];
 
 /** The kinds of media the person chooses a provider and model for (Settings → Services). */
-const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video', 'translate', 'web-search']);
+const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video-search', 'video', 'translate', 'web-search']);
 
 export const listProviders = () => OWN;
 
-/** The models of the providers whose service says what it offers (`refresh`), brought up to date. */
-export const freshProviders = (/** @type {{ force?: boolean }} */ options = {}) => Promise.all(OWN.map((p) => p.refresh?.(options))).then(() => OWN);
+/**
+ * The providers brought up to date: the ones the person added read again, and the models of those whose service says
+ * what it offers (`refresh`).
+ */
+export async function freshProviders(/** @type {{ force?: boolean }} */ options = {}) {
+  const added = await addedProviders(new Set(BUILT_IN.map((p) => p.id)));
+  OWN.splice(BUILT_IN.length, OWN.length - BUILT_IN.length, ...added);
+  await Promise.all(OWN.map((p) => p.refresh?.(options)));
+  return OWN;
+}
 
 /**
  * The provider `id` when it can serve `verb` now. `strict` (asked for by name on the command): a sentence saying why
@@ -62,7 +73,7 @@ async function named(id, verb, settings, strict) {
   const fail = (/** @type {string} */ why) => { if (strict) throw new Error(why); return null; };
   if (!provider) return fail(`There is no provider "${id}": use ${OWN.map((p) => p.id).join(', ')}.`);
   if (provider.ready && !provider.verbs.includes(verb)) {
-    return fail(`No local model for ${verb} is installed and on: the person installs one in Studio (the OpenFilm logo at the top left opens Settings → Services → Local models).`);
+    return fail(`No local model for ${verb} is installed and on: the person installs one in Studio (the OpenFilm logo at the top left opens Settings → Services → Local services).`);
   }
   if (!provider.verbs.includes(verb)) return fail(`${provider.name} does not do ${verb}.`);
   if (!providerKey(provider, settings)) {
@@ -154,25 +165,32 @@ async function state() {
       /* `envKey`: the environment has one (connected or not), so connecting can use it */
       const inEnv = envKey(p);
       return {
-        id: p.id, name: p.name, verbs: p.verbs, models: p.models ?? {}, keysUrl: p.keysUrl, env: key?.env ?? inEnv?.env ?? p.env, envKey: Boolean(inEnv),
+        id: p.id, name: p.name, verbs: p.verbs, models: p.models ?? {}, keysUrl: p.keysUrl, pricingUrl: p.pricingUrl, env: key?.env ?? inEnv?.env ?? p.env, envKey: Boolean(inEnv),
         /* `keyless`: it connects without a key; connected so, it has no last four */
         ...(p.keyless ? { keyless: true } : {}), source: key?.source ?? null, last4: key?.key ? key.key.slice(-4) : null,
         /* connected by signing in (sign-in.mjs), and as whom */
         signIn: Boolean(p.signIn), account: key?.source === 'file' ? settings.accounts[p.id] ?? null : null,
+        /* one the person added (added.mjs), not built in */
+        ...(p.added ? { added: true } : {}),
       };
     }),
+    /* the added services left out, and why */
+    ...(addedProblems.size ? { addedProblems: [...addedProblems].map(([folder, problem]) => ({ folder, problem })) } : {}),
     signingIn: signInState(),
     ...shownChoices(settings),
     custom: settings.custom.map(shownService),
+    /* the library searched by meaning at OpenFilm's service, or by its words alone */
+    librarySearch: settings.libraryOff ? null : 'openfilm',
   };
 }
 
 /**
  * Studio's `/api/providers/*` (the editor page, with the launch key like the rest of the API). Each answers the state:
- *   GET    /api/providers           → { providers: [{ id, name, verbs, models: { verb: [{ id, name }] }, keysUrl, env,
+ *   GET    /api/providers           → { providers: [{ id, name, verbs, models: { verb: [{ id, name }] }, keysUrl, pricingUrl, env,
  *                                       keyless?, source: 'file' | 'env' | null, last4 }],
  *                                       use: { verb: provider id | null },
- *                                       model: { verb: model id | null } }
+ *                                       model: { verb: model id | null },
+ *                                       librarySearch: 'openfilm' | null }
  *   PUT    /api/providers/:id/key   { key }               the key kept for that provider
  *   PUT    /api/providers/:id/key   { env: true }         the environment's key used for it again
  *   PUT    /api/providers/:id/key   { key: '' }           a keyless provider connected without a key
@@ -180,6 +198,8 @@ async function state() {
  *                                                         not used (until it is connected again)
  *   PUT    /api/providers/use       { verb, provider, model? }  who serves that kind of media (an id, or null: none),
  *                                       and with which of its models (its first when none is given)
+ *   PUT    /api/providers/library-search { on }  the library searched by meaning at OpenFilm's service (on, the
+ *                                       default) or by its words alone
  *   POST   /api/providers/:id/billing → {}, the provider's own page for its balance opened in the person's browser
  *   POST   /api/providers/:id/sign-in         a provider with `signIn`: its website opened in the person's browser to
  *                                       sign in (sign-in.mjs); the state's `signingIn` says who is waiting, and why
@@ -270,6 +290,12 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
       });
       return json(res, 200, await state());
     }
+  }
+  if (parts.length === 1 && parts[0] === 'library-search' && req.method === 'PUT') {
+    const { on } = /** @type {{ on?: unknown }} */ (await readJson(req));
+    if (typeof on !== 'boolean') throw new HttpError(400, 'on: true (OpenFilm searches it by meaning) or false (by its words)');
+    await changeSettings((s) => { s.libraryOff = !on; });
+    return json(res, 200, await state());
   }
   if (parts.length === 1 && parts[0] === 'use' && req.method === 'PUT') {
     await freshProviders();

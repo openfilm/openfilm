@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <title>Guest with number</title>
 <style>
-:root { --color: #ffffff; --accent: #ffc531; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --color: #ffffff; --accent: #ffc531; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; padding-left: 5vh; gap: 5vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); text-shadow: 0 0.6vh 2.4vh rgba(0, 0, 0, 0.4); }
-.t1 { font: 800 62vh/0.9 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: transparent; -webkit-text-stroke: 1vh var(--accent); letter-spacing: -0.02em; white-space: pre; text-shadow: none; animation: num 0.7s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; padding-left: 5vh; gap: 5vh; font-family: var(--font); color: var(--color); text-shadow: 0 0.6vh 2.4vh rgba(0, 0, 0, 0.4); }
+.t1 { font: 800 62vh/0.9 var(--font); color: transparent; -webkit-text-stroke: 1vh var(--accent); letter-spacing: -0.02em; white-space: pre; text-shadow: none; animation: num 0.7s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
 .v { width: 1vh; height: 66vh; background: var(--accent); animation: tall 0.5s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .tx { display: flex; flex-direction: column; gap: 1.6vh; }
 .t2 { align-self: flex-start; font-size: 8vh; font-weight: 800; letter-spacing: 0.3em; color: #111; background: var(--accent); padding: 0.6vh 1.8vh 0.6vh 2.2vh; text-shadow: none; animation: side 0.5s 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both; }

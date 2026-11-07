@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { changes, snapshot } from './file-changes.mjs';
+import { changes, snapshot, undoTurn } from './file-changes.mjs';
 import { readFileChanges } from '../chat/src/lib/file-changes.ts';
 
 const project = () => mkdtempSync(join(tmpdir(), 'openfilm-file-changes-'));
@@ -80,4 +80,44 @@ test('a saved turn\'s file changes are read back only as changes', () => {
   assert.equal(readFileChanges(undefined), null);
   assert.equal(readFileChanges([]), null);
   assert.deepEqual(readFileChanges([{ path: 'a.html', change: 'added' }, { path: 'b', change: 'odd' }, null]), [{ path: 'a.html', change: 'added' }]);
+});
+
+
+test('canvas snapshots do not read linked board documents or a linked tools folder', { skip: process.platform === 'win32' }, async () => {
+  const dir = project();
+  const elsewhere = project();
+  try {
+    writeFileSync(join(elsewhere, 'canvas.json'), 'private');
+    symlinkSync(elsewhere, join(dir, '.film'), 'dir');
+    const linked = await snapshot(dir, { canvas: true });
+    assert.equal(linked.cut, true);
+    assert.equal(linked.files.size, 0);
+    rmSync(join(dir, '.film'));
+    mkdirSync(join(dir, '.film'));
+    symlinkSync(join(elsewhere, 'canvas.json'), join(dir, '.film', 'canvas.json'));
+    const board = await snapshot(dir, { canvas: true });
+    assert.equal(board.cut, true);
+    assert.equal(board.files.size, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); rmSync(elsewhere, { recursive: true, force: true }); }
+});
+
+test('undo leaves a board alone when its document or a parent became a link after the snapshot', { skip: process.platform === 'win32' }, async () => {
+  for (const linked of ['.film', '.film/canvases', '.film/canvases/board.json']) {
+    const dir = project();
+    const elsewhere = project();
+    try {
+      mkdirSync(join(dir, '.film', 'canvases'), { recursive: true });
+      writeFileSync(join(dir, '.film', 'canvases', 'board.json'), 'before');
+      const before = await snapshot(dir, { canvas: true });
+      mkdirSync(join(elsewhere, 'canvases'));
+      writeFileSync(join(elsewhere, 'board.json'), 'external');
+      writeFileSync(join(elsewhere, 'canvases', 'board.json'), 'external');
+      rmSync(join(dir, linked), { recursive: true });
+      symlinkSync(linked.endsWith('.json') ? join(elsewhere, 'board.json') : elsewhere, join(dir, linked), linked.endsWith('.json') ? 'file' : 'dir');
+      const done = await undoTurn(dir, before, null, { trash: async () => assert.fail('no linked path is trashed') });
+      assert.deepEqual(done, { restored: 0, missed: ['.film/canvases/board.json'] });
+      assert.equal(readFileSync(join(elsewhere, 'board.json'), 'utf8'), 'external');
+      assert.equal(readFileSync(join(elsewhere, 'canvases', 'board.json'), 'utf8'), 'external');
+    } finally { rmSync(dir, { recursive: true, force: true }); rmSync(elsewhere, { recursive: true, force: true }); }
+  }
 });

@@ -2,7 +2,7 @@
 /**
  * Transcription on this computer: OpenAI's Whisper (Small, or Large v3 Turbo), each word timed, run by transformers.js
  * (its browser build, a file of the library) on the WebAssembly onnxruntime the library search runs too, nothing sent
- * anywhere. Its models are Local models (local-models.mjs), each in the transformers.js layout under models/<id>/.
+ * anywhere. Its models are Local services' (local-models.mjs), each in the transformers.js layout under models/<id>/.
  *
  * Whisper says what it heard in pieces: a word in languages with spaces, a run of characters in Chinese and Japanese.
  * A run is split into its characters, the run's time shared between them by how long each is (piecesOf), so every

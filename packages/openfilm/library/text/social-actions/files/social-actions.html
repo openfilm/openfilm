@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Like, comment, share</title>
 <style>
-:root { --accent: #ff2d55; --color: #ffffff; --disc: rgba(0, 0, 0, 0.5); }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff2d55; --color: #ffffff; --disc: rgba(0, 0, 0, 0.5); }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 22vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 22vh; font-family: var(--font); color: var(--color); }
 .it { display: flex; flex-direction: column; align-items: center; gap: 4vh; animation: pop 0.55s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
 .it:nth-child(2) { animation-delay: 0.12s; } .it:nth-child(3) { animation-delay: 0.24s; }
 .d { position: relative; width: 58vh; height: 58vh; border-radius: 50%; background: var(--disc); display: flex; align-items: center; justify-content: center; box-shadow: 0 2vh 5vh rgba(0, 0, 0, 0.25); }

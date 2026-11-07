@@ -21,7 +21,7 @@ export const CJK = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]/;
 export const fold = (text) => text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').normalize('NFC').toLowerCase();
 
 /* words that only look plural */
-const WHOLE = new Set(['news', 'bass', 'lens', 'chaos', 'series', 'canvas', 'christmas', 'xmas', 'bonus', 'status']);
+const WHOLE = new Set(['news', 'bass', 'lens', 'chaos', 'series', 'canvas', 'christmas', 'xmas', 'bonus', 'status', 'cute']);
 
 /**
  * A word as it is compared: its plural and its -ing, -ed and final e taken off, so `pads` is `pad`, and `rising`,

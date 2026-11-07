@@ -506,11 +506,13 @@ export function mergeFileWrite(root, path, theirs) {
 /**
  * Write `data` over `path` (null: take the file away) only while it still holds `expect` (null: no file; '' an empty
  * one or none), as one rename right after the check, so a write that lands meanwhile is never written over. Whether
- * it was written.
+ * it was written. Once renamed, nothing more is waited for: the caller records the write at once (`filmMerged`), so
+ * no one reads the file written and then finds Studio not knowing it yet.
  * @param {string} path @param {string | Buffer | null} expect @param {string | Buffer | null} data
  */
 export async function replaceIfStill(path, expect, data) {
   const tmp = data == null ? null : tempPath(path);
+  let placed = false;
   try {
     if (tmp) await writeFile(tmp, /** @type {string | Buffer} */ (data));
     const now = await readFile(path).catch((e) => (e?.code === 'ENOENT' ? null : Promise.reject(e)));
@@ -518,9 +520,11 @@ export async function replaceIfStill(path, expect, data) {
     if (!(same(now, want) || (want?.length === 0 && now == null))) return false;
     if (tmp) await replaceFile(tmp, path);
     else await rm(path, { force: true });
+    placed = true;
     return true;
   } finally {
-    if (tmp) await rm(tmp, { force: true });
+    /* the bytes left on their way: a write that was not made (a rename puts them in place, and leaves nothing) */
+    if (tmp && !placed) await rm(tmp, { force: true });
   }
 }
 

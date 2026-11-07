@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Credits roll</title>
 <style>
-:root { --color: #ffffff; --accent: #c9b48a; }
+:root { --font: Didot, 'Bodoni 72', Georgia, 'Songti SC', 'Noto Serif SC', serif; --color: #ffffff; --accent: #c9b48a; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -14,7 +14,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .w { position: fixed; inset: 0; overflow: hidden; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); text-align: center; text-shadow: 0 0.4vh 1.4vh rgba(0, 0, 0, 0.5);
   -webkit-mask-image: linear-gradient(transparent, #000 16%, #000 84%, transparent); mask-image: linear-gradient(transparent, #000 16%, #000 84%, transparent); }
 .roll { position: absolute; left: 0; right: 0; top: 0; display: flex; flex-direction: column; align-items: center; will-change: transform; }
-.t0 { font: 400 8vh/1 Didot, 'Bodoni 72', Georgia, 'Songti SC', 'Noto Serif SC', serif; letter-spacing: 0.3em; padding-left: 0.3em; margin-bottom: 10vh; white-space: pre; }
+.t0 { font: 400 8vh/1 var(--font); letter-spacing: 0.3em; padding-left: 0.3em; margin-bottom: 10vh; white-space: pre; }
 .t0::after { content: ""; display: block; width: 10vh; height: 0.4vh; margin: 4vh auto 0; background: var(--accent); }
 .it { display: flex; flex-direction: column; gap: 1.4vh; margin-bottom: 7vh; white-space: pre; }
 .it span:first-child { font-size: 2.8vh; font-weight: 600; letter-spacing: 0.3em; padding-left: 0.3em; color: var(--accent); text-transform: uppercase; }

@@ -5,7 +5,7 @@
 <title>Price tag</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ffd60a; }
+:root { --font: 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ffd60a; }
 svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
 svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .sw { transform-origin: 150px 0; animation: sw 1.4s both; }
@@ -19,7 +19,7 @@ svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 }
 .sway { transform-origin: 150px 0; animation: sway 2.8s ease-in-out 1.4s infinite; }
 @keyframes sway { 25% { transform: rotate(-2.5deg); } 75% { transform: rotate(2.5deg); } }
-.label { font: 400 52px 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #16161a; letter-spacing: -1px; }
+.label { font: 400 52px var(--font); fill: #16161a; letter-spacing: -1px; }
 .label2 { font: 800 24px 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #16161a; letter-spacing: 6px; opacity: 0.7; }
 </style>
 </head>

@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>NO WAY</title>
 <style>
-:root { --fill: #ffffff; --stroke: #e8173a; --lines: #ffffff; }
+:root { --font: Impact, 'Haettenschweiler', 'Arial Black', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --fill: #ffffff; --stroke: #e8173a; --lines: #ffffff; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: Impact, 'Haettenschweiler', 'Arial Black', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font); }
 .sp { position: absolute; inset: 0; overflow: hidden; transform: rotate(-8deg); }
 .sp i { position: absolute; height: 1.6vh; border-radius: 1vh; background: var(--lines); opacity: 0; animation: zip 0.7s linear infinite; }
 .sh { animation: jolt 2.2s 1.2s ease-out infinite; }

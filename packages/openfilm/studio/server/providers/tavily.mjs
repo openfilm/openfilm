@@ -27,6 +27,7 @@ export default {
   env: 'TAVILY_API_KEY',
   keysUrl: 'https://app.tavily.com/home',
   billingUrl: 'https://app.tavily.com/billing',
+  pricingUrl: 'https://www.tavily.com/pricing',
   verbs: ['web-search', 'web-fetch'],
   models: MODELS,
   async run(verb, args, ctx) {

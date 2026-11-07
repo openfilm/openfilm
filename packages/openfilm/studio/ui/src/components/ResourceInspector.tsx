@@ -13,12 +13,12 @@ export function ResourceInspector({ file, url, width, onClose }: {
   return (
     <InspectorPanel title={t('assets.props')} width={width} onClose={onClose}>
       <div className="flex items-start gap-2.5 border-b border-[var(--border)] py-4">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--fill-tsp)] text-[var(--text-muted)]"><Icon size={18} /></span>
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-field)] text-[var(--text-muted)]"><Icon size={18} /></span>
         <div className="min-w-0"><p className="whitespace-pre-wrap break-words text-[12px] font-medium">{file.name}</p><p className="mt-1 break-all text-[10px] leading-relaxed text-[var(--text-muted)]">{file.path}</p></div>
       </div>
       <AssetFields file={file} />
       <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border)] pt-4 text-[11px]">
-        <a href={url} download={file.name} className="flex items-center gap-1.5 rounded-md bg-[var(--fill-tsp)] px-2.5 py-2 hover:bg-[var(--bg-hover)]"><Download size={13} />{t('assets.download')}</a>
+        <a href={url} download={file.name} className="flex items-center gap-1.5 rounded-md bg-[var(--bg-field)] px-2.5 py-2 hover:bg-[var(--bg-hover)]"><Download size={13} />{t('assets.download')}</a>
       </div>
     </InspectorPanel>
   );

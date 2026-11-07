@@ -5,7 +5,7 @@
 <title>SALE ribbon</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ff3b30; }
+:root { --font: 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ff3b30; }
 svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
 svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .bob { animation: bob 2s ease-in-out 0.7s infinite; }
@@ -15,7 +15,7 @@ svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .tl { animation: tl 0.35s cubic-bezier(.2, .8, .2, 1) 0.25s both; } .tr { animation: tr 0.35s cubic-bezier(.2, .8, .2, 1) 0.25s both; }
 @keyframes tl { from { transform: translateX(80px); opacity: 0; } }
 @keyframes tr { from { transform: translateX(-80px); opacity: 0; } }
-.label { font: 400 84px 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #ffffff; letter-spacing: 6px; animation: lab 0.4s cubic-bezier(.34, 1.56, .64, 1) 0.3s both; transform-origin: 280px 100px; }
+.label { font: 400 84px var(--font); fill: #ffffff; letter-spacing: 6px; animation: lab 0.4s cubic-bezier(.34, 1.56, .64, 1) 0.3s both; transform-origin: 280px 100px; }
 @keyframes lab { from { transform: scale(0.3); opacity: 0; } }
 .shine { animation: sh 2.4s ease-in-out 0.9s infinite; }
 @keyframes sh { 0% { transform: translateX(-200px) skewX(-20deg); } 45%, 100% { transform: translateX(640px) skewX(-20deg); } }

@@ -80,3 +80,19 @@ export function apartOnTracks(edits: ClipEdit[], blocks: readonly Pick<TimelineB
   }
   return out;
 }
+
+/**
+ * A whole clip brought to the front of the picture (above every track) or sent to the back (below every track). Alone
+ * on its track, its track moves there; with other clips on it, the clip alone goes onto a new track there and the
+ * others stay where they are: moving the whole track would move clips the person did not touch, and reorder the
+ * tracks around them. Null when it is there already.
+ */
+export function stackClipEdit(tracks: readonly { clips: readonly unknown[] }[], loc: string, to: 'front' | 'back'): ClipEdit | null {
+  const m = /^film\.html#(\d+)\.(\d+)$/.exec(loc);
+  const track = m ? Number(m[1]) : NaN;
+  if (!tracks[track]) return null;
+  const end = to === 'front' ? 0 : tracks.length - 1;
+  if (track === end) return null;
+  if (tracks[track]!.clips.length <= 1) return { loc, prop: 'trackOrder', value: { from: track, to: end } };
+  return { loc, prop: 'track', value: { insert: to === 'front' ? 0 : tracks.length } };
+}

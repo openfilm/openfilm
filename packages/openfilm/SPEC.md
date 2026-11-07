@@ -147,7 +147,19 @@ Its translations are beside it as `1.<language>.vtt`, the same lines at the same
 `NOTE Each cue is one subtitle, as cut by hand in OpenFilm Studio.` has its cues as the person cut them: each is shown
 as one subtitle as it is, where an editor would otherwise cut long lines into subtitles. An editor's subtitles are the
 lines of the clips that can be heard, placed by each clip's `at`, its `#t=` fragment and `speed`; a host draws none
-of them into the picture.
+of them into the picture. Words on the picture are a caption track.
+
+### Captions
+
+A track may hold, instead of clips, one `<track kind="captions">` (or `kind="subtitles"`): a caption track. Its `src`
+is a WebVTT file relative to film.html; `srclang` and `label` say its language and name. Its cues are on the film's
+time, 0 at the film's start, and a host draws each over the tracks below it while it is on, laid out by its settings
+(`line`, `position`, `size`, `align`, `region`) and the file's REGION blocks as WebVTT lays out cues over a video.
+How they look is the CSS of the file's STYLE blocks, by `::cue` and `::cue(…)`: a cue by its id (`::cue(#c3)`), its
+spans by tag, class and voice (`<c.em>`, `<v Ana>`), a cue's words after its timestamps by `:past` and `:future`.
+Every CSS property applies there, `@keyframes` included; an animation runs on the cue's own time, 0 at its start, or
+on an element after a timestamp from that timestamp. A caption track has no sound, can be `hidden` or `locked` like
+any track, and is not part of the film's length.
 
 ## 2. The page
 
@@ -163,6 +175,7 @@ window.film = {
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `frame(t)` | function | Draw the complete picture for time `t ≥ 0` (below `duration` when there is one). If it returns a Promise, the picture is complete when it resolves. |
+| `frameReadsOverrides` | boolean | Optional. When true, the host also applies the clip's overrides before `frame`, so drawing code can read values such as CSS custom properties. |
 | `duration` | number | Optional. The page's own length in seconds. Without it a page has no end, like a still: its clip's media fragment (`title.html#t=0,4`) says how long it plays, and a range is given to check or render it alone. |
 | `ready` | Promise \| () => Promise | Optional. Resolves when fonts, images, models and data are loaded. The host calls `frame` only after it settles. For web fonts, load each face used (`document.fonts.load('700 64px Fraunces')`), not only `document.fonts.ready`. |
 | `width`, `height` | number | Optional. The page's size in CSS pixels, for a page that is part of the picture (a chart in a corner). Without them the page is its clip's `size` (§1), else the size of the stage, or 1920 × 1080 opened on its own. The host sizes the viewport to it; higher resolutions use device pixel ratio. |

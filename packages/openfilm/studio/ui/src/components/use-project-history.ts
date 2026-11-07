@@ -13,7 +13,7 @@
 import React from 'react';
 import { projectEvents } from '@/api';
 import { useT } from '@/i18n';
-import { historyApi, historyErrorKey, historyProgressOf, type HistoryProgress, type HistoryResult, type HistoryState } from '@/lib/project-history';
+import { historyApi, historyErrorKey, historyProgressOf, type HistoryProgress, type HistoryResult, type HistoryState, type Kept } from '@/lib/project-history';
 
 /** How many versions the list asks for at a time. */
 const PAGE = 50;
@@ -31,8 +31,9 @@ export interface ProjectHistory {
   /** Older versions too, PAGE more. */
   showMore: () => Promise<void>;
   save: (message: string) => Promise<boolean>;
-  discard: () => Promise<boolean>;
-  checkout: (commit: string, discard?: boolean) => Promise<HistoryResult<{ commit: string; missing?: string[] }>>;
+  discard: () => Promise<HistoryResult<{ kept?: Kept[] }>>;
+  /** `missing`: media of the version that could not be found; `kept`: files the trash would not take, left where they are */
+  checkout: (commit: string, discard?: boolean) => Promise<HistoryResult<{ commit: string; missing?: string[]; kept?: Kept[] }>>;
   /** film.html missing: only it put back from `commit`, every other file left as it is */
   restoreFilm: (commit: string) => Promise<HistoryResult<{ commit: string }>>;
   copy: (commit: string, name: string) => Promise<HistoryResult<{ project: { id: string; name: string }; missing?: string[] }>>;
@@ -110,7 +111,7 @@ export function useProjectHistory(projectId: string, {
     refresh,
     showMore: async () => { limit.current += PAGE; await refresh(); },
     save: async (message) => (await act('save', async () => { await beforeChange?.(); return historyApi.save(projectId, message); })).ok,
-    discard: async () => (await act('discard', async () => { await beforeChange?.(); return historyApi.discard(projectId); })).ok,
+    discard: () => act('discard', async () => { await beforeChange?.(); return historyApi.discard(projectId); }),
     checkout: (commit, discard = false) => act('checkout', async () => { await beforeChange?.(); return historyApi.checkout(projectId, commit, discard); }, ['dirty']),
     restoreFilm: (commit) => act('checkout', async () => { await beforeChange?.(); return historyApi.restoreFilm(projectId, commit); }, ['dirty']),
     copy: (commit, name) => act('copy', () => historyApi.copy(projectId, commit, name)),

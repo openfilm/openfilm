@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Coupon</title>
 <style>
-:root { --accent: #ff4d4f; --paper: #fff7ec; --ink: #2a1a14; }
+:root { --font: 'DIN Alternate', 'Bahnschrift', 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff4d4f; --paper: #fff7ec; --ink: #2a1a14; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
@@ -20,7 +20,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: transparent;
 .l::after { content: ""; position: absolute; right: 0; top: 9vh; bottom: 9vh; border-right: 0.8vh dashed rgba(255, 255, 255, 0.7); }
 .r { flex: 1; background: var(--paper); color: var(--ink); display: flex; flex-direction: column; justify-content: center; padding: 0 9vh 0 10vh; position: relative; overflow: hidden; }
 .r::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.75) 50%, transparent 65%); background-size: 300% 100%; animation: shine 3s 1s ease-in-out infinite; }
-.t1 { font: 800 30vh/1 'DIN Alternate', 'Bahnschrift', 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; white-space: pre; animation: pop 0.5s 0.4s cubic-bezier(0.3, 1.8, 0.5, 1) both; }
+.t1 { font: 800 30vh/1 var(--font); white-space: pre; animation: pop 0.5s 0.4s cubic-bezier(0.3, 1.8, 0.5, 1) both; }
 .t2 { font-size: 10vh; font-weight: 800; letter-spacing: 0.3em; padding-left: 0.3em; white-space: pre; animation: pop 0.5s 0.5s cubic-bezier(0.3, 1.8, 0.5, 1) both; }
 .t3 { font-size: 17vh; font-weight: 800; letter-spacing: 0.04em; white-space: pre; animation: side 0.5s 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .t4 { font-size: 8.4vh; font-weight: 500; opacity: 0.65; margin-top: 1.4vh; white-space: pre; animation: side 0.5s 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; }

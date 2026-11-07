@@ -1,15 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { getPriority, tmpdir, totalmem } from 'node:os';
 import { basename, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { BrowserPool } from './browser-pool.mjs';
 import { encoders, hardwareEncoder } from './encoders.mjs';
 import { filmHtml } from './film-doc.mjs';
 import { launch } from './host.mjs';
 import { defaultWorkers, machine, outOfMemory, render } from './render.mjs';
+import { chunkFolder } from './render-resume.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 
@@ -90,19 +91,117 @@ test('an encoder that fails to start fails the render with ffmpeg\'s error, inst
   }
 });
 
-test('a failed encode is the error told, even when its parts folder cannot be removed', { skip: (!hasFfmpeg && 'no ffmpeg') || (process.platform === 'win32' && 'no read-only folders') || (process.getuid?.() === 0 && 'root removes anything'), timeout: 60_000 }, async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'of-render-held-'));
-  /* the folder this render encodes its parts in, made read-only with a file in it: as Windows holds the files of an
-     encoder still exiting, the folder cannot be removed */
-  const work = join(dir, '.film', 'cache', 'render', `.parts-${process.pid}`);
+test('a failed encode is the error told, and leaves no chunk cut off nor a claim on its folder', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-failed-'));
+  const out = join(dir, 'out.mp4');
   try {
     writeFileSync(join(dir, 'index.html'), '<!doctype html><body><script>window.film = { duration: 1, width: 320, height: 180, frame() {} };</script>');
-    mkdirSync(work, { recursive: true });
-    writeFileSync(join(work, 'held'), '');
-    chmodSync(work, 0o555);
-    await assert.rejects(render([dir], { out: join(dir, 'out.mp4'), workers: 1, onProgress() {}, format: { video: ['-c:v', 'no_such_encoder'] } }), /^Error: ffmpeg: .*no_such_encoder/);
+    await assert.rejects(render([dir], { out, workers: 1, onProgress() {}, format: { video: ['-c:v', 'no_such_encoder'] } }), /^Error: ffmpeg: .*no_such_encoder/);
+    assert.deepEqual(readdirSync(chunkFolder(join(dir, '.film', 'cache', 'render'), out)), ['resume.json']);
   } finally {
-    chmodSync(work, 0o755);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a render whose process died partway is resumed from the chunks it finished, frame for frame the same as one drawn whole; one cancelled on purpose leaves none', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 300_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-resume-'));
+  const page = (hue) => `<!doctype html><body style="margin:0"><script>window.film = { duration: 4, width: 320, height: 180, frame(t) { document.body.style.background = \`hsl(\${${hue} + t * 90}, 80%, 50%)\`; } };</script>`;
+  const frames = (file) => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:v', '-f', 'framemd5', '-'], { encoding: 'utf8' }).split('\n').filter((l) => /^\d/.test(l)).map((l) => l.split(',').at(-1).trim());
+  /* the software encoder: what a chip's encoder makes of the same frames may differ by a bit, run to run */
+  const opts = { workers: 1, hardware: false };
+  const out = join(dir, 'resumed.mp4');
+  const kept = chunkFolder(join(dir, '.film', 'cache', 'render'), out);
+  /* a render in a process of its own, killed outright once it has drawn `frame` frames: a crash, the app quit */
+  const diedAt = (frame) => new Promise((done, fail) => {
+    const script = `import { render } from ${JSON.stringify(pathToFileURL(fileURLToPath(new URL('./render.mjs', import.meta.url))).href)};
+      render([${JSON.stringify(dir)}], { workers: 1, hardware: false, out: ${JSON.stringify(out)}, onProgress(n) { if (n >= ${frame}) process.kill(process.pid, 'SIGKILL'); } }).then(() => { console.error('ended'); process.exit(3); });`;
+    const child = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    child.stderr.on('data', (d) => { err += d; });
+    child.on('exit', (code, signal) => (signal === 'SIGKILL' || (process.platform === 'win32' && code === 1) ? done() : fail(new Error(`the render was not killed: exit ${code} ${signal}\n${err}`))));
+  });
+  try {
+    writeFileSync(join(dir, 'index.html'), page(0));
+    /* four chunks of a second: died in the third, the first two are kept */
+    await diedAt(70);
+    assert.deepEqual(readdirSync(kept).filter((n) => n.startsWith('chunk-')).sort(), ['chunk-0-30.mp4', 'chunk-30-60.mp4']);
+    const told = [];
+    const resumed = await render([dir], { ...opts, out, onProgress(done) { told.push(done); } });
+    assert.ok(resumed.lines.includes('  2 of 4 chunks were drawn by a render that stopped, and used'), resumed.lines.join('\n'));
+    assert.equal(told[0], 60, 'its progress starts at the frames kept');
+    assert.equal(existsSync(kept), false, 'a render that ended takes its chunks away');
+    const whole = await render([dir], { ...opts, out: join(dir, 'whole.mp4') });
+    assert.equal(whole.lines.some((l) => /chunks were drawn/.test(l)), false);
+    const resumedFrames = frames(resumed.out);
+    assert.equal(resumedFrames.length, 120);
+    assert.deepEqual(resumedFrames, frames(whole.out));
+
+    /* cancelled on purpose: nothing kept (an export's chunks are large, and out of sight) */
+    const stop = new AbortController();
+    await assert.rejects(render([dir], { ...opts, out, signal: stop.signal, onProgress(done) { if (done >= 70) stop.abort(); } }), /cancelled/);
+    assert.equal(existsSync(kept), false, 'a cancelled render leaves no chunks');
+
+    /* The same encoder but master capture: JPEG chunks cannot become part of a PNG/fine export. */
+    await diedAt(40);
+    const fine = await render([dir], { ...opts, out, fine: true });
+    assert.equal(fine.lines.some((l) => /chunks were drawn/.test(l)), false, 'fine capture does not reuse ordinary chunks');
+
+    /* died again, then the page changed: every chunk is drawn anew */
+    await diedAt(40);
+    writeFileSync(join(dir, 'index.html'), page(180));
+    const changed = await render([dir], { ...opts, out });
+    assert.equal(changed.lines.some((l) => /chunks were drawn/.test(l)), false);
+    assert.notDeepEqual(frames(changed.out), resumedFrames);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a file a page asked for and did not find is part of what its chunks were drawn from: once it is there, a render that died is not resumed', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 300_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-missing-'));
+  const out = join(dir, 'out.mp4');
+  const kept = chunkFolder(join(dir, '.film', 'cache', 'render'), out);
+  const frames = (file) => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:v', '-f', 'framemd5', '-'], { encoding: 'utf8' }).split('\n').filter((l) => /^\d/.test(l)).map((l) => l.split(',').at(-1).trim());
+  /* a logo over the picture, from a file not there yet: the page draws without it */
+  const logo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
+  try {
+    writeFileSync(join(dir, 'index.html'), `<!doctype html><body style="margin:0;background:#246"><img id="logo" src="logo.png" style="position:absolute;left:0;top:0;width:160px;height:90px"><script>window.film = { duration: 4, width: 320, height: 180, frame(t) {} };</script>`);
+    const script = `import { render } from ${JSON.stringify(pathToFileURL(fileURLToPath(new URL('./render.mjs', import.meta.url))).href)};
+      render([${JSON.stringify(dir)}], { workers: 1, hardware: false, out: ${JSON.stringify(out)}, onProgress(n) { if (n >= 70) process.kill(process.pid, 'SIGKILL'); } }).then(() => process.exit(3));`;
+    await new Promise((done, fail) => spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: 'ignore' })
+      .on('exit', (code, signal) => (signal === 'SIGKILL' || (process.platform === 'win32' && code === 1) ? done() : fail(new Error(`not killed: ${code} ${signal}`)))));
+    assert.deepEqual(readdirSync(kept).filter((n) => n.startsWith('chunk-')).sort(), ['chunk-0-30.mp4', 'chunk-30-60.mp4']);
+    const manifest = JSON.parse(readFileSync(join(kept, 'resume.json'), 'utf8'));
+    assert.equal(manifest.files[join(dir, 'logo.png')], '', 'the file missing is known, as missing');
+    writeFileSync(join(dir, 'logo.png'), logo);
+    const after = await render([dir], { workers: 1, hardware: false, out });
+    assert.equal(after.lines.some((l) => /chunks were drawn/.test(l)), false, 'nothing drawn without the logo is used');
+    const all = frames(after.out);
+    assert.equal(all.length, 120);
+    assert.equal(new Set(all).size, 1, 'every frame alike: the logo is on the first second as on the last');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a failed encode is the error told, even when its chunk folder cannot be removed', { skip: (!hasFfmpeg && 'no ffmpeg') || (process.platform === 'win32' && 'no read-only folders') || (process.getuid?.() === 0 && 'root removes anything'), timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-held-'));
+  const out = join(dir, 'out.mp4');
+  /* the folder this render keeps its chunks in, with a file in it, in a read-only folder: it cannot be removed, as on
+     Windows while an encoder still exiting holds a file of it */
+  const renderDir = join(dir, '.film', 'cache', 'render');
+  const kept = chunkFolder(renderDir, out);
+  try {
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><body><script>window.film = { duration: 1, width: 320, height: 180, frame() {} };</script>');
+    mkdirSync(kept, { recursive: true });
+    writeFileSync(join(kept, 'held'), '');
+    chmodSync(renderDir, 0o555);
+    await assert.rejects(render([dir], { out, workers: 1, onProgress() {}, format: { video: ['-c:v', 'no_such_encoder'] } }), /^Error: ffmpeg: .*no_such_encoder/);
+    const stop = new AbortController();
+    stop.abort();
+    await assert.rejects(render([dir], { out, workers: 1, onProgress() {}, signal: stop.signal }), /^Error: cancelled/);
+  } finally {
+    chmodSync(renderDir, 0o755);
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -175,7 +274,7 @@ window.film={duration:2,width:960,height:540,frame(t){els.forEach((d,k)=>{const 
   }
 });
 
-test('a render is written once: its parts straight into the file with the sound, and one part with nothing to add moved there', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async () => {
+test('a render is written once: its chunks straight into the file with the sound, and one chunk with nothing to add moved there', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-render-once-'));
   try {
     writeFileSync(join(dir, 'p.html'), '<!doctype html><body style="margin:0"><script>window.film = { duration: 1, width: 320, height: 180, frame(t) { document.body.style.background = `hsl(${t * 360}, 80%, 50%)`; } };</script>');
@@ -187,11 +286,11 @@ test('a render is written once: its parts straight into the file with the sound,
       assert.equal(Number(streams.find((s) => s.codec_type === 'video')?.nb_read_frames), 30, `${ext} by ${workers}: its frames`);
       assert.ok(Math.abs(Number(streams.find((s) => s.codec_type === 'audio')?.duration) - 1) < 0.05, `${ext} by ${workers}: its sound`);
     }
-    /* the part a browser writes is the file, not copied: the same one on the disk */
-    const part = join(dir, '.film', 'cache', 'render', `.parts-${process.pid}`, 'part-0.mov');
+    /* the chunk a browser writes is the file, not copied: the same one on the disk */
+    const quiet = join(dir, 'quiet.mov');
+    const part = join(chunkFolder(join(dir, '.film', 'cache', 'render'), quiet), 'drawing-0-30.mov');
     let ino = null;
     const look = setInterval(() => { if (existsSync(part)) ino = statSync(part).ino; }, 5);
-    const quiet = join(dir, 'quiet.mov');
     try {
       await render([dir], { out: quiet, workers: 1, silent: true, onProgress() {} });
     } finally {
@@ -262,7 +361,44 @@ test('--subtitles burns the project\'s subtitles into its film, named as its ren
     await assert.rejects(render([join(dir, 'page.html')], { ...quiet, subtitles: true }), /into the project's film: render the project's folder, not page\.html/);
     rmSync(join(dir, 'assets', 'vo.vtt'));
     await assert.rejects(render([dir], { ...quiet, subtitles: true, out: join(dir, 'none.mp4') }), /no subtitles to burn in/);
+    /* with a caption track, the subtitles are the film's picture: rendered as it is */
+    mkdirSync(join(dir, 'captions'));
+    writeFileSync(join(dir, 'captions', 'c.vtt'), 'WEBVTT\n\n00:00:00.500 --> 00:00:01.800\nOn the track\n');
+    writeFileSync(join(dir, 'film.html'), readFileSync(join(dir, 'film.html'), 'utf8').replace('<body>', '<body><section><track kind="captions" src="captions/c.vtt"></section>'));
+    const tracked = await render([dir], { ...quiet, subtitles: true, out: join(dir, 'tracked.mp4') });
+    assert.ok(changed(bottom(tracked.out, 10), bottom(tracked.out, 2)) > 200, 'the caption track drawn');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('--loudness brings the sound to the target with true peaks under -1 dBTP, the picture as drawn; a target out of range is refused (#323)', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-loud-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, 'assets'));
+  writeFileSync(join(dir, 'page.html'), '<!doctype html><body style="margin:0;background:#204080"><script>window.film = { duration: 3, width: 320, height: 180, frame() {} };</script>');
+  /* a quiet voice, and a knock at 1 s on another track: lavfi's sine is at 1/8, so the knock is about -18.6 dBFS, still caught by the limiter once turned up */
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=220:duration=3', '-af', 'volume=-28dB', '-ac', '1', '-ar', '48000', join(dir, 'assets', 'vo.wav')]);
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=900:duration=0.01', '-af', 'volume=-0.5dB', '-ac', '1', '-ar', '48000', join(dir, 'assets', 'knock.wav')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ id: 'p', src: 'page.html' }] }, { clips: [{ id: 'vo', src: 'assets/vo.wav' }] }, { clips: [{ id: 'k', src: 'assets/knock.wav', at: 1 }] },
+  ] }));
+  /* software encoding: h264_videotoolbox on macOS gives different bytes each time */
+  const quiet = { workers: 1, silent: true, onProgress() {}, fps: 10, hardware: false };
+  const plain = await render([dir], { ...quiet, silent: false, out: join(dir, 'plain.mp4') });
+  const loud = await render([dir], { ...quiet, silent: false, loudness: -16, out: join(dir, 'loud.mp4') });
+  const { loudnessOf } = await import('./loudness.mjs');
+  const was = await loudnessOf(plain.out);
+  const now = await loudnessOf(loud.out);
+  assert.ok(was.lufs < -25, `the mix as it is: ${was.lufs} LUFS`);
+  assert.ok(Math.abs(now.lufs - -16) <= 0.5, `integrated loudness ${now.lufs}`);
+  assert.ok(now.peak <= -1, `true peak ${now.peak}`);
+  assert.ok(loud.lines.some((l) => /^♪ sound at -16 LUFS: .* → .*LUFS · true peak .* dBTP$/.test(l)), loud.lines.join('\n'));
+  /* the picture is the same stream: not encoded again for the sound */
+  const video = (/** @type {string} */ file) => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:v', '-c', 'copy', '-f', 'md5', '-'], { encoding: 'utf8' });
+  assert.equal(video(loud.out), video(plain.out));
+  await assert.rejects(render([dir], { ...quiet, loudness: -3, out: join(dir, 'bad.mp4') }), /--loudness is a target from -70 to -5 LUFS/);
+  /* a render without sound (silent) has nothing to bring there, and says nothing of it */
+  const mute = await render([dir], { ...quiet, loudness: -16, out: join(dir, 'mute.mp4') });
+  assert.ok(!mute.lines.some((l) => /loudness/.test(l)), 'a silent render (no sound asked) says nothing of it');
 });

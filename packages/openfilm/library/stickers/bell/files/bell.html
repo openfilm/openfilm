@@ -5,7 +5,7 @@
 <title>Notification bell</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ffd60a; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ffd60a; }
 svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
 svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .in { transform-origin: 180px 200px; animation: in 0.5s cubic-bezier(.34, 1.56, .64, 1) both; }
@@ -19,7 +19,7 @@ svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
 .wv .l { transform-origin: 120px 150px; } .wv .r { transform-origin: 240px 150px; }
 .badge { transform-origin: 262px 98px; animation: b 0.45s cubic-bezier(.34, 1.56, .64, 1) 0.3s both; }
 @keyframes b { from { transform: scale(0); } }
-.label { font: 800 50px 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: #ffffff; }
+.label { font: 800 50px var(--font); fill: #ffffff; }
 </style>
 </head>
 <body>

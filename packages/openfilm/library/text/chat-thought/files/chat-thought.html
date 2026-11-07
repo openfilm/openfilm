@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Thought bubble</title>
 <style>
-:root { --cloud: #ffffff; --ink: #1d1e25; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --cloud: #ffffff; --ink: #1d1e25; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; }
+.w { position: fixed; inset: 0; font-family: var(--font); }
 .cl { position: absolute; left: 30vh; top: 10vh; width: 120vh; height: 62vh; animation: puff 0.6s 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) both, drift 3.2s 1.2s ease-in-out infinite; transform-origin: 15% 90%; filter: drop-shadow(0 2vh 4vh rgba(0, 0, 0, 0.3)); }
 .cl i { position: absolute; border-radius: 50%; background: var(--cloud); }
 .cl .base { left: 8vh; right: 8vh; top: 14vh; bottom: 6vh; border-radius: 22vh; }

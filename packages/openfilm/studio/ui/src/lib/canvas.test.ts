@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  canvasId, canvasKey, copyOf, emptyHistory, inputsKey, inputsOf, isStale, makeName, makeRequest, nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
+  canvasId, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modesFor, nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
 } from './canvas.ts';
 
 test('a board as sent is read node by node: notes and files, and edges between nodes it has', () => {
@@ -110,9 +110,40 @@ test('what is wired into a node comes in its edges\' order; words and pictures, 
   });
   assert.deepEqual(makeRequest({ ...v, opts: { frames: true, sec: 99, ratio: '9:16' } }, inputs, 'push').args,
     { out: 'push', prompt: 'cold blue dawn\n\na slow push in', duration: '30', 'aspect-ratio': '9:16', 'first-frame': 'assets/a.png', 'last-frame': 'assets/image/b.png' });
-  assert.equal(makeRequest({ ...v, make: 'image' }, inputs, 'still').unused, 2, 'a picture is made from words only');
+  assert.deepEqual(makeRequest({ ...v, make: 'image' }, inputs, 'still').args,
+    { out: 'still', prompt: 'cold blue dawn\n\na slow push in', ratio: '16:9', ref: ['assets/a.png', 'assets/image/b.png'] }, 'a picture is made from the pictures wired in');
+  /* within what the model makes */
+  const heygen = { ratios: ['16:9', '9:16'], seconds: [5, 30] as [number, number], refs: 0, frames: true };
+  assert.deepEqual(makeRequest({ ...v, opts: { sec: 4, ratio: '4:3' } }, inputs, 'push', heygen).args,
+    { out: 'push', prompt: 'cold blue dawn\n\na slow push in', duration: '5', 'aspect-ratio': '16:9', 'first-frame': 'assets/a.png' },
+    'a model that takes no references starts from the first picture');
+  assert.deepEqual(makeRequest({ ...v, opts: { mode: 'firstLast' } }, inputs, 'push', heygen).args['last-frame'], 'assets/image/b.png', 'between two frames when asked');
+  assert.equal(makeRequest({ ...v, opts: { mode: 'text' } }, inputs, 'push').unused, 2, 'from the words alone, the pictures are left');
+  assert.deepEqual(modesFor(heygen), ['text', 'first', 'firstLast']);
+  assert.deepEqual(modesFor({ refs: 9, frames: true, voice: true }), ['text', 'omni', 'first', 'firstLast', 'refs']);
+  assert.deepEqual(makeRequest({ ...v, opts: { frames: true } }, inputs, 'push', { refs: 1, frames: false }).args['input-reference'], ['assets/a.png'], 'one that takes no frames, references, as many as it takes');
+  assert.equal(makeRequest({ ...v, opts: { sec: 7 } }, inputs, 'push', { only: [5, 10] }).args.duration, '5');
+  assert.deepEqual(makeRequest({ ...v, make: 'image', opts: { quality: 'high' } }, inputs, 'still', { refs: 1, qualities: ['low', 'high'] }).args,
+    { out: 'still', prompt: 'cold blue dawn\n\na slow push in', ratio: '16:9', quality: 'high', ref: ['assets/a.png'] });
+  assert.equal(makeRequest({ ...v, make: 'image' }, inputs, 'still', { refs: 0 }).unused, 2, 'a model that takes no pictures leaves them');
+  assert.deepEqual(makeRequest({ ...v, make: 'image', opts: { size: '2k', transparent: true } }, [], 'cut', { sizes: ['1k', '2k'], transparent: true }).args,
+    { out: 'cut', prompt: 'a slow push in', ratio: '16:9', size: '2k', transparent: 'true' });
+  assert.equal(makeRequest({ ...v, make: 'image', opts: { size: '4k', transparent: true } }, [], 'cut', { sizes: ['1k'] }).args.size, undefined, 'only what the model makes');
+  assert.equal(makeRequest({ ...v, opts: { size: '1080p' } }, [], 'push', { sizes: ['720p', '1080p'] }).args.resolution, '1080p');
+  /* a GIF of so many frames, an SVG, and a picture redrawn where a mask or a markup says, as the model makes them */
+  const gpt = { formats: ['png', 'gif', 'svg'], mask: true, markup: true };
+  const still = [{ from: 'p', path: 'assets/a.png', media: 'image' as const }];
+  assert.deepEqual(makeRequest({ ...v, make: 'image', opts: { format: 'gif', gifFrames: 6, frameMs: 120 } }, [], 'g', gpt).args, { out: 'g', prompt: 'a slow push in', ratio: '16:9', format: 'gif', frames: '6', 'frame-ms': '120' });
+  assert.equal(makeRequest({ ...v, make: 'image', opts: { format: 'gif' } }, [], 'g', { refs: 4 }).args.format, undefined, 'only a model that makes GIFs');
+  assert.equal(makeRequest({ ...v, make: 'image', opts: { mask: 'assets/mask.png' } }, still, 'r', gpt).args.mask, 'assets/mask.png');
+  assert.equal(makeRequest({ ...v, make: 'image', opts: { mask: 'assets/mask.png' } }, [], 'r', gpt).args.mask, undefined, 'a mask goes with the picture it redraws');
+  assert.equal(makeRequest({ ...v, make: 'image', opts: { markup: 'assets/m.png' } }, still, 'r', gpt).args.markup, 'assets/m.png');
+  assert.deepEqual(readCanvasDoc({ nodes: [{ id: 'n', x: 0, y: 0, make: 'image', opts: { format: 'gif', gifFrames: 6, mask: 'assets/mask.png' } }], edges: [] }).nodes[0]!.opts, { format: 'gif', gifFrames: 6, mask: 'assets/mask.png' });
   assert.match(makeName({ ...v, prompt: 'A slow push-in, at dawn!' }, 36), /^a-slow-push-in-10$/);
-  assert.match(makeName({ ...v, prompt: '黎明' }, 36), /^video-10$/);
+  assert.match(makeName({ ...v, prompt: '黎明' }, 1296), /^video-100$/);
+  /* two made in the same moment never share a name (a file each); a preset names it when its words do not */
+  assert.notEqual(makeName({ ...v, prompt: '' }, 1296), makeName({ ...v, prompt: '' }, 1296));
+  assert.match(makeName({ ...v, prompt: '', preset: 'fullBody' }, 46656), /^full-body-1000$/);
 });
 
 test('a node is stale when what it would be asked is not what it made the one shown from', () => {
@@ -122,6 +153,10 @@ test('a node is stale when what it would be asked is not what it made the one sh
   assert.equal(isStale(made, inputs), false);
   assert.equal(isStale(made, [{ from: 'n', text: 'warm' }]), true);
   assert.equal(isStale({ ...made, prompt: 'dusk' }, inputs), true);
+  /* said on the node only when what is wired in changed: its own words and settings changed, the person knows */
+  assert.equal(inputsChanged({ ...made, prompt: 'dusk' }, inputs), false);
+  assert.equal(inputsChanged(made, [{ from: 'n', text: 'warm' }]), true);
+  assert.equal(inputsChanged({ ...made, made: 'abc' }, [{ from: 'n', text: 'warm' }]), false, 'a key from before, of one part: not said');
   assert.equal(isStale({ ...node }, []), false, 'nothing known it was made from');
 });
 

@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <title>Name card, news</title>
 <style>
-:root { --accent: #d7262e; --color: #ffffff; --ink: #14161c; }
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #d7262e; --color: #ffffff; --ink: #14161c; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
 .ln { position: relative; display: inline-block; white-space: pre; }
 .fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
 .fx .ch { display: inline-block; will-change: transform; }
 .src { -webkit-text-fill-color: transparent; }
-.w { position: fixed; inset: 0; display: flex; align-items: center; padding-left: 4vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; padding-left: 4vh; font-family: var(--font); }
 .in { display: flex; align-items: stretch; }
 .sq { display: flex; align-items: center; justify-content: center; background: var(--ink); color: #fff; padding: 0 3.4vh; font-size: 10vh; font-weight: 800; letter-spacing: 0.08em; writing-mode: vertical-rl; transform: rotate(180deg); animation: sq 0.4s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
 .st { display: flex; flex-direction: column; align-items: flex-start; }

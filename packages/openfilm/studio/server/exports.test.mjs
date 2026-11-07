@@ -316,9 +316,17 @@ test('a cancelled export stops and leaves no file, and a bad ask is refused befo
   for (const bad of [{ kind: 'pdf' }, { kind: 'video', range: [3, 1] }, { kind: 'video', codec: 'av1' }, { kind: 'video', frame: '9:1' }, { kind: 'video', frame: 'wide' },
     { kind: 'audio', mix: false }, { kind: 'stills', range: [0, 1] }, { kind: 'stills', as: 'pdf' }, { kind: 'gif', width: 5000 }, { kind: 'subtitles', format: 'ass' },
     { kind: 'slides', format: 'key' }, { kind: 'slides', range: [0, 1] }, { kind: 'nle', fps: 500 }, { kind: 'nle', audio: 'mix' }, { kind: 'nle', range: [0, 1] },
-    { kind: 'nle', format: 'fcpxml', alpha: 'png' }, { kind: 'nle', alpha: 'auto' }, { kind: 'nle', format: 'jianying', alpha: 'hevc_alpha' }, { kind: 'nle', format: 'jianying', alpha: 'prores4444' }]) {
+    { kind: 'video', loudness: -3 }, { kind: 'video', loudness: '-14' }, { kind: 'nle', format: 'fcpxml', alpha: 'png' }, { kind: 'nle', alpha: 'auto' }, { kind: 'nle', format: 'jianying', alpha: 'hevc_alpha' }, { kind: 'nle', format: 'jianying', alpha: 'prores4444' }]) {
     assert.throws(() => exports.start(project(), bad), ExportError, JSON.stringify(bad));
   }
+});
+
+test('a video exported at a loudness has its sound there, true peaks under -1 dBTP (render --loudness, #323)', ffmpeg, async () => {
+  const { loudnessOf } = await import('../../src/loudness.mjs');
+  const done = await exported({ kind: 'video', loudness: -23 }, 'Loud');
+  const { lufs, peak } = await loudnessOf(/** @type {string} */ (done.out));
+  assert.ok(Math.abs(lufs - -23) <= 0.5, `integrated loudness ${lufs}`);
+  assert.ok(peak <= -1, `true peak ${peak}`);
 });
 
 test('what an export Studio could not finish left behind goes before the next one; what a running Studio is making stays', ffmpeg, async () => {
@@ -397,6 +405,9 @@ test('each codec this machine encodes, at the size asked, transparent where the 
   }
   const hevc = can.hevc ? (await exported({ kind: 'video', codec: 'hevc', fps: 5, range: [0, 0.2] })).out : null;
   if (hevc) assert.equal(probe(hevc, 'stream=codec_tag_string'), 'hvc1', 'HEVC that Apple players open');
+  /* at master, 10 bits: a dark gradient keeps steps 8 bits would band */
+  const master = can.hevc ? (await exported({ kind: 'video', codec: 'hevc', quality: 'master', fps: 5, range: [0, 0.2] })).out : null;
+  if (master) assert.equal(probe(master, 'stream=pix_fmt'), 'yuv420p10le');
 });
 
 test('every codec carries the colors the page draws, tagged BT.709, through the graphics chip and without it', { ...ffmpeg, timeout: 300_000 }, async () => {
@@ -436,6 +447,21 @@ test('footage no browser reads, placed whole (no trim): its length is ffprobe\'s
   const draft = await ended(exports, exports.start(project('Whole ProRes', dir), { kind: 'nle', format: 'jianying', fps: 25 }));
   assert.equal(draft.status, 'done', draft.error);
   assert.equal(JSON.parse(readFileSync(draft.out, 'utf8')).duration, 1_200_000);
+});
+
+test('a trim to the file\'s end, written to the millisecond, exports as a video and as a draft', { ...ffmpeg, timeout: 240_000 }, async () => {
+  const dir = join(scratch, 'Trim to the end');
+  mkdirSync(dir, { recursive: true });
+  /* 65 frames at 30 fps: 2.166667 s, written 2.167 */
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-frames:v', '65', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(dir, 'rain.mp4')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'rain', src: 'rain.mp4', time: [0, 2.167] }] }] }));
+  const video = await exported({ kind: 'video', fps: 30 }, 'Trim to the end', dir);
+  assert.equal(video.status, 'done', video.error);
+  const drafts = join(scratch, 'Trim to the end drafts');
+  mkdirSync(drafts, { recursive: true });
+  const exports = createExports({ captions: subtitles, drafts: () => drafts });
+  const draft = await ended(exports, exports.start(project('Trim to the end', dir), { kind: 'nle', format: 'jianying', fps: 30 }));
+  assert.equal(draft.status, 'done', draft.error);
 });
 
 test('a PNG sequence comes zipped, one PNG with alpha per frame', ffmpeg, async () => {

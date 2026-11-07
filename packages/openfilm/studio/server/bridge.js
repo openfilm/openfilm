@@ -9,9 +9,11 @@
  *            { type: 'clock', ping }      what this page's clock says now (to put the editor's moments on it)
  *            { type: 'update', film, head, seq }  film.html changed: change the film in place if it can be
  *            { type: 'renders', list }    stretches rendered for the preview to play in their place: [{ a, b, src }]
+ *            { type: 'captions' }         the caption tracks' files changed: read again, the moment drawn again
  *            { type: 'preview', clip, overrides }   show a tweak on a page, not kept (null: stop showing)
  *            { type: 'overrides', list }  a page on its own: its clip's changes (SPEC §1), applied after each frame
  *            { type: 'pick', x, y, seq }          what is under this stage point
+ *            { type: 'shown' }            this load is shown now, over the one it replaces: say when it is on screen
  *   film   → { source: 'openfilm-film', type: 'ready', duration, width, height, sounds, spans, origin }
  *            { type: 'seeked', t, seq }           the frame at t is on screen
  *            { type: 'clock', ping, now }         this page's clock (performance.now) when the ping came
@@ -21,8 +23,13 @@
  *                                         refreshes, late]
  *            { type: 'updated', seq, inPlace, duration, sounds, spans }   (inPlace false: load the page again)
  *            { type: 'spans', spans }             a page opened for the first time said its own length and size
+ *            { type: 'shown' }                    a page that came on is shown (its first frame drawn): it is in the
+ *                                         picture only now, and an editor that lists what shows reads it again
  *            { type: 'picked', seq, target }      (null: nothing there)
+ *            { type: 'painted' }                  shown, it has been put on screen (two refreshes on): the load it
+ *                                         replaced, kept over it till then, may go
  *            { type: 'error', message }           the film or a page failed
+ *            { type: 'undecoded', src }           a video this browser could not play (src as film.html writes it)
  *
  * Only the editor's origin is listened to and answered (the server puts it in for EDITOR).
  */
@@ -57,6 +64,14 @@
     (await tweaker)(tweakState, tweaks);
   };
 
+  /* the videos it could not play, as soon as the timeline is there (before the film is up: it may be why it is not) */
+  void film.then(() => {
+    const said = (src) => post({ type: 'undecoded', src });
+    if (!editor()) return;
+    editor().undecoded = said;
+    for (const src of editor().unplayed?.() ?? []) said(src);
+  });
+
   /* the film once loaded, or null: one that fails to load (a clip with no length, a missing file) says why once, here,
      and draws and answers nothing after — a page error for each later message would only repeat it */
   let up = null;
@@ -65,7 +80,10 @@
       await f.ready;
       up = f;
       post({ type: 'ready', ...facts(f), origin: performance.timeOrigin });
-      if (editor()) editor().learned = () => post({ type: 'spans', spans: facts(f).spans });
+      if (editor()) {
+        editor().learned = () => post({ type: 'spans', spans: facts(f).spans });
+        editor().appeared = () => post({ type: 'shown' });
+      }
       return f;
     } catch (e) { fail(e); return null; }
   });
@@ -88,11 +106,13 @@
       const f = await loaded;
       if (!f) { drawing = false; return; }
       /* a person is watching: the timeline draws for them (a scrub does not wait for its videos to be composited); a
-         page on its own draws its frame. A frame that does not come within a moment is let go: one stuck page or
-         video must not stop the picture. */
+         page on its own draws its frame. A load behind the picture draws its first frame whole, as an exact frame is
+         (its videos on screen, its pages drawn): drawn for a watcher, it was swapped in white, then without its pages,
+         for as long as they took. A frame that does not come within a moment is let go: one stuck page or video must
+         not stop the picture. */
       const watch = editor()?.watch;
       let timer;
-      await Promise.race([watch ? watch(t) : drawn(f, t), new Promise((done) => { timer = setTimeout(done, behind ? BEHIND_WAIT_MS : FRAME_WAIT_MS); })]);
+      await Promise.race([watch && !behind ? watch(t) : drawn(f, t), new Promise((done) => { timer = setTimeout(done, behind ? BEHIND_WAIT_MS : FRAME_WAIT_MS); })]);
       clearTimeout(timer);
       post({ type: 'seeked', t, seq });
     } catch (e) { fail(e); }
@@ -179,6 +199,8 @@
     if (e.origin !== EDITOR || e.data?.source !== 'openfilm-studio') return;
     const m = e.data;
     if (m.type === 'clock') { post({ type: 'clock', ping: m.ping, now: clock() }); return; }
+    /* a refresh draws this page as shown, the next one is on screen */
+    if (m.type === 'shown') { requestAnimationFrame(() => requestAnimationFrame(() => post({ type: 'painted' }))); return; }
     /* before the next frame is drawn: the one asked for after them shows them */
     if (m.type === 'overrides') { if (!editor()) tweaks = Array.isArray(m.list) && m.list.length ? m.list : null; return; }
     if (m.type === 'seek') { stop(); next = m; asked = m.t; draw(); return; }
@@ -206,6 +228,7 @@
       else if (inPlace) next.seq = Math.max(Number(next.seq) || 0, Number(m.seq) || 0);
     }
     if (m.type === 'renders') editor()?.renders?.(m.list);
+    if (m.type === 'captions') void editor()?.captions?.();
     if (m.type === 'preview') editor()?.preview(m.clip, m.overrides);
     if (m.type === 'pick') post({ type: 'picked', seq: m.seq, target: editor()?.pick(m.x, m.y) ?? null });
   });

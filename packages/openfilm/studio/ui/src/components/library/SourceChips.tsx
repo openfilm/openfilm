@@ -17,7 +17,7 @@ export function SourceChips({ sources, value, onChange }: { sources: Source[]; v
   if (sources.length < 2) return null;
   const chip = (id: Source | '', label: string) => (
     <button key={id || 'all'} type="button" aria-pressed={value === id} onClick={() => onChange(id)}
-      className={`h-6 rounded-full border px-2.5 text-[11px] transition ${value === id ? 'border-[var(--tl-accent)] text-[var(--tl-accent)]' : 'border-[var(--border-strong)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
+      className={`h-6 rounded-full border px-2.5 text-[11px] transition ${value === id ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-[var(--border-strong)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
       {label}
     </button>
   );
@@ -29,13 +29,13 @@ export function SourceChips({ sources, value, onChange }: { sources: Source[]; v
   );
 }
 
-/** A thing's source on its corner (none for OpenFilm's own). */
-export function SourceBadge({ source }: { source: Source }) {
+/** A thing's source on its corner (none for OpenFilm's own): its source's name, or who made it (`by`). */
+export function SourceBadge({ source, by }: { source: Source; by?: string }) {
   const t = useT();
   if (source === 'official') return null;
   return (
-    <span className="pointer-events-none absolute left-1 top-1 rounded-[4px] bg-black/55 px-1.5 py-[1px] text-[10px] font-medium text-white">
-      {t(`assetDrawer.source_${source}`)}
+    <span className="pointer-events-none absolute left-1 top-1 max-w-[calc(100%-8px)] truncate rounded-[4px] bg-black/55 px-1.5 py-[1px] text-[10px] font-medium text-white">
+      {by ?? t(`assetDrawer.source_${source}`)}
     </span>
   );
 }

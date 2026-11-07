@@ -17,8 +17,15 @@ before(() => {
 const settings = (keys = {}, use = {}) => ({ keys, use, model: {} });
 const id = async (promise) => (await promise)?.id ?? null;
 
-test('the own-key providers, then Local models, in the order Settings lists them', () => {
+test('the own-key providers, then Local services, in the order Settings lists them', () => {
   assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'inworld', 'cartesia', 'openai', 'google', 'fal', 'openrouter', 'pexels', 'pixabay', 'brave', 'tavily', 'groq', 'azure', 'doubao', 'mimo', 'keenable', 'openfilm', 'local']);
+});
+
+test('each provider paid with a key of its own links its own pricing page; OpenFilm\'s service and Local services none', () => {
+  for (const p of listProviders()) {
+    if (p.signIn || p.ready) assert.equal(p.pricingUrl, undefined, p.id);
+    else assert.match(p.pricingUrl ?? '', /^https:\/\//, p.id);
+  }
 });
 
 test('nothing serves a kind of media nobody chose, even with a key that could', async () => {

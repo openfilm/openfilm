@@ -12,8 +12,9 @@ import { spawnSync } from 'node:child_process';
 import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
 import { arch, homedir, platform, release, version as osVersion } from 'node:os';
 import { join } from 'node:path';
-import { freeSpace, libraryRoot, studioHomeDir } from './locations.mjs';
+import { freeSpace, libraryProjects, libraryRoot, studioHomeDir } from './locations.mjs';
 import { problemLines, problemsFile } from './problems.mjs';
+import { folderSizeAsync } from './skills.mjs';
 
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const FROM_SOURCE = existsSync(new URL('../studio/ui/src', import.meta.url));
@@ -111,6 +112,9 @@ function writable(folder) {
 
 /** @param {number | null} bytes */
 const gb = (bytes) => (bytes == null ? '' : `, ${(bytes / 1e9).toFixed(bytes < 10e9 ? 1 : 0)} GB free`);
+
+/** @param {number} bytes */
+const size = (bytes) => (bytes < 1e6 ? `${Math.round(bytes / 1e3)} kB` : bytes < 1e9 ? `${(bytes / 1e6).toFixed(1)} MB` : `${(bytes / 1e9).toFixed(2)} GB`);
 
 /**
  * The browser films are drawn in: its version, what draws WebGL in it, and the video codecs it decodes on the graphics
@@ -218,6 +222,12 @@ export async function doctor({ run = 'openfilm', env = process.env, studio = nul
     ...(dataOk ? {} : { problem: `OpenFilm cannot write to ${at(data)}: give your account write access to it` }) });
   checks.push({ label: 'Projects', text: `${at(projects)}${existsSync(projects) ? (projectsOk ? '' : ' (not writable)') : ' (not made yet)'}${gb(freeSpace(projects))}`,
     ...(projectsOk ? {} : { problem: `OpenFilm cannot write to ${at(projects)}: choose another folder in Studio's Settings → General` }) });
+  /* a project's .film is hidden and can hold gigabytes of cache, history and logs: say how much, nowhere else visible.
+     Read a project at a time, without holding Studio: Copy report and the diagnostics file call this from the server. */
+  const films = libraryProjects(projects);
+  let usage = 0;
+  for (const folder of films) usage += await folderSizeAsync(join(folder, '.film'));
+  checks.push({ label: 'Film files', text: `${size(usage)} in ${films.length} project${films.length === 1 ? '' : 's'}' .film folders (cache, history and logs)` });
 
   if (network) {
     const reached = await fetch('https://registry.npmjs.org/openfilm', { method: 'HEAD', signal: AbortSignal.timeout(5000) }).then((r) => r.ok, () => false);

@@ -64,3 +64,25 @@ test('nothing found says so; a refused key says where to check it', async () => 
   reply = () => [401, { error: 'Unauthorized' }];
   await assert.rejects(pexels.run('image-search', { out: 'x', prompt: 'y' }, ctx()), /Pexels did not accept your key \(401\)/);
 });
+
+test('clips found: each its MP4 nearest Full HD, with its length, size and who made it; the key to the API only', async () => {
+  seen.length = 0;
+  const files = (id) => [
+    { quality: 'hd', file_type: 'video/mp4', width: 3840, height: 2160, link: `${base}/files/${id}-4k.mp4` },
+    { quality: 'hd', file_type: 'video/mp4', width: 1920, height: 1080, link: `${base}/files/${id}-hd.mp4` },
+    { quality: 'sd', file_type: 'video/mp4', width: 640, height: 360, link: `${base}/files/${id}-sd.mp4` },
+  ];
+  reply = (call) => {
+    if (call.url.pathname === '/v1/videos/search') {
+      return [200, { videos: [{ id: 7, url: 'https://www.pexels.com/video/7/', duration: 12, user: { name: 'Dee' }, video_files: files(7) }] }];
+    }
+    if (call.url.pathname.startsWith('/files/')) return [200, Buffer.from('mp4'), 'video/mp4'];
+    return [404, {}];
+  };
+  const result = await pexels.run('video-search', { out: 'city', prompt: 'lisbon tram', orientation: 'portrait' }, ctx());
+  const search = seen.find((c) => c.url.pathname === '/v1/videos/search');
+  assert.deepEqual([search.headers.authorization, search.url.searchParams.get('orientation')], [KEY, 'portrait']);
+  assert.ok(seen.some((c) => c.url.pathname === '/files/7-hd.mp4') && !seen.some((c) => c.url.pathname === '/files/7-4k.mp4'));
+  assert.deepEqual(result.index[0], { src: 'assets/video/city.mp4', kind: 'video', dur: 12, w: 1920, h: 1080,
+    from: { mode: 'search', prompt: 'lisbon tram', provider: 'pexels', sourceUrl: 'https://www.pexels.com/video/7/', credit: 'Video by Dee on Pexels' } });
+});

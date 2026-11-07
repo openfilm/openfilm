@@ -11,10 +11,7 @@ import { startStudio } from './server/server.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 
-/** GitHub's macOS runners, where this test's Layers panel never fills */
-const MAC_RUNNER = Boolean(process.env.CI) && process.platform === 'darwin';
-
-test('a click or a box in the dark around the picture selects no text: the picture is never tinted blue', { timeout: 300_000, skip: !hasFfmpeg ? 'no ffmpeg' : MAC_RUNNER && 'Layers never fills for this project on GitHub\'s macOS runners (it does on a Mac, on Linux and on Windows): looked into apart' }, async () => {
+test('a click or a box in the dark around the picture selects no text: the picture is never tinted blue', { timeout: 300_000, skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'of-viewer-dark-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
   const saved = new Map(names.map((name) => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
@@ -80,7 +77,7 @@ test('a click or a box in the dark around the picture selects no text: the pictu
     await page.mouse.move(film.x + 800 * scale, film.y + 640 * scale, { steps: 4 });
     assert.notEqual(await selection(), 'Range', 'drawing the box selects no text');
     await page.mouse.up();
-    await page.getByText('2 layers selected').waitFor({ state: 'visible' });
+    await until(async () => (await pickedLayers()).length === 2, 'the box selects both layers');
     assert.equal(await page.locator('[data-group-kind]').count() > 0, true, 'their box, each outlined inside it');
     assert.equal(await wholeClip(), 0, 'not the whole clip');
     assert.notEqual(await selection(), 'Range');

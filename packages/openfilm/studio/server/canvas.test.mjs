@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CANVAS_FILE, CanvasOpError, applyCanvasOps, parseCanvas, readCanvas, writeCanvas } from './canvas.mjs';
+import { Readable } from 'node:stream';
+import { CANVAS_FILE, CanvasOpError, agentCanvasRoute, applyCanvasOps, canvasRoute, canvasWriteRoute, parseCanvas, readCanvas, writeCanvas } from './canvas.mjs';
 
 test('a canvas keeps notes and project files as nodes, and edges between nodes it has', () => {
   assert.deepEqual(parseCanvas({
@@ -103,7 +104,7 @@ test("an agent's steps: added where they go, wired in order, kept as its", async
   assert.equal(by('mood').parent, 'g');
   assert.deepEqual(by('mood').by, { agent: 'codex', session: 's1' });
   assert.equal(by('n0').by, undefined, 'what was there is as it was');
-  assert.equal(by('shot').x, 400 + 280 + 80, 'right of its inputs');
+  assert.equal(by('shot').x, 400 + 622 + 80, 'right of its inputs: a picture is 622 wide (350 high, 16:9) until resized');
   assert.deepEqual(by('shot').versions, ['assets/image/b.png']);
   assert.deepEqual(canvas.edges.map((e) => [e.from, e.to, e.order]), [['ref', 'shot', 0], ['mood', 'shot', 1]]);
 });
@@ -124,4 +125,88 @@ test("an agent's steps are all taken or none, and a wrong one says which and why
 
 test('a cut keeps only that it is one, with its place', () => {
   assert.deepEqual(parseCanvas({ nodes: [{ id: 'c', x: 1, y: 2, w: 320, cut: true, text: 'ignored' }], edges: [] }).nodes, [{ id: 'c', x: 1, y: 2, w: 320, cut: true }]);
+});
+
+test("a text node's words are written by the person's agent, from what they ask and what is wired in", async () => {
+  const post = (body) => Object.assign(Readable.from([Buffer.from(JSON.stringify(body))]), { method: 'POST' });
+  const answer = () => { const res = { status: 0, body: '', writeHead(s) { res.status = s; }, end(b) { res.body = b; } }; return res; };
+  let asked = '';
+  const res = answer();
+  assert.equal(await canvasWriteRoute(/** @type {any} */ (post({ prompt: 'a three-shot script', inputs: ['a fox at dawn', 3] })), /** @type {any} */ (res), 'canvas-write',
+    async (text) => { asked = text; return '  1. The fox wakes.\n'; }), true);
+  assert.deepEqual([res.status, JSON.parse(res.body)], [200, { text: '1. The fox wakes.' }]);
+  assert.match(asked, /\[1\] a fox at dawn/);
+  assert.match(asked, /a three-shot script$/);
+  assert.doesNotMatch(asked, /\[2\]/);
+  /* no agent here (a browser's Studio): refused, saying so */
+  await assert.rejects(canvasWriteRoute(/** @type {any} */ (post({ prompt: 'x' })), /** @type {any} */ (answer()), 'canvas-write', undefined),
+    (e) => e.status === 409 && e.extra?.code === 'no-agent');
+  await assert.rejects(canvasWriteRoute(/** @type {any} */ (post({})), /** @type {any} */ (answer()), 'canvas-write', async () => ''), (e) => e.status === 400);
+  assert.equal(await canvasWriteRoute(/** @type {any} */ ({ method: 'GET' }), /** @type {any} */ (answer()), 'canvas-write', undefined), false);
+});
+
+test('a project has as many canvases as are made: named, copied, renamed, the first one stays first, deleted into the trash', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-boards-'));
+  const trash = mkdtempSync(join(tmpdir(), 'of-trash-'));
+  const before = process.env.OPENFILM_TRASH_DIR;
+  process.env.OPENFILM_TRASH_DIR = trash;
+  const call = async (method, rest, body) => {
+    const req = Object.assign(Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))]), { method });
+    const res = { status: 0, body: '', writeHead(s) { res.status = s; }, end(b) { res.body = b; } };
+    const was = await canvasRoute(/** @type {any} */ (req), /** @type {any} */ (res), root, rest);
+    return was ? JSON.parse(res.body) : null;
+  };
+  try {
+    writeFileSync(join(root, 'film.html'), '<!doctype html>');
+    await writeCanvas(root, { nodes: [{ id: 'n', x: 0, y: 0, text: 'first' }], edges: [] });
+    assert.deepEqual(await call('GET', 'canvases'), { boards: [{ id: 'main', nodes: 1 }] });
+    const copy = await call('POST', 'canvases', { name: 'Shots', from: 'main' });
+    assert.equal(copy.name, 'Shots');
+    const empty = await call('POST', 'canvases', {});
+    assert.deepEqual((await call('GET', 'canvases')).boards, [{ id: 'main', nodes: 1 }, { id: copy.id, name: 'Shots', nodes: 1 }, { id: empty.id, nodes: 0 }]);
+    /* written without a name, a board keeps its name */
+    await call('PUT', `canvas/${copy.id}`, { nodes: [], edges: [] });
+    assert.deepEqual(await call('GET', `canvas/${copy.id}`), { nodes: [], edges: [], name: 'Shots' });
+    assert.deepEqual(await call('PATCH', `canvases/${copy.id}`, { name: 'Storyboard' }), { id: copy.id, name: 'Storyboard' });
+    await assert.rejects(call('GET', 'canvas/nope'), (e) => e.status === 404);
+    /* an agent's steps go to the board shown */
+    let changed = '';
+    const ask = Object.assign(Readable.from([Buffer.from(JSON.stringify({ folder: root, ops: [{ op: 'add', kind: 'note', text: 'from the agent' }] }))]), { method: 'POST' });
+    const res = { body: '', writeHead() {}, end(b) { res.body = b; } };
+    await agentCanvasRoute(/** @type {any} */ (ask), /** @type {any} */ (res), (r) => { changed = r; });
+    assert.equal(changed, root);
+    assert.deepEqual((await readCanvas(root, copy.id)).nodes.map((n) => n.text), ['from the agent']);
+    assert.equal((await readCanvas(root)).nodes.length, 1);
+    /* the first deleted: the next is made the first; the last one stays */
+    const after = await call('DELETE', 'canvases/main');
+    assert.deepEqual(after.boards, [{ id: 'main', name: 'Storyboard', nodes: 1 }, { id: empty.id, nodes: 0 }]);
+    assert.equal(readFileSync(join(trash, 'canvas.json'), 'utf8').includes('first'), true);
+    await call('DELETE', `canvases/${empty.id}`);
+    await assert.rejects(call('DELETE', 'canvases/main'), (e) => e.status === 409);
+  } finally {
+    if (before === undefined) delete process.env.OPENFILM_TRASH_DIR; else process.env.OPENFILM_TRASH_DIR = before;
+    rmSync(root, { recursive: true, force: true });
+    rmSync(trash, { recursive: true, force: true });
+  }
+});
+
+test('a picture node keeps its GIF, its SVG and what of its picture it redraws', () => {
+  const [n] = parseCanvas({ nodes: [{ id: 'p', x: 0, y: 0, make: 'image', opts: { format: 'gif', gifFrames: 6, frameMs: 120, mask: 'assets/mask.png', markup: '../out.png' } }], edges: [] }).nodes;
+  assert.deepEqual(/** @type {any} */ (n).opts, { format: 'gif', gifFrames: 6, frameMs: 120, mask: 'assets/mask.png' });
+  const [odd] = parseCanvas({ nodes: [{ id: 'q', x: 0, y: 0, make: 'image', opts: { format: 'jpg', gifFrames: 40, frameMs: 5 } }], edges: [] }).nodes;
+  assert.equal(/** @type {any} */ (odd).opts, undefined, 'what the format does not take is left out');
+});
+
+test("an agent's nodes laid on each other are moved apart, and a group grows round what is in it", async () => {
+  const exists = async () => true;
+  const { canvas } = await applyCanvasOps({ nodes: [], edges: [] }, [
+    { op: 'add', kind: 'group', id: 'g', name: 'Shots', x: 0, y: 0, w: 400, h: 300 },
+    { op: 'add', kind: 'note', id: 'n', text: 'brief', group: 'g', x: 32, y: 52 },
+    { op: 'add', kind: 'image', id: 'a', prompt: 'one', group: 'g', x: 600, y: 52 },
+    { op: 'add', kind: 'image', id: 'b', prompt: 'two', group: 'g', x: 700, y: 52 },
+  ], { by: { agent: 'claude' }, exists });
+  const at = (id) => /** @type {any} */ (canvas.nodes.find((n) => n.id === id));
+  assert.ok(at('b').x >= at('a').x + 622, 'the second picture is clear of the first (622 wide)');
+  const g = at('g');
+  for (const id of ['n', 'a', 'b']) assert.ok(at(id).x + (at(id).w ?? 622) <= g.w && at(id).y + (at(id).h ?? 350) <= g.h, `${id} is inside its group`);
 });

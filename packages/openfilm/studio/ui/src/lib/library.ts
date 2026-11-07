@@ -57,6 +57,9 @@ export interface LibraryItem {
   /** A motion preset (src/clip-motion.mjs withPreset): how a clip comes in, goes out, moves while shown; on a cut, the
    *  clip before it goes out and the one after comes in. */
   motion?: Partial<Record<'in' | 'out' | 'loop', { name: string; body: string; secs: number; ease: string }>>;
+  /** A transition of two shots moving at once (a push, a wipe): the incoming clip overlaps the outgoing one by its
+      length, coming in by `motion.in` while that one goes out by `motion.out` (lib/clip-presets withCutMove). */
+  lap?: boolean;
   /** A fade: which of the timeline's transitions. */
   fade?: Extract<TransitionKind, 'dissolve' | 'dip-black' | 'dip-white'>;
 }
@@ -69,32 +72,55 @@ export interface LibraryIndex {
 
 let index: LibraryIndex | null = null;
 let reading: Promise<LibraryIndex | null> | null = null;
+let readAt = 0;
 const listeners = new Set<() => void>();
 
 function readIndex(): Promise<LibraryIndex | null> {
+  if (index && Date.now() - readAt < 60_000) return Promise.resolve(index);
   reading ??= fetch('/api/library', { cache: 'no-store' })
-    .then((r) => (r.ok ? r.json() : null), () => null)
+    .then((r) => (r.ok ? r.json() : null))
     .then((body: LibraryIndex | null) => {
       if (body && Array.isArray(body.items)) {
         for (const item of body.items) if (item.grade && !item.filter) item.filter = gradeFilter(item.id, item.grade);
         index = body;
+        readAt = Date.now();
         for (const fn of listeners) fn();
       }
-      else reading = null;
       return index;
-    });
+    }).catch(() => index).finally(() => { reading = null; });
   return reading;
 }
 
 /** The library's index, once read (null before). */
-export function useLibraryIndex(): LibraryIndex | null {
+export function useLibraryIndex(refresh = false): LibraryIndex | null {
   const seen = React.useSyncExternalStore(
     (fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     () => index,
     () => index,
   );
-  React.useEffect(() => { if (!index) void readIndex(); }, []);
+  React.useEffect(() => {
+    void readIndex();
+    if (!refresh) return;
+    const timer = window.setInterval(() => { if (!document.hidden) void readIndex(); }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
   return seen;
+}
+
+/* the library's things by the folder a project keeps each in (server takeSaved: its id as one name) */
+let byFolder: { of: LibraryIndex; map: Map<string, LibraryItem> } | null = null;
+
+/**
+ * The thing of the library a clip is (its page under `saved/openfilm/<id as one name>/`, or a template put in as one
+ * compound clip, its film under `parts/templates-<id>[-n]/`), when the index has been read: what the timeline and Layers
+ * call it (every emoji's page is `emoji.html`; its name is its own).
+ */
+export function libraryItemOfClip(src: string | undefined): LibraryItem | null {
+  const path = src?.split('#')[0] ?? '';
+  const m = /^saved\/openfilm\/([^/]+)\//.exec(path) ?? /^parts\/(templates-[^/]+?)(?:-\d+)?\/film\.html$/.exec(path);
+  if (!m || !index) return null;
+  if (byFolder?.of !== index) byFolder = { of: index, map: new Map(index.items.map((item) => [item.id.replace(/\//g, '-'), item])) };
+  return byFolder.map.get(m[1]!) ?? null;
 }
 
 /** A thing of the library by its `openfilm/` path, when the index has been read and has it. */
@@ -117,6 +143,14 @@ export function fromLibrary(path: string, items: readonly LibraryItem[] | null =
 /** Its name in `lang`, else English. */
 export const nameOf = (names: LibraryNames, lang: Language): string => names[lang] ?? names.en;
 
+/**
+ * What a new line of words says until it is typed in: "Default text", in English whatever the app's language, as every
+ * thing of the library says its own words in English.
+ */
+export function defaultTextWords(): string {
+  return builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`)?.name.en ?? 'Default text';
+}
+
 /** A file of the library by its place there. */
 /* `v`: the pictures were drawn again in place (2026-10-31): a copy kept from before is not used */
 export const libraryUrl = (rel: string): string => `/api/library/file?path=${encodeURIComponent(rel)}&v=2`;
@@ -135,10 +169,19 @@ export const waveUrl = (item: LibraryItem): string => libraryUrl(item.id.replace
 export function libraryDragItem(item: LibraryItem, name: string): ResourceDragItem | null {
   const saved = `${BUILT_IN}/${item.id}`;
   if (item.kind === 'look' || item.kind === 'fade') return { path: saved, name, kind: 'other', saved, apply: item.kind };
+  /* a transition that moves the two shots: onto a cut, as a fade goes */
+  if (item.kind === 'motion' && item.place === 'cut') return { path: saved, name, kind: 'other', saved, apply: 'fade' };
   if (item.kind === 'sound') return { path: saved, name, kind: 'audio', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
   if (item.kind === 'group') return { path: saved, name, kind: 'mg', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
+  /* a text style: a new line of words in it (the drop takes the text component with its variables) */
+  if (item.kind === 'textstyle') {
+    const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
+    const drag = text ? libraryDragItem(text, name) : null;
+    return drag ? { ...drag, ...(item.w && item.h ? { w: item.w, h: item.h } : {}), saved } : null;
+  }
   if (item.kind !== 'page' || !item.src) return null;
   return {
+    ...(item.id === TEXT_COMPONENT ? { words: defaultTextWords() } : {}),
     path: `${saved}/files/${item.src.split('#')[0]}`,
     name,
     kind: 'mg',
@@ -244,13 +287,76 @@ export function useLibraryFavorites(): readonly string[] {
   return seen ?? [];
 }
 
+/* ── what of the library is here: a sound, a piece of music, a template's music are fetched before they go in ── */
+
+/** Whether a thing may need fetching before it goes in (a published part of the library, or a template's music). */
+export const mayNeedFetch = (item: Pick<LibraryItem, 'id' | 'music'>): boolean => item.id.startsWith('audio/') || item.id.startsWith('community/') || Boolean(item.music);
+const asked = new Set<string>();
+/** asked, not answered yet: shown as to be fetched, never as one to put in that is not here */
+const asking = new Set<string>();
+const missing = new Set<string>();
+const fetching = new Set<string>();
+const failed = new Set<string>();
+let hereTick = 0;
+const hereSeen = new Set<() => void>();
+const tellHere = () => { hereTick += 1; for (const fn of hereSeen) fn(); };
+
+/** Ask, once each, which of these things need fetching before they go in (the server says). */
+export function askHere(ids: readonly string[]): void {
+  const fresh = ids.filter((id) => !asked.has(id));
+  if (!fresh.length) return;
+  for (const id of fresh) { asked.add(id); asking.add(id); }
+  void fetch('/api/library/missing', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: fresh }) })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((body: { ids?: string[] } | null) => {
+      for (const id of fresh) asking.delete(id);
+      if (!body) { for (const id of fresh) asked.delete(id); tellHere(); return; }
+      for (const id of body.ids ?? []) missing.add(id);
+      tellHere();
+    });
+}
+
+/** Fetch what a thing needs (its sound, a template's music); whether it is here now. */
+export async function fetchLibraryItem(id: string): Promise<boolean> {
+  fetching.add(id);
+  failed.delete(id);
+  tellHere();
+  try {
+    const r = await fetch('/api/library/fetch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
+    const ok = r.ok && Boolean(((await r.json()) as { ok?: boolean }).ok);
+    if (ok) missing.delete(id); else failed.add(id);
+    return ok;
+  } catch {
+    failed.add(id);
+    return false;
+  } finally {
+    fetching.delete(id);
+    tellHere();
+  }
+}
+
+/** A thing heard in full (a sound played): here now. */
+export function heardHere(id: string): void {
+  const was = missing.delete(id);
+  if (failed.delete(id) || was) tellHere();
+}
+
+/** Where a thing is: here, to be fetched, being fetched, or its fetch failed. */
+export type HereState = 'here' | 'missing' | 'fetching' | 'failed';
+
+/** What of the library is here, kept current as things are fetched. */
+export function useLibraryHere(): (id: string) => HereState {
+  React.useSyncExternalStore((fn) => { hereSeen.add(fn); return () => { hereSeen.delete(fn); }; }, () => hereTick, () => hereTick);
+  return (id) => (fetching.has(id) ? 'fetching' : failed.has(id) ? 'failed' : missing.has(id) || asking.has(id) ? 'missing' : 'here');
+}
+
 /** Star a thing, or take its star away: shown at once, then kept. */
 export function toggleFavorite(id: string): void {
   const had = favorites ?? [];
   favorites = had.includes(id) ? had.filter((x) => x !== id) : [...had, id];
   tellStarred();
   void fetch('/api/library/favorites', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: favorites }) })
-    .then((r) => (r.ok ? r.json() : null), () => null)
+    .then((r) => (r.ok ? r.json() : null))
     .then((body: { ids?: string[] } | null) => { if (body && Array.isArray(body.ids)) { favorites = body.ids; tellStarred(); } });
 }
 
@@ -312,6 +418,24 @@ export function coverLook(item: Pick<LibraryItem, 'id' | 'group'>): { background
 export const TEXT_COMPONENT = 'text/text';
 /** Where a project keeps it once taken (server takeSaved: `saved/openfilm/<id as one name>/`). */
 const TEXT_IN_PROJECT = `saved/${BUILT_IN}/${TEXT_COMPONENT.replace('/', '-')}/`;
+
+/**
+ * Whether a clip is a thing of the library (a sticker, an effect, a title, a line of words: taken into the project
+ * under `saved/openfilm/`): one thing on the picture, picked and moved whole, never by the parts its page is made of.
+ */
+export const isLibraryClip = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(`saved/${BUILT_IN}/`));
+/** Whether a clip is one of the library's stickers: drawn on the timeline by its picture. */
+export const isLibrarySticker = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(`saved/${BUILT_IN}/stickers-`));
+
+/**
+ * A filter of the library on a track of its own: its see-through page, taken into the project under the filter's name
+ * (`saved/openfilm/filters-warm-film/layer.html`, studio/server saved.mjs FILTER_LAYER), the clip's `backdrop-filter`
+ * grading every layer under it while it is on.
+ */
+export const isFilterLayer = (src: string | undefined): boolean => /^saved\/openfilm\/filters-[^/]+\/layer\.html$/.test(src?.split('#')[0] ?? '');
+
+/** An effect of the library (its page laid over the whole picture). */
+export const isLibraryEffect = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(`saved/${BUILT_IN}/effects-`));
 
 /** Whether a clip is the text component, which a text style or motion goes on. */
 export const isTextClip = (src: string | undefined): boolean => Boolean(src?.split('#')[0]?.startsWith(TEXT_IN_PROJECT));

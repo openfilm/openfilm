@@ -10,10 +10,11 @@
  * take the person's own key, which pays that service directly (a key in the environment shows as such and stays
  * there); OpenFilm signs in to the person's OpenFilm account in their browser; Keenable connects at once and takes a
  * key afterwards, for higher limits.
+ * Each links its own pricing page; what is free and what is paid is the service's to say.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { AudioWaveform, Captions, ChevronRight, Clapperboard, ExternalLink, Globe, Image, Mic, Music, Plus, ScanSearch, Scissors, X } from 'lucide-react';
+import { AudioWaveform, Captions, ChevronRight, Clapperboard, createLucideIcon, ExternalLink, Globe, Image, Mic, Music, Plus, ScanSearch, Scissors, X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { AZURE_SERVICES, PROVIDER_SITES, SERVICE_VERBS, azureKey, providerOrder, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { customProblem } from './CustomServices';
@@ -23,24 +24,32 @@ import { SettingsButton, SettingsField, SettingsLinkButton, settingsError, setti
 /** Where a new built-in provider is proposed, and what it needs. */
 const ADDING_PROVIDERS = 'https://github.com/openfilm/openfilm/blob/main/CONTRIBUTING.md#adding-a-media-provider';
 
+/** Video search: a clip's frame with its play mark, found with a magnifier (as image search finds a picture). */
+const VideoSearch = createLucideIcon('video-search', [
+  ['path', { d: 'M13 17H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v5', key: 'frame' }],
+  ['path', { d: 'M8 8.5v5l4-2.5z', key: 'play' }],
+  ['circle', { cx: '17', cy: '17', r: '3', key: 'lens' }],
+  ['path', { d: 'm22 22-2.8-2.8', key: 'handle' }],
+]);
+
 /** Each kind's picture, wherever kinds are listed. */
 export const KIND_ICON: Partial<Record<ProviderVerb, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>>> = {
-  tts: Mic, music: Music, sfx: AudioWaveform, asr: Captions, cutout: Scissors, image: Image, 'image-search': ScanSearch, video: Clapperboard, 'web-search': Globe,
+  tts: Mic, music: Music, sfx: AudioWaveform, asr: Captions, cutout: Scissors, image: Image, 'image-search': ScanSearch, video: Clapperboard, 'video-search': VideoSearch, 'web-search': Globe,
 };
 
 const chipClass = 'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[14px] transition hover:border-[var(--border-strong)] hover:text-[var(--text)]';
 
 /**
- * Every service as a chip: OpenFilm's own and `second` (Local models) first, then the connected ones (with a dot), the
- * recommended ones, and the rest and adding one behind "N more", each part in the default order (lib/providers
- * providerOrder). A chip opens the service's card (`onOpen` with its id, or 'add').
+ * Every service as a chip: OpenFilm's own first, then the connected ones (with a dot), the recommended ones, and the
+ * rest behind "N more", each part in the default order (lib/providers providerOrder); last `local` (Local services),
+ * just before adding one. A chip opens the service's card (`onOpen` with its id, or 'add').
  */
-export function ServicesBar({ hook, onOpen, second }: { hook: ProvidersHook; onOpen: (id: string) => void; second?: React.ReactNode }) {
+export function ServicesBar({ hook, onOpen, local }: { hook: ProvidersHook; onOpen: (id: string) => void; local?: React.ReactNode }) {
   const t = useT();
   const rows = hook.state?.providers ?? [];
-  /* OpenFilm's own first, then `second` (Local models), then the others */
+  /* OpenFilm's own first, then the others */
   const own = rows.find((p) => p.id === 'openfilm');
-  /* Local models has its own chip (`second`) */
+  /* Local services has its own chip (`local`) */
   const order = providerOrder(rows.filter((p) => p !== own && p.id !== 'local'));
   const [all, setAll] = React.useState(false);
   const chip = (p: OwnProvider) => (
@@ -56,16 +65,14 @@ export function ServicesBar({ hook, onOpen, second }: { hook: ProvidersHook; onO
     <div className="mb-10">
       <div className="flex flex-wrap gap-2">
         {own ? chip(own) : null}
-        {second}
         {order.connected.map(chip)}
         {order.recommended.map(chip)}
+        {all ? order.more.map(chip) : null}
+        {local}
         {all ? (
-          <>
-            {order.more.map(chip)}
-            <button type="button" onClick={() => onOpen('add')} className={`${chipClass} border-dashed border-[var(--border)] text-[var(--text-muted)]`}>
-              <Plus size={15} aria-hidden />{t('settings.providers.addProvider')}
-            </button>
-          </>
+          <button type="button" onClick={() => onOpen('add')} className={`${chipClass} border-dashed border-[var(--border)] text-[var(--text-muted)]`}>
+            <Plus size={15} aria-hidden />{t('settings.providers.addProvider')}
+          </button>
         ) : null}
         <button type="button" aria-expanded={all} onClick={() => setAll(!all)}
           className="inline-flex h-9 items-center gap-1 rounded-full px-3 text-[14px] text-[var(--text-faint)] transition hover:text-[var(--text)]">
@@ -96,7 +103,7 @@ export function Card({ label, onClose, children }: { label: string; onClose: () 
   return createPortal(
     <div className="fixed inset-0 z-[10070] grid place-items-center bg-black/45 p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-label={label}
-        className="relative flex max-h-[86dvh] w-[640px] max-w-full flex-col overflow-y-auto rounded-[16px] border border-[var(--border)] bg-[var(--dock-pane)] p-7 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
+        className="relative flex max-h-[86dvh] w-[640px] max-w-full flex-col overflow-y-auto rounded-[16px] border border-[var(--border)] bg-[var(--bg-panel)] p-7 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
         <button type="button" onClick={onClose} aria-label={t('settings.done')}
           className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
           <X size={16} />
@@ -105,6 +112,20 @@ export function Card({ label, onClose, children }: { label: string; onClose: () 
       </div>
     </div>,
     document.body,
+  );
+}
+
+/** The provider's own pricing page, a link after how it is paid. */
+function PricingLink({ provider }: { provider: OwnProvider }) {
+  const t = useT();
+  return (
+    <>
+      <span aria-hidden className="text-[var(--text-faint)]">·</span>
+      <a href={provider.pricingUrl} target="_blank" rel="noreferrer" className={settingsLink}
+        aria-label={t('settings.providers.pricingOf').replaceAll('{name}', provider.name)}>
+        {t('settings.providers.pricing')}
+      </a>
+    </>
   );
 }
 
@@ -122,20 +143,19 @@ export function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvi
   return (
     <Card label={provider.name} onClose={onClose}>
       <Connection provider={provider} hook={hook} header={(status, action) => (
-        <div className="flex items-start gap-4 pr-8">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] bg-[var(--fill-tsp)] text-[var(--text)]"><ProviderMark id={provider.id} size={24} /></span>
-          <div className="min-w-0 flex-1">
+        /* the status line runs on under the buttons, which are no taller than the name and website */
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 pr-8">
+          <span className="row-span-2 flex h-12 w-12 items-center justify-center rounded-[12px] bg-[var(--bg-field)] text-[var(--text)]"><ProviderMark id={provider.id} size={24} /></span>
+          <div className="min-w-0">
             <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{provider.name}</h2>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px]">
-              {site ? (
-                <a href={`https://${site}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[var(--text-faint)] transition hover:text-[var(--text)]">
-                  {site}<ExternalLink size={11} />
-                </a>
-              ) : null}
-              {status}
-            </div>
+            {site ? (
+              <a href={`https://${site}`} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[13.5px] text-[var(--text-faint)] transition hover:text-[var(--text)]">
+                {site}<ExternalLink size={11} />
+              </a>
+            ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1 pt-1">{action}</div>
+          <div className="flex items-center gap-1 pt-1">{action}</div>
+          {status ? <div className="col-span-2 col-start-2 mt-1 flex min-w-0 text-[13.5px]">{status}</div> : null}
         </div>
       )} />
       <p className="mt-5 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t(`settings.providers.about.${provider.id}`)}</p>
@@ -151,14 +171,14 @@ export function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvi
               <span className={`w-[132px] shrink-0 text-[14.5px] ${makes ? 'text-[var(--text)]' : 'text-[var(--text-faint)]'}`}>{t(`settings.providers.verbs.${verb}`)}</span>
               {models.length ? (
                 <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-                  {models.map((m) => <span key={m.id} className="rounded-[6px] bg-[var(--fill-tsp)] px-2 py-0.5 text-[13.5px] text-[var(--text-muted)]">{m.name}</span>)}
+                  {models.map((m) => <span key={m.id} className="rounded-[6px] bg-[var(--bg-field)] px-2 py-0.5 text-[13.5px] text-[var(--text-muted)]">{m.name}</span>)}
                 </div>
               ) : <span className="text-[14px] text-[var(--text-faint)]">{makes ? t('settings.providers.included') : '—'}</span>}
             </div>
           );
         })}
       </div>
-      <p className="mt-5 text-[13px] leading-relaxed text-[var(--text-faint)]">{paid}</p>
+      <p className="mt-5 inline-flex flex-wrap items-center gap-x-1.5 text-[13px] leading-relaxed text-[var(--text-faint)]">{paid}{provider.pricingUrl ? <PricingLink provider={provider} /> : null}</p>
     </Card>
   );
 }
@@ -191,9 +211,10 @@ function Connection({ provider, hook, header }: {
   const pasteLabel = azure ? t('settings.providers.key') : t('settings.providers.pasteKey').replaceAll('{name}', provider.name);
   const escape = (e: React.KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
 
-  /* one line that may wrap as text: the dot, Connected, and as whom (an account's email, or a key's last four) */
+  /* one line, never broken: the dot, Connected, and as whom (an account's email, or a key's last four); cut short when
+     the card is too narrow for it */
   const status = provider.source ? (
-    <span className="min-w-0 text-[var(--text-muted)]">
+    <span className="min-w-0 max-w-full truncate text-[var(--text-muted)]" title={provider.account || undefined}>
       <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[var(--ok)] align-middle" aria-hidden />
       {t('settings.providers.connected')}
       {provider.account ? <span className="text-[var(--text-faint)]"> · {provider.account}</span> : null}
@@ -270,7 +291,7 @@ export function AddProviderDialog({ onCustom, onClose }: { onCustom: () => void;
       <ol className="mt-6 flex flex-col divide-y divide-[var(--border)] border-y border-[var(--border)]">
         {(['addKnown', 'addOther', 'addCustom'] as const).map((key, i) => (
           <li key={key} className="flex gap-4 py-4">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--fill-tsp)] text-[12.5px] font-medium text-[var(--text-muted)]">{i + 1}</span>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--bg-field)] text-[12.5px] font-medium text-[var(--text-muted)]">{i + 1}</span>
             <span className="text-[14.5px] leading-relaxed text-[var(--text)]">{t(`settings.providers.${key}`)}</span>
           </li>
         ))}

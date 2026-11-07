@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
  * The library's templates, by the definitions in library-templates.json: each a group of clips, as Saved keeps clips
- * saved together, made of the library's own things. Places for the person's pictures (library/templates/slot.html,
- * numbered, to be replaced with their videos and photos) one after another, the transitions on their cuts, effects over
- * all of them, and titles and stickers each where it goes on any picture (`data-place`: its middle, and its height of
- * the picture's, laid out as it is put in). Its music is one of the library's, named in the catalog and put in with it.
+ * saved together, made of the library's own things. Places for the person's pictures one after another, each its
+ * example picture (files/example-<n>.jpg, made for that template and kept in its bundle; `data-slot`: which place, to
+ * be replaced with their videos and photos), the transitions on their cuts, effects over all of them, and titles and
+ * stickers each where it goes on any picture (`data-place`: its middle, and its height of the picture's, laid out as it
+ * is put in). Its music is one of the library's, named in the catalog and put in with it. Put in, it plays as its
+ * example until the person's own go in its places.
  * Writes each bundle under library/templates/<id>/ (saved.json and files/, every thing's files together) and
  * library/catalogs/templates.json.
  *
@@ -37,9 +39,10 @@ function lanes(list) {
 const catalog = [];
 for (const def of defs.templates) {
   const dir = join(LIB, 'templates', def.id);
-  rmSync(join(dir, 'files'), { recursive: true, force: true });
+  /* the bundle made again, its example pictures kept */
+  const EXAMPLE = /^example-\d+\.jpg$/;
   mkdirSync(join(dir, 'files'), { recursive: true });
-  cpSync(join(LIB, 'templates', 'slot.html'), join(dir, 'files', 'slot.html'));
+  for (const name of readdirSync(join(dir, 'files'))) if (!EXAMPLE.test(name)) rmSync(join(dir, 'files', name), { recursive: true, force: true });
   const used = new Set();
   /** whose each file in the bundle is, so two things never put different files in one place */
   const owner = new Map();
@@ -69,13 +72,11 @@ for (const def of defs.templates) {
   const starts = [];
   let total = 0;
   for (const len of def.slots) { starts.push(round(total)); total = round(total + len); }
-  const slots = def.slots.map((len, i) => ({
-    at: starts[i],
-    clip: {
-      src: 'slot.html', time: [0, len], style: 'object-fit: cover',
-      overrides: [{ at: ':root', style: { '--n': `'${i + 1}'`, ...(def.tone ? { '--tone': def.tone } : {}) } }],
-    },
-  }));
+  const slots = def.slots.map((len, i) => {
+    const example = `example-${i + 1}.jpg`;
+    if (!existsSync(join(dir, 'files', example))) throw new Error(`${def.id}: no ${example} for its place ${i + 1}`);
+    return { at: starts[i], clip: { src: example, time: [0, len], style: 'object-fit: cover', attrs: { 'data-slot': String(i + 1) } } };
+  });
 
   /* a transition on each cut, its middle on it */
   const cuts = (def.cut ?? []).length ? starts.slice(1) : [];
@@ -139,6 +140,12 @@ for (const def of defs.templates) {
   });
   console.log(`→ library/templates/${def.id}: ${def.slots.length} pictures, ${total} s, ${used.size} things`);
 }
+/* what each says it is about and its tags (scripts/library-describe.mjs wrote them) stay as they were */
+const before = existsSync(join(LIB, 'catalogs', 'templates.json')) ? JSON.parse(readFileSync(join(LIB, 'catalogs', 'templates.json'), 'utf8')).items : [];
+for (const item of catalog) {
+  const was = before.find((b) => b.id === item.id);
+  if (was?.about) item.about = was.about;
+  if (was?.tags && !item.tags) item.tags = was.tags;
+}
 writeFileSync(join(LIB, 'catalogs', 'templates.json'), `${JSON.stringify({ version: 1, groups: { template: defs.groups }, items: catalog }, null, 1)}\n`);
 console.log(`${catalog.length} templates → library/catalogs/templates.json`);
-if (!existsSync(join(LIB, 'templates', 'slot.html'))) throw new Error('library/templates/slot.html is missing');

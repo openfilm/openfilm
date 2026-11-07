@@ -48,7 +48,7 @@ export function ViewerBar({
   /* `minmax(0,1fr)` rather than `1fr`: a 1fr column will not shrink below its content, and two full timecodes are 25
      characters — a narrow pane would push the play button over the timecode. These columns shrink and clip. */
   return (
-    <div className="grid h-8 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2">
+    <div className="grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2">
       {/* where we are is read constantly: body color, 12px; the length one step fainter. One line, never wrapped:
           when it does not fit, the length is clipped first. No hour field for a film under an hour. */}
       <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] tabular-nums text-[var(--text)]">

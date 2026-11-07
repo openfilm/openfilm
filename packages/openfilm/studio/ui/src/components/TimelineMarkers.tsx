@@ -100,7 +100,7 @@ function MarkerCard({ placed, x, y, focusName, actions, onClose }: {
         if ((e.key === 'Delete' || e.key === 'Backspace') && e.target === box.current) { e.preventDefault(); actions.onRemove(marker.id); onClose(); }
       }}
       className="fixed z-[10001] flex flex-col gap-2 rounded-[8px] border p-2 shadow-[var(--shadow-lg)] outline-none"
-      style={{ left: Math.max(8, Math.min(x - W / 2, window.innerWidth - W - 8)), top: y + 6, width: W, background: 'var(--tl-head)', borderColor: 'var(--tl-line)' }}
+      style={{ left: Math.max(8, Math.min(x - W / 2, window.innerWidth - W - 8)), top: y + 6, width: W, background: 'var(--bg-panel)', borderColor: 'var(--border)' }}
     >
       <div className="flex items-center gap-1.5">
         <span className="shrink-0"><MarkerGlyph size={13} fill={MARKER_PAINT[marker.color]} /></span>
@@ -116,7 +116,7 @@ function MarkerCard({ placed, x, y, focusName, actions, onClose }: {
             if (e.key === 'Escape') { e.preventDefault(); close(); }
           }}
           onBlur={keepName}
-          className="h-[24px] min-w-0 flex-1 rounded-[4px] bg-[var(--bg)] px-1.5 text-[12px] text-[var(--text)] outline-none ring-1 ring-[var(--tl-line)] focus:ring-[var(--tl-accent)]"
+          className="h-[24px] min-w-0 flex-1 rounded-[4px] bg-[var(--bg-panel)] px-1.5 text-[12px] text-[var(--text)] outline-none ring-1 ring-[var(--border)] focus:ring-[var(--accent)]"
         />
       </div>
       <div className="flex items-center gap-1" role="radiogroup" aria-label={t('editorTools.markerColor')}>
@@ -129,19 +129,19 @@ function MarkerCard({ placed, x, y, focusName, actions, onClose }: {
             aria-label={t(`editorTools.colors.${c}`)}
             title={t(`editorTools.colors.${c}`)}
             onClick={() => actions.onChange(marker.id, { color: c })}
-            className="flex h-[22px] w-[22px] items-center justify-center rounded-full outline-none transition hover:bg-black/5 focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)] dark:hover:bg-white/10"
+            className="flex h-[22px] w-[22px] items-center justify-center rounded-full outline-none transition hover:bg-black/5 focus-visible:ring-1 focus-visible:ring-[var(--accent)] dark:hover:bg-white/10"
           >
-            <span className="block h-3 w-3 rounded-full" style={{ background: MARKER_PAINT[c], boxShadow: marker.color === c ? `0 0 0 2px var(--tl-head), 0 0 0 3.5px ${MARKER_PAINT[c]}` : undefined }} />
+            <span className="block h-3 w-3 rounded-full" style={{ background: MARKER_PAINT[c], boxShadow: marker.color === c ? `0 0 0 2px var(--bg-panel), 0 0 0 3.5px ${MARKER_PAINT[c]}` : undefined }} />
           </button>
         ))}
       </div>
-      <div className="flex items-center justify-between border-t pt-1.5" style={{ borderColor: 'var(--tl-line)' }}>
-        <span className="font-mono text-[10.5px] tabular-nums" style={{ color: 'var(--tl-faint)' }}>{formatTimecode(placed.ms)}</span>
+      <div className="flex items-center justify-between border-t pt-1.5" style={{ borderColor: 'var(--border)' }}>
+        <span className="font-mono text-[10.5px] tabular-nums" style={{ color: 'var(--text-faint)' }}>{formatTimecode(placed.ms)}</span>
         <button
           type="button"
           onClick={() => { actions.onRemove(marker.id); onClose(); }}
-          className="flex items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[11px] outline-none transition hover:bg-black/5 focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)] dark:hover:bg-white/10"
-          style={{ color: 'var(--text-dim)' }}
+          className="flex items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[11px] outline-none transition hover:bg-black/5 focus-visible:ring-1 focus-visible:ring-[var(--accent)] dark:hover:bg-white/10"
+          style={{ color: 'var(--text-muted)' }}
         >
           <Trash2 size={12} aria-hidden />{t('editorTools.markerDelete')}
         </button>
@@ -274,7 +274,7 @@ export function LaneMarkers({ placed, lane, actions }: { placed: readonly Placed
               /* its name beside it, as far as the next pin */
               <span
                 className="pointer-events-none absolute left-[12px] top-1/2 -translate-y-1/2 truncate whitespace-nowrap text-[10px] leading-none"
-                style={{ maxWidth: room, color: 'var(--tl-text)' }}
+                style={{ maxWidth: room, color: 'var(--text-muted)' }}
                 data-marker-name=""
               >
                 {p.marker.name}

@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * The models that run on this computer: Settings → Services → Local models. Each is fetched from OpenFilm's published
+ * The models that run on this computer: Settings → Services → Local services. Each is fetched from OpenFilm's published
  * library, checked, and kept in the library's cache for every OpenFilm here (src/local-models.mjs); nothing it is given
  * leaves the computer, and it costs nothing. A model is installed or not, and an installed one on or off (off: kept,
  * not used).
@@ -10,10 +10,8 @@
  *   PUT    /api/local-models/<id>           { on }: used or not
  *   DELETE /api/local-models/<id>           its files thrown away, and off
  *
- * The library search's sentence model (src/library-semantic.mjs) is fetched by a search by itself, unless it was
- * turned off or removed here. The others are Local models the provider (providers/local.mjs): transcripts and pictures'
- * backgrounds; one coming, going or turned on or off moves what Settings → Services chose for its kind
- * (providers/index.mjs localModelsChanged).
+ * They are what Local services runs (providers/local.mjs): transcripts and pictures' backgrounds; one coming, going
+ * or turned on or off moves what Settings → Services chose for its kind (providers/index.mjs localModelsChanged).
  */
 import { HttpError, json, readJson } from './http.mjs';
 import { modelBuiltIn, modelBytesHere, modelEntries, modelEntry, modelFailed, modelFetching, modelOn, modelReady, removeModel, setModelOn } from '../../src/local-models.mjs';
@@ -22,12 +20,11 @@ import { localModelsChanged } from './providers/index.mjs';
 /**
  * What a model is, for its page: what it is for (`kind`), who made it and where they publish it, its license, and
  * about how much memory it takes while it runs (measured).
- * @typedef {{ kind: 'search' | 'asr' | 'cutout', name: string, by: string, site: string, license: string, memoryMb: number }} About
+ * @typedef {{ kind: 'asr' | 'cutout', name: string, by: string, site: string, license: string, memoryMb: number }} About
  */
 
 /** @type {Record<string, About>} */
 const ABOUT = {
-  'multilingual-e5-small': { kind: 'search', name: 'Multilingual E5 Small', by: 'Microsoft', site: 'huggingface.co/intfloat/multilingual-e5-small', license: 'MIT', memoryMb: 600 },
   'whisper-small': { kind: 'asr', name: 'Whisper Small', by: 'OpenAI', site: 'github.com/openai/whisper', license: 'MIT', memoryMb: 1800 },
   'whisper-large-v3-turbo': { kind: 'asr', name: 'Whisper Large v3 Turbo', by: 'OpenAI', site: 'github.com/openai/whisper', license: 'MIT', memoryMb: 2400 },
   'birefnet-lite': { kind: 'cutout', name: 'BiRefNet Lite', by: 'Nankai University', site: 'github.com/ZhengPeng7/BiRefNet', license: 'MIT', memoryMb: 2600 },
@@ -58,9 +55,12 @@ export function localModels() {
  */
 export async function localModelsRoute(req, res, parts) {
   if (!parts.length && req.method === 'GET') {
+    /* Capture readiness first: a download can finish while provider settings are read. Never report a model as
+       installed before the provider refresh below has had a chance to select it for its kind. */
+    const models = localModels();
     /* one that finished coming since: its kind may go to it now */
     await localModelsChanged();
-    return json(res, 200, { models: localModels() });
+    return json(res, 200, { models });
   }
   const m = ABOUT[parts[0]] ? modelEntry(parts[0]) : null;
   if (!m) throw new HttpError(404, 'no such model');
@@ -74,6 +74,7 @@ export async function localModelsRoute(req, res, parts) {
     if (modelBuiltIn(m)) throw new HttpError(409, 'it is part of this checkout');
     removeModel(m);
   } else throw new HttpError(404, 'no such thing');
+  const models = localModels();
   await localModelsChanged();
-  return json(res, 200, { models: localModels() });
+  return json(res, 200, { models });
 }

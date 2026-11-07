@@ -1,5 +1,5 @@
 /**
- * OpenFilm for desktop: one window of tabs, a project in each, Studio on the left and a chat on the right, one page
+ * OpenFilm for desktop: one window of tabs, a project in each, a chat on the left and Studio on the right, one page
  * per tab (tabs.mjs). A project is picked in Studio's projects window (the tabs' `+`), and its tab opens; with no tab
  * open, the window's page is the projects (HOME).
  *
@@ -9,9 +9,9 @@
  * in the page (shell/bridge.ts); this process does what only the app can: the window, the agents, files on the disk,
  * ffmpeg, updates (preload.cjs). The window opens straight into the last project.
  */
-import { BaseWindow, Menu, WebContentsView, app, clipboard, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
+import { BaseWindow, Menu, Notification, WebContentsView, app, clipboard, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FLAVOR, IDENTITY, PRODUCT_NAME } from './flavor.mjs';
 import { folderDialogOptions, programDialogOptions } from './folder-dialog.mjs';
@@ -27,7 +27,7 @@ import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
 import { registerSkillsIpc } from './skills-ipc.mjs';
 import { createRoster } from './agent-roster.mjs';
-import { checkAgentProgram, closeEverySession, diagnoseAgent, forgetAgentStatus, listAgents, localAgent, openAgentInstaller, openAgentSignIn, setChosenPaths, signOutAgent } from './agents.mjs';
+import { AGENTS, checkAgentProgram, closeEverySession, diagnoseAgent, forgetAgentStatus, listAgents, localAgent, openAgentInstaller, openAgentSignIn, setChosenPaths, signOutAgent } from './agents.mjs';
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
 import { installOpenfilmCommand } from './openfilm-command.mjs';
 import { startUpdates } from './updates.mjs';
@@ -36,18 +36,33 @@ import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegIn, ffmpegOnPath } f
 import { PATH_SEP } from './environment.mjs';
 import { firstWindowsApps } from './windows-apps.mjs';
 import { createTabs, projectGone } from './tabs.mjs';
+import { turnNotice } from './turn-notices.mjs';
+import { restartDelay } from './studio-restart.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const mac = process.platform === 'darwin';
 const windows = process.platform === 'win32';
 /** Windows' window buttons over the top bar: the board's color, and the text's */
-const overlayColours = (t) => ({ color: t === 'dark' ? '#111111' : '#f2f2f2', symbolColor: t === 'dark' ? '#dadada' : '#1f1f1f', height: 32 });
+const overlayColours = (t) => ({ color: t === 'dark' ? '#111114' : '#e9e9eb', symbolColor: t === 'dark' ? '#ebebed' : '#161619', height: 32 });
 
 /* HTML-in-Canvas in Studio's viewer, as in the renderer (the `openfilm` package's src/host.mjs) */
 app.commandLine.appendSwitch('enable-blink-features', 'CanvasDrawElement');
+if (mac) {
+  /* Flush small Canvas2D batches: blur on hundreds of strokes otherwise queues gigabytes of intermediate
+     textures. Keep GPU canvas-to-WebGL uploads fast without changing the rest of Graphite's batching. */
+  const features = app.commandLine.getSwitchValue('enable-features');
+  app.commandLine.appendSwitch('enable-features', [
+    features,
+    'Canvas2DAutoFlushParams:max_recorded_op_graphite_kb/4',
+  ].filter(Boolean).join(','));
+} else {
+  app.commandLine.appendSwitch('disable-skia-graphite');
+}
 
 /* each flavour its own name, data folder and single-instance lock (flavor.mjs) */
 app.setName(PRODUCT_NAME);
+/* Windows shows a notification only for the app ID the Start menu shortcut carries: the installer's appId (release.mjs) */
+if (windows) app.setAppUserModelId(IDENTITY.bundleId);
 app.setPath('userData', IDENTITY.userData ?? join(app.getPath('appData'), PRODUCT_NAME));
 const DATA = app.getPath('userData');
 const LOGS = join(DATA, 'logs');
@@ -104,8 +119,8 @@ let localAgents = null;
 /** @type {ReturnType<typeof createRoster> | null} */
 let roster = null;
 
-/** the board Studio's panes sit on (its --dock-shell), so the window never flashes another color */
-const BACKGROUND = { light: '#f2f2f2', dark: '#111111' };
+/** the board Studio's panes sit on (its --bg-app), so the window never flashes another color */
+const BACKGROUND = { light: '#e9e9eb', dark: '#111114' };
 
 function focusWindow() {
   if (!win) return;
@@ -383,6 +398,43 @@ function setTheme(next) {
   if (windows) win?.setTitleBarOverlay?.(overlayColours(theme));
 }
 
+/** the notifications shown and not yet clicked or closed: one let go is garbage collected, and its click lost (macOS) */
+const notices = new Set();
+/** how many of them a long session keeps: an older one is closed, in Notification Center and Action Center too */
+const NOTICES_KEPT = 20;
+
+/**
+ * A turn of the chat's done, stopped by an error, or waiting for the person's answer: a notification of the system's,
+ * while the window is not in front and Settings › General leaves them on (turn-notices.mjs). Clicking it brings the
+ * window back on that project's tab. The taskbar button flashes (Windows), the Dock icon bounces once (macOS).
+ * @param {{ kind: 'done' | 'failed' | 'asking', agent: string, cwd: string, meta: any, error?: string }} turn
+ */
+async function noticeTurn({ kind, agent, cwd, meta, error }) {
+  if (!win || quitting || !Notification.isSupported()) return;
+  const project = typeof meta?.projectTitle === 'string' && meta.projectTitle ? meta.projectTitle : basename(cwd);
+  const notice = turnNotice(kind, {
+    project, agent: agent === 'byok' ? null : AGENTS[agent]?.label ?? agent, error, inFront: win.isFocused() && win.isVisible(),
+    on: readPreferences(DATA).notify, language: appLanguage(state.language, app.getPreferredSystemLanguages()),
+  });
+  if (!notice) return;
+  const shown = new Notification({ title: notice.title, body: notice.body });
+  const done = () => notices.delete(shown);
+  shown.on('click', () => {
+    done();
+    focusWindow();
+    void (async () => {
+      if (!projectPaths.has(cwd)) projectPaths = new Map((await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.map((p) => [p.path, p.id]));
+      newTab(projectPaths.get(cwd));
+    })();
+  });
+  shown.on('close', done);
+  notices.add(shown);
+  for (const old of notices) { if (notices.size <= NOTICES_KEPT) break; notices.delete(old); old.close(); }
+  shown.show();
+  if (windows) win.flashFrame(true);
+  else app.dock?.bounce('informational');
+}
+
 /** Tell Studio which folders the chat's agents are working in now. */
 function tellWorking(/** @type {string[]} */ folders) {
   studio?.child.postMessage({ type: 'working', folders });
@@ -412,7 +464,12 @@ function answerStudio(message, reply) {
     .finally(() => asked.delete(message.id));
 }
 
+/** when the running Studio started, and the wait before it did (studio-restart.mjs) */
+let startedAt = 0;
+let restartWait = 0;
+
 async function runStudio(env) {
+  startedAt = Date.now();
   studio = await startWindowStudio({
     onAsk: answerStudio,
     home: env.OPENFILM_HOME,
@@ -432,8 +489,10 @@ async function runStudio(env) {
     },
     onExit: (code) => {
       if (quitting) return;
-      log(`Studio stopped (${code}); starting it again\n`);
-      setTimeout(() => void runStudio(env).catch((error) => log(`Studio did not start again: ${error.message}\n`)), 1000);
+      /* stopping again and again at once: started again later each time (studio-restart.mjs) */
+      restartWait = restartDelay(restartWait, Date.now() - startedAt);
+      log(`Studio stopped (${code}); starting it again in ${restartWait / 1000} s\n`);
+      setTimeout(() => void runStudio(env).catch((error) => log(`Studio did not start again: ${error.message}\n`)), restartWait);
     },
   });
   /* a Studio started again hears where the agents are working */
@@ -531,6 +590,8 @@ async function start() {
   launch.dismiss();
 
   win.on('resize', layout);
+  /* the taskbar button a turn's notification set flashing (noticeTurn) stops once the window is in front */
+  if (windows) win.on('focus', () => win?.flashFrame(false));
   win.on('resized', saveState);
   win.on('moved', saveState);
   win.on('enter-full-screen', () => broadcast('desktop:full-screen', true));
@@ -565,8 +626,14 @@ async function start() {
     projects: async () => { const { projects } = await studioApi('/api/projects'); return projects.filter((p) => !projectGone(projects, p.id)).map((p) => p.path); },
     dataDir: DATA,
     reveal: (path) => shell.showItemInFolder(path),
+    trash: (path) => shell.trashItem(path),
     tell: (channel, value) => broadcast(channel, value),
     log,
+    filmPutBack: async (dir, done = false) => {
+      const { projects } = await studioApi('/api/projects');
+      const found = projects.find((p) => p.path === dir);
+      if (found) await studioApi(`/api/projects/${encodeURIComponent(found.id)}/history/put-back${done ? '/done' : ''}`, 'POST');
+    },
   });
   /* the tabs, drawn by each page in Studio's top bar: asked for, and told of every change (tellTabs) */
   const tabHandle = (channel, fn) => ipcMain.handle(channel, (event, opts) => {
@@ -621,6 +688,8 @@ async function start() {
     onWorking: tellWorking,
     /* a tab says when its agent waits for the person's answer */
     onAsking: (folders) => void tellTabsWorking({ asking: folders }),
+    /* a turn done, stopped or waiting, told by the system while the window is not in front */
+    onTurn: (turn) => void noticeTurn(turn),
     onConnectionResult: (id, error) => roster?.recordConnectionResult(id, error),
     /* the `openfilm` command first (with the app's ffmpeg and browser in it); the app's ffmpeg last, for a computer
        that has none of its own: the person's own ffmpeg and browsers are what the agent's commands use */

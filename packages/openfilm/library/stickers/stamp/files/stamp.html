@@ -5,7 +5,7 @@
 <title>Stamp</title>
 <style>
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
-:root { --color: #ff3b30; }
+:root { --font: 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ff3b30; }
 svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
 .in { transform-origin: 260px 120px; animation: in 0.45s cubic-bezier(.5, 0, .9, .5) both; }
 @keyframes in { 0% { transform: scale(2.4) rotate(-14deg); opacity: 0; } 70% { transform: scale(0.96) rotate(-8deg); opacity: 1; } 85% { transform: scale(1.02) rotate(-8deg); } 100% { transform: rotate(-8deg); } }
@@ -13,7 +13,7 @@ svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
 @keyframes sk { 25% { transform: translate(4px, -3px); } 50% { transform: translate(-3px, 2px); } 75% { transform: translate(2px, 1px); } }
 .dust { transform-origin: 260px 120px; opacity: 0; animation: dust 0.5s cubic-bezier(.2, .8, .2, 1) 0.32s both; }
 @keyframes dust { 0% { transform: scale(0.9); opacity: 0; } 1% { opacity: 0.7; } 100% { transform: scale(1.25); opacity: 0; } }
-.label { font: 400 74px 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: var(--color); letter-spacing: 4px; }
+.label { font: 400 74px var(--font); fill: var(--color); letter-spacing: 4px; }
 .label2 { font: 800 24px 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: var(--color); letter-spacing: 12px; }
 </style>
 </head>

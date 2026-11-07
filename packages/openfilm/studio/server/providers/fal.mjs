@@ -7,7 +7,7 @@
  * model is given go inline, as data: URIs.
  */
 import { extname } from 'node:path';
-import { RATIO_SIZE, billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, modelOf, mp3Seconds, needed, notes, number, ownAddress, round, serviceUrl, sleep, text, wavSeconds } from './common.mjs';
+import { RATIO_SIZE, billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, mediaSeconds, mimeOf, modelOf, mp3Seconds, needed, notes, number, ownAddress, pictureSize, pngOnly, round, serviceUrl, sleep, text, wavSeconds } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -20,6 +20,15 @@ const MODELS = {
     { id: 'seedance-2.0-fast', name: 'Seedance 2.0 Fast' },
     { id: 'kling-3.0-pro', name: 'Kling 3.0 Pro' },
     { id: 'kling-3.0-standard', name: 'Kling 3.0 Standard' },
+    /* from a clip (--video), each its own way: see FROM_CLIP */
+    { id: 'kling-o3-edit', name: 'Kling O3 Edit (changes what the prompt names in a clip)' },
+    { id: 'kling-o3-reference', name: 'Kling O3 Reference (a new clip with a clip\'s camera and motion)' },
+    { id: 'luma-ray-3.2', name: 'Luma Ray 3.2 Modify (a clip redrawn, its performance kept)' },
+    { id: 'minimax-h3-max-recast', name: 'MiniMax H3 Max Recast (a clip\'s people replaced)' },
+    /* a person speaking a recording (--audio), its lips following it word for word: see FROM_SPEECH */
+    { id: 'omnihuman-v2', name: 'OmniHuman v2 (a person in a picture speaking a recording)' },
+    { id: 'kling-avatar-v2', name: 'Kling Avatar v2 (a person in a picture speaking a recording)' },
+    { id: 'sync-3', name: 'sync-3 (a clip\'s lips made to follow a recording)' },
   ],
   music: [{ id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }, { id: 'fal-ai/lyria2', name: 'Lyria 2' }],
   sfx: [{ id: 'fal-ai/elevenlabs/sound-effects/v2', name: 'ElevenLabs Sound Effects v2' }, { id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }],
@@ -66,6 +75,47 @@ const VIDEO = {
   },
 };
 
+/**
+ * The models that make a clip from another (`--video`), each its own way: `edit` changes what the prompt names and keeps
+ * the rest, its length the clip's; `follow` makes a new clip with the clip's camera and motion; `modify` redraws the
+ * clip, its performance kept; `recast` puts the people of the reference pictures in place of the clip's, its sound
+ * kept. Each takes clips of `clip` seconds.
+ * @type {Record<string, { name: string, endpoint: string, way: 'edit' | 'follow' | 'modify' | 'recast', clip: [number, number] }>}
+ */
+const FROM_CLIP = {
+  'kling-o3-edit': { name: 'Kling O3 Edit', endpoint: 'fal-ai/kling-video/o3/pro/video-to-video/edit', way: 'edit', clip: [3, 15] },
+  'kling-o3-reference': { name: 'Kling O3 Reference', endpoint: 'fal-ai/kling-video/o3/pro/video-to-video/reference', way: 'follow', clip: [3, 15] },
+  'luma-ray-3.2': { name: 'Luma Ray 3.2', endpoint: 'luma/agent/ray/v3.2/video-to-video', way: 'modify', clip: [1, 18] },
+  'minimax-h3-max-recast': { name: 'MiniMax H3 Max Recast', endpoint: 'minimax/h3-max/recast', way: 'recast', clip: [5, 30] },
+};
+/**
+ * The models that make a person speak a recording (`--audio`), the lips following it word for word, the clip as long as
+ * the recording and its sound that recording: from a picture of the person (`--first-frame`, else the first
+ * `--input-reference`), the prompt steering how they move and how they are framed; or (`clip`) a clip whose lips are
+ * made to follow it (`--video`).
+ * @type {Record<string, { name: string, endpoint: string, from: 'picture' | 'clip', seconds: [number, number] }>}
+ */
+const FROM_SPEECH = {
+  'omnihuman-v2': { name: 'OmniHuman v2', endpoint: 'bytedance/omnihuman/v2', from: 'picture', seconds: [4, 300] },
+  'kling-avatar-v2': { name: 'Kling Avatar v2', endpoint: 'fal-ai/kling-video/ai-avatar/v2/pro', from: 'picture', seconds: [2, 300] },
+  'sync-3': { name: 'sync-3', endpoint: 'fal-ai/sync-lipsync/v3', from: 'clip', seconds: [1, 600] },
+};
+
+/* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0, sizes: ['1k', '2k', '4k'] } });
+for (const model of MODELS.video) {
+  const v = VIDEO[model.id];
+  const c = FROM_CLIP[model.id];
+  const s = FROM_SPEECH[model.id];
+  const spec = v ? { ratios: v.ratios, seconds: v.seconds, refs: v.reference ? 9 : 0, frames: true }
+    : c ? { seconds: c.clip, refs: c.way === 'recast' ? 9 : 0, needs: 'clip' }
+    : s ? { seconds: s.seconds, refs: s.from === 'picture' ? 1 : 0, needs: 'audio' } : null;
+  if (spec) Object.assign(model, { spec });
+}
+
+/** the largest clip sent inline when it cannot be put on fal's storage */
+const INLINE_MAX = 10 * 1024 * 1024;
+
 /** How long to wait between asking after a request (tests make it short). */
 export const polling = { ms: { image: 1000, audio: 2000, video: 5000 } };
 
@@ -76,17 +126,22 @@ export default {
   env: 'FAL_KEY',
   keysUrl: 'https://fal.ai/dashboard/keys',
   billingUrl: 'https://fal.ai/dashboard/billing',
+  pricingUrl: 'https://fal.ai/pricing',
   verbs: ['image', 'video', 'music', 'sfx'],
   models: MODELS,
   async run(verb, args, ctx) {
     if (verb === 'image') {
       const prompt = needed(args, 'prompt');
+      pngOnly(args, 'FLUX.2');
       const ratio = text(args.ratio) || '3:2';
       const size = RATIO_SIZE[ratio];
       if (!size) throw new Error(`--ratio is one of ${Object.keys(RATIO_SIZE).join(', ')}.`);
       const model = modelOf(MODELS, 'image', ctx);
-      const said = [...(args.transparent ? ['--transparent: FLUX.2 makes opaque pictures'] : []), ...(text(args.quality) === 'high' ? ['--quality high: FLUX.2 has one quality'] : [])];
-      const result = await queued(model, { prompt, image_size: size, output_format: 'png' }, ctx, polling.ms.image);
+      const said = [...(args.transparent ? ['--transparent: FLUX.2 makes opaque pictures'] : []),
+        ...(text(args.quality) && text(args.quality) !== 'low' ? [`--quality ${text(args.quality)}: FLUX.2 has one quality`] : []),
+        ...(list(args.ref).length || text(args.mask) || text(args.markup) ? ['--ref, --mask, --markup: FLUX.2 here makes pictures from the prompt alone'] : [])];
+      const pixels = pictureSize(ratio, text(args.size) || '1k') ?? size;
+      const result = await queued(model, { prompt, image_size: pixels, output_format: 'png' }, ctx, polling.ms.image);
       const image = result?.images?.[0];
       if (!text(image?.url)) throw new Error(`${NAME} answered without a picture.`);
       const { bytes, type } = await download(NAME, image.url, ctx);
@@ -101,13 +156,23 @@ export default {
 
 /**
  * A clip with sound, of the lengths and shapes the chosen model makes: from the prompt, from a first (and last) frame,
- * or (Seedance) from up to 9 reference pictures.
+ * (Seedance) from up to 9 reference pictures and a reference clip, or from a clip (`--video`, FROM_CLIP).
  * @param {Record<string, unknown>} args @param {RunContext} ctx
  */
 async function video(args, ctx) {
+  const chosen = modelOf(MODELS, 'video', ctx);
+  const clip = text(args.video);
+  if (FROM_SPEECH[chosen]) return fromSpeech(FROM_SPEECH[chosen], args, ctx);
+  if (text(args.audio)) {
+    throw new Error(`--audio: a person speaking a recording is made with --model omnihuman-v2 or kling-avatar-v2 (from a picture), or sync-3 (a clip's lips made to follow it).`);
+  }
+  if (FROM_CLIP[chosen]) return fromClip(FROM_CLIP[chosen], args, ctx);
   const prompt = needed(args, 'prompt');
   const path = landing('video', args.out, 'mp4');
-  const spec = VIDEO[modelOf(MODELS, 'video', ctx)];
+  const spec = VIDEO[chosen];
+  if (clip && !spec.reference) {
+    throw new Error(`--video: ${spec.name} makes clips from a prompt and pictures. A clip made from another is made with --model ${['seedance-2.0', ...Object.keys(FROM_CLIP)].join(', ')}.`);
+  }
   const said = [];
   const first = text(args['first-frame']);
   const last = text(args['last-frame']);
@@ -123,15 +188,28 @@ async function video(args, ctx) {
   const aspect = !ratio || ratio === 'adaptive' ? null : spec.ratios.includes(ratio) ? ratio : tall ? '9:16' : ['4:3', '1:1'].includes(ratio) && spec.ratios.includes('1:1') ? '1:1' : '16:9';
   if (aspect && aspect !== ratio) said.push(`${spec.name} makes ${spec.ratios.join(', ')} clips: ${aspect}`);
 
-  const endpoint = first ? spec.image : refs.length && spec.reference ? spec.reference : spec.text;
+  /* whose voice speaks the words of the prompt (Seedance): a recording of it, beside a picture or a clip of who speaks */
+  const voice = text(args.voice);
+  if (voice && !spec.reference) throw new Error(`--voice: ${spec.name} here takes no voice. Seedance takes one: --model seedance-2.0.`);
+  if (voice && first && !clip) {
+    refs = [first, ...refs].slice(0, 9);
+    said.push('--first-frame: with --voice it was given as a reference picture, the clip made from references');
+  }
+  if (voice && !refs.length && !clip) throw new Error('--voice goes with a picture or a clip of who speaks: --first-frame, --input-reference or --video.');
+  const fromRefs = voice || refs.length || clip;
+  const endpoint = first && !fromRefs ? spec.image : fromRefs && spec.reference ? spec.reference : spec.text;
+  if (first && clip) said.push('--first-frame: a clip made with a reference clip takes no first frame: it was left out');
   /* Kling calls the first frame start_image_url, and shapes only a clip made from the prompt */
   const kling = !spec.reference;
   const input = {
-    prompt, duration: String(seconds), ...(spec.resolution ? { resolution: spec.resolution } : {}),
+    /* Seedance's prompt names its reference clip @Video1 */
+    prompt: clip && !prompt.includes('@Video1') ? `@Video1: ${prompt}` : prompt, duration: String(seconds), ...(spec.resolution ? { resolution: spec.resolution } : {}),
     ...(aspect && !(kling && first) ? { aspect_ratio: aspect } : {}),
-    ...(first ? { [kling ? 'start_image_url' : 'image_url']: await dataUri(first, ctx) } : {}),
-    ...(last ? { end_image_url: await dataUri(last, ctx) } : {}),
+    ...(first && !fromRefs ? { [kling ? 'start_image_url' : 'image_url']: await dataUri(first, ctx) } : {}),
+    ...(last && !fromRefs ? { end_image_url: await dataUri(last, ctx) } : {}),
     ...(refs.length ? { image_urls: await Promise.all(refs.map((r) => dataUri(r, ctx))) } : {}),
+    ...(clip ? { video_urls: [await clipUrl(clip, ctx)] } : {}),
+    ...(voice ? { audio_urls: [await clipUrl(voice, ctx)] } : {}),
   };
   const result = await queued(endpoint, input, ctx, polling.ms.video);
   if (!text(result?.video?.url)) throw new Error(`${NAME} answered without a clip.`);
@@ -141,11 +219,125 @@ async function video(args, ctx) {
     files: [{ path, bytes }],
     index: [{ src: path, kind: 'video', dur: seconds, hasAudio: true, from: {
       mode: 'generate', prompt, provider: 'fal', model: endpoint, ...resolution, sec: seconds,
-      ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length ? { refs } : {}),
+      ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length ? { refs } : {}), ...(clip ? { clip } : {}),
     } }],
     receipt: { provider: 'fal', model: endpoint, src: path, dur: seconds, hasAudio: true, ...resolution, ...notes(said) },
     cost: billedBy(NAME),
   };
+}
+
+/**
+ * A clip made from another (`--video`), the chosen model's way (FROM_CLIP). A clip edited or recast is as long as the
+ * one given; one that follows another is as long as asked.
+ * @param {typeof FROM_CLIP[string]} spec @param {Record<string, unknown>} args @param {RunContext} ctx
+ */
+async function fromClip(spec, args, ctx) {
+  const clip = text(args.video);
+  if (!clip) throw new Error(`${spec.name} makes a clip from another: give it with --video.`);
+  const prompt = text(args.prompt);
+  if (spec.way !== 'recast' && !prompt) throw new Error(`--prompt: say what ${spec.name} is to make of the clip.`);
+  const path = landing('video', args.out, 'mp4');
+  const said = [];
+  const length = await mediaSeconds(ctx.root, clip);
+  if (length !== null && (length < spec.clip[0] - 0.05 || length > spec.clip[1] + 0.05)) {
+    throw new Error(`--video: ${spec.name} takes clips of ${spec.clip[0]} to ${spec.clip[1]} s, and ${clip} is ${Math.round(length * 10) / 10} s: trim it to the part to make again.`);
+  }
+  let refs = list(args['input-reference']);
+  if (spec.way === 'recast' && !refs.length) throw new Error(`--input-reference: ${spec.name} puts the people of these pictures in place of the clip's, one picture each.`);
+  if (refs.length > 4) { said.push(`${spec.name} takes 4 reference pictures: the rest were left out`); refs = refs.slice(0, 4); }
+  if (spec.way === 'modify' && refs.length > 1) { said.push(`${spec.name} takes one picture, its first frame: the rest were left out`); refs = refs.slice(0, 1); }
+  for (const name of ['first-frame', 'last-frame']) if (text(args[name])) said.push(`--${name}: ${spec.name} makes it from the clip: it was left out`);
+  const video = await clipUrl(clip, ctx);
+  const images = await Promise.all(refs.map((r) => dataUri(r, ctx)));
+  /* Kling's prompt names the clip @Video1 and the pictures @Image1… */
+  const named = prompt.includes('@Video1') ? prompt : `@Video1: ${prompt}`;
+  let seconds = length !== null ? Math.round(length * 10) / 10 : number(args.duration) ?? 5;
+  /** @type {Record<string, unknown>} */
+  let input;
+  if (spec.way === 'edit') input = { prompt: named, video_url: video, ...(images.length ? { image_urls: images } : {}), keep_audio: true };
+  else if (spec.way === 'follow') {
+    const asked = number(args.duration) ?? 5;
+    seconds = clamp(Math.round(asked), 3, 15);
+    if (seconds !== asked) said.push(`${spec.name} makes 3 to 15 second clips: ${seconds} s`);
+    const ratio = text(args['aspect-ratio']);
+    const aspect = ['16:9', '9:16', '1:1'].includes(ratio) ? ratio : 'auto';
+    if (ratio && ratio !== 'adaptive' && aspect !== ratio) said.push(`${spec.name} makes 16:9, 9:16 or 1:1 clips, else the clip's shape`);
+    input = { prompt: named, video_url: video, duration: String(seconds), aspect_ratio: aspect, ...(images.length ? { image_urls: images } : {}), keep_audio: true };
+  } else if (spec.way === 'modify') {
+    /* Luma redraws 5 or 10 seconds of the clip */
+    seconds = (length ?? number(args.duration) ?? 5) > 5 ? 10 : 5;
+    if (length !== null && Math.abs(length - seconds) > 0.05) said.push(`${spec.name} makes 5 or 10 second clips: ${seconds} s`);
+    input = { prompt, video_url: video, duration: `${seconds}s`, resolution: '720p', ...(images.length ? { start_image_url: images[0] } : {}) };
+  } else input = { video_url: video, reference_image_urls: images, ...(prompt ? { prompt } : {}), resolution: '1080P' };
+  const result = await queued(spec.endpoint, input, ctx, polling.ms.video);
+  if (!text(result?.video?.url)) throw new Error(`${NAME} answered without a clip.`);
+  const { bytes } = await download(NAME, result.video.url, ctx);
+  return {
+    files: [{ path, bytes }],
+    index: [{ src: path, kind: 'video', dur: seconds, hasAudio: true, from: { mode: 'generate', prompt, provider: 'fal', model: spec.endpoint, sec: seconds, clip, ...(refs.length ? { refs } : {}) } }],
+    receipt: { provider: 'fal', model: spec.endpoint, src: path, dur: seconds, hasAudio: true, ...notes(said) },
+    cost: billedBy(NAME),
+  };
+}
+
+/**
+ * A person speaking a recording (`--audio`), the chosen model's way (FROM_SPEECH): the clip is as long as the recording
+ * and its sound is the recording.
+ * @param {typeof FROM_SPEECH[string]} spec @param {Record<string, unknown>} args @param {RunContext} ctx
+ */
+async function fromSpeech(spec, args, ctx) {
+  const audio = text(args.audio);
+  if (!audio) throw new Error(`${spec.name} makes a person speak a recording: give it with --audio.`);
+  const said = [];
+  const picture = text(args['first-frame']) || list(args['input-reference'])[0];
+  const clip = text(args.video);
+  if (spec.from === 'picture' && !picture) throw new Error(`${spec.name} makes the person in a picture speak: give the picture with --first-frame.`);
+  if (spec.from === 'clip' && !clip) throw new Error(`${spec.name} makes a clip's lips follow the recording: give the clip with --video.`);
+  const seconds = await mediaSeconds(ctx.root, audio);
+  if (seconds !== null && (seconds < spec.seconds[0] || seconds > spec.seconds[1])) {
+    throw new Error(`--audio: ${spec.name} takes recordings of ${spec.seconds[0]} to ${spec.seconds[1]} s, and ${audio} is ${Math.round(seconds * 10) / 10} s.`);
+  }
+  if (text(args.duration) && seconds !== null) said.push(`--duration: the clip is as long as the recording, ${Math.round(seconds * 10) / 10} s`);
+  const prompt = text(args.prompt);
+  const path = landing('video', args.out, 'mp4');
+  const audioUrl = await clipUrl(audio, ctx);
+  const input = spec.from === 'clip'
+    ? { video_url: await clipUrl(clip, ctx), audio_url: audioUrl, sync_mode: 'cut_off' }
+    : { image_url: await dataUri(/** @type {string} */ (picture), ctx), audio_url: audioUrl, prompt: prompt || '.' };
+  const result = await queued(spec.endpoint, input, ctx, polling.ms.video);
+  if (!text(result?.video?.url)) throw new Error(`${NAME} answered without a clip.`);
+  const { bytes } = await download(NAME, result.video.url, ctx);
+  const dur = seconds !== null ? Math.round(seconds * 1000) / 1000 : number(args.duration) ?? 5;
+  return {
+    files: [{ path, bytes }],
+    index: [{ src: path, kind: 'video', dur, hasAudio: true, from: { mode: 'generate', prompt, provider: 'fal', model: spec.endpoint, sec: dur, audio, ...(picture && spec.from === 'picture' ? { firstFrame: picture } : {}), ...(clip ? { clip } : {}) } }],
+    receipt: { provider: 'fal', model: spec.endpoint, src: path, dur, hasAudio: true, ...notes(said) },
+    cost: billedBy(NAME),
+  };
+}
+
+/**
+ * A clip of the project where fal's models can read it: put on fal's storage (its address answered), else, when that
+ * cannot be done and it is small, inline as a data: URI.
+ * @param {string} clip @param {RunContext} ctx
+ */
+async function clipUrl(clip, ctx) {
+  const bytes = await ctx.read(clip);
+  const type = mimeOf(clip);
+  try {
+    const rest = serviceUrl('FAL_REST', 'https://rest.alpha.fal.ai');
+    const started = /** @type {any} */ (await (await call(NAME, `${rest}/storage/upload/initiate?storage_type=fal-cdn-v3`, {
+      method: 'POST', headers: { authorization: `Key ${ctx.key}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ content_type: type, file_name: clip.split('/').pop() }),
+    }, ctx)).json());
+    if (!text(started?.upload_url) || !text(started?.file_url)) throw new Error('no upload address');
+    await call(NAME, started.upload_url, { method: 'PUT', headers: { 'content-type': type }, body: Buffer.from(bytes) }, ctx);
+    return started.file_url;
+  } catch (e) {
+    if (ctx.signal.aborted) throw e;
+    if (bytes.byteLength > INLINE_MAX) throw new Error(`--video: ${clip} could not be put on fal's storage (${e instanceof Error ? e.message : e}), and is too large to send inline.`);
+    return `data:${type};base64,${Buffer.from(bytes).toString('base64')}`;
+  }
 }
 
 /**
