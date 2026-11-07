@@ -192,6 +192,14 @@ export async function undoTurn(root, before, hold, { trash }) {
     if (was && now && was.size === now.size && was.mtimeMs === now.mtimeMs) continue;
     if (was?.text != null && now?.text != null && was.text === now.text) continue;
     try {
+      /* A board path may have been replaced by a link since the turn began. Check again at restore time,
+         including its parents, before writing a saved document or sending a new one to the trash. */
+      if (path.startsWith('.film/')) {
+        for (const part of ['.film', ...(path.startsWith('.film/canvases/') ? ['.film/canvases'] : []), path]) {
+          const info = await lstat(join(root, ...part.split('/'))).catch((e) => { if (e.code !== 'ENOENT') throw e; return null; });
+          if (info && (part === path ? !info.isFile() : !info.isDirectory())) throw new Error('canvas path is linked or has changed kind');
+        }
+      }
       if (!was) { await trash(to); restored += 1; continue; }
       if (was.text != null) {
         await mkdir(dirname(to), { recursive: true });
