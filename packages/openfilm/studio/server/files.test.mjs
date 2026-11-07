@@ -195,6 +195,12 @@ test('one naming rule for imports, renames, moves and new folders: spaces and ev
   assert.equal(cleanName('a"<>|*b'), 'a b');
   assert.equal(cleanName('...'), '');
   assert.equal(cleanName(`${'x'.repeat(200)}.mp4`), `${'x'.repeat(116)}.mp4`);
+  /* a long name is not cut in the middle of a character: half a surrogate pair would become U+FFFD on disk */
+  const split = `${'a'.repeat(115)}😀${'b'.repeat(80)}.mp4`;
+  const cut = cleanName(split);
+  assert.ok(cut.length <= 120);
+  assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(cut), 'no half a character');
+  assert.equal(cut, `${'a'.repeat(115)}.mp4`);
   put('assets/a.mp4');
   assert.equal((await moveFile(root, 'assets/a.mp4', 'assets/镜头 01.mp4')).path, 'assets/镜头 01.mp4');
   assert.equal(await makeFolder(root, 'assets/Logos & Ünïcode'), 'assets/Logos & Ünïcode');

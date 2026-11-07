@@ -10,6 +10,15 @@ test('names keep spaces and every script; only what file systems refuse goes (th
   assert.equal(safeName(' ... '), '');
 });
 
+test('a long name is not cut in the middle of a character', () => {
+  const split = `${'a'.repeat(115)}😀${'b'.repeat(80)}.mp4`;
+  const cut = safeName(split);
+  assert.ok(cut.length <= 120);
+  assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(cut), 'no half a character');
+  assert.equal(cut, `${'a'.repeat(115)}.mp4`);
+  assert.equal(safeName(`${'x'.repeat(200)}.mp4`), `${'x'.repeat(116)}.mp4`);
+});
+
 test('a rename lands beside the old name and keeps the extension when none is typed', () => {
   assert.equal(renamedPath('assets/镜头01.mp4', '镜头 01', false), 'assets/镜头 01.mp4');
   assert.equal(renamedPath('assets/a.mp4', 'b.mov', false), 'assets/b.mov');
