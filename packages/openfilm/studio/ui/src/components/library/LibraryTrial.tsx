@@ -1,8 +1,9 @@
 /**
  * A thing of the library tried in the viewer (a click in the assets drawer, LibraryDrawer), over the picture there and
  * nothing written: a page laid over it; a sticker, and a text look or motion on the words a new line says, in the box
- * it gets when put in (libraryBox), so the try looks as the drop will; a transition played on the film's own picture
- * (OnPicture: its page over it, its dip or dissolve, its camera move), never on the library's sample; a filter grading
+ * it gets when put in (libraryBox), so the try looks as the drop will; a transition played once on the film's own
+ * picture (OnPicture: its page over it, its dip or dissolve, its camera move), never on the library's sample, the film
+ * free again when it has played; a filter grading
  * the whole picture through a backdrop-filter, as it will on its own track. A click on it lets it go. A template's
  * example plays in its place with its music, sharp, under controls of its own (TemplateTrial).
  */
@@ -45,6 +46,7 @@ function PictureTrial({ item, frame, onLetGo }: { item: LibraryItem; frame: stri
     seen.current.observe(el);
   }, []);
   const box = shape && size ? libraryBox(shape, size) : null;
+  const [played, setPlayed] = React.useState(false);
   /* a motion is shown from its start again, each time it has gone */
   const [round, setRound] = React.useState(0);
   React.useEffect(() => {
@@ -56,7 +58,7 @@ function PictureTrial({ item, frame, onLetGo }: { item: LibraryItem; frame: stri
     ? `${pageUrl(component)}?vars=${encodeURIComponent(JSON.stringify({ '--clip-length': `${MOTION_SECONDS}s`, ...(item.vars ?? {}) }))}&words=${encodeURIComponent(defaultTextWords())}`
     : page ? pageUrl(item) : null;
   return (
-    <div ref={measure} data-library-trial="" className="absolute inset-0 z-[6] cursor-default overflow-hidden" onPointerDown={(e) => { e.stopPropagation(); onLetGo(); }}>
+    <div ref={measure} data-library-trial="" className={`absolute inset-0 z-[6] cursor-default overflow-hidden ${played ? 'pointer-events-none' : ''}`} onPointerDown={(e) => { e.stopPropagation(); onLetGo(); }}>
       {/* a filter: over the whole picture, grading every layer of it, as it will on its own track */}
       {item.kind === 'look' && item.filter ? <div aria-hidden className="pointer-events-none absolute inset-0" style={{ backdropFilter: item.filter }} /> : null}
       {src && (!shape || box) ? (
@@ -69,7 +71,7 @@ function PictureTrial({ item, frame, onLetGo }: { item: LibraryItem; frame: stri
         />
       ) : null}
       {/* a transition: on the film's own picture */}
-      {item.cat === 'transition' ? <TransitionOnPicture item={item} picture={frame} playing live blur={0.35} /> : null}
+      {item.cat === 'transition' ? <TransitionOnPicture item={item} picture={frame} playing live blur={0.35} onEnded={() => setPlayed(true)} /> : null}
     </div>
   );
 }
