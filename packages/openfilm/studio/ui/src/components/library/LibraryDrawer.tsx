@@ -485,7 +485,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
                         /* a template as wide as its film (16:9, two a row: its places, length and buttons side by side) */
                         square={cat === 'sticker' || textSquare || (ON_FILM.has(cat) && cat !== 'template')}
                         here={hereOf(it.id)} onFetch={() => void fetchLibraryItem(it.id)}
-                        onPick={() => pick(picked === it.id ? null : it)} onAdd={() => addWhenHere(it)} />
+                        /* a transition plays once: another click plays it again */
+                        onPick={() => pick(picked === it.id && it.cat !== 'transition' ? null : it)} onAdd={() => addWhenHere(it)} />
                     ))}
                   </div>
                 )}

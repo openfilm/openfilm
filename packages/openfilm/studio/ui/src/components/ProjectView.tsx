@@ -1772,6 +1772,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
    * goes through dropAsset, or for a look or a fade through applyDrop.
    */
   const [libraryTrial, setLibraryTrial] = React.useState<LibraryItem | null>(null);
+  /* tried again, it starts again */
+  const [libraryTrialRound, setLibraryTrialRound] = React.useState(0);
   /* playing, the film is what is watched: the try goes */
   React.useEffect(() => { if (playing) setLibraryTrial(null); }, [playing]);
   const library = React.useMemo(() => {
@@ -1963,7 +1965,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         else if (item.kind === 'textmotion') textLook(item);
         else void place(item);
       },
-      tryOut: (item) => setLibraryTrial(item),
+      tryOut: (item) => { setLibraryTrial(item); setLibraryTrialRound((r) => r + 1); },
     };
     /* a look or a fade dropped on the timeline (Timeline onApplyDrop): on that clip, on that cut */
     const applyDrop = async (file: ResourceDragItem, at: { blockId: string } | { cut: { a: string | null; b: string | null } }): Promise<string | null> => {
@@ -4610,7 +4612,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                             {!fullscreen ? <CaptionStage previewRef={preview} projectId={projectId} stage={shownStage} timeMs={timeMs} onPick={showCaptionLook} onPause={pause} /> : null}
                           </Preview>
                           {/* a thing of the library tried from the assets drawer: over the picture, nothing written */}
-                          {libraryTrial && !fullscreen ? <LibraryTrial item={libraryTrial} frame={libraryFrame} onLetGo={() => setLibraryTrial(null)} /> : null}
+                          {libraryTrial && !fullscreen ? <LibraryTrial key={libraryTrialRound} item={libraryTrial} frame={libraryFrame} onLetGo={() => setLibraryTrial(null)} /> : null}
                         </div>
                         {!viewerReady && !empty && !previewError ? (
                           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black">
