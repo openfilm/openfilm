@@ -44,3 +44,25 @@ test('a character is kept with its pictures, put on any project, renamed and mov
   assert.deepEqual(await listCharacters(), []);
   assert.ok(existsSync(join(scratch, 'trash', kept.id)));
 });
+
+test('a character is kept only from pictures inside the project, however a path is written', async (t) => {
+  const scratch = mkdtempSync(join(tmpdir(), 'of-characters-'));
+  const before = process.env.OPENFILM_SHARED_HOME;
+  process.env.OPENFILM_SHARED_HOME = join(scratch, 'home');
+  t.after(() => {
+    if (before === undefined) delete process.env.OPENFILM_SHARED_HOME; else process.env.OPENFILM_SHARED_HOME = before;
+    rmSync(scratch, { recursive: true, force: true });
+  });
+  const root = join(scratch, 'projects', 'a');
+  mkdirSync(join(root, 'assets'), { recursive: true });
+  mkdirSync(join(root, '.film'));
+  writeFileSync(join(root, 'assets', 'in.png'), 'inside');
+  writeFileSync(join(root, '.film', 'own.png'), 'tools');
+  const outside = join(scratch, 'projects', 'out.png');
+  writeFileSync(outside, 'outside');
+  for (const path of ['../out.png', String.raw`..\out.png`, 'assets/../../out.png', String.raw`assets\..\..\out.png`, outside, '.film/own.png']) {
+    await assert.rejects(saveCharacter(root, { name: 'Out', pictures: [{ role: 'face', path }] }), /none of its pictures/, path);
+  }
+  const kept = await saveCharacter(root, { name: 'In', pictures: [{ role: 'face', path: 'assets/../../out.png' }, { role: 'body', path: 'assets/in.png' }] });
+  assert.deepEqual(kept.pictures.map((p) => p.role), ['body'], 'only the one inside');
+});
