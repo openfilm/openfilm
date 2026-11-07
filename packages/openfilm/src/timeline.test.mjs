@@ -1440,3 +1440,53 @@ test('a moving picture (a GIF) shows the frame its own timing has at the clip\'s
     await s.close();
   }
 });
+
+
+test('a module without a network buffer is retried with the page; a permanent failure is reported once', { timeout: 30_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-module-buffer-'));
+  writeFileSync(join(dir, 'p.html'), '<!doctype html><script type="module">import { duration } from "./needed.mjs"; window.film={duration,frame(){}};</script>');
+  writeFileSync(join(dir, 'needed.mjs'), 'export const duration = 1;');
+  const site = await serve(dir);
+  const browser = await launch();
+  const failing = (n, why) => {
+    const requests = { count: 0 };
+    const wrapped = { newContext: async (opts) => {
+      const context = await browser.newContext(opts);
+      const newPage = context.newPage.bind(context);
+      context.newPage = async () => {
+        const p = await newPage();
+        await p.route('**/needed.mjs', (route) => (++requests.count <= n ? route.abort('failed') : route.continue()));
+        const on = p.on.bind(p);
+        /* Chromium's Windows-only error code, on a real module request whose failure prevents initialization. */
+        p.on = (event, listener) => on(event, event !== 'requestfailed' ? listener : (request) => {
+          if (!request.url().endsWith('/needed.mjs')) return listener(request);
+          const failure = request.failure;
+          request.failure = () => ({ errorText: why });
+          try { listener(request); } finally { request.failure = failure; }
+        });
+        return p;
+      };
+      return context;
+    } };
+    return { browser: wrapped, requests };
+  };
+  try {
+    let f = failing(1, 'net::ERR_NO_BUFFER_SPACE');
+    const film = await FilmPage.open(f.browser, site.url, 'p.html', { waitMs: 300 });
+    assert.equal(film.meta.duration, 1);
+    assert.equal(f.requests.count, 2);
+    assert.deepEqual(film.problems, [], 'a recovered attempt leaves no old errors');
+    await film.close();
+    f = failing(3, 'net::ERR_NO_BUFFER_SPACE');
+    await assert.rejects(FilmPage.open(f.browser, site.url, 'p.html', { waitMs: 300 }), /ERR_NO_BUFFER_SPACE needed.mjs/);
+    assert.equal(f.requests.count, 3, 'bounded retries');
+    f = failing(1, 'net::ERR_CONNECTION_REFUSED');
+    await assert.rejects(FilmPage.open(f.browser, site.url, 'p.html', { waitMs: 300 }), /ERR_CONNECTION_REFUSED needed.mjs/);
+    assert.equal(f.requests.count, 1, 'a permanent failure is not retried');
+    assert.equal(browser.contexts().length, 0, 'failed pages are closed');
+  } finally {
+    await browser.close();
+    await site.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

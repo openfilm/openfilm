@@ -617,17 +617,6 @@ export class FilmPage {
         }
       });
     }
-    /* a page that never loads is closed: its tab would go on running. Windows sometimes has no socket buffer free for
-       a moment (net::ERR_NO_BUFFER_SPACE, seen with many browsers or servers at once): that page is loaded again */
-    for (let tries = 1; ; tries++) {
-      const missed = await film.page.goto(new URL(entry, origin + '/').href, { waitUntil: 'load', timeout: 60_000 }).then(() => null, (e) => e);
-      if (!missed) break;
-      if (tries === OPEN_TRIES || !/net::ERR_NO_BUFFER_SPACE/.test(String(missed?.message))) {
-        await film.context.close();
-        throw missed;
-      }
-      await new Promise((r) => setTimeout(r, 500 * tries));
-    }
     /* what else the page said, once (not what `said` already says), and failed files by their path in the folder */
     const failed = (said = '') => {
       const req = [...new Set(problems.filter((p) => p.kind === 'request').map((p) => p.message.replace(`${origin}/`, '')))]
@@ -636,11 +625,26 @@ export class FilmPage {
       const err = problems.filter((p) => p.kind === 'error').map((p) => p.message.replace(/^Error: /, '')).filter((m) => !said.includes(m.split('\n')[0]));
       return `${err.length ? `; the page threw: ${err.join(' | ')}` : ''}${req.length ? `; failed to load: ${req.join(', ')}` : ''}`;
     };
-    try {
-      await film.page.waitForFunction(() => window.film && typeof window.film.frame === 'function', null, { timeout: waitMs, polling: 50 });
-    } catch {
-      await film.context.close();
-      throw new FrameError(`window.film with a frame() function did not appear within ${waitMs / 1000} s${failed()}`);
+    /* Windows can briefly run out of network buffers while loading either the page or a module it needs to
+       initialize window.film. goto() still succeeds when only the module failed, so both steps belong to the retry.
+       Keep only the last attempt's problems; permanent errors are never retried. */
+    for (let tries = 1; ; tries++) {
+      problems.length = 0;
+      try {
+        await film.page.goto(new URL(entry, origin + '/').href, { waitUntil: 'load', timeout: 60_000 });
+        try {
+          await film.page.waitForFunction(() => window.film && typeof window.film.frame === 'function', null, { timeout: waitMs, polling: 50 });
+        } catch {
+          throw new FrameError(`window.film with a frame() function did not appear within ${waitMs / 1000} s${failed()}`);
+        }
+        break;
+      } catch (e) {
+        if (tries === OPEN_TRIES || !/net::ERR_NO_BUFFER_SPACE/.test(String(e?.message))) {
+          await film.context.close();
+          throw e;
+        }
+        await new Promise((r) => setTimeout(r, 500 * tries));
+      }
     }
     /* a ready that never comes (a file that never loads, a loop that never ends) is said, rather than waited on for ever */
     film.meta = await whileMoving(film.page, film.page.evaluate(async (laid) => {
