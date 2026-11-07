@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Blinds</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+.l { position: fixed; inset: 0; pointer-events: none; }
+:root { --color: #000000; }
+@property --w { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+.l { animation: b 0.8s ease-in-out both; background: repeating-linear-gradient(90deg, var(--color) 0 var(--w), transparent var(--w) 10%); }
+@keyframes b { 0% { --w: 0%; } 50% { --w: 10.2%; } 100% { --w: 0%; } }
+</style>
+</head>
+<body>
+<div class="l"></div>
+<script>
+/*
+ * Stripes close like blinds over the cut and open again. It lasts 0.8 s and covers the cut at its middle: put its
+ * middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations
+ * are held at t by the host.
+ */
+window.film = { duration: 0.8, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -8,9 +8,10 @@ import type { Turn } from '@openfilm/shared';
 import type { TranscriptItem } from '@/lib/agent-transcript';
 import type { ProjectSessionItem } from '@/lib/project-sessions';
 import { app } from '../app-bridge';
+import { joinKept } from '@/lib/chat-kept';
 
 export interface SavedTurn { turn: Turn; items: TranscriptItem[] }
-interface ProjectChat { sessions: ProjectSessionItem[]; last: string | null; turns: SavedTurn[] }
+export interface ProjectChat { sessions: ProjectSessionItem[]; last: string | null; turns: SavedTurn[] }
 
 const projects = new Map<string, ProjectChat>();
 const loading = new Map<string, Promise<void>>();
@@ -18,6 +19,9 @@ const loading = new Map<string, Promise<void>>();
  * "Untitled" where the last one was) is not the same project, and does not get its chat */
 const readFor = new Map<string, string>();
 const EMPTY: ProjectChat = { sessions: [], last: null, turns: [] };
+/** the folders whose record could not be read (Studio still starting, say): it is read again before it is written, and
+ * what it holds kept, so a reading that failed once never writes an empty list over the conversations */
+const unread = new Set<string>();
 
 /**
  * Read the project's record from its folder (once a launch, and again when another project takes the folder); the
@@ -36,6 +40,7 @@ export function openProjectChat(project: string, id: string): Promise<void> {
   const pending: Promise<void> = app.chat.load(project)
     .then((chat) => {
       if (!mine()) return;
+      unread.delete(project);
       projects.set(project, {
         sessions: Array.isArray(chat?.sessions) ? chat.sessions as ProjectSessionItem[] : [],
         last: typeof chat?.last === 'string' ? chat.last : null,
@@ -43,7 +48,7 @@ export function openProjectChat(project: string, id: string): Promise<void> {
       });
     })
     /* not readable (not one of Studio's projects yet, a folder gone): an empty record, written once it changes */
-    .catch(() => { if (mine()) projects.set(project, { ...EMPTY, sessions: [], turns: [] }); })
+    .catch(() => { if (mine()) { unread.add(project); projects.set(project, { ...EMPTY, sessions: [], turns: [] }); } })
     .finally(() => { loading.delete(key); });
   loading.set(key, pending);
   return pending;
@@ -61,9 +66,20 @@ function writeSessions(project: string) {
   clearTimeout(sessionWrites.get(project));
   sessionWrites.set(project, setTimeout(() => {
     sessionWrites.delete(project);
-    const chat = record(project);
-    void app.chat.saveSessions(project, chat.sessions, chat.last).catch(() => { /* written next time */ });
+    void readAgain(project).then(() => {
+      const chat = record(project);
+      return app.chat.saveSessions(project, chat.sessions, chat.last);
+    }).catch(() => { /* written next time */ });
   }, 150));
+}
+
+/** a record that could not be read, read now: what it holds joins what this launch added (failing: nothing written) */
+async function readAgain(project: string): Promise<void> {
+  if (!unread.has(project)) return;
+  const kept = await app.chat.load(project);
+  if (!unread.has(project)) return;
+  unread.delete(project);
+  joinKept(record(project), kept);
 }
 
 export const chatSessions = (project: string): ProjectSessionItem[] => record(project).sessions;

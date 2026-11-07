@@ -27,6 +27,7 @@ import { savedRoot } from '../../src/locations.mjs';
 import { STUDIO_STATE, filmClosure, folderView } from './closure.mjs';
 import { readProjectFilm } from './film.mjs';
 import { cleanName, importFile, inside, kindOf } from './files.mjs';
+import { BUILT_IN, builtInRoot, fetchLibrary } from './library.mjs';
 
 export class SavedError extends Error {
   /** @param {string} message @param {number} status */
@@ -36,6 +37,16 @@ export class SavedError extends Error {
   }
 }
 
+/** OpenFilm's line of words, in its library (the studio's lib/library TEXT_COMPONENT). */
+export const TEXT_COMPONENT = 'text/text';
+/** The fonts a person added to a project for its lines of words (project-fonts addTextFont): its own, never the library's. */
+export const TEXT_OWN_FONTS = 'fonts/own.css';
+/**
+ * A filter of the library on a track of its own (the studio's lib/library FILTER_LAYER): its see-through page, taken
+ * into a project under the filter's own name (`saved/openfilm/filters-warm-film/`), the clip's style grading what is
+ * under it.
+ */
+export const FILTER_LAYER = 'filters/layer';
 const VERSION = 2;
 /** What the API calls the library's top folder: its paths are `saved/<place in the library>`. */
 export const LIBRARY = 'saved';
@@ -132,6 +143,8 @@ function bundleEntry(rel, item) {
     ...(num(item.w) ? { w: num(item.w) } : {}),
     ...(num(item.h) ? { h: num(item.h) } : {}),
     ...(kind === 'page' && item.kind !== 'group' ? { page: `${rel}/files/${mainOf(item)}` } : {}),
+    /* a clip of a sound, a video or a picture: its file, by its `saved/` path, which the pane plays and pictures */
+    ...(item.kind === 'clip' && ['audio', 'video', 'image'].includes(kind) ? { file: libraryPath(`${rel}/files/${mainOf(item)}`) } : {}),
     ...(size ? { size } : {}),
     ...(overrides ? { overrides } : {}),
   };
@@ -298,40 +311,51 @@ const placeName = (/** @type {string} */ rel) => rel.split('/').map((part) => pa
  * maybe changed since in that project) stays as it is.
  * @param {string} from @param {string[]} files @param {string} to
  */
-async function copyIn(from, files, to) {
+async function copyIn(from, files, to, fresh = false) {
   for (const rel of files) {
     const dest = join(to, rel);
-    if ((await stat(dest).catch(() => null))?.isFile()) continue;
+    const there = (await stat(dest).catch(() => null))?.isFile();
+    /* `fresh`: one there that is not the library's as it is now is written again, but the project's own fonts */
+    if (there && (!fresh || rel === TEXT_OWN_FONTS || (await readFile(dest)).equals(await readFile(join(from, rel))))) continue;
     await mkdir(dirname(dest), { recursive: true });
     await copyFile(join(from, rel), dest);
   }
 }
 
 /**
- * What a project needs to use a thing of the library (`path`, a `saved/` path): a file imported into its assets/ (as
- * one from the computer is), or a bundle's files copied to `saved/<its place>/` there (a file there already is kept as
- * it is) and the clip, a group's clips or the page, with their files' places there.
+ * What a project needs to use a thing of the library (`path`, a `saved/` path, or an `openfilm/` one for a thing of
+ * OpenFilm's own library, library.mjs): a file imported into its assets/ (as one from the computer is), or a bundle's
+ * files copied to `saved/<its place>/` there (a file there already is kept as it is, but OpenFilm's line of words) and
+ * the clip, a group's clips or the page, with their files' places there. OpenFilm's things go to `saved/openfilm/<its place, one name>/`.
  * @param {string} root @param {unknown} path
  * @returns {Promise<{ clip: Record<string, unknown> & { src: string } } | { clips: { track: number, at: number, clip: Record<string, unknown> & { src: string } }[] } | { path: string }>}
  */
 export async function takeSaved(root, path) {
-  const lib = await libraryRoot();
-  const rel = libraryRel(path);
+  const builtIn = typeof path === 'string' && path.startsWith(`${BUILT_IN}/`);
+  const lib = builtIn ? builtInRoot() : await libraryRoot();
+  const rel = builtIn ? /** @type {string} */ (path).slice(BUILT_IN.length + 1) : libraryRel(path);
   if (!rel) throw new SavedError('a thing in Saved, please', 400);
-  const at = inside(lib, rel);
+  /* a filter (a look, no page of its own): the filter layer's page, under the filter's name */
+  const filter = builtIn && rel !== FILTER_LAYER && /^filters\/[\w-]+$/.test(rel) && !existsSync(inside(lib, rel));
+  /* OpenFilm's own: in the package, or a published part fetched now (library.mjs) */
+  const at = filter ? inside(lib, FILTER_LAYER) : (builtIn ? await fetchLibrary(rel) : null) ?? inside(lib, rel);
   const info = await stat(at).catch(() => null);
   if (!info) throw new SavedError('That is not in Saved any more.', 404);
   if (info.isFile()) return { path: (await importFile(root, `assets/${basename(rel)}`, createReadStream(at))).path };
   const item = await readBundle(at);
   if (!item) throw new SavedError('That is a folder: open it and pick what is in it.', 400);
   /* its place in the project: the library's, made a name a page's address takes as it is */
-  const base = `saved/${placeName(rel)}`;
+  /* OpenFilm's things one folder each under saved/openfilm/ (`effects-snow`), so their pages are no deeper than a
+     project's pages are looked for (files.mjs listFiles) */
+  const base = `saved/${placeName(builtIn ? `${BUILT_IN}/${rel.replaceAll('/', '-')}` : rel)}`;
   const from = join(at, 'files');
   const files = [];
   for (const entry of await readdir(from, { recursive: true, withFileTypes: true }).catch(() => [])) {
     if (entry.isFile()) files.push(join(entry.parentPath ?? entry.path, entry.name).slice(from.length + 1));
   }
-  await copyIn(from, files, join(root, base));
+  /* the library's line of words (its text component) is one page every text of a project shares, changed only through
+     its variables: a project's copy follows the library's (its motions kept within its box, say), never kept as it was */
+  await copyIn(from, files, join(root, base), builtIn && rel === TEXT_COMPONENT);
   if (item.kind === 'page') return { path: `${base}/${item.path}` };
   if (item.kind === 'group') return { clips: item.clips.map((/** @type {any} */ c) => ({ track: c.track, at: c.at, clip: { ...c.clip, src: `${base}/${c.clip.src}` } })) };
   return { clip: { ...item.clip, src: `${base}/${item.clip.src}` } };

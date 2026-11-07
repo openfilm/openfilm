@@ -1,5 +1,5 @@
 /**
- * The seam between Studio and the chat is the handle that sizes the chat, as Studio's own seams are (its
+ * The seam between the chat and Studio (on its right) is the handle that sizes the chat, as Studio's own seams are (its
  * PaneDivider): it draws nothing for a mouse (the cursor says it can be dragged, the panes say what is happening) and
  * lights up only when reached by keyboard. The app owns the width (shell/bridge.ts keeps it within the window).
  */
@@ -19,7 +19,7 @@ export function Divider() {
       aria-orientation="vertical"
       aria-label="Resize the chat"
       tabIndex={0}
-      className="absolute bottom-0 left-0 top-0 z-20 w-[10px] cursor-col-resize outline-none focus-visible:bg-[var(--border-strong)]"
+      className="absolute -right-[5px] bottom-0 top-0 z-20 w-[10px] cursor-col-resize outline-none focus-visible:bg-[var(--border-strong)]"
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -28,11 +28,11 @@ export function Divider() {
       }}
       onPointerMove={(event) => {
         if (!drag.current) return;
-        desktop.setChatWidth(drag.current.width + (drag.current.x - event.clientX));
+        desktop.setChatWidth(drag.current.width + (event.clientX - drag.current.x));
       }}
       onPointerUp={(event) => {
         if (!drag.current) return;
-        desktop.setChatWidth(drag.current.width + (drag.current.x - event.clientX), true);
+        desktop.setChatWidth(drag.current.width + (event.clientX - drag.current.x), true);
         drag.current = null;
         document.body.style.cursor = '';
       }}
@@ -40,7 +40,7 @@ export function Divider() {
       onKeyDown={(event) => {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
         event.preventDefault();
-        desktop.setChatWidth(columnWidth(event.currentTarget) + (event.key === 'ArrowLeft' ? STEP : -STEP), true);
+        desktop.setChatWidth(columnWidth(event.currentTarget) + (event.key === 'ArrowRight' ? STEP : -STEP), true);
       }}
     />
   );

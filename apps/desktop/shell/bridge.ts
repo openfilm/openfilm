@@ -59,7 +59,7 @@ function signal<T>(value: T) {
 }
 const events = <T,>() => signal<T>(undefined as T);
 
-/* ── the chat's column: open or not, how wide, and the assets drawer over it ── */
+/* ── the chat's column, left of Studio: open or not, how wide, and the assets drawer over it ── */
 const TOP_BAR = 32;
 const column = document.getElementById('of-chat')!;
 const layout = { open: true, width: 420, min: 340, studioMin: 640 };
@@ -166,9 +166,10 @@ projectReady = follow();
 /* ── between Studio and the chat: what is selected, what is referenced, what Studio is asked to show ── */
 const selection = signal<StudioSelection | null>(null);
 const refer = events<StudioRef>();
-/* a skill picked in the examples (Studio's ExamplesDialog), to be named in the message; and "Add a skill" there */
-const skillPicked = events<{ name: string; description: string; newConversation?: boolean }>();
+/* a skill tried in Studio's library, to be named in the message; and "Add a skill" */
+const skillPicked = events<{ name: string; description: string; title?: string; newConversation?: boolean }>();
 const skillAdd = events<void>();
+const asked = events<{ text: string; refs: StudioRef[] }>();
 /** what the pointer is over in Studio (null: nothing), for the chat to light its pills that point at it */
 const hover = signal<StudioRef | null>(null);
 let command: ((command: StudioCommand) => void) | null = null;
@@ -308,6 +309,7 @@ const host: StudioHost = {
   tabs: native.tabs,
   useSkill: (skill) => skillPicked.set(skill),
   skills: { add: () => skillAdd.set(undefined) },
+  ask: (request) => { if (!layout.open) setChatOpen(true); asked.set(request); },
 };
 (window as unknown as { openfilmHost: StudioHost }).openfilmHost = host;
 
@@ -338,9 +340,12 @@ function commandFor(ref: StudioRef): StudioCommand {
     case 'range': return { type: 'show-range', start: ref.start, end: ref.end };
     case 'track': return { type: 'show-track', track: ref.track };
     case 'file': return { type: 'show-file', path: ref.path };
+    case 'node': return { type: 'show-node', id: ref.id };
     case 'subtitle': return { type: 'show-subtitle', start: ref.start, end: ref.end };
     /* another film: the examples, where it came from */
     case 'example': return { type: 'show-examples', open: { kind: 'example', id: ref.id } };
+    /* a voice: Services, where its service is connected */
+    case 'voice': return { type: 'settings', section: 'providers' };
   }
 }
 
@@ -385,10 +390,9 @@ function commandFor(ref: StudioRef): StudioCommand {
   /* the composer's examples button: the examples over the film, to point at one or name a skill */
   showExamples: (open?: CommunityItem) => command?.({ type: 'show-examples', ...(open ? { open } : {}) }),
   onUseSkill: skillPicked.on,
+  onAsk: asked.on,
   onAddSkill: skillAdd.on,
-  /* the Community over the film closed: its "Use it" and "make one with the agent" land the person in the conversation */
-  closeExamples: () => command?.({ type: 'close-examples' }),
-  useSkill: (skill: { name: string; description: string; newConversation?: boolean }) => skillPicked.set(skill),
+  useSkill: (skill: { name: string; description: string; title?: string; newConversation?: boolean }) => skillPicked.set(skill),
   /* a reference made in the chat (⌘L there, the @ menu) gets its picture as Studio's own do */
   withPicture: (ref: StudioRef) => { const done = pictured.then(() => withPicture(ref)); pictured = done.then(() => {}); return done; },
   /* what a pill hovered in the chat points at, lit in Studio while it is (null: none); and the references of the
@@ -401,6 +405,22 @@ function commandFor(ref: StudioRef): StudioCommand {
     const id = project.get()?.id;
     if (!id) return { files: [] };
     try { return await (await fetch(`/api/projects/${encodeURIComponent(id)}/files`)).json(); } catch { return { files: [] }; }
+  },
+  /* Studio's skills (its own listing, with their covers), Discover's among them, for the cards of an empty conversation:
+     Discover read first unless it was in the last ten minutes (Studio reads it as it starts), a few seconds at most */
+  async starterSkills() {
+    const id = project.get()?.id;
+    if (!id) return [];
+    type Listed = { name: string; description: string; cover?: string; order?: number; off?: true; shown?: { title: Record<string, string> } };
+    try {
+      await fetch('/api/skills/catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fresh: 10 * 60 * 1000 }), signal: AbortSignal.timeout(5000) })
+        .catch(() => { /* offline or slow: what Discover read before */ });
+      const body = await (await fetch(`/api/skills?project=${encodeURIComponent(id)}`)).json() as { skills?: Listed[] };
+      return (body.skills ?? [])
+        .filter((s): s is Listed & { cover: string } => Boolean(s.cover) && !s.off)
+        .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
+        .map((s) => ({ name: s.name, description: s.description, cover: s.cover, title: s.shown?.title ?? null }));
+    } catch { return []; }
   },
   setChatWidth: (width: number, done?: boolean) => setChatWidth(width, done === true),
   setChatOpen,

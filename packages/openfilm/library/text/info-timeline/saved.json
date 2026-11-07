@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "info-timeline.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Year 1\", \"type\": \"text\", \"at\": \".y1\"}, {\"name\": \"Event 1\", \"type\": \"text\", \"at\": \".e1\"}, {\"name\": \"Year 2\", \"type\": \"text\", \"at\": \".y2\"}, {\"name\": \"Event 2\", \"type\": \"text\", \"at\": \".e2\"}, {\"name\": \"Year 3\", \"type\": \"text\", \"at\": \".y3\"}, {\"name\": \"Event 3\", \"type\": \"text\", \"at\": \".e3\"}, {\"name\": \"Year 4\", \"type\": \"text\", \"at\": \".y4\"}, {\"name\": \"Event 4\", \"type\": \"text\", \"at\": \".e4\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 4000
+}

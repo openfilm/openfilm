@@ -4,8 +4,9 @@
  * would commit (tracked and untracked, not ignored; every file under the folder when it is not a git checkout), less
  * node_modules, dist, .dev and .release, and reports:
  *
- *   cjk       Chinese, Japanese or Korean prose outside the i18n dictionaries, the release notes (whats-new.ts), translated docs
- *             and a skill's openfilm.json (its title and summary in each language)
+ *   cjk       Chinese, Japanese or Korean prose outside the i18n dictionaries (and the library's names, library/index.json, audio.json, stickers.json and each of library/catalogs/, the words it is searched by, library/tags.json, and its keyword index, library/search.json, its voices as their services describe them, library/voices.json, what a made sample says, scripts/library-voice-lines.json, the text's names, scripts/library-text-names.json, and the templates', scripts/library-templates.json, and the table that keeps a local transcript in one Chinese script,
+ *             src/zh-script.json), the release notes (whats-new.ts), translated docs
+ *             and a skill's openfilm.json, OpenFilm's own in manual/ too (its title and summary in each language)
  *             (README.zh-CN.md): comments and text are in English.
  *             A line is prose when its CJK characters outweigh its Latin words (one character for four letters), so
  *             an English comment that quotes 永 or 2026年10月7日 passes. In tests and fixtures, string literals are
@@ -39,7 +40,7 @@ const { values: opts } = parseArgs({
 const ROOT = resolve(opts.dir ?? join(import.meta.dirname, '..'));
 
 const SKIP_DIR = /(^|\/)(node_modules|dist|\.dev|\.release|\.git)\//;
-const LOCALE = /(^|\/)(i18n|locales)\/|\/whats-new\.ts$|\.(zh-CN|ja|ko|es)\.md$|(^|\/)skills\/[^/]+\/openfilm\.json$/;
+const LOCALE = /(^|\/)(i18n|locales)\/|\/whats-new\.ts$|\.(zh-CN|ja|ko|es)\.md$|(^|\/)(skills|manual)\/[^/]+\/openfilm\.json$|(^|\/)library\/(index|voices|audio|stickers|tags|search|catalogs\/[^/]+)\.json$|\/scripts\/library-(voice-lines|text-names|sticker-groups|templates)\.json$|\/src\/zh-script\.json$/;
 const TESTISH = /(\.test\.[cm]?[jt]sx?$|(^|\/)(test|tests|fixtures?|__fixtures__)\/)/;
 
 /** A home folder with a real name in it; the placeholders docs and tests use are fine. */

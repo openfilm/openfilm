@@ -2,7 +2,8 @@
  * Whether focus is in a typing context: Space must not play and Cmd/Ctrl+Z must not undo the whole film.
  *
  * The keys pressed in an app's own panel inside Studio's page (lib/host.ts `panel`, marked `data-studio-host-panel`)
- * are the app's: Studio's shortcuts leave them alone, as they do a text field's.
+ * are the app's, and those pressed on the canvas (`data-studio-canvas`) are the canvas's: Studio's shortcuts leave
+ * them alone, as they do a text field's.
  *
  * In-place text editing on the stage uses `contenteditable="plaintext-only"` (see
  * FilmStageSelect). Matching only `[contenteditable="true"]` would miss it, and Space would be
@@ -12,9 +13,13 @@
  * constructors, so a cross-document instanceof is always false.
  */
 export function isTypingTarget(target: EventTarget | null): boolean {
+  return inHostPanel(target) || isTextField(target);
+}
+
+/** Whether `target` is a field that takes typing (a text field, a select, editable text): not a slider or a button. */
+export function isTextField(target: EventTarget | null): boolean {
   const el = elementOf(target);
   if (!el) return false;
-  if (inHostPanel(el)) return true;
   const field = typeof el.closest === 'function' ? el.closest('input, textarea, select') : null;
   if (field) {
     /* A focused slider, color swatch or checkbox is not typing: after dragging a volume or
@@ -33,7 +38,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
  */
 export function inHostPanel(target: EventTarget | null): boolean {
   const el = elementOf(target);
-  return Boolean(el && typeof el.closest === 'function' && el.closest('[data-studio-host-panel]'));
+  return Boolean(el && typeof el.closest === 'function' && el.closest('[data-studio-host-panel], [data-studio-canvas]'));
 }
 
 function elementOf(target: EventTarget | null): HTMLElement | null {

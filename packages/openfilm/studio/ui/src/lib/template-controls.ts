@@ -129,3 +129,22 @@ export function pictureStyle(kind: TemplateImage['kind'], path: string | null): 
 export function withImage(overrides: readonly FilmOverride[] | undefined, image: Pick<TemplateImage, 'at' | 'n' | 'kind'>, path: string | null): FilmOverride[] | null {
   return nextOverrides(overrides, { at: image.at, ...(image.n != null ? { n: image.n } : {}) }, { style: { [imageKey(image.kind)]: path == null ? null : cssUrl(path) } });
 }
+
+/* one step of a selector, `tag.class.class` (a step of the stage's path may add `:nth-of-type(2)`) */
+const stepParts = (step: string) => {
+  const m = /^([a-z][\w-]*)?((?:\.[\w-]+)*)(?::[\w-]+\([^)]*\))*$/i.exec(step.trim());
+  return m ? { tag: m[1]?.toLowerCase() ?? '', classes: (m[2] ?? '').split('.').filter(Boolean) } : null;
+};
+/**
+ * Whether a page's own words, named by the stage by their path (`body > div.w > div.t`), are what a property names by a
+ * selector of tags and classes (`.t`, `.t > .x`): its steps, from the last, each found in the path's last ones.
+ */
+export function pathIsAt(path: string, selector: string): boolean {
+  const want = selector.split('>').map(stepParts);
+  const have = path.split('>').map(stepParts);
+  if (want.some((w) => !w || (!w.tag && !w.classes.length)) || want.length > have.length) return false;
+  return want.every((w, i) => {
+    const h = have[have.length - want.length + i];
+    return Boolean(h) && (!w!.tag || w!.tag === h!.tag) && w!.classes.every((c) => h!.classes.includes(c));
+  });
+}

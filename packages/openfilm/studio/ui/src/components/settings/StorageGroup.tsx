@@ -42,7 +42,12 @@ export function StorageGroup() {
       setTyping(null);
       setWhere(done.locations);
       if (done.failed.length) setError({ which, text: t('settings.storage.moveFailed').replace('{names}', done.failed.map((f) => f.name).join(', ')) });
-      if (done.moved) setNote({ which, text: t('settings.storage.moved').replace('{count}', String(done.moved)) });
+      if (done.moved) {
+        const moved = t('settings.storage.moved').replace('{count}', String(done.moved));
+        /* across disks, an old folder the trash would not take stays on the old disk: said, with where */
+        const left = done.left?.length ? ' ' + t('settings.storage.moveLeft').replace('{paths}', () => done.left.map((f) => f.path).join(', ')) : '';
+        setNote({ which, text: moved + left });
+      }
     } catch (e) {
       setError({ which, text: e instanceof Error ? e.message : String(e) });
     } finally {

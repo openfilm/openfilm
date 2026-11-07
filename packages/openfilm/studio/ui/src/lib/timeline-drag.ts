@@ -456,6 +456,8 @@ export interface DropLane {
   docIndex?: number;
   /** Nothing can be put on a locked track. */
   locked?: boolean;
+  /** A sound track (A): only sounds go on it, and sounds go on nothing else. */
+  sound?: boolean;
   /** What is taken on this film.html track besides the clips being dragged. Rows of one track share a docIndex. */
   occupied?: readonly { startMs: number; endMs: number }[];
 }
@@ -505,6 +507,8 @@ export function moveDestFor(
   sourceDocIndex: number | undefined,
   lanes: readonly DropLane[],
   hoverLane: number,
+  /** The clip moved is a sound (by default: whether the track it is on is a sound track). */
+  sound?: boolean,
 ): TrackDrop {
   if (sourceDocIndex == null) return { action: 'stay' };
   const onFilm = lanes.filter((lane) => lane.docIndex != null);
@@ -519,6 +523,9 @@ export function moveDestFor(
   if (!target || target.docIndex == null) return { action: 'refuse' };
   if (target.docIndex === sourceDocIndex) return { action: 'stay' };
   if (target.locked) return { action: 'refuse' };
+  /* a sound to a sound track, a picture to a picture track */
+  const home = lanes.find((lane) => lane.docIndex === sourceDocIndex);
+  if (Boolean(target.sound) !== (sound ?? Boolean(home?.sound))) return { action: 'refuse' };
   return { action: 'move', trackIndex: target.docIndex };
 }
 
@@ -529,6 +536,8 @@ export interface GroupMember {
   laneIndex: number;
   startMs: number;
   endMs: number;
+  /** A sound (by default: whether the track it is on is a sound track). */
+  sound?: boolean;
 }
 
 export interface GroupLaneShift {
@@ -547,8 +556,8 @@ export interface GroupLaneShift {
  * Where a selection moved up or down lands.
  *
  * One degree of freedom: the whole group moves the same number of rows, keeping the shape the user made. Only the
- * rows asked for are tried. Any track takes any clip; a track a clip moves to must be
- * unlocked. What is already on a track where a clip lands is the edit mode's to settle (insert or overwrite); the
+ * rows asked for are tried. A track a clip moves to must be unlocked, and of its kind (a sound
+ * to a sound track, a picture to a picture track). What is already on a track where a clip lands is the edit mode's to settle (insert or overwrite); the
  * landings themselves may not overlap each other: clips on one track do not overlap (SPEC).
  */
 export function groupLaneShift(
@@ -576,6 +585,7 @@ function groupFitsAt(
     if (!lane || lane.docIndex == null) return null;
     const moved = lane.docIndex !== home?.docIndex;
     if (moved && lane.locked) return null;
+    if (moved && Boolean(lane.sound) !== (m.sound ?? Boolean(home?.sound))) return null;
     landed.push({ member: m, docIndex: lane.docIndex, moved });
   }
   /* landings may not overlap on one track (rows spread from one track share its index) */

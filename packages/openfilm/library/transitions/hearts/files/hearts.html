@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Hearts</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #ff4d7d; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A swarm of hearts rises from the bottom, its edge made of bobbing hearts, and fills the frame over the cut; then
+ * it floats on up and away with hearts trailing. It lasts 1 s and covers the cut at its middle: put its middle on
+ * the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame
+ * so it fits a stage of any shape.
+ */
+const D = 1;
+const DEFAULT = '#ff4d7d';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const mix = (a, b, x) => a + (b - a) * x;
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+const rgbOf = (c) => { g.fillStyle = '#000'; g.fillStyle = c; const s = String(g.fillStyle); return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number); };
+/* a colour made lighter (k > 0, toward white) or darker (k < 0, toward black), at an opacity */
+const tone = (c, k, a = 1) => `rgba(${rgbOf(c).map((x) => Math.round(k > 0 ? x + (255 - x) * k : x * (1 + k))).join(', ')}, ${a})`;
+/* a heart s wide, its middle at x, y */
+const heart = (x, y, s, rot = 0) => {
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(s / 2, s / 2);
+  g.beginPath(); g.moveTo(0, 0.95);
+  g.bezierCurveTo(-0.55, 0.55, -1, 0.15, -1, -0.3); g.bezierCurveTo(-1, -0.75, -0.6, -1, -0.5, -1);
+  g.bezierCurveTo(-0.2, -1, 0, -0.8, 0, -0.55); g.bezierCurveTo(0, -0.8, 0.2, -1, 0.5, -1);
+  g.bezierCurveTo(0.6, -1, 1, -0.75, 1, -0.3); g.bezierCurveTo(1, 0.15, 0.55, 0.55, 0, 0.95);
+  g.closePath(); g.restore();
+};
+
+function draw(u) {
+  const c = color(), hs = H * 0.2;
+  const shades = [c, tone(c, 0.25), tone(c, -0.2)];
+  const top = mix(H + hs, -hs * 1.4, inOut(seg(u, 0, 0.42)));
+  const bottom = mix(H + hs * 1.4, -hs, inOut(seg(u, 0.56, 1)));
+  if (top < bottom) {
+    g.fillStyle = c;
+    g.fillRect(0, Math.max(0, top), W, Math.min(H, bottom) - Math.max(0, top));
+    /* faint hearts drifting up inside it */
+    g.save();
+    g.beginPath();
+    g.rect(0, top, W, bottom - top);
+    g.clip();
+    for (let i = 0; i < 24; i++) {
+      heart(hash(i + 50) * W, H * (1.2 - ((hash(i + 51) + u * 0.9) % 1.4)), H * (0.06 + 0.08 * hash(i + 52)), (hash(i + 53) - 0.5) * 0.6);
+      g.fillStyle = tone(c, 0.15, 0.6);
+      g.fill();
+    }
+    g.restore();
+  }
+  /* hearts along the top edge, and along the bottom edge after the cut */
+  const n = Math.ceil(W / (hs * 0.7)) + 2;
+  for (const [edge, dir, on] of [[top, -1, top < H + hs], [bottom, 1, u >= 0.5 && bottom > -hs]]) {
+    if (!on) continue;
+    for (let i = 0; i < n; i++) {
+      const id = i + (dir > 0 ? 100 : 0);
+      const x = (i - 0.5) * hs * 0.7 + (hash(id) - 0.5) * hs * 0.3;
+      const y = edge + dir * hs * (0.1 + 0.3 * hash(id + 1)) + Math.sin(u * 12 + i) * hs * 0.08;
+      const s = hs * (0.8 + 0.5 * hash(id + 2));
+      heart(x, y, s, (hash(id + 3) - 0.5) * 0.6 + Math.sin(u * 9 + i) * 0.1);
+      g.fillStyle = shades[Math.floor(hash(id + 4) * 3)];
+      g.fill();
+    }
+  }
+  /* loose hearts floating up ahead of it, and after it */
+  for (let i = 0; i < 30; i++) {
+    const b = i < 18 ? hash(i + 200) * 0.3 : 0.56 + hash(i + 200) * 0.3, p = seg(u, b, b + 0.4);
+    if (p <= 0 || p >= 1) continue;
+    const x = hash(i + 201) * W + Math.sin(p * 8 + i) * hs * 0.3, y = H * (1.1 - 1.4 * p);
+    heart(x, y, hs * (0.3 + 0.4 * hash(i + 202)) * Math.sin(Math.PI * p), Math.sin(p * 6 + i) * 0.4);
+    g.fillStyle = shades[i % 3];
+    g.fill();
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

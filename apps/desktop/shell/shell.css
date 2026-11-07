@@ -3,14 +3,15 @@
 @source '../node_modules/openfilm/studio/ui/src';
 @source '../chat/src';
 
-/* the chat's column: beside Studio, under its top bar (bridge.ts places and sizes it); over Studio's panes and its
+/* the chat's column: left of Studio, under its top bar (bridge.ts places and sizes it); over Studio's panes and its
    assets drawer, under its menus and dialogs */
-#of-chat { position: fixed; right: 0; bottom: 0; height: auto; z-index: 40; background: transparent; }
+/* the line between the window's top bar and the panes runs over the chat too, as it does over Studio's panes */
+#of-chat { position: fixed; left: 0; bottom: 0; height: auto; z-index: 40; background: transparent; box-sizing: border-box; border-top: 1px solid var(--dock-line, #000); }
 #of-chat[hidden] { display: none; }
-/* the assets open: Studio's drawer is in the column, above the composer; only the chat's pane (its composer then)
-   takes the pointer, the rest of the column is the drawer's */
+/* the assets open: Studio's drawer fills the column, the composer floating over its foot; only the composer and the
+   cards on it take the pointer, the rest of the column (around them too) is the drawer's */
 #of-chat[data-assets-open] { pointer-events: none; }
-#of-chat[data-assets-open] aside { pointer-events: auto; }
+#of-chat[data-assets-open] [data-composer-cards] > * { pointer-events: auto; }
 /* the chat's layer takes no room: what it holds is fixed in place over the window */
 #of-chat-layer { height: 0; background: transparent; }
 /* focused by a click to keep the keyboard in the chat (index.html), never ringed */

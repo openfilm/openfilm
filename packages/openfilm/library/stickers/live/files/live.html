@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Live</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ff2d55; }
+.w { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.live { position: relative; z-index: 1; display: flex; align-items: center; gap: 2.4vw; height: 56vh; padding: 0 4.5vw; border-radius: 12vh; background: linear-gradient(135deg, color-mix(in srgb, var(--color), #ffffff 18%), var(--color)); animation: pop 0.45s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes pop { from { transform: scale(0.3); opacity: 0; } 40% { opacity: 1; } }
+.d { position: relative; width: 14vh; height: 14vh; }
+.d i { position: absolute; inset: 0; border-radius: 50%; background: #ffffff; }
+.d i + i { animation: ping 1.2s cubic-bezier(.2, .8, .2, 1) 0.45s infinite; }
+@keyframes ping { from { transform: scale(1); opacity: 0.8; } to { transform: scale(2.8); opacity: 0; } }
+.label { color: #ffffff; font: 900 28vh var(--font); letter-spacing: 0.08em; }
+.v { display: flex; align-items: center; gap: 1.6vw; height: 44vh; margin-left: -4vw; padding: 0 3.5vw 0 6vw; border-radius: 0 10vh 10vh 0; background: rgba(0, 0, 0, 0.55); animation: slide 0.45s cubic-bezier(.2, .8, .2, 1) 0.3s both; }
+@keyframes slide { from { transform: translateX(-30%); opacity: 0; } }
+.v svg { width: 9vw; height: 18vh; }
+.count { color: #ffffff; font: 700 22vh var(--font); }
+</style>
+</head>
+<body>
+<div class="w">
+<div class="live"><div class="d"><i></i><i></i></div><div class="label">LIVE</div></div>
+<div class="v"><svg viewBox="0 0 40 24"><path d="M2 12 C8 3 32 3 38 12 C32 21 8 21 2 12 Z" fill="none" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/><circle cx="20" cy="12" r="5" fill="#ffffff"/></svg><div class="count">1.2K</div></div>
+</div>
+<script>
+/*
+ * A live sign: a red LIVE label with a pulsing dot pops in and a viewer count slides out beside it. Its words, count
+ * and color are the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its
+ * CSS animations are held at t by the host.
+ */
+window.film = { width: 400, height: 140, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

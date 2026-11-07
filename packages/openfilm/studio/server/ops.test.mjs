@@ -125,3 +125,66 @@ test('fade: a split leaves the fade in on the left half and the fade out on the 
   const t = applyOps(faded(), [{ op: 'props', edits: [{ clip: 'v', prop: 'end', value: 3.5 }] }]);
   assert.deepEqual(t.tracks[1].clips[0].overrides, [{ fade: [0.5, 1] }]);
 });
+
+test('a page that offers its clip\'s length is told it after every edit: an insert, a trim, a split', () => {
+  const props = JSON.stringify([{ name: 'Text', type: 'text', at: '.t' }, { name: 'Length', type: 'var', var: '--clip-length' }]);
+  const clip = { src: 'text.html', id: 'w', time: [0, 3], attrs: { 'data-props': props }, overrides: [{ fade: [0.2, 0] }, { at: ':root', style: { '--color': 'red' } }] };
+  const f = applyOps(film(), [{ op: 'insert', clip, at: 10, track: 0 }]);
+  const w = (v) => v.tracks.flatMap((t) => t.clips).filter((c) => c.src === 'text.html');
+  assert.deepEqual(w(f)[0].overrides, [{ fade: [0.2, 0] }, { at: ':root', style: { '--color': 'red', '--clip-length': '3s' } }]);
+  const trimmed = applyOps(structuredClone(f), [{ op: 'props', edits: [{ clip: w(f)[0].id, prop: 'end', value: 4.25 }] }]);
+  assert.equal(w(trimmed)[0].overrides[1].style['--clip-length'], '4.25s');
+  const split = applyOps(structuredClone(trimmed), [{ op: 'split', clip: w(trimmed)[0].id, left: { end: 1 }, right: { at: 11, start: 1 } }]);
+  /* the right half's page runs from 1 s to 4.25 s of its own time: it goes out at 4.25 s, its end */
+  assert.deepEqual(w(split).map((c) => c.overrides.at(-1).style['--clip-length']), ['1s', '4.25s']);
+  /* a page that does not offer it is left as it is */
+  const other = applyOps(film(), [{ op: 'insert', clip: { src: 'x.html', id: 'x', time: [0, 2] }, at: 12, track: 0 }]);
+  assert.equal(other.tracks[0].clips.find((c) => c.id === 'x').overrides, undefined);
+});
+
+test('keyframes: set by name; a cut clip\'s right half and a copy move by keyframes of their own; unused ones go', () => {
+  const style = 'animation: v--scale 4s linear both';
+  const moving = () => applyOps(film(), [
+    { op: 'props', edits: [{ clip: 'v', prop: 'style', value: style }] },
+    { op: 'keyframes', set: { 'v--scale': '0% { scale: 1 } 100% { scale: 2 }', fade: 'to { opacity: 0 }' } },
+  ]);
+  const f = moving();
+  assert.deepEqual(f.keyframes, { 'v--scale': '0% { scale: 1 } 100% { scale: 2 }', fade: 'to { opacity: 0 }' });
+  /* cut 1 s in: the right half starts where the left was then */
+  const cut = applyOps(moving(), [{ op: 'split', clip: 'v', left: { end: 3 }, right: { at: 1, start: 3 }, rightId: 'v2' }]);
+  const right = cut.tracks[1].clips[1];
+  assert.equal(right.style, 'animation: v2--scale 3s linear both');
+  assert.equal(cut.keyframes['v2--scale'], '0% { scale: 1.25 } 100% { scale: 2 }');
+  assert.equal(cut.keyframes['v--scale'], f.keyframes['v--scale']);
+  /* a copy has its own */
+  const copy = applyOps(moving(), [{ op: 'insert', from: 'v', at: 12, track: 1 }]);
+  assert.equal(copy.tracks[1].clips[1].style, 'animation: v-2--scale 4s linear both');
+  assert.equal(copy.keyframes['v-2--scale'], f.keyframes['v--scale']);
+  /* the clip gone, its keyframes go; others stay */
+  const gone = applyOps(moving(), [{ op: 'remove', clip: 'v' }]);
+  assert.deepEqual(gone.keyframes, { fade: 'to { opacity: 0 }' });
+  assert.throws(() => applyOps(film(), [{ op: 'keyframes', set: { 'bad name': 'x' } }]), EditError);
+});
+
+test('motion: a clip\'s keyframes by property, written as its animations and the film\'s @keyframes', () => {
+  const f = applyOps(film(), [{ op: 'props', edits: [{ clip: 'v', prop: 'motion', value: { opacity: [{ t: 0, v: 0 }, { t: 0.5, v: 1, ease: 'ease-out' }] } }] }]);
+  assert.equal(f.tracks[1].clips[0].style, 'animation: v--opacity 0.5s linear both');
+  assert.equal(f.keyframes['v--opacity'], '0% { opacity: 0 } 100% { opacity: 1; animation-timing-function: cubic-bezier(0, 0, 0.58, 1) }');
+  const none = applyOps(f, [{ op: 'props', edits: [{ clip: 'v', prop: 'motion', value: null }] }]);
+  assert.equal(none.tracks[1].clips[0].style, undefined);
+  assert.deepEqual(none.keyframes, {});
+});
+
+test('caption tracks: put in at a place, known by their file, kept though they hold no clips, taken out by their file', () => {
+  const zh = { src: 'captions/zh.vtt', kind: 'captions', srclang: 'zh', label: 'Captions' };
+  const f = applyOps(film(), [{ op: 'captions', at: 0, captions: zh }]);
+  assert.deepEqual(f.tracks[0], { clips: [], captions: zh });
+  /* an edit that empties another track drops that one; the caption track stays */
+  const g = applyOps(f, [{ op: 'remove', clip: 's' }]);
+  assert.equal(g.tracks.length, 3);
+  assert.deepEqual(g.tracks[0].captions, zh);
+  assert.throws(() => applyOps(g, [{ op: 'captions', at: 1, captions: zh }]), (e) => e instanceof EditError && /already/.test(e.message));
+  assert.throws(() => applyOps(g, [{ op: 'captions', at: 1, captions: { src: 'x.srt' } }]), EditError);
+  const h = applyOps(g, [{ op: 'uncaptions', src: 'captions/zh.vtt' }]);
+  assert.deepEqual(ids(h), [['a', 'b'], ['v']]);
+});

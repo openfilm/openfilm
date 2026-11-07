@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Old paper</title>
+<style>
+  /* what a clip of it may change: the paper's tone, how aged it looks (0 to 1) */
+  :root { --color: #8a5a2b; --amount: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * An old photograph on yellowed paper: a sepia wash over the picture, the paper's fibers, mottled tone, brown
+ * foxing spots, a ring where a cup once stood, a fold across a corner and edges gone dark with age, flickering faintly
+ * as if lit by a lamp. A page of OpenFilm's library (CC0): the paper is made once from fixed numbers, and what moves
+ * comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// the paper, made once for each size and tone
+let paper = null;
+function makePaper(w, h, tone) {
+  const d = devicePixelRatio || 1, c = document.createElement('canvas');
+  c.width = Math.round(w * d); c.height = Math.round(h * d);
+  const x = c.getContext('2d'); x.scale(d, d);
+  const u = Math.min(w, h) / 100, r = (k) => hash(k * 1.913 + 0.37);
+  const dark = tone.map((v) => Math.round(v * 0.55));
+  // mottled tone: big soft blotches, lighter and darker
+  for (let i = 0; i < 46; i++) {
+    const px = r(i) * w, py = r(i + 100) * h, R = (8 + r(i + 200) * 30) * u, light = r(i + 300) > 0.5;
+    const g = x.createRadialGradient(px, py, 0, px, py, R);
+    g.addColorStop(0, light ? `rgba(255,236,200,${0.05 + r(i + 400) * 0.06})` : `rgba(${dark},${0.05 + r(i + 400) * 0.07})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g; x.fillRect(px - R, py - R, 2 * R, 2 * R);
+  }
+  // fibers: short curling strands
+  x.lineCap = 'round';
+  for (let i = 0; i < 700; i++) {
+    const px = r(i + 500) * w, py = r(i + 1500) * h, L = (0.8 + r(i + 2500) * 3) * u, a = r(i + 3500) * 6.283, bend = (r(i + 4500) - 0.5) * L;
+    x.strokeStyle = r(i + 5500) > 0.5 ? `rgba(255,240,215,${0.06 + r(i + 6500) * 0.08})` : `rgba(${dark},${0.05 + r(i + 6500) * 0.07})`;
+    x.lineWidth = 0.06 * u + r(i + 7500) * 0.08 * u;
+    x.beginPath(); x.moveTo(px, py);
+    x.quadraticCurveTo(px + Math.cos(a) * L / 2 - Math.sin(a) * bend, py + Math.sin(a) * L / 2 + Math.cos(a) * bend, px + Math.cos(a) * L, py + Math.sin(a) * L);
+    x.stroke();
+  }
+  // foxing: clusters of small brown spots
+  x.filter = `blur(${0.12 * u}px)`;
+  for (let k = 0; k < 7; k++) {
+    const cx = r(k + 8000) * w, cy = r(k + 8100) * h;
+    for (let i = 0; i < 14; i++) {
+      const px = cx + (r(k * 31 + i + 8200) - 0.5) * 16 * u, py = cy + (r(k * 31 + i + 8600) - 0.5) * 12 * u, R = (0.12 + Math.pow(r(k * 31 + i + 9000), 3) * 0.9) * u;
+      x.fillStyle = `rgba(${dark.map((v) => v + 20)},${0.35 + r(k * 31 + i + 9400) * 0.4})`;
+      x.beginPath(); x.ellipse(px, py, R, R * (0.6 + r(i + 9800) * 0.4), r(i + 9900) * 3, 0, 6.283); x.fill();
+    }
+  }
+  // a ring where a cup once stood
+  x.filter = `blur(${0.35 * u}px)`;
+  const sx = w * (0.72 + r(1) * 0.12), sy = h * (0.18 + r(2) * 0.15), sr = 11 * u;
+  x.strokeStyle = `rgba(${dark},0.34)`; x.lineWidth = 0.7 * u;
+  x.beginPath(); x.arc(sx, sy, sr, 0.3, 5.6); x.stroke();
+  x.strokeStyle = `rgba(${dark},0.16)`; x.lineWidth = 2.2 * u;
+  x.beginPath(); x.arc(sx + 0.4 * u, sy + 0.3 * u, sr - 1.2 * u, 0, 6.283); x.stroke();
+  // a fold across the lower left corner: a light ridge beside a dark one
+  x.filter = `blur(${0.25 * u}px)`;
+  const f0 = [0, h * 0.62], f1 = [w * 0.34, h];
+  x.strokeStyle = 'rgba(255,240,215,0.22)'; x.lineWidth = 0.35 * u;
+  x.beginPath(); x.moveTo(...f0); x.lineTo(...f1); x.stroke();
+  x.strokeStyle = `rgba(${dark},0.25)`; x.lineWidth = 0.3 * u;
+  x.beginPath(); x.moveTo(f0[0], f0[1] + 0.5 * u); x.lineTo(f1[0] + 0.5 * u, f1[1]); x.stroke();
+  x.filter = 'none';
+  // the edges, darkened and browned with age
+  const M = Math.max(w, h);
+  x.save(); x.translate(w / 2, h / 2); x.scale(w / M, h / M);
+  const v = x.createRadialGradient(0, 0, M * 0.32, 0, 0, M * 0.74);
+  v.addColorStop(0, `rgba(${dark},0)`); v.addColorStop(0.7, `rgba(${dark},0.45)`); v.addColorStop(1, `rgba(${dark.map((q) => q * 0.6)},0.9)`);
+  x.fillStyle = v; x.fillRect(-M, -M, 2 * M, 2 * M);
+  x.restore();
+  return { c, key: `${w}x${h}:${tone}:${d}` };
+}
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const tone = rgb('--color', '#8a5a2b'), age = num('--amount', 1);
+    const key = `${w}x${h}:${tone}:${devicePixelRatio || 1}`;
+    if (!paper || paper.key !== key) paper = makePaper(w, h, tone);
+    const f = Math.floor(t * 12), lamp = 0.94 + 0.06 * hash(f + 0.3) + 0.03 * Math.sin(t * 5);
+    // the sepia wash: the tone, and a pale cream over it
+    ctx.fillStyle = `rgba(${tone},${0.46 * age})`; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = `rgba(250,228,185,${0.12 * age * lamp})`; ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = Math.min(1, age * lamp);
+    ctx.drawImage(paper.c, 0, 0, w, h);
+    ctx.globalAlpha = 1;
+    // a dim moment now and then
+    ctx.fillStyle = `rgba(30,15,0,${(1 - lamp) * 0.8})`; ctx.fillRect(0, 0, w, h);
+    // a speck or two of dust on the glass, new each beat
+    for (let i = 0; i < 3; i++) {
+      if (hash(f * 3.3 + i) > 0.5 * age) continue;
+      ctx.fillStyle = 'rgba(40,25,10,0.5)';
+      ctx.beginPath(); ctx.arc(hash(f * 5.1 + i + 0.2) * w, hash(f * 6.7 + i + 0.4) * h, (0.15 + hash(f + i) * 0.3) * u, 0, 6.283); ctx.fill();
+    }
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

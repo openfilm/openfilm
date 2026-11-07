@@ -117,7 +117,7 @@ export function startUpdates({ dataDir, productName, getWindow, onState, prepare
       const words = installWords(installLanguage(language, app.getPreferredSystemLanguages()), { name: productName, version });
       const shown = new BrowserWindow({
         width: 380, height: 120, show: false, frame: false, resizable: false, maximizable: false, minimizable: false, fullscreenable: false,
-        title: productName, backgroundColor: nativeTheme.shouldUseDarkColors ? '#111111' : '#f2f2f2',
+        title: productName, backgroundColor: nativeTheme.shouldUseDarkColors ? '#111114' : '#e9e9eb',
         webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
       });
       shown.once('ready-to-show', () => shown.show());

@@ -3,7 +3,8 @@
  * What the own-key providers share: calling a service and saying plainly what went wrong, the flags as values, where
  * results land, word timings, WAV and picture sizes, and subtitle translation's prompt and answer.
  */
-import { basename, extname } from 'node:path';
+import { execFile } from 'node:child_process';
+import { basename, extname, join } from 'node:path';
 
 /** @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -25,11 +26,12 @@ export async function call(service, url, init, ctx) {
   }
   if (res.ok) return res;
   const text = await res.text().catch(() => '');
+  if (KEY_LIMIT.test(text)) throw keyLimit(service);
   if (outOfBalance(res.status, text)) throw noBalance(service);
   /* with no key (a keyless provider) there is nothing to blank out */
   const reason = (ctx.key ? reasonOf(text).split(ctx.key).join('•••') : reasonOf(text)).slice(0, 500);
   if (PAID_PLAN.test(text)) throw new Error(`${service} needs a paid plan for this (${res.status})${reason ? `: ${reason}` : ''}`);
-  if (res.status === 401 || res.status === 403) throw new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Providers.`);
+  if (res.status === 401 || res.status === 403) throw new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Services.`);
   throw new Error(`${service} answered ${res.status}${reason ? `: ${reason}` : ''}`);
 }
 
@@ -61,6 +63,16 @@ export function outOfBalance(status, text) {
  * @param {string} service
  */
 export const noBalance = (service) => Object.assign(new Error(`${service} doesn't have enough balance for this.`), { code: 'balance' });
+
+/** A key that reached the spending limit set on the key itself (OpenRouter: "Key limit exceeded"), money left or not. */
+const KEY_LIMIT = /key limit exceeded/i;
+
+/**
+ * What a provider throws when its key reached the spending limit set on it: like a balance used up (`code: 'balance'`,
+ * nothing more runs until the person acts), but what to change is the key's limit (`limit`), not the balance.
+ * @param {string} service
+ */
+export const keyLimit = (service) => Object.assign(new Error(`${service}: this key reached the spending limit set on it.`), { code: 'balance', limit: true });
 
 /** The human part of a service's error body (each service nests it its own way). */
 function reasonOf(/** @type {string} */ text) {
@@ -118,7 +130,7 @@ export function landing(/** @type {string} */ dir, /** @type {unknown} */ out, /
 /** The extension for a media type a service answered with. */
 export function extOf(/** @type {string | null | undefined} */ mime, fallback = 'bin') {
   const m = (mime ?? '').toLowerCase().split(';')[0].trim();
-  return ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
+  return ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov',
     'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav' })[m] ?? fallback;
 }
 
@@ -167,7 +179,7 @@ export function wordsFromCharacters(chars, starts, ends, dur = null) {
   const words = [];
   /** @type {{ token: string, start: number, end: number } | null} */
   let word = null;
-  const cut = (/** @type {number} */ t) => dur === null ? t : Math.min(t, dur);
+  const cut = (/** @type {number} */ t) => round(dur === null ? t : Math.min(t, dur));
   chars.forEach((ch, i) => {
     const start = cut(Number(starts[i]) || 0);
     const end = cut(Number(ends[i]) || start);
@@ -176,6 +188,28 @@ export function wordsFromCharacters(chars, starts, ends, dur = null) {
     if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(ch)) { words.push({ token: ch, start, end }); word = null; return; }
     if (word) { word.token += ch; word.end = end; }
     else words.push(word = { token: ch, start, end });
+  });
+  return words;
+}
+
+/**
+ * Words with their times from per-word timings, as services that time words give them: a token with no letter or
+ * digit (a space, punctuation) stays with the word before it. Times are clamped to the file's length and kept to the
+ * millisecond.
+ * @param {unknown[]} tokens @param {unknown[]} starts @param {unknown[]} ends @param {number | null} [dur]
+ */
+export function wordsFromTokens(tokens, starts, ends, dur = null) {
+  /** @type {{ token: string, start: number, end: number }[]} */
+  const words = [];
+  const cut = (/** @type {number} */ t) => round(dur === null ? t : Math.min(t, dur));
+  tokens.forEach((raw, i) => {
+    const token = text(raw);
+    if (!token) return;
+    const start = cut(Number(starts[i]) || 0);
+    const end = cut(Number(ends[i]) || start);
+    const last = words.at(-1);
+    if (!/[\p{L}\p{N}]/u.test(token)) { if (last) { last.token += token; last.end = Math.max(last.end, end); } return; }
+    words.push({ token, start, end });
   });
   return words;
 }
@@ -231,14 +265,129 @@ export function imageSize(/** @type {Uint8Array} */ bytes) {
       at += 2 + b.readUInt16BE(at + 2);
     }
   }
+  if (b.length > 10 && b.toString('ascii', 0, 4) === 'GIF8') return { w: b.readUInt16LE(6), h: b.readUInt16LE(8) };
+  /* an SVG: its width and height, else its viewBox's */
+  const head = b.toString('utf8', 0, Math.min(b.length, 4096));
+  const svg = /<svg\b[^>]*>/i.exec(head)?.[0];
+  if (svg) {
+    const attr = (/** @type {string} */ name) => Number(new RegExp(`\\s${name}\\s*=\\s*["']\\s*([\\d.]+)(?:px)?\\s*["']`, 'i').exec(svg)?.[1]);
+    const box = /\sviewBox\s*=\s*["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(svg);
+    const w = attr('width') || Number(box?.[1]);
+    const h = attr('height') || Number(box?.[2]);
+    if (w > 0 && h > 0) return { w: Math.round(w), h: Math.round(h) };
+  }
   return null;
+}
+
+/**
+ * An MP4's length and picture size from its boxes (moov: mvhd, and the first track with a picture size in its tkhd),
+ * null when it has no movie header.
+ * @returns {{ seconds: number, w: number | null, h: number | null } | null}
+ */
+export function mp4Facts(/** @type {Uint8Array} */ bytes) {
+  const b = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  /** The boxes between two offsets: type, where the body starts, where the box ends. */
+  const boxes = function* (/** @type {number} */ start, /** @type {number} */ end) {
+    for (let at = start; at + 8 <= end;) {
+      let size = b.readUInt32BE(at);
+      let head = 8;
+      if (size === 1 && at + 16 <= end) { size = Number(b.readBigUInt64BE(at + 8)); head = 16; }
+      else if (size === 0) size = end - at;
+      if (size < head || at + size > end) return;
+      yield { type: b.toString('ascii', at + 4, at + 8), body: at + head, end: at + size };
+      at += size;
+    }
+  };
+  let seconds = null, w = null, h = null;
+  for (const moov of boxes(0, b.length)) {
+    if (moov.type !== 'moov') continue;
+    for (const box of boxes(moov.body, moov.end)) {
+      const v1 = b[box.body] === 1;
+      if (box.type === 'mvhd' && box.body + (v1 ? 32 : 20) <= box.end) {
+        const scale = b.readUInt32BE(box.body + (v1 ? 20 : 12));
+        const length = v1 ? Number(b.readBigUInt64BE(box.body + 24)) : b.readUInt32BE(box.body + 16);
+        if (scale) seconds = round(length / scale);
+      }
+      if (box.type !== 'trak' || w !== null) continue;
+      for (const tkhd of boxes(box.body, box.end)) {
+        const at = tkhd.body + (b[tkhd.body] === 1 ? 88 : 76);
+        if (tkhd.type !== 'tkhd' || at + 8 > tkhd.end) continue;
+        const tw = Math.round(b.readUInt32BE(at) / 65536), th = Math.round(b.readUInt32BE(at + 4) / 65536);
+        if (tw && th) { w = tw; h = th; }
+      }
+    }
+  }
+  return seconds === null ? null : { seconds, w, h };
+}
+
+/**
+ * How long a recording in the project lasts (ffprobe), in seconds, or null when it cannot be told.
+ * @param {string} root the project @param {string} rel the file, in it
+ * @returns {Promise<number | null>}
+ */
+export function mediaSeconds(root, rel) {
+  return new Promise((done) => {
+    execFile('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', join(root, rel)], { timeout: 15_000 }, (error, out) => {
+      const seconds = Number(String(out).trim());
+      done(!error && seconds > 0 ? seconds : null);
+    });
+  });
+}
+
+/** A picture service that makes PNGs alone refuses a GIF or an SVG, and says where they are made. */
+export function pngOnly(/** @type {Record<string, unknown>} */ args, /** @type {string} */ name) {
+  const format = text(args.format);
+  if (format && format !== 'png') throw new Error(`--format ${format}: ${name} makes still pictures. A GIF or an SVG is GPT Image 2.6's: use OpenAI for it.`);
+}
+
+/* GPT Image makes a GIF's frames on one sheet: by how many there are, the grids it lays them out on (columns × rows) */
+const GIF_GRIDS = (/** @type {number} */ n) => (n <= 8 ? [[4, 2], [2, 4]] : n === 9 ? [[3, 3]] : n <= 12 ? [[4, 3], [3, 4], [4, 4]] : [[4, 4]]);
+
+/**
+ * The largest frame of a GIF of `frames` frames in `ratio`'s shape, no larger than `cap` (the size asked), that GPT Image
+ * makes: each side a multiple of 16, and the sheet of all of them at most 3840 px on its longest side, of 655,360 to
+ * 8,294,400 pixels. null when none fits.
+ * @param {string} ratio @param {number} frames @param {{ width: number, height: number }} cap
+ */
+export function gifFrameSize(ratio, frames, cap) {
+  const shape = RATIO_SIZE[ratio];
+  const a = shape.width / shape.height;
+  /** @type {{ width: number, height: number } | null} */
+  let best = null;
+  for (const [cols, rows] of GIF_GRIDS(frames)) {
+    const h = Math.min(3840 / rows, 3840 / (cols * a), Math.sqrt(8_294_400 / (cols * rows * a)), cap.height, cap.width / a);
+    const height = Math.floor(h / 16) * 16;
+    const width = Math.floor((height * a) / 16) * 16;
+    if (cols * rows * width * height < 655_360) continue;
+    if (!best || width * height > best.width * best.height) best = { width, height };
+  }
+  return best;
 }
 
 /** Pixel sizes for `--ratio` at about 1.3 megapixels, each side a multiple of 16 (what image services accept). */
 export const RATIO_SIZE = /** @type {Record<string, { width: number, height: number }>} */ ({
   '16:9': { width: 1536, height: 864 }, '9:16': { width: 864, height: 1536 }, '1:1': { width: 1024, height: 1024 },
   '4:3': { width: 1344, height: 1008 }, '3:4': { width: 1008, height: 1344 }, '3:2': { width: 1536, height: 1024 }, '2:3': { width: 1024, height: 1536 },
+  '21:9': { width: 1680, height: 720 },
 });
+
+/** The pixels a picture of each `--size` has, about: 1K a square of 1024, 2K of 2048, 4K as many as 3840 × 2160. */
+const SIZE_PIXELS = /** @type {Record<string, number>} */ ({ '2k': 2048 * 2048, '4k': 3840 * 2160 });
+
+/**
+ * A picture's width and height for `--ratio` and `--size` (1k, 2k, 4k), in multiples of 16 as image models take them:
+ * 1K as RATIO_SIZE has it, 2K and 4K that many pixels in that shape, no side past 3840.
+ * @param {string} ratio @param {string} size
+ */
+export function pictureSize(ratio, size) {
+  const one = RATIO_SIZE[ratio];
+  const pixels = SIZE_PIXELS[size];
+  if (!one || !pixels) return one ?? null;
+  /* the longer side at most 3840, the other in proportion */
+  const scale = Math.min(Math.sqrt(pixels / (one.width * one.height)), 3840 / Math.max(one.width, one.height));
+  const side = (/** @type {number} */ v) => Math.floor((v * scale) / 16) * 16;
+  return { width: side(one.width), height: side(one.height) };
+}
 
 /** The index row and receipt of one picture made from a prompt. */
 export function madePicture(/** @type {{ path: string, bytes: Uint8Array, prompt: string, provider: string, model: string, notes: string[] }} */ p) {
@@ -283,6 +432,35 @@ export async function foundPictures({ service, provider, args, hits, notes: said
     index,
     receipt: { provider, images, asked, landed: files.length, ...notes(said) },
   };
+}
+
+/**
+ * Clips found on the web, downloaded and landed as `assets/video/<out>.mp4`, `<out>_2.mp4`, ...: as many as were asked,
+ * from the hits in order (one that cannot be downloaded is skipped), each with its length and size as the search said,
+ * and who made it and its page: the credit a film gives it. Throws a sentence when none landed.
+ * @param {{ service: string, provider: string, args: Record<string, unknown>, hits: { url: string, page: string, credit: string, dur: number | null, w: number | null, h: number | null }[], notes: string[] }} p
+ * @param {RunContext} ctx
+ */
+export async function foundClips({ service, provider, args, hits, notes: said }, ctx) {
+  const prompt = needed(args, 'prompt');
+  const asked = Math.round(number(args.n) ?? 1);
+  /** @type {{ path: string, bytes: Uint8Array }[]} */
+  const files = [];
+  const index = [];
+  const clips = [];
+  for (const hit of hits) {
+    if (files.length >= asked) break;
+    const got = await download(service, hit.url, ctx).catch((e) => { if (ctx.signal.aborted) throw e; return null; });
+    if (!got) continue;
+    const name = files.length ? `${text(args.out).replace(/\.[a-z0-9]{2,4}$/i, '')}_${files.length + 1}` : args.out;
+    const path = landing('video', name, extOf(got.type, 'mp4'));
+    files.push({ path, bytes: got.bytes });
+    const facts = { ...(hit.dur ? { dur: hit.dur } : {}), ...(hit.w && hit.h ? { w: hit.w, h: hit.h } : {}) };
+    index.push({ src: path, kind: 'video', ...facts, from: { mode: 'search', prompt, provider, sourceUrl: hit.page, credit: hit.credit } });
+    clips.push({ src: path, ...facts, source: 'web', credit: hit.credit, page: hit.page });
+  }
+  if (!files.length) throw new Error(`${service} found no clips for "${prompt}". Try other words.`);
+  return { files, index, receipt: { provider, clips, asked, landed: files.length, ...notes(said) } };
 }
 
 /** The receipt's `notes` (flags a service could not honor), only when there are some. */

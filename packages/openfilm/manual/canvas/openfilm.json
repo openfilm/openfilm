@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/manual/canvas",
+  "order": 3,
+  "icon": "layers",
+  "title": {
+    "en": "Canvas",
+    "zh-CN": "画布",
+    "ja": "キャンバス",
+    "ko": "캔버스",
+    "es": "Lienzo"
+  },
+  "summary": {
+    "en": "The board beside the edit: ideas, references and shots laid out before they go into the film.",
+    "zh-CN": "剪辑旁边的画板：想法、参考和镜头先在这里摆开，再放进片子。",
+    "ja": "編集の隣のボード：アイデア、参考、ショットを映画に入れる前に並べます。",
+    "ko": "편집 옆의 보드: 아이디어, 참고 자료, 장면을 영상에 넣기 전에 펼쳐 둡니다.",
+    "es": "El tablero junto a la edición: ideas, referencias y planos dispuestos antes de entrar en el vídeo."
+  },
+  "details": {
+    "zh-CN": "什么时候用：你让智能体用画布，或者在画布上选中一个节点让它处理，或者在正式剪辑前先把想法、参考和镜头摆出来的时候。\n它教什么：画布是剪辑旁边的白板，上面的笔记、文件和生成图片、视频、声音的节点都不会直接进片子；智能体用 openfilm canvas 读画布，用 openfilm canvas apply 添加、修改、连接和删除节点，你在画布上马上就能看到。\n关掉后：智能体看不懂画布，也不会在画布上帮你摆东西。用不到画布可以关掉。",
+    "en": "When it is used: when you ask an agent to use the canvas, point it at a node on the canvas, or want ideas, references and shots laid out before the edit.\nWhat it teaches: that the canvas is the board beside the edit, whose notes, files and nodes making pictures, video and sound are not in the film; to read it with openfilm canvas, and to add, change, wire and remove nodes with openfilm canvas apply, which you see on the canvas at once.\nTurned off: agents can't read the canvas or lay things out on it. Fine to turn off if you don't use the canvas.",
+    "ja": "使うとき：エージェントにキャンバスを使うよう頼んだとき、キャンバス上のノードを指したとき、編集の前にアイデア・参考・ショットを並べたいとき。\n教えること：キャンバスは編集の隣のボードで、メモやファイル、画像・動画・音を作るノードは映画には入らないこと。openfilm canvas で読み、openfilm canvas apply でノードを追加・変更・接続・削除すると、すぐキャンバスに表示されること。\nオフにすると：エージェントはキャンバスを読めず、そこに並べることもできません。キャンバスを使わないならオフで構いません。",
+    "ko": "언제 쓰나요: 에이전트에게 캔버스를 쓰라고 하거나, 캔버스의 노드를 가리키거나, 편집 전에 아이디어·참고 자료·장면을 펼쳐 두고 싶을 때.\n무엇을 알려 주나요: 캔버스는 편집 옆의 보드이고, 그 위의 메모·파일과 이미지·영상·소리를 만드는 노드는 영상에 들어가지 않는다는 것. openfilm canvas로 읽고, openfilm canvas apply로 노드를 추가·변경·연결·삭제하면 캔버스에 바로 보인다는 것.\n끄면: 에이전트가 캔버스를 읽지 못하고 그 위에 정리해 주지도 못합니다. 캔버스를 쓰지 않는다면 꺼도 됩니다.",
+    "es": "Cuándo se usa: cuando pides a un agente que use el lienzo, le señalas un nodo del lienzo, o quieres ideas, referencias y planos dispuestos antes de editar.\nQué enseña: que el lienzo es el tablero junto a la edición, cuyas notas, archivos y nodos que hacen imágenes, vídeo y sonido no están en el vídeo; a leerlo con openfilm canvas y a añadir, cambiar, conectar y quitar nodos con openfilm canvas apply, que ves en el lienzo al momento.\nSi se desactiva: los agentes no pueden leer el lienzo ni ordenar cosas en él. Puedes desactivarla si no usas el lienzo."
+  }
+}

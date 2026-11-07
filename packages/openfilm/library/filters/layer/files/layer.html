@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Filter</title>
+<style>
+html, body { margin: 0; height: 100%; background: transparent; }
+</style>
+</head>
+<body>
+<script>
+/*
+ * A filter of the library on a track of its own: an empty, see-through page over the whole picture. The clip's own
+ * style grades what is under it (`backdrop-filter`: the filter's grade, as a clip's `filter` would grade the clip
+ * alone), so every layer below it is graded while the clip is on; `?look=` in its address says which filter it is.
+ * A page of OpenFilm's library (CC0): what it shows at t comes from t alone.
+ */
+window.film = { frame() {} };
+</script>
+</body>
+</html>

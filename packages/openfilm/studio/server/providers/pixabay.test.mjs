@@ -67,3 +67,19 @@ test('a key it does not take is said like any refused key; an error echoing the 
   reply = () => [500, `failed for key=${KEY}`, 'text/plain'];
   await assert.rejects(pixabay.run('image-search', { out: 'x', prompt: 'y' }, ctx()), (e) => e.message === 'Pixabay answered 500: failed for key=•••');
 });
+
+test('clips found: footage by default, its Full HD rendition, with its length and who made it', async () => {
+  seen.length = 0;
+  reply = (call) => {
+    if (call.url.pathname === '/api/videos/') {
+      return [200, { hits: [{ pageURL: 'https://pixabay.com/videos/id-9/', duration: 8, user: 'Eva',
+        videos: { large: { url: '', width: 0, height: 0 }, medium: { url: `${base}/files/9-m.mp4`, width: 1920, height: 1080 }, small: { url: `${base}/files/9-s.mp4`, width: 1280, height: 720 } } }] }];
+    }
+    if (call.url.pathname.startsWith('/files/')) return [200, Buffer.from('mp4'), 'video/mp4'];
+    return [404, {}];
+  };
+  const result = await pixabay.run('video-search', { out: 'sea', prompt: 'waves at dusk' }, ctx());
+  const search = seen.find((c) => c.url.pathname === '/api/videos/');
+  assert.deepEqual([search.url.searchParams.get('video_type'), search.url.searchParams.get('q')], ['film', 'waves at dusk']);
+  assert.deepEqual(result.receipt.clips, [{ src: 'assets/video/sea.mp4', dur: 8, w: 1920, h: 1080, source: 'web', credit: 'Video by Eva on Pixabay', page: 'https://pixabay.com/videos/id-9/' }]);
+});

@@ -8,9 +8,11 @@ import {
   type MarkdownScan,
 } from '@openfilm/shared/markdown';
 import type { StudioRef } from '../app-bridge';
+import { audioLinkPath, projectAudioUrl } from '@/lib/audio-link';
+import { AttachmentPreview } from './AttachmentPreview';
 import { useT } from '@/i18n';
 import { agentRefPill, parseAgentRefs } from '@/lib/agent-refs';
-import { useClipSrc } from '@/lib/studio-film';
+import { ProjectFolderContext, useClipSrc } from '@/lib/studio-film';
 import { PromptPill, PromptPillRevealContext } from './prompt-editor';
 
 /**
@@ -24,7 +26,7 @@ export function Markdown({ text, muted = false }: { text: string; muted?: boolea
   const blocks = useMarkdownBlocks(text);
   if (!blocks.length) return null;
   return (
-    <div className={`flex min-w-0 flex-col gap-2 text-[14px] leading-[1.65] ${muted ? 'text-[var(--chat-hint)]' : 'text-[var(--chat-text)]'}`}>
+    <div className={`flex min-w-0 flex-col gap-2 text-[14px] leading-[1.65] ${muted ? 'text-[var(--text-faint)]' : 'text-[var(--text)]'}`}>
       {blocks.map((block, index) => <MarkdownRow key={index} block={block} />)}
     </div>
   );
@@ -56,8 +58,8 @@ const MarkdownRow = React.memo(function MarkdownRow({ block }: { block: Markdown
   if (block.kind === 'heading') {
     // No room for an h1 in a conversation: a heading only leads a few lines, a little top space is enough.
     const cls = block.level <= 2
-      ? 'pt-1 text-[1.07em] font-semibold text-[var(--chat-text)]'
-      : 'pt-0.5 font-semibold text-[var(--chat-text)]';
+      ? 'pt-1 text-[1.07em] font-semibold text-[var(--text)]'
+      : 'pt-0.5 font-semibold text-[var(--text)]';
     return <p className={cls}>{inline(block.text)}</p>;
   }
   if (block.kind === 'paragraph') {
@@ -91,7 +93,7 @@ const MarkdownRow = React.memo(function MarkdownRow({ block }: { block: Markdown
     // No syntax highlighting: code blocks in chat are mostly a few lines of commands, not worth a highlighter
     // in the bundle.
     return (
-      <pre className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2 font-mono text-[13.5px] leading-[1.55] text-[var(--text-dim)]">
+      <pre className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--bg-field)] px-2.5 py-2 font-mono text-[13.5px] leading-[1.55] text-[var(--text-muted)]">
         <code>{block.text}</code>
       </pre>
     );
@@ -102,7 +104,7 @@ const MarkdownRow = React.memo(function MarkdownRow({ block }: { block: Markdown
       <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
         <table className="w-full border-collapse text-left text-[14px]">
           {head ? (
-            <thead className="bg-[var(--surface-2)]">
+            <thead className="bg-[var(--bg-field)]">
               <tr>
                 {head.map((cell, index) => (
                   <th key={index} className="border-b border-[var(--border)] px-2 py-1 font-semibold">
@@ -116,7 +118,7 @@ const MarkdownRow = React.memo(function MarkdownRow({ block }: { block: Markdown
             {body.map((row, rowIndex) => (
               <tr key={rowIndex} className="border-b border-[var(--border)]/60 last:border-0">
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="px-2 py-1 text-[var(--text-dim)]">{inline(cell)}</td>
+                  <td key={cellIndex} className="px-2 py-1 text-[var(--text-muted)]">{inline(cell)}</td>
                 ))}
               </tr>
             ))}
@@ -132,13 +134,14 @@ function inline(text: string): React.ReactNode[] {
   return parseInlineMarkdown(text).map((piece, index) => {
     if (piece.kind === 'code') {
       return (
-        <code key={index} className="rounded bg-[var(--surface-2)] px-1 py-0.5 font-mono text-[0.88em]">
+        <code key={index} className="rounded bg-[var(--bg-field)] px-1 py-0.5 font-mono text-[0.88em]">
           {piece.text}
         </code>
       );
     }
     if (piece.kind === 'strong') return <strong key={index} className="font-semibold">{withRefs(piece.text)}</strong>;
     if (piece.kind === 'em') return <em key={index} className="italic">{withRefs(piece.text)}</em>;
+    if (piece.kind === 'link' && audioLinkPath(piece.href)) return <AudioLink key={index} href={piece.href} text={piece.text} />;
     if (piece.kind === 'link') {
       return (
         <a
@@ -195,4 +198,20 @@ function AgentRefPill({ studioRef }: { studioRef: StudioRef }) {
       } : {})}
     />
   );
+}
+
+/** A local audition is streamed by Studio, with its existing project and real-file boundary checks. */
+function AudioLink({ href, text }: { href: string; text: string }) {
+  const folder = React.useContext(ProjectFolderContext);
+  const t = useT();
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => { setOpen(false); }, [folder, href]);
+  const url = projectAudioUrl(href, folder);
+  const name = audioLinkPath(href)?.split(/[\\/]/).pop() ?? text;
+  return <>
+    <button type="button" onClick={() => setOpen(true)}
+      className="break-all text-[var(--accent)] underline underline-offset-2 hover:opacity-80">{text}</button>
+    {open && !url ? <span role="alert" className="ml-1 text-[var(--err)]">{t('assets.previewFailed')}</span> : null}
+    {open && url ? <AttachmentPreview item={{ name, kind: 'document', url }} onClose={() => setOpen(false)} /> : null}
+  </>;
 }

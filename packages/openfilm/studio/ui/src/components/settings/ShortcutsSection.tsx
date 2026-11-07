@@ -31,7 +31,7 @@ function Caps({ combo }: { combo: string }) {
   return (
     <span className="inline-flex items-center gap-1">
       {comboCaps(combo, MAC).map((cap, i) => (
-        <kbd key={i} className="inline-flex h-6 min-w-6 items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--dock-pane)] px-1.5 font-sans text-[12.5px] leading-none text-[var(--text-dim)]">
+        <kbd key={i} className="inline-flex h-6 min-w-6 items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--bg-panel)] px-1.5 font-sans text-[12.5px] leading-none text-[var(--text-muted)]">
           {cap}
         </kbd>
       ))}
@@ -218,7 +218,7 @@ export function ShortcutsSection() {
                 title={custom ? t('settings.shortcuts.change') : t('settings.shortcuts.editCopy')}
                 onClick={() => (on ? setRecording(null) : startRecording(id))}
                 className={`flex min-h-8 max-w-[220px] items-center justify-end rounded-[7px] px-2 py-1 transition ${
-                  on ? 'bg-[var(--bg-active)] ring-1 ring-[var(--accent)]' : pending?.id === id ? 'ring-1 ring-[var(--err)]' : 'hover:bg-[var(--bg-hover)]'
+                  on ? 'bg-[var(--bg-pressed)] ring-1 ring-[var(--accent)]' : pending?.id === id ? 'ring-1 ring-[var(--err)]' : 'hover:bg-[var(--bg-hover)]'
                 }`}>
                 {on ? <span className="text-[13px] text-[var(--text-muted)]">{t('settings.shortcuts.recording')}</span> : conflict ? <Caps combo={conflict.combo} /> : caps}
               </button>
@@ -227,7 +227,7 @@ export function ShortcutsSection() {
         </div>
         {/* the keys pressed are another action's: replace, or keep things as they are */}
         {conflict ? (
-          <div role="alert" className="mb-1 mt-1.5 flex flex-col gap-2 rounded-[8px] border border-[var(--border)] bg-[var(--dock-pane)] px-3 py-2.5">
+          <div role="alert" className="mb-1 mt-1.5 flex flex-col gap-2 rounded-[8px] border border-[var(--border)] bg-[var(--bg-panel)] px-3 py-2.5">
             <span className="text-[13.5px] leading-snug text-[var(--text)]">
               {t('settings.shortcuts.conflict').replace('{keys}', comboCaps(conflict.combo, MAC).join(MAC ? '' : '+')).replace('{action}', actionName(conflict.other))}
             </span>

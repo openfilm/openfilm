@@ -148,9 +148,9 @@ export function Tooltip({
               top: side === 'bottom' ? at.y + 2 + ARROW_H : at.y - 2 - ARROW_H,
               /* The first frame has not measured the shift yet; do not paint, so it is not seen jumping from the wrong position. */
               visibility: fit ? 'visible' : 'hidden',
-              background: 'var(--tooltip-bg)',
-              color: 'var(--tooltip-text)',
-              border: '1px solid var(--tooltip-border)',
+              background: 'var(--bg-raised)',
+              color: 'var(--text)',
+              border: '1px solid var(--border-strong)',
             }}
           >
             {label}
@@ -165,20 +165,20 @@ export function Tooltip({
                 left: fit?.arrow ?? '50%',
                 width: ARROW_BOX,
                 height: ARROW_BOX,
-                background: 'var(--tooltip-bg)',
+                background: 'var(--bg-raised)',
                 /* A square rotated 45 degrees, with only its two outward-facing edges stroked, overlaps the bubble's border to form one continuous arrow. */
                 ...(side === 'bottom'
                   ? {
                     top: -ARROW_BOX / 2 - 0.5,
                     transform: 'translateX(-50%) rotate(45deg)',
-                    borderTop: '1px solid var(--tooltip-border)',
-                    borderLeft: '1px solid var(--tooltip-border)',
+                    borderTop: '1px solid var(--border-strong)',
+                    borderLeft: '1px solid var(--border-strong)',
                   }
                   : {
                     bottom: -ARROW_BOX / 2 - 0.5,
                     transform: 'translateX(-50%) rotate(45deg)',
-                    borderBottom: '1px solid var(--tooltip-border)',
-                    borderRight: '1px solid var(--tooltip-border)',
+                    borderBottom: '1px solid var(--border-strong)',
+                    borderRight: '1px solid var(--border-strong)',
                   }),
               }}
             />

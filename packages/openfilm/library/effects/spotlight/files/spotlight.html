@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Spotlight</title>
+<style>
+  /* what a clip of it may change: how dark the rest of the frame goes (0 to 1), the spot's size, how fast it moves */
+  :root { --amount: 0.82; --size: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A spotlight in the dark: the frame goes dark but for a soft round spot of light that glides from place to place,
+ * easing in and out and resting a moment at each, like a flashlight looking around. A page of OpenFilm's library
+ * (CC0): what it shows at t comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// where the spot rests in turn, anywhere in the middle part of the frame
+const spot = (k) => [0.2 + hash(k * 3.1 + 0.2) * 0.6, 0.28 + hash(k * 3.1 + 0.6) * 0.44];
+const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, m = Math.min(w, h);
+    const dark = num('--amount', 0.82), size = num('--size', 1), tt = t * num('--speed', 1);
+    // 1.8 seconds a stop: it moves for 1.1 of them and rests for the rest, wobbling a little like a hand
+    const S = 1.8, k = Math.floor(tt / S), p = Math.min(1, (tt - k * S) / 1.1);
+    const [x0, y0] = spot(k), [x1, y1] = spot(k + 1), e = ease(p);
+    const x = (x0 + (x1 - x0) * e) * w + Math.sin(tt * 2.3) * m * 0.006 + Math.sin(tt * 3.7 + 1) * m * 0.004;
+    const y = (y0 + (y1 - y0) * e) * h + Math.cos(tt * 2.9) * m * 0.006;
+    const r = m * 0.3 * size * (1 + 0.04 * Math.sin(tt * 1.3));
+    // the dark, with a hole of light: soft at the rim, a little light spilling far around it
+    ctx.fillStyle = `rgba(4,4,8,${dark})`;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.save(); ctx.translate(x, y); ctx.scale(1.08, 1);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.9);
+    g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.42, 'rgba(0,0,0,1)'); g.addColorStop(0.53, 'rgba(0,0,0,0.75)');
+    g.addColorStop(0.7, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * 1.9, 0, 6.283); ctx.fill();
+    ctx.restore();
+    // a faint warm ring where the beam's edge falls
+    ctx.globalCompositeOperation = 'lighter';
+    const l = ctx.createRadialGradient(x, y, r * 0.7, x, y, r * 1.05);
+    l.addColorStop(0, 'rgba(255,225,190,0)'); l.addColorStop(0.75, 'rgba(255,225,190,0.045)'); l.addColorStop(1, 'rgba(255,225,190,0)');
+    ctx.fillStyle = l; ctx.beginPath(); ctx.arc(x, y, r * 1.05, 0, 6.283); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

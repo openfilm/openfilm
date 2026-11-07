@@ -1,0 +1,139 @@
+{
+ "version": 2,
+ "kind": "group",
+ "clips": [
+  {
+   "track": 0,
+   "at": 0.2,
+   "clip": {
+    "src": "shop-limited.html",
+    "time": [
+     0,
+     2.2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Title\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Ends in\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Timer\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Timer\", \"type\": \"var\", \"var\": \"--timer\"}, {\"name\": \"Pill\", \"type\": \"var\", \"var\": \"--pill\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.2,\"fit\":0.13}"
+    },
+    "size": {
+     "w": 900,
+     "h": 200
+    },
+    "overrides": [
+     {
+      "fade": [
+       0,
+       0.2
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "track": 0,
+   "at": 2.6,
+   "clip": {
+    "src": "shop-burst.html",
+    "time": [
+     0,
+     2
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Big text\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Small text\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Burst\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Back burst\", \"type\": \"var\", \"var\": \"--accent2\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]",
+     "data-place": "{\"x\":0.76,\"y\":0.4,\"fit\":0.4}"
+    },
+    "size": {
+     "w": 500,
+     "h": 500
+    }
+   }
+  },
+  {
+   "track": 0,
+   "at": 4.8,
+   "clip": {
+    "src": "shop-coupon.html",
+    "time": [
+     0,
+     2.8
+    ],
+    "attrs": {
+     "data-props": "[{\"name\": \"Value\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Unit\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Title\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Condition\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Code\", \"type\": \"text\", \"at\": \".t5\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Paper\", \"type\": \"var\", \"var\": \"--paper\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--ink\"}]",
+     "data-place": "{\"x\":0.5,\"y\":0.5,\"fit\":0.3}"
+    },
+    "size": {
+     "w": 900,
+     "h": 350
+    }
+   }
+  },
+  {
+   "track": 1,
+   "at": 1.95,
+   "clip": {
+    "src": "comic-bam.html",
+    "time": [
+     0,
+     0.9
+    ]
+   }
+  },
+  {
+   "track": 1,
+   "at": 4.3,
+   "clip": {
+    "src": "shock.html",
+    "time": [
+     0,
+     0.6
+    ]
+   }
+  },
+  {
+   "track": 2,
+   "at": 0,
+   "clip": {
+    "src": "example-1.jpg",
+    "time": [
+     0,
+     2.4
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "1"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 2.4,
+   "clip": {
+    "src": "example-2.jpg",
+    "time": [
+     0,
+     2.2
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "2"
+    }
+   }
+  },
+  {
+   "track": 2,
+   "at": 4.6,
+   "clip": {
+    "src": "example-3.jpg",
+    "time": [
+     0,
+     3
+    ],
+    "style": "object-fit: cover",
+    "attrs": {
+     "data-slot": "3"
+    }
+   }
+  }
+ ],
+ "durationMs": 7600
+}

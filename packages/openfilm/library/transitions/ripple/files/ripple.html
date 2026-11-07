@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ripple</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Ripples spread from the middle as if a drop fell into the picture, bright crests and dark troughs, and the water
+ * flashes white over the cut; then a rippling hole opens onto the next shot. It lasts 0.9 s and covers the cut at
+ * its middle: put its middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t
+ * alone, drawn in parts of the frame so it fits a stage of any shape.
+ */
+const D = 0.9;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+const inExpo = (x) => (x <= 0 ? 0 : 2 ** (10 * x - 10));
+
+function draw(u) {
+  const cx = W / 2, cy = H / 2, R = Math.hypot(W, H) / 2;
+  /* the flash, with a hole that ripples open after the cut */
+  const flash = u < 0.5 ? inExpo(seg(u, 0.24, 0.42)) : 1 - seg(u, 0.85, 1);
+  const open = u < 0.5 ? 0 : R * 1.15 * inOut(seg(u, 0.56, 0.95));
+  if (flash > 0) {
+    g.fillStyle = `rgba(232, 246, 255, ${flash})`;
+    g.beginPath();
+    g.rect(0, 0, W, H);
+    if (open > 0) {
+      for (let i = 0; i <= 120; i++) {
+        const a = (i / 120) * TAU, r = open * (1 + 0.035 * Math.sin(a * 9 + u * 30));
+        if (i) g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a)); else g.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+      }
+      g.closePath();
+    }
+    g.fill('evenodd');
+  }
+  /* the rings: a dark trough inside, a bright crest outside */
+  for (let k = 0; k < 7; k++) {
+    const r = R * 1.6 * (u * 1.25 - k * 0.09);
+    if (r <= 0 || r < open) continue;
+    const w = R * (0.05 + 0.05 * (r / R)), a = clamp(1.2 - r / (R * 1.6)) * (u < 0.5 ? 1 : 1 - seg(u, 0.5, 1));
+    const ring = g.createRadialGradient(cx, cy, Math.max(0, r - w), cx, cy, r + w);
+    ring.addColorStop(0, 'rgba(0, 40, 80, 0)');
+    ring.addColorStop(0.35, `rgba(0, 40, 80, ${0.35 * a})`);
+    ring.addColorStop(0.6, `rgba(235, 250, 255, ${0.75 * a})`);
+    ring.addColorStop(1, 'rgba(235, 250, 255, 0)');
+    g.fillStyle = ring;
+    g.fillRect(0, 0, W, H);
+  }
+  /* the open edge of the hole glints */
+  if (open > 0 && open < R * 1.15) {
+    g.strokeStyle = `rgba(255, 255, 255, ${0.8 * (1 - open / (R * 1.15))})`;
+    g.lineWidth = H * 0.012;
+    g.beginPath();
+    g.arc(cx, cy, open, 0, TAU);
+    g.stroke();
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>
