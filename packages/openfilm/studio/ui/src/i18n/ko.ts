@@ -2444,6 +2444,7 @@ export const ko: Words = {
       switchWhere: {
         codex: 'Codex 앱 또는 터미널의 codex login',
         copilot: 'Copilot 자체(터미널에서 copilot 실행 후 /user)',
+        antigravity: 'Google Antigravity 자체(터미널에서 agy 실행 후 /logout)',
         opencode: 'OpenCode 앱 또는 터미널의 opencode auth switch',
         codebuddy: 'CodeBuddy 자체(터미널에서 codebuddy 실행)',
         qwen: 'Qwen Code 자체(터미널에서 qwen 실행 후 /auth)',
