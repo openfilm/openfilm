@@ -587,6 +587,11 @@ async function start() {
     trash: (path) => shell.trashItem(path),
     tell: (channel, value) => broadcast(channel, value),
     log,
+    filmPutBack: async (dir) => {
+      const { projects } = await studioApi('/api/projects');
+      const found = projects.find((p) => p.path === dir);
+      if (found) await studioApi(`/api/projects/${encodeURIComponent(found.id)}/history/put-back`, 'POST');
+    },
   });
   /* the tabs, drawn by each page in Studio's top bar: asked for, and told of every change (tellTabs) */
   const tabHandle = (channel, fn) => ipcMain.handle(channel, (event, opts) => {
