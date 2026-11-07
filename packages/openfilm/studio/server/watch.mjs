@@ -13,8 +13,9 @@ import { settleFiles } from './person-edits.mjs';
 import { FILM_FILE } from '../../src/film-doc.mjs';
 import { projectMissing } from './project-presence.mjs';
 
-/* a dot folder is a tool's (Studio's own .film, .git…), and what builds and packages make is not the film */
-const IGNORED = /^(\.[^/\\]+|node_modules|dist|build)([/\\]|$)/;
+/* a dot folder is a tool's (Studio's own .film, .git…, a compound clip's film's own too, in parts/), and what builds
+   and packages make is not the film */
+const IGNORED = /(^|[/\\])(\.[^/\\]+|node_modules|dist|build)([/\\]|$)/;
 /** How long changes are gathered before one event: an agent writes a file in several chunks, and often several files. */
 const SETTLE_MS = 120;
 /** How long missing project files are rechecked before their pages are told (the project gone, or its film.html). */
@@ -33,13 +34,13 @@ const WRITING = /(^|[/\\])([^/\\]+\.[0-9a-f-]{8,}\.tmp|\.\d+\.\d+\.importing)$/;
  * `history`: the version history changed (history.mjs); `moved`: its action changed the folder's files (a version
  * restored), so Studio's own state of the film is read again. `history-progress`: how far an action is, `op` which
  * ('save', 'restore'…).
- * `project`: the project renamed, as it is now.
+ * `project`: the project renamed, as it is now. `canvas`: an agent changed the canvas (canvas.mjs).
  * @typedef {{ type: 'film', rev: string } | { type: 'files', paths?: string[] } | { type: 'history', moved?: boolean } | { type: 'export', job: object }
  *   | { type: 'history-progress', op: string, phase: string, done: number, total: number } | { type: 'project', project: object }
  *   | { type: 'ask', ask: object } | { type: 'asked', id: string } | { type: 'notice', notice: object }
- *   | { type: 'film-missing' } | { type: 'gone' }} FolderEvent   `gone`: the project was deleted, or its folder is
- *   missing. `film-missing`: its folder is there but film.html is not (being written again, or lost): the project stays
- *   open, and its pages hear of the film (`film`) once it is back
+ *   | { type: 'canvas' } | { type: 'film-missing' } | { type: 'gone' }} FolderEvent   `gone`: the project was deleted, or
+ *   its folder is missing. `film-missing`: its folder is there but film.html is not (being written again, or lost): the
+ *   project stays open, and its pages hear of the film (`film`) once it is back
  */
 
 /**

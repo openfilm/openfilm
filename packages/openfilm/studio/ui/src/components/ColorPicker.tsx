@@ -80,7 +80,7 @@ function useDrag(onMove: (x: number, y: number) => void, onEnd: () => void) {
 
 const KNOB = 'pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,.18),0_1px_3px_rgba(0,0,0,.3)]';
 const CHECKER = { backgroundImage: 'repeating-conic-gradient(#d9d9d9 0 25%, #fff 0 50%)', backgroundSize: '8px 8px' };
-const NUMBER = 'h-[26px] min-w-0 rounded-[5px] bg-[var(--fill-tsp)] px-2 text-[11px] text-[var(--text)] outline-none tabular-nums ring-1 ring-inset ring-transparent focus:bg-[var(--bg)] focus:ring-[1.5px] focus:ring-[var(--accent)]';
+const NUMBER = 'h-[26px] min-w-0 rounded-[5px] bg-[var(--bg-field)] px-2 text-[11px] text-[var(--text)] outline-none tabular-nums ring-1 ring-inset ring-transparent focus:bg-[var(--bg-panel)] focus:ring-[1.5px] focus:ring-[var(--accent)]';
 
 export function ColorPicker({
   label, value, onPreview, onCommit, onClose,
@@ -127,7 +127,7 @@ export function ColorPicker({
   return (
     <div
       data-color-picker=""
-      className="w-[240px] select-none rounded-[12px] border border-[var(--border-strong)] bg-[var(--bg-surface)] p-3 text-[var(--text)] shadow-[0_16px_40px_-8px_rgba(0,0,0,.35),0_4px_12px_rgba(0,0,0,.14)]"
+      className="w-[240px] select-none rounded-[12px] border border-[var(--border-strong)] bg-[var(--bg-raised)] p-3 text-[var(--text)] shadow-[0_16px_40px_-8px_rgba(0,0,0,.35),0_4px_12px_rgba(0,0,0,.14)]"
     >
       <div className="mb-2.5 flex h-5 items-center">
         <span className="text-[11px] font-semibold">{label}</span>
@@ -146,7 +146,7 @@ export function ColorPicker({
       </div>
 
       <div className="mt-3 flex items-center gap-2.5">
-        <button type="button" onClick={pick} aria-label={t('colorPicker.eyedropper')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+        <button type="button" onClick={pick} aria-label={t('colorPicker.eyedropper')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
           <Pipette size={14} />
         </button>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -193,7 +193,7 @@ export function ColorPicker({
               type="button"
               aria-label={r}
               onClick={() => { const next = hexToHsv(r); if (next) { setC(next); dirty.current = true; onPreview(r); commit(r); } }}
-              className={`h-5 w-5 rounded-[4px] shadow-[inset_0_0_0_1px_rgba(0,0,0,.12)] transition hover:scale-110 ${r.toLowerCase() === solid ? 'ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--bg-surface)]' : ''}`}
+              className={`h-5 w-5 rounded-[4px] shadow-[inset_0_0_0_1px_rgba(0,0,0,.12)] transition hover:scale-110 ${r.toLowerCase() === solid ? 'ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--bg-raised)]' : ''}`}
               style={{ background: r }}
             />
           ))}

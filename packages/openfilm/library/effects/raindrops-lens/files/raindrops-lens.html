@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Rain on the lens</title>
+<style>
+  /* what a clip of it may change: how many drops gather (0 to 1), how fast they land and run */
+  :root { --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Rain on the glass in front of the lens: drops landing, each with a dark rim, a bright catch-light at the top and
+ * light gathered at its foot; now and then one grows heavy and runs down in fits and starts, leaving a wet trail and
+ * beads behind; a fine mist over the glass. A page of OpenFilm's library (CC0): every drop comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// one drop, drawn once: lit from above, light focused at its foot
+const DROP = (() => {
+  const g = document.createElement('canvas'); g.width = g.height = 128;
+  const x = g.getContext('2d');
+  // the body, clear with a faint sheen; its edge shadowed most toward the top, where the glass bends the light away
+  x.save(); x.beginPath(); x.arc(64, 64, 60, 0, 6.283); x.clip();
+  x.fillStyle = 'rgba(255,255,255,0.07)'; x.fillRect(0, 0, 128, 128);
+  const edge = x.createRadialGradient(64, 74, 30, 64, 74, 66);
+  edge.addColorStop(0, 'rgba(10,15,25,0)'); edge.addColorStop(0.7, 'rgba(10,15,25,0.12)'); edge.addColorStop(1, 'rgba(10,15,25,0.5)');
+  x.fillStyle = edge; x.fillRect(0, 0, 128, 128);
+  x.restore();
+  // light gathered at the foot
+  x.filter = 'blur(3px)';
+  x.fillStyle = 'rgba(255,255,255,0.5)';
+  x.beginPath(); x.ellipse(64, 94, 30, 12, 0, 0, Math.PI); x.fill();
+  // the catch-light
+  x.filter = 'blur(1.5px)';
+  x.fillStyle = 'rgba(255,255,255,0.95)';
+  x.beginPath(); x.ellipse(46, 36, 12, 7, -0.6, 0, 6.283); x.fill();
+  x.fillStyle = 'rgba(255,255,255,0.5)';
+  x.beginPath(); x.ellipse(82, 30, 4, 3, 0.4, 0, 6.283); x.fill();
+  return g;
+})();
+const N = 130;
+const drops = Array.from({ length: N }, (_, i) => {
+  const r = (k) => hash(i * 8.41 + k);
+  return { i, order: r(1), life: 6 + r(2) * 8, offset: r(3), size: 1.4 + Math.pow(r(4), 2.5) * 6.5, runs: r(5) < 0.28 };
+});
+const MIST = 520;
+const mist = Array.from({ length: MIST }, (_, i) => ({ x: hash(i + 0.11), y: hash(i + 0.22), s: 0.2 + hash(i + 0.33) * 0.45, born: hash(i + 0.44) }));
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), speed = num('--speed', 1), tt = t * speed;
+    // the glass fogs a little
+    ctx.fillStyle = 'rgba(200,210,222,0.07)'; ctx.fillRect(0, 0, w, h);
+    // fine beads of mist
+    for (const m of mist) {
+      if (m.born > amount) continue;
+      const d = m.s * u * 2;
+      ctx.globalAlpha = 0.5;
+      ctx.drawImage(DROP, m.x * w - d / 2, m.y * h - d / 2, d, d);
+    }
+    for (const dr of drops) {
+      if (dr.order > amount) continue;
+      const cyc = tt / dr.life + dr.offset, k = Math.floor(cyc), p = cyc - k, a = p * dr.life;
+      const r = (j) => hash(dr.i * 23.9 + k * 13.1 + j);
+      const x0 = r(1) * w, y0 = r(2) * h * 1.05 - 0.05 * h;
+      const R = dr.size * u * (0.7 + 0.6 * r(3)) / 2;
+      // it lands: a quick swell from nothing
+      const land = Math.min(1, a / 0.12), pop = land < 1 ? 0.6 + 0.4 * Math.sin(land * Math.PI / 2) : 1;
+      const fade = Math.min(1, (1 - p) * dr.life / 0.6);
+      let y = y0, stretch = 1;
+      if (dr.runs) {
+        // it runs, after a while, in fits and starts: fast, slow, fast
+        const start = 1.2 + r(4) * dr.life * 0.4;
+        if (a > start) {
+          const s = a - start, v = (0.12 + r(5) * 0.18) * h, om = 5 + r(6) * 4;
+          const run = v * (s - 0.8 * Math.sin(s * om) / om);
+          y = y0 + run; stretch = 1.25;
+          // the wet trail and the beads it leaves
+          const top = Math.max(y0, y - 0.22 * h);
+          const g = ctx.createLinearGradient(0, top, 0, y);
+          g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,0.16)');
+          ctx.globalAlpha = fade; ctx.fillStyle = g;
+          ctx.fillRect(x0 - R * 0.28, top, R * 0.56, Math.max(0, y - top - R * 0.5));
+          for (let b = 0; b < 6; b++) {
+            const by = y0 + (run * (b + 0.5 + 0.4 * r(10 + b))) / 7;
+            if (by > y - R || by < y - 0.3 * h) continue;
+            const bd = R * (0.25 + 0.25 * r(20 + b));
+            ctx.globalAlpha = 0.9 * fade;
+            ctx.drawImage(DROP, x0 + (r(30 + b) - 0.5) * R * 0.5 - bd, by - bd, bd * 2, bd * 2);
+          }
+        }
+      }
+      if (y - R > h) continue;
+      ctx.globalAlpha = fade;
+      ctx.drawImage(DROP, x0 - R * pop, y - R * pop * stretch, 2 * R * pop, 2 * R * pop * stretch);
+    }
+    ctx.globalAlpha = 1;
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -8,7 +8,8 @@
  * preview needs the file's length, name and kind. So the file being dragged is also kept here (`peekResourceDrag`);
  * the drop itself still reads the data (`readResourceDragData`).
  *
- * Media pane: on `dragstart` call `setResourceDragData(e.dataTransfer, file)`, on `dragend` `clearResourceDrag()`.
+ * Media pane: on `dragstart` call `setResourceDragData(e.dataTransfer, file)` (and `dragPicture(e)`), on `dragend`
+ * `clearResourceDrag()`.
  */
 export const RESOURCE_DRAG_TYPE = 'application/x-openfilm-resource';
 
@@ -36,6 +37,12 @@ export interface ResourceDragItem {
   fps?: number;
   /** A saved thing (lib/saved), not a file of the project: its files are brought in as it lands. */
   saved?: string;
+  /** Not a clip but what goes on one (a look, lib/library) or on a cut (a fade): dropped there, not on a track. */
+  apply?: 'look' | 'fade';
+  /** A line of the library's words: what it says once put in (the timeline's preview of it says it too). */
+  words?: string;
+  /** A line of the library's words in a look of the person's own (a saved preset): its CSS variables. */
+  vars?: Record<string, string>;
 }
 
 const KINDS: readonly ResourceKind[] = ['video', 'image', 'audio', 'mg', 'other'];
@@ -59,6 +66,68 @@ export function setResourceDragData(
   if (!item) return;
   data.setData(RESOURCE_DRAG_TYPE, JSON.stringify(item));
   data.setData('text/plain', item.path);
+}
+
+/* ── the picture that follows the pointer ──
+   The browser's own drag picture cannot be hidden or changed once a drag has begun, yet over the timeline the thing
+   should become the clip it will be (the timeline draws it where it lands). So the browser is given a blank one and the
+   dragged element's copy follows the pointer here, hidden while the timeline shows the clip instead. */
+
+let picture: HTMLElement | null = null;
+const BLANK = typeof Image === 'undefined' ? null : Object.assign(new Image(), { src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' });
+
+const follow = (e: DragEvent) => {
+  /* the last dragover of some browsers says 0, 0 */
+  if (picture && (e.clientX || e.clientY)) picture.style.translate = `${e.clientX}px ${e.clientY}px`;
+};
+/* let go where it came from (a panel marked `data-drag-home`: the library, the media pane), and nothing there takes
+   it: taken as a drop that does nothing, so it ends at once. Refused, the browser would first fly its picture back to
+   where the drag began, and the drag would end only after that */
+const atHome = (e: Event) => e.target instanceof Element && Boolean(e.target.closest('[data-drag-home]'));
+const home = (e: DragEvent) => {
+  if (!picture || e.defaultPrevented || !atHome(e)) return;
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = e.dataTransfer.effectAllowed.includes('move') ? 'move' : 'copy';
+};
+const dropPicture = (e?: Event) => {
+  /* let go at home: nothing done there (not its path typed into a field it was let go on) */
+  if (e?.type === 'drop' && atHome(e)) e.preventDefault();
+  picture?.remove();
+  picture = null;
+  document.removeEventListener('dragover', follow, true);
+  document.removeEventListener('dragover', home);
+  document.removeEventListener('dragend', dropPicture, true);
+  document.removeEventListener('drop', dropPicture, true);
+};
+
+/**
+ * At `dragstart`: the element dragged (`e.currentTarget`) follows the pointer as it was grabbed, a little see-through,
+ * in place of the browser's picture.
+ */
+export function dragPicture(e: { currentTarget: EventTarget; dataTransfer: DataTransfer; clientX: number; clientY: number }): void {
+  const from = e.currentTarget as HTMLElement;
+  if (!BLANK || !(from instanceof HTMLElement)) return;
+  dropPicture();
+  const box = from.getBoundingClientRect();
+  const copy = from.cloneNode(true) as HTMLElement;
+  copy.style.cssText = `position:absolute;left:${box.left - e.clientX}px;top:${box.top - e.clientY}px;width:${box.width}px;height:${box.height}px;margin:0`;
+  const holder = document.createElement('div');
+  holder.setAttribute('aria-hidden', 'true');
+  holder.style.cssText = `position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;opacity:.85;translate:${e.clientX}px ${e.clientY}px`;
+  holder.append(copy);
+  document.body.append(holder);
+  picture = holder;
+  e.dataTransfer.setDragImage(BLANK, 0, 0);
+  document.addEventListener('dragover', follow, true);
+  /* after the page's own handlers (bubbling): a place that takes the drop decides first */
+  document.addEventListener('dragover', home);
+  document.addEventListener('dragend', dropPicture, true);
+  document.addEventListener('drop', dropPicture, true);
+}
+
+/** While the timeline draws the dragged thing as the clip it will be: its picture is not shown. */
+export function hideDragPicture(hidden: boolean): void {
+  if (picture) picture.style.visibility = hidden ? 'hidden' : '';
 }
 
 /**
@@ -104,6 +173,9 @@ function normalizeResourceDragItem(value: unknown): ResourceDragItem | null {
     ...(h === undefined ? {} : { h }),
     ...(fps === undefined ? {} : { fps }),
     ...(typeof item.saved === 'string' && item.saved ? { saved: item.saved } : {}),
+    ...(item.apply === 'look' || item.apply === 'fade' ? { apply: item.apply } : {}),
+    ...(typeof item.words === 'string' && item.words ? { words: item.words } : {}),
+    ...(item.vars && typeof item.vars === 'object' && Object.values(item.vars).every((v) => typeof v === 'string') ? { vars: item.vars } : {}),
   };
 }
 

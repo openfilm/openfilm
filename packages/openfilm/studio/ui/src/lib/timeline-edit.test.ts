@@ -14,6 +14,8 @@ import {
   planCloseGap,
   planCloseMainGaps,
   planCloseTrackGaps,
+  planCutRange,
+  planDetachAudio,
   planEdges,
   planLink,
   planMove,
@@ -477,6 +479,41 @@ test('a detached sound goes on a sound track with room, else on a new one under 
   assert.deepEqual(soundTrackFor(locked, { startMs: 0, endMs: 4000 }, 0), { insert: 2 });
 });
 
+test('sounds detached together: each on a track with room, a track opened for one there for the next, each linked to its video', () => {
+  /* two videos playing together and one after them; one sound track, busy over the first two */
+  const m = model(
+    { role: 'video', clips: [['a', 0, 4], ['c', 5, 8]] },
+    { role: 'video', clips: [['b', 1, 3]] },
+    { role: 'audio', clips: [['vo', 0, 4]] },
+  );
+  const film = filmOf(m);
+  const ops = planDetachAudio(m, film.tracks.slice(0, 2).flatMap((t) => t.clips) as never);
+  const out = applyOps(structuredClone(film) as never, ops as never) as unknown as FilmValue;
+  const sounds = out.tracks.map((t) => t.clips.filter((c) => (c as { sound?: true }).sound));
+  /* a's sound opens a track under vo's; b's overlaps it and opens another; c's has room beside vo, below c's own track */
+  assert.deepEqual(sounds.map((t) => t.map((c) => [c.src, c.at ?? 0])), [[], [], [['c.mp4', 5]], [['a.mp4', 0]], [['b.mp4', 1]]]);
+  const clips = out.tracks.flatMap((t) => t.clips);
+  for (const id of ['a', 'b', 'c']) {
+    const video = clips.find((c) => c.id === id)!;
+    const sound = clips.find((c) => (c as { sound?: true }).sound && c.src === `${id}.mp4`)!;
+    assert.equal((video as { volume?: number }).volume, 0, `${id} is silent`);
+    assert.equal(video.attrs?.['data-link'], id, `${id} has its own link`);
+    assert.equal(sound.attrs?.['data-link'], id, `${id}'s sound is linked to it`);
+    assert.deepEqual(sound.time, video.time, `${id}'s sound plays the same seconds`);
+  }
+  /* no two sounds on one track at once */
+  for (const t of out.tracks) {
+    const spans = t.clips.map((c) => [c.at ?? 0, (c.at ?? 0) + c.time![1]! - c.time![0]!]).sort((x, y) => x[0]! - y[0]!);
+    for (let i = 1; i < spans.length; i++) assert.ok(spans[i]![0]! >= spans[i - 1]![1]!, 'nothing overlaps on a track');
+  }
+  /* a video linked already keeps its link; a video not on the timeline is left alone */
+  const linked = model({ role: 'video', clips: [['v', 0, 2, { link: 'k' }]] }, { role: 'audio', clips: [['s', 0, 2, { link: 'k' }]] });
+  const kept = planDetachAudio(linked, [...filmOf(linked).tracks[0]!.clips, { id: 'gone', src: 'gone.mp4' }] as never);
+  assert.deepEqual(kept[0], { op: 'props', edits: [{ clip: 'v', prop: 'volume', value: 0 }, { clip: 'v', prop: 'link', value: 'k' }] });
+  assert.equal(kept.length, 2);
+  assert.deepEqual(planDetachAudio(linked, [{ id: 'gone', src: 'gone.mp4' }]), []);
+});
+
 /* ── the model from the timeline ── */
 
 test('the model joins a track spread over rows and leaves out drops not written yet', () => {
@@ -516,12 +553,13 @@ test('the main track is the lowest picture track; what rides on it starts over o
   assert.equal(hostOf(main, { startMs: 12_500 }), null, 'past the end of the main track nothing rides');
 });
 
-test('with the magnet a delete on the main track closes up; with linkage what rides on it goes too', () => {
+test('with the magnet a delete on the main track closes up; with linkage the pictures riding on it go too, a sound stays', () => {
   const m = filmWithMain();
   assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false, ...ON })), [
     [['logo', 5, 6]],
     [['a', 0, 4], ['c', 4, 8]],
     [['bed', 0, 12]],
+    [['sfx', 5, 6]],
   ]);
   /* without linkage the main track closes up and the rest stays */
   assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false, magnet: true, linkage: false })), [
@@ -530,12 +568,29 @@ test('with the magnet a delete on the main track closes up; with linkage what ri
     [['bed', 0, 12]],
     [['sfx', 5, 6]],
   ]);
-  /* without the magnet a gap is left; linkage still takes what rides on b */
+  /* without the magnet a gap is left; linkage still takes the title riding on b */
   assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false, magnet: false, linkage: true })), [
     [['logo', 9, 10]],
     [['a', 0, 4], ['c', 8, 12]],
     [['bed', 0, 12]],
+    [['sfx', 5, 6]],
   ]);
+});
+
+test('a caption track\'s cues are clips: they ride on the main track, go with their shot, never leave caption tracks', () => {
+  const m = model(
+    { role: 'mg', clips: [['on-b', 5, 6.5, { cue: true, still: true }], ['long', 0, 12, { cue: true, still: true }]] },
+    { role: 'video', clips: [['a', 0, 4], ['b', 4, 8], ['c', 8, 12]] },
+  ).map((t, i) => (i === 0 ? { ...t, captions: true } : t));
+  /* b deleted, the main track closing up: the cue over b goes with it, the long one stays */
+  assert.deepEqual(after(m, planRemove(m, ['b'], { ripple: false, ...ON })), [[['long', 0, 12]], [['a', 0, 4], ['c', 4, 8]]]);
+  /* a cue moves along its caption track, and never onto another kind of track (nor a clip onto a caption track) */
+  assert.ok(planMove(m, { ids: ['on-b'], deltaMs: 2000, pointerMs: 7000, mode: 'place' }));
+  assert.equal(planMove(m, { ids: ['on-b'], deltaMs: 0, pointerMs: 5000, mode: 'place', to: new Map([['on-b', 1]]) }), null);
+  assert.equal(planMove(m, { ids: ['a'], deltaMs: 0, pointerMs: 1000, mode: 'place', to: new Map([['a', 0]]) }), null);
+  /* put over another cue, it stays there (its file cuts the other short): no track opens */
+  const over = planMove(m, { ids: ['on-b'], deltaMs: -5000, pointerMs: 500, mode: 'place' })!;
+  assert.ok(!over.ops.some((op) => op.op === 'props' && op.edits.some((e) => e.prop === 'track')));
 });
 
 test('a clip past the end of the main track rides on nothing: deleting the last shot leaves it be', () => {
@@ -617,4 +672,17 @@ test('no plan makes two clips on a track overlap', () => {
     planSpeed(m, ['d'], 0.25, { ripple: true }),
   ];
   for (const plan of plans) apart(after(m, plan!));
+});
+
+test('a stretch cut out of the film: what is in it goes, what crosses it is trimmed or cut in two, all after it closes up', () => {
+  const m = model([['a', 0, 4], ['b', 4, 8]], [['vo', 1, 6]], [['late', 7, 9]], { locked: true, clips: [['kept', 2, 5]] });
+  assert.deepEqual(after(m, planCutRange(m, { startMs: 2000, endMs: 3000 })), [
+    [['a', 0, 2], ['a-b', 2, 3], ['b', 3, 7]],
+    [['vo', 1, 2], ['vo-b', 2, 5]],
+    [['late', 6, 8]],
+    [['kept', 2, 5]],
+  ]);
+  /* a clip wholly inside goes */
+  const n = model([['x', 0, 2], ['y', 2, 3], ['z', 3, 5]]);
+  assert.deepEqual(after(n, planCutRange(n, { startMs: 2000, endMs: 3000 })), [[['x', 0, 2], ['z', 2, 4]]]);
 });

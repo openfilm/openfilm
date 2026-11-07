@@ -12,7 +12,7 @@
 
 import React from 'react';
 import {
-  Blocks, Brackets, Captions, Clapperboard, Clock3, Crop, Film, Loader2, Mic, MousePointer2, Music, Paperclip,
+  AudioLines, Blocks, Brackets, Captions, Clapperboard, Clock3, Crop, Film, Loader2, Mic, MousePointer2, Music, Paperclip,
   Quote, Rows3, Shapes, SquareDashed, Video, Waves,
 } from 'lucide-react';
 import {
@@ -45,6 +45,8 @@ export const PILL_ICON: Record<PromptReferenceKind, React.ComponentType<{ size?:
   skill: Blocks,
   /* An example film (another film, not this one): a clapperboard. */
   example: Clapperboard,
+  /* A voice of the library, to speak a voice-over in: a sound's lines, not a clip's microphone. */
+  voice: AudioLines,
   /* Timeline clips: the icon follows the clip's kind on the timeline, so the pill
      matches the clip the user just picked. */
   clipMg: Shapes,
@@ -69,23 +71,23 @@ function iconFor(kind: string): React.ComponentType<{ size?: number; className?:
 /**
  * Each kind's color, drawn on the icon's small square.
  *
- * Clips use the timeline's colors (`--tl-*`), so a pill matches its clip. Things in the
- * picture (an element, a region) use the selection blue they light up in. Times use
+ * Clips use the timeline's colors (`--clip-*`), so a pill matches its clip. Things in the
+ * picture (an element, a region) use the stage's selection teal they light up in. Times use
  * amber, apart from the playhead's colors. Things outside the film (files, canvas cards,
  * skills) have no color.
  */
 const PILL_TONE: Partial<Record<PromptReferenceKind, string>> = {
-  element: '#0d99ff',
-  region: '#0d99ff',
+  element: '#0fa596',
+  region: '#0fa596',
   time: '#d48a1f',
   range: '#d48a1f',
-  subtitle: 'var(--tl-caption)',
-  clipMg: 'var(--tl-scene)',
-  clipVideo: 'var(--tl-video)',
-  clipVoice: 'var(--tl-voice)',
-  clipSfx: 'var(--tl-sfx)',
-  clipMusic: 'var(--tl-music)',
-  clipCaption: 'var(--tl-caption)',
+  subtitle: 'var(--clip-text)',
+  clipMg: 'var(--clip-page)',
+  clipVideo: 'var(--clip-video)',
+  clipVoice: 'var(--clip-audio)',
+  clipSfx: 'var(--clip-audio)',
+  clipMusic: 'var(--clip-audio)',
+  clipCaption: 'var(--clip-text)',
 };
 
 /**
@@ -189,7 +191,7 @@ function PillCardPicture({ image }: { image: PillImage }) {
       {box ? (
         <div
           aria-hidden
-          className="absolute rounded-[2px] border-[1.5px] border-[#0d99ff] shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
+          className="absolute rounded-[2px] border-[1.5px] border-[#0fa596] shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
           style={box}
         />
       ) : null}
@@ -294,12 +296,12 @@ export function PromptPill({
       } ${clickable ? 'cursor-pointer' : ''}`}
       style={{
         background: tone
-          ? `color-mix(in srgb, ${tone} ${clickable ? 11 : 9}%, var(--surface))`
-          : 'var(--surface-2)',
-        ['--tw-ring-color' as string]: state === 'failed' ? 'var(--danger)' : tone ? `color-mix(in srgb, ${tone} 26%, transparent)` : 'var(--border)',
+          ? `color-mix(in srgb, ${tone} ${clickable ? 11 : 9}%, var(--bg-raised))`
+          : 'var(--bg-field)',
+        ['--tw-ring-color' as string]: state === 'failed' ? 'var(--err)' : tone ? `color-mix(in srgb, ${tone} 26%, transparent)` : 'var(--border)',
         /* Lit from elsewhere: a solid border (over the faint ring) and a deeper fill */
         ...(lit ? {
-          background: tone ? `color-mix(in srgb, ${tone} 24%, var(--surface))` : 'var(--bg-hover)',
+          background: tone ? `color-mix(in srgb, ${tone} 24%, var(--bg-raised))` : 'var(--bg-hover)',
           boxShadow: `inset 0 0 0 1.5px ${tone ?? 'var(--text-muted)'}`,
         } : {}),
       }}
@@ -323,7 +325,7 @@ export function PromptPill({
           className="flex h-[1.05em] w-[1.05em] shrink-0 items-center justify-center rounded-[4px]"
           style={tone
             ? { background: tone, color: '#fff' }
-            : { background: 'var(--fill-tsp)', color: 'var(--text-muted)' }}
+            : { background: 'var(--bg-field)', color: 'var(--text-muted)' }}
         >
           <Icon size={10} className="shrink-0" />
         </span>

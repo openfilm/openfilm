@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Stamp</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --font: 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ff3b30; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+.in { transform-origin: 260px 120px; animation: in 0.45s cubic-bezier(.5, 0, .9, .5) both; }
+@keyframes in { 0% { transform: scale(2.4) rotate(-14deg); opacity: 0; } 70% { transform: scale(0.96) rotate(-8deg); opacity: 1; } 85% { transform: scale(1.02) rotate(-8deg); } 100% { transform: rotate(-8deg); } }
+.sk { animation: sk 0.3s linear 0.32s both; }
+@keyframes sk { 25% { transform: translate(4px, -3px); } 50% { transform: translate(-3px, 2px); } 75% { transform: translate(2px, 1px); } }
+.dust { transform-origin: 260px 120px; opacity: 0; animation: dust 0.5s cubic-bezier(.2, .8, .2, 1) 0.32s both; }
+@keyframes dust { 0% { transform: scale(0.9); opacity: 0; } 1% { opacity: 0.7; } 100% { transform: scale(1.25); opacity: 0; } }
+.label { font: 400 74px var(--font); fill: var(--color); letter-spacing: 4px; }
+.label2 { font: 800 24px 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: var(--color); letter-spacing: 12px; }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 520 240"><defs><filter id="ink" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="2" seed="7" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -3.2 0 0 0 2.75" result="m"/><feComposite in="SourceGraphic" in2="m" operator="in"/></filter></defs>
+<rect class="dust" x="40" y="30" width="440" height="180" rx="22" fill="none" stroke="var(--color)" stroke-width="6"/>
+<g class="in"><g class="sk"><g filter="url(#ink)">
+<rect x="40" y="30" width="440" height="180" rx="22" fill="none" stroke="var(--color)" stroke-width="10"/>
+<rect x="56" y="46" width="408" height="148" rx="12" fill="none" stroke="var(--color)" stroke-width="3"/>
+<text class="label" x="260" y="140" text-anchor="middle">LIMITED</text>
+<text class="label2" x="266" y="178" text-anchor="middle">EDITION</text>
+</g></g></g></svg>
+<script>
+/*
+ * A rubber stamp slammed down at a slant, its ink rough and uneven, with a shake as it lands. Its words and color
+ * are the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS
+ * animations are held at t by the host.
+ */
+window.film = { width: 520, height: 240, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "fest-birthday.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Greeting\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Name\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"First color\", \"type\": \"var\", \"var\": \"--c1\"}, {\"name\": \"Second color\", \"type\": \"var\", \"var\": \"--c2\"}, {\"name\": \"Third color\", \"type\": \"var\", \"var\": \"--c3\"}, {\"name\": \"Ribbon\", \"type\": \"var\", \"var\": \"--ribbon\"}]"
+    }
+  },
+  "durationMs": 4000
+}

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "place-weather.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Temperature\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"City\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Sky\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Sun\", \"type\": \"var\", \"var\": \"--sun\"}, {\"name\": \"Card\", \"type\": \"var\", \"var\": \"--card\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 4000
+}

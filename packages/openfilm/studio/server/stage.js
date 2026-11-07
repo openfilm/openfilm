@@ -55,7 +55,29 @@
   const clipById = (id) => clips().find((c) => c.id === id) ?? null;
 
   /* ── a clip on the stage: its placement maps its own px to stage px ── */
-  const matrixOf = (c) => new DOMMatrix(getComputedStyle(c.el).transform);
+  /* where the clip's element draws, as the browser applies it: about its transform-origin (the film places a scaled or
+     turned clip about its middle, timeline.mjs place), its translate, rotate and scale, then its transform (as
+     timeline.mjs matrixOf), so a point is found in the clip where it is drawn */
+  const matrixOf = (c) => {
+    const css = getComputedStyle(c.el);
+    const [ox = 0, oy = 0] = css.transformOrigin.split(' ').map(parseFloat);
+    const m = new DOMMatrix().translateSelf(ox, oy);
+    if (css.translate && css.translate !== 'none') {
+      const [x = '0', y = '0', z = '0'] = css.translate.split(' ');
+      m.translateSelf(parseFloat(x), parseFloat(y), parseFloat(z));
+    }
+    if (css.rotate && css.rotate !== 'none') {
+      const parts = css.rotate.split(' ');
+      const deg = parseFloat(parts.pop() ?? '0');
+      const axis = parts.length === 3 ? parts.map(Number) : parts[0] === 'x' ? [1, 0, 0] : parts[0] === 'y' ? [0, 1, 0] : [0, 0, 1];
+      m.rotateAxisAngleSelf(axis[0], axis[1], axis[2], deg);
+    }
+    if (css.scale && css.scale !== 'none') {
+      const [sx, sy = sx, sz = '1'] = css.scale.split(' ');
+      m.scaleSelf(parseFloat(sx), parseFloat(sy), parseFloat(sz));
+    }
+    return m.multiplySelf(new DOMMatrix(css.transform === 'none' ? undefined : css.transform)).translateSelf(-ox, -oy);
+  };
   const mapPoint = (M, x, y) => { const p = M.transformPoint(new DOMPoint(x, y)); return { x: p.x, y: p.y }; };
   /** A box in the clip's px → the stage box around it. */
   const mapRect = (M, r) => {
@@ -709,7 +731,8 @@
   const outline = (c, hit) => {
     const M = matrixOf(c);
     const turned = hit.frame.r || clipTurn(M);
-    return { handle: handleOf(hit.el), rect: mapRect(M, hit.rect), ...(turned ? { frame: mapFrame(M, hit.frame) } : {}) };
+    /* `of`: the clip it is in (`clip` would say it is the whole clip's outline) */
+    return { handle: handleOf(hit.el), of: c.id, rect: mapRect(M, hit.rect), ...(turned ? { frame: mapFrame(M, hit.frame) } : {}) };
   };
   /** A layer by its handle, else by its clip and its selector (`at` and `n`, or a `loc`: `at`, or `at#n`). */
   const layerOf = (ref) => {
@@ -811,12 +834,20 @@
       paintAround(b, c, { t: g.t, s: [round(g.s[0] * ks[0]), round(g.s[1] * ks[1])], r: Math.round((g.r + dr) * 100) / 100 }, center);
     }
   };
+  /* clips shown with overrides of an inspector's not written yet (the show op): their own overrides then */
+  const shownWith = new Map();
   const release = (id) => {
     if (!drafts.delete(id)) return;
     editor()?.preview(id, null);
   };
   /* the film was updated: a clip whose kept overrides changed shows them, not the drafts made against the old ones */
   const updated = () => {
+    for (const [id, base] of shownWith) {
+      const c = clipById(id);
+      if (c && JSON.stringify(c.overrides ?? []) === base) continue;
+      shownWith.delete(id);
+      editor()?.preview(id, null);
+    }
     for (const [id, d] of drafts) {
       const c = clipById(id);
       if (!c || JSON.stringify(c.overrides ?? []) !== d.base) release(id);
@@ -932,6 +963,10 @@
     /* the new words stay on screen until the edit is kept (or refused: the editor releases the clip), with what held
        the others in place as they were typed (kept with them) */
     const hold = kept && edit.hold && Object.keys(edit.hold).length ? edit.hold : null;
+    /* a line of words fitted as it was typed (fitTyped): its words' size as shown, kept with the words until written
+       (shown again with the clip's overrides, the size set on the page itself would go, and the words jump) */
+    const size = kept && edit.fit ? c.win?.document.documentElement.style.getPropertyValue('--size') : '';
+    if (size) draft(c, { at: ':root' }, { style: { '--size': size } });
     if (kept) draft(c, edit.target, { text: value, ...(hold ? { style: hold } : {}) });
     post({ type: 'stage-event', event: 'text', handle: edit.handle, commit: Boolean(kept), ...(kept ? { value, before: edit.before, ...(hold ? { hold } : {}) } : {}) });
   };
@@ -976,8 +1011,11 @@
     /* the editor shows the words as they are typed (the inspector's box with them); they are kept at Enter or blur */
     const onInput = () => {
       if (!editing) return;
-      if (search) editing.hold = search(holdInline);
-      post({ type: 'stage-event', event: 'typing', handle, value: overlay ? collapse(host.innerText ?? host.textContent ?? '') : stageText(host) });
+      /* a line of words whose box follows its words (textFit): its box made so here, before the picture is drawn again
+         (asked of the editor, it would come a frame or more late: the words shrunk or wrapped meanwhile) */
+      const size = editing.fit ? fitTyped(editing) : null;
+      if (search && !editing.fit) editing.hold = search(holdInline);
+      post({ type: 'stage-event', event: 'typing', handle, value: overlay ? collapse(host.innerText ?? host.textContent ?? '') : stageText(host), ...(size ? { size } : {}) });
     };
     const host = overlay ? openOverlay(el) : el;
     /* the line hidden under its overlay, the blocks in it still shown (they are not what is typed) */
@@ -1006,6 +1044,9 @@
       children: [...el.childNodes],
       before: textOf(el),
       hold: null,
+      fit: null,
+      holdOff: () => holdInline({}),
+      refit: () => onInput(),
       cleanup: () => { host.removeEventListener('keydown', onKey); host.removeEventListener('blur', onBlur); host.removeEventListener('input', onInput); release(); },
     };
     /* the line in its page, and its page in the film */
@@ -1016,6 +1057,51 @@
     host.focus({ preventScroll: true });
     doc.getSelection()?.selectAllChildren(host);
     return true;
+  };
+
+  /**
+   * The box of a line of words being typed in, fitted to its words as each is typed (the editor's fitTextNow, done
+   * here in the same task as the typing): one line hugs its words with their room (never wider than `maxW`, where it
+   * wraps), a line a side was pulled on keeps its width; as tall as its lines, its words as large (`--size` in vh of
+   * its height: set in px on the page itself while it is typed, see textFit), its middle where it was. `fit` (from the editor, textFit): its box and place as
+   * kept (w0 × h0 at x0, y0, scale s, turn r), its font size, whether it hugs. Answers its new size.
+   */
+  const fitTyped = (ed) => {
+    const f = ed.fit;
+    const doc = ed.c.win?.document;
+    const box = doc?.querySelector('.box');
+    if (!box || !hooks()) return null;
+    const nw = oneLineWidth(box);
+    const room = 2 * (0.23 * f.font + 0.04 * nw);
+    const w = f.hug ? Math.max(1, Math.min(f.maxW, 8192, Math.round(nw + room))) : f.w0;
+    const show = (h) => {
+      /* grown from its side as it is aligned: a line aligned left keeps its left edge, right its right, else its middle */
+      const grow = f.align === 'left' || f.align === 'start' ? 0 : f.align === 'right' || f.align === 'end' ? 1 : 0.5;
+      const x = f.x0 - (w - f.w0) * f.s * grow;
+      const y = f.y0 - ((h - f.h0) * f.s) / 2;
+      hooks().place(ed.c.id, { x: Math.round(x), y: Math.round(y), w: Math.round(w * f.s), h: Math.round(h * f.s), ...(f.r ? { r: f.r } : {}) }, { w, h });
+    };
+    let h = f.h ?? f.h0;
+    show(h);
+    const tall = Math.min(8192, Math.round(box.offsetHeight + 2 * 0.23 * f.font));
+    if (Math.abs(tall - h) >= 2) { h = tall; show(h); }
+    f.h = h;
+    return { w, h };
+  };
+
+  /** How wide `el` is with the words in it (`.t`, or itself) on one line, nothing wrapped. */
+  const oneLineWidth = (el) => {
+    const line = el.matches('.t') ? el : el.querySelector('.t') ?? el;
+    /* the words on one line, and a box around them not held to its page's width (its max-width) while measured */
+    const set = (node, prop, value) => {
+      const was = [node.style.getPropertyValue(prop), node.style.getPropertyPriority(prop)];
+      node.style.setProperty(prop, value, 'important');
+      return () => { if (was[0]) node.style.setProperty(prop, was[0], was[1]); else node.style.removeProperty(prop); };
+    };
+    const back = [set(line, 'white-space', 'pre'), ...(line !== el ? [set(el, 'max-width', 'none')] : [])];
+    const w = el.offsetWidth;
+    for (const undo of back) undo();
+    return w;
   };
 
   /* ── keys pressed while the picture has focus go to the editor (its own keys work there too) ── */
@@ -1067,7 +1153,9 @@
     listenAll();
     const h = hooks();
     /* an update may have added pages: their keys are heard too */
-    if (h) { h.updated = () => { listenAll(); updated(); }; h.woke = listenAll; }
+    /* a page opened after its frame was drawn (one just put in at the playhead): the editor draws the frame again, so
+       it shows without the playhead being moved */
+    if (h) { h.updated = () => { listenAll(); updated(); }; h.woke = () => { listenAll(); post({ type: 'stage-event', event: 'woke' }); }; }
   })();
 
   /* ── restacking ── */
@@ -1670,10 +1758,65 @@
         return { id: c.id, visible: on.has(c), x: r.left, y: r.top, w: r.width, h: r.height };
       });
     },
+    /**
+     * The caption cues on the picture now (top track first): each one's box as laid out (`box`) and where its words
+     * are drawn (`text`), stage px.
+     */
+    captions() {
+      const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
+      return (hooks()?.captions?.() ?? []).map(({ el, ...cue }) => ({ ...cue, box: rect(el), text: rect(el.querySelector('.cue-text') ?? el) }));
+    },
+    /**
+     * Show cues of a caption track moved by (dx, dy) stage px and scaled by `k` about their middle, not kept yet (`ids`
+     * null: every one; none of them: in place again).
+     */
+    captionShift({ track, ids, dx, dy, k }) {
+      for (const cue of hooks()?.captions?.() ?? []) {
+        if (cue.track !== track || (ids && !ids.includes(cue.id))) continue;
+        cue.el.style.translate = dx || dy ? `${dx}px ${dy}px` : '';
+        cue.el.style.scale = k && k !== 1 ? String(k) : '';
+        /* a cue in a region is held to its box: shown whole while it is dragged out of it */
+        const region = cue.el.closest('.cue-region');
+        if (region) region.style.overflow = dx || dy || (k && k !== 1) ? 'visible' : '';
+      }
+      return true;
+    },
     /** `pictures`: a video or a still only (a page is clicked by its layers; what is under its empty parts is found). */
     clipAt({ x, y, pictures }) { return clipAt(x, y, Boolean(pictures))?.id ?? null; },
     /** Show a clip placed in a box not kept yet (null: in its own again). */
-    place({ clip, box }) { hooks()?.place(clip, box ?? null); return true; },
+    /* `vars`: its page's variables shown with it, in the same frame (a line of words grown taller, its words as large).
+       `root`: the same set on the page itself, not as a draft (a draft shows the clip's overrides again, and would put
+       back the words of a line being typed in) */
+    place({ clip, box, size, vars, root }) {
+      const c = vars || root ? clipById(clip) : null;
+      if (vars && c?.kind === 'page') draft(c, { at: ':root' }, { style: vars });
+      if (root && c?.win) for (const [k, v] of Object.entries(root)) c.win.document.documentElement.style.setProperty(k, String(v));
+      hooks()?.place(clip, box ?? null, size ?? null);
+      return true;
+    },
+    /**
+     * Show a page clip with `overrides` instead of its own (an inspector's edit measured before it is written), until
+     * its own change (written: see updated) or this is called with null.
+     */
+    show({ clip, overrides }) {
+      const c = clipById(clip);
+      if (!c) return false;
+      if (Array.isArray(overrides)) shownWith.set(clip, JSON.stringify(c.overrides ?? [])); else shownWith.delete(clip);
+      editor()?.preview(clip, Array.isArray(overrides) ? overrides : null);
+      return true;
+    },
+    /** An element of a clip shown now, as its page lays it out (no transform counted): its size, and its font's. */
+    /* `natural`: also its width with its words on one line, nothing wrapped (`nw`; a box with its padding: its words,
+       `.t`, kept on one line) */
+    measure({ clip, at, natural }) {
+      const c = clipById(clip);
+      let el = null;
+      try { el = c?.win?.document?.querySelector(String(at)) ?? null; } catch { /* not a selector */ }
+      if (!el || !c?.win) return null;
+      const out = { w: el.offsetWidth, h: el.offsetHeight, font: parseFloat(c.win.getComputedStyle(el).fontSize) || 0 };
+      if (natural) out.nw = oneLineWidth(el);
+      return out;
+    },
     /** Show a clip in CSS of its own not kept yet (null: its own again). */
     look({ clip, css }) { hooks()?.look?.(clip, typeof css === 'string' ? css : null); return true; },
     /** Show a layer's move / scale / turn; with `center` (stage px), its offset keeps its center there. */
@@ -2078,6 +2221,20 @@
     },
     textStart: startText,
     textFinish({ commit }) { finishText(Boolean(commit)); return true; },
+    /* the line being typed in is a line of words whose box follows its words (fitTyped); null: no more */
+    textFit({ fit }) {
+      if (!editing) return false;
+      editing.fit = fit && typeof fit === 'object' ? { ...fit } : null;
+      /* its words' size in px while it is typed in (its box's height changes as lines come and go; a size in vh of it
+         would change with it); what was typed before this came: fitted now */
+      if (editing.fit) {
+        editing.c.win?.document.documentElement.style.setProperty('--size', `${Math.round(editing.fit.font * 100) / 100}px`);
+        editing.holdOff();
+        editing.hold = null;
+        editing.refit();
+      }
+      return true;
+    },
     /**
      * What a page clip shows that it can change without opening the page (its properties are made of these): the CSS
      * custom properties its stylesheets set on `:root` (or `html`), each with its value now; its words, each layer of
@@ -2127,6 +2284,19 @@
     },
   };
 
+  /*
+   * What a drag shows (a layer moved, a clip placed, a value dragged) is answered once the picture has drawn it. The
+   * editor asks the next step only after the answer, and draws its outline from it: answered at once, a page slow to
+   * draw had the outline run ahead of the picture, and each step's work kept it from drawing. Hidden (no frames
+   * drawn), it answers soon anyway.
+   */
+  const SHOWN_OPS = new Set(['paint', 'paintMany', 'place', 'look', 'tweak']);
+  const drawn = () => new Promise((done) => {
+    const late = setTimeout(done, 250);
+    /* the frame's callbacks run before it is drawn; a task after them runs once it is */
+    requestAnimationFrame(() => setTimeout(() => { clearTimeout(late); done(); }, 0));
+  });
+
   window.addEventListener('message', async (e) => {
     if (e.origin !== EDITOR || e.source !== parent || e.data?.source !== 'openfilm-studio' || e.data.type !== 'stage') return;
     const { seq, op, ...args } = e.data;
@@ -2142,6 +2312,7 @@
       post({ type: 'stage', seq, result: null, error: String(error?.message ?? error) });
       return;
     }
+    if (SHOWN_OPS.has(op)) await drawn();
     post({ type: 'stage', seq, result });
   });
 })();

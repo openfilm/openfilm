@@ -1,0 +1,193 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Gold frame</title>
+<style>
+  /* what a clip of it may change: the gilding's color, how often a glint crosses it (seconds) */
+  :root { --color: #d4a640; --speed: 3.6; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * An ornate gilded frame round the picture, as on a painting in a gallery: a dark outer rim, a rounded cove, a row
+ * of beads, a band of embossed vine, rosettes at the corners and a bright fillet at the opening, lit from the top
+ * left and casting its shadow onto the picture. Now and then a glint of light runs across the gold. A page of
+ * OpenFilm's library (CC0): what it shows at t comes from t alone.
+ */
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const shade = (c, k) => `rgb(${c.map((v) => Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k))})`;
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// the frame itself is the same in every frame: drawn once for each size and color
+const art = document.createElement('canvas'), glint = document.createElement('canvas');
+let artKey = '', T = 0;
+function build(w, h, d, gold) {
+  art.width = glint.width = Math.round(w * d); art.height = glint.height = Math.round(h * d);
+  const g = art.getContext('2d');
+  g.setTransform(d, 0, 0, d, 0, 0);
+  const u = Math.min(w, h) / 100;
+  T = 10.5 * u;
+  // the four sides as mitered trapezoids between insets a and b
+  const side = (k, a, b) => {
+    g.beginPath();
+    if (k === 0) { g.moveTo(a, a); g.lineTo(w - a, a); g.lineTo(w - b, b); g.lineTo(b, b); }
+    if (k === 1) { g.moveTo(w - a, a); g.lineTo(w - a, h - a); g.lineTo(w - b, h - b); g.lineTo(w - b, b); }
+    if (k === 2) { g.moveTo(w - a, h - a); g.lineTo(a, h - a); g.lineTo(b, h - b); g.lineTo(w - b, h - b); }
+    if (k === 3) { g.moveTo(a, h - a); g.lineTo(a, a); g.lineTo(b, b); g.lineTo(b, h - b); }
+    g.closePath();
+  };
+  const across = (k, a, b) => {
+    if (k === 0) return g.createLinearGradient(0, a, 0, b);
+    if (k === 1) return g.createLinearGradient(w - a, 0, w - b, 0);
+    if (k === 2) return g.createLinearGradient(0, h - a, 0, h - b);
+    return g.createLinearGradient(a, 0, b, 0);
+  };
+  // a molding: a band from inset a to b, its profile given as color stops across it
+  const molding = (a, b, stops) => {
+    for (let k = 0; k < 4; k++) {
+      const gr = across(k, a * T, b * T);
+      for (const [o, c] of stops) gr.addColorStop(o, c);
+      side(k, a * T, b * T); g.fillStyle = gr; g.fill();
+    }
+  };
+  const C = (k) => shade(gold, k);
+  molding(0, 0.1, [[0, C(-0.75)], [0.5, C(-0.35)], [1, C(-0.6)]]);
+  molding(0.1, 0.46, [[0, C(-0.5)], [0.2, C(0.1)], [0.42, C(0.55)], [0.6, C(0.05)], [0.85, C(-0.45)], [1, C(-0.65)]]);
+  molding(0.46, 0.58, [[0, C(-0.7)], [1, C(-0.55)]]);
+  molding(0.58, 0.84, [[0, C(-0.15)], [0.5, C(0.1)], [1, C(-0.25)]]);
+  molding(0.84, 0.93, [[0, C(-0.55)], [0.5, C(0.35)], [1, C(-0.3)]]);
+  molding(0.93, 1, [[0, C(0.75)], [0.4, C(0.2)], [1, C(-0.7)]]);
+  // beads in the dark channel
+  const br = 0.05 * T, bd = 0.52 * T, step = br * 2.6;
+  const bead = (x, y) => {
+    const rg = g.createRadialGradient(x - br * 0.35, y - br * 0.35, 0, x, y, br);
+    rg.addColorStop(0, C(0.85)); rg.addColorStop(0.35, C(0.2)); rg.addColorStop(1, C(-0.55));
+    g.fillStyle = rg; g.beginPath(); g.arc(x, y, br, 0, Math.PI * 2); g.fill();
+  };
+  for (let x = bd + T * 0.7; x < w - bd - T * 0.7; x += step) { bead(x, bd); bead(x, h - bd); }
+  for (let y = bd + T * 0.7; y < h - bd - T * 0.7; y += step) { bead(bd, y); bead(w - bd, y); }
+  // an embossed vine along the flat band: a wave with a leaf in each bend, a dark stroke under a light one
+  const vine = (len, offs) => {
+    const P = T * 0.62, A = T * 0.07;
+    for (const [dy, col, lw] of [[0.012 * T, C(-0.7), 0.035 * T], [-0.008 * T, C(0.7), 0.022 * T]]) {
+      g.strokeStyle = col; g.fillStyle = col; g.lineWidth = lw; g.lineCap = 'round';
+      g.beginPath();
+      for (let x = offs; x <= len - offs; x += 2) { const y = Math.sin((x - offs) / P * Math.PI * 2) * A + dy; x === offs ? g.moveTo(x, y) : g.lineTo(x, y); }
+      g.stroke();
+      for (let x = offs + P * 0.25; x < len - offs; x += P / 2) {
+        const up = Math.round((x - offs - P * 0.25) / (P / 2)) % 2 ? 1 : -1;
+        g.beginPath(); g.ellipse(x + P * 0.1, up * A * 2.1 + dy, T * 0.07, T * 0.028, up * 0.5, 0, Math.PI * 2); g.fill();
+      }
+    }
+  };
+  const mid = 0.71 * T;
+  for (let k = 0; k < 4; k++) {
+    g.save();
+    side(k, 0.58 * T, 0.84 * T); g.clip();
+    if (k === 0) g.translate(0, mid);
+    if (k === 1) { g.translate(w - mid, 0); g.rotate(Math.PI / 2); }
+    if (k === 2) { g.translate(w, h - mid); g.rotate(Math.PI); }
+    if (k === 3) { g.translate(mid, h); g.rotate(-Math.PI / 2); }
+    vine(k % 2 ? h : w, T * 1.2);
+    g.restore();
+  }
+  // rosettes at the corners
+  for (const [x, y] of [[T * 0.62, T * 0.62], [w - T * 0.62, T * 0.62], [w - T * 0.62, h - T * 0.62], [T * 0.62, h - T * 0.62]]) {
+    const R = T * 0.62;
+    g.save();
+    g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = T * 0.12; g.shadowOffsetX = T * 0.04; g.shadowOffsetY = T * 0.06;
+    const base = g.createRadialGradient(x - R * 0.3, y - R * 0.3, 0, x, y, R);
+    base.addColorStop(0, C(0.5)); base.addColorStop(0.7, C(-0.1)); base.addColorStop(1, C(-0.6));
+    g.fillStyle = base; g.beginPath(); g.arc(x, y, R, 0, Math.PI * 2); g.fill();
+    g.restore();
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2 + Math.PI / 8, px = x + Math.cos(a) * R * 0.55, py = y + Math.sin(a) * R * 0.55;
+      const pg = g.createLinearGradient(px - R * 0.2, py - R * 0.2, px + R * 0.2, py + R * 0.2);
+      pg.addColorStop(0, C(0.5)); pg.addColorStop(0.5, C(0)); pg.addColorStop(1, C(-0.6));
+      g.fillStyle = pg; g.beginPath(); g.ellipse(px, py, R * 0.36, R * 0.17, a, 0, Math.PI * 2); g.fill();
+    }
+    const boss = g.createRadialGradient(x - R * 0.12, y - R * 0.12, 0, x, y, R * 0.3);
+    boss.addColorStop(0, '#fff8dc'); boss.addColorStop(0.3, C(0.4)); boss.addColorStop(1, C(-0.55));
+    g.fillStyle = boss; g.beginPath(); g.arc(x, y, R * 0.3, 0, Math.PI * 2); g.fill();
+  }
+  // light from the top left: the right and bottom sides fall into shade
+  g.globalCompositeOperation = 'source-atop';
+  side(1, 0, T); g.fillStyle = 'rgba(40,20,0,0.22)'; g.fill();
+  side(2, 0, T); g.fillStyle = 'rgba(40,20,0,0.3)'; g.fill();
+  side(0, 0, T); g.fillStyle = 'rgba(255,240,200,0.06)'; g.fill();
+  // a gilt's mottle: tiny specks of wear
+  for (let i = 0; i < 1400; i++) {
+    const s = Math.sin(i * 91.7) * 43758.5453, r1 = s - Math.floor(s), s2 = Math.sin(i * 47.3 + 9) * 43758.5453, r2 = s2 - Math.floor(s2);
+    const along = r1 * 2 * (w + h), dd = r2 * T;
+    let x, y;
+    if (along < w) { x = along; y = dd; } else if (along < w + h) { x = w - dd; y = along - w; } else if (along < 2 * w + h) { x = along - w - h; y = h - dd; } else { x = dd; y = along - 2 * w - h; }
+    g.fillStyle = i % 3 ? 'rgba(60,30,0,0.25)' : 'rgba(255,245,210,0.35)';
+    g.fillRect(x, y, 0.18 * u, 0.18 * u);
+  }
+  g.globalCompositeOperation = 'source-over';
+}
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, d = devicePixelRatio || 1, u = Math.min(w, h) / 100;
+    const gold = rgb('--color', '#d4a640'), every = Math.max(1, num('--speed', 3.6));
+    const key = [w, h, d, gold].join();
+    if (key !== artKey) { build(w, h, d, gold); artKey = key; }
+    // the frame's shadow on the picture
+    ctx.save();
+    ctx.beginPath(); ctx.rect(T, T, w - 2 * T, h - 2 * T); ctx.clip();
+    ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 2.4 * u; ctx.shadowOffsetX = 0.7 * u; ctx.shadowOffsetY = 1 * u;
+    ctx.beginPath(); ctx.rect(-w, -h, 3 * w, 3 * h); ctx.rect(T, T, w - 2 * T, h - 2 * T); ctx.fillStyle = '#000'; ctx.fill('evenodd');
+    ctx.restore();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(art, 0, 0);
+    // the glint: a soft diagonal band running across the gold, eased, then a rest
+    const p = (t % every) / 2.2;
+    if (p < 1) {
+      const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      const gc = glint.getContext('2d'), W = glint.width, H = glint.height;
+      gc.setTransform(1, 0, 0, 1, 0, 0);
+      gc.globalCompositeOperation = 'source-over';
+      gc.clearRect(0, 0, W, H);
+      const D = W + H, x = -0.3 * D + e * 1.6 * D, bw = 0.3 * Math.min(W, H);
+      const gr = gc.createLinearGradient(x - bw, 0, x + bw, bw * 0.6);
+      gr.addColorStop(0, 'rgba(255,240,190,0)'); gr.addColorStop(0.45, 'rgba(255,236,170,0.55)'); gr.addColorStop(0.5, 'rgba(255,255,240,0.95)'); gr.addColorStop(0.55, 'rgba(255,236,170,0.55)'); gr.addColorStop(1, 'rgba(255,240,190,0)');
+      gc.fillStyle = gr;
+      gc.save(); gc.translate(x, 0); gc.transform(1, 0, -0.7, 1, 0, 0); gc.translate(-x, 0); gc.fillRect(-D, 0, 3 * D, H); gc.restore();
+      gc.globalCompositeOperation = 'destination-in';
+      gc.drawImage(art, 0, 0);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = Math.sin(p * Math.PI) * 0.9;
+      ctx.drawImage(glint, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

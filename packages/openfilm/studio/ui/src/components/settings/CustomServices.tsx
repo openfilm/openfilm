@@ -13,44 +13,56 @@ import { SettingsButton, SettingsField, SettingsGroup, SettingsInset, SettingsIt
 /** Whether the last change that failed was to one of the person's own services (it is said under its form). */
 export const customProblem = (hook: ProvidersHook) => hook.problemFor === 'custom' || Boolean(hook.state?.custom.some((s) => s.id === hook.problemFor));
 
-/** The person's own services: each with what it does and how it is called, and a form to add one. */
-export function CustomServices({ hook }: { hook: ProvidersHook }) {
+/**
+ * The person's own services: each with what it does and how it is called, and a form to add one. `adding`: counted up
+ * to open that form and bring it into view (Add a provider's "Add a custom service").
+ */
+export function CustomServices({ hook, adding = 0 }: { hook: ProvidersHook; adding?: number }) {
   const t = useT();
   const services = hook.state?.custom ?? [];
   const [open, setOpen] = React.useState<string | null>(null);
+  const group = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!adding) return;
+    setOpen('');
+    const r = requestAnimationFrame(() => group.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    return () => cancelAnimationFrame(r);
+  }, [adding]);
   if (!hook.state) return null;
   return (
-    <SettingsGroup title={t('settings.providers.own.title')} footnote={t('settings.providers.own.note')}>
-      {services.map((service) => (
-        <SettingsItem
-          key={service.id}
-          mark={<Server size={16} />}
-          title={service.name}
-          badge={service.last4 ? <SettingsStatus tone="muted"><span className="font-mono tabular-nums">•••• {service.last4}</span></SettingsStatus> : null}
-          description={(
-            <>
-              <span className="font-mono text-[13px] text-[var(--text-faint)]">{service.url}</span>
-              {service.note ? <span className="mt-0.5 block whitespace-pre-line">{service.note}</span> : null}
-            </>
-          )}
-          control={open === service.id ? null : (
-            <>
-              <SettingsButton variant="quiet" disabled={hook.busy === service.id} onClick={() => void hook.removeService(service.id)}>{t('settings.providers.own.remove')}</SettingsButton>
-              <SettingsButton onClick={() => setOpen(service.id)}>{t('settings.providers.own.edit')}</SettingsButton>
-            </>
-          )}
-        >
-          {open === service.id ? <ServiceForm hook={hook} service={service} onDone={() => setOpen(null)} /> : null}
-        </SettingsItem>
-      ))}
-      {open === '' ? (
-        <div className="py-4"><ServiceForm hook={hook} service={null} onDone={() => setOpen(null)} /></div>
-      ) : (
-        <div className="py-4">
-          <SettingsButton onClick={() => setOpen('')}><Plus size={15} strokeWidth={2} />{t('settings.providers.own.add')}</SettingsButton>
-        </div>
-      )}
-    </SettingsGroup>
+    <div ref={group}>
+      <SettingsGroup title={t('settings.providers.own.title')} footnote={t('settings.providers.own.note')}>
+        {services.map((service) => (
+          <SettingsItem
+            key={service.id}
+            mark={<Server size={16} />}
+            title={service.name}
+            badge={service.last4 ? <SettingsStatus tone="muted"><span className="font-mono tabular-nums">•••• {service.last4}</span></SettingsStatus> : null}
+            description={(
+              <>
+                <span className="font-mono text-[13px] text-[var(--text-faint)]">{service.url}</span>
+                {service.note ? <span className="mt-0.5 block whitespace-pre-line">{service.note}</span> : null}
+              </>
+            )}
+            control={open === service.id ? null : (
+              <>
+                <SettingsButton variant="quiet" disabled={hook.busy === service.id} onClick={() => void hook.removeService(service.id)}>{t('settings.providers.own.remove')}</SettingsButton>
+                <SettingsButton onClick={() => setOpen(service.id)}>{t('settings.providers.own.edit')}</SettingsButton>
+              </>
+            )}
+          >
+            {open === service.id ? <ServiceForm hook={hook} service={service} onDone={() => setOpen(null)} /> : null}
+          </SettingsItem>
+        ))}
+        {open === '' ? (
+          <div className="py-4"><ServiceForm hook={hook} service={null} onDone={() => setOpen(null)} /></div>
+        ) : (
+          <div className="py-4">
+            <SettingsButton onClick={() => setOpen('')}><Plus size={15} strokeWidth={2} />{t('settings.providers.own.add')}</SettingsButton>
+          </div>
+        )}
+      </SettingsGroup>
+    </div>
   );
 }
 

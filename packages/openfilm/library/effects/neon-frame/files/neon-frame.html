@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Neon frame</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+.l { position: fixed; inset: 0; pointer-events: none; }
+:root { --color: #ff3fd8; }
+.l { inset: 2.5%; border-radius: 1.5vw; box-shadow: inset 0 0 0 0.5vw var(--color), 0 0 2.5vw 0.4vw var(--color), inset 0 0 2.5vw 0.4vw var(--color); animation: n 2.4s steps(1) infinite; }
+@keyframes n { 0%, 100% { opacity: 1; } 47% { opacity: 0.45; } 50% { opacity: 1; } 53% { opacity: 0.65; } }
+</style>
+</head>
+<body>
+<div class="l"></div>
+<script>
+/*
+ * A neon tube around the picture, flickering now and then. A page of OpenFilm's library (CC0): what it shows at t
+ * comes from t alone; its CSS animations are held at t by the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

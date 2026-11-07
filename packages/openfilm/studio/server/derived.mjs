@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { hasAlpha } from '../../src/seekable.mjs';
 import { readable } from './files.mjs';
 import { TOOL_DIR } from './projects.mjs';
 import { writeAtomic } from './atomic.mjs';
@@ -101,11 +102,16 @@ export async function probe(root, rel) {
   return JSON.parse(bytes.toString());
 }
 
-/** A video's poster: one frame a second in (or its first), 480 px wide, as JPEG. */
+/**
+ * A video's or a picture's poster: one frame a second in (or its first), 480 px wide, as JPEG; as PNG when it has an
+ * alpha in its pixels (a ProRes 4444, a PNG), so what it leaves clear stays clear.
+ */
 export async function poster(/** @type {string} */ root, /** @type {string} */ rel) {
   const { abs, key } = await source(root, rel);
-  return cached(root, 'posters', `${key}.jpg`, async () => {
-    const grab = (/** @type {string} */ at) => tool('ffmpeg', ['-v', 'error', '-ss', at, '-i', abs, '-frames:v', '1', '-vf', 'scale=480:-2', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-q:v', '4', '-']);
+  const clear = hasAlpha({ pix_fmt: (await probe(root, rel).catch(() => null))?.pixfmt });
+  const as = clear ? ['-pix_fmt', 'rgba', '-vcodec', 'png'] : ['-vcodec', 'mjpeg', '-q:v', '4'];
+  return cached(root, 'posters', `${key}.${clear ? 'png' : 'jpg'}`, async () => {
+    const grab = (/** @type {string} */ at) => tool('ffmpeg', ['-v', 'error', '-ss', at, '-i', abs, '-frames:v', '1', '-vf', 'scale=480:-2', '-f', 'image2pipe', ...as, '-']);
     const frame = await grab('1').catch(() => Buffer.alloc(0));
     return frame.length ? frame : grab('0');
   });

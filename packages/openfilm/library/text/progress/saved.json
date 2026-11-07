@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "progress.html",
+    "time": [
+      0,
+      3
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Text\", \"type\": \"text\", \"at\": \".t\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 3000
+}

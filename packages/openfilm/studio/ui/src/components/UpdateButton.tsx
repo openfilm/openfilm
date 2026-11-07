@@ -23,7 +23,7 @@ export function UpdateButton() {
   const words = (key: string) => t(key).replace('{version}', update.version);
   if (update.status === 'installing') {
     return (
-      <span role="status" className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-dim)]">
+      <span role="status" className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-muted)]">
         <Loader2 size={13} className="animate-spin" />
         {t('update.installing')}
       </span>
@@ -39,7 +39,7 @@ export function UpdateButton() {
           {t('update.restart')}
         </button>
       </Tooltip>
-      {waiting ? <span role="status" className="min-w-0 truncate text-[12px] text-[var(--text-dim)]">{waiting}</span> : null}
+      {waiting ? <span role="status" className="min-w-0 truncate text-[12px] text-[var(--text-muted)]">{waiting}</span> : null}
     </>
   );
 }
@@ -81,7 +81,7 @@ export function WebUpdateButton() {
   const words = (key: string) => t(key).replace('{version}', update.version);
   if (update.status === 'updating') {
     return (
-      <span role="status" className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-dim)]">
+      <span role="status" className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-muted)]">
         <Loader2 size={13} className="animate-spin" />
         {t('update.webUpdating')}
       </span>
@@ -98,7 +98,7 @@ export function WebUpdateButton() {
           {t('update.webUpdate')}
         </button>
       </Tooltip>
-      {said ? <span role="status" className="min-w-0 truncate text-[12px] text-[var(--text-dim)]">{said}</span> : null}
+      {said ? <span role="status" className="min-w-0 truncate text-[12px] text-[var(--text-muted)]">{said}</span> : null}
     </>
   );
 }

@@ -2,8 +2,10 @@
 /**
  * Subtitle styles: one table, one function, every place that draws them.
  *
- * Subtitles are drawn by Studio, never by the film: the editor lays them over the picture (SubtitleOverlay), and an
- * export burns them in or writes them as SRT / WebVTT / a transcript. Each of those builds its CSS here
+ * Before caption tracks (SPEC §1 Captions), Studio drew a project's subtitles over the picture in a style of its own;
+ * a project from then has them made its caption track as it opens (caption-tracks.mjs `syncSpeechCaptions`), and the
+ * styles here are the looks a caption track can take at once (`subtitleStyleVtt`). An export of such a project not
+ * opened since burns them in or writes them as SRT / WebVTT / a transcript. Each of those builds its CSS here
  * (`filmSubtitleCss`, `filmSubtitleFrameHtml`), so what the person sees while editing is what the export draws. The
  * only legitimate difference is the unit of the font size (the editor follows the window with `cqmin`; an export draws
  * at the frame's pixels), so that one value is passed in.
@@ -156,12 +158,20 @@ export const FILM_SUBTITLE_SIZE_PCT_MAX = 10;
  * A ready-made look, like a character style: picking one sets the whole set, and every value can still be changed
  * after. They stay because the combinations that read well are few; built from scratch, subtitles tend to sink into
  * the picture.
- * @typedef {'outline' | 'bar' | 'bold' | 'yellow' | 'clean'} FilmSubtitleLookId
+ * @typedef {'outline' | 'bar' | 'bold' | 'yellow' | 'clean' | 'soft-box' | 'white-box' | 'yellow-box' | 'news' | 'variety' | 'pink'
+ *   | 'blue-edge' | 'gold' | 'block' | 'neon' | 'cinema' | 'type' | 'thin'} FilmSubtitleLookId
  * @typedef {Pick<FilmSubtitleStyle, 'font' | 'fill' | 'stroke' | 'shadow' | 'box'>} FilmSubtitleLook
  */
 
 /** @type {readonly FilmSubtitleLookId[]} */
-export const FILM_SUBTITLE_LOOK_IDS = ['outline', 'bar', 'bold', 'yellow', 'clean'];
+export const FILM_SUBTITLE_LOOK_IDS = [
+  'outline', 'bar', 'bold', 'yellow', 'clean', 'soft-box', 'white-box', 'yellow-box', 'news', 'variety', 'pink', 'blue-edge', 'gold',
+  'block', 'neon', 'cinema', 'type', 'thin',
+];
+
+/** Serif and typewriter stacks for the film and type looks: each platform's own, Chinese, Japanese and Korean included. */
+const SERIF_STACK = '"Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", Georgia, "Times New Roman", serif';
+const TYPE_STACK = 'ui-monospace, Menlo, Consolas, "Courier New", "PingFang SC", "Microsoft YaHei", monospace';
 
 /** @param {Partial<FilmSubtitleFont>} [over] @returns {FilmSubtitleFont} */
 function font(over = {}) {
@@ -220,6 +230,102 @@ export const FILM_SUBTITLE_LOOKS = {
     fill: '#ffffff',
     stroke: null,
     shadow: { dxEm: 0, dyEm: 0.04, blurEm: 0.2, color: 'rgba(0,0,0,0.62)' },
+    box: null,
+  },
+  /* a rounded, see-through box: a vlog's */
+  'soft-box': {
+    font: font({ weight: 600 }),
+    fill: '#ffffff',
+    stroke: null,
+    shadow: null,
+    box: { color: '#000000', opacity: 0.38, radiusEm: 0.45, padXEm: 0.6, padYEm: 0.14 },
+  },
+  'white-box': {
+    font: font({ weight: 700 }),
+    fill: '#111111',
+    stroke: null,
+    shadow: null,
+    box: { color: '#ffffff', opacity: 0.95, radiusEm: 0.14, padXEm: 0.45, padYEm: 0.1 },
+  },
+  'yellow-box': {
+    font: font({ weight: 800 }),
+    fill: '#111111',
+    stroke: null,
+    shadow: null,
+    box: { color: '#ffd400', opacity: 1, radiusEm: 0.1, padXEm: 0.45, padYEm: 0.1 },
+  },
+  /* a news bar: white on red, square */
+  news: {
+    font: font({ weight: 700, letterSpacingEm: 0.02 }),
+    fill: '#ffffff',
+    stroke: null,
+    shadow: null,
+    box: { color: '#d81f2a', opacity: 1, radiusEm: 0, padXEm: 0.5, padYEm: 0.12 },
+  },
+  /* a variety show's: yellow letters, a red edge, a hard shadow */
+  variety: {
+    font: font({ weight: 900, letterSpacingEm: 0.02 }),
+    fill: '#ffe14d',
+    stroke: { widthEm: 0.1, color: '#e8263f' },
+    shadow: { dxEm: 0.04, dyEm: 0.07, blurEm: 0, color: 'rgba(60,0,10,0.85)' },
+    box: null,
+  },
+  pink: {
+    font: font({ weight: 900, letterSpacingEm: 0.02 }),
+    fill: '#ff5fa2',
+    stroke: { widthEm: 0.09, color: '#ffffff' },
+    shadow: { dxEm: 0, dyEm: 0.06, blurEm: 0.12, color: 'rgba(120,0,60,0.55)' },
+    box: null,
+  },
+  'blue-edge': {
+    font: font({ weight: 800, letterSpacingEm: 0.02 }),
+    fill: '#ffffff',
+    stroke: { widthEm: 0.09, color: '#1f6bff' },
+    shadow: { dxEm: 0, dyEm: 0.05, blurEm: 0.1, color: 'rgba(0,20,80,0.6)' },
+    box: null,
+  },
+  gold: {
+    font: font({ weight: 800, letterSpacingEm: 0.03 }),
+    fill: '#ffd77a',
+    stroke: { widthEm: 0.07, color: '#4a2c00' },
+    shadow: { dxEm: 0, dyEm: 0.05, blurEm: 0.14, color: 'rgba(0,0,0,0.6)' },
+    box: null,
+  },
+  /* heavy letters lifted off the picture by a hard shadow below them */
+  block: {
+    font: font({ weight: 900, letterSpacingEm: 0.01 }),
+    fill: '#ffffff',
+    stroke: { widthEm: 0.06, color: '#111111' },
+    shadow: { dxEm: 0.05, dyEm: 0.08, blurEm: 0, color: '#111111' },
+    box: null,
+  },
+  neon: {
+    font: font({ weight: 600, letterSpacingEm: 0.06 }),
+    fill: '#f2feff',
+    stroke: null,
+    shadow: { dxEm: 0, dyEm: 0, blurEm: 0.35, color: '#00e1ff' },
+    box: null,
+  },
+  /* a film's: serif, spaced, a soft shadow */
+  cinema: {
+    font: font({ family: SERIF_STACK, weight: 400, letterSpacingEm: 0.08 }),
+    fill: '#f3efe4',
+    stroke: null,
+    shadow: { dxEm: 0, dyEm: 0.04, blurEm: 0.25, color: 'rgba(0,0,0,0.75)' },
+    box: null,
+  },
+  type: {
+    font: font({ family: TYPE_STACK, weight: 500, letterSpacingEm: 0.02 }),
+    fill: '#ffffff',
+    stroke: null,
+    shadow: null,
+    box: { color: '#000000', opacity: 0.8, radiusEm: 0.04, padXEm: 0.35, padYEm: 0.08 },
+  },
+  thin: {
+    font: font({ weight: 300, letterSpacingEm: 0.12 }),
+    fill: '#ffffff',
+    stroke: null,
+    shadow: { dxEm: 0, dyEm: 0.03, blurEm: 0.18, color: 'rgba(0,0,0,0.55)' },
     box: null,
   },
 };
@@ -795,4 +901,43 @@ export function filmSubtitleCuesInRanges(cues, ranges) {
     offset += to - from;
     return part;
   });
+}
+
+/* ── a style as a caption track says it (SPEC §1 Captions) ───────────────── */
+
+const rgbaOf = (/** @type {string} */ color, /** @type {number} */ alpha) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!m) return color;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${Math.round(alpha * 100) / 100})`;
+};
+
+/**
+ * A subtitle style (film-subtitle.mjs) as a caption track says it: a REGION where its lines sit (its place, as wide as
+ * it lets them be), and STYLE CSS for how they look. The size is a share of the frame's short side (`cqmin`), as the
+ * style's is; the word being said (karaoke) becomes the words said so far (`:past`).
+ * @param {import('./film-subtitle.mjs').FilmSubtitleStyle} style
+ * @returns {{ region: string, css: string, align: string }}
+ */
+export function subtitleStyleVtt(style) {
+  const f = style.font;
+  const anchor = style.pos.y > 0.55 ? 100 : style.pos.y < 0.45 ? 0 : 50;
+  const pct = (/** @type {number} */ n) => `${Math.round(n * 1000) / 10}%`;
+  const region = [
+    'id:main', `width:${Math.round(style.maxWidthPct)}%`, 'lines:3',
+    `regionanchor:50%,${anchor}%`, `viewportanchor:${pct(style.pos.x)},${pct(style.pos.y)}`,
+  ].join('\n');
+  const cue = [
+    `font: ${f.italic ? 'italic ' : ''}${f.weight} ${f.sizePct}cqmin/${f.lineHeight} ${cssFontFamily(f.family)}`,
+    `color: ${style.fill}`,
+    style.box ? `background: ${rgbaOf(style.box.color, style.box.opacity)}` : 'background: none',
+    ...(style.box ? [`padding: ${style.box.padYEm}em ${style.box.padXEm}em`, `border-radius: ${style.box.radiusEm}em`] : []),
+    ...(style.stroke && style.stroke.widthEm > 0 ? [`-webkit-text-stroke: ${style.stroke.widthEm}em ${style.stroke.color}`, 'paint-order: stroke fill'] : []),
+    ...(style.shadow ? [`text-shadow: ${style.shadow.dxEm}em ${style.shadow.dyEm}em ${style.shadow.blurEm}em ${style.shadow.color}`] : []),
+    ...(f.letterSpacingEm ? [`letter-spacing: ${f.letterSpacingEm}em`] : []),
+    ...(f.upper ? ['text-transform: uppercase'] : []),
+  ];
+  const lines = [`::cue { ${cue.join('; ')}; }`];
+  if (style.karaoke) lines.push(`::cue(:past) { color: ${style.karaoke.color}; }`);
+  return { region, css: lines.join('\n'), align: style.align };
 }

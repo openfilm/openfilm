@@ -1,0 +1,150 @@
+{
+ "version": 1,
+ "models": [
+  {
+   "id": "whisper-small",
+   "files": [
+    {
+     "path": "models/onnxruntime-web-1.31.1/ort.wasm.min.mjs",
+     "bytes": 53725,
+     "sha256": "c21d9c326d453a4a61398270c804d5979e118540597cb0c07f7b3d64e6098234"
+    },
+    {
+     "path": "models/onnxruntime-web-1.31.1/ort-wasm-simd-threaded.mjs",
+     "bytes": 24738,
+     "sha256": "30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3"
+    },
+    {
+     "path": "models/onnxruntime-web-1.31.1/ort-wasm-simd-threaded.wasm",
+     "bytes": 14848852,
+     "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+    },
+    {
+     "path": "models/transformers-4.3.2/transformers.min.js",
+     "bytes": 587917,
+     "sha256": "8b5a3171f8876bab2b1820a7d65eb87628e3d30bb5ea85b9dd398e76eb34decb"
+    },
+    {
+     "path": "models/whisper-small/config.json",
+     "bytes": 2227,
+     "sha256": "457854d452f17661e197d74aee12b8e74fb75ba30ebfaa7426d0d61ea1e08a18"
+    },
+    {
+     "path": "models/whisper-small/generation_config.json",
+     "bytes": 3893,
+     "sha256": "f538b28220c6a6d6f1af1458d4141cacb4ef4963df3de98a19490440c412ddf0"
+    },
+    {
+     "path": "models/whisper-small/preprocessor_config.json",
+     "bytes": 339,
+     "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d"
+    },
+    {
+     "path": "models/whisper-small/tokenizer.json",
+     "bytes": 2480466,
+     "sha256": "27fc476bfe7f17299480be2273fc0608e4d5a99aba2ab5dec5374b4482d1a566"
+    },
+    {
+     "path": "models/whisper-small/tokenizer_config.json",
+     "bytes": 282683,
+     "sha256": "2a4c4281cf9f51ac6ccc406fdc711a087afe6530f671fa7b80953edc498275ce"
+    },
+    {
+     "path": "models/whisper-small/onnx/encoder_model_quantized.onnx",
+     "bytes": 92240498,
+     "sha256": "9f5635b596e6084045c7426ca6f6f99db8ce606ea895397c3b4a3c0aa3f9b070"
+    },
+    {
+     "path": "models/whisper-small/onnx/decoder_model_merged_quantized.onnx",
+     "bytes": 156795750,
+     "sha256": "c831996a6d5a535cf17447b0d7ecc36da6b72696e6fb906852ba6136b9199abb"
+    }
+   ]
+  },
+  {
+   "id": "whisper-large-v3-turbo",
+   "files": [
+    {
+     "path": "models/onnxruntime-web-1.31.1/ort.wasm.min.mjs",
+     "bytes": 53725,
+     "sha256": "c21d9c326d453a4a61398270c804d5979e118540597cb0c07f7b3d64e6098234"
+    },
+    {
+     "path": "models/onnxruntime-web-1.31.1/ort-wasm-simd-threaded.mjs",
+     "bytes": 24738,
+     "sha256": "30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3"
+    },
+    {
+     "path": "models/onnxruntime-web-1.31.1/ort-wasm-simd-threaded.wasm",
+     "bytes": 14848852,
+     "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+    },
+    {
+     "path": "models/transformers-4.3.2/transformers.min.js",
+     "bytes": 587917,
+     "sha256": "8b5a3171f8876bab2b1820a7d65eb87628e3d30bb5ea85b9dd398e76eb34decb"
+    },
+    {
+     "path": "models/whisper-large-v3-turbo/config.json",
+     "bytes": 1330,
+     "sha256": "32c02d1dfb9a93ff236cdcf0f741f8f3a4cedb437c407a361a022451ac009131"
+    },
+    {
+     "path": "models/whisper-large-v3-turbo/generation_config.json",
+     "bytes": 3797,
+     "sha256": "8568ddf83476167b4607014956b87142763fa6923e71259a606734beb39bdfc8"
+    },
+    {
+     "path": "models/whisper-large-v3-turbo/preprocessor_config.json",
+     "bytes": 340,
+     "sha256": "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711"
+    },
+    {
+     "path": "models/whisper-large-v3-turbo/tokenizer.json",
+     "bytes": 2710337,
+     "sha256": "297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd"
+    },
+    {
+     "path": "models/whisper-large-v3-turbo/tokenizer_config.json",
+     "bytes": 282843,
+     "sha256": "844b642c73a91359722f47b35705f7174686df33d252695d8572cf9ac03a6389"
+    },
+    {
+     "path": "models/whisper-large-v3-turbo/onnx/encoder_model_quantized.onnx",
+     "bytes": 644883359,
+     "sha256": "a5bece0f99f86b5fed85e59b6b23299500639b283a0a6e00098e6583ed1baeb8"
+    },
+    {
+     "path": "models/whisper-large-v3-turbo/onnx/decoder_model_merged_quantized.onnx",
+     "bytes": 439997434,
+     "sha256": "b4ab1c92a9bcf8c8fdc49deacb57ac51b707d5248bc7868af42371b896c3ae52"
+    }
+   ]
+  },
+  {
+   "id": "birefnet-lite",
+   "files": [
+    {
+     "path": "models/onnxruntime-web-1.31.1/ort.wasm.min.mjs",
+     "bytes": 53725,
+     "sha256": "c21d9c326d453a4a61398270c804d5979e118540597cb0c07f7b3d64e6098234"
+    },
+    {
+     "path": "models/onnxruntime-web-1.31.1/ort-wasm-simd-threaded.mjs",
+     "bytes": 24738,
+     "sha256": "30ed0b5cd1182ede931fea448afb567d4dc705ec957af09f108a2be5f770dac3"
+    },
+    {
+     "path": "models/onnxruntime-web-1.31.1/ort-wasm-simd-threaded.wasm",
+     "bytes": 14848852,
+     "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+    },
+    {
+     "path": "models/birefnet-lite/model.onnx",
+     "bytes": 98451949,
+     "sha256": "cdcc278ab17011c8507c83f368935527a7cde826dec4dff7f3dc6e18474f4a81"
+    }
+   ]
+  }
+ ]
+}

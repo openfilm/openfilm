@@ -56,6 +56,18 @@ function trackNow(before: Film, after: Film, track: number, moved: Set<string>):
   return { newTrack: 0 };
 }
 
+/**
+ * A track moved back to where it was at `from` in `before`, named by clips (the agent may add or move tracks before
+ * the undo): the track by one of its clips, its place by a clip of the track that was right over it (or under it, at
+ * the top). Indexes stand in for a track with no clips.
+ */
+function trackBack(before: Film, from: number): { clip?: string; below?: string; above?: string } {
+  const own = before.tracks[from]?.clips[0]?.id;
+  const over = before.tracks[from - 1]?.clips[0]?.id;
+  const under = from === 0 ? before.tracks[1]?.clips[0]?.id : undefined;
+  return { ...(own ? { clip: own } : {}), ...(over ? { below: over } : {}), ...(under ? { above: under } : {}) };
+}
+
 /** A clip's fields other than its identity and its place (those go back by a move). */
 const fieldsOf = (row: Clip) => Object.keys(row).filter((k) => k !== 'id' && k !== 'at');
 
@@ -70,14 +82,28 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
   const undo: Op[] = [];
   for (const op of ops) {
     if (op.op === 'track') { undo.push({ op: 'track', track: op.track, field: op.field, value: Boolean(before.tracks[op.track]?.[op.field]) }); continue; }
-    if (op.op === 'reorder') { undo.push({ op: 'reorder', from: op.to, to: op.from }); continue; }
+    if (op.op === 'reorder') {
+      undo.push({ op: 'reorder', from: op.to, to: op.from, ...trackBack(before, op.clip ? (was.get(op.clip)?.track ?? op.from) : op.from) });
+      continue;
+    }
+    if (op.op === 'captions') { undo.push({ op: 'uncaptions', src: op.captions.src }); continue; }
+    if (op.op === 'uncaptions') {
+      const at = before.tracks.findIndex((t) => t.captions?.src === op.src);
+      const track = before.tracks[at];
+      if (track?.captions) {
+        for (const field of ['hidden', 'locked'] as const) if (track[field]) undo.push({ op: 'track', track: at, field, value: true });
+        undo.push({ op: 'captions', at, captions: copy(track.captions) });
+      }
+      continue;
+    }
     if (op.op === 'stage') { const { w, h } = before.stage ?? DEFAULT_STAGE; undo.push({ op: 'stage', w, h }); continue; }
+    if (op.op === 'keyframes') continue;
     if (op.op === 'insert') { for (const [id] of now) if (!was.has(id)) ids.add(id); continue; }
     if (op.op === 'props') {
       for (const e of op.edits) {
         if (e.prop === 'trackOrder') {
           const { from, to } = e.value as { from: number; to: number };
-          undo.push({ op: 'reorder', from: Math.max(0, Math.min(after.tracks.length - 1, to)), to: from });
+          undo.push({ op: 'reorder', from: Math.max(0, Math.min(after.tracks.length - 1, to)), to: from, ...trackBack(before, from) });
         } else if (e.prop === 'locked' || e.prop === 'hidden' || e.prop === 'muted') {
           const home = now.get(e.clip);
           const old = was.get(e.clip);
@@ -122,6 +148,11 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
     const changed = [...new Set([...fieldsOf(old.row), ...fieldsOf(cur.row)])].filter((field) => JSON.stringify(then[field]) !== JSON.stringify(nowRow[field]));
     if (changed.length) undo.push({ op: 'fields', clip: id, fields: Object.fromEntries(changed.map((field) => [field, field in then ? copy(then[field]) : null])) });
   }
+  /* the film's keyframes the edit changed (a clip's own, as its motion was set, cut or copied) back as they were */
+  const kfBefore = before.keyframes ?? {}, kfAfter = after.keyframes ?? {};
+  const kfBack = Object.fromEntries([...new Set([...Object.keys(kfBefore), ...Object.keys(kfAfter)])]
+    .filter((n) => kfBefore[n] !== kfAfter[n]).map((n) => [n, kfBefore[n] ?? null]));
+  if (Object.keys(kfBack).length) undo.unshift({ op: 'keyframes', set: kfBack });
   return reopenTracks(undo.reverse(), gone);
 }
 

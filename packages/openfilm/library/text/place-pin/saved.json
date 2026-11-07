@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "place-pin.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Place\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Region\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Coordinates\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Pin\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 4000
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Shock burst</title>
+<style>
+  /* what a clip of it may change: the burst's two colors, how often it hits (beats a second, about) */
+  :root { --color: #ffd23f; --accent: #ff3d6e; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A shock: every beat a flash at the middle, rays of two colors bursting from the
+ * center and white streaks rushing to the edges, then easing off to thin lines flickering at the edges until the
+ * next hit. A page of OpenFilm's library (CC0): each beat is worked out from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+const easeOut = (p) => 1 - Math.pow(1 - p, 3);
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const speed = Math.max(0.1, num('--speed', 1)), A = rgb('--color', '#ffd23f'), B = rgb('--accent', '#ff3d6e');
+    const period = 1.5 / speed;
+    const beat = t / period + 0.04, k = Math.floor(beat), p = beat - k;
+    const cx = w / 2, cy = h / 2, R = Math.hypot(w, h) * 0.6, e = easeOut(Math.min(1, p / 0.5));
+    // rays of two colors, opening from the middle and turning a little as they fade
+    const rays = 22, spin = hash(k) * 6.283 + p * 0.25, inner = R * (0.06 + 0.22 * e);
+    const fade = Math.pow(Math.max(0, 1 - p / 0.6), 2);
+    for (let i = 0; i < rays; i++) {
+      const a0 = spin + (i / rays) * 6.283, a1 = a0 + (6.283 / rays) * (0.2 + hash(k * 7 + i) * 0.35);
+      const g = ctx.createRadialGradient(cx, cy, inner, cx, cy, R);
+      const c = i % 2 ? A : B;
+      g.addColorStop(0, `rgba(${c},0)`); g.addColorStop(0.5, `rgba(${c},0)`); g.addColorStop(1, `rgba(${c},${0.9 * fade})`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a0) * inner, cy + Math.sin(a0) * inner);
+      ctx.lineTo(cx + Math.cos(a0) * R, cy + Math.sin(a0) * R);
+      ctx.lineTo(cx + Math.cos(a1) * R, cy + Math.sin(a1) * R);
+      ctx.lineTo(cx + Math.cos(a1) * inner, cy + Math.sin(a1) * inner);
+      ctx.fill();
+    }
+    // between hits, thin lines keep crowding in at the edges, flickering twelve times a second
+    const step = Math.floor(t * 12), hold = 0.6 + 0.4 * Math.pow(1 - p, 2);
+    ctx.fillStyle = `rgba(255,255,255,${0.75 * hold})`;
+    ctx.beginPath();
+    for (let i = 0; i < 130; i++) {
+      const r = (q) => hash(step * 41.3 + i * 2.9 + q);
+      const a = ((i + r(1)) / 130) * 6.283, tip = (0.62 + r(2) * 0.32 + 0.12 * (1 - e)) * 0.6, half = (0.003 + r(3) * 0.009);
+      ctx.moveTo(cx + Math.cos(a) * tip * w, cy + Math.sin(a) * tip * h);
+      ctx.lineTo(cx + Math.cos(a - half) * R * 1.3, cy + Math.sin(a - half) * R * 1.3);
+      ctx.lineTo(cx + Math.cos(a + half) * R * 1.3, cy + Math.sin(a + half) * R * 1.3);
+      ctx.closePath();
+    }
+    ctx.fill();
+    // white streaks rushing outward
+    ctx.fillStyle = `rgba(255,255,255,${0.9 * Math.pow(1 - p, 1.2)})`;
+    ctx.beginPath();
+    for (let i = 0; i < 90; i++) {
+      const r = (q) => hash(k * 97.1 + i * 3.7 + q);
+      const a = r(1) * 6.283, start = (0.08 + r(2) * 0.25 + e * (0.7 + r(3) * 0.5)) * R;
+      const len = (0.12 + r(4) * 0.35) * R * (1 - p * 0.6), wd = (0.15 + r(5) * 0.6) * u;
+      const ca = Math.cos(a), sa = Math.sin(a), nx = -sa * wd, ny = ca * wd;
+      const mx = cx + ca * (start + len * 0.3), my = cy + sa * (start + len * 0.3);
+      ctx.moveTo(cx + ca * start, cy + sa * start);
+      ctx.lineTo(mx + nx, my + ny);
+      ctx.lineTo(cx + ca * (start + len), cy + sa * (start + len));
+      ctx.lineTo(mx - nx, my - ny);
+      ctx.closePath();
+    }
+    ctx.fill();
+    // the flash
+    const flash = Math.pow(Math.max(0, 1 - p / 0.22), 2);
+    if (flash > 0) {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+      g.addColorStop(0, `rgba(255,255,255,${0.95 * flash})`); g.addColorStop(0.35, `rgba(255,250,235,${0.6 * flash})`); g.addColorStop(1, `rgba(${A},${0.25 * flash})`);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    }
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

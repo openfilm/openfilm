@@ -54,6 +54,21 @@ test('track flags and order', () => {
   roundTrip(f, [{ op: 'track', track: 1, field: 'hidden', value: true }]);
 });
 
+test('a track order undone after the agent added a track above: the track that moved goes back, not the one now there', () => {
+  const f = film([{ src: 'a.html', id: 'a' }], [{ src: 'b.html', id: 'b' }], [{ src: 'c.html', id: 'c' }]);
+  const edit = props(['c', 'trackOrder', { from: 2, to: 0 }]);
+  const after = apply(f, edit);
+  assert.deepEqual(ids(after), [['c@0'], ['a@0'], ['b@0']]);
+  const undo = inverse(f, after, edit);
+  /* the agent writes a new track on top meanwhile */
+  const written = structuredClone(after);
+  written.tracks.unshift({ clips: [{ src: 'n.html', id: 'n' }] } as Film['tracks'][number]);
+  assert.deepEqual(ids(apply(written, undo)), [['n@0'], ['a@0'], ['b@0'], ['c@0']]);
+  /* and redone */
+  const back = apply(written, undo);
+  assert.deepEqual(ids(apply(back, inverse(written, back, undo))), [['n@0'], ['c@0'], ['a@0'], ['b@0']]);
+});
+
 test('split, delete (with a ripple), paste, drop, duplicate', () => {
   const f = film([{ src: 'v.mp4', id: 'v', at: 1, time: [2, 8] }, { src: 'b.html', id: 'b', at: 9 }], [{ src: 's.wav', id: 's' }]);
   const split = roundTrip(f, [{ op: 'split', clip: 'v', left: { end: 4 }, right: { start: 4, end: 8, at: 3 } }]);
@@ -106,4 +121,31 @@ test('undoing a delete the agent already put back: the clip is not put back twic
   const undo = inverse(f, after, [{ op: 'remove', clip: 'a2' }]);
   /* the agent writes the film back as it was, then the person presses ⌘Z */
   assert.deepEqual(apply(structuredClone(f), undo), f);
+});
+
+test('a clip\'s keyframes set, changed, cut and taken away come back exactly', () => {
+  const start = film([{ id: 'v', src: 'v.mp4', time: [0, 6] }]);
+  const set = props(['v', 'motion', { scale: [{ t: 0, v: 1 }, { t: 2, v: 1.3, ease: 'ease-out' }] }]);
+  const keyed = apply(start, set);
+  /* undone, the film has no keyframes left (an emptied set: written, it takes them out of the file) */
+  assert.deepEqual(apply(keyed, inverse(start, keyed, set)), { ...start, keyframes: {} });
+  /* it had keyframes: undone, the film has them as they were (an emptied map is none) */
+  const changed = apply(keyed, props(['v', 'motion', { scale: [{ t: 0, v: 1 }, { t: 4, v: 2 }] }]));
+  assert.deepEqual(apply(changed, inverse(keyed, changed, props(['v', 'motion', null]))), keyed);
+  const cut: Op[] = [{ op: 'split', clip: 'v', left: { end: 3 }, right: { at: 3, start: 3 }, rightId: 'w' }];
+  const halves = apply(keyed, cut);
+  assert.ok(halves.keyframes?.['w--scale']);
+  assert.deepEqual(apply(halves, inverse(keyed, halves, cut)), keyed);
+});
+
+test('a caption track put in is taken out by undo; one taken out comes back where it was, hidden as it was', () => {
+  const base: Film = { tracks: [{ clips: [{ id: 'v', src: 'v.mp4' }] }] };
+  const zh = { src: 'captions/zh.vtt', kind: 'captions' as const };
+  const add: Op[] = [{ op: 'captions', at: 0, captions: zh }];
+  const added = applyOps(structuredClone(base), add) as Film;
+  assert.deepEqual(applyOps(structuredClone(added), inverse(base, added, add)), base);
+  const hidden: Film = { tracks: [{ clips: [{ id: 'v', src: 'v.mp4' }] }, { clips: [], hidden: true, captions: zh }] };
+  const drop: Op[] = [{ op: 'uncaptions', src: zh.src }];
+  const dropped = applyOps(structuredClone(hidden), drop) as Film;
+  assert.deepEqual(applyOps(structuredClone(dropped), inverse(hidden, dropped, drop)), hidden);
 });

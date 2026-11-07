@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Checklist</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #34c759; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.box { fill: rgba(255, 255, 255, 0.14); stroke: #ffffff; stroke-width: 6; }
+.tick { fill: none; stroke: var(--color); stroke-width: 12; stroke-linecap: round; stroke-linejoin: round; }
+.row .pop { animation: pop 0.4s cubic-bezier(.34, 1.56, .64, 1) var(--d) both; }
+@keyframes pop { from { transform: scale(0); } }
+.row .tick { stroke-dasharray: 1 2; stroke-dashoffset: 1.01; animation: draw 0.26s cubic-bezier(.6, .05, .3, 1) calc(var(--d) + 0.2s) both, bump 2.4s ease-in-out calc(var(--d) + 1s) infinite; }
+@keyframes draw { from { stroke-dashoffset: 1.01; opacity: 0; } 1% { opacity: 1; } to { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes bump { 0%, 12%, 100% { transform: none; } 6% { transform: scale(1.15); } }
+.row text { fill: #ffffff; font: 700 46px var(--font); animation: txt 0.4s cubic-bezier(.2, .8, .2, 1) calc(var(--d) + 0.12s) both; }
+@keyframes txt { from { opacity: 0; transform: translateX(-24px); } }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 500 360">
+<g class="row" style="--d: 0s"><g transform="translate(70 70)"><g class="pop"><rect class="box" x="-30" y="-30" width="60" height="60" rx="14"/><path class="tick" pathLength="1" d="M-16 0 L-4 12 L20 -16"/></g></g><text class="l1" x="128" y="86">Plan</text></g>
+<g class="row" style="--d: 0.22s"><g transform="translate(70 180)"><g class="pop"><rect class="box" x="-30" y="-30" width="60" height="60" rx="14"/><path class="tick" pathLength="1" d="M-16 0 L-4 12 L20 -16"/></g></g><text class="l2" x="128" y="196">Shoot</text></g>
+<g class="row" style="--d: 0.44s"><g transform="translate(70 290)"><g class="pop"><rect class="box" x="-30" y="-30" width="60" height="60" rx="14"/><path class="tick" pathLength="1" d="M-16 0 L-4 12 L20 -16"/></g></g><text class="l3" x="128" y="306">Edit</text></g>
+</svg>
+<script>
+/*
+ * Three boxes that pop in one by one and are ticked, each with its words. Its words and the ticks' color are the
+ * clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations
+ * are held at t by the host.
+ */
+window.film = { width: 500, height: 360, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

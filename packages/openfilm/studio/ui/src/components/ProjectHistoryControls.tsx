@@ -393,18 +393,18 @@ export function ProjectHistoryControls({
               if (e.key !== 'Escape' && e.key !== 'Tab') e.stopPropagation();
             }}
           >
-            <aside className="flex min-h-0 w-[180px] shrink-0 flex-col border-r border-[var(--border-soft)] bg-[var(--surface-2)] sm:w-[260px]">
+            <aside className="flex min-h-0 w-[180px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-field)] sm:w-[260px]">
               <div className="flex shrink-0 items-center gap-2 px-5 pb-4 pt-5">
                 <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight">{t('versions.title')}</h2>
                 <button type="button" disabled={!!busy || !state} aria-label={t(selecting ? 'versions.cancelSelection' : 'versions.selectVersions')} aria-pressed={selecting}
                   onClick={() => { setSelecting(!selecting); setChecked(new Set()); }}
-                  className={`flex shrink-0 items-center gap-1 rounded-lg p-1.5 text-[11px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] disabled:opacity-40 ${selecting ? 'bg-[var(--surface)] text-[var(--text)]' : ''}`}>
+                  className={`flex shrink-0 items-center gap-1 rounded-lg p-1.5 text-[11px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] disabled:opacity-40 ${selecting ? 'bg-[var(--bg-raised)] text-[var(--text)]' : ''}`}>
                   <ListChecks size={14} /><span className="hidden sm:inline">{t(selecting ? 'versions.cancelSelection' : 'versions.selectVersions')}</span>
                 </button>
               </div>
-              <div className="mx-3 mb-3 grid shrink-0 grid-cols-2 gap-1 rounded-lg bg-[var(--fill-tsp)] p-1">
-                <button type="button" disabled={!!busy} aria-pressed={!deletedView} onClick={() => switchView(false)} className={`rounded-md px-2 py-1.5 text-[11px] ${!deletedView ? 'bg-[var(--surface)] text-[var(--text)] shadow-[var(--shadow-sm)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{t('versions.savedVersions')}</button>
-                <button type="button" disabled={!!busy} aria-pressed={deletedView} onClick={() => switchView(true)} className={`rounded-md px-2 py-1.5 text-[11px] ${deletedView ? 'bg-[var(--surface)] text-[var(--text)] shadow-[var(--shadow-sm)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{t('versions.deletedVersions')} {state?.deletedCount ? `(${state.deletedCount})` : ''}</button>
+              <div className="mx-3 mb-3 grid shrink-0 grid-cols-2 gap-1 rounded-lg bg-[var(--bg-field)] p-1">
+                <button type="button" disabled={!!busy} aria-pressed={!deletedView} onClick={() => switchView(false)} className={`rounded-md px-2 py-1.5 text-[11px] ${!deletedView ? 'bg-[var(--bg-raised)] text-[var(--text)] shadow-[var(--shadow-sm)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{t('versions.savedVersions')}</button>
+                <button type="button" disabled={!!busy} aria-pressed={deletedView} onClick={() => switchView(true)} className={`rounded-md px-2 py-1.5 text-[11px] ${deletedView ? 'bg-[var(--bg-raised)] text-[var(--text)] shadow-[var(--shadow-sm)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{t('versions.deletedVersions')} {state?.deletedCount ? `(${state.deletedCount})` : ''}</button>
               </div>
               <div ref={filterBox} className="relative z-10 mx-3 mb-4 flex shrink-0 gap-2">
                 <div className="relative min-w-0 flex-1">
@@ -419,7 +419,7 @@ export function ProjectHistoryControls({
                     onChange={(e) => setSearch(e.target.value)}
                     aria-label={t('versions.search')}
                     placeholder={t('versions.search')}
-                    className="h-8 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] pl-8 pr-2 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--border-strong)]"
+                    className="h-8 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] pl-8 pr-2 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--border-strong)]"
                   />
                 </div>
                 <button
@@ -431,7 +431,7 @@ export function ProjectHistoryControls({
                   aria-controls={filterPanelId}
                   className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition ${
                     filtersActive || filtersOpen
-                      ? 'border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text)]'
+                      ? 'border-[var(--border-strong)] bg-[var(--bg-raised)] text-[var(--text)]'
                       : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]'
                   }`}
                 >
@@ -441,7 +441,7 @@ export function ProjectHistoryControls({
                   <fieldset
                     id={filterPanelId}
                     aria-label={t('versions.filterVersions')}
-                    className="absolute left-0 right-0 top-[calc(100%+6px)] rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] p-2.5 shadow-[var(--shadow-lg)]"
+                    className="absolute left-0 right-0 top-[calc(100%+6px)] rounded-xl border border-[var(--border-strong)] bg-[var(--bg-raised)] p-2.5 shadow-[var(--shadow-lg)]"
                   >
                     <legend className="sr-only">{t('versions.filterVersions')}</legend>
                     <p className="px-1 pb-2 text-[10px] font-medium text-[var(--text-faint)]">
@@ -469,7 +469,7 @@ export function ProjectHistoryControls({
                         </span>
                       </label>
                     ))}
-                    <div className="my-2 border-t border-[var(--border-soft)]" />
+                    <div className="my-2 border-t border-[var(--border)]" />
                     <label className="flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1.5 text-[11px] hover:bg-[var(--bg-hover)]">
                       <input
                         type="checkbox"
@@ -501,13 +501,13 @@ export function ProjectHistoryControls({
                   }}
                   aria-pressed={working && !deletedView}
                   className={`relative flex w-full items-center gap-2.5 rounded-xl px-3 py-3 text-left transition ${
-                    working && !deletedView ? 'bg-[var(--surface)] shadow-[var(--shadow-sm)]' : 'hover:bg-[var(--bg-hover)]'
+                    working && !deletedView ? 'bg-[var(--bg-raised)] shadow-[var(--shadow-sm)]' : 'hover:bg-[var(--bg-hover)]'
                   }`}
                 >
                   {working && !deletedView ? (
-                    <span aria-hidden className="absolute bottom-4 left-0 top-4 w-0.5 rounded-full bg-[var(--text)]" />
+                    <span aria-hidden className="absolute bottom-4 left-0 top-4 w-0.5 rounded-full bg-[var(--accent)]" />
                   ) : null}
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--fill-tsp)] text-[var(--text-muted)]">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-field)] text-[var(--text-muted)]">
                     <Film size={15} />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -525,14 +525,14 @@ export function ProjectHistoryControls({
                   ) : null}
                 </button>
               </div>
-              {selecting && <div className="flex shrink-0 items-center gap-2 border-t border-[var(--border-soft)] px-4 py-2 text-[11px]">
+              {selecting && <div className="flex shrink-0 items-center gap-2 border-t border-[var(--border)] px-4 py-2 text-[11px]">
                 <button type="button" disabled={!!busy || !selectable.length} onClick={() => setChecked(new Set(selectable.every((version) => checked.has(version.commit)) ? [] : selectable.map((version) => version.commit)))} className="text-[var(--text-muted)] hover:text-[var(--text)] disabled:opacity-40">{t(selectable.length && selectable.every((version) => checked.has(version.commit)) ? 'versions.clearSelection' : 'versions.selectVisible')}</button>
                 <span className="flex-1 text-[var(--text-faint)]">{t('versions.selectionCount').replace('{n}', String(selectedCommits.length))}</span>
                 <button type="button" disabled={!!busy || !selectedCommits.length} onClick={() => deletedView ? void recover(selectedCommits) : setDialog({ kind: 'delete', commits: selectedCommits })} className={`flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-[var(--bg-hover)] disabled:opacity-40 ${deletedView ? 'text-[var(--text)]' : 'text-[var(--err)]'}`}>
                   {deletedView ? <RotateCcw size={12} /> : <Trash2 size={12} />}{t(deletedView ? 'versions.recoverRecords' : 'versions.deleteSelected')}
                 </button>
               </div>}
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-[var(--border-soft)] px-3 pb-3">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-[var(--border)] px-3 pb-3">
                 {deletedView && !deletedState && !deletedFailed ? <Loader2 size={15} className="mx-auto my-6 animate-spin text-[var(--text-faint)]" /> : null}
                 {deletedView && deletedFailed ? <button type="button" onClick={() => setDeletedAttempt((n) => n + 1)} className="px-2 py-4 text-[12px] text-[var(--text-muted)]">{t('versions.loadFailed')} {t('versions.retry')}</button> : null}
                 {versions.map((v) => {
@@ -563,22 +563,22 @@ export function ProjectHistoryControls({
                         }}
                         aria-pressed={chosen}
                         className={`relative mb-1 flex min-w-0 flex-1 items-start gap-2.5 rounded-xl px-3 py-3 text-left transition ${
-                          chosen ? 'bg-[var(--surface)] shadow-[var(--shadow-sm)]' : 'hover:bg-[var(--bg-hover)]'
+                          chosen ? 'bg-[var(--bg-raised)] shadow-[var(--shadow-sm)]' : 'hover:bg-[var(--bg-hover)]'
                         }`}
                       >
                         {chosen ? (
                           <span
                             aria-hidden
-                            className="absolute bottom-4 left-0 top-4 w-0.5 rounded-full bg-[var(--text)]"
+                            className="absolute bottom-4 left-0 top-4 w-0.5 rounded-full bg-[var(--accent)]"
                           />
                         ) : null}
-                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--fill-tsp)] text-[var(--text-faint)]">
+                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-field)] text-[var(--text-faint)]">
                           <Icon size={13} />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span
                             className={`line-clamp-2 break-words text-[12px] font-medium leading-relaxed ${
-                              chosen ? 'text-[var(--text)]' : 'text-[var(--text-dim)]'
+                              chosen ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'
                             }`}
                             title={label(v)}
                           >
@@ -594,7 +594,7 @@ export function ProjectHistoryControls({
                             ) : null}
                           </span>
                           {v.commit === status?.head ? (
-                            <span className="mt-1.5 inline-block rounded bg-[var(--fill-tsp)] px-1.5 text-[9px] leading-[17px] text-[var(--text-muted)]">
+                            <span className="mt-1.5 inline-block rounded bg-[var(--bg-field)] px-1.5 text-[9px] leading-[17px] text-[var(--text-muted)]">
                               {t(changes ? 'versions.lastSaved' : 'versions.inUse')}
                             </span>
                           ) : null}
@@ -632,7 +632,7 @@ export function ProjectHistoryControls({
                 ) : null}
               </div>
               {working && state && !deletedView ? (
-                <div className="shrink-0 border-t border-[var(--border-soft)] p-3">
+                <div className="shrink-0 border-t border-[var(--border)] p-3">
                   <button
                     type="button"
                     disabled={!!busy || !changes}
@@ -641,7 +641,7 @@ export function ProjectHistoryControls({
                       setInput('');
                       setDialog({ kind: 'save' });
                     }}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-2 text-[12px] hover:bg-[var(--bg-hover)] disabled:cursor-default disabled:opacity-40"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] px-2 py-2 text-[12px] hover:bg-[var(--bg-hover)] disabled:cursor-default disabled:opacity-40"
                   >
                     <Plus size={13} />
                     {t('versions.saveVersion')}
@@ -697,7 +697,7 @@ export function ProjectHistoryControls({
                     projectId={projectId}
                     commit={commit}
                   />
-                  <section className="flex min-h-0 flex-col border-t border-[var(--border-soft)]" aria-label={t('versions.fileChanges')}>
+                  <section className="flex min-h-0 flex-col border-t border-[var(--border)]" aria-label={t('versions.fileChanges')}>
                     <div className="flex h-10 shrink-0 items-center gap-2 px-5">
                       <h4 className="min-w-0 text-[12px] font-medium">
                         <button
@@ -709,7 +709,7 @@ export function ProjectHistoryControls({
                         >
                           <ChevronRight size={13} className={`shrink-0 transition-transform ${filesExpanded ? 'rotate-90' : ''}`} />
                           {t('versions.fileChanges')}
-                          <span className="rounded bg-[var(--fill-tsp)] px-1.5 py-0.5 text-[10px] tabular-nums text-[var(--text-faint)]">{currentCount}</span>
+                          <span className="rounded bg-[var(--bg-field)] px-1.5 py-0.5 text-[10px] tabular-nums text-[var(--text-faint)]">{currentCount}</span>
                         </button>
                       </h4>
                       <span className="ml-auto hidden text-[10px] text-[var(--text-faint)] md:inline">
@@ -760,7 +760,7 @@ export function ProjectHistoryControls({
                   </section>
                 </div>
               )}
-              <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[var(--border-soft)] bg-[color-mix(in_srgb,var(--surface-2)_45%,transparent)] px-5 py-3.5">
+              <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-field)_45%,transparent)] px-5 py-3.5">
                 <div
                   className="min-w-0 flex-1 basis-full text-[11px] leading-relaxed text-[var(--text-muted)] lg:basis-0"
                   role="status"
@@ -860,7 +860,7 @@ function FileRow({ file, t }: { file: Change; t: Translate }) {
       <File size={13} className="shrink-0 text-[var(--text-faint)]" />
       <span
         className={`min-w-0 shrink truncate text-[12px] ${
-          file.change === 'deleted' ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-dim)]'
+          file.change === 'deleted' ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-muted)]'
         }`}
       >
         {name}
@@ -963,7 +963,7 @@ function Ask({
                 onKeyDown={(e) => {
                   if (e.key !== 'Escape') e.stopPropagation();
                 }}
-                className="h-8 w-full rounded-lg bg-[var(--surface-2)] px-2.5 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)]"
+                className="h-8 w-full rounded-lg bg-[var(--bg-field)] px-2.5 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)]"
               />
             </form>
           ) : null}

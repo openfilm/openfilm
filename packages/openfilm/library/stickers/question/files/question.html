@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Question mark</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #ffd60a; }
+svg { width: 100vw; height: 100vh; display: block; overflow: visible; }
+svg { filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+text { font: 400 300px 'Arial Black', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; fill: var(--color); stroke: #ffffff; stroke-width: 12px; stroke-linejoin: round; paint-order: stroke; }
+.in { transform-origin: 150px 360px; animation: in 0.55s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes in { 0% { transform: scale(0) rotate(-40deg); } 55% { transform: scale(1.15) rotate(10deg); } 80% { transform: scale(0.96) rotate(-3deg); } 100% { transform: none; } }
+.w { transform-origin: 150px 360px; animation: w 1.8s ease-in-out 0.55s infinite; }
+@keyframes w { 25% { transform: rotate(-9deg); } 75% { transform: rotate(9deg); } }
+.sm { animation: sm 0.45s cubic-bezier(.34, 1.56, .64, 1) var(--d) both, f 1.6s ease-in-out calc(var(--d) + 0.5s) infinite; }
+@keyframes sm { from { transform: scale(0); opacity: 0; } }
+@keyframes f { 50% { transform: translateY(-10px); } }
+.sm text { font-size: 96px; stroke-width: 8px; }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 300 400">
+<g transform="translate(54 120) rotate(-16)"><g class="sm" style="--d: 0.25s"><text x="0" y="0" text-anchor="middle">?</text></g></g>
+<g transform="translate(256 96) rotate(14)"><g class="sm" style="--d: 0.36s"><text x="0" y="0" text-anchor="middle">?</text></g></g>
+<g class="in"><g class="w"><text x="156" y="350" text-anchor="middle">?</text></g></g>
+</svg>
+<script>
+/*
+ * A big question mark that pops in tilting, two small ones after it, and keeps wondering from side to side. Its
+ * color is the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS
+ * animations are held at t by the host.
+ */
+window.film = { width: 300, height: 400, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

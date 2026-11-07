@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyOps } from '../../../server/ops.mjs';
 import type { Op } from '../api.ts';
-import { cutPoints, namedTrack, nextCut, planNudge, sideTargets, splitAllTargets, splitTargets, trackNamesOf } from './timeline-nav.ts';
+import { cutPoints, nextCut, planNudge, sideTargets, splitAllTargets, splitTargets } from './timeline-nav.ts';
 import type { EditTrack } from './timeline-edit.ts';
 import type { TimelineBlock, TimelineTrack } from './timeline-layout';
 
@@ -85,24 +85,4 @@ test('⌥ → moves the selection a frame, on the frame grid, stopping against a
   /* a locked track does not move */
   const locked: EditTrack[] = [{ index: 0, locked: true, clips: [clip('a', 1, 2)] }];
   assert.equal(planNudge(locked, ['a'], 1), null);
-});
-
-test('a track\'s name follows its clips when tracks move, and its place when it has none', () => {
-  const tracks = [{ clips: [{ id: 'a' }, { id: 'b' }] }, { clips: [] }, { clips: [{ id: 'm' }] }];
-  let saved = namedTrack([], tracks, 0, 'Picture');
-  saved = namedTrack(saved, tracks, 1, 'Empty');
-  saved = namedTrack(saved, tracks, 2, 'Music');
-  assert.deepEqual([...trackNamesOf(saved, tracks)].sort(), [[0, 'Picture'], [1, 'Empty'], [2, 'Music']]);
-  /* the music track moved to the top, a new track opened under it */
-  const moved = [{ clips: [{ id: 'm' }] }, { clips: [] }, { clips: [{ id: 'a' }, { id: 'b' }] }, { clips: [] }];
-  const now = trackNamesOf(saved, moved);
-  assert.equal(now.get(0), 'Music');
-  assert.equal(now.get(2), 'Picture');
-  assert.equal(now.get(1), 'Empty');
-  /* renamed, and a name taken away */
-  saved = namedTrack(saved, tracks, 0, 'Main');
-  assert.equal(trackNamesOf(saved, tracks).get(0), 'Main');
-  assert.equal(saved.filter((s) => s.name === 'Picture').length, 0);
-  saved = namedTrack(saved, tracks, 2, '  ');
-  assert.equal(trackNamesOf(saved, tracks).has(2), false);
 });

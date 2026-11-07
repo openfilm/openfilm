@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/manual/media",
+  "order": 2,
+  "icon": "music",
+  "title": {
+    "en": "Media",
+    "zh-CN": "素材",
+    "ja": "素材",
+    "ko": "소재",
+    "es": "Medios"
+  },
+  "summary": {
+    "en": "Music, sounds, effects and templates from the library; voice-over, pictures, video and transcripts made for the film.",
+    "zh-CN": "素材库里的音乐、音效、特效和模板，以及为片子生成配音、图片、视频和字幕。",
+    "ja": "ライブラリの音楽、効果音、エフェクト、テンプレート。映画のためのナレーション、画像、動画、文字起こしの生成。",
+    "ko": "라이브러리의 음악, 효과음, 효과, 템플릿. 영상을 위한 내레이션, 이미지, 동영상, 자막 생성.",
+    "es": "Música, sonidos, efectos y plantillas de la biblioteca; voz en off, imágenes, vídeo y transcripciones hechos para el vídeo."
+  },
+  "details": {
+    "zh-CN": "什么时候用：要加音乐、音效、转场、特效、滤镜、贴纸、文字动画或模板，或者要生成配音、图片、视频、字幕、上网查资料的时候。\n它教什么：先在 OpenFilm 自带的素材库里找（免费、离线、CC0 可商用）；库里没有合适的，再用你在设置里连接的生成服务；拿到的素材都放进项目的 assets 文件夹。\n关掉后：智能体不知道有素材库和这些服务，会自己用代码画或到网上随便找，效果和速度都会差。",
+    "en": "When it is used: when music, a sound effect, a transition, an effect, a filter, a sticker, a text animation or a template goes in, or when voice-over, pictures, video or captions are made, or the web is searched.\nWhat it teaches: to look in OpenFilm's own library first (free, offline, CC0); when nothing there fits, to use the services you connected in Settings; and to keep what it gets in the project's assets folder.\nTurned off: agents don't know about the library or these services, and draw things in code or take whatever they find online, slower and worse.",
+    "ja": "使うとき：音楽・効果音・トランジション・エフェクト・フィルター・ステッカー・テキストアニメーション・テンプレートを入れるとき、またはナレーション・画像・動画・字幕を作るとき、Web で調べるとき。\n教えること：まず OpenFilm 付属の素材ライブラリ（無料・オフライン・CC0）から探すこと、合うものがなければ設定でつないだ生成サービスを使うこと、手に入れた素材はプロジェクトの assets フォルダに置くこと。\nオフにすると：エージェントはライブラリもサービスも知らず、コードで描いたりネットで適当に探したりするため、仕上がりも速さも落ちます。",
+    "ko": "언제 쓰나요: 음악, 효과음, 전환, 효과, 필터, 스티커, 텍스트 애니메이션, 템플릿을 넣을 때, 또는 내레이션·이미지·영상·자막을 만들거나 웹을 검색할 때.\n무엇을 알려 주나요: 먼저 OpenFilm 기본 소재 라이브러리(무료, 오프라인, CC0)에서 찾고, 맞는 것이 없으면 설정에서 연결한 생성 서비스를 쓰며, 가져온 소재는 프로젝트의 assets 폴더에 두는 것.\n끄면: 에이전트가 라이브러리와 서비스를 몰라 코드로 그리거나 인터넷에서 아무거나 가져오게 되어, 결과도 속도도 나빠집니다.",
+    "es": "Cuándo se usa: cuando entra música, un efecto de sonido, una transición, un efecto, un filtro, un sticker, una animación de texto o una plantilla, o cuando se hacen voz en off, imágenes, vídeo o subtítulos, o se busca en la web.\nQué enseña: a buscar primero en la biblioteca de OpenFilm (gratis, sin conexión, CC0); si nada encaja, a usar los servicios que conectaste en Ajustes; y a guardar lo que obtiene en la carpeta assets del proyecto.\nSi se desactiva: los agentes no conocen la biblioteca ni esos servicios, y dibujan con código o toman lo primero que encuentran en internet, más lento y peor."
+  }
+}

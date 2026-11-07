@@ -1,0 +1,145 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fireworks</title>
+<style>
+  /* what a clip of it may change: how many shells go up (0 to 1), how fast the show runs */
+  :root { --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Fireworks over the picture: shells climb on a sparking trail, burst white-hot, then open into colored stars that
+ * slow in the air and droop, trailing light; peonies, rings, golden willows that hang and fall, and strobing stars
+ * that crackle as they die. Each burst lights the sky for a moment. Every star's place is closed-form in t (launch,
+ * drag, gravity), and shells fired before t = 0 are already open at the start. A page of OpenFilm's library (CC0).
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+const sprites = new Map();
+function sprite(c) {
+  const key = c.join();
+  if (sprites.has(key)) return sprites.get(key);
+  const g = document.createElement('canvas'); g.width = g.height = 64;
+  const x = g.getContext('2d'), r = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.15, `rgba(${c},0.95)`); r.addColorStop(0.4, `rgba(${c},0.25)`); r.addColorStop(1, `rgba(${c},0)`);
+  x.fillStyle = r; x.fillRect(0, 0, 64, 64);
+  sprites.set(key, g);
+  return g;
+}
+const COLORS = [[255, 80, 90], [255, 200, 80], [90, 200, 255], [170, 110, 255], [120, 255, 160], [255, 120, 210], [255, 255, 255]];
+const GOLD = [255, 190, 90];
+const P = 0.58, RISE = 1.0, K = 2.6;
+function shell(k, t, w, h, u, amount) {
+  const r = (q) => hash(k * 311.7 + q * 17.3);
+  if (r(0) > amount) return;
+  const t0 = k * P + r(1) * 0.35, tau = t - t0;
+  const type = r(2) < 0.38 ? 'peony' : r(2) < 0.58 ? 'willow' : r(2) < 0.76 ? 'ring' : 'strobe';
+  const life = type === 'willow' ? 3.2 : 2.2;
+  if (tau < 0 || tau > RISE + life) return;
+  const bx = w * (0.14 + 0.72 * r(3)), by = h * (0.14 + 0.32 * r(4)), sx = bx + (r(5) - 0.5) * w * 0.08;
+  const c = type === 'willow' ? GOLD : COLORS[(((Math.floor(r(6) * COLORS.length) + k * 3) % COLORS.length) + COLORS.length) % COLORS.length];
+  const c2 = COLORS[Math.floor(r(7) * COLORS.length)];
+  const size = Math.max(w, h) * (0.15 + 0.11 * r(8)) * (type === 'ring' ? 0.85 : 1);
+  if (tau < RISE) {
+    // the climb: fast, slowing near the top, a spark at its head and a fading trail behind
+    const e = (s) => 1 - Math.pow(1 - s, 2.4);
+    const at = (s) => [sx + (bx - sx) * e(s), h + 2 * u + (by - h - 2 * u) * e(s)];
+    const s = tau / RISE;
+    for (let j = 0; j < 10; j++) {
+      const q = Math.max(0, s - j * 0.018), [x, y] = at(q);
+      ctx.globalAlpha = (1 - j / 10) * 0.8;
+      const d = (1.6 - j * 0.1) * u;
+      ctx.drawImage(sprite(GOLD), x - d, y - d, d * 2, d * 2);
+    }
+    // a few sparks falling off the trail
+    for (let j = 0; j < 8; j++) {
+      const q = Math.max(0, s - hash(k + j * 3.1) * 0.25), [x, y] = at(q), age = (s - q) * RISE;
+      ctx.globalAlpha = Math.max(0, 0.7 - age * 2.5);
+      const d = 0.7 * u;
+      ctx.drawImage(sprite(GOLD), x + (hash(k * 3 + j) - 0.5) * age * 8 * u - d, y + age * age * 30 * u - d, d * 2, d * 2);
+    }
+    ctx.globalAlpha = 1;
+    return;
+  }
+  const b = tau - RISE;
+  // the flash that lights the sky
+  if (b < 0.6) {
+    const f = Math.exp(-b * 7), R = size * 2.2;
+    const g = ctx.createRadialGradient(bx, by, 0, bx, by, R);
+    g.addColorStop(0, `rgba(${c.map((v) => Math.round(v * 0.5 + 127))},${0.55 * f})`); g.addColorStop(0.3, `rgba(${c},${0.16 * f})`); g.addColorStop(1, `rgba(${c},0)`);
+    ctx.fillStyle = g; ctx.fillRect(bx - R, by - R, 2 * R, 2 * R);
+  }
+  const n = type === 'ring' ? 64 : type === 'willow' ? 90 : 120;
+  const term = type === 'willow' ? h * 0.16 : h * 0.07;
+  const fade = Math.pow(Math.max(0, 1 - b / life), type === 'willow' ? 0.8 : 1.4);
+  const pos = (vx, vy, s) => { const e = 1 - Math.exp(-K * s); return [bx + vx / K * e, by + (vy - term) / K * e + term * s]; };
+  const ringTilt = r(9) * Math.PI, ringFlat = 0.35 + 0.4 * r(10);
+  for (let i = 0; i < n; i++) {
+    const q = (z) => hash(k * 97.1 + i * 3.71 + z);
+    let vx, vy;
+    if (type === 'ring') {
+      const a = i / n * Math.PI * 2, x = Math.cos(a), y = Math.sin(a) * ringFlat;
+      vx = (x * Math.cos(ringTilt) - y * Math.sin(ringTilt)) * size * K; vy = (x * Math.sin(ringTilt) + y * Math.cos(ringTilt)) * size * K;
+    } else {
+      // a point on a sphere, seen from the front: dense in the middle, like a real shell
+      const z = q(1) * 2 - 1, a = q(2) * Math.PI * 2, rr = Math.sqrt(1 - z * z) * (0.85 + 0.15 * q(3));
+      vx = Math.cos(a) * rr * size * K; vy = Math.sin(a) * rr * size * K;
+    }
+    const col = type === 'peony' && q(4) > 0.6 ? c2 : c;
+    // strobes and dying willows crackle: on and off in a hash of the moment
+    let a = fade;
+    if (type === 'strobe' && b > 0.5) a *= hash(Math.floor(t * 20) * 1.3 + i) > 0.45 ? 1 : 0.08;
+    if (b > life * 0.7 && q(5) > 0.5) a *= hash(Math.floor(t * 24) + i * 7) > 0.5 ? 1.3 : 0.2;
+    if (a <= 0.01) continue;
+    // the trail: the star's path a moment ago, fading behind it
+    const trail = type === 'willow' ? 0.5 : 0.22;
+    let [px, py] = pos(vx, vy, b);
+    ctx.lineCap = 'round';
+    for (let j = 1; j <= 5; j++) {
+      const [x2, y2] = pos(vx, vy, Math.max(0, b - trail * j / 5));
+      ctx.strokeStyle = `rgba(${col},${a * 0.55 * (1 - j / 6)})`;
+      ctx.lineWidth = (type === 'willow' ? 0.45 : 0.55) * u * (1 - j / 7);
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(x2, y2); ctx.stroke();
+      px = x2; py = y2;
+    }
+    const [x, y] = pos(vx, vy, b);
+    const hot = b < 0.12 ? [255, 255, 255] : col;
+    const d = (type === 'willow' ? 1.3 : 1.8) * u * (0.6 + 0.4 * fade);
+    ctx.globalAlpha = Math.min(1, a);
+    ctx.drawImage(sprite(hot), x - d, y - d, d * 2, d * 2);
+    ctx.globalAlpha = 1;
+  }
+}
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = Math.max(0, Math.min(1, num('--amount', 1))), tt = t * Math.max(0.1, num('--speed', 1)) + 2.2;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let k = Math.floor((tt - RISE - 3.6) / P); k <= Math.floor(tt / P); k++) shell(k, tt, w, h, u, amount);
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

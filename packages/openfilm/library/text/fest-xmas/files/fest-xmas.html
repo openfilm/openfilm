@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Merry Christmas</title>
+<style>
+:root { --font: 'Snell Roundhand', 'Segoe Script', 'Brush Script MT', 'Kaiti SC', 'STKaiti', 'KaiTi', cursive; --color: #ffffff; --tree: #1f9d5a; --star: #ffd34d; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6vh; font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; color: var(--color); }
+.snow { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.snow i { position: absolute; top: -4vh; border-radius: 50%; background: #fff; animation: fall linear infinite; }
+.tr { position: relative; width: 62vh; height: 84vh; flex: none; }
+.tr b { position: absolute; left: 50%; background: var(--tree); clip-path: polygon(50% 0, 100% 100%, 0 100%); transform-origin: 50% 100%; animation: grow 0.55s cubic-bezier(0.3, 1.6, 0.5, 1) both; }
+.tr b:nth-of-type(1) { width: 62vh; height: 34vh; margin-left: -31vh; top: 42vh; }
+.tr b:nth-of-type(2) { width: 50vh; height: 30vh; margin-left: -25vh; top: 24vh; animation-delay: 0.1s; }
+.tr b:nth-of-type(3) { width: 36vh; height: 24vh; margin-left: -18vh; top: 9vh; animation-delay: 0.2s; }
+.tr .trunk { position: absolute; left: 50%; top: 76vh; width: 10vh; height: 8vh; margin-left: -5vh; background: #7a4a2a; border-radius: 0 0 1vh 1vh; }
+.tr .star { position: absolute; left: 50%; top: 0; width: 16vh; height: 16vh; margin: -6vh 0 0 -8vh; background: var(--star); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); animation: star 0.6s 0.4s cubic-bezier(0.3, 1.8, 0.5, 1) both, twinkle 1.6s 1.1s ease-in-out infinite; filter: drop-shadow(0 0 2vh var(--star)); }
+.tr .lt { position: absolute; width: 3.4vh; height: 3.4vh; border-radius: 50%; animation: on 0.3s steps(1) both, blink 1.2s ease-in-out infinite; }
+.tx { display: flex; flex-direction: column; align-items: flex-start; }
+.t1 { font: 400 18vh/1.05 var(--font); white-space: pre; text-shadow: 0 1vh 3vh rgba(0, 0, 0, 0.45); -webkit-mask-image: linear-gradient(90deg, #000 45%, transparent 55%); mask-image: linear-gradient(90deg, #000 45%, transparent 55%); -webkit-mask-size: 220% 100%; mask-size: 220% 100%; animation: write 1.2s 0.3s cubic-bezier(0.3, 0.1, 0.3, 1) both; }
+.t2 { margin: 2vh 0 0 2vh; font-size: 6vh; font-weight: 600; letter-spacing: 0.3em; white-space: pre; opacity: 0.9; animation: rise 0.6s 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes fall { from { transform: translate(0, 0); } to { transform: translate(6vh, 108vh); } }
+@keyframes grow { from { transform: scale(0); } }
+@keyframes star { from { transform: scale(0) rotate(-144deg); } }
+@keyframes twinkle { 50% { scale: 1.12; filter: drop-shadow(0 0 4vh var(--star)); } }
+@keyframes on { from { opacity: 0; } }
+@keyframes blink { 50% { filter: brightness(1.6); transform: scale(1.25); } }
+@keyframes write { from { -webkit-mask-position: 100% 0; mask-position: 100% 0; } to { -webkit-mask-position: 0 0; mask-position: 0 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(3vh); } }
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="snow"><i style="left: 81.9%; width: 1.3vh; height: 1.3vh; animation-duration: 5.7s; animation-delay: -2.1s; opacity: 0.76"></i><i style="left: 10.5%; width: 2.0vh; height: 2.0vh; animation-duration: 3.4s; animation-delay: -2.1s; opacity: 0.80"></i><i style="left: 80.0%; width: 1.2vh; height: 1.2vh; animation-duration: 5.2s; animation-delay: -2.2s; opacity: 0.86"></i><i style="left: 63.0%; width: 1.8vh; height: 1.8vh; animation-duration: 3.3s; animation-delay: -0.3s; opacity: 0.61"></i><i style="left: 77.9%; width: 2.9vh; height: 2.9vh; animation-duration: 4.8s; animation-delay: -4.0s; opacity: 0.97"></i><i style="left: 56.2%; width: 1.6vh; height: 1.6vh; animation-duration: 4.2s; animation-delay: -1.7s; opacity: 0.66"></i><i style="left: 98.2%; width: 1.3vh; height: 1.3vh; animation-duration: 4.0s; animation-delay: -1.9s; opacity: 0.76"></i><i style="left: 91.8%; width: 2.0vh; height: 2.0vh; animation-duration: 4.0s; animation-delay: -4.3s; opacity: 0.86"></i><i style="left: 82.2%; width: 2.0vh; height: 2.0vh; animation-duration: 5.3s; animation-delay: -2.5s; opacity: 0.97"></i><i style="left: 94.9%; width: 2.8vh; height: 2.8vh; animation-duration: 4.7s; animation-delay: -0.1s; opacity: 0.90"></i><i style="left: 75.0%; width: 2.2vh; height: 2.2vh; animation-duration: 3.9s; animation-delay: -0.6s; opacity: 0.91"></i><i style="left: 65.0%; width: 2.5vh; height: 2.5vh; animation-duration: 3.3s; animation-delay: -4.4s; opacity: 0.62"></i><i style="left: 20.6%; width: 1.5vh; height: 1.5vh; animation-duration: 3.3s; animation-delay: -1.4s; opacity: 0.54"></i><i style="left: 93.6%; width: 2.7vh; height: 2.7vh; animation-duration: 5.6s; animation-delay: -3.8s; opacity: 0.59"></i><i style="left: 12.1%; width: 2.4vh; height: 2.4vh; animation-duration: 3.4s; animation-delay: -2.4s; opacity: 0.88"></i><i style="left: 83.0%; width: 2.5vh; height: 2.5vh; animation-duration: 4.6s; animation-delay: -0.7s; opacity: 0.55"></i><i style="left: 17.3%; width: 2.8vh; height: 2.8vh; animation-duration: 4.5s; animation-delay: -0.7s; opacity: 0.59"></i><i style="left: 6.7%; width: 2.4vh; height: 2.4vh; animation-duration: 4.6s; animation-delay: -0.6s; opacity: 0.74"></i><i style="left: 94.5%; width: 1.4vh; height: 1.4vh; animation-duration: 3.8s; animation-delay: -4.4s; opacity: 0.78"></i><i style="left: 19.9%; width: 2.1vh; height: 2.1vh; animation-duration: 4.1s; animation-delay: -2.2s; opacity: 0.63"></i><i style="left: 72.8%; width: 2.8vh; height: 2.8vh; animation-duration: 5.4s; animation-delay: -4.3s; opacity: 0.90"></i><i style="left: 10.7%; width: 2.5vh; height: 2.5vh; animation-duration: 3.1s; animation-delay: -2.6s; opacity: 0.94"></i><i style="left: 39.3%; width: 2.8vh; height: 2.8vh; animation-duration: 5.5s; animation-delay: -1.6s; opacity: 0.82"></i><i style="left: 85.1%; width: 1.2vh; height: 1.2vh; animation-duration: 3.2s; animation-delay: -3.0s; opacity: 0.55"></i><i style="left: 22.8%; width: 1.5vh; height: 1.5vh; animation-duration: 4.1s; animation-delay: -4.5s; opacity: 0.53"></i><i style="left: 53.3%; width: 2.5vh; height: 2.5vh; animation-duration: 4.2s; animation-delay: -2.1s; opacity: 0.75"></i><i style="left: 58.4%; width: 1.7vh; height: 1.7vh; animation-duration: 4.1s; animation-delay: -0.5s; opacity: 0.94"></i><i style="left: 49.0%; width: 2.4vh; height: 2.4vh; animation-duration: 5.6s; animation-delay: -5.5s; opacity: 0.72"></i><i style="left: 5.4%; width: 2.8vh; height: 2.8vh; animation-duration: 5.5s; animation-delay: -2.0s; opacity: 0.57"></i><i style="left: 5.7%; width: 2.8vh; height: 2.8vh; animation-duration: 4.4s; animation-delay: -5.2s; opacity: 0.56"></i><i style="left: 29.1%; width: 1.8vh; height: 1.8vh; animation-duration: 5.5s; animation-delay: -2.9s; opacity: 0.88"></i><i style="left: 63.4%; width: 2.9vh; height: 2.9vh; animation-duration: 6.0s; animation-delay: -0.3s; opacity: 0.92"></i><i style="left: 4.0%; width: 2.8vh; height: 2.8vh; animation-duration: 4.4s; animation-delay: -0.0s; opacity: 0.66"></i><i style="left: 36.0%; width: 3.0vh; height: 3.0vh; animation-duration: 3.5s; animation-delay: -4.2s; opacity: 0.73"></i></div>
+  <div class="tr"><b></b><b></b><b></b><i class="trunk"></i><i class="star"></i><i class="lt" style="left: 26vh; top: 26vh; background: #ffd34d; animation-delay: 0.50s, 0.80s"></i><i class="lt" style="left: 34vh; top: 40vh; background: #ff5a5f; animation-delay: 0.60s, 0.90s"></i><i class="lt" style="left: 18vh; top: 48vh; background: #7cd3ff; animation-delay: 0.70s, 1.00s"></i><i class="lt" style="left: 40vh; top: 58vh; background: #ffd34d; animation-delay: 0.80s, 1.10s"></i><i class="lt" style="left: 12vh; top: 66vh; background: #ff5a5f; animation-delay: 0.90s, 1.20s"></i><i class="lt" style="left: 28vh; top: 68vh; background: #ffffff; animation-delay: 1.00s, 1.30s"></i><i class="lt" style="left: 46vh; top: 70vh; background: #7cd3ff; animation-delay: 1.10s, 1.40s"></i></div>
+  <div class="tx"><span class="t1">Merry Christmas</span><span class="t2">AND A WARM NEW YEAR</span></div>
+</div>
+<script>
+/*
+ * A simple tree of stacked triangles with a star and lights, a greeting written in script beside it, snow falling.
+ * A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by
+ * the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

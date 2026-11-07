@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentSession, CLIENT_CAPABILITIES, agentDefaults, closeEverySession, planProblem, probeFolder, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, distinctOptions, errorCause, legacyOptions, optionsForModel, powerShellScript, powerShellLine, powerShellWindowLaunch, terminalScript, checkAgentProgram, readAgentStatus, setChosenPaths, signInScript, turnError, signInError, codexTooOld, ANTIGRAVITY_TESTED, antigravityTooOld, AGENTS, ownSignIn, codexServiceError, codexRefusal, codexNotice, explainFailure, stderrReason, withToolKind, OWN_GROUP, stopTree, winArg, CLAUDE_TESTED, claudeOutdated } from './agents.mjs';
+import { AgentSession, CLIENT_CAPABILITIES, INSTRUCTIONS, agentDefaults, agentInstructions, closeEverySession, planProblem, probeFolder, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, codexSessionConfig, distinctOptions, errorCause, legacyOptions, optionsForModel, powerShellScript, powerShellLine, powerShellWindowLaunch, terminalScript, checkAgentProgram, readAgentStatus, setChosenPaths, signInScript, turnError, signInError, codexTooOld, ANTIGRAVITY_TESTED, antigravityTooOld, AGENTS, ownSignIn, codexServiceError, codexRefusal, codexNotice, explainFailure, stderrReason, withToolKind, OWN_GROUP, stopTree, winArg, CLAUDE_TESTED, claudeOutdated } from './agents.mjs';
 import { spawn } from 'node:child_process';
 import { acpSignedIn, signOutAgent } from './agents.mjs';
+import { openfilmCommand } from './openfilm-command.mjs';
 
 test('a fresh sign-in check bypasses a cached signed-out result and shares the pending probe', async () => {
   const { mkdtempSync, readFileSync, writeFileSync, rmSync } = await import('node:fs');
@@ -219,6 +220,24 @@ test("the person's own developer_instructions in Codex's config, read as TOML wr
   assert.equal(codexDeveloperInstructions('[profiles.work]\ndeveloper_instructions = "not at the top"\n'), null);
   assert.equal(codexDeveloperInstructions('model = "gpt"\n'), null);
   assert.equal(codexDeveloperInstructions(''), null);
+});
+
+test("an agent is told to run the app's openfilm by its whole path: its shell may find another one first on the PATH", () => {
+  const command = openfilmCommand('/Users/me/Library/Application Support/OpenFilm/bin', 'darwin');
+  assert.equal(command, "'/Users/me/Library/Application Support/OpenFilm/bin/openfilm'", 'quoted, for the space in it');
+  const told = agentInstructions(command);
+  for (const run of [`\`${command}\` with no arguments`, `\`${command} open\``, `\`${command} look\``]) assert.ok(told.includes(run), run);
+  assert.match(told, /not as `openfilm` \(your shell may find another one first\)/);
+  assert.ok(!told.includes('on your PATH'));
+  assert.equal(openfilmCommand('C:\\Users\\me\\AppData\\Roaming\\OpenFilm\\bin', 'win32'), null, 'on Windows the name on the PATH');
+  assert.equal(agentInstructions(null), INSTRUCTIONS);
+  assert.match(INSTRUCTIONS, /Use the `openfilm` command on your PATH/);
+});
+
+test("Codex keeps the session's PATH for each command, the app's openfilm first, after the person's own instructions", () => {
+  const config = codexSessionConfig('Told.', { theirs: 'Be brief.', path: '/app/bin:/usr/bin', platform: 'darwin' });
+  assert.deepEqual(config, { developer_instructions: 'Be brief.\n\nTold.', 'shell_environment_policy.set.PATH': '/app/bin:/usr/bin' });
+  assert.deepEqual(codexSessionConfig('Told.', { path: 'C:\\app\\bin;C:\\Windows', platform: 'win32' }), { developer_instructions: 'Told.' });
 });
 
 test('the chat says it shows notices, so an agent sends its warnings as notices and not as words in its reply', async () => {

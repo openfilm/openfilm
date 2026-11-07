@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "lower-vlog.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Name\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Tag\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Pill\", \"type\": \"var\", \"var\": \"--pill\"}]"
+    }
+  },
+  "durationMs": 4000
+}

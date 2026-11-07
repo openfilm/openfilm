@@ -235,11 +235,11 @@ export function ModelPopover({ placement = 'bottom', align = 'start', agent: con
           <button type="button" onMouseDown={keepFocus}
             className="group inline-flex h-8 max-w-full items-center rounded-full px-2 text-[12.5px] font-medium transition hover:bg-[var(--bg-hover)]">
             <span className="inline-flex min-w-0 max-w-[190px] items-center gap-1.5 truncate whitespace-nowrap">
-              <span className="shrink-0 text-[var(--text-dim)]"><ChatAgentIcon id={agent} size={13} /></span>
-              <span className="truncate text-[var(--text-dim)] transition group-hover:text-[var(--text)]">
+              <span className="shrink-0 text-[var(--text-muted)]"><ChatAgentIcon id={agent} size={13} /></span>
+              <span className="truncate text-[var(--text-muted)] transition group-hover:text-[var(--text)]">
                 {(ready(agent) && triggerModel) || (current ? nameOf(current) : t('composer.agentNone'))}
               </span>
-              {ready(agent) && triggerEffort ? <span className="text-[var(--text-muted)] transition group-hover:text-[var(--text-dim)]">{triggerEffort}</span> : null}
+              {ready(agent) && triggerEffort ? <span className="text-[var(--text-muted)] transition group-hover:text-[var(--text-muted)]">{triggerEffort}</span> : null}
             </span>
           </button>
         </Tooltip>
@@ -304,7 +304,7 @@ export function ModelPopover({ placement = 'bottom', align = 'start', agent: con
                   onClick={() => showSide(o.id)}
                   className={`${ROW_BASE} ${side === o.id ? 'bg-[var(--bg-hover)]' : 'hover:bg-[var(--bg-hover)]'}`}>
                   <span className="shrink-0 text-[var(--text)]">{rowLabel(o)}</span>
-                  <span className="min-w-0 flex-1 truncate text-right text-[var(--text-dim)]">{valueOf(o)}</span>
+                  <span className="min-w-0 flex-1 truncate text-right text-[var(--text-muted)]">{valueOf(o)}</span>
                   <ChevronRight size={12} className="shrink-0 text-[var(--text-faint)]" />
                 </button>
               </React.Fragment>

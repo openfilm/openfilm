@@ -281,6 +281,25 @@ test('which Codex a program is: npm\'s package, Homebrew\'s folder, else what it
   assert.equal(codexVersion(join(home, 'gone')), null);
 });
 
+test("a Codex inside an app says its version when asked, not the old label the app keeps around it (issue #290)", () => {
+  const home = mkdtempSync(join(tmpdir(), 'of-home-'));
+  /* the copy the Codex app runs, with an npm-style package.json left beside it naming an older build */
+  const beside = join(home, 'Applications', 'Codex.app', 'Contents', 'Resources', 'codex-cli');
+  put(join(beside, 'package.json'), JSON.stringify({ name: '@openai/codex', version: '0.137.0' }));
+  const inApp = put(join(beside, 'bin', 'codex'));
+  assert.equal(codexVersion(inApp, { ask: () => '0.165.0' }), '0.165.0', "the program's own words, not the label");
+  /* an app copy that cannot be asked falls back to the label rather than nothing */
+  const quiet = put(join(beside, 'bin', 'codex-quiet'));
+  utimesSync(quiet, new Date(0), new Date(0));
+  assert.equal(codexVersion(quiet, { ask: () => null }), '0.137.0', 'the label when the program says nothing');
+  /* outside an app, the label keeps saying it without asking: npm's own package */
+  const npm = put(join(home, 'npm', 'codex.js'));
+  put(join(home, 'npm', 'package.json'), JSON.stringify({ name: '@openai/codex', version: '0.42.0' }));
+  let askedOutside = 0;
+  assert.equal(codexVersion(npm, { ask: () => { askedOutside += 1; return '9.9.9'; } }), '0.42.0', 'the package.json, not asked');
+  assert.equal(askedOutside, 0, 'never asked outside an app while the label answers');
+});
+
 test('Codex installed long ago beside the copy an app keeps up to date: the later one is used', () => {
   if (process.platform === 'win32') return;
   const home = mkdtempSync(join(tmpdir(), 'of-home-'));

@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Follow</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #fe2c55; }
+.w { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.btn { position: relative; display: flex; align-items: center; gap: 2.6vw; height: 50vh; padding: 0 7vw 0 5.5vw; border-radius: 25vh; background: var(--color); animation: pop 0.45s cubic-bezier(.34, 1.56, .64, 1) both, press 0.3s ease-in-out 0.75s forwards, done 0.3s ease 0.85s both; }
+@keyframes pop { from { transform: scale(0.3); opacity: 0; } 40% { opacity: 1; } }
+@keyframes press { 40% { transform: scale(0.92); } }
+@keyframes done { to { background: #ffffff; } }
+.ic { position: relative; width: 22vh; height: 22vh; }
+.ic svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ic path { fill: none; stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; }
+.plus { stroke: #ffffff; animation: turn 0.35s ease-in 0.85s both; }
+@keyframes turn { to { transform: rotate(90deg) scale(0); opacity: 0; } }
+.tick { stroke: var(--color); stroke-dasharray: 1 2; stroke-dashoffset: 1.01; opacity: 0; animation: tick 0.35s cubic-bezier(.2, .8, .2, 1) 1.05s both; }
+@keyframes tick { from { opacity: 0; } 1% { opacity: 1; } to { stroke-dashoffset: 0; opacity: 1; } }
+.t { display: grid; }
+.t > div { grid-area: 1 / 1; font: 800 21vh var(--font); white-space: nowrap; }
+.label { color: #ffffff; animation: out 0.2s ease 0.85s both; }
+.label2 { color: #16161a; opacity: 0; animation: in2 0.3s cubic-bezier(.2, .8, .2, 1) 0.95s both; }
+@keyframes out { to { opacity: 0; transform: translateY(-30%); } }
+@keyframes in2 { from { opacity: 0; transform: translateY(30%); } to { opacity: 1; transform: none; } }
+.rip { position: absolute; left: 70%; top: 50%; width: 30vh; height: 30vh; margin: -15vh; border-radius: 50%; background: rgba(255, 255, 255, 0.55); opacity: 0; animation: rip 0.6s cubic-bezier(.2, .8, .2, 1) 0.75s both; }
+@keyframes rip { from { transform: scale(0); opacity: 1; } to { transform: scale(4); opacity: 0; } }
+.btn { overflow: hidden; }
+</style>
+</head>
+<body>
+<div class="w"><div class="btn">
+<div class="rip"></div>
+<div class="ic"><svg viewBox="-50 -50 100 100"><path class="plus" d="M0 -34 L0 34 M-34 0 L34 0"/><path class="tick" pathLength="1" d="M-32 2 L-10 24 L32 -22"/></svg></div>
+<div class="t"><div class="label">Follow</div><div class="label2">Following</div></div>
+</div></div>
+<script>
+/*
+ * A follow button: it pops in, is tapped with a ripple, and its plus turns over into a tick as it becomes following.
+ * Its words and color are the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t
+ * alone; its CSS animations are held at t by the host.
+ */
+window.film = { width: 460, height: 180, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

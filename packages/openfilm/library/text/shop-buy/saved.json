@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "shop-buy.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Button\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Color from\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Color to\", \"type\": \"var\", \"var\": \"--accent2\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 4000
+}

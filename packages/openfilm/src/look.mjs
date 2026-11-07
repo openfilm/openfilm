@@ -7,6 +7,7 @@ import { FrameError, launch, SOFTWARE_GL } from './host.mjs';
 import { LOUDNESS_SLACK, TRUE_PEAK } from './loudness.mjs';
 import { hasAlpha } from './seekable.mjs';
 import { blockDiff, checkSound, cutText, fileOf, ffmpeg, filmSound, fmt, hash, homeFor, locate, mix, open, outDir, parseTarget, SAME_LIMIT, shown, shuffled, spread, UsageError } from './shared.mjs';
+import { sheetTimes } from './samples.mjs';
 import { watch } from './watch.mjs';
 
 const MEDIA = /\.(mp4|mov|m4v|webm|mkv|avi|png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|flac)$/i;
@@ -97,7 +98,7 @@ export async function look(args, opts = {}) {
       if (range && range[1] > dur) warnings.push(`${fmt(range[0])}-${fmt(range[1])} runs past the film's end (${fmt(dur)}): the sheet stops there`);
       const [from, to] = range ? [clamp(range[0]), Math.min(range[1], dur)] : [0, dur];
       const count = Math.max(1, Math.round(opts.count ?? 12));
-      const times = Array.from({ length: count }, (_, i) => clamp(from + ((to - from) * i) / count));
+      const times = sheetTimes(from, to, count).map(clamp);
       // Twice, each time in its own shuffled order, the way a person scrubs: a frame that depends on what was
       // drawn before it shows up as two different pictures.
       const cut = new Map();
@@ -427,7 +428,9 @@ async function lookMedia(target, at, range, opts) {
   } else {
     const [from, to] = range ? [Math.max(0, range[0]), Math.min(range[1], dur)] : [0, dur];
     const count = Math.max(1, Math.round(opts.count ?? 12));
-    const times = video ? Array.from({ length: count }, (_, i) => from + ((to - from) * i) / count) : [];
+    /* ffmpeg has no frame at the file's own end: the last one a sheet can draw is two frames before it */
+    const last = Math.max(from, dur - (fps ? 2 / fps : 0.04));
+    const times = video ? sheetTimes(from, Math.min(to, last), count) : [];
     let wave = null;
     if (audio) {
       const png = join(dir, `.${name}-wave.png`);

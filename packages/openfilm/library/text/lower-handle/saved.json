@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "lower-handle.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Name\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Handle\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Initial\", \"type\": \"text\", \"at\": \".t3\"}, {\"name\": \"Button\", \"type\": \"text\", \"at\": \".t4\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Accent\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Card\", \"type\": \"var\", \"var\": \"--card\"}, {\"name\": \"Text\", \"type\": \"var\", \"var\": \"--ink\"}]"
+    }
+  },
+  "durationMs": 4000
+}

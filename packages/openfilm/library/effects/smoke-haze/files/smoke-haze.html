@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Smoke haze</title>
+<style>
+  /* what a clip of it may change: the smoke's color, how thick it is (0 to 1), how fast it drifts */
+  :root { --color: #e6e8ee; --amount: 0.8; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Smoke haze: wisps of smoke drifting low across the frame and curling as they rise, thick near the ground and
+ * thinning out above. Two layers of seamless noise slide past each other at their own speeds, so the wisps keep
+ * changing shape. A page of OpenFilm's library (CC0): what it shows comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// seamless fractal noise, size × size, values 0..1
+function noise(size, cells, octaves, seed) {
+  const out = new Float32Array(size * size);
+  let amp = 1, total = 0;
+  for (let o = 0; o < octaves; o++) {
+    const n = cells << o, step = size / n;
+    const lattice = new Float32Array(n * n);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) lattice[j * n + i] = hash(seed + o * 101.3 + i * 7.13 + j * 157.9);
+    for (let y = 0; y < size; y++) {
+      const fy = y / step, j0 = Math.floor(fy), ty = fy - j0, sy = ty * ty * (3 - 2 * ty);
+      for (let x = 0; x < size; x++) {
+        const fx = x / step, i0 = Math.floor(fx), tx = fx - i0, sx = tx * tx * (3 - 2 * tx);
+        const a = lattice[(j0 % n) * n + (i0 % n)], b = lattice[(j0 % n) * n + ((i0 + 1) % n)];
+        const c = lattice[((j0 + 1) % n) * n + (i0 % n)], d = lattice[((j0 + 1) % n) * n + ((i0 + 1) % n)];
+        out[y * size + x] += amp * (a + (b - a) * sx + (c - a + (a - b + d - c) * sx) * sy);
+      }
+    }
+    total += amp; amp *= 0.5;
+  }
+  for (let k = 0; k < out.length; k++) out[k] /= total;
+  return out;
+}
+// the noise as wisps: clear where it is low, soft white where it is high
+function wisps(size, cells, seed, lo, hi) {
+  const n = noise(size, cells, 5, seed), g = document.createElement('canvas'); g.width = g.height = size;
+  const x = g.getContext('2d'), img = x.createImageData(size, size);
+  for (let k = 0; k < n.length; k++) {
+    const v = Math.min(1, Math.max(0, (n[k] - lo) / (hi - lo)));
+    img.data[k * 4] = img.data[k * 4 + 1] = img.data[k * 4 + 2] = 255;
+    img.data[k * 4 + 3] = Math.round(255 * v * v * (3 - 2 * v));
+  }
+  x.putImageData(img, 0, 0);
+  return g;
+}
+const A = wisps(256, 3, 1.7, 0.42, 0.78), B = wisps(256, 2, 9.3, 0.3, 0.72), C = wisps(256, 4, 4.1, 0.48, 0.8);
+const layer = document.createElement('canvas'), lx = layer.getContext('2d');
+function sheet(img, scale, ox, oy, w, h) {
+  const p = lx.createPattern(img, 'repeat');
+  p.setTransform(new DOMMatrix().translate(ox, oy).scale(scale));
+  lx.fillStyle = p; lx.fillRect(0, 0, w, h);
+}
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight;
+    const amount = num('--amount', 0.8), speed = num('--speed', 1), c = rgb('--color', '#e6e8ee');
+    const tt = t * speed;
+    // work at half size: smoke is soft anyway
+    const lw = Math.ceil(w / 2), lh = Math.ceil(h / 2);
+    if (layer.width !== lw || layer.height !== lh) { layer.width = lw; layer.height = lh; }
+    const s = Math.max(lw, lh) / 256;
+    // the broad body: wisps cut by a slower second sheet so their shapes keep changing
+    lx.globalCompositeOperation = 'source-over'; lx.clearRect(0, 0, lw, lh);
+    sheet(A, s * 1.6, tt * 14 * s, -tt * 5 * s, lw, lh);
+    lx.globalCompositeOperation = 'destination-in';
+    sheet(B, s * 2.4, -tt * 6 * s, -tt * 9 * s, lw, lh);
+    lx.globalCompositeOperation = 'source-over';
+    lx.globalAlpha = 0.6;
+    sheet(C, s * 1.1, tt * 22 * s, -tt * 12 * s, lw, lh);
+    lx.globalAlpha = 1;
+    // thick near the ground, thin above
+    lx.globalCompositeOperation = 'destination-in';
+    const g = lx.createLinearGradient(0, 0, 0, lh);
+    g.addColorStop(0, 'rgba(0,0,0,0.25)'); g.addColorStop(0.45, 'rgba(0,0,0,0.55)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+    lx.fillStyle = g; lx.fillRect(0, 0, lw, lh);
+    // its color
+    lx.globalCompositeOperation = 'source-in';
+    lx.fillStyle = `rgb(${c})`; lx.fillRect(0, 0, lw, lh);
+    lx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = Math.min(1, amount) * (0.92 + 0.08 * Math.sin(tt * 0.7));
+    ctx.drawImage(layer, 0, 0, w, h);
+    // and a faint even haze over everything
+    const haze = ctx.createLinearGradient(0, 0, 0, h);
+    haze.addColorStop(0, `rgba(${c},${0.04 * amount})`); haze.addColorStop(1, `rgba(${c},${0.16 * amount})`);
+    ctx.globalAlpha = 1; ctx.fillStyle = haze; ctx.fillRect(0, 0, w, h);
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

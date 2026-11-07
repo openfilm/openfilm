@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Speed lines</title>
+<style>
+  /* what a clip of it may change: the lines' color, how many show (0 to 1), how fast they streak */
+  :root { --color: #ffffff; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Comic speed lines: long tapered strokes streaking across the picture, keeping to the top and bottom and leaving the
+ * middle clear, a few dark ones among the light, redrawn twelve times a second like hand-drawn animation. A page of
+ * OpenFilm's library (CC0): every line's place is worked out from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+const N = 170;
+const lines = Array.from({ length: N }, (_, i) => {
+  const r = (k) => hash(i * 13.37 + k);
+  // the lines keep to the top and bottom thirds and leave the middle clear
+  const side = r(1) < 0.5 ? -1 : 1, edge = 0.2 + Math.pow(r(3), 0.8) * 0.32;
+  return {
+    y: 0.5 + side * edge, edge, order: r(4), x: r(5), len: 0.45 + r(6) * 0.7,
+    thick: 0.12 + Math.pow(r(7), 2.6) * 0.9, v: 1.6 + r(8) * 2.2, dark: r(9) < 0.18, seed: r(10) * 100,
+    soft: r(11) < 0.12,
+  };
+});
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = num('--amount', 1), speed = num('--speed', 1), c = rgb('--color', '#ffffff');
+    // held twelve times a second, like drawn animation
+    const step = Math.floor(t * 12), tq = step / 12;
+    // a faint light streak along the top and bottom edges
+    const haze = ctx.createLinearGradient(0, 0, 0, h);
+    haze.addColorStop(0, `rgba(${c},0.3)`); haze.addColorStop(0.25, `rgba(${c},0)`);
+    haze.addColorStop(0.75, `rgba(${c},0)`); haze.addColorStop(1, `rgba(${c},0.3)`);
+    ctx.fillStyle = haze; ctx.fillRect(0, 0, w, h);
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    for (const l of lines) {
+      if (l.order > amount) continue;
+      const jig = hash(l.seed + step);
+      const len = l.len * w * (0.85 + jig * 0.3);
+      const span = w + len * 2;
+      const x = w + len - ((l.x + tq * l.v * speed * 0.5) % 1) * span;
+      const y = l.y * h + (jig - 0.5) * 1.5 * u;
+      const fade = Math.min(1, (l.edge - 0.2) / 0.12);          // lines nearer the middle are fainter
+      const th = l.thick * u * (0.8 + jig * 0.4) * (0.5 + fade * 0.7) * (l.soft ? 3 : 1);
+      const a = (0.45 + fade * 0.5) * (0.75 + jig * 0.25) * (l.soft ? 0.3 : 1);
+      ctx.shadowBlur = l.soft ? 0 : 0.5 * u;
+      ctx.fillStyle = l.dark ? `rgba(20,20,28,${a * 0.6})` : `rgba(${c},${Math.min(0.95, a)})`;
+      // a long lens of ink: sharp head, swelling a fifth of the way, a long thin tail
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + len * 0.2, y - th, x + len, y);
+      ctx.quadraticCurveTo(x + len * 0.2, y + th, x, y);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

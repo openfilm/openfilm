@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ink drop</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+:root { --color: #141414; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Drops of ink land one after another and bloom out with soft, feathered, uneven edges until they run together
+ * over the cut; then the ink washes out in pale blooms onto the next shot. It lasts 1.2 s and covers the cut at
+ * its middle: put its middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t
+ * alone, drawn in parts of the frame so it fits a stage of any shape.
+ */
+const D = 1.2;
+const DEFAULT = '#141414';
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const mix = (a, b, x) => a + (b - a) * x;
+const inQuad = (x) => x * x;
+const inCubic = (x) => x * x * x;
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+/* smooth noise in [0, 1] along x */
+const noise = (x, seed = 0) => { const i = Math.floor(x), f = x - i; return mix(hash(i + seed * 57), hash(i + 1 + seed * 57), f * f * (3 - 2 * f)); };
+/* the colour the page is given (its --color), read on each frame */
+const color = () => getComputedStyle(document.documentElement).getPropertyValue('--color').trim() || DEFAULT;
+const rgbOf = (c) => { g.fillStyle = '#000'; g.fillStyle = c; const s = String(g.fillStyle); return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number); };
+/* a colour made lighter (k > 0, toward white) or darker (k < 0, toward black), at an opacity */
+const tone = (c, k, a = 1) => `rgba(${rgbOf(c).map((x) => Math.round(k > 0 ? x + (255 - x) * k : x * (1 + k))).join(', ')}, ${a})`;
+
+/* where each drop lands (parts of the frame), and when */
+const DROPS = [[0.42, 0.46, 0], [0.7, 0.62, 0.06], [0.24, 0.7, 0.11], [0.76, 0.24, 0.15], [0.16, 0.22, 0.19]];
+/* an uneven round bloom */
+const bloom = (x, y, r, seed) => {
+  g.beginPath();
+  for (let i = 0; i <= 80; i++) {
+    const a = (i / 80) * TAU;
+    const rr = r * (0.78 + 0.3 * noise(((i % 80) / 80) * 9, seed) + 0.06 * Math.sin(a * 11 + seed));
+    if (i) g.lineTo(x + rr * Math.cos(a), y + rr * Math.sin(a)); else g.moveTo(x + rr * Math.cos(a), y + rr * Math.sin(a));
+  }
+  g.closePath();
+};
+
+function draw(u) {
+  const c = color(), R = Math.hypot(W, H), soft = Math.max(2, H * 0.02);
+  if (u < 0.5) {
+    /* a wash under the drops makes sure the cut is covered */
+    const wash = inCubic(seg(u, 0.3, 0.42));
+    if (wash > 0) { g.fillStyle = tone(c, 0, wash); g.fillRect(0, 0, W, H); }
+    DROPS.forEach(([x, y, s], i) => {
+      const p = seg(u, s, 0.42);
+      if (p <= 0) return;
+      const r = R * 0.75 * p ** 1.5;
+      g.filter = `blur(${soft * 1.6}px)`;
+      bloom(x * W, y * H, r * 1.08, i);
+      g.fillStyle = tone(c, 0.25, 0.55);
+      g.fill();
+      g.filter = `blur(${soft * 0.6}px)`;
+      bloom(x * W, y * H, r * 0.86, i + 20);
+      g.fillStyle = c;
+      g.fill();
+    });
+    g.filter = 'none';
+    return;
+  }
+  /* the ink washes out in pale blooms */
+  g.fillStyle = c;
+  g.fillRect(0, 0, W, H);
+  g.globalCompositeOperation = 'destination-out';
+  DROPS.forEach(([x, y, s], i) => {
+    const p = seg(u, 0.56 + s * 0.9, 0.97) ** 1.5;
+    if (p <= 0) return;
+    g.filter = `blur(${soft * 1.6}px)`;
+    bloom((1 - x) * W, y * H, R * 0.95 * p, i + 40);
+    g.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    g.fill();
+    g.filter = `blur(${soft * 0.6}px)`;
+    bloom((1 - x) * W, y * H, R * 0.8 * p, i + 60);
+    g.fillStyle = '#000';
+    g.fill();
+  });
+  g.filter = 'none';
+  g.fillStyle = `rgba(0, 0, 0, ${inQuad(seg(u, 0.85, 1))})`;
+  g.fillRect(0, 0, W, H);
+  g.globalCompositeOperation = 'source-over';
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

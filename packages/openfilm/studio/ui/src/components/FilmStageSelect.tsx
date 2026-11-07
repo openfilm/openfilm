@@ -39,7 +39,7 @@ import { doubleClickAim, keepPress, type Press } from '@/lib/double-press';
 
 import { ContextMenu, type ContextMenuEntry } from '@/components/ContextMenu';
 import { MgOutline } from '@/components/MgOutline';
-import { FRAME_BLUE, GestureHint, StageTransformFrame, type FrameGeometry } from '@/components/StageTransformFrame';
+import { FRAME_COLOR, GestureHint, StageTransformFrame, type FrameGeometry } from '@/components/StageTransformFrame';
 import { StageMaskOverlay } from '@/components/StageMaskOverlay';
 import { linkedOutlines } from '@/components/film-stage-hit';
 import { inHostPanel } from '@/components/typing-target';
@@ -48,6 +48,9 @@ import type { PreviewHandle, StageEvent } from '@/editor/Preview';
 import { useT } from '@/i18n';
 import { cropOf, declared, pxOf, type ClipLook, type Crop } from '@/lib/clip-look';
 import { filmClipKind, filmDocLoc, filmSrcKind, parseFilmDocLoc, type FilmBox, type FilmDoc } from '@/lib/film';
+import { isLibraryClip, isTextClip, withRootVars } from '@/lib/library';
+import { TEXT_ROOM } from '@/lib/text-box';
+import { withWords } from '@/lib/text-look';
 import type { OverrideGeometry } from '@/lib/film-overrides';
 import { spanShows, type ClipSpan } from '@/lib/film-shape';
 import {
@@ -82,7 +85,7 @@ export type { LayerGeometry } from '@/lib/stage-gesture';
 
 /** Pulled open this far (stage px, both ways) it is a marquee; less is a click (a shaky hand keeps its click). */
 const MARQUEE_MIN_PX = 8;
-const PICK_BLUE = FRAME_BLUE;
+const PICK_COLOR = FRAME_COLOR;
 /** Snap this close (screen px: the feel must not change with the picture's scale). */
 const SNAP_PX = 6;
 const NO_GUIDES: readonly MgGuide[] = [];
@@ -163,14 +166,18 @@ interface StageOutline {
   handle: number;
   rect: ClientBox;
   frame?: StageFrame;
+  /** a whole clip's outline: the clip */
   clip?: string;
+  /** a layer's: the clip it is in */
+  of?: string;
 }
 
-/** A clip's edit from the stage: its film.html `box`, or its own CSS (`style`: a crop). */
+/** A clip's edit from the stage: its film.html `box`, its own CSS (`style`: a crop), the `size` a page is laid out at,
+    or its `overrides` (a line of words' size, kept as it was while its box grows). */
 export interface StageClipEdit {
   loc: string;
-  prop: 'box' | 'style';
-  value: FilmBox | string | null;
+  prop: 'box' | 'style' | 'size' | 'overrides';
+  value: FilmBox | { w: number; h: number } | string | readonly unknown[] | null;
 }
 
 /** What the inspector needs of the stage while the editor wires it (see FilmStageSelect's `controlRef`). */
@@ -200,6 +207,12 @@ export interface FilmStageControl {
   describe(element: StageElement): Promise<StageElement | null>;
   /** Measure the selection again (something else changed the picture). */
   refresh(): void;
+  /**
+   * A line of words (the library's text component) given `overrides` (new words, a new look): what is written with
+   * them so its box stays its words (its size, its box, `--size` made up for its height); null for anything else. It is
+   * shown with them until they are written; `null` lets go of that (the edit refused).
+   */
+  fitText(clipLoc: string, overrides: readonly unknown[] | null): Promise<StageClipEdit[] | null>;
   /** Crop the video or still in hand in place (the inspector's Crop); false when nothing there can be. */
   startCrop(): boolean;
   /** The inspector's Mask › Edit on picture: the mask's handles over the thing it is for, while that is in hand. */
@@ -246,7 +259,7 @@ const drawnItems = <T extends MultiItem>(items: readonly T[]): T[] => items.filt
 interface LinkedMark { loc: string; t: MgTransform; box: MgBox }
 const NO_MARKS: readonly LinkedMark[] = [];
 /** What the app's chat points at, on the picture: the timeline's accent, apart from the selection's blue. */
-const CHAT_TONE = 'var(--tl-accent)';
+const CHAT_TONE = 'var(--accent)';
 
 function sameLinkedMarks(a: readonly LinkedMark[], b: readonly LinkedMark[]): boolean {
   return a.length === b.length && a.every((m, i) => {
@@ -309,6 +322,19 @@ function clipLocOf(doc: FilmDoc, id: string): string | undefined {
 }
 
 /** A whole clip in hand: its box is the part that shows. */
+/** The largest a page is laid out at (film.html refuses more). */
+const MAX_PAGE = 8192;
+
+/** A line of words' `--size` in `overrides`, in vh of its height (the page's own 62vh when it has none); null in another unit. */
+function vhSizeOf(overrides: readonly unknown[] | undefined): number | null {
+  const root = overrides?.find((o) => (o as { at?: string; n?: number }).at === ':root' && (o as { n?: number }).n === undefined) as { style?: Record<string, string> } | undefined;
+  const m = /^\s*([\d.]+)vh\s*$/.exec(root?.style?.['--size'] ?? '62vh');
+  return m ? Number(m[1]) : null;
+}
+
+/** What a line of words is fitted from (FilmStageSelect textFitBase): its box and place as kept, its font size now. */
+interface TextFitBase { clipLoc: string; clipId: string; box: MgBox; t: MgTransform; font: number; oneLine: boolean; align: string }
+
 function describeClip(info: ClipInfo, stage: { w: number; h: number }): Hit {
   const aabb = info.box ? frameAabb(visibleFrame(info.t, info.box, info.crop)) : { x: 0, y: 0, w: stage.w, h: stage.h };
   const element: StageElement = {
@@ -421,7 +447,8 @@ interface FilmStageSelectProps {
   onHoverLayer?: (hit: { element: StageElement; box: StageBox } | null) => void;
   /** A clip's menu's Mask, its shapes: the one picked is put on the clip in hand, its handles on the picture. */
   onStartMask?: (shape: MaskShape | 'none', clipLoc: string) => void;
-  /** A layer pointed at from elsewhere (a row of the Layers panel), outlined as the one under the pointer is. */
+  /** A layer pointed at from elsewhere (a row of the Layers panel), outlined as the one under the pointer is; `loc`
+      empty: the whole clip. */
   pointLayer?: { clipId: string; loc: string } | null;
   /** A picture of the project dropped on a picture inside a page (an <img>, a box painted with one): put in its place. */
   onDropPicture?: (element: StageElement, path: string) => void;
@@ -451,6 +478,9 @@ function FilmStageSelectImpl({
   }, []);
   /** The layer under the pointer (only with no clip in hand). Stage px. */
   const [hover, setHover] = React.useState<StageOutline | null>(null);
+  /* what the pointer rests on now, for a press (a thing of the library under it is moved at once) */
+  const hoverRef = React.useRef(hover);
+  hoverRef.current = hover;
   const [draft, setDraft] = React.useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   /** The marquee's own copy: a press and a release can land in one batch of updates, so decisions never read state. */
   const draftRef = React.useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
@@ -628,11 +658,36 @@ function FilmStageSelectImpl({
     override: layer.override,
     ...(layer.instance != null ? { instance: layer.instance, instances: layer.instances } : {}),
   }), []);
-  const hitOf = React.useCallback((layer: StageLayer): Hit => ({ rect: layer.rect, label: layer.label, element: elementOf(layer), layer }), [elementOf]);
+  /** Whether clip `id` is a line of the library's words (its text component). */
+  const isTextClipId = (id: string) => {
+    const at = parseFilmDocLoc(clipLocOf(docRef.current, id) ?? '');
+    return Boolean(at && isTextClip(docRef.current.tracks[at.track]?.clips[at.clip]?.src ?? ''));
+  };
+  /** Whether clip `id` is a thing of the library (lib/library isLibraryClip): a sticker, an effect, a title, words. */
+  const isWholeClipId = (id: string) => {
+    const at = parseFilmDocLoc(clipLocOf(docRef.current, id) ?? '');
+    return Boolean(at && isLibraryClip(docRef.current.tracks[at.track]?.clips[at.clip]?.src ?? ''));
+  };
+  /** A layer as the picture holds it. */
+  const layerHit = React.useCallback((layer: StageLayer): Hit => ({ rect: layer.rect, label: layer.label, element: elementOf(layer), layer }), [elementOf]);
+  /* a thing of the library (a sticker, an effect, a title, a line of words: lib/library isLibraryClip) is one thing on
+     the picture: pointed at, hovered or pressed, it is its whole clip (one frame, never a part of its page moved out of
+     its box and cut by it); a double-click on its words goes in to type (layerHit) */
+  const hitOf = React.useCallback((layer: StageLayer): Hit => {
+    const loc = isWholeClipId(layer.clip) ? clipLocOf(docRef.current, layer.clip) : undefined;
+    const info = loc ? infoOf(loc) : null;
+    return info ? describeClip(info, stage) : layerHit(layer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layerHit, stage]);
 
   /* ── in-place text editing state (the film runs the text box; it says when it ends) ── */
   const [editingText, setEditingTextState] = React.useState<string | null>(null);
   const textEdit = React.useRef<{ element: StageElement; layer: StageLayer } | null>(null);
+  /* a line of words (the library's text component) being typed in: its one frame, its box following the words as they
+     come (fitTextNow), shown at `w` × `h` (`shownT`: the transform its frame is drawn at) */
+  const [textTyping, setTextTyping] = React.useState<{ base: TextFitBase; w: number; h: number; shownT: MgTransform; shown?: boolean } | null>(null);
+  const textTypingRef = React.useRef(textTyping);
+  const setTyping = (next: typeof textTyping) => { textTypingRef.current = next; setTextTyping(next); };
   /** The last presses on the picture, in stage px: a double-click is aimed by its first click (see onStageDoubleClick). */
   const pressesRef = React.useRef<Press[]>([]);
   /* while a line is typed in place the picture takes the pointer (move the caret, select words, click away to blur) */
@@ -1085,11 +1140,65 @@ function FilmStageSelectImpl({
     const edit = textEdit.current;
     const element = edit?.element;
     if (!edit || edit.layer.handle !== e.handle || !element?.text) return;
+    /* a line of words: its whole clip stays in hand while it is typed in (the Text inspector stays); its box follows */
+    if (isTextClipId(edit.layer.clip)) { textTypedRef.current(e); return; }
     /* a layer named by its words is named by the new ones */
     const label = element.label === element.text.value && e.value ? e.value : element.label;
     const next = { ...element, label, text: { ...element.text, value: e.value } };
     setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element: next } : cur));
     onSelectElement?.(next);
+  };
+  /* a line of words typed in: the picture fitted its box as the words were typed (stage.js fitTyped), its frame
+     follows; an older picture without that: fitted from here */
+  const textTypedRef = React.useRef((e: Extract<StageEvent, { event: 'typing' }>) => { void e; });
+  textTypedRef.current = (e) => {
+    const typing = textTypingRef.current;
+    if (!typing) return;
+    if (e.size) setTyping({ base: typing.base, w: e.size.w, h: e.size.h, shownT: textAt(typing.base, e.size.w, e.size.h).shownT, shown: true });
+    else typingFit.push(0);
+  };
+  /* the box of a line of words typed in, fitted again to its words (the last ones typed) */
+  const typingFitNow = async () => {
+    const cur = textTypingRef.current;
+    if (!cur) return;
+    const fit = await fitTextNow(cur.base, { w: cur.w, h: cur.h });
+    if (!fit || textTypingRef.current?.base !== cur.base) return;
+    setTyping({ base: cur.base, w: fit.w, h: fit.h, shownT: fit.shownT });
+  };
+  const typingFitRef = React.useRef(typingFitNow);
+  typingFitRef.current = typingFitNow;
+  const typingFit = React.useMemo(() => new Latest<number>(() => typingFitRef.current()), []);
+  /** The whole clip of a line of words in hand again (its one frame), drawn at `shownT` until film.html has it. */
+  const pickWholeText = (clipLoc: string, shownT?: MgTransform) => {
+    const info = infoOf(clipLoc);
+    if (!info) return;
+    const hit = describeClip(info, stage);
+    commitHit(shownT && hit.element ? { ...hit, element: { ...hit.element, transform: shownT } } : hit);
+  };
+  /**
+   * Typing in a line of words ended: the words, its size, its box and its words' size written as one edit (one undo),
+   * the whole clip in hand again; given up, it goes back as it was.
+   */
+  const textTypingDone = async (typing: NonNullable<typeof textTyping>, value: string | null) => {
+    const { base } = typing;
+    if (value == null || !onEditClip) { unfitText(base); pickWholeText(base.clipLoc); return; }
+    /* the size the picture showed as the words were typed (stage.js fitTyped) is what is written: measured again now,
+       after typing ended, the page is between its typed size and its kept one */
+    const fit = typing.shown
+      ? { w: typing.w, h: typing.h, ...textAt(base, typing.w, typing.h) }
+      : (await typingFit.idle(), await fitTextNow(base, { w: typing.w, h: typing.h }))
+        ?? { w: typing.w, h: typing.h, ...textAt(base, typing.w, typing.h) };
+    pickWholeText(base.clipLoc, fit.shownT);
+    const overrides = withRootVars(withWords(textSizeOf(base.clipLoc)?.overrides, value), { '--size': `${fit.vh}vh` });
+    const failed = await onEditClip([
+      { loc: base.clipLoc, prop: 'size', value: { w: fit.w, h: fit.h } },
+      { loc: base.clipLoc, prop: 'overrides', value: overrides },
+      { loc: base.clipLoc, prop: 'box', value: fit.box },
+    ]);
+    if (!failed) return;
+    void ask('release', { clip: base.clipId });
+    unfitText(base);
+    pickWholeText(base.clipLoc);
   };
   const onTextDone = (e: Extract<StageEvent, { event: 'text' }>) => {
     const edit = textEdit.current;
@@ -1097,8 +1206,31 @@ function FilmStageSelectImpl({
     textEdit.current = null;
     setEditingText(null);
     syncGeomSoon();
+    const typing = textTypingRef.current;
+    if (typing) {
+      setTyping(null);
+      void textTypingDone(typing, e.commit && e.value ? e.value : null);
+      return;
+    }
     const { element, layer } = edit;
+    /* a line of words not fitted (its page did not answer how large it is): its words still written as the one entry
+       the Text inspector reads too (lib/text-look withWords), the whole clip in hand again */
+    if (element.clipLoc && isTextClipId(layer.clip) && onEditClip) {
+      const clipLoc = element.clipLoc;
+      pickWholeText(clipLoc);
+      if (!e.commit || !e.value) return;
+      const at = parseFilmDocLoc(clipLoc);
+      const own = at ? (docRef.current.tracks[at.track]?.clips[at.clip] as { overrides?: unknown[] } | undefined)?.overrides : undefined;
+      void onEditClip([{ loc: clipLoc, prop: 'overrides', value: withWords(own, e.value) }]).then((failed) => {
+        if (failed) void ask('release', { clip: layer.clip });
+      });
+      return;
+    }
+    /* a thing of the library (a sticker with words: "look here"): the whole of it in hand again once typed in, never its
+       label alone, which could be dragged out of it */
+    const whole = element.clipLoc && isWholeClipId(layer.clip) ? element.clipLoc : null;
     if (!e.commit || !e.value || !onEditTextInline) {
+      if (whole) { pickWholeText(whole); return; }
       /* given up (or nothing new): the inspector goes back to the words it had */
       setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element } : cur));
       if (pickedRef.current?.element?.loc === element.loc) onSelectElement?.(element);
@@ -1106,7 +1238,8 @@ function FilmStageSelectImpl({
     }
     const value = e.value;
     const nextElement = { ...element, ...(element.text ? { text: { ...element.text, value } } : {}) };
-    setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element: nextElement } : cur));
+    if (whole) pickWholeText(whole);
+    else setPicked((cur) => (cur?.element?.loc === element.loc ? { ...cur, element: nextElement } : cur));
     void onEditTextInline(element, value, e.hold).then((failed) => {
       if (!failed) return;
       void ask('release', { clip: layer.clip });
@@ -1114,8 +1247,10 @@ function FilmStageSelectImpl({
       syncGeomSoon();
     });
   };
-  const startTextEdit = (): boolean => {
-    const held = pickedRef.current;
+  /** `target`: the line to type in, when it is not the one in hand (a line of words is typed in with its whole clip
+      in hand, never its line picked first: the inspector and the frame would go to the line and back) */
+  const startTextEdit = (target?: { element: StageElement; layer: StageLayer }): boolean => {
+    const held = target ?? pickedRef.current;
     const element = held?.element;
     const layer = held?.layer;
     if (!onEditTextInline || !layer || !element?.text || textEdit.current || layer.locked || lockedClip(element.clipLoc)) return false;
@@ -1125,7 +1260,24 @@ function FilmStageSelectImpl({
     setHover(null);
     previewRef.current?.focus?.();
     void ask<boolean>('textStart', { handle: layer.handle }).then((started) => {
-      if (started || textEdit.current?.layer.handle !== layer.handle) return;
+      if (started) {
+        /* a line of words: one frame, its box following the words as they are typed, the whole clip in hand */
+        if (element.clipLoc && isTextClipId(layer.clip)) {
+          const now = pickedRef.current?.element;
+          if (!(now?.isMgOuter && now.clipLoc === element.clipLoc)) pickWholeText(element.clipLoc);
+          void textFitBase(element.clipLoc).then((base) => {
+            if (!base || textEdit.current?.layer.handle !== layer.handle) return;
+            setTyping({ base, w: Math.round(base.box.w), h: Math.round(base.box.h), shownT: base.t });
+            /* the picture fits its box as each word is typed, in the same step (no frame drawn with the old box) */
+            void ask('textFit', { fit: {
+              w0: Math.round(base.box.w), h0: Math.round(base.box.h), x0: base.t.x, y0: base.t.y, s: base.t.scaleY, r: base.t.rotate,
+              font: base.font, hug: base.oneLine, maxW: Math.round(stage.w / base.t.scaleY), align: base.align,
+            } });
+          });
+        }
+        return;
+      }
+      if (textEdit.current?.layer.handle !== layer.handle) return;
       textEdit.current = null;
       setEditingText(null);
     });
@@ -1136,7 +1288,11 @@ function FilmStageSelectImpl({
   /* the selection changed, or the layer went: what was typed is committed (like a click elsewhere); not a box just
      opened on the new selection (a double-click selects and types at once) */
   React.useEffect(() => () => {
-    if (textEdit.current && textEdit.current.element.loc !== pickedRef.current?.element?.loc) finishTextEditRef.current(true);
+    const now = pickedRef.current?.element;
+    const edit = textEdit.current;
+    /* a line of words typed in is held as its whole clip meanwhile: that is not another selection */
+    const own = edit && now && (now.loc === edit.element.loc || (now.isMgOuter && now.clipLoc === edit.element.clipLoc));
+    if (edit && !own) finishTextEditRef.current(true);
   }, [heldLoc]);
 
   /* ── the keyboard (the window's, and the picture's when it has focus: the film passes those on) ── */
@@ -1197,10 +1353,12 @@ function FilmStageSelectImpl({
       const k = e.key.toLowerCase();
       const action = keyAction(e);
       const wordsSelected = () => Boolean(window.getSelection()?.toString());
+      /* [ and ] are the timeline's too (select left / right of the playhead): from there, they are its */
+      const fromTimeline = Boolean((e.target as Element | null)?.closest?.('[data-timeline]'));
       const menuId = mod && e.shiftKey && k === 'h' ? 'hide'
         : mod && e.shiftKey && k === 'l' ? 'lock'
-          : !mod && !e.altKey && e.key === ']' ? 'front'
-            : !mod && !e.altKey && e.key === '[' ? 'back'
+          : !mod && !e.altKey && !fromTimeline && e.key === ']' ? 'front'
+            : !mod && !e.altKey && !fromTimeline && e.key === '[' ? 'back'
               : action === 'remove' || action === 'ripple-delete' ? 'delete'
                 : action === 'copy' && !wordsSelected() ? 'copy-layers'
                   : null;
@@ -1370,7 +1528,8 @@ function FilmStageSelectImpl({
     const info = clipInfo(doc, spans, stage, only);
     /* not on screen now (the playhead elsewhere): no frame over a picture it is not in; it comes back with it */
     if (info && !shownNow(info.id)) { if (held?.isMgOuter) dropPick(); return; }
-    if (held?.isMgOuter && held.clipLoc === only) return;
+    /* in hand already; or a line of it being typed in (a double-click went in: the clip stays selected there) */
+    if (held?.clipLoc === only && (held.isMgOuter || textEdit.current)) return;
     /* a sound has no picture: the handles of the clip held before go */
     if (!info) { if (pickedRef.current?.element?.isMgOuter) dropPick(); return; }
     /* the inspector's preview was of the clip held before */
@@ -1466,6 +1625,7 @@ function FilmStageSelectImpl({
         return layer ? elementOf(layer) : null;
       },
       refresh: syncGeomSoon,
+      fitText: (clipLoc, overrides) => fitWordsRef.current(clipLoc, overrides),
       startCrop: () => startCropRef.current(),
       editMask: setMaskSession,
       picked: () => pickedItemsRef.current(),
@@ -1509,6 +1669,8 @@ function FilmStageSelectImpl({
      empty part, as its layers are: several pages on the picture are each found) */
   const hoverQueue = React.useMemo(() => new Latest<{ x: number; y: number; from: number | null }>(async (p) => {
     let found = await ask<StageOutline>('hit', p);
+    /* a thing of the library: its whole clip's outline (hitOf) */
+    if (found?.of && isWholeClipId(found.of)) found = clipOutlineRef.current(found.of);
     if (!found) {
       const id = await ask<string>('clipAt', { x: p.x, y: p.y });
       found = id ? clipOutlineRef.current(id) : null;
@@ -1543,8 +1705,15 @@ function FilmStageSelectImpl({
   /* goes up when the picture is drawn anew: the layer pointed at is looked up again (it may be gone) */
   const [pointAgain, setPointAgain] = React.useState(0);
   React.useEffect(() => {
-    if (!pointClip || !pointLoc) {
+    if (!pointClip) {
       if (pointed.current) { pointed.current = false; setHover(null); }
+      return undefined;
+    }
+    /* a clip's own row: the whole clip, outlined as it is under the pointer */
+    if (!pointLoc) {
+      const outline = clipOutlineRef.current(pointClip);
+      pointed.current = Boolean(outline);
+      setHover(outline);
       return undefined;
     }
     let live = true;
@@ -1617,7 +1786,7 @@ function FilmStageSelectImpl({
   }, [hoverHandle, onHoverLayer, ask, elementOf]);
 
   /* ── a whole clip in hand: moved, scaled, turned ── */
-  const clipPlace = React.useMemo(() => new Latest<{ clip: string; box: FilmBox | null }>(async (a) => { await ask('place', a); }), [ask]);
+  const clipPlace = React.useMemo(() => new Latest<{ clip: string; box: FilmBox | null; size?: { w: number; h: number } | null; vars?: Record<string, string>; root?: Record<string, string> }>(async (a) => { await ask('place', a); }), [ask]);
   const clipsPlace = React.useMemo(() => new Latest<{ clip: string; box: FilmBox | null }[]>(async (list) => {
     await Promise.all(list.map((a) => ask('place', a)));
   }), [ask]);
@@ -1665,9 +1834,17 @@ function FilmStageSelectImpl({
       guides = r.guides;
     }
     shown = visibleFrame(next, g.box, g.crop);
-    clipPlace.push({ clip: g.clipId, box: compactBox(next, g.box) });
     liveTRef.current = next;
-    setLiveT(next);
+    /* a line of words pulled by a side: as tall as its lines are as it goes */
+    const live = g.kind === 'scale' ? textLiveOf(g) : null;
+    if (live) {
+      shown = visibleFrame(placeText(g, next, live), g.box, g.crop);
+      void growText(g);
+    } else {
+      const side = g.kind === 'scale' ? textSideways(g, next) : null;
+      clipPlace.push(side ? { clip: g.clipId, box: side.box, size: side.size } : { clip: g.clipId, box: compactBox(next, g.box) });
+      setLiveT(next);
+    }
     setLiveGuides((cur) => (sameGuides(cur, guides) ? cur : guides));
     const vs = viewScaleNow();
     setHint({
@@ -1691,15 +1868,224 @@ function FilmStageSelectImpl({
     /* the linked outline moves with it at once (film.html follows a moment later) */
     setLinkedMarks((marks) => (marks.some((m) => m.loc === g.clipLoc) ? marks.map((m) => (m.loc === g.clipLoc ? { ...m, t: at } : m)) : marks));
   };
+  /**
+   * A line of words pulled by a side, as it goes: laid out at its new width and as tall as its lines are (`h`, measured
+   * after each width: growText), its size in the page's unit (`--size` in vh of its height, `vh` as kept) made smaller
+   * as it grows so its words stay as large. Null for anything else, or words sized another way.
+   */
+  const textLive = React.useRef<{ g: object; vh: number; h0: number; h: number; busy: boolean; again: boolean } | null>(null);
+  const textLiveOf = (g: { clipLoc: string; clipId: string; box: MgBox; handle?: { hx: number; hy: number } }) => {
+    if (!g.handle || g.handle.hy !== 0 || !isTextClipId(g.clipId)) return null;
+    if (textLive.current?.g === g) return textLive.current;
+    const vh = textSizeOf(g.clipLoc)?.vh;
+    textLive.current = vh ? { g, vh, h0: Math.round(g.box.h), h: Math.round(g.box.h), busy: false, again: false } : null;
+    return textLive.current;
+  };
+  /** Its `--size` as kept, in vh of its height, and its overrides; null when it is sized another way. */
+  const textSizeOf = (clipLoc: string) => {
+    const at = parseFilmDocLoc(clipLoc);
+    const clip = at ? docRef.current.tracks[at.track]?.clips[at.clip] : undefined;
+    const overrides = (clip as { overrides?: unknown[] } | undefined)?.overrides;
+    const vh = vhSizeOf(overrides);
+    return vh != null ? { vh, overrides } : null;
+  };
+  /** Shown at transform `t` (its width from the pull) and the height in `live`: placed, and the transform its frame shows. */
+  const placeText = (g: { clipId: string; box: MgBox }, t: MgTransform, live: { vh: number; h0: number; h: number }) => {
+    const w = Math.round((g.box.w * t.scaleX) / t.scaleY);
+    const y = t.y - ((live.h - live.h0) * t.scaleY) / 2;
+    clipPlace.push({
+      clip: g.clipId,
+      box: compactBox({ ...t, scaleX: t.scaleY, y }, { ...g.box, w, h: live.h }),
+      size: { w, h: live.h },
+      vars: { '--size': `${Math.round(((live.vh * live.h0) / live.h) * 100) / 100}vh` },
+    });
+    const shownT = { ...t, y, scaleY: (t.scaleY * live.h) / live.h0 };
+    setLiveT(shownT);
+    return shownT;
+  };
+  /** Its lines measured at the width it is shown at now; taller or shorter, shown so (one at a time, the last width). */
+  const growText = async (g: { clipId: string; box: MgBox; crop: Crop }) => {
+    const live = textLive.current;
+    if (!live) return;
+    if (live.busy) { live.again = true; return; }
+    live.busy = true;
+    try {
+      do {
+        live.again = false;
+        await clipPlace.idle();
+        const h = await textLines(g.clipId);
+        if (textLive.current !== live || gestureRef.current !== live.g || h == null || Math.abs(h - live.h) < 2) continue;
+        live.h = h;
+        const t = liveTRef.current;
+        if (!t) continue;
+        /* its size by the pointer says so too */
+        const f = visibleFrame(placeText(g, t, live), g.box, g.crop);
+        setHint((cur) => (cur ? { ...cur, text: `${Math.round(f.w)} × ${Math.round(f.h)}` } : cur));
+      } while (live.again && textLive.current === live);
+    } finally { live.busy = false; }
+  };
+  /** How tall a line of words shown now is: its lines, and the room its box keeps above and below them (lib/text-box). */
+  /**
+   * A line of words, its box its words (one frame, as it is on the picture): what it is fitted from (its box and place
+   * as kept, its font size now, whether it hugs its words, as a line put in does, or keeps a width a side was pulled
+   * to: one line no wider than its words and their room, or as wide as the picture, hugs them). Read from the words it
+   * shows now (before they change). Null for anything else, or words sized another way.
+   */
+  const textFitBase = async (clipLoc: string): Promise<TextFitBase | null> => {
+    const info = infoOf(clipLoc);
+    const el = info ? describeClip(info, stage).element : null;
+    const size = textSizeOf(clipLoc);
+    if (!el?.clipId || !el.mgBox || !el.transform || !size || !isTextClipId(el.clipId)) return null;
+    /* worked out once for the clip as film.html has it, and kept until that changes: read again while a preview is on
+       the picture (another size, another font), it would start from the preview, and each preview from the last */
+    const at = parseFilmDocLoc(clipLoc);
+    const clip = at ? docRef.current.tracks[at.track]?.clips[at.clip] : undefined;
+    const key = JSON.stringify([clip?.box, clip?.size, clip?.overrides, stage.w, stage.h]);
+    const kept = fitBases.current.get(clipLoc);
+    if (kept?.key === key) return kept.base;
+    /* its words' size from what is written (`--size` in vh of its height), never read off the page */
+    const font = (size.vh / 100) * el.mgBox.h;
+    const m = await ask<{ font: number }>('measure', { clip: el.clipId, at: '.t' });
+    const one = await ask<{ nw?: number }>('measure', { clip: el.clipId, at: '.box', natural: true });
+    if (!m?.font || one?.nw == null) return null;
+    /* its one line as wide as at its written size (the page may show it at another for a moment) */
+    const nw = one.nw * (font / m.font);
+    const w0 = el.mgBox.w;
+    const lines = Math.round((el.mgBox.h - 2 * TEXT_ROOM * font) / (1.15 * font));
+    const hug = nw + 2 * (TEXT_ROOM * font + 0.04 * nw);
+    const widest = stage.w / el.transform.scaleY;
+    const hugs = w0 >= widest - 2 || (lines <= 1 && w0 <= hug + Math.max(4, 0.02 * w0));
+    const root = (size.overrides ?? []).find((o) => (o as { at?: string; n?: number }).at === ':root' && (o as { n?: number }).n === undefined) as { style?: Record<string, string> } | undefined;
+    const base = { clipLoc, clipId: el.clipId, box: el.mgBox, t: el.transform, font, oneLine: hugs, align: root?.style?.['--align'] ?? 'center' };
+    fitBases.current.set(clipLoc, { key, base });
+    return base;
+  };
+  const fitBases = React.useRef(new Map<string, { key: string; base: TextFitBase }>());
+  /** At `w` × `h` (its page's size), its middle where it was: its box, the transform its frame shows, its size in vh. */
+  const textAt = (b: TextFitBase, w: number, h: number) => {
+    const s = b.t.scaleY;
+    /* grown from its side as it is aligned (stage.js fitTyped alike): left keeps its left edge, right its right */
+    const grow = b.align === 'left' || b.align === 'start' ? 0 : b.align === 'right' || b.align === 'end' ? 1 : 0.5;
+    const x = b.t.x - (w - b.box.w) * s * grow;
+    const y = b.t.y - ((h - b.box.h) * s) / 2;
+    return {
+      box: compactBox({ ...b.t, scaleX: s, x, y }, { ...b.box, w, h }),
+      shownT: { ...b.t, x, y, scaleX: (s * w) / b.box.w, scaleY: (s * h) / b.box.h },
+      vh: Math.round(((100 * b.font) / h) * 10) / 10,
+    };
+  };
+  /**
+   * Fitted to the words its page shows now, and shown so: one line as wide as its words and the room around them (lib/
+   * text-box; never wider than the picture, where it wraps), a wrapped one at its width; as tall as its lines. `from`:
+   * the size it is shown at now. Its `--size` is set on the page itself (`root`), so words being typed stay.
+   */
+  const fitTextNow = async (b: TextFitBase, from: { w: number; h: number }) => {
+    const n = await ask<{ nw?: number }>('measure', { clip: b.clipId, at: '.box', natural: true });
+    if (n?.nw == null) return null;
+    const room = 2 * (TEXT_ROOM * b.font + 0.04 * n.nw);
+    const w = b.oneLine ? Math.max(1, Math.min(Math.round(stage.w / b.t.scaleY), MAX_PAGE, Math.round(n.nw + room))) : Math.round(b.box.w);
+    const show = (h: number) => {
+      const at = textAt(b, w, h);
+      clipPlace.push({ clip: b.clipId, box: at.box, size: { w, h } });
+      return at;
+    };
+    if (w !== from.w) show(from.h);
+    await clipPlace.idle();
+    const h = Math.min(MAX_PAGE, (await textLines(b.clipId)) ?? from.h);
+    return { w, h, ...show(h) };
+  };
+  /** Back as it is kept: its own box and size, its own `--size`. */
+  const unfitText = (b: TextFitBase) => {
+    clipPlace.push({ clip: b.clipId, box: null, size: null, root: { '--size': `${textSizeOf(b.clipLoc)?.vh ?? 62}vh` } });
+  };
+  /** The edits that keep a line of words its words' box with `overrides` (FilmStageControl fitText). */
+  const fitWords = async (clipLoc: string, overrides: readonly unknown[] | null): Promise<StageClipEdit[] | null> => {
+    const at = parseFilmDocLoc(clipLoc);
+    const id = at ? docRef.current.tracks[at.track]?.clips[at.clip]?.id : undefined;
+    if (!id || !isTextClipId(id)) return null;
+    /* its frame drawn where it is shown (a preview's box; back to its own when let go) */
+    const frameAt = (b: TextFitBase, t: MgTransform) => {
+      const held = pickedRef.current?.element;
+      if (held?.isMgOuter && held.clipLoc === clipLoc) holdClipAt({ clipLoc, box: b.box, crop: NO_CROP }, t);
+    };
+    const letGo = async () => {
+      await ask('show', { clip: id, overrides: null });
+      clipPlace.push({ clip: id, box: null, size: null, root: { '--size': `${textSizeOf(clipLoc)?.vh ?? 62}vh` } });
+      const kept = fitBases.current.get(clipLoc)?.base;
+      if (kept) frameAt(kept, kept.t);
+      return null;
+    };
+    if (!overrides) return letGo();
+    /* from the clip as written (whether it hugs its words, its box); its new words' size from the new `--size` (in vh
+       of its written height), shown in px while it is fitted, so the page's height for the moment does not change it */
+    const was = await textFitBase(clipLoc);
+    const vh = vhSizeOf(overrides);
+    if (!was || vh == null) return letGo();
+    const font = (vh / 100) * was.box.h;
+    await ask('show', { clip: id, overrides: withRootVars(overrides, { '--size': `${Math.round(font * 100) / 100}px` }) });
+    const b = { ...was, font };
+    const fit = await fitTextNow(b, { w: Math.round(b.box.w), h: Math.round(b.box.h) });
+    if (!fit) return letGo();
+    frameAt(b, fit.shownT);
+    return [
+      { loc: clipLoc, prop: 'size', value: { w: fit.w, h: fit.h } },
+      { loc: clipLoc, prop: 'overrides', value: withRootVars(overrides, { '--size': `${fit.vh}vh` }) },
+      { loc: clipLoc, prop: 'box', value: fit.box },
+    ];
+  };
+  const fitWordsRef = React.useRef(fitWords);
+  fitWordsRef.current = fitWords;
+  const textLines = async (clip: string) => {
+    const [box, words] = await Promise.all([ask<{ h: number } | null>('measure', { clip, at: '.box' }), ask<{ font: number } | null>('measure', { clip, at: '.t' })]);
+    return box?.h && words?.font ? Math.round(box.h + 2 * TEXT_ROOM * words.font) : null;
+  };
+  /** A line of words pulled wider or narrower by a side: laid out again at its new width (its `size`), never stretched;
+      null for anything else. */
+  const textSideways = (g: { clipId: string; box: MgBox; handle?: { hx: number; hy: number } }, t: MgTransform) => {
+    if (!g.handle || g.handle.hy !== 0 || !isTextClipId(g.clipId)) return null;
+    /* as large as it was made (its scale, both ways alike), its own width what the side pulled */
+    const w = Math.round((g.box.w * t.scaleX) / t.scaleY);
+    if (w === Math.round(g.box.w)) return null;
+    return { size: { w, h: Math.round(g.box.h) }, box: compactBox({ ...t, scaleX: t.scaleY }, { ...g.box, w }) };
+  };
   /** Written as film.html's `box`; refused, it goes back where it started (the caller says why). */
   const commitClipBox = (g: { clipLoc: string; clipId: string; box: MgBox; crop: Crop; origin: MgTransform }, t: MgTransform) => {
-    holdClipAt(g, t);
+    const live = textLive.current?.g === g ? textLive.current : null;
+    textLive.current = null;
+    /* a line of words grown as it was pulled: held as tall as it was shown until film.html has it */
+    holdClipAt(g, live ? { ...t, y: t.y - ((live.h - live.h0) * t.scaleY) / 2, scaleY: (t.scaleY * live.h) / live.h0 } : t);
     if (!onEditClip) return;
-    void onEditClip([{ loc: g.clipLoc, prop: 'box', value: compactBox(t, g.box) }]).then((failed) => {
+    const side = textSideways(g, t);
+    const write = (edits: StageClipEdit[]) => void onEditClip(edits).then((failed) => {
+      /* its words' size shown as it was pulled: film.html's own now (a changed size lets it go by itself) */
+      if (live && (failed || !edits.some((e) => e.prop === 'overrides'))) void ask('release', { clip: g.clipId });
       if (!failed) return;
       clipPlace.push({ clip: g.clipId, box: null });
       holdClipAt(g, g.origin);
     });
+    if (!side) { write([{ loc: g.clipLoc, prop: 'box', value: compactBox(t, g.box) }]); return; }
+    /* a line of words at its new width: as tall as its lines now are, its words as large as they were */
+    void clipPlace.idle().then(() => textHeight(g)).then((tall) => write(tall ? [
+      { loc: g.clipLoc, prop: 'size', value: { w: side.size.w, h: tall.h } },
+      { loc: g.clipLoc, prop: 'overrides', value: tall.overrides },
+      { loc: g.clipLoc, prop: 'box', value: compactBox({ ...t, scaleX: t.scaleY, y: t.y - ((tall.h - g.box.h) * t.scaleY) / 2 }, { ...g.box, w: side.size.w, h: tall.h }) },
+    ] : [
+      { loc: g.clipLoc, prop: 'size', value: side.size },
+      { loc: g.clipLoc, prop: 'box', value: side.box },
+    ]));
+  };
+  /**
+   * How tall a line of words is at the width it is shown at now: its lines' height and
+   * the room its box keeps above and below them (lib/text-box: of their size), its size in the page's own unit made
+   * smaller as the box grows taller, so its words stay as large (the page sizes them by its height: `--size` in vh).
+   * Null when it cannot be told (its size given another way, or the page not shown).
+   */
+  const textHeight = async (g: { clipLoc: string; clipId: string; box: MgBox }) => {
+    const size = textSizeOf(g.clipLoc);
+    const h = size ? await textLines(g.clipId) : null;
+    if (!size || h == null || Math.abs(h - g.box.h) < 2) return null;
+    const vh = Math.round(size.vh * (g.box.h / h) * 10) / 10;
+    return { h, overrides: withRootVars(size.overrides, { '--size': `${vh}vh` }) };
   };
 
   const endMgGesture = () => {
@@ -2184,7 +2570,9 @@ function FilmStageSelectImpl({
       if (!inside || !held?.element?.text) {
         const layer = await ask<StageLayer>('hit', { ...at, from: held?.layer?.handle ?? null, detail: true });
         if (token !== pressSeq.current || !layer?.text) return;
-        commitHit(hitOf(layer));
+        /* a line of words: typed in at once, its whole clip staying in hand */
+        if (isTextClipId(layer.clip)) { startTextEditRef.current({ element: elementOf(layer), layer }); return; }
+        commitHit(layerHit(layer));
       }
       startTextEditRef.current();
     })();
@@ -2646,7 +3034,8 @@ function FilmStageSelectImpl({
         currentTarget.setPointerCapture(pointerId);
       };
       const outerCrop = outer?.isMgOuter && outer.clipLoc ? infoOf(outer.clipLoc)?.crop ?? NO_CROP : NO_CROP;
-      const stretchable = outer?.clipKind === 'video';
+      /* a video or still takes any proportions; a line of words is made wider or narrower (textSideways) */
+      const stretchable = outer?.clipKind === 'video' || Boolean(outer?.clipId && isTextClipId(outer.clipId));
       if (onEditClip && handle && outer?.isMgOuter && outer.clipLoc && outer.clipId && outer.mgBox && origin && !lockedClip(outer.clipLoc)) {
         const kind = handle.getAttribute('data-mg-kind');
         const at = HANDLE_AT[handle.getAttribute('data-mg-handle') ?? ''];
@@ -2682,6 +3071,33 @@ function FilmStageSelectImpl({
           hit: { x: p.x, y: p.y },
         });
         return;
+      }
+      /* a sticker or a line of words of the library (one thing: hitOf) under the press, not in hand yet: taken in hand
+         and moved at once, as on the timeline (no first click to pick it); a click on it is still a click. Anything
+         else under a press draws a marquee, so a press on a picture that fills the frame does not move it */
+      const under = hoverRef.current?.clip;
+      const underLoc = under && !e.shiftKey && onEditClip && isWholeClipId(under) ? clipLocOf(docRef.current, under) : undefined;
+      const underInfo = underLoc && !lockedClip(underLoc) && (!outer?.isMgOuter || outer.clipLoc !== underLoc) ? infoOf(underLoc) : null;
+      if (underLoc && underInfo?.box && insideFrame(visibleFrame(underInfo.t, underInfo.box, underInfo.crop), stagePt.x, stagePt.y)) {
+        const hit = describeClip(underInfo, stage);
+        const el = hit.element;
+        if (el?.mgBox && el.transform && el.clipId) {
+          setHover(null);
+          commitHit(hit);
+          startGesture({
+            kind: 'move',
+            stretchable: isTextClipId(el.clipId),
+            pendingClick: true,
+            start: stagePt,
+            origin: el.transform,
+            box: el.mgBox,
+            crop: underInfo.crop,
+            clipLoc: underLoc,
+            clipId: el.clipId,
+            hit: { x: p.x, y: p.y },
+          });
+          return;
+        }
       }
       /* several clips selected: a press on one of them drags them all (Shift: a marquee
          that adds to them instead) */
@@ -3053,7 +3469,16 @@ function FilmStageSelectImpl({
         {measure && picked ? <Measures lines={measure.lines} other={measure.other} viewScale={vsNow} /> : null}
         {hint ? <GestureHint x={hint.x} y={hint.y} text={hint.text} /> : null}
         {/* what is in hand and not in the picture now (see syncPick) has no frame */}
-        {picked && !pickLost && !(multi && !drawnItems(multi).length) ? (
+        {textTyping ? (() => {
+          /* a line of words being typed in: its one frame, following its words; only drawn (inert), so a click in the
+             words places the caret there, not on the frame's own handles */
+          const frame = scaleFrame(visibleFrame(textTyping.shownT, textTyping.base.box, NO_CROP), vsNow);
+          return (
+            <div inert className="contents">
+              <StageTransformFrame frame={frame} scope="mg" edges="sides" moving={false} label={sizeLabel(frame)} bounds={stageBounds} />
+            </div>
+          );
+        })() : picked && !pickLost && !(multi && !drawnItems(multi).length) ? (
           <>
             {mgFrame ? (
               /* cropping, the crop's own frame is the one in hand */
@@ -3061,7 +3486,7 @@ function FilmStageSelectImpl({
                 <StageTransformFrame
                   frame={mgFrame}
                   scope="mg"
-                  edges={picked.element?.clipKind === 'video'}
+                  edges={picked.element?.clipKind === 'video' ? true : picked.element?.clipId && isTextClipId(picked.element.clipId) ? 'sides' : false}
                   moving={liveT != null && dragging}
                   label={sizeLabel(mgFrame)}
                   bounds={stageBounds}
@@ -3170,9 +3595,9 @@ function Box({ rect, frame, tone, fading }: {
         ...(turned
           ? { left: turned.cx - turned.w / 2, top: turned.cy - turned.h / 2, width: turned.w, height: turned.h, transform: `rotate(${turned.r}deg)` }
           : { left: rect.left, top: rect.top, width: rect.width, height: rect.height }),
-        border: tone === 'picked' || tone === 'region' ? `2px solid ${PICK_BLUE}` : `1px solid ${PICK_BLUE}`,
+        border: tone === 'picked' || tone === 'region' ? `2px solid ${PICK_COLOR}` : `1px solid ${PICK_COLOR}`,
         /* a marquee: a thin line round a very light fill, what it goes over still plain under it */
-        ...(tone === 'draft' ? { background: 'rgba(13,153,255,.07)' } : {}),
+        ...(tone === 'draft' ? { background: 'rgba(15,165,150,.07)' } : {}),
         ...(tone === 'region' ? { background: 'rgba(12,140,232,.2)', borderRadius: 3, transition: 'opacity 300ms ease-out', opacity: fading ? 0 : 1 } : {}),
         ...(tone === 'picked' ? { background: 'rgba(12,140,232,.06)', boxShadow: '0 0 0 1px rgba(255,255,255,.45)' } : {}),
         ...(tone === 'chat' ? { border: `2px solid ${CHAT_TONE}`, borderRadius: 3, background: `color-mix(in srgb, ${CHAT_TONE} 10%, transparent)`, boxShadow: '0 0 0 1px rgba(255,255,255,.45)' } : {}),
@@ -3191,8 +3616,8 @@ function Guide({ guide, viewScale }: { guide: MgGuide; viewScale: number }) {
     <div
       className="pointer-events-none absolute z-[6]"
       style={guide.axis === 'x'
-        ? { left: at, top: 0, bottom: 0, width: 1, background: PICK_BLUE }
-        : { top: at, left: 0, right: 0, height: 1, background: PICK_BLUE }}
+        ? { left: at, top: 0, bottom: 0, width: 1, background: PICK_COLOR }
+        : { top: at, left: 0, right: 0, height: 1, background: PICK_COLOR }}
     />
   );
 }
@@ -3276,7 +3701,7 @@ function CropOverlay({ session: s, viewScale: vs, moving, bounds, onAspect, onDo
         <button type="button" title={t('stageCrop.cancelHint')} className="rounded-[4px] px-2 py-0.5 hover:bg-white/10" onClick={onCancel}>
           {t('stageCrop.cancel')}
         </button>
-        <button type="button" title={t('stageCrop.doneHint')} className="rounded-[4px] px-2 py-0.5" style={{ background: FRAME_BLUE }} onClick={onDone}>
+        <button type="button" title={t('stageCrop.doneHint')} className="rounded-[4px] px-2 py-0.5" style={{ background: FRAME_COLOR }} onClick={onDone}>
           {t('stageCrop.done')}
         </button>
       </div>

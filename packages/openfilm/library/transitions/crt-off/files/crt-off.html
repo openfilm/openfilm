@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CRT off</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * The picture flares and collapses into a bright line, then a dot that fades on black over the cut, like an old TV
+ * switching off; then it switches on again into the next shot. It lasts 0.8 s and covers the cut at its middle:
+ * put its middle on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in
+ * parts of the frame so it fits a stage of any shape.
+ */
+const D = 0.8;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+/* 0 at a, 1 at b, 0 again at c */
+const tri = (u, a, b, c) => (u < b ? seg(u, a, b) : 1 - seg(u, b, c));
+const inExpo = (x) => (x <= 0 ? 0 : 2 ** (10 * x - 10));
+const outExpo = (x) => (x >= 1 ? 1 : 1 - 2 ** (-10 * x));
+
+function draw(u) {
+  const cx = W / 2, cy = H / 2;
+  /* off: the opening closes to a line, the line to a dot; on: the same, the other way */
+  const v = u < 0.5 ? 1 - inExpo(seg(u, 0, 0.18)) : outExpo(seg(u, 0.68, 0.86));
+  const hz = u < 0.5 ? 1 - inExpo(seg(u, 0.17, 0.3)) : outExpo(seg(u, 0.57, 0.69));
+  const oh = Math.max(2, H * v), ow = Math.max(2, W * hz);
+  /* black around the opening */
+  g.fillStyle = '#000';
+  g.beginPath();
+  g.rect(0, 0, W, H);
+  g.rect(cx - ow / 2, cy - oh / 2, ow, oh);
+  g.fill('evenodd');
+  /* the picture flares white as it squeezes, and settles as it opens */
+  const flare = u < 0.5 ? seg(u, 0.03, 0.17) : 1 - seg(u, 0.72, 0.98);
+  if (flare > 0) {
+    g.fillStyle = `rgba(235, 245, 255, ${flare * (v < 0.02 ? 1 : 0.85)})`;
+    g.fillRect(cx - ow / 2, cy - oh / 2, ow, oh);
+  }
+  /* the glow around the line while it is thin */
+  if (oh < H * 0.06 && ow > 4) {
+    const k = 1 - oh / (H * 0.06);
+    const gl = g.createLinearGradient(0, cy - H * 0.05, 0, cy + H * 0.05);
+    gl.addColorStop(0, 'rgba(150, 190, 255, 0)');
+    gl.addColorStop(0.5, `rgba(200, 225, 255, ${0.7 * k})`);
+    gl.addColorStop(1, 'rgba(150, 190, 255, 0)');
+    g.fillStyle = gl;
+    g.fillRect(cx - ow / 2, cy - H * 0.05, ow, H * 0.1);
+  }
+  /* the glowing dot left when the line has gone, fading over the cut */
+  const dot = u < 0.5 ? tri(u, 0.24, 0.3, 0.48) : tri(u, 0.52, 0.58, 0.64);
+  if (dot > 0) {
+    const r = H * 0.12 * dot;
+    const gl = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+    gl.addColorStop(0, `rgba(255, 255, 255, ${dot})`);
+    gl.addColorStop(0.2, `rgba(200, 225, 255, ${dot * 0.8})`);
+    gl.addColorStop(1, 'rgba(120, 170, 255, 0)');
+    g.fillStyle = gl;
+    g.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,415 @@
+{
+ "version": 1,
+ "groups": {
+  "template": [
+   {
+    "id": "vlog",
+    "name": {
+     "en": "Vlog",
+     "zh-CN": "Vlog",
+     "ja": "Vlog",
+     "ko": "브이로그",
+     "es": "Vlog"
+    }
+   },
+   {
+    "id": "intro",
+    "name": {
+     "en": "Openers",
+     "zh-CN": "片头",
+     "ja": "オープニング",
+     "ko": "오프닝",
+     "es": "Aperturas"
+    }
+   },
+   {
+    "id": "beat",
+    "name": {
+     "en": "On the beat",
+     "zh-CN": "卡点",
+     "ja": "ビート合わせ",
+     "ko": "비트",
+     "es": "Al ritmo"
+    }
+   },
+   {
+    "id": "promo",
+    "name": {
+     "en": "Shop",
+     "zh-CN": "电商",
+     "ja": "ショップ",
+     "ko": "쇼핑",
+     "es": "Tienda"
+    }
+   },
+   {
+    "id": "memory",
+    "name": {
+     "en": "Memories",
+     "zh-CN": "回忆",
+     "ja": "思い出",
+     "ko": "추억",
+     "es": "Recuerdos"
+    }
+   },
+   {
+    "id": "holiday",
+    "name": {
+     "en": "Holidays",
+     "zh-CN": "节日",
+     "ja": "イベント",
+     "ko": "기념일",
+     "es": "Fiestas"
+    }
+   },
+   {
+    "id": "knowledge",
+    "name": {
+     "en": "Explainers",
+     "zh-CN": "知识",
+     "ja": "解説",
+     "ko": "지식",
+     "es": "Explicativos"
+    }
+   }
+  ]
+ },
+ "items": [
+  {
+   "id": "templates/travel-vlog",
+   "cat": "template",
+   "group": "vlog",
+   "name": {
+    "en": "Travel diary",
+    "zh-CN": "旅行日记",
+    "ja": "旅の日記",
+    "ko": "여행 일기",
+    "es": "Diario de viaje"
+   },
+   "kind": "group",
+   "durationMs": 11000,
+   "slots": 4,
+   "music": "audio/music/plucky-light-underscore-f5be3b.mp3",
+   "about": "11 s, four slots: script title, map pin and look-here callout, with light leaks and exposure flashes between; plucked music. For trip diaries.",
+   "tags": [
+    "travel",
+    "vlog",
+    "light",
+    "happy",
+    "title"
+   ]
+  },
+  {
+   "id": "templates/weekend-vlog",
+   "cat": "template",
+   "group": "vlog",
+   "name": {
+    "en": "Weekend vlog",
+    "zh-CN": "周末Vlog",
+    "ja": "週末Vlog",
+    "ko": "주말 브이로그",
+    "es": "Vlog de fin de semana"
+   },
+   "kind": "group",
+   "durationMs": 10600,
+   "slots": 5,
+   "music": "audio/music/cafe-tape-piano-8646df.mp3",
+   "about": "10.6 s, five slots: a calendar date, name pill, blur-swipe, circle and dot transitions, film grain, soft piano bed, a bouncing sign-off. For weekend vlogs.",
+   "tags": [
+    "vlog",
+    "film",
+    "warm",
+    "bounce",
+    "outro"
+   ]
+  },
+  {
+   "id": "templates/cinema-open",
+   "cat": "template",
+   "group": "intro",
+   "name": {
+    "en": "Film opening",
+    "zh-CN": "电影开场",
+    "ja": "映画のオープニング",
+    "ko": "영화 오프닝",
+    "es": "Apertura de cine"
+   },
+   "kind": "group",
+   "durationMs": 10000,
+   "slots": 3,
+   "music": "audio/music/cinematic-bloom-swell-7cb0bd.mp3",
+   "about": "10 s, three slots under letterbox bars and film grain, burn and projector flashes, ending on a serif film title. For short film openings.",
+   "tags": [
+    "cinematic-look",
+    "film",
+    "title",
+    "drama",
+    "epic"
+   ]
+  },
+  {
+   "id": "templates/brand-intro",
+   "cat": "template",
+   "group": "intro",
+   "name": {
+    "en": "Brand opener",
+    "zh-CN": "品牌开场",
+    "ja": "ブランドオープニング",
+    "ko": "브랜드 오프닝",
+    "es": "Apertura de marca"
+   },
+   "kind": "group",
+   "durationMs": 8000,
+   "slots": 3,
+   "music": "audio/music/confident-tech-launch-4c279b.mp3",
+   "about": "8 s, three slots: a tilted color slab title, then a sweep-box brand title, with color-bar and ribbon transitions. For brand openers.",
+   "tags": [
+    "logo",
+    "corporate",
+    "title",
+    "tech",
+    "confident"
+   ]
+  },
+  {
+   "id": "templates/beat-cut",
+   "cat": "template",
+   "group": "beat",
+   "name": {
+    "en": "Quick cuts",
+    "zh-CN": "卡点快剪",
+    "ja": "クイックカット",
+    "ko": "빠른 컷",
+    "es": "Cortes rápidos"
+   },
+   "kind": "group",
+   "durationMs": 6800,
+   "slots": 9,
+   "music": "audio/music/bright-electro-pop-groove-d9ec8e.mp3",
+   "about": "6.8 s, nine rapid slots cut on the beat with shock and RGB-split flashes, ending on a glitch title; electro pop. For quick montage reels.",
+   "tags": [
+    "glitch",
+    "intense",
+    "electronic",
+    "social",
+    "action"
+   ]
+  },
+  {
+   "id": "templates/comic-cuts",
+   "cat": "template",
+   "group": "beat",
+   "name": {
+    "en": "Comic beats",
+    "zh-CN": "综艺卡点",
+    "ja": "バラエティ",
+    "ko": "예능 비트",
+    "es": "Ritmo cómico"
+   },
+   "kind": "group",
+   "durationMs": 5200,
+   "slots": 4,
+   "music": "audio/music/wonky-synth-versus-pulse-3bf0a8.mp3",
+   "about": "5.2 s, four slots with comic stickers WOW, NO WAY, LOL and OMG, BAM bursts and speed lines; wonky synth beat. For funny reaction clips.",
+   "tags": [
+    "comic",
+    "comedy",
+    "shake",
+    "playful",
+    "intense"
+   ]
+  },
+  {
+   "id": "templates/product-promo",
+   "cat": "template",
+   "group": "promo",
+   "name": {
+    "en": "New product",
+    "zh-CN": "新品推广",
+    "ja": "新商品",
+    "ko": "신제품",
+    "es": "Producto nuevo"
+   },
+   "kind": "group",
+   "durationMs": 10600,
+   "slots": 4,
+   "music": "audio/music/corporate-electronic-groove-78bc80.mp3",
+   "about": "10.6 s, four slots with a NEW tag, spec card, struck price and buy button, stripe and blur-swipe transitions; corporate electronic groove. For product ads.",
+   "tags": [
+    "corporate",
+    "tech",
+    "slide",
+    "trailer",
+    "confident"
+   ]
+  },
+  {
+   "id": "templates/flash-sale",
+   "cat": "template",
+   "group": "promo",
+   "name": {
+    "en": "Flash sale",
+    "zh-CN": "限时促销",
+    "ja": "タイムセール",
+    "ko": "타임 세일",
+    "es": "Oferta relámpago"
+   },
+   "kind": "group",
+   "durationMs": 7600,
+   "slots": 3,
+   "music": "audio/music/playful-electronic-pop-c27b46.mp3",
+   "about": "7.6 s, three slots with a limited-time pill, discount starburst and coupon, comic bursts and shocks between; playful electronic pop. For sale promos.",
+   "tags": [
+    "intense",
+    "vivid",
+    "playful",
+    "corporate",
+    "celebration"
+   ]
+  },
+  {
+   "id": "templates/old-days",
+   "cat": "template",
+   "group": "memory",
+   "name": {
+    "en": "Old days",
+    "zh-CN": "旧时光",
+    "ja": "あの頃",
+    "ko": "그 시절",
+    "es": "Viejos tiempos"
+   },
+   "kind": "group",
+   "durationMs": 12600,
+   "slots": 4,
+   "music": "audio/music/americana-nocturne-guitar-ccb2da.mp3",
+   "about": "12.6 s, four slots under film scratches, grain and vignette, burn and slip transitions, serif title and calendar date; nocturne guitar. For old family photos.",
+   "tags": [
+    "nostalgic",
+    "retro",
+    "film",
+    "warm",
+    "soft"
+   ]
+  },
+  {
+   "id": "templates/love-story",
+   "cat": "template",
+   "group": "memory",
+   "name": {
+    "en": "Love story",
+    "zh-CN": "恋爱日记",
+    "ja": "ラブストーリー",
+    "ko": "러브 스토리",
+    "es": "Historia de amor"
+   },
+   "kind": "group",
+   "durationMs": 11600,
+   "slots": 4,
+   "music": "audio/music/garden-serenade-piano-strings-5533fa.mp3",
+   "about": "11.6 s, four slots with a script title, floating hearts, falling petals, heart and sparkle flashes, and a closing quote. For love stories and weddings.",
+   "tags": [
+    "romantic",
+    "dreamy",
+    "soft",
+    "warm",
+    "particles"
+   ]
+  },
+  {
+   "id": "templates/birthday",
+   "cat": "template",
+   "group": "holiday",
+   "name": {
+    "en": "Birthday",
+    "zh-CN": "生日快乐",
+    "ja": "誕生日",
+    "ko": "생일 축하",
+    "es": "Cumpleaños"
+   },
+   "kind": "group",
+   "durationMs": 9000,
+   "slots": 3,
+   "music": "audio/music/birthday-celebration-piano-52fa16.mp3",
+   "about": "9 s, three slots with twinkling stars, circle and sparkle transitions, then flags, a name ribbon and confetti; birthday piano. For birthday greetings.",
+   "tags": [
+    "celebration",
+    "holiday",
+    "happy",
+    "particles",
+    "playful"
+   ]
+  },
+  {
+   "id": "templates/new-year",
+   "cat": "template",
+   "group": "holiday",
+   "name": {
+    "en": "New Year",
+    "zh-CN": "新年快乐",
+    "ja": "新年",
+    "ko": "새해",
+    "es": "Año Nuevo"
+   },
+   "kind": "group",
+   "durationMs": 9200,
+   "slots": 3,
+   "music": "audio/music/tang-banquet-pipa-88468c.mp3",
+   "about": "9.2 s, three slots with fireworks, sparkles, exposure flash and sun rays, ending on a gold year greeting; festive pipa music. For New Year greetings.",
+   "tags": [
+    "holiday",
+    "celebration",
+    "particles",
+    "chinese",
+    "happy"
+   ]
+  },
+  {
+   "id": "templates/how-to",
+   "cat": "template",
+   "group": "knowledge",
+   "name": {
+    "en": "Step by step",
+    "zh-CN": "干货步骤",
+    "ja": "ステップ解説",
+    "ko": "단계별 설명",
+    "es": "Paso a paso"
+   },
+   "kind": "group",
+   "durationMs": 14200,
+   "slots": 5,
+   "music": "audio/music/minimal-tech-ambient-25420d.mp3",
+   "about": "14.2 s, five slots with a chapter number, three numbered step callouts and a subscribe button, slat and pixel transitions; minimal ambient bed. For tutorials.",
+   "tags": [
+    "explainer",
+    "focused",
+    "minimal",
+    "tech",
+    "social"
+   ]
+  },
+  {
+   "id": "templates/news-flash",
+   "cat": "template",
+   "group": "knowledge",
+   "name": {
+    "en": "News flash",
+    "zh-CN": "新闻快报",
+    "ja": "ニュース速報",
+    "ko": "뉴스 속보",
+    "es": "Noticia de última hora"
+   },
+   "kind": "group",
+   "durationMs": 10000,
+   "slots": 3,
+   "music": "audio/music/minimal-data-documentary-pulse-bb6f8d.mp3",
+   "about": "10 s, three slots with a breaking-news strap, name strap and rolling ticker, scan-tear and slat transitions; documentary pulse. For news reports.",
+   "tags": [
+    "news",
+    "corporate",
+    "tense",
+    "documentary",
+    "focused"
+   ]
+  }
+ ]
+}

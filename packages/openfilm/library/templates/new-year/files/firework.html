@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fireworks</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { width: 100vw; height: 100vh; display: block; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Fireworks: rockets shoot up and burst into trails of sparks that fall and flicker out, three at a time, again and
+ * again; every spark is worked out from t alone. A page of OpenFilm's library (CC0): what it shows at t comes from t
+ * alone; its CSS animations are held at t by the host.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const cv = document.querySelector('canvas');
+const ctx = cv.getContext('2d');
+const P = 2.7;
+const SHOTS = [[200, 150, 0, '#ffd60a'], [112, 116, 0.8, '#ff2d55'], [292, 128, 1.55, '#30b0ff']];
+const K = 2.2, G = 150, N = 64;
+const at = (v, age) => (1 - Math.exp(-K * age)) / K * v;
+window.film = {
+  width: 400,
+  height: 400,
+  frame(t) {
+    const W = innerWidth, H = innerHeight, dpr = devicePixelRatio || 1;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.setTransform(cv.width / 400, 0, 0, cv.height / 400, 0, 0);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    for (let c = Math.max(0, Math.floor(t / P) - 1); c <= Math.floor(t / P); c++) {
+      SHOTS.forEach(([bx, by, start, color], j) => {
+        const s0 = c * P + start, up = 0.32, age = t - s0;
+        if (age < 0 || age > up + 2) return;
+        const seed = c * 17 + j * 5;
+        const ox = bx + (hash(seed + 0.3) - 0.5) * 40, oy = by + (hash(seed + 0.7) - 0.5) * 30;
+        if (age < up) {
+          const k = 1 - Math.pow(1 - age / up, 2);
+          const y = 410 - (410 - oy) * k, y2 = 410 - (410 - oy) * Math.max(0, k - 0.25);
+          const g = ctx.createLinearGradient(ox, y2, ox, y);
+          g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, color);
+          ctx.strokeStyle = g; ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.moveTo(ox, y2); ctx.lineTo(ox, y); ctx.stroke();
+          return;
+        }
+        const a2 = age - up, fade = Math.pow(Math.max(0, 1 - a2 / 1.9), 1.3);
+        if (a2 < 0.1) { ctx.fillStyle = 'rgba(255,255,255,' + (0.8 * (1 - a2 / 0.1)) + ')'; ctx.beginPath(); ctx.arc(ox, oy, 8 + a2 * 160, 0, 7); ctx.fill(); }
+        for (let i = 0; i < N; i++) {
+          const a = (i / N) * Math.PI * 2 + hash(seed + i) * 0.12, v = 110 + Math.pow(hash(seed + i * 1.3), 0.6) * 240;
+          const pos = (q) => [ox + Math.cos(a) * at(v, q), oy + Math.sin(a) * at(v, q) + G * q * q * 0.5];
+          const [x1, y1] = pos(a2);
+          const tw = a2 > 0.7 ? (hash(i + Math.floor(t * 20) * 0.37 + seed) > 0.5 ? 1 : 0.25) : 1;
+          ctx.strokeStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 8;
+          for (let k = 0; k < 4; k++) {
+            const [xa, ya] = pos(Math.max(0, a2 - 0.045 * k)), [xb, yb] = pos(Math.max(0, a2 - 0.045 * (k + 1)));
+            ctx.globalAlpha = fade * tw * (1 - k / 4);
+            ctx.lineWidth = (4.6 - k) * fade + 0.8;
+            ctx.beginPath(); ctx.moveTo(xb, yb); ctx.lineTo(xa, ya); ctx.stroke();
+          }
+          ctx.shadowBlur = 0; ctx.globalAlpha = fade * tw;
+          ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x1, y1, 2.4 * fade + 0.8, 0, 7); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      });
+    }
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

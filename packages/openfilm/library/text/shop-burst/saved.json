@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "shop-burst.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Big text\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Small text\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Burst\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Back burst\", \"type\": \"var\", \"var\": \"--accent2\"}, {\"name\": \"Color\", \"type\": \"var\", \"var\": \"--color\"}]"
+    }
+  },
+  "durationMs": 4000
+}

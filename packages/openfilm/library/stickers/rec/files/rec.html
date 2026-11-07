@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>REC</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --color: #ff3b30; }
+.w { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.pill { display: flex; align-items: center; gap: 3vw; height: 60vh; padding: 0 5vw; border-radius: 12vh; background: rgba(0, 0, 0, 0.5); border: 0.5vh solid rgba(255, 255, 255, 0.18); animation: in 0.45s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes in { from { transform: translateX(-12vw); opacity: 0; } }
+.dot { width: 22vh; height: 22vh; border-radius: 50%; background: var(--color); box-shadow: 0 0 6vh var(--color); animation: blink 1s steps(1) 0.45s infinite; }
+@keyframes blink { 50% { opacity: 0.15; box-shadow: none; } }
+.rec { color: #ffffff; font: 800 30vh 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; letter-spacing: 0.06em; }
+.tc { color: #ffffff; font: 600 26vh 'SF Mono', Menlo, Consolas, 'Courier New', monospace; opacity: 0.92; }
+</style>
+</head>
+<body>
+<div class="w"><div class="pill"><div class="dot"></div><div class="rec">REC</div><div class="tc">00:00:00:00</div></div></div>
+<script>
+/*
+ * A camera's recording sign: a blinking red dot, REC and a running timecode counted from t. Its dot's color is the
+ * clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations
+ * are held at t by the host.
+ */
+const tc = document.querySelector('.tc');
+const two = (n) => String(n).padStart(2, '0');
+window.film = {
+  width: 440,
+  height: 140,
+  frame(t) {
+    const s = Math.floor(t);
+    tc.textContent = `${two(Math.floor(s / 3600))}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}:${two(Math.floor((t - s) * 30))}`;
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

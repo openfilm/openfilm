@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pros and cons</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --good: #2fd27a; --bad: #ff5b5b; --card: rgba(16, 18, 24, 0.82); --color: #ffffff; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 4vh; padding: 0 4vh; font-family: var(--font); color: var(--color); }
+.col { flex: 1; max-width: 94vh; background: var(--card); border-radius: 4vh; padding: 6vh 6vh 7vh; box-shadow: 0 2.4vh 6vh rgba(0, 0, 0, 0.3); animation: up 0.6s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+.col + .col { animation-delay: 0.12s; }
+.hd { display: flex; align-items: center; gap: 2.4vh; font-size: 9vh; font-weight: 800; letter-spacing: 0.14em; padding-bottom: 3.4vh; margin-bottom: 3.4vh; border-bottom: 0.6vh solid rgba(255, 255, 255, 0.14); white-space: pre; }
+.hd::before { content: ""; width: 3vh; height: 3vh; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1.2vh color-mix(in srgb, var(--c) 30%, transparent); }
+.good { --c: var(--good); } .bad { --c: var(--bad); }
+.hd span { color: var(--c); }
+.it { display: flex; align-items: center; gap: 3vh; font-size: 8.4vh; font-weight: 600; line-height: 1.2; margin-top: 3.2vh; white-space: pre; animation: side 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.it::before { content: ""; flex: none; width: 7vh; height: 7vh; border-radius: 50%; background: var(--c); }
+.good .it::before { background: var(--c) no-repeat center / 60% url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.5 5.3 4 7.6 8.6 2.6' fill='none' stroke='white' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.bad .it::before { background: var(--c) no-repeat center / 50% url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 2 8 8M8 2 2 8' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E"); }
+.good .it:nth-of-type(2) { animation-delay: 0.35s; } .good .it:nth-of-type(3) { animation-delay: 0.5s; } .good .it:nth-of-type(4) { animation-delay: 0.65s; }
+.bad .it:nth-of-type(2) { animation-delay: 0.45s; } .bad .it:nth-of-type(3) { animation-delay: 0.6s; } .bad .it:nth-of-type(4) { animation-delay: 0.75s; }
+@keyframes up { from { opacity: 0; transform: translateY(10vh) scale(0.9); } }
+@keyframes side { from { opacity: 0; transform: translateX(-5vh); } }
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="col good"><div class="hd"><span class="h1">PROS</span></div><div class="it"><span class="p1">Light and quiet</span></div><div class="it"><span class="p2">Battery for two days</span></div><div class="it"><span class="p3">Fair price</span></div></div>
+  <div class="col bad"><div class="hd"><span class="h2">CONS</span></div><div class="it"><span class="c1">No case included</span></div><div class="it"><span class="c2">Slow to charge</span></div><div class="it"><span class="c3">Two colors only</span></div></div>
+</div>
+<script>
+/*
+ * Two columns, good points with ticks and bad points with crosses, each line coming in after the other. A page of
+ * OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at t by the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

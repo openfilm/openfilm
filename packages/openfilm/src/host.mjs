@@ -1,5 +1,6 @@
 // The reference host (SPEC §4): serves a film folder over HTTP, opens its page in Chromium and asks it for frames.
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { pipeline } from 'node:stream';
 import { createReadStream, readFileSync, realpathSync, statSync } from 'node:fs';
@@ -8,6 +9,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { chromium } from 'playwright-core';
 import { DEFAULT_STAGE, FILM_FILE, readFilmFile } from './film-doc.mjs';
 import { readableLink } from './media-links.mjs';
+import { guard } from './browser-memory.mjs';
 
 // Media seeks that land inside the frame they name. A plain `video.currentTime = t` at a frame boundary otherwise
 // shows the previous frame about a third of the time. Every page that draws a film by seeking video runs it first,
@@ -30,6 +32,20 @@ const TIMELINE = readFileSync(fileURLToPath(new URL('./timeline.mjs', import.met
 const FILM_DOC = readFileSync(fileURLToPath(new URL('./film-doc.mjs', import.meta.url)), 'utf8');
 /* a page clip's overrides, applied: the timeline imports it from here, and so do Studio's thumbnails of a page clip */
 const OVERRIDES = readFileSync(fileURLToPath(new URL('./overrides.mjs', import.meta.url)), 'utf8');
+/* the timeline's reading of caption tracks' WebVTT (SPEC §1 Captions) */
+const CAPTIONS = readFileSync(fileURLToPath(new URL('./captions.mjs', import.meta.url)), 'utf8');
+/* the library's text component (library/text/text): its fonts and motions are a caption's too (src/captions.mjs) */
+const TEXT_DIR = new URL('../library/text/text/files/', import.meta.url);
+let captionText = null;
+/** The text component's @font-face and @keyframes rules; its fonts are served beside them (`__film/fonts/…`, as the rules say). */
+function captionTextCss() {
+  if (captionText != null) return captionText;
+  let page = '';
+  try { page = readFileSync(fileURLToPath(new URL('text.html', TEXT_DIR)), 'utf8'); } catch { /* a package without the library: none */ }
+  const css = /<style>([\s\S]*?)<\/style>/.exec(page)?.[1] ?? '';
+  captionText = (css.match(/@(?:font-face|keyframes)[^{]*\{(?:[^{}]|\{[^{}]*\})*\}/g) ?? []).join('\n');
+  return captionText;
+}
 
 /**
  * The start of a film, before the timeline takes its clips over: nothing shows, a page clip has the stage's size to
@@ -39,6 +55,8 @@ const OVERRIDES = readFileSync(fileURLToPath(new URL('./overrides.mjs', import.m
  */
 const filmStart = (stage) => `<style>html,body{margin:0;overflow:hidden}:where(body){background:#000}`
   + `body>section{display:contents}body>section>:is(iframe,video,img,audio){position:absolute;left:0;top:0;margin:0;visibility:hidden}`
+  /* a clip not on draws no filter: Chromium paints a hidden element's filter (an feImage, a mask's stroke) all the same */
+  + `body>section>:not([style*="visibility: visible"]){filter:none!important}`
   + `body>section>iframe{border:0;width:${stage.w}px;height:${stage.h}px}:where(body>section>:is(video,img)){object-fit:contain}</style>`
   + `<script>${HOLD_MEDIA}</script>`
   + `<script type="module" src="__film/timeline.mjs"></script>`;
@@ -76,6 +94,22 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     }
     if (path.endsWith('/__film/film-doc.mjs')) {
       res.writeHead(200, { ...extraHeaders, 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' }).end(FILM_DOC);
+      return true;
+    }
+    if (path.endsWith('/__film/captions.mjs')) {
+      res.writeHead(200, { ...extraHeaders, 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' }).end(CAPTIONS);
+      return true;
+    }
+    if (path.endsWith('/__film/caption-text.css')) {
+      res.writeHead(200, { ...extraHeaders, 'content-type': 'text/css; charset=utf-8', 'cache-control': 'no-store' }).end(captionTextCss());
+      return true;
+    }
+    const font = /\/__film\/fonts\/([\w.-]+\.(?:woff2|ttf))$/.exec(path)?.[1];
+    if (font) {
+      let body = null;
+      try { body = readFileSync(fileURLToPath(new URL(`fonts/${font}`, TEXT_DIR))); } catch { /* not one of its fonts */ }
+      if (!body) { res.writeHead(404, extraHeaders).end(); return true; }
+      res.writeHead(200, { ...extraHeaders, 'content-type': font.endsWith('.woff2') ? 'font/woff2' : 'font/ttf', 'cache-control': 'max-age=86400' }).end(body);
       return true;
     }
     if (path.endsWith('/__film/overrides.mjs')) {
@@ -215,20 +249,42 @@ export function mediaFacts(file) {
   return /** @type {Promise<{ duration: number, w: number, h: number } | null>} */ (mediaFactsOf.get(key));
 }
 
+/* the ports browsers refuse to open (the Fetch standard's bad ports, ERR_UNSAFE_PORT) that an OS may hand out */
+const BAD_PORTS = new Set([1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080]);
+
+/**
+ * Listen on 127.0.0.1 at `port`; for port 0, at one a browser opens: a port browsers refuse is let go and the OS asked
+ * again. The port it listens on.
+ * @param {import('node:net').Server} server
+ * @param {number} [port]
+ * @returns {Promise<number>}
+ */
+export async function listenLocal(server, port = 0) {
+  for (;;) {
+    await new Promise((done, fail) => {
+      server.once('error', fail);
+      server.listen(port, '127.0.0.1', () => { server.off('error', fail); done(undefined); });
+    });
+    const got = /** @type {import('node:net').AddressInfo} */ (server.address()).port;
+    if (port || !BAD_PORTS.has(got)) return got;
+    await new Promise((done) => server.close(() => done(undefined)));
+  }
+}
+
 /**
  * Serve `root`. HTML gets the host flag injected before any page script;
  * ?film-host=0 serves the page untouched, as a visitor would see it.
  */
-export function serve(root, { port = 0, swap } = {}) {
+export async function serve(root, { port = 0, swap } = {}) {
   const files = folderFiles(root, { swap });
   const server = createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     if (!files(req, res, url.pathname, url.searchParams)) res.writeHead(403).end();
   });
-  return new Promise((ok) => server.listen(port, '127.0.0.1', () => ok({
-    server, url: `http://127.0.0.1:${server.address().port}`,
+  return {
+    server, url: `http://127.0.0.1:${await listenLocal(server, port)}`,
     close: () => new Promise((done) => { server.closeAllConnections?.(); server.close(() => done()); }),
-  })));
+  };
 }
 
 /** Put `tag` before any script of the page: after <head> if there is one before the first script, else after the doctype. */
@@ -259,12 +315,21 @@ export function injectFirst(html, tag) {
  * included), is the smaller download, starts inside agents'
  * OS sandboxes where the full Chromium cannot, and is the build Studio's engine uses — one browser on the machine.
  * A visible window needs the full Chromium (`headed`). A host may pick another build, add arguments and its own
- * environment.
+ * environment. Each browser is held to a share of the machine's memory (browser-memory.mjs): a page whose drawing
+ * takes more ends it.
  */
 export async function launch({ headed = false, channel = headed ? 'chromium' : null, args: extra = [], env } = {}) {
-  /* CanvasDrawElement: HTML-in-Canvas (drawElementImage, texElementImage2D), so a page can draw its own DOM into 2D or WebGL */
-  const args = ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--autoplay-policy=no-user-gesture-required', '--hide-scrollbars', '--enable-blink-features=CanvasDrawElement', ...extra];
-  const open = (/** @type {string[]} */ angle) => chromium.launch({ ...(channel ? { channel } : {}), headless: !headed, args: [...args, ...angle], ...(env ? { env } : {}) });
+  /* CanvasDrawElement: HTML-in-Canvas (drawElementImage, texElementImage2D), so a page can draw its own DOM into 2D or WebGL.
+     No Skia Graphite: with it, a 2D canvas drawing hundreds of strokes each through `ctx.filter = 'blur(…)'` had the
+     GPU process take 7 to 9 GB for one frame (two such browsers froze a 16 GB Mac); without it, 400 MB, as fast */
+  const args = ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-skia-graphite', '--autoplay-policy=no-user-gesture-required', '--hide-scrollbars', '--enable-blink-features=CanvasDrawElement', ...extra];
+  const open = async (/** @type {string[]} */ angle) => {
+    /* a switch of no meaning to Chromium, so its process (and every one it starts) is found to be watched */
+    const marker = `--openfilm-browser=${randomUUID()}`;
+    const browser = await chromium.launch({ ...(channel ? { channel } : {}), headless: !headed, args: [...args, ...angle, marker], ...(env ? { env } : {}) });
+    guard(browser, marker);
+    return browser;
+  };
   const browser = extra.some((a) => a.startsWith('--use-angle')) ? await open([])
     : process.platform === 'darwin' ? await open(['--use-angle=metal'])
     : process.platform === 'win32' ? await onWindows(open)
@@ -460,6 +525,8 @@ export class FrameError extends Error {}
 export class VideoNotShown extends FrameError {}
 /** How many exact frames of video may go unseen, none seen yet, before the browser counts as showing no video. */
 const UNSEEN_VIDEO = 3;
+/** And with no other way to show video: how many before the film fails, rather than be drawn black. */
+const NEVER_SHOWN = 12;
 
 /**
  * `work`, or a FrameError saying `why` once `ms` pass. The limit is kept here, not in the page: a page whose code
@@ -635,13 +702,18 @@ export class FilmPage {
     const why = `frame(${Number(t.toFixed(3))}) did not finish within ${timeoutMs / 1000} s`;
     const videos = await inTime(drawn, timeoutMs, why).catch(async (e) => { throw e.message === why ? new FrameError(`${why}${await stuck(this.page)}`) : e; });
     /* every seek waited out (five seconds a frame) and the picture black: when browsers can show video another way,
-       the film is drawn again in those */
-    if (videos && videos.shown === 0 && videos.unshown >= UNSEEN_VIDEO && await this.onVideoNotShown()) {
-      throw new VideoNotShown(`this browser never showed the film's video frames (${videos.unshown} sought): video is shown another way from now on`);
+       the film is drawn again in those; with none, it fails before it is all drawn black */
+    if (videos && videos.shown === 0 && videos.unshown >= UNSEEN_VIDEO) {
+      if (await this.onVideoNotShown()) {
+        throw new VideoNotShown(`this browser never showed the film's video frames (${videos.unshown} sought): video is shown another way from now on`);
+      }
+      if (videos.unshown >= NEVER_SHOWN) {
+        throw new FrameError(`this browser never showed the film's video frames (${videos.unshown} sought), so its picture would be black. On Windows, updating the graphics driver can help.`);
+      }
     }
   }
 
-  /** PNG (or JPEG) of the viewport as composited. */
+  /** PNG (or JPEG, or WebP) of the viewport as composited. */
   async capture({ format = 'png', quality } = {}) {
     // Without a clip, headless Chromium returns CSS pixels; a clip at the device pixel ratio returns real pixels.
     const clip = { x: 0, y: 0, width: this.meta.width, height: this.meta.height, scale: this.scale };
@@ -650,6 +722,11 @@ export class FilmPage {
     const { data } = await inTime(this.cdp.send('Page.captureScreenshot', { format, quality, clip, fromSurface: true, optimizeForSpeed: true }),
       CAPTURE_MS, `the picture did not come within ${CAPTURE_MS / 1000} s`);
     return Buffer.from(data, 'base64');
+  }
+
+  /** What the page leaves unpainted from now on: clear (a capture keeps it transparent), else black. */
+  async ground(/** @type {boolean} */ clear) {
+    await this.cdp.send('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: clear ? 0 : 1 } });
   }
 
   async gpu() {

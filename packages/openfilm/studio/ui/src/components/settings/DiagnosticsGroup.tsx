@@ -51,7 +51,7 @@ export function ReportText({ text }: { text: string }) {
   const t = useT();
   return (
     <textarea readOnly value={text} rows={12} aria-label={t('settings.report.title')} onFocus={(e) => e.currentTarget.select()}
-      className="mb-2 w-full resize-y rounded-md border border-[var(--border)] bg-[var(--surface-2)] p-2 font-mono text-[11.5px] leading-snug text-[var(--text)]" />
+      className="mb-2 w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg-field)] p-2 font-mono text-[11.5px] leading-snug text-[var(--text)]" />
   );
 }
 
@@ -180,7 +180,7 @@ export function DiagnosticsGroup() {
         {shown.length ? (
           <ul className="mb-2 flex flex-col gap-1.5">
             {shown.map((p, i) => (
-              <li key={`${p.t}:${i}`} className="min-w-0 rounded-md bg-[var(--surface-2)] px-2.5 py-1.5 text-[12.5px] leading-snug">
+              <li key={`${p.t}:${i}`} className="min-w-0 rounded-md bg-[var(--bg-field)] px-2.5 py-1.5 text-[12.5px] leading-snug">
                 <div className="flex gap-2 text-[var(--text-muted)]">
                   <span className="shrink-0 tabular-nums">{when(p.t)}</span>
                   <span className="truncate">{[p.agent ?? p.area, p.step].filter(Boolean).join(' · ')}</span>

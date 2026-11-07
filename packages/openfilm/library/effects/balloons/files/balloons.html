@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Balloons</title>
+<style>
+  /* what a clip of it may change: how many balloons (0 to 1), how fast they rise */
+  :root { --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Balloons rising through the picture: glossy latex in party colors, each with its shine, its knot and a string
+ * that trails behind as it sways; far ones small and faint, near ones large and quick. Every balloon's place is
+ * worked out from t alone, wrapping round below the frame, so any length of clip works. A page of OpenFilm's library
+ * (CC0).
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+const PALETTE = [[255, 59, 79], [255, 126, 182], [255, 201, 60], [76, 201, 240], [46, 196, 182], [155, 93, 229], [245, 245, 250], [255, 140, 66]];
+const mix = (c, k) => c.map((v) => Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k));
+const N = 24;
+const balloons = Array.from({ length: N }, (_, i) => {
+  const r = (k) => hash(i * 13.7 + k);
+  return { depth: r(1), x: r(2), y: r(3), order: r(4), c: PALETTE[Math.floor(r(5) * PALETTE.length)], f: 0.5 + r(6) * 0.6, ph: r(7) * 6.28, sway: 1.5 + r(8) * 3 };
+}).sort((a, b) => a.depth - b.depth);
+function balloon(x, y, rx, tilt, lag, c, alpha) {
+  const ry = rx * 1.2;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(tilt);
+  ctx.globalAlpha = alpha;
+  // the string, trailing behind the sway
+  const L = ry * 2.6;
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = Math.max(0.6, rx * 0.035);
+  ctx.beginPath(); ctx.moveTo(0, ry * 1.08);
+  ctx.bezierCurveTo(-lag * 0.6 + rx * 0.25, ry * 1.08 + L * 0.35, -lag + -rx * 0.25, ry * 1.08 + L * 0.7, -lag * 1.4, ry * 1.08 + L);
+  ctx.stroke();
+  // the knot
+  ctx.fillStyle = `rgb(${mix(c, -0.3)})`;
+  ctx.beginPath(); ctx.moveTo(-rx * 0.1, ry * 1.1); ctx.lineTo(rx * 0.1, ry * 1.1); ctx.lineTo(rx * 0.04, ry * 0.97); ctx.lineTo(-rx * 0.04, ry * 0.97); ctx.closePath(); ctx.fill();
+  // the body: rounder at the top, narrowing to the knot
+  ctx.beginPath();
+  ctx.moveTo(0, -ry);
+  ctx.bezierCurveTo(rx * 1.33, -ry, rx * 1.08, ry * 0.62, 0, ry);
+  ctx.bezierCurveTo(-rx * 1.08, ry * 0.62, -rx * 1.33, -ry, 0, -ry);
+  const g = ctx.createRadialGradient(-rx * 0.35, -ry * 0.4, rx * 0.05, -rx * 0.1, -ry * 0.1, rx * 1.35);
+  g.addColorStop(0, `rgb(${mix(c, 0.45)})`); g.addColorStop(0.35, `rgb(${c})`); g.addColorStop(0.8, `rgb(${mix(c, -0.35)})`); g.addColorStop(1, `rgb(${mix(c, -0.55)})`);
+  ctx.fillStyle = g; ctx.fill();
+  // light coming back through the latex at the lower edge
+  const rim = ctx.createRadialGradient(rx * 0.35, ry * 0.55, 0, rx * 0.35, ry * 0.55, rx * 0.6);
+  rim.addColorStop(0, `rgba(${mix(c, 0.3)},0.45)`); rim.addColorStop(1, `rgba(${c},0)`);
+  ctx.fillStyle = rim; ctx.fill();
+  // the shine
+  ctx.save();
+  ctx.translate(-rx * 0.4, -ry * 0.45); ctx.rotate(-0.5);
+  const s = ctx.createRadialGradient(0, 0, 0, 0, 0, rx * 0.32);
+  s.addColorStop(0, 'rgba(255,255,255,0.9)'); s.addColorStop(0.5, 'rgba(255,255,255,0.35)'); s.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.scale(0.55, 1);
+  ctx.fillStyle = s; ctx.beginPath(); ctx.arc(0, 0, rx * 0.32, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.beginPath(); ctx.ellipse(-rx * 0.12, -ry * 0.72, rx * 0.07, rx * 0.04, -0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const amount = Math.max(0, Math.min(1, num('--amount', 1))), speed = num('--speed', 1);
+    for (const b of balloons) {
+      if (b.order > amount) continue;
+      const rx = (3.2 + b.depth * b.depth * 7.5) * u;
+      const span = h + rx * 6.5;
+      const rise = (0.07 + b.depth * 0.11) * h * speed;
+      const y = h + rx * 1.4 - ((b.y * span + t * rise) % span);
+      const phase = t * b.f * speed + b.ph;
+      const x = b.x * (w + 6 * u) - 3 * u + Math.sin(phase) * b.sway * u;
+      const tilt = Math.cos(phase) * 0.1;
+      const lag = Math.cos(phase) * b.sway * u * 0.9;
+      const c = b.depth < 0.35 ? mix(b.c, 0.12) : b.c;
+      balloon(x, y, rx, tilt, lag, c, 0.55 + 0.45 * Math.min(1, b.depth * 1.6));
+    }
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

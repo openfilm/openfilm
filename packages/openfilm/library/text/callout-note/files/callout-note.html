@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Note with pointer</title>
+<style>
+:root { --font: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff6b3d; --card: #ffffff; --ink: #17181c; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.ln { position: relative; display: inline-block; white-space: pre; }
+.fx { position: absolute; left: 0; top: 0; width: 100%; white-space: pre; pointer-events: none; -webkit-text-fill-color: currentColor; }
+.fx .ch { display: inline-block; will-change: transform; }
+.src { -webkit-text-fill-color: transparent; }
+.w { position: fixed; inset: 0; display: flex; align-items: flex-start; padding: 8vh 6vh 0; font-family: var(--font); }
+.c { position: relative; background: var(--card); color: var(--ink); border-radius: 6vh; padding: 9vh 11vh 10vh 10vh; box-shadow: 0 3vh 8vh rgba(0, 0, 0, 0.32); transform-origin: 8vh 90vh; animation: pop 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) both, bob 3s 1s ease-in-out infinite; }
+.c::after { content: ""; position: absolute; left: 10vh; bottom: -9vh; width: 14vh; height: 10vh; background: var(--card); clip-path: polygon(0 0, 100% 0, 0 100%); }
+.t1 { display: inline-flex; align-items: center; gap: 2vh; font-size: 10vh; font-weight: 800; letter-spacing: 0.12em; color: var(--accent); white-space: pre; animation: rise 0.5s 0.3s both; }
+.t1::before { content: ""; width: 4vh; height: 4vh; border-radius: 50%; background: var(--accent); }
+.t2 { display: block; margin-top: 3vh; font-size: 17vh; font-weight: 700; line-height: 1.15; white-space: pre; animation: rise 0.5s 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes pop { from { transform: scale(0); } }
+@keyframes bob { 50% { translate: 0 -1.6vh; } }
+@keyframes rise { from { opacity: 0; transform: translateY(3vh); } }
+</style>
+</head>
+<body>
+<div class="w"><div class="c"><span class="t1">NOTE</span><span class="t2">Shot on a phone,
+no filter</span></div></div>
+<script>
+/*
+ * A white note box with a pointer at its corner that pops out of the point it shows, a colored label and a line of
+ * words. A page of OpenFilm's library (CC0): what it shows at t comes from t alone; its CSS animations are held at
+ * t by the host.
+ */
+window.film = { frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

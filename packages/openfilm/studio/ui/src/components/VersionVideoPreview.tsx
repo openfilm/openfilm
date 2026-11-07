@@ -49,7 +49,7 @@ export function VersionVideoPreview({ projectId, commit }: { projectId: string; 
     return (
       <div
         role="alert"
-        className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-[var(--canvas)] px-6 py-8 text-center"
+        className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-[var(--bg-app)] px-6 py-8 text-center"
       >
         <p className="text-[12px] text-[var(--text-muted)]">{t('versions.previewFailed')}</p>
         <button
@@ -66,7 +66,7 @@ export function VersionVideoPreview({ projectId, commit }: { projectId: string; 
       <div
         role="status"
         aria-label={t('versions.previewLoading')}
-        className="flex min-h-0 flex-1 items-center justify-center gap-2 bg-[var(--canvas)] text-[12px] text-[var(--text-muted)]"
+        className="flex min-h-0 flex-1 items-center justify-center gap-2 bg-[var(--bg-app)] text-[12px] text-[var(--text-muted)]"
       >
         <Loader2 size={15} className="animate-spin" />
         {t('versions.previewLoading')}
@@ -137,24 +137,24 @@ function SnapshotPlayer({ snapshot }: { snapshot: VersionPreview }) {
   };
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="relative min-h-0 flex-1 bg-[var(--canvas)]" aria-label={t('versions.videoPreview')}>
+      <div className="relative min-h-0 flex-1 bg-[var(--bg-app)]" aria-label={t('versions.videoPreview')}>
         <Preview ref={preview} folder={snapshot.folder} stage={stage} time={now} onInfo={onInfo} onError={setError} />
       </div>
       {snapshot.missing.length ? (
         <p
           role="status"
-          className="shrink-0 border-t border-[var(--border-soft)] bg-[var(--surface-2)] px-4 py-1.5 text-[11px] text-[var(--warn)]"
+          className="shrink-0 border-t border-[var(--border)] bg-[var(--bg-field)] px-4 py-1.5 text-[11px] text-[var(--warn)]"
         >
           {t('versions.previewMissing').replace('{n}', String(snapshot.missing.length))}
         </p>
       ) : null}
-      <div className="flex h-11 shrink-0 items-center gap-3 border-t border-[var(--border-soft)] px-4">
+      <div className="flex h-11 shrink-0 items-center gap-3 border-t border-[var(--border)] px-4">
         <button
           type="button"
           disabled={!duration || !!error}
           onClick={toggle}
           aria-label={t(playing ? 'versions.pause' : 'versions.play')}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--text-dim)] hover:bg-[var(--bg-hover)] disabled:opacity-40"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] hover:bg-[var(--bg-hover)] disabled:opacity-40"
         >
           {playing ? <Pause size={16} /> : <Play size={16} />}
         </button>
