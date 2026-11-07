@@ -162,6 +162,15 @@ export interface StudioHost {
     onChange: (listener: (prefs: HostDeveloper) => void) => () => void;
   };
   /**
+   * The app's notifications, for Settings → General: the system's notification of a chat's turn done, stopped by an
+   * error, or waiting for an answer, while the window is not in front (on, until switched off).
+   */
+  notifications?: {
+    get: () => Promise<boolean>;
+    set: (on: boolean) => Promise<unknown>;
+    onChange: (listener: (on: boolean) => void) => () => void;
+  };
+  /**
    * The app keeps each open project in a tab of its own window, one shown at a time, and draws nothing of them: Studio
    * names the one in front at its top bar's left, the way to the others and to the recent ones (ProjectSwitcher,
    * `open`: one open already is shown). With no tab open the page is at `/`, and
