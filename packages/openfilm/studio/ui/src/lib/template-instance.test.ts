@@ -98,6 +98,14 @@ test("a place's picture framed: filling or whole, the point looked at, how near;
   assert.equal(withPlaceFrame(style, { fit: 'contain', x: 0.5, y: 0.5, zoom: 1 }), 'object-fit: contain; animation: kb 8s infinite');
 });
 
+test("a template's object-position is read as CSS reads it: one value, keywords, and other units", () => {
+  assert.deepEqual(placeFrame('object-position: top'), { fit: 'cover', x: 0.5, y: 0, zoom: 1 });
+  assert.deepEqual(placeFrame('object-position: 30%'), { fit: 'cover', x: 0.3, y: 0.5, zoom: 1 }, 'one value is across, not both axes');
+  assert.deepEqual(placeFrame('object-position: right bottom'), { fit: 'cover', x: 1, y: 1, zoom: 1 });
+  assert.deepEqual(placeFrame('object-position: 30% 80%'), { fit: 'cover', x: 0.3, y: 0.8, zoom: 1 });
+  assert.deepEqual(placeFrame('object-position: 10px 20px'), { fit: 'cover', x: 0.5, y: 0.5, zoom: 1 }, 'px are not percentages');
+});
+
 test('a template stretched: its places in proportion, a transition on its cut, its opening held, its end with it', () => {
   const film = { tracks: [
     { clips: [
