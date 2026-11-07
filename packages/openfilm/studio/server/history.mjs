@@ -549,25 +549,48 @@ export function saveVersion(root, { message = '', kind, onProgress } = {}) {
 }
 
 /**
+ * A file of the folder the trash would not take: its path, the error's words, and the Recycle Bin's own answer when
+ * that is what refused (trash.mjs: `why`, the drive, the sizes), for Studio to say in its language.
+ * @typedef {{ path: string, error: string, recycle?: Record<string, unknown> }} Kept
+ */
+
+/**
+ * A file of the folder to the trash, as a delete in Studio does. One the trash will not take (Windows' Recycle Bin
+ * refusing it, a trash on another disk) stays where it is and is named in `kept`, with why: the version is put back
+ * around it, rather than half way, with the files already written and the rest not, and the head not moved. It is
+ * in the folder still, so it counts as a change until the person deletes it (Studio says so).
+ * @param {string} root @param {string} path @param {Kept[]} kept
+ */
+async function toTrash(root, path, kept) {
+  try { await moveToTrash(join(root, path)); } catch (e) {
+    const { message, extra } = /** @type {Error & { extra?: Record<string, unknown> }} */ (e);
+    kept.push({ path, error: message, ...(extra?.code === 'recycle' ? { recycle: extra } : {}) });
+  }
+}
+
+/**
  * Put the folder back as `head` holds it, `changes` (changesNow) being what differs: its files written where they
- * differ, and a file the version does not have (made since) to the trash, as a delete in Studio does. Files the
- * versions leave out are not touched.
+ * differ, and a file the version does not have (made since) to the trash (toTrash: one the trash refuses stays, named
+ * in `kept`). Files the versions leave out are not touched.
  * @param {import('./history-store.mjs').Repo} repo @param {import('./history-store.mjs').Version} version
  * @param {Change[]} changes @param {Progress} [progress]
+ * @returns {Promise<{ missing: string[], kept: Kept[] }>}
  */
 async function putBack(repo, version, changes, progress) {
   const { missing } = await writeFiles(repo, version, { progress });
+  /** @type {Kept[]} */
+  const kept = [];
   for (const { path, change } of changes) {
-    if (change === 'added' && !version.has(path) && existsSync(join(repo.root, path))) await moveToTrash(join(repo.root, path));
+    if (change === 'added' && !version.has(path) && existsSync(join(repo.root, path))) await toTrash(repo.root, path, kept);
   }
   /* Studio's state of the film (markers, settings, subtitle style) the version did not have: it had none */
-  for (const path of STUDIO_STATE) if (!version.has(path) && existsSync(join(repo.root, path))) await moveToTrash(join(repo.root, path));
-  return missing;
+  for (const path of STUDIO_STATE) if (!version.has(path) && existsSync(join(repo.root, path))) await toTrash(repo.root, path, kept);
+  return { missing, kept };
 }
 
 /**
  * Discard the changes: the folder as the version checked out holds it. Returns the media it holds that could not be
- * found.
+ * found, and the files made since that the trash would not take (left where they are).
  * @param {string} root @param {Options} [o]
  */
 export function discardChanges(root, { onProgress } = {}) {
@@ -577,7 +600,7 @@ export function discardChanges(root, { onProgress } = {}) {
     const head = await headOf(root);
     if (!head) throw new HistoryError('nothing is committed yet, so there is nothing to go back to', 409, 'nothing');
     const { changes } = await changesNow(repo, head);
-    return { missing: await putBack(repo, await readVersion(repo, head), changes, progress) };
+    return putBack(repo, await readVersion(repo, head), changes, progress);
   });
 }
 
@@ -585,7 +608,8 @@ export function discardChanges(root, { onProgress } = {}) {
  * Check out `commit`, as git does: the folder holds its files (those of the version checked out that it does not
  * have go to the trash) and it is where the next commit goes. No version is made. The branch whose tip it is is
  * checked out; any other version, on its own (detached). With changes, refused ('dirty') unless `discard`: they would
- * be lost. Returns the version, and the media it holds that could not be found.
+ * be lost. Returns the version, the media it holds that could not be found, and the files of the folder the trash
+ * would not take (left where they are, the version checked out around them).
  * @param {string} root @param {string} commit @param {{ discard?: boolean } & Options} [o]
  */
 export function checkoutVersion(root, commit, { discard = false, onProgress } = {}) {
@@ -597,17 +621,17 @@ export function checkoutVersion(root, commit, { discard = false, onProgress } = 
     const { changes } = await changesNow(repo, head);
     if (changes.length && !discard) throw new HistoryError('there are changes: commit or discard them first', 409, 'dirty');
     const version = await readVersion(repo, full);
-    const missing = await putBack(repo, version, changes, progress);
+    const { missing, kept } = await putBack(repo, version, changes, progress);
     if (head) {
       for (const path of (await readVersion(repo, head)).keys()) {
-        if (!version.has(path) && existsSync(join(root, path))) await moveToTrash(join(root, path));
+        if (!version.has(path) && existsSync(join(root, path))) await toTrash(root, path, kept);
       }
     }
     const tips = (await git(root, ['for-each-ref', `--points-at=${full}`, '--format=%(refname)', 'refs/heads'])).split('\n').filter(Boolean);
     const branch = tips.includes('refs/heads/main') ? 'refs/heads/main' : tips[0];
     if (branch) await git(root, ['symbolic-ref', 'HEAD', branch]);
     else await git(root, ['update-ref', '--no-deref', 'HEAD', full]);
-    return { commit: full, missing };
+    return { commit: full, missing, kept };
   });
 }
 

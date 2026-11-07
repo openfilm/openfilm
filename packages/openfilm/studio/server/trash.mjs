@@ -6,14 +6,16 @@
  *   macOS    the system's own `trash` (macOS 15 and later): the Trash of the file's disk, with Put Back, and allowed
  *            where moving into ~/.Trash is not (a program without Full Disk Access); before it, ~/.Trash (with " 2",
  *            " 3" on a name already there)
- *   Linux    the freedesktop trash: ~/.local/share/Trash/{files,info}, with the .trashinfo that lets it be restored
+ *   Linux    the freedesktop trash: ~/.local/share/Trash/{files,info}, with the .trashinfo that lets it be restored;
+ *            from another disk (a project on a second drive, /tmp on its own file system) it is copied there, then removed
  *   Windows  the Recycle Bin, through PowerShell. An item the Recycle Bin cannot take (on a network or removable
  *            drive, bigger than the bin holds, a bin set to delete right away) is refused and left where it is: the
  *            shell's own answer would be to delete it for good, without a word
  */
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, link, lstat, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -114,13 +116,33 @@ function freeName(/** @type {string} */ dir, /** @type {string} */ name) {
   return candidate;
 }
 
+/**
+ * Move `from` to `to`; from another disk, which rename cannot cross, a copy under a name of its own, given `to` only
+ * once whole and never over what is there, and then the original removed. A copy that fails removes only its own part.
+ * Once `to` is whole a failed removal is `copied`: the item is in the trash, and what is left of the original stays.
+ */
+async function moveInto(/** @type {string} */ from, /** @type {string} */ to) {
+  try { await rename(from, to); return; }
+  catch (e) { if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EXDEV') throw e; }
+  const part = `${to}.part-${randomUUID()}`;
+  try {
+    await cp(from, part, { recursive: true, errorOnExist: true, force: false, preserveTimestamps: true, verbatimSymlinks: true });
+    if ((await lstat(part)).isDirectory()) await rename(part, to);
+    else await link(part, to);
+  } finally {
+    await rm(part, { recursive: true, force: true });
+  }
+  try { await rm(from, { recursive: true }); }
+  catch (e) { throw Object.assign(/** @type {Error} */ (e), { copied: true }); }
+}
+
 /** @param {string} path an absolute path */
 export async function moveToTrash(path) {
   /* tests (and anyone who wants deletes kept elsewhere) name the folder that stands for the trash */
   if (process.env.OPENFILM_TRASH_DIR) {
     const dir = process.env.OPENFILM_TRASH_DIR;
     await mkdir(dir, { recursive: true });
-    await rename(path, join(dir, freeName(dir, basename(path))));
+    await moveInto(path, join(dir, freeName(dir, basename(path))));
     return;
   }
   if (process.platform === 'win32') {
@@ -166,8 +188,11 @@ export async function moveToTrash(path) {
       if (/** @type {NodeJS.ErrnoException} */ (e).code === 'EEXIST') continue;
       throw e;
     }
-    try { await rename(path, join(files, name)); }
-    catch (e) { await rm(record, { force: true }); throw e; }
+    try { await moveInto(path, join(files, name)); }
+    catch (e) {
+      if (!(/** @type {{ copied?: boolean }} */ (e).copied)) await rm(record, { force: true });
+      throw e;
+    }
     return;
   }
 }

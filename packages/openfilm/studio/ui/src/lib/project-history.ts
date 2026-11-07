@@ -222,6 +222,9 @@ async function call<T = Record<string, unknown>>(projectId: string, path: string
   }
 }
 
+/** A file a restore left in the folder because the trash would not take it: why, and the Recycle Bin's own answer when that is what refused. */
+export interface Kept { path: string; error: string; recycle?: unknown }
+
 export const historyApi = {
   preview: (id: string, commit: string) => call<VersionPreview>(id, `/versions/${encodeURIComponent(commit)}/preview`),
   load: async (id: string, limit = 50, deleted = false) => {
@@ -233,8 +236,8 @@ export const historyApi = {
     return r.ok ? changeList(r.body.files) : null;
   },
   save: (id: string, message: string) => call<{ commit: string }>(id, '/save', 'POST', { message }),
-  discard: (id: string) => call<{ missing?: string[] }>(id, '/discard', 'POST', {}),
-  checkout: (id: string, commit: string, discard = false) => call<{ commit: string; missing?: string[] }>(id, '/checkout', 'POST', { commit, discard }),
+  discard: (id: string) => call<{ missing?: string[]; kept?: Kept[] }>(id, '/discard', 'POST', {}),
+  checkout: (id: string, commit: string, discard = false) => call<{ commit: string; missing?: string[]; kept?: Kept[] }>(id, '/checkout', 'POST', { commit, discard }),
   /** film.html missing: only it put back, as the version has it; the other files are left as they are */
   restoreFilm: (id: string, commit: string) => call<{ commit: string }>(id, '/film', 'POST', { commit }),
   copy: (id: string, commit: string, name: string) => call<{ project: { id: string; name: string }; missing?: string[] }>(id, '/copy', 'POST', { commit, name }),

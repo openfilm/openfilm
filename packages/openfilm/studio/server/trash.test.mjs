@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import fsp from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { moveToTrash } from './trash.mjs';
@@ -56,6 +58,98 @@ test('a failed move leaves no new trash record', async (t) => {
   await assert.rejects(moveToTrash(join(root, 'missing.wav')), (e) => e.code === 'ENOENT');
   assert.deepEqual(readdirSync(files), []);
   assert.deepEqual(readdirSync(info), []);
+});
+
+/** rename refusing to cross a disk (EXDEV), as from /tmp on its own file system to the home folder's trash. */
+const otherDisk = (t) => {
+  const real = fsp.rename;
+  t.mock.method(fsp, 'rename', async (from, to) => {
+    if (String(from).includes('.part-')) return real(from, to);
+    throw Object.assign(new Error('EXDEV: cross-device link not permitted'), { code: 'EXDEV' });
+  });
+  syncBuiltinESMExports();
+  t.after(() => { fsp.rename = real; syncBuiltinESMExports(); });
+};
+
+/** Replace one fs/promises function for this test: `make` gets the real one. */
+const swap = (t, name, make) => {
+  const real = fsp[name];
+  fsp[name] = make(real);
+  syncBuiltinESMExports();
+  t.after(() => { fsp[name] = real; syncBuiltinESMExports(); });
+};
+
+test('from another disk, a file and a folder are copied into the trash with their record, then removed', async (t) => {
+  const { root, files, info } = linuxTrash(t);
+  otherDisk(t);
+  const take = join(root, 'take.wav');
+  writeFileSync(take, 'recording');
+  const shots = join(root, 'Shots');
+  mkdirSync(join(shots, 'day 1'), { recursive: true });
+  writeFileSync(join(shots, 'day 1', 'a.mp4'), 'clip');
+  await moveToTrash(take);
+  await moveToTrash(shots);
+  assert.ok(!existsSync(take) && !existsSync(shots));
+  assert.equal(readFileSync(join(files, 'take.wav'), 'utf8'), 'recording');
+  assert.equal(readFileSync(join(files, 'Shots', 'day 1', 'a.mp4'), 'utf8'), 'clip');
+  assert.deepEqual(readdirSync(info).sort(), ['Shots.trashinfo', 'take.wav.trashinfo']);
+});
+
+test('from another disk, a copy that fails leaves the original, no part of it in the trash, and no record', async (t) => {
+  const { root, files, info } = linuxTrash(t);
+  otherDisk(t);
+  await assert.rejects(moveToTrash(join(root, 'missing.wav')), (e) => e.code === 'ENOENT');
+  assert.deepEqual(readdirSync(files), []);
+  assert.deepEqual(readdirSync(info), []);
+});
+
+test('from another disk, a copy that fails halfway leaves the whole original, no part of it in the trash, and no record', async (t) => {
+  const { root, files, info } = linuxTrash(t);
+  otherDisk(t);
+  const shots = join(root, 'Shots');
+  mkdirSync(shots);
+  writeFileSync(join(shots, 'a.mp4'), 'clip');
+  swap(t, 'cp', (real) => async (from, to, o) => {
+    await real(from, to, o);
+    throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+  });
+  await assert.rejects(moveToTrash(shots), (e) => e.code === 'EACCES');
+  assert.equal(readFileSync(join(shots, 'a.mp4'), 'utf8'), 'clip');
+  assert.deepEqual(readdirSync(files), []);
+  assert.deepEqual(readdirSync(info), []);
+});
+
+test('from another disk, a file another process put in the trash under the name meanwhile is left as it is', async (t) => {
+  const { root, files, info } = linuxTrash(t);
+  otherDisk(t);
+  const take = join(root, 'take.wav');
+  writeFileSync(take, 'recording');
+  swap(t, 'cp', (real) => async (from, to, o) => {
+    await real(from, to, o);
+    writeFileSync(join(files, 'take.wav'), 'theirs');
+  });
+  await assert.rejects(moveToTrash(take), (e) => e.code === 'EEXIST');
+  assert.equal(readFileSync(join(files, 'take.wav'), 'utf8'), 'theirs');
+  assert.equal(readFileSync(take, 'utf8'), 'recording');
+  assert.deepEqual(readdirSync(files), ['take.wav']);
+  assert.deepEqual(readdirSync(info), []);
+});
+
+test('from another disk, a removal that fails after a good copy keeps the copy and its record', async (t) => {
+  const { root, files, info } = linuxTrash(t);
+  otherDisk(t);
+  const shots = join(root, 'Shots2');
+  mkdirSync(shots);
+  writeFileSync(join(shots, 'a.mp4'), 'clip');
+  swap(t, 'rm', (real) => async (path, o) => {
+    if (path === shots) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+    return real(path, o);
+  });
+  await assert.rejects(moveToTrash(shots), (e) => e.code === 'EACCES');
+  assert.equal(readFileSync(join(files, 'Shots2', 'a.mp4'), 'utf8'), 'clip');
+  assert.deepEqual(readdirSync(files), ['Shots2']);
+  assert.deepEqual(readdirSync(info), ['Shots2.trashinfo']);
+  assert.ok(existsSync(shots));
 });
 
 /* ── Windows: the Recycle Bin itself, or a stand-in for its PowerShell elsewhere ── */

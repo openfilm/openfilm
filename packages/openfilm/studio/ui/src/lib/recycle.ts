@@ -30,8 +30,12 @@ const KEY: Record<RecycleRefusal['why'], string> = { network: 'network', removab
 /** `{key}` in `words` filled with `value` as it is (a replacement string would read `$&` or `$1` in a file's name). */
 const fill = (words: string, key: string, value: string) => words.replace(`{${key}}`, () => value);
 
+/** Why alone, a clause: "it is 12.4 GB, more than the Recycle Bin of drive D: holds (5 GB)". */
+export function recycleWhyWords(t: (path: string) => string, r: RecycleRefusal): string {
+  return fill(fill(fill(t(`recycle.${KEY[r.why]}`), 'drive', r.drive), 'size', r.size ?? ''), 'holds', r.holds ?? '');
+}
+
 /** The refusal said whole: the item, why, and that it stays where it is. */
 export function recycleRefusalWords(t: (path: string) => string, r: RecycleRefusal): string {
-  const why = fill(fill(fill(t(`recycle.${KEY[r.why]}`), 'drive', r.drive), 'size', r.size ?? ''), 'holds', r.holds ?? '');
-  return fill(fill(t('recycle.refused'), 'name', r.name), 'why', why);
+  return fill(fill(t('recycle.refused'), 'name', r.name), 'why', recycleWhyWords(t, r));
 }
