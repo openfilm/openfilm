@@ -514,12 +514,16 @@ test('a Codex older than the ones tried, that did not start, is said to need an 
   assert.equal(codexTooOld('claude', '/usr/local/bin/claude', failed, () => '0.104.0'), failed);
 });
 
-test('an Antigravity older than 1.5.0, that did not start, is said to need an update; a later one as it was', () => {
+test('an Antigravity older than 1.5.1, that did not start, is said to need an update; a later one as it was', () => {
   const failed = new Error('Process exited with code 2');
   const old = antigravityTooOld('antigravity', '/usr/local/bin/agy', failed, () => '1.4.2');
   assert.equal(old.code, 'outdated');
-  assert.match(old.message, /^Google Antigravity 1\.4\.2 is older than OpenFilm needs \(1\.5\.0 or later\): update agy, then try again\./);
-  assert.equal(antigravityTooOld('antigravity', '/usr/local/bin/agy', failed, () => '1.5.0'), failed);
+  assert.match(old.message, /^Google Antigravity 1\.4\.2 is older than OpenFilm needs \(1\.5\.1 or later\): update agy, then try again\./);
+  assert.equal(antigravityTooOld('antigravity', '/usr/local/bin/agy', failed, () => '1.5.0').code, 'outdated');
+  assert.equal(antigravityTooOld('antigravity', '/usr/local/bin/agy', failed, () => '1.5.1'), failed);
+  assert.equal(antigravityTooOld('antigravity', '/usr/local/bin/agy', failed, () => '1.5.3'), failed);
+  const signIn = Object.assign(new Error('Authentication required'), { code: 'sign-in' });
+  assert.equal(antigravityTooOld('antigravity', '/usr/local/bin/agy', signIn, () => '1.5.0'), signIn);
   assert.equal(antigravityTooOld('antigravity', '/usr/local/bin/agy', failed, () => null), failed);
 });
 
