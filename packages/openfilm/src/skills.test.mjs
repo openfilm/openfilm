@@ -463,3 +463,20 @@ test('the folder walk reads asynchronously: same bytes, and Studio still runs wh
   walking = false;
   assert.ok(turns > 0, 'the event loop turned while the walk waited for the disk');
 });
+
+test('a skill named with capitals is found by its name alone', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-capitals-'));
+  const mine = join(root, 'mine');
+  const none = join(root, 'none');
+  mkdirSync(none, { recursive: true });
+  skill(join(mine, 'myskill'), 'MySkill', 'A skill written with capitals');
+  try {
+    const where = { mine, official: none };
+    for (const key of ['myskill', 'MySkill', '  MYSKILL  ']) {
+      assert.deepEqual(skillsNamed(key, where).map((s) => s.name), ['MySkill']);
+    }
+    assert.deepEqual(skillsNamed('local-myskill', where).map((s) => s.name), ['MySkill']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
