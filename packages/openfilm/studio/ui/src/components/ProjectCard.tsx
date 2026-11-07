@@ -14,6 +14,7 @@ import { api, type Project } from '@/api';
 import { useT } from '@/i18n';
 import { formatDuration } from '@/lib/export-jobs';
 import { useHoverOpen } from '@/lib/hover-open';
+import { posterRetryDelay, posterTry } from '@/lib/projects-page';
 import { studioHost, type HostTab } from '@/lib/host';
 import { Popover } from './Popover';
 import { posterUrl } from './ProjectCover';
@@ -74,8 +75,15 @@ export function ProjectCard({ name, facts, actions = {}, onAll, trigger, disable
   const hover = useHoverOpen();
   React.useEffect(() => { if (disabled) hover.dismiss(); }, [disabled, hover.dismiss]);
   const cover = facts ? posterUrl(facts.project) : null;
-  const [coverFailed, setCoverFailed] = React.useState(false);
-  React.useEffect(() => setCoverFailed(false), [cover]);
+  const [coverAttempt, setCoverAttempt] = React.useState<{ url: string; n: number; failed: boolean } | null>(null);
+  const tried = coverAttempt && coverAttempt.url === cover ? coverAttempt : { url: cover ?? '', n: 0, failed: false };
+  const again = tried.failed ? posterRetryDelay(tried.n) : null;
+  React.useEffect(() => {
+    if (!hover.open || again == null) return undefined;
+    const timer = setTimeout(() => setCoverAttempt({ url: tried.url, n: tried.n + 1, failed: false }), again);
+    return () => clearTimeout(timer);
+  }, [hover.open, again, tried.url, tried.n]);
+  const hasCover = facts && (facts.project.cover != null || (facts.clips > 0 && facts.durationMs > 0));
   const [projects, setProjects] = React.useState<Project[] | null>(null);
   React.useEffect(() => {
     if (!hover.open) return;
@@ -117,9 +125,13 @@ export function ProjectCard({ name, facts, actions = {}, onAll, trigger, disable
           <>
             <div className={menu.summary}>
               <div className={menu.thumbnail} style={{ width: Math.min(72, 64 * facts.stage.w / facts.stage.h), height: Math.min(64, 72 * facts.stage.h / facts.stage.w) }}>
-                {(facts.project.cover != null || (facts.clips > 0 && facts.durationMs > 0)) && !coverFailed
-                  ? <img src={cover!} alt="" draggable={false} onError={() => setCoverFailed(true)} />
-                  : <Clapperboard size={22} strokeWidth={1.5} />}
+                {hasCover && (!tried.failed || again != null) ? <img
+                  src={posterTry(tried.url, tried.n)} alt="" draggable={false}
+                  style={tried.failed ? { display: 'none' } : undefined}
+                  onLoad={() => setCoverAttempt({ url: tried.url, n: tried.n, failed: false })}
+                  onError={() => setCoverAttempt({ url: tried.url, n: tried.n, failed: true })}
+                /> : null}
+                {!hasCover || tried.failed ? <Clapperboard size={22} strokeWidth={1.5} /> : null}
               </div>
               <div className={menu.summaryText}>
                 <div className={menu.title} title={facts.project.name}>{facts.project.name || t('project.untitled')}</div>
