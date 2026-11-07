@@ -109,7 +109,7 @@ test('the chat tells Studio the film goes back before it writes it, and undoes t
     };
     const found = readFileSync(join(dir, 'film.html'), 'utf8');
     assert.deepEqual(await turn('t1', '<section></section>'), { ok: true, restored: 1, missed: [] });
-    assert.deepEqual(told, [[dir, '<section></section>']], "told while the turn's film is still there");
+    assert.deepEqual(told, [[dir, '<section></section>'], [dir, found]], "told while the turn's film is still there");
     assert.equal(readFileSync(join(dir, 'film.html'), 'utf8'), found);
     answer = async () => { throw new Error('Studio is restarting'); };
     assert.deepEqual(await turn('t2', '<section></section>'), { ok: true, restored: 1, missed: [] });
@@ -120,4 +120,36 @@ test('the chat tells Studio the film goes back before it writes it, and undoes t
 test('an id that names no folder holds nothing', () => {
   assert.equal(holdDir('/p', '../x'), null);
   assert.equal(holdDir('/p', 'local:t1'), join('/p', '.film', 'cache', 'turn-files', 'local-t1'));
+});
+
+
+test('a canvas-only chat turn is undoable: all boards return, with unrelated Studio state left alone', async () => {
+  const dir = filled();
+  const { bin, trash } = trashBeside(dir);
+  try {
+    const boards = join(dir, '.film', 'canvases');
+    mkdirSync(boards, { recursive: true });
+    const original = JSON.stringify({ nodes: [{ id: 'old', x: 1, y: 2, text: 'Before' }], edges: [] });
+    writeFileSync(join(dir, '.film', 'canvas.json'), original);
+    writeFileSync(join(boards, 'oldboard.json'), original);
+    writeFileSync(join(dir, '.film', 'canvas-made.json'), 'generation history');
+    const told = [];
+    const invoke = chatIpc(dir, trash, async (at, done) => { told.push(done === true ? 'after' : 'before'); });
+    await invoke('desktop:chat:snapshot', { project: dir, turnId: 'canvas' });
+    writeFileSync(join(dir, '.film', 'canvas.json'), JSON.stringify({ nodes: [{ id: 'new', x: 20, y: 30, text: 'After' }], edges: [] }));
+    rmSync(join(boards, 'oldboard.json'));
+    writeFileSync(join(boards, 'newboard.json'), original);
+    writeFileSync(join(dir, '.film', 'settings.json'), 'later settings');
+    const changed = await invoke('desktop:chat:changes', { project: dir, turnId: 'canvas' });
+    assert.equal(changed.undoable, true);
+    assert.deepEqual(changed.files.map((f) => f.path), ['.film/canvas.json', '.film/canvases/newboard.json', '.film/canvases/oldboard.json']);
+    const done = await invoke('desktop:chat:undo', { project: dir, turnId: 'canvas' });
+    assert.deepEqual(done, { ok: true, restored: 3, missed: [] });
+    assert.deepEqual(told, ['before', 'after']);
+    assert.equal(readFileSync(join(dir, '.film', 'canvas.json'), 'utf8'), original);
+    assert.equal(readFileSync(join(boards, 'oldboard.json'), 'utf8'), original);
+    assert.equal(existsSync(join(boards, 'newboard.json')), false);
+    assert.equal(readFileSync(join(dir, '.film', 'canvas-made.json'), 'utf8'), 'generation history');
+    assert.equal(readFileSync(join(dir, '.film', 'settings.json'), 'utf8'), 'later settings');
+  } finally { rmSync(dir, { recursive: true, force: true }); rmSync(bin, { recursive: true, force: true }); }
 });

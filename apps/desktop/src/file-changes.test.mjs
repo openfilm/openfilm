@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { changes, snapshot } from './file-changes.mjs';
@@ -80,4 +80,23 @@ test('a saved turn\'s file changes are read back only as changes', () => {
   assert.equal(readFileChanges(undefined), null);
   assert.equal(readFileChanges([]), null);
   assert.deepEqual(readFileChanges([{ path: 'a.html', change: 'added' }, { path: 'b', change: 'odd' }, null]), [{ path: 'a.html', change: 'added' }]);
+});
+
+
+test('canvas snapshots do not read linked board documents or a linked tools folder', { skip: process.platform === 'win32' }, async () => {
+  const dir = project();
+  const elsewhere = project();
+  try {
+    writeFileSync(join(elsewhere, 'canvas.json'), 'private');
+    symlinkSync(elsewhere, join(dir, '.film'), 'dir');
+    const linked = await snapshot(dir, { canvas: true });
+    assert.equal(linked.cut, true);
+    assert.equal(linked.files.size, 0);
+    rmSync(join(dir, '.film'));
+    mkdirSync(join(dir, '.film'));
+    symlinkSync(join(elsewhere, 'canvas.json'), join(dir, '.film', 'canvas.json'));
+    const board = await snapshot(dir, { canvas: true });
+    assert.equal(board.cut, true);
+    assert.equal(board.files.size, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); rmSync(elsewhere, { recursive: true, force: true }); }
 });
