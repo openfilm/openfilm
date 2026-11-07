@@ -51,6 +51,13 @@ test('poster and frames are JPEG, cached until the file changes', { skip: !hasFf
   assert.equal(readdirSync(join(root, '.film', 'cache', 'frames')).length, 2, 'a changed file is worked out again');
 });
 
+test('a poster of a picture or video with an alpha is a PNG with it, so what it leaves clear stays clear', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red@0.0:size=200x100,format=rgba', '-frames:v', '1', join(root, 'assets', 'clear.png')]);
+  const png = await poster(root, 'assets/clear.png');
+  assert.equal(png.subarray(1, 4).toString('latin1'), 'PNG');
+  assert.equal(png[25], 6, 'its color type keeps the alpha (RGBA)');
+});
+
 test('waveform: loud where the tone is, silent after', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
   const { duration, peaks } = await waveform(root, 'assets/tone.wav');
   assert.ok(Math.abs(duration - 2) < 0.05);

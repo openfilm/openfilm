@@ -1,0 +1,5 @@
+/*
+ * The project's own fonts for its lines of words: each file a person adds in Studio's font menu ("Add a font file")
+ * is put beside this one and declared here, and text.html loads this sheet. Empty as the library has it; a project's
+ * copy keeps what was added to it when the text component is brought in again.
+ */

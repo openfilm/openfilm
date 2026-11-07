@@ -48,7 +48,7 @@ function SourceDialog({
       onMouseDown={(event) => { if (closeOnOutside && event.target === event.currentTarget) onClose(); }}
     >
       <div
-        className="flex max-h-[calc(100vh-48px)] w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)]"
+        className="flex max-h-[calc(100vh-48px)] w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]"
         style={{ maxWidth: width, animation: 'openfilm-pop 0.16s ease-out both' }}
       >
         {children}
@@ -149,7 +149,7 @@ export function FolderBrowserDialog({
   const place = (id: string) => t(`projects.browse.place.${id}`);
   const lastName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
   const side = (active: boolean) => `flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition ${
-    active ? 'bg-[var(--bg-active)] text-[var(--text)]' : 'text-[var(--text-dim)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
+    active ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
   }`;
 
   return (
@@ -166,14 +166,14 @@ export function FolderBrowserDialog({
             onChange={(event) => setTyped(event.target.value)}
             spellCheck={false}
             autoComplete="off"
-            className="h-8 w-full rounded-lg bg-[var(--surface-2)] px-3 font-mono text-[12px] text-[var(--text)] outline-none focus:ring-1 focus:ring-[var(--border-strong)]"
+            className="h-8 w-full rounded-lg bg-[var(--bg-field)] px-3 font-mono text-[12px] text-[var(--text)] outline-none focus:ring-1 focus:ring-[var(--border-strong)]"
           />
         </label>
         <CardButton type="submit" weight="secondary">{t('projects.browse.go')}</CardButton>
       </form>
       {/* a steady height, however many folders there are (not flex-1: in a column of auto height it would collapse) */}
-      <div className="flex min-h-0 shrink border-y border-[var(--border-soft)]" style={{ height: 'min(380px, 56vh)' }}>
-        <nav className="w-[168px] shrink-0 overflow-y-auto border-r border-[var(--border-soft)] p-2" aria-label={t('projects.browse.places')}>
+      <div className="flex min-h-0 shrink border-y border-[var(--border)]" style={{ height: 'min(380px, 56vh)' }}>
+        <nav className="w-[168px] shrink-0 overflow-y-auto border-r border-[var(--border)] p-2" aria-label={t('projects.browse.places')}>
           <p className="px-2.5 pb-1 pt-1 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-faint)]">{t('projects.browse.places')}</p>
           {listing?.places.map((p) => (
             <button key={p.path} type="button" onClick={() => void go(p.path)} className={side(listing.path === p.path)} title={p.path}>
@@ -287,9 +287,9 @@ function FetchProgress({ job }: { job: FetchJob | null }) {
       </div>
       <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--border)]">
         {percent == null ? (
-          <div className="openfilm-loading-bar absolute inset-y-0 left-0 w-1/3 rounded-full bg-[var(--text)]/60" />
+          <div className="openfilm-loading-bar absolute inset-y-0 left-0 w-1/3 rounded-full bg-[var(--accent)]" />
         ) : (
-          <div className="h-full rounded-full bg-[var(--text)] transition-[width] duration-300 ease-out" style={{ width: `${percent}%` }} />
+          <div className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-300 ease-out" style={{ width: `${percent}%` }} />
         )}
       </div>
       <div className="mt-2 flex min-h-[16px] items-baseline gap-3 text-[11.5px] tabular-nums text-[var(--text-muted)]">
@@ -433,7 +433,7 @@ export function GitHubDialog({
                 placeholder={t('projects.fetch.placeholder')}
                 spellCheck={false}
                 autoComplete="off"
-                className="h-8 w-full rounded-lg bg-[var(--surface-2)] pl-8 pr-3 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)] disabled:opacity-60"
+                className="h-8 w-full rounded-lg bg-[var(--bg-field)] pl-8 pr-3 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)] disabled:opacity-60"
               />
             </div>
             <CardButton key="get" type="submit" weight="primary" disabled={!ready}>
@@ -443,7 +443,7 @@ export function GitHubDialog({
           </div>
           <p className="mt-2 text-[12px] leading-relaxed text-[var(--text-faint)]">{t('projects.fetch.hint')}</p>
           {running ? (
-            <div className="mt-4 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] px-3.5 py-3">
+            <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--bg-field)] px-3.5 py-3">
               <FetchProgress job={job} />
               <div className="mt-3 flex justify-end">
                 <CardButton key="cancel" weight="secondary" onClick={cancel}>{t('projects.fetch.cancel')}</CardButton>
@@ -478,7 +478,7 @@ export function ExamplesSection({
   const t = useT();
   if (!examples.length) return null;
   return (
-    <section className="mt-8 border-t border-[var(--border-soft)] pt-4">
+    <section className="mt-8 border-t border-[var(--border)] pt-4">
       <button
         type="button"
         onClick={onToggle}
@@ -532,7 +532,7 @@ function ExampleListRow({ example, onOpen }: { example: Example; onOpen: () => v
         aria-label={`${t('projects.examples.open')} · ${example.title}`}
         className="flex w-full min-w-0 items-center gap-3 py-4 text-left sm:gap-4"
       >
-        <span className="relative block aspect-video w-28 shrink-0 overflow-hidden rounded-md bg-[var(--surface-2)] ring-1 ring-[var(--border)] transition group-hover:brightness-[1.04] sm:w-36">
+        <span className="relative block aspect-video w-28 shrink-0 overflow-hidden rounded-md bg-[var(--bg-field)] ring-1 ring-[var(--border)] transition group-hover:brightness-[1.04] sm:w-36">
           <ExamplePoster example={example} />
         </span>
         <span className="min-w-0 flex-1">
@@ -562,7 +562,7 @@ function ExampleCard({ example, onOpen }: { example: Example; onOpen: () => void
         type="button"
         onClick={onOpen}
         aria-label={`${t('projects.examples.open')} · ${example.title}`}
-        className="relative block aspect-video w-full overflow-hidden rounded-lg bg-[var(--surface-2)] ring-1 ring-[var(--border)] transition hover:brightness-[1.04]"
+        className="relative block aspect-video w-full overflow-hidden rounded-lg bg-[var(--bg-field)] ring-1 ring-[var(--border)] transition hover:brightness-[1.04]"
       >
         <ExamplePoster example={example} />
         {example.duration ? (
@@ -572,7 +572,7 @@ function ExampleCard({ example, onOpen }: { example: Example; onOpen: () => void
           </span>
         ) : null}
         <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
-          <span className="flex items-center gap-1.5 rounded-full bg-[var(--surface)] px-3 py-1 text-[12px] font-medium text-[var(--text)] shadow">
+          <span className="flex items-center gap-1.5 rounded-full bg-[var(--bg-raised)] px-3 py-1 text-[12px] font-medium text-[var(--text)] shadow">
             <FolderOpen size={13} />
             {t('projects.examples.open')}
           </span>

@@ -74,7 +74,12 @@ export type FilmTrack = {
   muted?: boolean;
   /** attributes of its <section> kept as they are: id, class, title, lang, dir, data-*, aria-* */
   attrs?: Record<string, string>;
+  /** a caption track (it has no clips): its WebVTT file on the film's time (SPEC §1 Captions) */
+  captions?: FilmCaptions;
 }
+
+/** A caption track's `<track>`: its WebVTT file, and the language and name it is shown by. */
+export type FilmCaptions = { src: string; kind: 'captions' | 'subtitles'; srclang?: string; label?: string };
 
 export type FilmDoc = {
   stage: { w: number; h: number };

@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Film slip</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * The film slips its gate: a strip of light-struck frames with sprocket holes down both sides races down through
+ * the frame over the cut, then out of the bottom. It lasts 0.7 s and covers the cut at its middle: put its middle
+ * on the cut. A page of OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the
+ * frame so it fits a stage of any shape.
+ */
+const D = 0.7;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const mix = (a, b, x) => a + (b - a) * x;
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+function draw(u) {
+  /* four frames of film */
+  const fh = H * 0.82, gap = H * 0.08, L = 4 * (fh + gap);
+  const pos = (x) => mix(-L, H, inOut(clamp(x)));
+  const y0 = pos(u), speed = Math.abs(pos(u + 0.01) - pos(u - 0.01)) / 0.02 / H;
+  if (y0 >= H || y0 + L <= 0) return;
+  const weave = (hash(Math.floor(u * D * 24)) - 0.5) * W * 0.006;
+  g.save();
+  g.translate(weave, 0);
+  /* the film base */
+  g.fillStyle = '#1b130c';
+  g.fillRect(-W * 0.02, y0, W * 1.04, L);
+  /* frames: light-struck, amber in the middle, each a little different */
+  const mx = W * 0.09, blur = Math.min(H * 0.12, speed * H * 0.012);
+  for (let f = 0; f < 4; f++) {
+    const fy = y0 + gap / 2 + f * (fh + gap);
+    if (fy > H || fy + fh < 0) continue;
+    const b = 0.7 + 0.3 * hash(f + 3);
+    const glow = g.createRadialGradient(W / 2, fy + fh / 2, 0, W / 2, fy + fh / 2, W * 0.55);
+    glow.addColorStop(0, `rgba(255, ${Math.round(220 * b)}, ${Math.round(150 * b)}, 1)`);
+    glow.addColorStop(0.55, `rgba(${Math.round(220 * b)}, ${Math.round(120 * b)}, 50, 1)`);
+    glow.addColorStop(1, 'rgba(70, 30, 12, 1)');
+    g.fillStyle = glow;
+    g.fillRect(mx, fy - blur / 2, W - 2 * mx, fh + blur);
+    /* a scratch or two */
+    g.fillStyle = 'rgba(255, 245, 220, 0.35)';
+    g.fillRect(mx + hash(f + 7) * (W - 2 * mx), fy, 1, fh);
+    /* edge numbers on the margin */
+    g.save();
+    g.fillStyle = 'rgba(255, 190, 90, 0.8)';
+    g.font = `${Math.round(H * 0.035)}px ui-monospace, Menlo, Consolas, monospace`;
+    g.translate(W - mx * 0.3, fy + fh / 2);
+    g.rotate(Math.PI / 2);
+    g.textAlign = 'center';
+    g.fillText(`▸ ${12 + f}`, 0, 0);
+    g.restore();
+  }
+  /* sprocket holes, light shining through, drawn out by the speed */
+  const ph = H * 0.06, step = H * 0.13, hw = W * 0.032;
+  g.fillStyle = 'rgba(255, 246, 228, 0.92)';
+  for (let k = 0; (k + 1) * step < L; k++) {
+    const hy = y0 + step / 2 + k * step;
+    if (hy > H + step || hy < -step) continue;
+    for (const hx of [mx * 0.3, W - mx * 0.3 - hw - W * 0.03]) {
+      g.beginPath();
+      g.roundRect(hx, hy - blur / 2, hw, ph + blur, hw * 0.25);
+      g.fill();
+    }
+  }
+  g.restore();
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

@@ -23,6 +23,7 @@ import { TOOL_DIR } from './projects.mjs';
 import { moveToTrash } from './trash.mjs';
 import { linkKind, rewriteLinks } from './page-links.mjs';
 import { ffmpeg } from '../../src/shared.mjs';
+import { compoundOuter } from './parts.mjs';
 
 export const ASSETS = 'assets';
 /** Folders that hold tools and builds, not a film's pages. */
@@ -48,12 +49,16 @@ export function inside(root, rel, how = {}) {
   if (typeof rel !== 'string' || !rel || rel.includes('\0')) throw new FileError('which file?');
   const clean = normalize(rel.split('/').join(sep));
   const abs = join(root, clean);
-  const back = relative(root, abs);
+  /* a compound clip's film names the files of the project it is in (`../../assets/a.mp4`): inside that one (parts.mjs) */
+  const base = compoundOuter(root);
+  const back = relative(base, abs);
   const parts = back.split(sep);
+  const own = relative(root, abs).split(sep);
   /* on Windows a `:` in a name is a stream of it (`.film::$INDEX_ALLOCATION` is the folder itself) */
   const streams = process.platform === 'win32' && parts.some((p) => p.includes(':'));
-  if (!back || parts[0] === '..' || isToolDir(parts[0]) || streams || /^[a-zA-Z]:/.test(clean) || clean.startsWith(sep)
-    || !(onDiskInside(root, abs) || (how.read === true && readableLink(root, abs)))) {
+  if (!back || !own[0] || parts[0] === '..' || isToolDir(parts[0]) || (own[0] !== '..' && isToolDir(own[0])) || streams
+    || /^[a-zA-Z]:/.test(clean) || clean.startsWith(sep)
+    || !(onDiskInside(base, abs) || (how.read === true && readableLink(base, abs)))) {
     throw new FileError(`${rel} is not a path inside the project`);
   }
   return abs;
@@ -86,7 +91,9 @@ function entryInside(root, rel) {
  * Windows drops, a stream of it, and its short 8.3 name on Windows (`FILM~1`).
  */
 function isToolDir(/** @type {string | undefined} */ name) {
-  const plain = String(name ?? '').split(':')[0].replace(/[. ]+$/, '').toLowerCase();
+  let plain = String(name ?? '').split(':')[0].toLowerCase();
+  /* Windows drops a name's trailing dots and spaces */
+  while (plain.endsWith('.') || plain.endsWith(' ')) plain = plain.slice(0, -1);
   return plain === TOOL_DIR.toLowerCase() || (process.platform === 'win32' && /^film~\d+$/.test(plain));
 }
 

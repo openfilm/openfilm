@@ -143,7 +143,7 @@ export function AttachmentPreview({
          makes a frame look darker. Text gets a fixed reading area on the paper color, laid
          out from the top left, not centered. */
       fit={onStage}
-      bodyClassName={onStage ? 'bg-black' : 'bg-[var(--surface-2)]'}
+      bodyClassName={onStage ? 'bg-black' : 'bg-[var(--bg-field)]'}
       actions={
         <Tooltip label={t('assets.download')} side="bottom">
           <a
@@ -298,7 +298,7 @@ function PreviewBody({ item, body }: { item: AttachmentPreviewItem; body: Body }
   /* No preview, but still the type's icon, so a .zip and an .xlsx look different. */
   return (
     <div className="flex flex-col items-center gap-3 p-10 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--surface)]">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--bg-raised)]">
         <AttachmentTypeIcon file={item} size={30} className="text-[var(--text-faint)]" />
       </div>
       <p className="text-[12.5px] text-[var(--text-muted)]">{t('assets.noPreview')}</p>
@@ -352,7 +352,7 @@ function AudioPreview({ item }: { item: AttachmentPreviewItem }) {
 
   return (
     <div className="flex w-full flex-col items-center gap-5 p-10">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--surface)]">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--bg-raised)]">
         <Icon size={30} className="text-[var(--text-faint)]" />
       </div>
       {failed ? (

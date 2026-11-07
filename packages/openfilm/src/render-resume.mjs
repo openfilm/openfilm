@@ -1,4 +1,4 @@
-// A render that stops (cancelled, an error, a crash, the computer asleep or out of power) keeps the chunks it finished,
+// A render that stops on its own (an error, a crash, the computer asleep or out of power) keeps the chunks it finished,
 // and the next render of the same file with the same settings draws only the rest. A chunk is a few seconds of the
 // film, written under another name and renamed once it is whole, so a chunk that is there is complete. The chunks
 // are kept with what they were drawn from: the settings, and each file the film's pages asked for as it was when

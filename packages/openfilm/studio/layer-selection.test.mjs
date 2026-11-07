@@ -53,12 +53,12 @@ async function withCard(name, run, { chat = false, again = false } = {}) {
     const on = (x, y) => ({ x: box.x + x * scale, y: box.y + y * scale });
     const until = async (check, what) => {
       for (let i = 0; i < 60; i += 1) { if (await check()) return; await page.waitForTimeout(100); }
-      assert.fail(what);
+      assert.fail(`${what}; selection: ${JSON.stringify(await selection())}`);
     };
     /** What is selected on the picture: how many layers together (null: not several), the Layers rows selected, and
         the blue boxes drawn over the picture (their left tops, film px). */
     const selection = () => page.evaluate(({ x, y, scale: k }) => {
-      const many = /(\d+) layers selected/.exec(document.querySelector('[data-film-inspector]')?.textContent ?? '');
+      const many = /(\d+) layers selected/.exec(document.querySelector('[data-inspector-workspace]')?.getAttribute('aria-label') ?? '');
       const boxes = [...document.querySelectorAll('[data-film-select] div')].filter((d) => /solid/.test(d.style.border));
       return {
         many: many ? Number(many[1]) : null,
@@ -327,5 +327,27 @@ test('a layer dragged again and again is drawn every frame on its way, and no ot
     assert.equal(back, -1, `the title never goes back (frame ${back})`);
     assert.ok(frames.at(-1).y > frames[0].y + 150, 'it went down with the hand');
     assert.equal(outlines.filter((n) => n !== 1).length, 0, `the selection's outline alone, every frame (${outlines.filter((n) => n !== 1).length} of ${outlines.length} frames had another or none)`);
+  });
+});
+
+test('a color typed and then Add stroke clicked: the words keep the color and get the stroke, in the film and on the picture', { timeout: 120_000 }, async () => {
+  await withCard('Stroke', async ({ page, on, until, click, overrides }) => {
+    const inspector = page.locator('[data-film-inspector]');
+    await click(on(300, 240));
+    await inspector.getByRole('button', { name: 'Add stroke' }).waitFor({ state: 'visible' });
+    /* the color is written as the field is left: by the same click that adds the stroke, so the two edits are made
+       together */
+    await inspector.locator('input[aria-label="Color"]').fill('ff0000');
+    await inspector.getByRole('button', { name: 'Add stroke' }).click();
+    await until(async () => (await overrides()).some((o) => o.style?.outline), 'the stroke is written');
+    await page.waitForTimeout(500);
+    const [title] = await overrides();
+    assert.equal(title.at, '#title');
+    assert.equal(title.style.color, '#ff0000', 'the color is kept in film.html');
+    assert.equal(title.style.outline, '2px solid #ffffff');
+    /* the page may be drawn again as the film is written: asked of the frame there is now */
+    const drawn = () => page.frames().find((f) => f.url().endsWith('/card.html'))
+      ?.evaluate(() => getComputedStyle(document.getElementById('title')).color).catch(() => null);
+    await until(async () => (await drawn()) === 'rgb(255, 0, 0)', 'and on the picture');
   });
 });

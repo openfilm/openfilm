@@ -1,12 +1,11 @@
 // @ts-check
 /**
- * Google's Gemini API with the person's own key: pictures, video (Veo), voice-over, transcription and subtitle
+ * Google's Gemini API with the person's own key: pictures, video (Gemini Omni), voice-over, transcription and subtitle
  * translation. REST API (https://ai.google.dev/api), key in `x-goog-api-key`. Pictures, speech and text come from
- * `generateContent`; transcription uses Gemini Transcribe through the Interactions API; a video is a long-running
- * operation, asked after until it is done. Generated speech has no word timings and comes as raw PCM, wrapped here in
- * a WAV file.
+ * `generateContent`; transcription and video use the Interactions API. Generated speech has no word timings and comes
+ * as raw PCM, wrapped here in a WAV file.
  */
-import { RATIO_SIZE, billedBy, call, clamp, download, extOf, imageSize, landing, list, madePicture, mimeOf, modelOf, needed, notes, number, ownAddress, serviceUrl, sleep, speechUpload, text, translatedLines, translationAsk, wav, wavSeconds } from './common.mjs';
+import { RATIO_SIZE, billedBy, call, clamp, download, extOf, imageSize, landing, list, madePicture, mediaSeconds, mimeOf, modelOf, mp4Facts, needed, notes, number, ownAddress, pngOnly, serviceUrl, sleep, speechUpload, text, translatedLines, translationAsk, wav, wavSeconds } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -21,9 +20,7 @@ const MODELS = {
     { id: 'gemini-3.1-flash-lite-image', name: 'Gemini 3.1 Flash-Lite Image' },
   ],
   video: [
-    { id: 'veo-3.1-generate-preview', name: 'Veo 3.1' },
-    { id: 'veo-3.1-fast-generate-preview', name: 'Veo 3.1 Fast' },
-    { id: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite' },
+    { id: 'gemini-omni-1.2-flash', name: 'Gemini Omni 1.2 Flash' },
   ],
   translate: [
     { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
@@ -33,6 +30,9 @@ const MODELS = {
 };
 /** the image model that makes 1K pictures only */
 const ONE_K_ONLY = 'gemini-3.1-flash-lite-image';
+/* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0, sizes: model.id === ONE_K_ONLY ? ['1k'] : ['1k', '2k', '4k'] } });
+for (const model of MODELS.video) Object.assign(model, { spec: { ratios: ['16:9', '9:16'], seconds: [3, 15], refs: 6, frames: true, clip: true, sizes: ['360p', '720p', '1080p', '4K'] } });
 
 /** The prebuilt voices (they speak every language), each with how Google describes it. */
 const VOICES = /** @type {[string, string][]} */ ([
@@ -54,6 +54,7 @@ export default {
   keysUrl: 'https://aistudio.google.com/apikey',
   /* AI Studio's keys page is where a key's project shows its billing */
   billingUrl: 'https://aistudio.google.com/apikey',
+  pricingUrl: 'https://aistudio.google.com/docs/pricing',
   verbs: ['voice', 'tts', 'image', 'video', 'asr', 'translate'],
   models: MODELS,
   async run(verb, args, ctx) {
@@ -126,17 +127,23 @@ export default {
     }
     if (verb === 'image') {
       const prompt = needed(args, 'prompt');
+      pngOnly(args, 'Gemini');
       const ratio = text(args.ratio) || '3:2';
       if (!RATIO_SIZE[ratio]) throw new Error(`--ratio is one of ${Object.keys(RATIO_SIZE).join(', ')}.`);
       const model = modelOf(MODELS, 'image', ctx);
-      const high = text(args.quality) === 'high' && model !== ONE_K_ONLY;
+      /* the size asked; the finer qualities, a 1K picture asked, at 2K as before */
+      const size = text(args.size) || '1k';
+      const fine = ['high', 'xhigh', 'max'].includes(text(args.quality));
+      const wanted = size !== '1k' ? size.toUpperCase() : fine ? '2K' : '1K';
+      const resolution = model === ONE_K_ONLY ? '1K' : wanted;
       const said = [
         ...(args.transparent ? ['--transparent: Gemini makes opaque pictures'] : []),
-        ...(text(args.quality) === 'high' && !high ? ['--quality high: Flash-Lite Image makes 1K pictures only'] : []),
+        ...(resolution !== wanted ? [`--size ${size}, --quality ${text(args.quality) || 'low'}: Flash-Lite Image makes 1K pictures only`] : []),
+        ...(list(args.ref).length || text(args.mask) || text(args.markup) ? ['--ref, --mask, --markup: Gemini here makes pictures from the prompt alone'] : []),
       ];
       const body = await generate(model, {
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: ratio, imageSize: high ? '2K' : '1K' } },
+        generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: ratio, imageSize: resolution } },
       });
       const picture = inline(body, 'image');
       const path = landing('image', args.out, extOf(picture.mimeType, 'png'));
@@ -153,13 +160,16 @@ export default {
       const answer = (body?.candidates?.[0]?.content?.parts ?? []).map((/** @type {any} */ p) => String(p?.text ?? '')).join('');
       return { files: [], index: [], receipt: { provider: 'google', model, language: text(args.language), lines: translatedLines(answer, ask.count) }, cost: billedBy(NAME) };
     }
+    if (verb === 'video' && (text(args.audio) || text(args.voice))) {
+      throw new Error(`--${text(args.audio) ? 'audio' : 'voice'}: Gemini Omni takes no recording. A person speaks the words written in the prompt in quotes, with the clip's own sound; a clip whose lips follow a recording is fal's.`);
+    }
     if (verb === 'video') return video(args, ctx, base, send);
     throw new Error(`${NAME} does not do ${verb}.`);
   },
 };
 
 /**
- * A prepared speech file uploaded with Gemini's resumable Files API. The returned upload address is accepted only on
+ * A prepared file uploaded with Gemini's resumable Files API. The returned upload address is accepted only on
  * Google's configured origin, so the person's key and bytes cannot be redirected elsewhere.
  * @param {{ blob: Blob, name: string, size: number }} upload @param {string} base
  * @param {(url: string, init?: RequestInit) => Promise<Response>} send
@@ -189,7 +199,7 @@ async function uploadFile(upload, base, send) {
   })).json();
   const file = body?.file;
   const uri = text(file?.uri), name = text(file?.name);
-  if (!uri || !name) throw new Error(`${NAME} did not keep the speech upload.`);
+  if (!uri || !name) throw new Error(`${NAME} did not keep the upload.`);
   return { uri, name, mimeType: text(file?.mimeType ?? file?.mime_type) || mimeType };
 }
 
@@ -234,8 +244,11 @@ function inline(/** @type {any} */ body, /** @type {string} */ what) {
 }
 
 /**
- * A Veo clip: 4, 6 or 8 seconds (8 with reference pictures), 16:9 or 9:16 at 720p, with sound. Started as an
- * operation, then asked after until it is done or the run is cancelled.
+ * A Gemini Omni clip with its own sound: 3 to 15 seconds (10 at most between a first and a last frame), 16:9 or 9:16,
+ * 360p to 4K. Made from the prompt, from a first (and last) frame, or from up to 6 reference pictures; or from a clip
+ * (`--video`), edited or continued as the prompt says. Asked through the Interactions API with the clip sent back as a
+ * file address, since an answer carries 4 MB at most inline; the file is asked after until it is ready, then
+ * downloaded with the key.
  * @param {Record<string, unknown>} args @param {RunContext} ctx @param {string} base
  * @param {(url: string, init?: RequestInit) => Promise<Response>} send
  */
@@ -244,54 +257,117 @@ async function video(args, ctx, base, send) {
   const path = landing('video', args.out, 'mp4');
   const model = modelOf(MODELS, 'video', ctx);
   const said = [];
-  const first = text(args['first-frame']);
-  const last = text(args['last-frame']);
+  const clip = text(args.video);
+  const first = clip ? '' : text(args['first-frame']);
+  const last = clip ? '' : text(args['last-frame']);
+  if (clip) for (const name of ['first-frame', 'last-frame']) if (text(args[name])) said.push(`--${name}: Gemini Omni makes it from the clip: it was left out`);
+  if (last && !first) throw new Error('--last-frame: Gemini Omni ends on a last frame only after a first one. Give --first-frame too.');
   let refs = list(args['input-reference']);
-  if (refs.length > 3) { said.push('Veo takes 3 reference pictures: the rest were left out'); refs = refs.slice(0, 3); }
+  if (refs.length && first) { said.push('reference pictures go with a clip made from the prompt: the frames were used'); refs = []; }
+  if (refs.length > 6) { said.push('Gemini Omni takes 6 reference pictures: the rest were left out'); refs = refs.slice(0, 6); }
 
-  /* the nearest length Veo makes, the longer one on a tie */
-  const asked = number(args.duration) ?? 8;
-  const seconds = refs.length ? 8 : [4, 6, 8].reduce((best, s) => Math.abs(s - asked) <= Math.abs(best - asked) ? s : best, 8);
-  if (seconds !== asked) said.push(`Veo makes 4, 6 or 8 second clips${refs.length ? ' (8 with reference pictures)' : ''}: ${seconds} s`);
+  /* a clip edited or continued needs a length said: the seconds asked (a continuation adds 3 to 10), else the clip's own */
+  const length = clip ? await mediaSeconds(ctx.root, clip) : null;
+  if (length !== null && length > 30.05) {
+    throw new Error(`--video: Gemini Omni edits clips of 15 s at most and continues them to 30 s at most, and ${clip} is ${Math.round(length * 10) / 10} s: trim it to the part to make again.`);
+  }
+  const asked = number(args.duration) ?? (!clip ? 8 : length !== null ? Math.round(length) : null);
+  const longest = first && last ? 10 : 15;
+  const seconds = asked === null ? null : clamp(Math.round(asked), 3, longest);
+  if (asked !== null && seconds !== asked) said.push(`Gemini Omni makes 3 to ${longest} second clips${first && last ? ' between two frames' : ''}: ${seconds} s`);
 
-  const picture = async (/** @type {string} */ file) => ({ inlineData: { mimeType: mimeOf(file), data: Buffer.from(await ctx.read(file)).toString('base64') } });
-  const instance = {
-    prompt,
-    ...(first ? { image: await picture(first) } : {}),
-    ...(last ? { lastFrame: await picture(last) } : {}),
-    ...(refs.length ? { referenceImages: await Promise.all(refs.map(async (r) => ({ image: await picture(r), referenceType: 'asset' }))) } : {}),
-  };
-  /* with a first frame and no ratio asked, the picture's own shape decides */
+  /* with a first frame and no ratio asked, the picture's own shape decides; a clip keeps its own unless one is asked */
   let ratio = text(args['aspect-ratio']);
   if (!ratio && first) { const size = imageSize(await ctx.read(first)); ratio = size && size.h > size.w ? '9:16' : '16:9'; }
   const tall = ['9:16', '3:4', '2:3', '9:21'].includes(ratio);
-  const aspectRatio = tall ? '9:16' : '16:9';
-  if (ratio && ratio !== aspectRatio && ratio !== 'adaptive') said.push(`Veo makes 16:9 or 9:16 clips: ${aspectRatio}`);
+  const aspect = clip && (!ratio || ratio === 'adaptive') ? '' : tall ? '9:16' : '16:9';
+  if (ratio && aspect && ratio !== aspect && ratio !== 'adaptive') said.push(`Gemini Omni makes 16:9 or 9:16 clips: ${aspect}`);
+  const askedSize = text(args.resolution);
+  const resolution = OMNI_SIZES[askedSize.toLowerCase()] ? askedSize.toLowerCase() : '720p';
+  if (askedSize && resolution !== askedSize.toLowerCase()) said.push(`Gemini Omni makes ${Object.keys(OMNI_SIZES).join(', ')}: ${resolution}`);
 
-  const started = await (await send(`${base}/v1beta/models/${model}:predictLongRunning`, {
-    method: 'POST', body: JSON.stringify({ instances: [instance], parameters: { aspectRatio, durationSeconds: seconds } }),
-  })).json();
-  const name = text(started?.name);
-  if (!name) throw new Error(`${NAME} did not start the video.`);
-  /** @type {any} */
-  let op = started;
-  while (!op?.done) {
-    await sleep(polling.ms, ctx.signal);
-    op = await (await send(`${base}/v1beta/${name}`)).json();
+  const picture = async (/** @type {string} */ file) => ({ type: 'image', data: Buffer.from(await ctx.read(file)).toString('base64'), mime_type: mimeOf(file) });
+  const pictures = await Promise.all([first, last, ...refs].filter(Boolean).map(picture));
+  const given = clip ? await omniUpload(clip, ctx, base, send) : null;
+  try {
+    /* the role of a single first frame, and of reference pictures, is set; two frames are read as a start and an end;
+       whether a clip is edited or continued, the prompt says */
+    const task = clip ? '' : first && !last ? 'image_to_video' : refs.length ? 'reference_to_video' : '';
+    const parts = [...(given ? [{ type: 'video', uri: given.uri, mime_type: given.mimeType }] : []), ...pictures];
+    const body = {
+      model,
+      input: parts.length ? [...parts, { type: 'text', text: prompt }] : prompt,
+      response_format: { type: 'video', delivery: 'uri', ...(aspect ? { aspect_ratio: aspect } : {}), resolution, ...(seconds !== null ? { duration: `${seconds}s` } : {}) },
+      ...(task ? { generation_config: { video_config: { task } } } : {}),
+    };
+    const answer = /** @type {any} */ (await (await send(`${base}/v1beta/interactions`, { method: 'POST', body: JSON.stringify(body) })).json());
+    const made = interactionContents(answer).find((/** @type {any} */ c) => c?.type === 'video' && (typeof c.data === 'string' || typeof c.uri === 'string'));
+    if (!made) throw new Error(`Gemini Omni made no clip${text(answer?.status) && answer.status !== 'completed' ? ` (${answer.status})` : ''}.`);
+    const bytes = typeof made.data === 'string' ? new Uint8Array(Buffer.from(made.data, 'base64')) : await omniFile(made.uri, ctx, base, send);
+    /* its length and size as made; when the file does not say, as asked */
+    const facts = mp4Facts(bytes);
+    const [w, h] = OMNI_SIZES[resolution];
+    const [width, height] = facts?.w && facts.h ? [facts.w, facts.h] : clip ? [null, null] : tall ? [h, w] : [w, h];
+    const dur = facts?.seconds ?? seconds ?? length ?? 10;
+    return {
+      files: [{ path, bytes }],
+      index: [{ src: path, kind: 'video', ...(width && height ? { w: width, h: height } : {}), dur, hasAudio: true, from: {
+        mode: 'generate', prompt, provider: 'google', model, resolution, sec: dur,
+        ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length ? { refs } : {}), ...(clip ? { clip } : {}),
+      } }],
+      receipt: { provider: 'google', model, src: path, dur, ...(width && height ? { width, height } : {}), hasAudio: true, resolution, ...notes(said) },
+      cost: billedBy(NAME),
+    };
+  } finally {
+    /* an uploaded clip otherwise stays in the person's Gemini project for up to 48 hours */
+    if (given) await send(`${base}/v1beta/${given.name}`, { method: 'DELETE' }).catch(() => {});
   }
-  if (op.error) throw new Error(`Veo could not make the clip: ${text(op.error.message) || JSON.stringify(op.error)}`);
-  const result = op.response?.generateVideoResponse;
-  const uri = text(result?.generatedSamples?.[0]?.video?.uri);
-  if (!uri) throw new Error(`Veo made no clip${result?.raiMediaFilteredReasons ? `: ${[].concat(result.raiMediaFilteredReasons).join('; ')}` : ''}.`);
-  const { bytes } = await download(NAME, ownAddress(NAME, uri, base), ctx, { headers: { 'x-goog-api-key': ctx.key } });
-  const [width, height] = tall ? [720, 1280] : [1280, 720];
-  return {
-    files: [{ path, bytes }],
-    index: [{ src: path, kind: 'video', w: width, h: height, dur: seconds, hasAudio: true, from: {
-      mode: 'generate', prompt, provider: 'google', model, resolution: '720p', sec: seconds,
-      ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length ? { refs } : {}),
-    } }],
-    receipt: { provider: 'google', model, src: path, dur: seconds, width, height, hasAudio: true, resolution: '720p', ...notes(said) },
-    cost: billedBy(NAME),
-  };
+}
+
+/** Each size Gemini Omni makes, wide. */
+const OMNI_SIZES = /** @type {Record<string, [number, number]>} */ ({ '360p': [640, 360], '720p': [1280, 720], '1080p': [1920, 1080], '4k': [3840, 2160] });
+
+/**
+ * A project clip uploaded with the Files API for Gemini Omni to edit or continue, asked after until it is ready.
+ * @param {string} clip @param {RunContext} ctx @param {string} base
+ * @param {(url: string, init?: RequestInit) => Promise<Response>} send
+ */
+async function omniUpload(clip, ctx, base, send) {
+  const bytes = await ctx.read(clip);
+  const file = await uploadFile({ blob: new Blob([new Uint8Array(bytes)], { type: mimeOf(clip) }), name: clip.split('/').pop() ?? clip, size: bytes.length }, base, send);
+  try {
+    await fileReady(file.name, 'take the clip', ctx, base, send);
+  } catch (e) {
+    await send(`${base}/v1beta/${file.name}`, { method: 'DELETE' }).catch(() => {});
+    throw e;
+  }
+  return file;
+}
+
+/**
+ * A made clip sent back as a file address: asked after until the file is ready, then downloaded with the key, on
+ * Google's own origin only.
+ * @param {string} uri @param {RunContext} ctx @param {string} base
+ * @param {(url: string, init?: RequestInit) => Promise<Response>} send
+ */
+async function omniFile(uri, ctx, base, send) {
+  const at = ownAddress(NAME, uri, base);
+  const id = /\/files\/([^/:?]+)/.exec(new URL(at).pathname)?.[1];
+  if (id) await fileReady(`files/${id}`, 'finish the clip', ctx, base, send);
+  return (await download(NAME, at, ctx, { headers: { 'x-goog-api-key': ctx.key } })).bytes;
+}
+
+/**
+ * Waits until a file of the Files API (`files/…`) is ready to use, asking after it until the run is cancelled.
+ * @param {string} name @param {string} what what failed, said when it does @param {RunContext} ctx @param {string} base
+ * @param {(url: string, init?: RequestInit) => Promise<Response>} send
+ */
+async function fileReady(name, what, ctx, base, send) {
+  if (!/^files\/[a-z0-9-]+$/i.test(name)) return;
+  for (;;) {
+    const file = /** @type {any} */ (await (await send(`${base}/v1beta/${name}`)).json());
+    if (file?.state === 'FAILED') throw new Error(`Gemini Omni could not ${what}${text(file.error?.message) ? `: ${text(file.error.message)}` : ''}.`);
+    if (!file?.state || file.state === 'ACTIVE') return;
+    await sleep(polling.ms, ctx.signal);
+  }
 }

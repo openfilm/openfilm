@@ -5,6 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chooseProvider, listProviders, shownChoices } from './index.mjs';
 
+/* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
+process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
+
 before(() => {
   /* this machine's own keys must not decide these */
   process.env.OPENFILM_HOME = mkdtempSync(join(tmpdir(), 'of-routing-'));
@@ -14,8 +17,15 @@ before(() => {
 const settings = (keys = {}, use = {}) => ({ keys, use, model: {} });
 const id = async (promise) => (await promise)?.id ?? null;
 
-test('the own-key providers, in the order Settings lists them', () => {
-  assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'openai', 'google', 'fal', 'pexels', 'pixabay', 'brave', 'tavily', 'groq', 'azure', 'doubao', 'mimo', 'keenable']);
+test('the own-key providers, then Local services, in the order Settings lists them', () => {
+  assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'inworld', 'cartesia', 'openai', 'google', 'fal', 'openrouter', 'pexels', 'pixabay', 'brave', 'tavily', 'groq', 'azure', 'doubao', 'mimo', 'keenable', 'openfilm', 'local']);
+});
+
+test('each provider paid with a key of its own links its own pricing page; OpenFilm\'s service and Local services none', () => {
+  for (const p of listProviders()) {
+    if (p.signIn || p.ready) assert.equal(p.pricingUrl, undefined, p.id);
+    else assert.match(p.pricingUrl ?? '', /^https:\/\//, p.id);
+  }
 });
 
 test('nothing serves a kind of media nobody chose, even with a key that could', async () => {

@@ -12,12 +12,13 @@ import { HardDriveUpload, ImageIcon, Plus, RotateCcw } from 'lucide-react';
 import { useT } from '@/i18n';
 import type { FilmOverride } from '@/lib/film';
 import {
-  ROOT, fieldOf, isFontVar, labelOf, relativeTo, valueOf, type TemplateControls, type VarField,
+  ROOT, fieldOf, isFontVar, labelOf, pathIsAt, relativeTo, valueOf, type TemplateControls, type VarField,
 } from '@/lib/template-controls';
 import {
   propOf, propValue, renamedProp, withProp, withPropValue, withPropsReset, withoutProp, type ComponentProp, type PropValue,
 } from '@/lib/component-props';
 import { joinFontFamily, splitFontFamily } from '@/lib/font-styles';
+import { isLibraryClip } from '@/lib/library';
 import { readResourceDragData, RESOURCE_DRAG_TYPE } from '@/lib/resource-drag';
 import { ColorField, FIELD, INPUT, NumField, Section, SectionAction } from './inspector-fields';
 import { FontFamilyPicker } from './FontFamilyPicker';
@@ -46,6 +47,14 @@ export interface PropsHost {
   pickPicture?: () => Promise<string | null>;
   /** Outline a layer of the page on the picture (a row pointed at); null: none. */
   point?: (target: { at: string; n?: number } | null) => void;
+  /**
+   * A line of words, whose box follows its words: a preview of its look refits its box as it goes, and a write needs no
+   * take-back first (`settle` drops the previews not shown yet, so none comes after it).
+   */
+  fits?: boolean;
+  settle?: () => void;
+  /** Play the part of the clip a motion is in (its way in, its loop, its way out), so a change to it is seen. */
+  playMotion?: (slot: 'in' | 'loop' | 'out') => void;
 }
 
 const PICTURE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
@@ -68,6 +77,10 @@ export function PropertiesSection({ host, commit }: {
   const [renaming, setRenaming] = React.useState<string | null>(null);
   const overrides = host.overrides();
   const props = host.props();
+  /* a clip's length is Studio's to keep (studio/server/ops.mjs), not the person's to set: not shown */
+  const shown = props.filter((p) => !(p.type === 'var' && p.var === '--clip-length'));
+  const advanced = shown.filter((p) => p.type === 'var' && p.advanced);
+  const ordinary = shown.filter((p) => !(p.type === 'var' && p.advanced));
   const kept = JSON.stringify(overrides ?? []);
   React.useEffect(() => {
     let live = true;
@@ -87,7 +100,6 @@ export function PropertiesSection({ host, commit }: {
   React.useEffect(() => () => { host.point?.(null); }, [host]);
 
   const set = (prop: ComponentProp, value: PropValue | null) => commit(withPropValue(overrides, prop, value));
-  const changed = props.filter((p) => propValue(overrides, p) != null);
   /* the page's variables not offered yet: what the + offers */
   const vars = (controls?.vars ?? []).filter((v) => !propOf(props, 'var', v.name));
   const add = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -123,7 +135,8 @@ export function PropertiesSection({ host, commit }: {
     const value = propValue(overrides, prop);
     switch (prop.type) {
       case 'text': {
-        const own = controls?.texts.find((x) => sameAt(x, prop))?.value ?? '';
+        /* the page's own words: by the property's selector, else by the path the stage names them by */
+        const own = (controls?.texts.find((x) => sameAt(x, prop)) ?? controls?.texts.find((x) => (x.n ?? null) === (prop.n ?? null) && pathIsAt(x.at, prop.at)))?.value ?? '';
         const target = { at: prop.at, ...(prop.n ? { n: prop.n } : {}) };
         return (
           <WordsInput
@@ -145,7 +158,9 @@ export function PropertiesSection({ host, commit }: {
       case 'var': {
         const own = controls?.vars.find((v) => v.name === prop.var)?.value ?? '';
         const now = typeof value === 'string' ? value : own;
-        const paint = (next: string | null) => host.preview({ at: ROOT }, next == null ? null : { style: { [prop.var]: next } });
+        const paint = (next: string | null) => {
+          if (!prop.advanced) host.preview({ at: ROOT }, next == null ? null : { style: { [prop.var]: next } });
+        };
         return isFontVar(prop.var, now)
           ? <FontInput label={prop.name} value={now} onCommit={(next) => set(prop, next)} onPreview={paint} />
           : <VarInput name={prop.name} field={fieldOf(now, isNamedColor)} onCommit={(next) => set(prop, next)} onPreview={paint} />;
@@ -153,26 +168,30 @@ export function PropertiesSection({ host, commit }: {
     }
   };
 
-  return (
+  /* a thing of the library is one thing (its layers are not picked one by one): with nothing it offers, no section
+     telling how to make a property of a layer of it */
+  if (!shown.length && isLibraryClip(host.page)) return null;
+
+  const section = (list: ComponentProp[], isAdvanced: boolean) => (
     <Section
-      id="properties"
-      title={t('inspector.props')}
+      id={isAdvanced ? 'advanced-properties' : 'properties'}
+      title={t(isAdvanced ? 'inspector.advancedProperties' : 'inspector.props')}
       aside={(
         <span className="flex items-center">
-          {changed.length ? (
-            <SectionAction label={t('inspector.propsResetAll')} onClick={() => commit(withPropsReset(overrides, props))}><RotateCcw size={11} /></SectionAction>
+          {list.some((p) => propValue(overrides, p) != null) ? (
+            <SectionAction label={t('inspector.propsResetAll')} onClick={() => commit(withPropsReset(overrides, list))}><RotateCcw size={11} /></SectionAction>
           ) : null}
-          <Tooltip label={t('inspector.propsAdd')}>
+          {!isAdvanced ? <Tooltip label={t('inspector.propsAdd')}>
             <button type="button" aria-label={t('inspector.propsAdd')} onClick={add} className="flex h-5 w-5 items-center justify-center rounded-[4px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
               <Plus size={12} />
             </button>
-          </Tooltip>
+          </Tooltip> : null}
         </span>
       )}
     >
-      {!props.length ? (
+      {!list.length ? (
         <p className="text-[10.5px] leading-[15px] text-[var(--text-faint)]">{t('inspector.propsEmpty')}</p>
-      ) : props.map((prop) => (
+      ) : list.map((prop) => (
         <div key={prop.name} {...pointing(prop)} onContextMenu={(e) => rowMenu(e, prop)}>
           <Line
             label={renaming === prop.name ? (
@@ -192,12 +211,16 @@ export function PropertiesSection({ host, commit }: {
           </Line>
         </div>
       ))}
-      {!controls && props.length ? (
+      {!controls && list.length ? (
         <p className="text-[10.5px] leading-[15px] text-[var(--text-faint)]">{t('inspector.templateOffPicture')}</p>
       ) : null}
-      {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
     </Section>
   );
+  return <>
+    {ordinary.length || !isLibraryClip(host.page) ? section(ordinary, false) : null}
+    {advanced.length ? section(advanced, true) : null}
+    {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
+  </>;
 }
 
 /** A property's name typed anew: kept on Enter or when left, Esc gives up. */
@@ -216,7 +239,7 @@ function NameInput({ value, onDone, onCancel }: { value: string; onDone: (next: 
         if (e.key === 'Enter' && !e.nativeEvent.isComposing) { done.current = true; onDone(raw); }
         if (e.key === 'Escape') { done.current = true; onCancel(); }
       }}
-      className="h-5 w-full min-w-0 rounded-[4px] bg-[var(--bg)] px-1 text-[11px] text-[var(--text)] outline-none ring-1 ring-[var(--accent)]"
+      className="h-5 w-full min-w-0 rounded-[4px] bg-[var(--bg-panel)] px-1 text-[11px] text-[var(--text)] outline-none ring-1 ring-[var(--accent)]"
     />
   );
 }
@@ -225,8 +248,8 @@ function NameInput({ value, onDone, onCancel }: { value: string; onDone: (next: 
 function Switch({ label, on, onChange }: { label: string; on: boolean; onChange: (on: boolean) => void }) {
   return (
     <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} className="flex h-6 items-center">
-      <span aria-hidden className={`relative h-[16px] w-[28px] shrink-0 rounded-full transition-colors ${on ? 'bg-[var(--text)]' : 'bg-[var(--surface-2)] ring-1 ring-inset ring-[var(--border)]'}`}>
-        <span className={`absolute top-[3px] h-2.5 w-2.5 rounded-full transition-all ${on ? 'left-[15px] bg-[var(--bg)]' : 'left-[3px] bg-[var(--text-faint)]'}`} />
+      <span aria-hidden className={`relative h-[16px] w-[28px] shrink-0 rounded-full transition-colors ${on ? 'bg-[var(--switch-on)]' : 'bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)]'}`}>
+        <span className={`absolute top-[3px] h-2.5 w-2.5 rounded-full transition-all ${on ? 'left-[15px] bg-white' : 'left-[3px] bg-[var(--text-faint)]'}`} />
       </span>
     </button>
   );
@@ -412,7 +435,7 @@ function WordsInput({ label, value, onCommit, onPreview }: {
           (e.target as HTMLTextAreaElement).blur();
         }
       }}
-      className="w-full resize-none rounded-[5px] bg-[var(--fill-tsp)] px-2 py-1 text-[11.5px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent transition hover:ring-[var(--border)] focus:bg-[var(--bg)] focus:ring-[1.5px] focus:ring-[var(--accent)]"
+      className="w-full resize-none rounded-[5px] bg-[var(--bg-field)] px-2 py-1 text-[11.5px] leading-[1.5] text-[var(--text)] outline-none ring-1 ring-inset ring-transparent transition hover:ring-[var(--border)] focus:bg-[var(--bg-panel)] focus:ring-[1.5px] focus:ring-[var(--accent)]"
     />
   );
 }

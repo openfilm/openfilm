@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>8mm film</title>
+<style>
+  /* what a clip of it may change: how worn the film looks (0 to 1), the warmth of its tint */
+  :root { --amount: 1; --color: #ffb46e; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Home movie on 8mm film: the projector's gate with its soft dark rounded edges weaving a little each frame, a
+ * sprocket hole flaring at the side, burnt warm light at the edges, heavy grain, dust, hairs and a scratch, and the
+ * exposure flickering, all at 18 frames a second. A page of OpenFilm's library (CC0): what it shows at t comes from
+ * t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// six tiles of grain, made once: light and dark specks, a new tile (and a new offset) every film frame
+const GRAIN = Array.from({ length: 6 }, (_, k) => {
+  const S = 192, c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d'), img = x.createImageData(S, S);
+  for (let i = 0; i < S * S; i++) {
+    const r = hash(i * 0.731 + k * 91.7), v = r > 0.5 ? 255 : 0;
+    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
+    img.data[i * 4 + 3] = Math.round(Math.pow(Math.abs(r - 0.5) * 2, 1.6) * 120);
+  }
+  x.putImageData(img, 0, 0);
+  return c;
+});
+function rounded(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
+    const wear = num('--amount', 1), tint = rgb('--color', '#ffb46e');
+    const f = Math.floor(t * 18), r = (k) => hash(f * 13.37 + k);
+    // the gate weaves: a small jump each frame on a slower drift
+    const wx = (r(1) - 0.5) * 0.5 * u + Math.sin(t * 1.7) * 0.3 * u, wy = (r(2) - 0.5) * 0.9 * u + Math.sin(t * 2.3) * 0.4 * u;
+    // warm tint and the exposure flicker
+    ctx.fillStyle = `rgba(${tint},0.16)`; ctx.fillRect(0, 0, w, h);
+    const ex = (r(3) - 0.5) * wear;
+    ctx.fillStyle = ex > 0 ? `rgba(255,240,220,${ex * 0.12})` : `rgba(20,10,0,${-ex * 0.18})`; ctx.fillRect(0, 0, w, h);
+    // grain
+    const G = GRAIN[f % 6], gs = Math.max(1.6, u / 2.4);
+    ctx.save(); ctx.globalAlpha = 0.9 * wear; ctx.translate(-r(4) * 192 * gs, -r(5) * 192 * gs); ctx.scale(gs, gs);
+    ctx.fillStyle = ctx.createPattern(G, 'repeat'); ctx.fillRect(0, 0, w / gs + 400, h / gs + 400);
+    ctx.restore();
+    // dust and the odd hair, new each frame
+    const specks = 2 + Math.floor(r(20) * 7 * wear);
+    for (let i = 0; i < specks; i++) {
+      const x = r(30 + i) * w, y = r(50 + i) * h, s = (0.15 + Math.pow(r(70 + i), 3) * 0.9) * u;
+      ctx.fillStyle = r(90 + i) > 0.25 ? 'rgba(15,10,5,0.75)' : 'rgba(255,250,235,0.7)';
+      ctx.beginPath(); ctx.ellipse(x, y, s, s * (0.5 + r(110 + i) * 0.5), r(130 + i) * 3, 0, 6.283); ctx.fill();
+    }
+    if (r(150) < 0.35 * wear) {
+      const x = r(151) * w, y = r(152) * h, L = (4 + r(153) * 9) * u, a = r(154) * 6.283;
+      ctx.strokeStyle = 'rgba(15,10,5,0.6)'; ctx.lineWidth = 0.14 * u;
+      ctx.beginPath(); ctx.moveTo(x, y);
+      ctx.bezierCurveTo(x + Math.cos(a) * L * 0.4 + (r(155) - 0.5) * L, y + Math.sin(a) * L * 0.4 + (r(156) - 0.5) * L, x + Math.cos(a) * L * 0.8, y + Math.sin(a) * L * 0.8 + (r(157) - 0.5) * L * 0.6, x + Math.cos(a) * L, y + Math.sin(a) * L);
+      ctx.stroke();
+    }
+    // a long scratch that stays a while, jittering
+    const run = Math.floor(t / 1.3);
+    if (hash(run + 0.77) < 0.7 * wear) {
+      const x = (0.15 + hash(run + 0.33) * 0.7) * w + (r(160) - 0.5) * 0.6 * u;
+      ctx.fillStyle = `rgba(255,248,230,${0.25 + r(161) * 0.25})`; ctx.fillRect(x, 0, Math.max(1, 0.12 * u), h);
+    }
+    // the gate: dark round-cornered edges, soft, weaving
+    ctx.fillStyle = 'rgb(8,6,4)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.filter = `blur(${1.6 * u}px)`;
+    const ix = 2.2 * u, iy = 2.6 * u;
+    rounded(ix + wx, iy + wy, w - 2 * ix, h - 2 * iy, 6 * u); ctx.fill();
+    ctx.filter = 'none';
+    ctx.globalCompositeOperation = 'source-over';
+    // a soft dark ring inside the gate: the old lens falling off at the corners
+    const v = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.hypot(w, h) * 0.55);
+    v.addColorStop(0, 'rgba(20,10,0,0)'); v.addColorStop(1, `rgba(20,10,0,${0.55 * wear})`);
+    ctx.fillStyle = v; ctx.fillRect(0, 0, w, h);
+    // burnt warm light breathing in at the edges
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 3; i++) {
+      const side = (i + Math.floor(t * 0.7)) % 4, k = 0.5 + 0.5 * Math.sin(t * (1.1 + i * 0.7) + i * 2) * (0.7 + 0.3 * r(10 + i));
+      const along = 0.2 + hash(i + Math.floor(t * 0.7) * 3.1) * 0.6;
+      const x = side === 0 ? 0 : side === 1 ? w : along * w, y = side === 2 ? 0 : side === 3 ? h : along * h;
+      const R = (25 + 20 * k) * u, g = ctx.createRadialGradient(x, y, 0, x, y, R);
+      g.addColorStop(0, `rgba(255,150,60,${0.6 * k * wear})`); g.addColorStop(0.4, `rgba(255,80,30,${0.25 * k * wear})`); g.addColorStop(1, 'rgba(255,60,20,0)');
+      ctx.fillStyle = g; ctx.fillRect(x - R, y - R, 2 * R, 2 * R);
+    }
+    // the sprocket hole at the left edge, flaring with the projector's light
+    ctx.filter = `blur(${0.8 * u}px)`;
+    const sh = 13 * u, sy = h * 0.5 - sh / 2 + wy * 3 + Math.sin(t * 0.9) * 2 * u;
+    ctx.fillStyle = `rgba(255,236,200,${0.8 * wear})`;
+    rounded(-0.8 * u + wx, sy, 3.6 * u, sh, 1.4 * u); ctx.fill();
+    ctx.filter = 'none';
+    ctx.globalCompositeOperation = 'source-over';
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

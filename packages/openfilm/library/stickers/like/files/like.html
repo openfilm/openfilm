@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Like</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+:root { --font: 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif; --color: #ff2d55; }
+.w { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0.6vmin 1.4vmin rgba(0, 0, 0, 0.32)); }
+.pill { display: flex; align-items: center; gap: 3.5vw; height: 46vh; padding: 0 6.5vw 0 5vw; border-radius: 23vh; background: #ffffff; animation: pop 0.45s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes pop { from { transform: scale(0.3); opacity: 0; } 40% { opacity: 1; } }
+.hc { position: relative; width: 26vh; height: 26vh; }
+.hc svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.h0 { fill: none; stroke: #c7c7cc; stroke-width: 9; }
+.h1 { fill: var(--color); animation: h 0.5s cubic-bezier(.34, 1.56, .64, 1) 0.28s both, beat 1.6s ease-in-out 1.2s infinite; }
+@keyframes h { from { transform: scale(0); } 60% { transform: scale(1.35); } }
+@keyframes beat { 0%, 30%, 100% { transform: none; } 10% { transform: scale(1.18); } 20% { transform: scale(1.04); } }
+.ring { fill: none; stroke: var(--color); stroke-width: 6; opacity: 0; animation: ring 0.5s cubic-bezier(.2, .8, .2, 1) 0.28s both; }
+@keyframes ring { 0% { transform: scale(0.3); opacity: 1; stroke-width: 18; } 100% { transform: scale(1.5); opacity: 0; stroke-width: 1; } }
+.p { fill: var(--color); opacity: 0; animation: p 0.55s cubic-bezier(.2, .8, .2, 1) 0.32s both; }
+@keyframes p { 0% { transform: rotate(var(--a)) translateX(30px) scale(1); opacity: 1; } 100% { transform: rotate(var(--a)) translateX(78px) scale(0); opacity: 1; } }
+.plus { position: absolute; left: 50%; top: -6vh; transform: translateX(-50%); color: var(--color); font: 800 15vh var(--font); opacity: 0; animation: plus 0.9s cubic-bezier(.2, .8, .2, 1) 0.35s both; }
+@keyframes plus { 0% { opacity: 0; transform: translate(-50%, 10vh) scale(0.6); } 25% { opacity: 1; transform: translate(-50%, -4vh) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -14vh); } }
+.label { color: #16161a; font: 800 21vh var(--font); letter-spacing: -0.02em; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="w"><div class="pill">
+<div class="hc"><svg viewBox="-50 -50 100 100">
+<circle class="ring" r="40"/>
+<circle class="p" r="7" style="--a: 12deg"/><circle class="p" r="5" style="--a: 63deg"/><circle class="p" r="7" style="--a: 115deg"/><circle class="p" r="5" style="--a: 166deg"/><circle class="p" r="7" style="--a: 218deg"/><circle class="p" r="5" style="--a: 269deg"/><circle class="p" r="7" style="--a: 321deg"/>
+<path class="h0" d="M0.0 34.0 C-30.0 14.0 -42.0 0.0 -42.0 -14.0 C-42.0 -28.0 -31.0 -38.0 -19.0 -38.0 C-10.0 -38.0 -3.0 -33.0 0.0 -26.0 C3.0 -33.0 10.0 -38.0 19.0 -38.0 C31.0 -38.0 42.0 -28.0 42.0 -14.0 C42.0 0.0 30.0 14.0 0.0 34.0 Z"/><path class="h1" d="M0.0 34.0 C-30.0 14.0 -42.0 0.0 -42.0 -14.0 C-42.0 -28.0 -31.0 -38.0 -19.0 -38.0 C-10.0 -38.0 -3.0 -33.0 0.0 -26.0 C3.0 -33.0 10.0 -38.0 19.0 -38.0 C31.0 -38.0 42.0 -28.0 42.0 -14.0 C42.0 0.0 30.0 14.0 0.0 34.0 Z"/>
+</svg><div class="plus">+1</div></div>
+<div class="label">1,024</div>
+</div></div>
+<script>
+/*
+ * A like: a pill pops in, its heart fills with a burst and a +1 floats up, then the heart keeps beating beside the
+ * count. Its count and color are the clip's to change. A page of OpenFilm's library (CC0): what it shows at t comes
+ * from t alone; its CSS animations are held at t by the host.
+ */
+window.film = { width: 500, height: 240, frame() {} };
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

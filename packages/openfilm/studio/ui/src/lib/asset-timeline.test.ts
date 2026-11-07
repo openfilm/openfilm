@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assetClipElement, assetClipKindOf, assetDropInsert, assetDropSpot, assetDropTargetOf, assetFitBox, assetPageFit, assetRunInsert, soundLaneHit } from './asset-timeline.ts';
+import { assetClipElement, assetClipKindOf, assetDropInsert, assetDropPreview, assetDropSpot, assetDropTargetOf, assetFitBox, assetPageFit, assetRunInsert, soundLaneHit } from './asset-timeline.ts';
 import type { TimelineTrack } from './timeline-layout.ts';
 
-/* A file from the media pane lands on the row under the pointer — a track has no kind (SPEC) — or, where its time
-   is taken, on a new track right beside it; never somewhere else. */
+/* A file from the media pane lands on the row under the pointer when it is a track of its kind (a sound on a sound
+   track, a picture on a picture track), or, where its time is taken, on a new track right beside it; let go over a
+   track of the other kind, on the nearest of its own kind free there, else a new one where its kind's tracks are. */
 
 const row = (docIndex: number, role: TimelineTrack['role'], spans: [number, number][]): TimelineTrack => ({
   lane: `doc-${docIndex}`,
@@ -15,7 +16,7 @@ const row = (docIndex: number, role: TimelineTrack['role'], spans: [number, numb
   docIndex,
   blocks: spans.map(([startMs, endMs], i) => ({ id: `${docIndex}.${i}`, title: '', startMs, endMs, kind: role === 'audio' ? 'music' : role })),
 });
-/* P1 (pages) over V1 (footage) over A1 */
+/* V2 (pages) over V1 (footage) over A1 */
 const tracks = [row(0, 'mg', [[1000, 5000], [7500, 11_500]]), row(1, 'video', [[0, 10_000]]), row(2, 'audio', [[0, 10_000]])];
 const video = { path: 'assets/footage/product.mp4', kind: 'video', durationMs: 4000 };
 const sound = { path: 'assets/audio/bed.mp3', kind: 'audio', durationMs: 4000 };
@@ -25,19 +26,37 @@ test('footage dropped on a free stretch of a page track goes onto it', () => {
   assert.deepEqual(spot, { action: 'into', laneIndex: 0, lane: 'doc-0', docIndex: 0, locked: false });
   const plan = assetDropInsert(video, tracks, assetDropTargetOf(spot), 12_000);
   assert.deepEqual(plan, { element: { src: video.path }, kind: 'video', at: 12, track: 0 });
-  /* a sound on a picture track too */
-  assert.equal(assetDropSpot(sound, tracks, { lane: 1, band: 'body' }, 10_000)?.action, 'into');
+  /* a sound let go on a picture track: on the sound track, free there */
+  assert.deepEqual(assetDropSpot(sound, tracks, { lane: 1, band: 'body' }, 10_000), { action: 'into', laneIndex: 2, lane: 'doc-2', docIndex: 2, locked: false });
 });
 
 test('where the time is taken, a new track right above a picture row, right below a sound row', () => {
   assert.deepEqual(assetDropSpot(video, tracks, { lane: 0, band: 'body' }, 2000), { action: 'new-track', laneIndex: 0, docAt: 0 });
   assert.deepEqual(assetDropSpot(video, tracks, { lane: 1, band: 'body' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
-  assert.deepEqual(assetDropSpot(video, tracks, { lane: 2, band: 'body' }, 2000), { action: 'new-track', laneIndex: 3, docAt: 3 });
+  assert.deepEqual(assetDropSpot(sound, tracks, { lane: 2, band: 'body' }, 2000), { action: 'new-track', laneIndex: 3, docAt: 3 });
+});
+
+test('a picture let go on a sound track goes on a picture track, never among the sounds; a sound never among the pictures', () => {
+  /* free there: onto the nearest picture track */
+  assert.deepEqual(assetDropSpot(video, tracks, { lane: 2, band: 'body' }, 12_000), { action: 'into', laneIndex: 1, lane: 'doc-1', docIndex: 1, locked: false });
+  /* taken on every picture track: a new one right above V1, which stays the main track */
+  assert.deepEqual(assetDropSpot(video, tracks, { lane: 2, band: 'body' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
+  /* a sound at the edge of a page row: under the sound tracks, not between the pictures */
+  assert.deepEqual(assetDropSpot(sound, tracks, { lane: 0, band: 'below' }, 2000), { action: 'new-track', laneIndex: 3, docAt: 3 });
 });
 
 test('the edges of a row and the space around the rows open a track there', () => {
   assert.deepEqual(assetDropSpot(video, tracks, { lane: 1, band: 'above' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
-  assert.deepEqual(assetDropSpot(sound, tracks, { lane: 0, band: 'below' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
+  assert.deepEqual(assetDropSpot(sound, tracks, { lane: 2, band: 'below' }, 2000), { action: 'new-track', laneIndex: 3, docAt: 3 });
+  /* a text of the library: onto a row of text where there is room, else a row of text of its own just above */
+  const text = { path: 'openfilm/text/name/files/name.html', kind: 'mg' as const, durationMs: 1000, saved: 'openfilm/text/name' };
+  assert.deepEqual(assetDropSpot(text, tracks, { lane: 1, band: 'body' }, 10_000), { action: 'new-track', laneIndex: 1, docAt: 1 });
+  const words = tracks.map((tr, i) => (i === 1 ? { ...tr, text: true } : tr));
+  assert.equal(assetDropSpot(text, words, { lane: 1, band: 'body' }, 10_000)?.action, 'into');
+  /* nothing goes onto a caption track: a row of its own above it */
+  const captioned = tracks.map((tr, i) => (i === 1 ? { ...tr, text: true, captions: { src: 'captions/c.vtt' } } : tr));
+  assert.deepEqual(assetDropSpot(text, captioned, { lane: 1, band: 'body' }, 10_000), { action: 'new-track', laneIndex: 1, docAt: 1 });
+  assert.deepEqual(assetDropSpot(video, captioned, { lane: 1, band: 'body' }, 10_000, 'insert'), { action: 'new-track', laneIndex: 1, docAt: 1 });
   assert.deepEqual(assetDropSpot(video, tracks, { lane: -1, band: 'above' }, 2000), { action: 'new-track', laneIndex: 0, docAt: 0 });
   assert.deepEqual(assetDropSpot(video, tracks, { lane: 3, band: 'below' }, 2000), { action: 'new-track', laneIndex: 3, docAt: 3 });
 });
@@ -141,4 +160,31 @@ test('a page without a size of its own keeps the size it is shown at alone, scal
 test('a page the pane names one without its ending (a bundle of Saved) is an mg clip', () => {
   assert.equal(assetClipKindOf({ path: 'saved/Lower third', kind: 'mg' }), 'mg');
   assert.equal(assetClipKindOf({ path: 'saved/notes', kind: 'other' }), null);
+});
+
+test('the preview of a drop looks as it will land: a line of words its words, a sticker as a sticker', () => {
+  const words = { path: 'openfilm/text/text/files/text.html', name: 'Candy', kind: 'mg' as const, durationMs: 3000, saved: 'openfilm/text/looks/candy', words: '默认文本' };
+  const text = assetDropPreview(words, tracks, { lane: 0, band: 'body' }, 12_000);
+  assert.equal(text?.title, '默认文本');
+  assert.equal(text?.look, 'text');
+  const sticker = assetDropPreview({ path: 'openfilm/stickers/tap/files/tap.html', name: 'Tap', kind: 'mg', durationMs: 3000, saved: 'openfilm/stickers/tap' }, tracks, { lane: 0, band: 'body' }, 12_000);
+  assert.equal(sticker?.look, 'sticker');
+  assert.equal(assetDropPreview(video, tracks, { lane: 0, band: 'body' }, 12_000)?.look, undefined);
+});
+
+test('a sticker, text or effect of the library let go on the main track goes over it, never cutting the film', () => {
+  const withMain = tracks.map((tr, i) => (i === 1 ? { ...tr, main: true } : tr));
+  const sticker = { path: 'openfilm/stickers/tap/files/tap.html', name: 'Tap', kind: 'mg' as const, durationMs: 3000, saved: 'openfilm/stickers/tap' };
+  /* free on the page track above: there */
+  assert.deepEqual(assetDropSpot(sticker, withMain, { lane: 1, band: 'body' }, 12_000, 'insert'), { action: 'into', laneIndex: 0, lane: 'doc-0', docIndex: 0, locked: false });
+  /* taken there too: a new track right above the main one */
+  assert.deepEqual(assetDropSpot(sticker, withMain, { lane: 1, band: 'body' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
+  /* footage still goes onto the main track */
+  assert.equal(assetDropSpot(video, withMain, { lane: 1, band: 'body' }, 12_000, 'insert')?.action, 'into');
+});
+
+test('a main track with no film on it, only stickers, takes another sticker in its gap', () => {
+  const stickers = tracks.map((tr, i) => (i === 1 ? { ...tr, main: true, overlay: true } : tr));
+  const sticker = { path: 'openfilm/stickers/tap/files/tap.html', name: 'Tap', kind: 'mg' as const, durationMs: 3000, saved: 'openfilm/stickers/tap' };
+  assert.deepEqual(assetDropSpot(sticker, stickers, { lane: 1, band: 'body' }, 12_000), { action: 'into', laneIndex: 1, lane: stickers[1]!.lane, docIndex: stickers[1]!.docIndex ?? null, locked: false });
 });

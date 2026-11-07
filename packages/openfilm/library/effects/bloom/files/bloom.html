@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Soft bloom</title>
+<style>
+  /* what a clip of it may change: the glow's color, how strong it is (0 to 1), how fast it breathes */
+  :root { --color: #fff0e6; --amount: 1; --speed: 1; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * A soft dreamy bloom: the edges of the frame melt into a bright haze, like shooting through a smeared filter, with
+ * pools of glow drifting slowly around the rim and the whole haze breathing in and out. A page of OpenFilm's library
+ * (CC0): what it shows at t comes from t alone.
+ */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const root = document.documentElement;
+const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+const num = (name, fallback) => { const v = parseFloat(css(name)); return Number.isFinite(v) ? v : fallback; };
+const probe = document.createElement('canvas').getContext('2d');
+const rgb = (name, fallback) => {
+  probe.fillStyle = fallback; probe.fillStyle = css(name) || fallback;
+  const s = probe.fillStyle;
+  return s[0] === '#' ? [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) : s.match(/[\d.]+/g).slice(0, 3).map(Number);
+};
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+function fit() {
+  const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+}
+// pools of glow wandering around the rim, each tinted a little warmer, pinker or cooler than the color
+const POOLS = Array.from({ length: 9 }, (_, i) => ({ at: i / 9 + hash(i + 0.3) * 0.08, pace: 0.02 + hash(i + 0.5) * 0.03, r: 0.25 + hash(i + 0.7) * 0.25, tint: [[0, 0, 0], [0, -30, -10], [-20, -5, 0]][i % 3], phase: hash(i + 0.9) * 6.283 }));
+window.film = {
+  frame(t) {
+    fit();
+    const w = innerWidth, h = innerHeight, m = Math.min(w, h), M = Math.max(w, h);
+    const amount = num('--amount', 1), tt = t * num('--speed', 1), c = rgb('--color', '#fff0e6');
+    const breathe = 0.82 + 0.18 * Math.sin(tt * 0.9) * Math.sin(tt * 0.31 + 0.7);
+    // the haze: clear in the middle, bright and milky toward the edges (an ellipse that follows the frame's shape)
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.scale(w / M, h / M);
+    const g = ctx.createRadialGradient(0, 0, M * 0.22, 0, 0, M * 0.74);
+    g.addColorStop(0, `rgba(${c},0)`); g.addColorStop(0.45, `rgba(${c},${0.18 * breathe * amount})`);
+    g.addColorStop(0.8, `rgba(${c},${0.55 * breathe * amount})`); g.addColorStop(1, `rgba(${c},${0.78 * breathe * amount})`);
+    ctx.fillStyle = g; ctx.fillRect(-M, -M, 2 * M, 2 * M);
+    ctx.restore();
+    // the pools, sliding round the rim
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of POOLS) {
+      const a = (p.at + tt * p.pace) * 6.283;
+      const x = w / 2 + Math.cos(a) * w * 0.52, y = h / 2 + Math.sin(a) * h * 0.52;
+      const r = p.r * M, k = (0.18 + 0.12 * Math.sin(tt * 0.8 + p.phase)) * amount;
+      const pc = c.map((v, i) => Math.max(0, Math.min(255, v + p.tint[i])));
+      const pg = ctx.createRadialGradient(x, y, 0, x, y, r);
+      pg.addColorStop(0, `rgba(${pc},${k})`); pg.addColorStop(1, `rgba(${pc},0)`);
+      ctx.fillStyle = pg; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+    }
+    // a whisper of lift over everything, so the middle is soft too
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(${c},${0.06 * amount})`; ctx.fillRect(0, 0, w, h);
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { window.film.frame((performance.now() - t0) / 1000); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

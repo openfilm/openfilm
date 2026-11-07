@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "lower-neon.html",
+    "time": [
+      0,
+      4
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Name\", \"type\": \"text\", \"at\": \".t1\"}, {\"name\": \"Role\", \"type\": \"text\", \"at\": \".t2\"}, {\"name\": \"Font\", \"type\": \"var\", \"var\": \"--font\"}, {\"name\": \"Frame and name glow\", \"type\": \"var\", \"var\": \"--accent\"}, {\"name\": \"Role glow\", \"type\": \"var\", \"var\": \"--accent2\"}]"
+    }
+  },
+  "durationMs": 4000
+}

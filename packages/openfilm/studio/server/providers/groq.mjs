@@ -34,6 +34,7 @@ export default {
   env: 'GROQ_API_KEY',
   keysUrl: 'https://console.groq.com/keys',
   billingUrl: 'https://console.groq.com/settings/billing',
+  pricingUrl: 'https://console.groq.com/docs/models',
   verbs: ['voice', 'tts', 'asr'],
   models: MODELS,
   async run(verb, args, ctx) {

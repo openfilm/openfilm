@@ -9,7 +9,7 @@ import React from 'react';
 /** A section's body: an optional note, then its groups. */
 export function SettingsPage({ note, children }: { note?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="flex max-w-[880px] flex-col">
+    <div className="flex flex-col">
       {note ? <p className="mb-8 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{note}</p> : null}
       {children}
     </div>
@@ -39,7 +39,7 @@ export function SettingsItem({ mark, title, badge, description, control, childre
   return (
     <div className="py-4">
       <div className="flex min-h-10 items-center gap-4">
-        {mark ? <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[var(--fill-tsp)] text-[var(--text)]">{mark}</span> : null}
+        {mark ? <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[var(--bg-field)] text-[var(--text)]">{mark}</span> : null}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="text-[15px] text-[var(--text)]">{title}</span>
@@ -66,7 +66,7 @@ export function SettingsStatus({ tone = 'ok', children }: { tone?: 'ok' | 'muted
 
 const BUTTON = {
   default: 'border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg-hover)]',
-  primary: 'border border-transparent bg-[var(--text)] text-[var(--bg)] hover:opacity-90',
+  primary: 'border border-transparent bg-[var(--primary)] text-[var(--on-primary)] hover:bg-[var(--primary-hover)]',
   quiet: 'border border-transparent text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]',
 };
 
@@ -91,8 +91,8 @@ export function SettingsLinkButton({ className = '', ...props }: React.AnchorHTM
 export function SettingsSwitch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
     <button type="button" role="switch" aria-checked={checked} aria-label={label} title={label} disabled={disabled} onClick={() => onChange(!checked)}
-      className={`relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-50 ${checked ? 'bg-[var(--text)]' : 'bg-[var(--surface-3)]'}`}>
-      <span className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-[var(--bg)] shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-all ${checked ? 'left-[19px]' : 'left-[3px]'}`} />
+      className={`relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-50 ${checked ? 'bg-[var(--switch-on)]' : 'bg-[var(--bg-pressed)]'}`}>
+      <span className={`absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-all ${checked ? 'left-[19px]' : 'left-[3px]'}`} />
     </button>
   );
 }
@@ -105,13 +105,13 @@ export function SettingsSegmented<T extends string>({ label, value, options, onC
   onChange: (value: T) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex shrink-0 gap-0.5 rounded-[10px] bg-[var(--fill-tsp)] p-[3px]">
+    <div role="radiogroup" aria-label={label} className="inline-flex shrink-0 gap-0.5 rounded-[10px] bg-[var(--bg-field)] p-[3px]">
       {options.map((option) => {
         const on = option.value === value;
         return (
           <button key={option.value} type="button" role="radio" aria-checked={on} onClick={() => { if (!on) onChange(option.value); }}
             className={`inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-[7px] px-3 text-[14px] transition ${
-              on ? 'bg-[var(--dock-pane)] text-[var(--text)] shadow-[0_1px_2px_rgba(0,0,0,0.08)] ring-1 ring-[var(--border)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+              on ? 'bg-[var(--bg-panel)] text-[var(--text)] shadow-[0_1px_2px_rgba(0,0,0,0.08)] ring-1 ring-[var(--border)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
             }`}>
             {option.icon ? <span className="flex shrink-0">{option.icon}</span> : null}
             {option.label}

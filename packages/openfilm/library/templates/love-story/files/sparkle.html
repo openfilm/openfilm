@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sparkle</title>
+<style>
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas></canvas>
+<script>
+/*
+ * Star glints pop all over the frame, more and brighter toward the cut, where they melt into white, and twinkle
+ * out over the next shot. It lasts 0.9 s and covers the cut at its middle: put its middle on the cut. A page of
+ * OpenFilm's library (CC0): what it shows at t comes from t alone, drawn in parts of the frame so it fits a stage
+ * of any shape.
+ */
+const D = 0.9;
+const canvas = document.querySelector('canvas');
+const g = canvas.getContext('2d');
+let W = 0;
+let H = 0;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/* how far u is through [a, b], from 0 to 1 */
+const seg = (u, a, b) => clamp((u - a) / (b - a));
+const inQuad = (x) => x * x;
+const outQuad = (x) => 1 - (1 - x) * (1 - x);
+/* a fixed random number in [0, 1) for each n: the same on every frame */
+const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+/* a star of n points, radii ro and ri, its middle at x, y */
+const star = (x, y, ro, ri, n = 5, rot = 0) => {
+  g.beginPath();
+  for (let i = 0; i < n * 2; i++) { const a = rot - Math.PI / 2 + (i * Math.PI) / n, r = i % 2 ? ri : ro; g.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)); }
+  g.closePath();
+};
+
+/* a four-pointed glint with long thin spikes and a soft core */
+const glint = (x, y, s, a, rot) => {
+  const core = g.createRadialGradient(x, y, 0, x, y, s * 0.5);
+  core.addColorStop(0, `rgba(255, 255, 255, ${a})`);
+  core.addColorStop(0.3, `rgba(255, 240, 200, ${a * 0.5})`);
+  core.addColorStop(1, 'rgba(255, 230, 180, 0)');
+  g.fillStyle = core;
+  g.fillRect(x - s, y - s, s * 2, s * 2);
+  g.fillStyle = `rgba(255, 255, 255, ${a})`;
+  star(x, y, s, s * 0.06, 4, rot);
+  g.fill();
+  star(x, y, s * 0.45, s * 0.05, 4, rot + Math.PI / 4);
+  g.fill();
+};
+
+function draw(u) {
+  const M = Math.min(W, H);
+  const wash = u < 0.5 ? inQuad(seg(u, 0.18, 0.42)) : 1 - outQuad(seg(u, 0.56, 0.84));
+  g.fillStyle = `rgba(255, 252, 244, ${wash})`;
+  g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 46; i++) {
+    const after = i >= 30;
+    const born = after ? 0.5 + hash(i) * 0.32 : hash(i) * 0.36, life = 0.16 + hash(i + 1) * 0.14;
+    const p = seg(u, born, born + life);
+    if (p <= 0 || p >= 1) continue;
+    const grow = after ? 1 : 1 + 1.5 * seg(u, 0.15, 0.42);
+    const s = M * (0.06 + 0.14 * hash(i + 2)) * grow * Math.sin(Math.PI * p);
+    glint(hash(i + 3) * W, hash(i + 4) * H, s, 0.95, p * 1.2 + hash(i + 5));
+  }
+}
+
+window.film = {
+  duration: D,
+  frame(t) {
+    const r = window.devicePixelRatio || 1;
+    W = innerWidth;
+    H = innerHeight;
+    if (canvas.width !== Math.round(W * r) || canvas.height !== Math.round(H * r)) { canvas.width = Math.round(W * r); canvas.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.filter = 'none';
+    g.clearRect(0, 0, W, H);
+    /* u: how far through the transition, 0 to 1; the cut is at 0.5 */
+    draw(Math.min(Math.max(t / D, 0), 1));
+  },
+};
+if (!window.filmHost) {
+  const t0 = performance.now();
+  const loop = () => { const t = (performance.now() - t0) / 1000; window.film.frame(window.film.duration ? t % window.film.duration : t); requestAnimationFrame(loop); };
+  loop();
+}
+</script>
+</body>
+</html>

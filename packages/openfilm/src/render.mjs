@@ -6,6 +6,7 @@ import { availableParallelism, freemem, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { clipKind, FILM_FILE } from './film-doc.mjs';
 import { broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, prores709 } from './encoders.mjs';
+import { memoryError } from './browser-memory.mjs';
 import { FilmPage, launch } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
 import { browserCopies, filmVideos } from './seekable.mjs';
@@ -83,7 +84,8 @@ export async function render(args, opts = {}) {
   if (range && opts.ranges) throw new UsageError('choose a range or ranges, not both');
   if (opts.loudness != null && !isLoudness(opts.loudness)) throw new UsageError(`--loudness is a target from ${LOUDNESS_RANGE[0]} to ${LOUDNESS_RANGE[1]} LUFS, e.g. --loudness=-14 for online video`);
   if (at != null) throw new UsageError(`render takes a range (for example ${at}-${at + 2}), not one time; for one frame use openfilm look ${at}`);
-  /* --subtitles: the project's film drawn around by a page that burns its subtitles in (the export's own, burn.mjs),
+  /* --subtitles: a project's subtitles from before caption tracks (its voices' transcripts in the style Studio kept),
+     the project's film drawn around by a page that burns them in (the export's own, burn.mjs),
      rendered in its place, from the project's folder, named as the film's own render is. Studio burns only the
      project's film, so a page of it is refused */
   if (opts.subtitles) {
@@ -91,6 +93,8 @@ export async function render(args, opts = {}) {
     const own = existsSync(join(loc.root, FILM_FILE)) ? FILM_FILE : 'index.html';
     if (decodeURI(loc.entry) !== own) throw new UsageError(`--subtitles burns the subtitles into the project's film: render the project's folder, not ${decodeURI(loc.entry)}`);
     const { subtitlesForExport } = await import('../studio/server/captions.mjs');
+    /* a film with caption tracks has its subtitles in its picture already: rendered as it is */
+    if ((await subtitlesForExport(loc.root)).tracks) return await render(args, { ...opts, subtitles: false });
     const burn = await burned(loc.root, { burnSubtitles: true }, subtitlesForExport, !!opts.alpha);
     if (!burn) throw new UsageError('--subtitles: the film has no subtitles to burn in');
     try {
@@ -189,7 +193,7 @@ export async function render(args, opts = {}) {
       console.error(`openfilm render: ${shown(file)}: a copy this browser plays could not be made, so it is drawn as it is`);
     };
     try {
-      copies = await browserCopies(browser, site.url, root, files, { signal: opts.signal, slow: total >= fps * 2, failed });
+      copies = await browserCopies(browser, site.url, root, files, { signal: opts.signal, slow: total >= fps * 2, fine: !!opts.fine, failed });
     } catch (e) {
       await probe.close();
       await pool?.give(lent, { retire: true });
@@ -205,7 +209,7 @@ export async function render(args, opts = {}) {
   const work = store.folder;
   const chunks = chunksOf(f0, f1, fps);
   const settingsFor = (/** @type {typeof format} */ f) => settingsOf({ entry, root, frames: [f0, f1], fps: ffmpegRate(rate), size, scale, samples, shutter, alpha,
-    duration: Number.isFinite(end) ? end : null, spans: selection?.spans ?? null, format: f });
+    duration: Number.isFinite(end) ? end : null, fine: !!opts.fine, spans: selection?.spans ?? null, format: f });
   /* chunks a render that stopped drew with alpha, or without the chip after it gave up, are drawn on so */
   if (clearFormat && store.kept === settingsFor(clearFormat)) { clear = true; format = clearFormat; encoder = encoderOf(format.video); }
   else if (chip && store.kept === settingsFor(own)) { onChip = false; format = own; encoder = encoderOf(own.video); }
@@ -251,7 +255,8 @@ export async function render(args, opts = {}) {
   /** @type {(() => void)[]} */
   const unwatch = [];
   const watch = (/** @type {import('playwright-core').Browser} */ b) => {
-    const closed = () => crash(gone);
+    /* ended for the memory the page took: said so, and not drawn again in new browsers (browserFailed) */
+    const closed = () => crash(memoryError(b) ?? gone);
     b.on('disconnected', closed);
     unwatch.push(() => b.off('disconnected', closed));
     if (!b.isConnected()) closed();
@@ -284,7 +289,7 @@ export async function render(args, opts = {}) {
       opts.signal?.addEventListener('abort', quit, { once: true });
       const runs = pages.map(async (film) => {
         for (let c = left.shift(); c && !stop.signal.aborted; c = left.shift()) {
-          await encode({ film, a: c.a, b: c.b, file: store.drawing(c) }, { fps, rate, samples, shutter, duration: end, first: f0, format: f, onFrame: progress, still: alpha ? 'png' : 'jpeg', opaque, signal: stop.signal,
+          await encode({ film, a: c.a, b: c.b, file: store.drawing(c) }, { fps, rate, samples, shutter, duration: end, first: f0, format: f, onFrame: progress, still: alpha || opts.fine ? 'png' : 'jpeg', opaque, signal: stop.signal,
             sourceFrame: selection ? (frame) => selectionFrame(selection.spans, frame) : (frame) => frame });
           store.finished(c, used);
         }
