@@ -1090,6 +1090,27 @@ test('a project deleted: every page showing it is told it is gone; several delet
   assert.deepEqual(projects.filter((p) => made.some((m) => m.id === p.id)), []);
 });
 
+test('a byte range past a media file\'s end is answered 416, not left hanging', async () => {
+  const put = await fetch(`${studio.origin}/api/saved/files?path=saved/clip.mp4`, {
+    method: 'PUT',
+    headers: { 'x-studio-key': studio.key, 'content-type': 'application/octet-stream' },
+    body: Buffer.from('0123456789'),
+  });
+  assert.equal(put.status, 200);
+  const ask = (range) => fetch(`${studio.origin}/api/saved/file?path=saved/clip.mp4`, {
+    headers: { 'x-studio-key': studio.key, range }, signal: AbortSignal.timeout(2000),
+  });
+  for (const range of ['bytes=999999-', 'bytes=8-2', 'bytes=-']) {
+    const res = await ask(range);
+    assert.equal(res.status, 416, `${range}: answered, not hanging`);
+    assert.equal(res.headers.get('content-range'), 'bytes */10');
+  }
+  const part = await ask('bytes=2-4');
+  assert.equal(part.status, 206);
+  assert.equal(part.headers.get('content-range'), 'bytes 2-4/10');
+  assert.equal(await part.text(), '234');
+});
+
 test('a new project starts in the subtitle look Studio sends with it, written before anything else; an opened one gets none (#286)', async () => {
   const look = { on: true, fill: '#ffd400', align: 'left' };
   const { project } = await (await api('/api/projects', { method: 'POST', body: { name: 'Remembered look', subtitleStyle: look } })).json();
