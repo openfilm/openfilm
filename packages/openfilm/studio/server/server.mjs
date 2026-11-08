@@ -166,8 +166,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   /** films fetched from GitHub into the library (fetch-repo.mjs), each opened as a project when it lands */
   const fetches = createFetches({ library: libraryRoot, open: (folder) => openProject(folder) });
 
-  const sameKey = (/** @type {string | null | undefined} */ given) => typeof given === 'string' && given.length === key.length
-    && timingSafeEqual(Buffer.from(given), Buffer.from(key));
+  const sameKey = (/** @type {string | null | undefined} */ given) => {
+    if (typeof given !== 'string') return false;
+    const a = Buffer.from(given), b = Buffer.from(key);
+    return a.length === b.length && timingSafeEqual(a, b);
+  };
 
   /** The caller holds the key; a browser write must also come from the editor's own origin. */
   function authorize(/** @type {Req} */ req) {
