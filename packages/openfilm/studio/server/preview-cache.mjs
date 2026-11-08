@@ -53,7 +53,9 @@ export function projectPrint(root) {
       if (d.isDirectory()) { walk(join(dir, d.name), path); continue; }
       if (path === FILM_FILE || SOUNDS.has(extname(d.name).toLowerCase())) continue;
       seen += 1;
-      try { const s = statSync(join(dir, d.name)); hash.update(`${path}\0${s.size}\0${Math.round(s.mtimeMs)}\n`); } catch { /* gone meanwhile */ }
+      /* an atomic rename lands a whole new file under the same name: size and a rounded date can match, its
+         nanosecond time, inode and change time do not (the history store keys its files the same way) */
+      try { const s = statSync(join(dir, d.name), { bigint: true }); hash.update(`${path}\0${s.size}\0${s.mtimeNs}\0${s.ino}\0${s.ctimeNs}\n`); } catch { /* gone meanwhile */ }
     }
   };
   walk(root, '');

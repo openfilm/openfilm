@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, renameSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { filmHtml } from '../../src/film-doc.mjs';
@@ -42,6 +42,18 @@ test('a render is named by all its picture depends on: film.html and the pages c
   mkdirSync(join(dir, '.film'), { recursive: true });
   writeFileSync(join(dir, '.film', 'settings.json'), '{}');
   assert.equal(previewKey(dir, 0, 1, 30, 540), previewKey(dir, 0, 1, 30, 540));
+});
+
+test('a page replaced under the same name, size and date is a new picture, not the old render', () => {
+  const dir = project();
+  const at = join(dir, 'a.html');
+  const before = previewKey(dir, 0, 1, 30, 540);
+  const { atime, mtime } = statSync(at);
+  const part = join(dir, 'a.html.next');
+  writeFileSync(part, page('b')); /* the same number of bytes, another picture */
+  utimesSync(part, atime, mtime); /* a copy on some disks keeps the old date */
+  renameSync(part, at); /* how an import lands: a whole new file, all at once */
+  assert.notEqual(previewKey(dir, 0, 1, 30, 540), before, 'the replaced page is not the old one');
 });
 
 test('renders are made one at a time, on the frame grid; asked again under other names, the old ones are let go', async () => {
