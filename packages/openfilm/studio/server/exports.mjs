@@ -563,7 +563,7 @@ async function clipFilm(root, clipId, { change = {}, doc = filmDoc(root) } = {})
 
 
 const H264_CRF = { standard: 23, high: 18, master: 14 };
-const X265_CRF = { standard: 28, high: 23, master: 19 };
+const X265_CRF = { standard: 28, high: 23, master: 14 };
 const VP9_CRF = { standard: 36, high: 30, master: 20 };
 /** Bits per pixel per frame by quality, for encoders that take a bitrate (the same scale as the dialog's estimate). */
 const BPP = { standard: 0.07, high: 0.11, master: 0.2 };
@@ -603,8 +603,9 @@ function encoding(codec, quality, size, fps, have, hw = null) {
     case 'hevc':
       if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(0.8), { gop }), ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
       if (have.has('libx265')) {
-        /* master in 10 bits (Main 10): a dark gradient keeps steps 8 bits break into bands */
-        return { encoder: 'libx265', format: { video: ['-c:v', 'libx265', '-preset', 'medium', '-crf', String(X265_CRF[quality]), '-x265-params', 'log-level=error', '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709], ...(quality === 'master' ? { pix: YUV_709('yuv420p10le') } : {}) } };
+        /* master in 10 bits (Main 10), with finer grain-aware encoding: small changing dither must not become one
+           frozen texture. It costs more time and bytes; the smaller delivery qualities keep their settings. */
+        return { encoder: 'libx265', format: { video: ['-c:v', 'libx265', '-preset', quality === 'master' ? 'slow' : 'medium', '-crf', String(X265_CRF[quality]), ...(quality === 'master' ? ['-tune', 'grain'] : []), '-x265-params', 'log-level=error', '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709], ...(quality === 'master' ? { pix: YUV_709('yuv420p10le') } : {}) } };
       }
       if (have.has('hevc_videotoolbox')) return { encoder: 'hevc_videotoolbox', format: { video: ['-c:v', 'hevc_videotoolbox', '-b:v', bitrate(0.8), '-g', String(gop), '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
       throw new ExportError('this computer\'s ffmpeg has no HEVC encoder (libx265 or hevc_videotoolbox)');
