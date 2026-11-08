@@ -8,13 +8,14 @@
  */
 import React from 'react';
 import {
-  AudioWaveform, Bell, Car, Cat, Cpu, Download, Footprints, Laugh, Leaf, Loader2, MousePointerClick, Pause, Play, Plus, Star, Users, Wind, X, Zap,
+  AlertCircle, AudioWaveform, Bell, Car, Cat, Cpu, Download, Footprints, Laugh, Leaf, Loader2, MousePointerClick, Pause, Play, Plus, RotateCw, Square, Star, Users, Wind, X, Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { coverLook, heardHere, libraryUrl, mayNeedFetch, soundLook, toggleFavorite, useLibraryHere, waveUrl, type HereState, type LibraryItem } from '@/lib/library';
 import { createPreviewPlayer, type Playable, type PreviewError, type PreviewState } from '@/lib/library-player';
 import { useMediaImage } from '@/lib/media-queue';
+import styles from './AudioList.module.css';
 
 /** each group of sounds its mark on its tile */
 const MARKS: Record<string, LucideIcon> = {
@@ -114,6 +115,11 @@ export function previewMessage(player: Pick<Player, 'error' | 'slow' | 'download
       : player.slow ? 'assetDrawer.previewSlow' : 'assetDrawer.previewLoading');
 }
 
+/** Unknown download size: animate activity without inventing a percentage. */
+export function LoadingBar({ label }: { label: string }) {
+  return <span className={styles.loading} role="progressbar" aria-label={label} data-audio-loading="" />;
+}
+
 function Buttons({ item, kept, addTip, onAdd, always, here = 'here', downloading }: {
   item: LibraryItem; kept: boolean; addTip: string; onAdd: () => void; always?: boolean; here?: HereState; downloading: boolean;
 }) {
@@ -128,10 +134,9 @@ function Buttons({ item, kept, addTip, onAdd, always, here = 'here', downloading
       </button>
       {here === 'here' ? <HereButton here={here} addTip={addTip} onAdd={onAdd} onFetch={onAdd} className={`${ON_PANEL} text-[var(--text)]`} show={show} />
         : <span role="img" data-library-download={downloading || here === 'fetching' ? 'fetching' : here}
-          title={t(downloading ? 'assetDrawer.previewDownloading' : here === 'fetching' ? 'assetDrawer.downloading' : 'assetDrawer.previewDownloadPlay')}
           aria-label={t(downloading ? 'assetDrawer.previewDownloading' : here === 'fetching' ? 'assetDrawer.downloading' : 'assetDrawer.previewDownloadPlay')}
           className={`${ON_PANEL} ${here === 'failed' ? 'text-[#ff8a80]' : 'text-[var(--text-muted)]'}`}>
-          {downloading || here === 'fetching' ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+          <Download size={12} />
         </span>}
     </span>
   );
@@ -148,7 +153,7 @@ export function Tile({ item, playing, loading = false, size, cover }: { item: Li
       {cover ? null : <Mark size={size * 0.38} strokeWidth={1.8} className={`relative drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)] ${playing || loading ? 'opacity-0' : 'opacity-90 group-hover:opacity-0'}`} />}
       <span className={`absolute inset-0 grid place-items-center bg-black/35 ${playing || loading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
         <span className="grid h-7 w-7 place-items-center rounded-full bg-black/45">
-          {loading ? <Loader2 size={15} className="animate-spin" /> : playing ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" className="translate-x-px" />}
+          {loading ? <Square size={11} fill="currentColor" /> : playing ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" className="translate-x-px" />}
         </span>
       </span>
     </span>
@@ -177,8 +182,6 @@ export function SoundRow({ item, name, group, picked, player, kept, addTip, onPi
 }) {
   const t = useT();
   const mine = player.item?.id === item.id;
-  const pending = mine && (player.loading || Boolean(player.error));
-  const hint = pending ? previewMessage(player, t) : here && here !== 'here' ? t('assetDrawer.previewDownloadPlay') : '';
   return (
     <div
       {...drag}
@@ -189,7 +192,7 @@ export function SoundRow({ item, name, group, picked, player, kept, addTip, onPi
       className={`group grid h-[60px] cursor-default select-none grid-cols-[44px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 ${picked || mine ? 'bg-[var(--bg-field)]' : 'hover:bg-[var(--bg-field)]'}`}
       onClick={() => { onPick(); player.toggle(item); }}
       onDoubleClick={onAdd}
-      title={hint ? `${name}\n${hint}` : name}
+      title={name}
     >
       <Tile item={item} playing={mine && player.playing} loading={mine && player.loading} size={44} />
       <span className="flex min-w-0 flex-col justify-center gap-1">
@@ -200,8 +203,8 @@ export function SoundRow({ item, name, group, picked, player, kept, addTip, onPi
           <Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} here={here} downloading={mine && player.downloading} />
         </span>
         <span className="flex h-4 min-w-0 items-center gap-2">
-          {!pending ? <span className="min-w-0 flex-1"><Wave item={item} played={mine && player.duration ? player.time / player.duration : 0} /></span> : null}
-          {hint ? <span className={`truncate text-[10.5px] ${mine && player.error ? 'text-[#ff8a80]' : 'text-[var(--text-muted)]'}`}>{hint}</span> : null}
+          {mine && player.loading ? <LoadingBar label={previewMessage(player, t)} />
+            : <Wave item={item} played={mine && player.duration ? player.time / player.duration : 0} />}
         </span>
       </span>
     </div>
@@ -215,7 +218,6 @@ export function MusicCard({ item, name, group, picked, player, kept, addTip, onP
 }) {
   const t = useT();
   const mine = player.item?.id === item.id;
-  const hint = mine && (player.loading || player.error) ? previewMessage(player, t) : here && here !== 'here' ? t('assetDrawer.previewDownloadPlay') : '';
   return (
     <div
       {...drag}
@@ -226,13 +228,13 @@ export function MusicCard({ item, name, group, picked, player, kept, addTip, onP
       className={`group flex h-[92px] cursor-default select-none gap-2.5 rounded-xl p-2 ring-1 ${picked || mine ? 'bg-[var(--bg-field)] ring-[var(--accent)]' : 'bg-[var(--bg-raised)] ring-transparent hover:bg-[var(--bg-field)]'}`}
       onClick={() => { onPick(); player.toggle(item); }}
       onDoubleClick={onAdd}
-      title={hint ? `${name}\n${hint}` : name}
+      title={name}
     >
       <Tile item={item} playing={mine && player.playing} loading={mine && player.loading} size={76} cover />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className={`line-clamp-2 text-[12.5px] font-medium leading-[17px] ${picked || mine ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{name}</span>
         <span className="mt-0.5 truncate text-[11px] text-[var(--text-faint)]">{group} · {lengthOf(item.durationMs ?? 0, t)}</span>
-        {hint ? <span className={`truncate text-[10.5px] ${mine && player.error ? 'text-[#ff8a80]' : 'text-[var(--text-muted)]'}`}>{hint}</span> : null}
+        {mine && player.loading ? <span className="mt-1"><LoadingBar label={previewMessage(player, t)} /></span> : null}
         <span className="mt-auto flex justify-end"><Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} always here={here} downloading={mine && player.downloading} /></span>
       </span>
     </div>
@@ -265,25 +267,27 @@ export function MiniPlayer<T extends Playable>({ player, name, group, art }: {
   return (
     /* on the drawer's own ground, a hairline above it: the composer's card under it sits on the same ground, as one
        stack, not a lighter strip ending on the card */
-    <div className={`mb-[var(--drawer-under,0px)] flex shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-panel)] px-4 ${player.loading || player.error ? 'min-h-[72px] py-2' : 'h-[60px]'}`} data-studio-host-panel="" data-audio-player={player.status}>
+    <div className="mb-[var(--drawer-under,0px)] flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-panel)] px-4" data-studio-host-panel="" data-audio-player={player.status}>
       <button type="button" className="group relative shrink-0 cursor-default" onClick={() => player.toggle(item)}
         aria-label={t(player.loading ? 'assetDrawer.previewCancel' : player.error ? 'assetDrawer.previewRetry' : player.playing ? 'assetDrawer.pause' : 'assetDrawer.play')}>
         {art(item, player.playing)}
-        {player.loading ? <span className="absolute inset-0 grid place-items-center rounded-lg bg-black/60 text-white"><Loader2 size={18} className="animate-spin" /></span> : null}
+        {player.loading || player.error ? <span className="absolute inset-0 grid place-items-center rounded-lg bg-black/60 text-white">
+          {player.error ? <RotateCw size={15} /> : <Square size={12} fill="currentColor" />}
+        </span> : null}
       </button>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex min-w-0 items-baseline gap-2">
           <span className="truncate text-[12.5px] font-medium text-[var(--text)]">{name}</span>
           <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
         </span>
-        {player.loading || player.error ? (
-          <span className="flex min-w-0 items-start gap-2 text-[11px] leading-4" role="status" aria-live="polite">
-            <span className={`min-w-0 ${player.error ? 'text-[#ff8a80]' : 'text-[var(--text-muted)]'}`}>
-              {previewMessage(player, t)}
-            </span>
-            <button type="button" className="shrink-0 text-[var(--accent)] hover:underline" onClick={() => player.error ? player.toggle(item) : player.pause()}>
-              {t(player.error ? 'assetDrawer.previewRetry' : 'assetDrawer.previewCancel')}
-            </button>
+        {player.loading ? (
+          <span className="flex h-4 items-center"><LoadingBar label={previewMessage(player, t)} /></span>
+        ) : player.error ? (
+          <span className="flex h-4 items-center gap-2 text-[#ff8a80]" role="status" aria-live="polite">
+            <span className="sr-only">{previewMessage(player, t)}</span>
+            <AlertCircle size={13} aria-hidden />
+            <button type="button" aria-label={t('assetDrawer.previewRetry')} title={t('assetDrawer.previewRetry')}
+              className="grid h-5 w-5 place-items-center text-[var(--accent)]" onClick={() => player.toggle(item)}><RotateCw size={13} /></button>
           </span>
         ) : <span className="flex items-center gap-2 text-[11px] tabular-nums">
           <span className="text-[var(--accent)]">{say(at)}</span>

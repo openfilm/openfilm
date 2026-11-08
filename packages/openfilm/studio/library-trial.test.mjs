@@ -111,7 +111,7 @@ function sampleWav() {
   return wav;
 }
 
-test('a slow audio preview shows loading and a slow hint, can be cancelled and never starts later', { timeout: 60_000 }, async () => {
+test('a pending audio preview shows only a loading bar, can be cancelled and never starts later', { timeout: 60_000 }, async () => {
   let finish;
   const waiting = new Promise((done) => { finish = done; });
   await withLibrary('Sounds', async ({ page }) => {
@@ -119,9 +119,10 @@ test('a slow audio preview shows loading and a slow hint, can be cancelled and n
     await row.click();
     const player = page.locator('[data-audio-player]');
     await page.locator('[data-audio-player="loading"]').waitFor({ timeout: 2000 });
-    assert.match(await player.getByRole('status').textContent(), /Downloading… Playback starts when ready/);
+    await player.getByRole('progressbar').waitFor();
+    assert.equal(await player.getByRole('progressbar').innerText(), '');
+    assert.equal((await player.innerText()).trim(), 'Slow preview');
     assert.equal(await row.getAttribute('aria-busy'), 'true');
-    await player.getByText('Download is slow. Playback starts when ready.', { exact: true }).waitFor({ timeout: 7000 });
     await player.getByRole('button', { name: 'Cancel', exact: true }).last().click();
     await page.locator('[data-audio-player="paused"]').waitFor();
     assert.equal(await page.evaluate(() => window.__libraryPreviews[0].getAttribute('src')), null);
@@ -209,22 +210,25 @@ test('one click on an uncached music card downloads and plays automatically, wit
       const card = page.locator('[data-library-audio="audio/music/automatic.wav"]');
       try {
         await card.locator('[data-library-download="missing"]').waitFor();
-        assert.equal(await card.getByText('Click to download and play', { exact: true }).count(), 1);
+        assert.equal(await card.getByText('Click to download and play', { exact: true }).count(), 0);
         assert.equal(await card.getByRole('button', { name: 'Download', exact: true }).count(), 0);
         await card.click({ position: { x: 90, y: 30 } });
         const player = page.locator('[data-audio-player]');
         await page.locator('[data-audio-player="loading"]').waitFor();
         await card.locator('[data-library-download="fetching"]').waitFor();
-        const status = player.getByRole('status');
-        assert.match(await status.textContent(), /Downloading… Playback starts when ready/);
-        assert.equal(await status.locator('span').first().evaluate((el) => el.scrollWidth <= el.clientWidth), true, 'the automatic playback promise is not clipped');
+        const bar = player.getByRole('progressbar');
+        await bar.waitFor();
+        assert.equal(await bar.innerText(), '');
+        assert.equal(await bar.getAttribute('aria-valuenow'), null, 'an unknown download size has no invented percentage');
+        assert.equal((await player.innerText()).trim(), 'Automatic music', 'loading adds no visible explanatory text');
+        assert.equal(await card.getByRole('progressbar').count(), 1);
         if (process.env.OPENFILM_TEST_ARTIFACTS) {
           await player.screenshot({ path: join(process.env.OPENFILM_TEST_ARTIFACTS, 'automatic-download.png') });
           await page.evaluate(() => { localStorage.setItem('openfilm.language', 'zh-CN'); window.dispatchEvent(new StorageEvent('storage', { key: 'openfilm.language' })); });
-          await player.getByText('正在下载，完成后自动播放', { exact: true }).waitFor();
+          await player.getByRole('progressbar', { name: '正在下载，完成后自动播放', exact: true }).waitFor();
           await player.screenshot({ path: join(process.env.OPENFILM_TEST_ARTIFACTS, 'automatic-download-zh.png') });
           await page.evaluate(() => { localStorage.setItem('openfilm.language', 'en'); window.dispatchEvent(new StorageEvent('storage', { key: 'openfilm.language' })); });
-          await player.getByText('Downloading… Playback starts when ready.', { exact: true }).waitFor();
+          await player.getByRole('progressbar', { name: 'Downloading… Playback starts when ready.', exact: true }).waitFor();
         }
         fileReady();
         await page.locator('[data-audio-player="playing"]').waitFor({ timeout: 5000 });
