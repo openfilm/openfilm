@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- Click a sound or music card to download and play automatically. Compact loading bars indicate the wait without extra explanatory text. Previews can be cancelled or retried and ignore late events from previous previews. Background waveform downloads leave connections available for playback.
+- Click a library asset to download its missing files and preview automatically, including stickers, community effects and templates. Download icons are passive status indicators. Compact loading bars indicate the wait without extra explanatory text. Previews can be cancelled or retried and ignore late events from previous previews. Template videos start automatically when ready and stop when closed. Background waveform downloads leave connections available for playback.
 
 - Settings keeps Codex usage percentages on one line and lists Google Antigravity and DeepSeek Harness first among optional agents.
 

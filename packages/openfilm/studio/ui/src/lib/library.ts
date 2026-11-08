@@ -321,23 +321,32 @@ export function askHere(ids: readonly string[]): void {
     });
 }
 
-/** Fetch what a thing needs (its sound, a template's music); whether it is here now. */
-export async function fetchLibraryItem(id: string): Promise<boolean> {
-  fetching.add(id);
-  failed.delete(id);
-  tellHere();
-  try {
-    const r = await fetch('/api/library/fetch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
-    const ok = r.ok && Boolean(((await r.json()) as { ok?: boolean }).ok);
-    if (ok) heardHere(id); else failed.add(id);
-    return ok;
-  } catch {
-    failed.add(id);
-    return false;
-  } finally {
-    fetching.delete(id);
+const fetchJobs = new Map<string, Promise<boolean>>();
+
+/** Preview and insertion share the same download, including a double click while the preview is being prepared. */
+export function fetchLibraryItem(id: string): Promise<boolean> {
+  const pending = fetchJobs.get(id);
+  if (pending) return pending;
+  const job = (async () => {
+    fetching.add(id);
+    failed.delete(id);
     tellHere();
-  }
+    try {
+      const r = await fetch('/api/library/fetch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
+      const ok = r.ok && Boolean(((await r.json()) as { ok?: boolean }).ok);
+      if (ok) heardHere(id); else failed.add(id);
+      return ok;
+    } catch {
+      failed.add(id);
+      return false;
+    } finally {
+      fetchJobs.delete(id);
+      fetching.delete(id);
+      tellHere();
+    }
+  })();
+  fetchJobs.set(id, job);
+  return job;
 }
 
 /** A thing heard in full (a sound played): here now. */

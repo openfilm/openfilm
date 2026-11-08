@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { chromium } from 'playwright-core';
 import { filmHtml } from '../src/film-doc.mjs';
 import { openProject } from './server/projects.mjs';
@@ -261,4 +262,131 @@ test('one click on an uncached music card downloads and plays automatically, wit
       });
     });
   } finally { fileReady(); lookupReady(); }
+});
+
+test('one click on an uncached Emoji prepares its bundle and opens the preview without a download button', { timeout: 60_000 }, async () => {
+  let release, downloads = 0, prepared = false;
+  const waiting = new Promise((done) => { release = done; });
+  try {
+    await withLibrary('Stickers', async ({ page, trial }) => {
+      try {
+        await page.getByRole('button', { name: 'Still stickers', exact: true }).click();
+        const card = page.locator('[data-library-card="stickers/emoji/automatic"]');
+        await card.locator('[data-library-download="missing"]').waitFor();
+        assert.equal(await card.getByRole('button', { name: 'Download', exact: true }).count(), 0);
+        await card.click();
+        await page.locator('[data-library-preparing="loading"]').waitFor();
+        assert.equal(await card.getByRole('progressbar').count(), 1);
+        assert.equal(await trial.getByRole('progressbar').innerText(), '');
+        assert.equal(await trial.locator('iframe').count(), 0);
+        release();
+        await trial.frameLocator('iframe').locator('#automatic-preview').waitFor();
+        assert.equal(downloads, 1);
+        await card.hover();
+        await card.getByRole('button', { name: 'Add at the playhead', exact: true }).waitFor();
+      } finally { release(); }
+    }, async (page) => {
+      await page.route('**/api/library', (route) => route.fulfill({ json: { version: 1, groups: {}, items: [
+        { id: 'stickers/emoji/automatic', cat: 'sticker', group: 'faces', kind: 'page', still: true, src: 'sticker.html', w: 320, h: 180, fit: 0.5, durationMs: 2000, name: { en: 'Automatic Emoji' } },
+      ] } }));
+      await page.route('**/api/library/missing', (route) => route.fulfill({ json: { ids: ['stickers/emoji/automatic'] } }));
+      await page.route('**/api/library/fetch', async (route) => {
+        assert.equal(route.request().postDataJSON().id, 'stickers/emoji/automatic');
+        downloads += 1; await waiting; prepared = true;
+        await route.fulfill({ json: { ok: true } }).catch(() => {});
+      });
+      await page.route('**/api/library/pages/**', (route) => {
+        assert.equal(prepared, true);
+        return route.fulfill({ contentType: 'text/html', body: '<body style="background:cyan"><h1 id="automatic-preview">Automatic Emoji</h1><script>window.previewStarted=true</script>' });
+      });
+      await page.route('**/api/library/file?*', (route) => route.fulfill({ status: 404 }));
+    });
+  } finally { release(); }
+});
+
+test('a remote effect can retry preparation, cancel the wait, and never preview after cancellation', { timeout: 60_000 }, async () => {
+  let release, downloads = 0, frames = 0;
+  const waiting = new Promise((done) => { release = done; });
+  try {
+    await withLibrary('Effects', async ({ page, trial }) => {
+      try {
+        const card = page.locator('[data-library-card="community/v1/effect/automatic"]');
+        await card.click();
+        await page.locator('[data-library-preparing="error"]').waitFor();
+        assert.equal((await trial.innerText()).trim(), '');
+        await trial.getByRole('button', { name: 'Try again', exact: true }).click();
+        await page.locator('[data-library-preparing="loading"]').waitFor();
+        const finished = page.waitForResponse((r) => r.url().endsWith('/api/library/fetch'));
+        await trial.getByRole('button', { name: 'Cancel', exact: true }).click();
+        release();
+        await (await finished).finished();
+        await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+        assert.equal(await trial.count(), 0);
+        assert.equal(frames, 0, 'the cancelled asset never opens later');
+        await card.click();
+        await trial.frameLocator('iframe').locator('#effect-preview').waitFor();
+        assert.equal(downloads, 3);
+      } finally { release(); }
+    }, async (page) => {
+      await page.route('**/api/library', (route) => route.fulfill({ json: { version: 1, groups: {}, items: [
+        { id: 'community/v1/effect/automatic', cat: 'effect', kind: 'page', group: 'automatic', src: 'effect.html', durationMs: 2000, name: { en: 'Automatic effect' } },
+      ] } }));
+      await page.route('**/api/library/missing', (route) => route.fulfill({ json: { ids: ['community/v1/effect/automatic'] } }));
+      await page.route('**/api/library/fetch', async (route) => {
+        downloads += 1;
+        if (downloads === 1) return route.fulfill({ status: 503 });
+        if (downloads === 2) await waiting;
+        await route.fulfill({ json: { ok: true } }).catch(() => {});
+      });
+      await page.route('**/api/library/pages/**', (route) => {
+        frames += 1;
+        return route.fulfill({ contentType: 'text/html', body: '<body style="background:cyan"><h1 id="effect-preview">Automatic effect</h1>' });
+      });
+      await page.route('**/api/library/file?*', (route) => route.fulfill({ status: 404 }));
+    });
+  } finally { release(); }
+});
+
+test('an uncached template prepares its assets and autoplays the video when its download finishes', {
+  timeout: 60_000, skip: spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status !== 0,
+}, async () => {
+  const mp4 = execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=160x90:r=10:d=2',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2', '-shortest', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac',
+    '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', 'pipe:1']);
+  let prepared, downloaded, asks = 0;
+  const assets = new Promise((done) => { prepared = done; });
+  const video = new Promise((done) => { downloaded = done; });
+  try {
+    await withLibrary('Templates', async ({ page, trial }) => {
+      try {
+        const card = page.locator('[data-library-card="templates/automatic"]');
+        await card.click();
+        await page.locator('[data-library-preparing="loading"]').waitFor();
+        assert.equal(await card.getByRole('button', { name: 'Download', exact: true }).count(), 0);
+        prepared();
+        const preview = page.locator('[data-template-trial="templates/automatic"]');
+        await preview.getByRole('progressbar').waitFor();
+        downloaded();
+        await preview.locator('[data-template-trial-play="playing"]').waitFor({ timeout: 8000 });
+        await page.waitForFunction(() => document.querySelector('[data-template-trial] video')?.currentTime > 0.05);
+        assert.equal(asks, 1);
+        const media = await preview.locator('video').evaluateHandle((v) => v);
+        await preview.locator('[data-template-trial-close]').click();
+        assert.equal(await trial.count(), 0);
+        assert.equal(await media.evaluate((v) => v.paused && !v.getAttribute('src')), true);
+        await media.dispose();
+      } finally { prepared(); downloaded(); }
+    }, async (page) => {
+      await page.route('**/api/library', (route) => route.fulfill({ json: { version: 1, groups: {}, items: [
+        { id: 'templates/automatic', cat: 'template', kind: 'group', group: 'automatic', music: 'audio/music/tune.mp3', durationMs: 2000, name: { en: 'Automatic template' } },
+      ] } }));
+      await page.route('**/api/library/missing', (route) => route.fulfill({ json: { ids: ['templates/automatic'] } }));
+      await page.route('**/api/library/fetch', async (route) => { asks += 1; await assets; await route.fulfill({ json: { ok: true } }).catch(() => {}); });
+      await page.route('**/api/library/file?*', async (route) => {
+        if (new URL(route.request().url()).searchParams.get('path') === 'examples/templates/automatic.mp4') {
+          await video; await route.fulfill({ body: mp4, contentType: 'video/mp4' }).catch(() => {});
+        } else await route.fulfill({ status: 404 });
+      });
+    });
+  } finally { prepared(); downloaded(); }
 });
