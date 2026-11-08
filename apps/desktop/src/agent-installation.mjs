@@ -40,7 +40,8 @@ export const AGENT_PROGRAMS = Object.freeze({
   deepseek: { names: ['dsh'], dirs: (home, win, apps = ['/Applications', join(home, 'Applications')]) => (win
     ? [join(localAppData(home), 'Programs', 'DeepSeek Harness', 'resources', 'runtime', 'cli', 'bin')]
     : apps.map((dir) => dirname(join(dir, 'DeepSeek Harness.app', DSH_IN_APP)))) },
-  /* Google Antigravity keeps agy in %LOCALAPPDATA%\agy\bin on Windows */
+  /* Antigravity's ACP server is the separately installed agy CLI, not its desktop app. The official installer
+     uses ~/.local/bin (HOME_BIN_CANDIDATES) on macOS/Linux and %LOCALAPPDATA%\agy\bin on Windows. */
   antigravity: {
     names: ['agy'],
     dirs: (home, win) => (win ? [join(localAppData(home), 'agy', 'bin')] : []),
@@ -481,10 +482,12 @@ const WINDOWS_APP_NAMES = {
   kimi: /^Kimi(?:\s|$)/i,
   minimax: /^MiniMax(?:\s|$)/i,
   deepseek: /^DeepSeek Harness(?:\s|$)/i,
+  antigravity: /^(?:Google\s+)?Antigravity(?:\s|$)/i,
 };
 const WINDOWS_APP_FOLDERS = {
   copilot: /^GitHub Copilot$/i, cursor: /^cursor$/i, opencode: /^(?:@opencodedesktop|OpenCode)$/i,
   codebuddy: /^CodeBuddy/i, kimi: /^Kimi/i, minimax: /^MiniMax/i, deepseek: /^DeepSeek Harness$/i,
+  antigravity: /^Antigravity$/i,
 };
 const directoryExists = (dir) => { try { return statSync(dir).isDirectory(); } catch { return false; } };
 /** Registered custom folders and the maker's default folders. Stale registry entries never count. */
@@ -634,6 +637,7 @@ const DESKTOP_APPS = {
   codebuddy: { name: 'CodeBuddy', mac: /^CodeBuddy.*\.app$/i, win: (local) => folders(join(local, 'Programs'), /^CodeBuddy/i) },
   kimi: { name: 'Kimi', mac: /^Kimi.*\.app$/i, win: (local) => folders(join(local, 'Programs'), /^Kimi/i) },
   minimax: { name: 'MiniMax', mac: /^MiniMax.*\.app$/i, win: (local) => folders(join(local, 'Programs'), /^MiniMax/i) },
+  antigravity: { name: 'Antigravity', mac: /^(?:Google )?Antigravity\.app$/i, win: (local) => folders(join(local, 'Programs'), /^Antigravity$/i) },
 };
 
 /** The folders in a folder whose names match. */
@@ -662,6 +666,8 @@ export function desktopApp(id, { home = homedir(), applicationDirs = ['/Applicat
  * install page (AGENT_DOWNLOADS).
  */
 export const AGENT_INSTALLERS = Object.freeze({
+  /* antigravity.google/docs/getting-started?tab=cli — the desktop download does not install agy */
+  antigravity: { sh: 'curl -fsSL https://antigravity.google/cli/install.sh | bash', ps: 'irm https://antigravity.google/cli/install.ps1 | iex' },
   /* cursor.com/docs/cli/installation */
   cursor: { sh: 'curl https://cursor.com/install -fsS | bash', ps: "irm 'https://cursor.com/install?win32=true' | iex" },
   /* docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli */

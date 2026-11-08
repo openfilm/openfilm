@@ -92,7 +92,7 @@ export interface LibraryActions {
 /** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
 export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried, captions, speak, onServices, projectId = null, showSkills, under = 0 }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried, captions, speak, onServices, projectId = null, showSkills, under = 0, shown: isShown = true }: {
   media: React.ReactNode;
   /** the project's own media, or Saved */
   mediaScope: 'project' | 'saved';
@@ -112,6 +112,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
   /** how much of its foot the app's composer floats over: the lists run on under it, their ends scrolled clear of it
       (--drawer-under) */
   under?: number;
+  shown?: boolean;
 }) {
   const t = useT();
   const lang = useLanguage();
@@ -297,6 +298,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
   /* what a sound or a piece of music plays in, under the list */
   const player = usePlayer();
   closePlayer.current = player.close;
+  React.useEffect(() => { if (!isShown) { setPicked(null); tryOut.current(null); player.close(); } }, [isShown]);
   const dragProps = (item: LibraryItem) => ({ onDragStart: dragOf(item, nameOf(item.name, lang)), onDragEnd: () => clearResourceDrag() });
   /* a long list (thousands of sounds) is drawn a page at a time, from its top again when what it lists changes */
   const [drawn, setDrawn] = React.useState(PAGE);

@@ -35,6 +35,7 @@
     "./skills": "./src/skills.mjs",
     "./skills-cli": "./src/skills-cli.mjs",
     "./studio": "./studio/server/server.mjs",
+    "./desktop-account": "./studio/server/account.mjs",
     "./studio-ui/*": "./studio/ui/src/*",
     "./package.json": "./package.json"
   },
@@ -53,6 +54,7 @@
     "!library/vectors.i8",
     "!library/vectors.json",
     "examples-index",
+    "skill-catalog-seed.json",
     "src",
     "!src/*.test.mjs",
     "MANUAL.md",

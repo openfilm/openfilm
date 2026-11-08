@@ -3,8 +3,33 @@ import assert from 'node:assert/strict';
 import {
   SourceError, createSpeedMeter, examplesCollapsed, fetchErrorKey, followFetch, formatBytes, formatSeconds, looksLikeRepoUrl,
   pathCrumbs, secondsLeft, setExamplesCollapsed, seenSkills, sourcesApi, type FetchJob,
-  SKILLS_CHANGED, watchSkills, type SkillEntry,
+  SKILLS_CHANGED, watchSkills, seenCatalog, type SkillEntry,
 } from './project-sources.ts';
+
+test('older skills responses cannot erase a refreshed catalog or overwrite its newer list', async (t) => {
+  const pending: Array<(r: Response) => void> = [];
+  t.mock.method(globalThis, 'fetch', () => new Promise<Response>((resolve) => pending.push(resolve)));
+  const old = sourcesApi.skills('catalog-race'), latest = sourcesApi.skills('catalog-race');
+  const skill = { uid: 'openfilm/available', name: 'available', description: '', source: 'official', scripts: 0 };
+  pending[1](new Response(JSON.stringify({ skills: [skill], catalog: { read: '2026-11-08T12:00:00Z' } })));
+  await latest;
+  pending[0](new Response(JSON.stringify({ skills: [], catalog: null })));
+  await old;
+  assert.deepEqual(seenSkills('catalog-race'), [skill]);
+  assert.equal(seenCatalog(), '2026-11-08T12:00:00Z');
+});
+
+test('a skills response that breaks after its headers keeps the last list and reports a failed refresh', async (t) => {
+  const skill = { uid: 'openfilm/cached', name: 'cached', description: '', source: 'official', scripts: 0 };
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ skills: [skill] })));
+  await sourcesApi.skills('broken-body');
+  t.mock.method(globalThis, 'fetch', async () => new Response(new ReadableStream({
+    start(controller) { controller.error(new DOMException('The response body stalled.', 'TimeoutError')); },
+  })));
+  assert.deepEqual(await sourcesApi.skills('broken-body'), [skill]);
+  assert.deepEqual(seenSkills('broken-body'), [skill]);
+  await assert.rejects(sourcesApi.readDiscover(), /body stalled/);
+});
 
 test('cover edits update cached personal skills, preserve project overrides, and retain state on failure', async (t) => {
   const mine = { uid: 'local/cover-edit', name: 'cover-edit', description: '', source: 'mine', scripts: 0, cover: '/old.png' };

@@ -4,6 +4,10 @@
 
 ### Patch Changes
 
+- Layout → Edit layout opens a temporary editor for the current work mode. Move any panel into nested splits, swap panels, dock at workspace edges and resize live. Done saves the layout; Cancel restores it, with undo and redo while editing. The library retains its original UI without an extra header. Edit and canvas presets stay within their own mode, and canvas resizing preserves the current view center. Named layouts support import and export.
+
+- OpenFilm is available as a built-in agent with the same account as Services. Choose from seven Claude, GPT and DeepSeek models, and manage their visibility and order with live drag reordering. Advanced library categories use the same drag controls, with Media fixed first. The matching cloud release enables provider caching and settles actual model costs without rounding up each small call separately.
+
 - Studio: Shift+E and the clip menu disable or enable selected clips with undo and redo. Jianying and CapCut drafts retain complete sources and editable trim handles. Transparent video exports preserve edge colors when resized or motion-blurred and retain frames across transparency changes.
 
 - [#381](https://github.com/openfilm/openfilm/pull/381) [`b108090`](https://github.com/openfilm/openfilm/commit/b1080902e6847f55323dbc092981c0cc685a4578) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Undoing a chat turn restores its canvas boards along with its files. A turn that only changes the canvas can be undone too. Open boards refresh after the restore and forget undo steps that could bring back references to files the turn's undo removed.

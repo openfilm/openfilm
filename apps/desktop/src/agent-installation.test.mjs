@@ -409,6 +409,19 @@ test('Antigravity version is read from agy --version; an older copy is detected 
   assert.equal(detectAgentInstallation('antigravity', { home, win: true, env: { LOCALAPPDATA: join(home, 'AppData', 'Local') }, pathDirs: [] }).cli, exe);
 });
 
+test('Antigravity desktop alone needs its separate ACP CLI; the official CLI is found off PATH', () => {
+  const home = mkdtempSync(join(tmpdir(), 'of-antigravity-'));
+  const apps = join(home, 'Applications');
+  const opts = { home, applicationDirs: [apps], win: false, env: { PATH: '' } };
+  const app = join(apps, 'Antigravity.app');
+  put(join(app, 'Contents', 'MacOS', 'Antigravity'), '#!/bin/sh\n', 0o755);
+  assert.equal(desktopApp('antigravity', opts), 'Antigravity');
+  assert.equal(detectAgentInstallation('antigravity', opts).cli, null, 'the desktop launcher is not the ACP server');
+  assert.equal(detectAgentInstallation('antigravity', { ...opts, chosen: app }).cli, null);
+  const cli = put(join(home, '.local', 'bin', 'agy'), '#!/bin/sh\n', 0o755);
+  assert.equal(detectAgentInstallation('antigravity', opts).cli, cli, 'the installer folder is searched without shell PATH');
+});
+
 test("Cursor's agent counts only in its own folder (or Homebrew's cursor-cli), whatever it is called", () => {
   if (process.platform === 'win32') return;
   const home = mkdtempSync(join(tmpdir(), 'of-home-'));
@@ -503,6 +516,8 @@ test("each official installer: the maker's command for this system, the others n
   assert.equal(installCommand('cursor', { win: false }), 'curl https://cursor.com/install -fsS | bash');
   assert.equal(installCommand('cursor', { win: true }), "irm 'https://cursor.com/install?win32=true' | iex");
   assert.equal(installCommand('copilot', { win: true }), 'winget install GitHub.Copilot');
+  assert.equal(installCommand('antigravity', { win: false }), 'curl -fsSL https://antigravity.google/cli/install.sh | bash');
+  assert.equal(installCommand('antigravity', { win: true }), 'irm https://antigravity.google/cli/install.ps1 | iex');
   for (const id of ['codex', 'claude', 'opencode', 'byok']) assert.equal(installCommand(id, { win: false }), null, id);
   for (const [id, { sh, ps }] of Object.entries(AGENT_INSTALLERS)) {
     assert.match(sh, /^curl .*https:\/\/\S+.*\| bash$/, id);
@@ -589,8 +604,9 @@ test('custom Windows app registrations identify the desktop app without making i
     ['cursor', 'Cursor (User)', 'Cursor'], ['codebuddy', 'CodeBuddy CN (User)', 'CodeBuddy'],
     ['copilot', 'GitHub Copilot', 'GitHub Copilot'], ['kimi', 'Kimi Code', 'Kimi'],
     ['minimax', 'MiniMax Code', 'MiniMax'], ['deepseek', 'DeepSeek Harness 0.2.1-rc.3', 'DeepSeek Harness'],
+    ['antigravity', 'Google Antigravity', 'Antigravity'], ['antigravity', 'Antigravity 2.29.1', 'Antigravity'],
   ]) {
-    const dir = join(home, 'custom apps', id);
+    const dir = join(home, 'custom apps', name);
     assert.equal(desktopApp(id, { ...opts, windowsApps: [{ name, directories: [dir] }] }), null, 'stale registration');
     mkdirSync(dir, { recursive: true });
     const windowsApps = [{ name, directories: [dir] }];

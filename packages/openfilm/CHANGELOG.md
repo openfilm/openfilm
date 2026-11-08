@@ -4,6 +4,8 @@
 
 ### Patch Changes
 
+- Layout → Edit layout opens a temporary editor for the current work mode. Move any panel into nested splits, swap panels, dock at workspace edges and resize live. Done saves the layout; Cancel restores it, with undo and redo while editing. The library retains its original UI without an extra header. Edit and canvas presets stay within their own mode, and canvas resizing preserves the current view center. Named layouts support import and export.
+
 - Click a library asset to download its missing files and preview automatically, including stickers, community effects and templates. Download icons are passive status indicators. Compact loading bars indicate the wait without extra explanatory text. Previews can be cancelled or retried and ignore late events from previous previews. Template videos start automatically when ready and stop when closed. Background waveform downloads leave connections available for playback.
 
 - Settings keeps Codex usage percentages on one line and lists Google Antigravity and DeepSeek Harness first among optional agents.

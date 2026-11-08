@@ -1,12 +1,15 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Copy, Loader2, X } from 'lucide-react';
+import { Check, Copy, Loader2 } from 'lucide-react';
 import { useT } from '@/i18n';
 import type { HostAgent, HostAgentDiagnosis } from '@/lib/host';
+import { agentMark } from '@/lib/provider-marks';
+import { ProviderMark } from './ProviderMark';
+import { DialogClose, DialogIdentity } from './DialogIdentity';
 import { SettingsButton, SettingsLinkButton } from './ui';
 
 /** Connection instructions and opt-in diagnostics, above Settings without closing the parent dialog on Escape. */
-export function AgentConnectionHelp({ agent, status, report, checking, hint, error, notice, copied, onClose, onCheck, onLocate, onCopy }: {
+export function AgentConnectionHelp({ agent, status, report, checking, hint, error, notice, copied, onClose, onCheck, onLocate, onCopy, actions, connectionStatus }: {
   agent: HostAgent;
   status: string | null;
   report: HostAgentDiagnosis | null;
@@ -19,10 +22,11 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
   onCheck?: () => void;
   onLocate?: () => void;
   onCopy?: () => void;
+  actions?: React.ReactNode;
+  connectionStatus?: React.ReactNode;
 }) {
   const t = useT();
   const dialog = React.useRef<HTMLDialogElement>(null);
-  const titleId = React.useId();
   React.useLayoutEffect(() => {
     const node = dialog.current;
     if (!node) return undefined;
@@ -36,10 +40,15 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
     : agent.app ? 'helpDesktopOnly' : ['codex', 'copilot', 'opencode', 'deepseek'].includes(agent.id) ? 'helpBundled' : 'helpInstall';
   const words = (key: string) => t(`settings.agents.${key}`).replaceAll('{name}', agent.name);
   const raw = [error, agent.connectionIssue?.message, report?.text].filter(Boolean).join('\n\n');
+  const website = (() => {
+    if (!agent.install) return undefined;
+    try { const url = new URL(agent.install); return { href: url.href, label: url.host }; }
+    catch { return undefined; }
+  })();
 
   return createPortal(
-    <dialog ref={dialog} aria-labelledby={titleId} aria-modal="true"
-      className="m-auto max-h-[85vh] overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-panel)] p-0 text-[var(--text)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)] backdrop:bg-black/50 open:flex open:flex-col"
+    <dialog ref={dialog} aria-label={words('helpTitle')} aria-modal="true"
+      className="m-auto max-h-[85vh] overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-raised)] p-0 text-[var(--text)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)] backdrop:bg-black/50 open:flex open:flex-col"
       style={{ width: 'min(640px, calc(100vw - 32px))' }}
       onCancel={(event) => { event.preventDefault(); onClose(); }}
       onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); } }}
@@ -48,11 +57,11 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
         const bounds = event.currentTarget.getBoundingClientRect();
         if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
       }}>
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] px-6 py-4">
-        <h3 id={titleId} className="text-[18px] font-semibold">{words('helpTitle')}</h3>
-        <button type="button" onClick={onClose} aria-label={words('close')} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"><X size={18} /></button>
-      </header>
-      <div className="min-h-0 overflow-y-auto overscroll-contain px-6 py-5 text-[14px] leading-relaxed text-[var(--text-muted)]">
+      <DialogClose label={words('close')} onClose={onClose} />
+      <div className="shrink-0 px-7 pt-7">
+        <DialogIdentity name={agent.name} mark={<ProviderMark id={agentMark(agent.id)} size={24} />} website={website} actions={actions} status={connectionStatus} />
+      </div>
+      <div className="min-h-0 overflow-y-auto overscroll-contain px-7 py-5 text-[14px] leading-relaxed text-[var(--text-muted)]">
         <section>
           <h4 className="mb-2 font-medium text-[var(--text)]">{words('helpConnect')}</h4>
           <ol className="ml-5 list-decimal space-y-2">
@@ -71,7 +80,7 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
             <h4 className="font-medium text-[var(--text)]">{words('helpCheckTitle')}</h4>
             {onCheck ? <SettingsButton variant="quiet" disabled={checking} onClick={onCheck}>{checking ? <Loader2 size={14} className="animate-spin" /> : null}{words(checking ? 'searching' : 'recheck')}</SettingsButton> : null}
           </div>
-          {status ? <p>{status}</p> : null}
+          {status && !connectionStatus ? <p>{status}</p> : null}
           {notice ? <p role="status" className="mt-2">{notice}</p> : null}
           {agent.path ? <p className="mt-1 break-all font-mono text-[12px]">{agent.path}</p> : null}
           {hint ? <p role="status" className="mt-2">{hint}</p> : null}
@@ -85,7 +94,7 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
           </div> : null}
         </section>
       </div>
-      <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-[var(--border)] px-6 py-4">
+      <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-[var(--border)] px-7 py-4">
         {agent.install ? <SettingsLinkButton href={agent.install}>{words('helpOfficial')}</SettingsLinkButton> : <span />}
         <SettingsButton autoFocus onClick={onClose}>{words('helpDone')}</SettingsButton>
       </footer>

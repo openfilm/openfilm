@@ -52,6 +52,7 @@ import { CHARACTER_PARTS, CharacterLibrary, HistoryModal, MaterialLibrary } from
 import { RedrawEditor, type RedrawWay } from './redraw';
 import { presetOf } from '@/lib/canvas-presets';
 import { FRAME_COLOR, NODE_TYPES } from './nodes';
+import { CanvasLoading } from './CanvasLoading';
 
 /** how long after the last change the board is written */
 const SAVE_AFTER_MS = 600;
@@ -82,7 +83,7 @@ const unselectEdges = (list: Edge[]) => (list.some((e) => e.selected) ? list.map
 /** what was copied last, on any board of this page: pasted with new ids, a step further each time */
 let clipboard: { doc: CanvasDoc; pasted: number } | null = null;
 
-function BoardView({ shown = true, projectId, folder, files, sources, onAddToFilm, onSendToFilm, onImportFiles, onOpenSettings, onReveal, chat, onError, onNotice, focus, insert, onRefer }: CanvasViewProps) {
+function BoardView({ shown = true, projectId, folder, files, sources, onAddToFilm, onSendToFilm, onImportFiles, onOpenSettings, onReveal, chat, onError, onNotice, focus, insert, addFiles, onRefer }: CanvasViewProps) {
   const t = useT();
   const flow = useReactFlow<BoardNode, Edge>();
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardNode>([]);
@@ -90,6 +91,9 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   const [ready, setReady] = React.useState(false);
   /* the board is seen once it is fitted to what is on it: never first drawn close up and then pulled out to all of it */
   const [fitted, setFitted] = React.useState(false);
+  /* Warming may lay out overlapping nodes, but must not save that layout before the board is ever opened. */
+  const opened = React.useRef(shown);
+  React.useEffect(() => { if (shown) opened.current = true; }, [shown]);
   const [editing, setEditing] = React.useState<string | null>(null);
   const [menu, setMenu] = React.useState<MenuAt | null>(null);
   const [context, setContext] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
@@ -116,6 +120,24 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   boardRef.current = boardId;
   const saved = React.useRef('');
   const rootRef = React.useRef<HTMLDivElement>(null);
+  const lastViewSize = React.useRef<{ board: string; width: number; height: number } | null>(null);
+  /* A dock can shrink or move the canvas. Keep the same world point in its center, without refitting or touching nodes. */
+  React.useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root || !fitted) return;
+    const resize = () => {
+      const width = root.clientWidth, height = root.clientHeight, previous = lastViewSize.current;
+      if (!width || !height) return;
+      if (shown && previous?.board === boardId && (width !== previous.width || height !== previous.height)) {
+        const view = flow.getViewport();
+        void flow.setViewport({ ...view, x:view.x+(width-previous.width)/2, y:view.y+(height-previous.height)/2 }, { duration:0 });
+      }
+      if (shown || previous?.board !== boardId) lastViewSize.current = { board:boardId,width,height };
+    };
+    resize();
+    const observer = new ResizeObserver(resize); observer.observe(root);
+    return () => observer.disconnect();
+  }, [fitted,shown,boardId]);
   const pickerRef = React.useRef<HTMLInputElement>(null);
   const themeChanges = useThemeChanges();
   const dark = React.useMemo(() => document.documentElement.dataset.theme === 'dark', [themeChanges]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -132,7 +154,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
 
   /* ── undo and redo: the board before each change ── */
   const history = React.useRef<CanvasHistory>(emptyHistory());
-  const willChange = React.useCallback(() => { history.current = remember(history.current, docNow()); }, []);
+  const editVersion = React.useRef(0);
+  const willChange = React.useCallback(() => { editVersion.current++; history.current = remember(history.current, docNow()); }, []);
   const step = (back: boolean) => {
     const moved = (back ? undo : redo)(history.current, docNow());
     if (!moved) return;
@@ -190,12 +213,23 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
   const reloadBoard = React.useRef(() => {});
 
-  /* read once a board is shown; shown fitted to the view */
+  /* Read once a board is mounted (possibly in the background), fitted before it is shown. */
   const [loads, setLoads] = React.useState(0);
+  const pendingBoard = React.useRef<{ key:string; promise:ReturnType<typeof api.canvas> } | null>(null);
   reloadBoard.current = () => setLoads((n) => n + 1);
   React.useEffect(() => {
     let live = true;
-    void api.canvas(projectId, boardId).then((raw) => {
+    const version = editVersion.current;
+    setFitted(false);
+    const key = `${projectId}/${boardId}/${loads}`;
+    /* StrictMode replays setup before the first request resolves. Reuse only that in-flight read, never a stale board. */
+    if (pendingBoard.current?.key !== key) {
+      const request = { key,promise:api.canvas(projectId,boardId) };
+      pendingBoard.current = request;
+      const settled = () => { if (pendingBoard.current === request) pendingBoard.current = null; };
+      void request.promise.then(settled,settled);
+    }
+    void pendingBoard.current.promise.then((raw) => {
       if (!live) return;
       const doc = readCanvasDoc(raw);
       saved.current = canvasKey(doc);
@@ -204,10 +238,17 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       setReady(true);
       /* once the cards are measured: every group round what is in it (a board an agent laid out loosely), then all in view */
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        setNodes((list) => fitGroups(unstack(list)));
-        /* an empty board's fit never settles: seen within a moment whatever it does */
+        if (!live) return;
+        setNodes((list) => {
+          const fitted = fitGroups(unstack(list));
+          /* Fitting the display is not a document edit. Keep it as the comparison baseline until the person changes something. */
+          if (editVersion.current === version) saved.current = canvasKey(fromFlow(fitted,now.current.edges));
+          return fitted;
+        });
+        /* An empty board has nothing to fit. Populated boards wait for the actual measured fit, not a timer. */
         const seen = () => { if (live) setFitted(true); };
-        void Promise.race([flow.fitView({ padding: 0.2, maxZoom: 1 }), new Promise((done) => { window.setTimeout(done, 300); })]).then(seen, seen);
+        if (!doc.nodes.length) seen();
+        else void flow.fitView({ padding: 0.2, maxZoom: 1 }).then(seen, seen);
       }));
     }, (e: unknown) => {
       if (!live) return;
@@ -243,7 +284,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
 
   /* written a moment after the last change that says something new (a selection says nothing) */
   React.useEffect(() => {
-    if (!ready) return undefined;
+    if (!ready || !opened.current) return undefined;
     const doc = fromFlow(nodes, edges);
     const key = canvasKey(doc);
     if (key === saved.current) return undefined;
@@ -252,7 +293,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         (e: unknown) => onError(t('canvas.saveFailed').replace('{error}', e instanceof Error ? e.message : String(e))));
     }, SAVE_AFTER_MS);
     return () => clearTimeout(write);
-  }, [nodes, edges, ready, projectId, boardId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [nodes, edges, ready, projectId, boardId, shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── what can be done to the board ── */
   const selectedIds = () => new Set(now.current.nodes.filter((n) => n.selected).map((n) => n.id));
@@ -400,6 +441,14 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const box = rootRef.current!.getBoundingClientRect();
     return flow.screenToFlowPosition({ x: box.left + box.width / 2, y: box.top + box.height / 2 });
   };
+
+  const addedRequest = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (!shown || !ready || !addFiles || addedRequest.current === addFiles.n) return;
+    addedRequest.current = addFiles.n;
+    const at = middle();
+    for (const [i,path] of addFiles.paths.entries()) addFile(path, { x: at.x + i * (FILE_W + 24), y: at.y });
+  }, [shown, ready, addFiles?.n]);
 
   /** files of this computer, picked: brought into the project first (as the Assets bring them) */
   const picked = React.useRef<((files: File[]) => void) | null>(null);
@@ -845,7 +894,18 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   const onDrop = (event: React.DragEvent) => {
     const at = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
     const item = readResourceDragData(event.dataTransfer);
-    if (item) { event.preventDefault(); addFile(item.path, at); return; }
+    if (item) {
+      event.preventDefault(); event.stopPropagation();
+      if (item.apply) { onNotice(t('layout.canvasEffectInEdit')); return; }
+      if (!item.saved) { addFile(item.path, at); return; }
+      const board = boardRef.current;
+      void api.takeSaved(projectId, item.saved).then(taken => {
+        if (boardRef.current !== board) return;
+        const paths = 'path' in taken ? [taken.path] : 'clip' in taken ? [taken.clip.src] : taken.clips.map(row => row.clip.src);
+        for (const [i,path] of [...new Set(paths)].entries()) addFile(path, { x: at.x + i*(FILE_W+24), y: at.y });
+      }, error => onError(error instanceof Error ? error.message : String(error)));
+      return;
+    }
     /* files of this computer: brought into the project first (as the Assets bring them), then laid down side by side */
     if (isComputerFileDrag(event.dataTransfer) && event.dataTransfer.files.length) {
       event.preventDefault();
@@ -913,7 +973,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   /* ── keys: the board's own, and the page's while nothing else has them (a menu closed, a node drawn again): the
      board covers the edit, so Studio's ⌘Z, Space and the rest are not to act on a film out of sight ── */
   const onKeyDown = (event: KeyboardEvent) => {
-    if (!shown) return;
+    if (!shown || !fitted) return;
     const target = event.target as HTMLElement;
     if (target !== document.body && !rootRef.current?.contains(target)) return;
     /* a menu open has the keys (its Escape closes it, and only it); a dialog over the board has them all (its own undo) */
@@ -1087,6 +1147,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       <div
         ref={rootRef}
         data-studio-canvas=""
+        data-canvas-ready={fitted ? '1' : '0'}
+        aria-busy={!fitted}
         tabIndex={-1}
         className="relative h-full w-full outline-none"
         onPointerDown={(event) => { if (!(event.target as HTMLElement).closest('input, textarea')) rootRef.current?.focus({ preventScroll: true }); }}
@@ -1174,7 +1236,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           minZoom={0.1}
           maxZoom={4}
           proOptions={{ hideAttribution: true }}
-          className={`openfilm-canvas transition-opacity duration-150 ${fitted ? 'opacity-100' : 'opacity-0'} ${tool === 'hand' ? 'cursor-grab' : ''}`}
+          className={`openfilm-canvas ${fitted ? 'opacity-100' : 'opacity-0'} ${tool === 'hand' ? 'cursor-grab' : ''}`}
         >
           <Dots />
           {map ? (
@@ -1275,6 +1337,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         ) : null}
         {context ? <ContextMenu x={context.x} y={context.y} items={context.items} onClose={() => setContext(null)} /> : null}
         {viewed ? <Viewer file={viewed} sources={sources} onClose={() => setViewing(null)} /> : null}
+        {!fitted ? <CanvasLoading /> : null}
         <input ref={pickerRef} type="file" multiple hidden onChange={(event) => { const list = [...(event.target.files ?? [])]; if (list.length) picked.current?.(list); }} />
       </div>
     </BoardContext.Provider>
@@ -1309,6 +1372,8 @@ export interface CanvasViewProps {
   focus?: { id: string; n: number } | null;
   /** a board to lay down below what is there (an example's canvas, copied in): its nodes new; `n` is new each time */
   insert?: { doc: CanvasDoc; n: number } | null;
+  /** Files chosen in the independent project library, placed at the current board center. */
+  addFiles?: { paths: string[]; n: number } | null;
   onError: (message: string) => void;
 }
 
