@@ -4,6 +4,12 @@
 
 ### Patch Changes
 
+- Disable or enable selected timeline clips with Shift+E or the clip menu, with undo and redo. Their source trims, levels and neighbouring clips stay in place; disabled clips are neither drawn nor heard, and export to editing projects disabled.
+
+- Jianying and CapCut drafts retain complete video and audio sources and native playback speeds. Processed footage retains the full source duration and editable trim handles, with an untouched source in the media library.
+
+- Transparent exports resize and average motion-blur samples using alpha-weighted color, preventing bright fringes. Switching between transparent and opaque PNG frames no longer resets the sampling filters and drops output frames.
+
 - [#375](https://github.com/openfilm/openfilm/pull/375) [`46811b0`](https://github.com/openfilm/openfilm/commit/46811b0a2359666cfc03e3dd6f64e0f1e08db764) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Back on the edit from the canvas, the canvas's cards no longer stay on top of the picture and the inspector.
 
 - [#381](https://github.com/openfilm/openfilm/pull/381) [`b108090`](https://github.com/openfilm/openfilm/commit/b1080902e6847f55323dbc092981c0cc685a4578) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Undoing a chat turn restores its canvas boards along with its files. A turn that only changes the canvas can be undone too. Open boards refresh after the restore and forget undo steps that could bring back references to files the turn's undo removed.

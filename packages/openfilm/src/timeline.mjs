@@ -898,7 +898,7 @@ function nearOf(kind, max, t, only, exact) {
   const off = (c) => (t < c.at ? c.at - t : t >= c.end ? t - c.end : 0);
   const all = clips.filter((c) => c.kind === kind);
   const wanted = all
-    .filter((c) => !c.hidden && !c.missing && (only ? off(c) === 0 : t < c.at ? c.at - t <= WAKE_AHEAD : t - c.end <= WAKE_BEHIND))
+    .filter((c) => !c.hidden && !c.disabled && !c.missing && (only ? off(c) === 0 : t < c.at ? c.at - t <= WAKE_AHEAD : t - c.end <= WAKE_BEHIND))
     .sort((a, b) => off(a) - off(b));
   const on = wanted.filter((c) => off(c) === 0).length;
   const keep = new Set(wanted.slice(0, Math.max(on, max)));
@@ -911,7 +911,7 @@ function nearOf(kind, max, t, only, exact) {
   for (const c of awake) {
     /* one an edit is putting on screen (see cue) stays awake, wherever it is now */
     if (cueing.has(c)) continue;
-    if ((kind === 'video' && !only && (c.hidden || off(c) > KEEP)) || over > 0) { rest(c); over--; }
+    if ((kind === 'video' && !only && (c.hidden || c.disabled || off(c) > KEEP)) || over > 0) { rest(c); over--; }
   }
 }
 /** a scrub's last moment, its neighbors woken (and the far ones let go) once it stops */
@@ -972,7 +972,8 @@ function settle(c, row, track, ti) {
   c.at = row.at ?? 0;
   /* a hidden track's clips are loaded (an editor shows them, grayed) but neither drawn nor heard */
   c.hidden = Boolean(track.hidden);
-  c.volume = track.muted || c.hidden || c.missing ? 0 : (row.volume ?? 1);
+  c.disabled = Boolean(row.disabled);
+  c.volume = track.muted || c.hidden || c.disabled || c.missing ? 0 : (row.volume ?? 1);
   c.span = clipSpan(row, c.native, where);
   c.end = c.at + c.span.length;
   c.fade = fittedFade(clipFade(row), c.span.length);
@@ -1175,7 +1176,7 @@ async function draw(t, live, play = null) {
 /** One clip's part of a frame (see draw): a page coming on while watched is put in `coming`, a picture going off in `going`. */
 async function drawClip(c, t, live, play, turn, coming, going) {
   if (c.kind === 'sound') return;
-  const on = !c.hidden && !c.missing && t >= c.at && t < c.end;
+  const on = !c.hidden && !c.disabled && !c.missing && t >= c.at && t < c.end;
   c.shown = on;
   const appears = on && c.el.style.visibility !== 'visible';
   if (live && appears && c.kind === 'page') { c.coming = turn; coming.push(c); }
@@ -1425,7 +1426,7 @@ window.__filmSounds = () => sounds;
 /* for a host waiting for `ready`: how many clips have loaded, so a long film still loading is told from a stuck one */
 window.__filmProgress = () => progress;
 /* for `look`: where each picture starts, to check the picture is there */
-window.__filmCuts = () => clips.filter((c) => c.kind !== 'sound' && !c.hidden).map((c) => ({ id: c.id, src: c.src, at: c.at, end: c.end }));
+window.__filmCuts = () => clips.filter((c) => c.kind !== 'sound' && !c.hidden && !c.disabled).map((c) => ({ id: c.id, src: c.src, at: c.at, end: c.end }));
 /* for an editor: where every clip sits on the film, sounds included, in seconds, its source's own length and picture
    size (a page's width × height, a video's frame, a still's pixels; none for a sound), whether it is a page that sets
    no size of its own (`reflows`: laid out at its clip's size, else the stage's), and how a picture looks */
@@ -1535,7 +1536,7 @@ async function change(value, look) {
      picture changes at once, not first without them until that moment is drawn again */
   if (shownT != null) {
     for (const c of records) {
-      const on = c.el && !c.hidden && !c.missing && shownT >= c.at && shownT < c.end;
+      const on = c.el && !c.hidden && !c.disabled && !c.missing && shownT >= c.at && shownT < c.end;
       const ready = c.kind === 'still' || (c.kind === 'video' && c.el.readyState >= 2) || (c.kind === 'page' && made.has(c.id) && c.drawn);
       if (on && !c.shown && ready) { c.shown = true; c.el.style.visibility = 'visible'; fadeAt(c, shownT); }
     }
@@ -1573,7 +1574,7 @@ let changing = Promise.resolve(true);
  * state before its frame. A video on screen already keeps its picture until its new frame is drawn.
  */
 async function cue(c, row, track, t, fresh) {
-  if (track.hidden || c.missing || (c.kind !== 'video' && !(fresh && c.kind === 'page'))) return;
+  if (track.hidden || row.disabled || c.missing || (c.kind !== 'video' && !(fresh && c.kind === 'page'))) return;
   if (c.kind === 'video' && c.shown && c.el.readyState >= 2) return;
   let span;
   try { span = clipSpan(row, c.native, row.id); } catch { return; }

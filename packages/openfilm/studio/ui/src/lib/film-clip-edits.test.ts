@@ -1,6 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { apartOnTracks, plainClipRefusal, stackClipEdit } from './film-clip-edits.ts';
+import { apartOnTracks, plainClipRefusal, stackClipEdit, toggleClipEdits } from './film-clip-edits.ts';
+
+test('mixed clip selections disable together, then enable together; caption cues are left alone', () => {
+  const blocks = [{ loc: 'film.html#0.0', disabled: true }, { loc: 'film.html#0.1' }, { loc: 'captions.vtt#first' }];
+  assert.deepEqual(toggleClipEdits(blocks), [
+    { loc: 'film.html#0.0', prop: 'disabled', value: true },
+    { loc: 'film.html#0.1', prop: 'disabled', value: true },
+  ]);
+  assert.deepEqual(toggleClipEdits(blocks.slice(0, 2).map((b) => ({ ...b, disabled: true }))), [
+    { loc: 'film.html#0.0', prop: 'disabled', value: null },
+    { loc: 'film.html#0.1', prop: 'disabled', value: null },
+  ]);
+});
 
 test('a refused clip edit is said without film.html\'s address and asides, the media fragment as the trim', () => {
   assert.equal(

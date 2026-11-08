@@ -88,6 +88,14 @@ export function proresOptions(encoder, alpha) {
 export const FRAMES_709 = 'setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709';
 
 /**
+ * Mix or resize transparent frames in associated color, then restore straight alpha for the encoder. Averaging RGB
+ * independently lets a nearly transparent bright pixel tint an opaque neighbour and creates a luminous fringe.
+ * Sixteen bits keep low-alpha edges from being rounded away during the association.
+ * @param {string} filters
+ */
+export const alphaCompositeFilter = (filters) => `format=gbrap16le,premultiply=inplace=1,${filters},unpremultiply=inplace=1`;
+
+/**
  * ProRes of the browser's frames, BT.709 throughout: converted to YUV with it (swscale's own default is BT.601; the
  * Mac's engine takes RGB and converts it itself), said on the frames and to the encoder. Footage converted for an
  * editor keeps its own colors and takes proresOptions as it is.

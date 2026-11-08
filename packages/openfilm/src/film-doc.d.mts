@@ -46,6 +46,8 @@ export type FilmClip = {
   id: string;
   at?: number;
   time?: FilmTimeSpan;
+  /** Neither drawn nor heard; its timing and original level stay available in the editor. */
+  disabled?: true;
   /** pictures: pages, videos, stills */
   box?: FilmBox;
   /** pages: the CSS pixels a page without a size of its own is laid out at */

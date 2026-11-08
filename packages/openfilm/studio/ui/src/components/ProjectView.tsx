@@ -44,7 +44,7 @@ import type { CaptionsMake } from '@/components/library/CaptionsPane';
 import { LibraryTrial } from '@/components/library/LibraryTrial';
 import { hugText } from '@/lib/text-box';
 import { textVars, withMotion, withWords } from '@/lib/text-look';
-import { apartOnTracks, stackClipEdit, type ClipEdit } from '@/lib/film-clip-edits';
+import { apartOnTracks, stackClipEdit, toggleClipEdits, type ClipEdit } from '@/lib/film-clip-edits';
 import { mediaFetch, useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
 import {
@@ -210,6 +210,7 @@ function editStepLabel(edits: readonly ClipEdit[], tracks: readonly TimelineTrac
   if (props.has('box')) return 'history.stepTransform';
   if (props.has('fade')) return 'history.stepFade';
   if (props.has('volume') || props.has('muted')) return 'history.stepVolume';
+  if (props.has('disabled')) return first?.value === true ? 'history.stepClipsDisabled' : 'history.stepClipsEnabled';
   if (props.has('trackOrder')) return 'history.stepTrackOrder';
   if (props.has('locked') || props.has('hidden')) return 'history.stepTrackFlag';
   if (['at', 'start', 'end', 'track'].some((p) => props.has(p))) {
@@ -2203,7 +2204,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const wanting = new Set(subs.captions?.untranscribed ?? []);
     return timelineTracks.flatMap((tr) => (tr.muted || tr.hidden ? [] : tr.blocks.flatMap((b) => {
       const src = b.src?.replace(/#.*$/, '');
-      if (!b.clipId || !src || b.cue) return [];
+      if (!b.clipId || !src || b.cue || b.disabled) return [];
       const transcribed = transcribedSrcs.has(src);
       return transcribed || wanting.has(src) ? [{ clipId: b.clipId, name: b.title || src, src, startMs: b.startMs, endMs: b.endMs, transcribed }] : [];
     })));
@@ -4054,6 +4055,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         take();
         const to = nextCut(cutPoints(tracksRef.current), now, cmd === 'next-cut' ? 1 : -1);
         if (to != null) go(to);
+        return;
+      }
+      case 'toggle-clip': {
+        const edits = toggleClipEdits(selectedClips);
+        if (!edits.length) return;
+        take();
+        if (once) void editBlocks(edits);
         return;
       }
       case 'duplicate':
