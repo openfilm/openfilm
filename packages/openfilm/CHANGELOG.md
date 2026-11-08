@@ -4,6 +4,12 @@
 
 ### Patch Changes
 
+- Editing-project exports for Premiere Pro, Final Cut Pro, Jianying and CapCut can use complete original footage, by reference or full copy, preserving source in/out handles, native frame rates, playback speeds and disabled clips. Rendered-effects export remains available; web pages still render when needed.
+
+- The canvas module preloads after the first paint and warms in the background after opening a project. Its first display has a loading view, hidden warming does not save a board, and returning to the edit keeps the canvas hidden.
+
+- Timeline ranges have a visible close button and clear with Escape even when clips are selected. Open menus keep their Escape priority.
+
 - Layout → Edit layout opens a temporary editor for the current work mode. Move any panel into nested splits, swap panels, dock at workspace edges and resize live. Done saves the layout; Cancel restores it, with undo and redo while editing. The library retains its original UI without an extra header. Edit and canvas presets stay within their own mode, and canvas resizing preserves the current view center. Named layouts support import and export.
 
 - Click a library asset to download its missing files and preview automatically, including stickers, community effects and templates. Download icons are passive status indicators. Compact loading bars indicate the wait without extra explanatory text. Previews can be cancelled or retried and ignore late events from previous previews. Template videos start automatically when ready and stop when closed. Background waveform downloads leave connections available for playback.
@@ -41,6 +47,40 @@
 - [#374](https://github.com/openfilm/openfilm/pull/374) [`8cea0e9`](https://github.com/openfilm/openfilm/commit/8cea0e949648ddc860b7fd0c92c65a14161c4869) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Undo of a chat turn: the film goes back as the turn found it. Studio took the film put back for a write of the agent's and merged the turn's clips into it, so a clip came back whose page the undo had just moved to the trash.
 
 - [#383](https://github.com/openfilm/openfilm/pull/383) [`684d04d`](https://github.com/openfilm/openfilm/commit/684d04d2041d1442ec14d85d175e1413e7628d86) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - A page is loaded again when Windows briefly has no network buffer for a module needed to initialize the film. Previously only a failed page navigation was retried, so a transient failure of captions or overrides could stop an export. Permanent errors are still reported without retrying.
+
+- [#407](https://github.com/openfilm/openfilm/pull/407) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a clip with a fragment in its src still counts as using that file
+
+- [#393](https://github.com/openfilm/openfilm/pull/393) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: splitting a caption cue at its middle keeps an emoji whole, instead of writing half a character into each cue.
+
+- [#402](https://github.com/openfilm/openfilm/pull/402) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a damaged character record no longer takes the whole characters panel down
+
+- [#392](https://github.com/openfilm/openfilm/pull/392) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a cookie whose value is not percent-encoded is ignored, instead of stopping the request it came on.
+
+- Discover shows its official offline snapshot on a new installation while checking the live skill index. Refreshes have a deadline, retain usable cached skills when one download fails, and can be retried in the gallery. Pinned file manifests avoid GitHub's anonymous API quota and detect incomplete downloads. Older responses no longer erase a newly refreshed skill list.
+
+- [#386](https://github.com/openfilm/openfilm/pull/386) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - doctor: a report takes keys and email addresses out of the Studio log lines it quotes, as it says it does
+
+- [#396](https://github.com/openfilm/openfilm/pull/396) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - HEVC master exports use finer grain-aware software encoding so subtle changing texture is not flattened into a still pattern. Master files can be larger and take longer to encode.
+
+- [#388](https://github.com/openfilm/openfilm/pull/388) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a long file name is not cut in the middle of a character
+
+- [#387](https://github.com/openfilm/openfilm/pull/387) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a byte range past a media file's end is answered, not left hanging
+
+- [#395](https://github.com/openfilm/openfilm/pull/395) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a file replaced under the same name, size and date gets a new preview, instead of the old one being kept.
+
+- [#405](https://github.com/openfilm/openfilm/pull/405) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Render: a resumed render does not reuse chunks drawn from a file that was replaced
+
+- [#404](https://github.com/openfilm/openfilm/pull/404) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - CLI: a SKILL.md with empty front matter keeps its body and name
+
+- [#389](https://github.com/openfilm/openfilm/pull/389) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - CLI: a skill named with capitals is found by its name alone
+
+- [#403](https://github.com/openfilm/openfilm/pull/403) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - CLI: a sound whose name contains a percent sign is found instead of stopping look and render
+
+- [#394](https://github.com/openfilm/openfilm/pull/394) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a template's object-position is read as CSS reads it, so its framing control starts where the picture actually sits.
+
+- [#406](https://github.com/openfilm/openfilm/pull/406) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: an rgba() color in a template keeps its alpha when its scheme changes
+
+- [#280](https://github.com/openfilm/openfilm/pull/280) Thanks [@rick-mingyu-liu](https://github.com/rick-mingyu-liu)! - While OpenFilm is not in front, the system says when the chat's agent has finished a turn, stopped with an error, or waits for your answer (a question or a permission). Clicking the notification brings the window back on that project's tab; the taskbar button flashes on Windows and the Dock icon bounces on macOS. Settings › General › Notifications switches them off. An error is shown without your home folder, keys or email addresses.
 
 ## 0.3.0
 
