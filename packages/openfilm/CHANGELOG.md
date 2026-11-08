@@ -4,6 +4,8 @@
 
 ### Patch Changes
 
+- Library audio previews show loading, slow connections and retryable errors, can be cancelled while loading, and ignore late events from previous previews. Background waveform downloads leave connections available for playback.
+
 - Disable or enable selected timeline clips with Shift+E or the clip menu, with undo and redo. Their source trims, levels and neighbouring clips stay in place; disabled clips are neither drawn nor heard, and export to editing projects disabled.
 
 - Jianying and CapCut drafts retain complete video and audio sources and native playback speeds. Processed footage retains the full source duration and editable trim handles, with an untouched source in the media library.
