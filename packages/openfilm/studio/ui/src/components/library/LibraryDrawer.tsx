@@ -466,7 +466,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
                     {items.slice(0, drawn).map((it) => (
                       <SoundRow key={it.id} item={it} name={nameOf(it.name, lang)} group={groupName(it.group)} picked={picked === it.id} player={player}
                         kept={favorites.includes(it.id)} addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => addWhenHere(it)} drag={dragProps(it)}
-                        here={hereOf(it.id)} onFetch={() => void fetchLibraryItem(it.id)} />
+                        here={hereOf(it.id)} />
                     ))}
                   </div>
                 ) : cat === 'music' ? (
@@ -474,7 +474,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
                     {items.slice(0, drawn).map((it) => (
                       <MusicCard key={it.id} item={it} name={nameOf(it.name, lang)} group={groupName(it.group)} picked={picked === it.id} player={player}
                         kept={favorites.includes(it.id)} addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => addWhenHere(it)} drag={dragProps(it)}
-                        here={hereOf(it.id)} onFetch={() => void fetchLibraryItem(it.id)} />
+                        here={hereOf(it.id)} />
                     ))}
                   </div>
                 ) : (

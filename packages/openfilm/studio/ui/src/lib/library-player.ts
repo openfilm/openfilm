@@ -6,6 +6,8 @@ export interface PreviewState<T extends Playable> {
   status: 'idle' | 'loading' | 'playing' | 'paused' | 'error';
   slow: boolean;
   error: PreviewError | null;
+  /** Metadata is available: the local file endpoint has finished preparing this media. */
+  ready: boolean;
   time: number;
   duration: number;
 }
@@ -19,7 +21,7 @@ export function createPreviewPlayer<T extends Playable>({
   slowMs = 5000,
   timeoutMs = 20_000,
 } = {}) {
-  let state: PreviewState<T> = { item: null, status: 'idle', slow: false, error: null, time: 0, duration: 0 };
+  let state: PreviewState<T> = { item: null, status: 'idle', slow: false, error: null, ready: false, time: 0, duration: 0 };
   let audio: HTMLAudioElement | null = null;
   let source = '';
   let wanted = false;
@@ -89,11 +91,11 @@ export function createPreviewPlayer<T extends Playable>({
     source = src;
     const a = makeAudio(source);
     audio = a;
-    update({ item: next, status: 'loading', slow: false, error: null, time: resume, duration: (next.durationMs ?? 0) / 1000 });
+    update({ item: next, status: 'loading', slow: false, error: null, ready: false, time: resume, duration: (next.durationMs ?? 0) / 1000 });
     a.onloadedmetadata = () => {
       if (audio !== a) return;
       onReady(next.id);
-      if (Number.isFinite(a.duration)) update({ duration: a.duration });
+      update({ ready: true, ...(Number.isFinite(a.duration) ? { duration: a.duration } : {}) });
       if (resume > 0) a.currentTime = resume;
     };
     a.onplaying = () => {
@@ -135,7 +137,7 @@ export function createPreviewPlayer<T extends Playable>({
     close: () => {
       release();
       source = '';
-      update({ item: null, status: 'idle', slow: false, error: null, time: 0, duration: 0 });
+      update({ item: null, status: 'idle', slow: false, error: null, ready: false, time: 0, duration: 0 });
     },
   };
 }

@@ -115,24 +115,25 @@ test('a slow audio preview shows loading and a slow hint, can be cancelled and n
   let finish;
   const waiting = new Promise((done) => { finish = done; });
   await withLibrary('Sounds', async ({ page }) => {
-    const row = page.locator('[title="Slow preview"]');
+    const row = page.locator('[data-library-audio="audio/sfx/slow.wav"]');
     await row.click();
     const player = page.locator('[data-audio-player]');
     await page.locator('[data-audio-player="loading"]').waitFor({ timeout: 2000 });
-    assert.equal(await player.getByRole('status').textContent(), 'Loading preview…Cancel');
+    assert.match(await player.getByRole('status').textContent(), /Downloading… Playback starts when ready/);
     assert.equal(await row.getAttribute('aria-busy'), 'true');
-    await page.getByText('Still loading… You can cancel and try again.', { exact: true }).waitFor({ timeout: 7000 });
+    await player.getByText('Download is slow. Playback starts when ready.', { exact: true }).waitFor({ timeout: 7000 });
     await player.getByRole('button', { name: 'Cancel', exact: true }).last().click();
     await page.locator('[data-audio-player="paused"]').waitFor();
     assert.equal(await page.evaluate(() => window.__libraryPreviews[0].getAttribute('src')), null);
     finish();
-    await page.getByTitle('Ready preview', { exact: true }).click();
+    await page.locator('[data-library-audio="audio/sfx/ready.wav"]').click();
     await page.locator('[data-audio-player="playing"]').waitFor({ timeout: 5000 });
     assert.equal(await page.evaluate(() => window.__libraryPreviews[0].paused), true);
     await player.getByRole('button', { name: 'Close', exact: true }).click();
     assert.equal(await player.count(), 0);
     assert.equal(await page.evaluate(() => window.__libraryPreviews.every((a) => a.paused)), true);
   }, async (page) => {
+    await page.route('**/api/library/missing', (route) => route.fulfill({ json: { ids: ['audio/sfx/slow.wav', 'audio/sfx/ready.wav'] } }));
     await page.addInitScript(() => {
       const Audio = window.Audio;
       window.__libraryPreviews = [];
@@ -156,7 +157,7 @@ test('a failed voice sample offers retry and plays from its sample URL on the ne
     await page.getByText('Test voice', { exact: true }).click();
     const player = page.locator('[data-audio-player]');
     await page.locator('[data-audio-player="error"]').waitFor({ timeout: 5000 });
-    assert.match(await player.getByRole('status').textContent(), /Could not play this preview/);
+    assert.match(await player.getByRole('status').textContent(), /Could not load. Retry to play/);
     await player.getByRole('button', { name: 'Try again', exact: true }).last().click();
     await page.locator('[data-audio-player="playing"]').waitFor({ timeout: 5000 });
     assert.equal(asks, 2);
@@ -181,7 +182,7 @@ test('uncached waveform pictures leave connections for the audio preview', { tim
   try {
     await withLibrary('Sounds', async ({ page }) => {
       try {
-        await page.getByTitle('Queued sound 0', { exact: true }).click();
+        await page.locator('[data-library-audio="audio/sfx/sound-0.wav"]').click();
         await page.locator('[data-audio-player="playing"]').waitFor({ timeout: 5000 });
         assert.ok(waveRequests > 0 && waveRequests <= 2, `${waveRequests} waveforms started while their downloads were blocked`);
         assert.equal(await page.locator('[data-audio-preview]').count(), 1);
@@ -197,4 +198,63 @@ test('uncached waveform pictures leave connections for the audio preview', { tim
       });
     });
   } finally { release(); }
+});
+
+test('one click on an uncached music card downloads and plays automatically, with no separate download action', { timeout: 60_000 }, async () => {
+  let fileReady, lookupReady, audioRequests = 0, downloadActions = 0;
+  const file = new Promise((done) => { fileReady = done; });
+  const lookup = new Promise((done) => { lookupReady = done; });
+  try {
+    await withLibrary('Music', async ({ page }) => {
+      const card = page.locator('[data-library-audio="audio/music/automatic.wav"]');
+      try {
+        await card.locator('[data-library-download="missing"]').waitFor();
+        assert.equal(await card.getByText('Click to download and play', { exact: true }).count(), 1);
+        assert.equal(await card.getByRole('button', { name: 'Download', exact: true }).count(), 0);
+        await card.click({ position: { x: 90, y: 30 } });
+        const player = page.locator('[data-audio-player]');
+        await page.locator('[data-audio-player="loading"]').waitFor();
+        await card.locator('[data-library-download="fetching"]').waitFor();
+        const status = player.getByRole('status');
+        assert.match(await status.textContent(), /Downloading… Playback starts when ready/);
+        assert.equal(await status.locator('span').first().evaluate((el) => el.scrollWidth <= el.clientWidth), true, 'the automatic playback promise is not clipped');
+        if (process.env.OPENFILM_TEST_ARTIFACTS) {
+          await player.screenshot({ path: join(process.env.OPENFILM_TEST_ARTIFACTS, 'automatic-download.png') });
+          await page.evaluate(() => { localStorage.setItem('openfilm.language', 'zh-CN'); window.dispatchEvent(new StorageEvent('storage', { key: 'openfilm.language' })); });
+          await player.getByText('正在下载，完成后自动播放', { exact: true }).waitFor();
+          await player.screenshot({ path: join(process.env.OPENFILM_TEST_ARTIFACTS, 'automatic-download-zh.png') });
+          await page.evaluate(() => { localStorage.setItem('openfilm.language', 'en'); window.dispatchEvent(new StorageEvent('storage', { key: 'openfilm.language' })); });
+          await player.getByText('Downloading… Playback starts when ready.', { exact: true }).waitFor();
+        }
+        fileReady();
+        await page.locator('[data-audio-player="playing"]').waitFor({ timeout: 5000 });
+        assert.equal(audioRequests, 1);
+        assert.equal(downloadActions, 0);
+        await card.getByRole('button', { name: 'Add at the playhead', exact: true }).waitFor();
+        /* The older missing lookup arrives after the audio is ready: the add button must stay ready. */
+        const answered = page.waitForResponse((r) => r.url().endsWith('/api/library/missing'));
+        lookupReady();
+        await (await answered).finished();
+        await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+        assert.equal(await card.locator('[data-library-download]').count(), 0);
+        assert.equal(await card.getByRole('button', { name: 'Add at the playhead', exact: true }).count(), 1);
+      } finally { fileReady(); lookupReady(); }
+    }, async (page) => {
+      await page.route('**/api/library', (route) => route.fulfill({ json: { version: 1, groups: {}, items: [
+        { id: 'audio/music/automatic.wav', cat: 'music', kind: 'sound', group: 'calm', name: { en: 'Automatic music' }, durationMs: 3000 },
+      ] } }));
+      await page.route('**/api/library/missing', async (route) => {
+        await lookup;
+        await route.fulfill({ json: { ids: ['audio/music/automatic.wav'] } }).catch(() => {});
+      });
+      await page.route('**/api/library/fetch', (route) => { downloadActions += 1; return route.fulfill({ json: { ok: true } }); });
+      await page.route('**/api/library/file?*', async (route) => {
+        if (new URL(route.request().url()).searchParams.get('path') === 'audio/music/automatic.wav') {
+          audioRequests += 1;
+          await file;
+          await route.fulfill({ body: sampleWav(), contentType: 'audio/wav' }).catch(() => {});
+        } else await route.fulfill({ status: 404 });
+      });
+    });
+  } finally { fileReady(); lookupReady(); }
 });

@@ -41,11 +41,13 @@ test('preview is loading immediately and becomes playing only when audio can act
   player.toggle(track, '/sample.mp3');
   assert.equal(state().status, 'loading');
   assert.equal(state().duration, 10);
+  assert.equal(state().ready, false);
   assert.deepEqual(heard, []);
   samples[0]!.onplay?.();
   assert.equal(state().status, 'loading', 'play intent is not audible playback');
   samples[0]!.onloadedmetadata?.();
   assert.equal(state().duration, 12);
+  assert.equal(state().ready, true);
   assert.deepEqual(heard, ['sound']);
   samples[0]!.onplaying?.();
   assert.equal(state().status, 'playing');

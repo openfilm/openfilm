@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- Library audio previews show loading, slow connections and retryable errors, can be cancelled while loading, and ignore late events from previous previews. Background waveform downloads leave connections available for playback.
+- Click a sound or music card to download and play automatically. Uncached cards explain this action, and download indicators show status rather than requiring a separate download click. Previews show loading, slow connections and retryable errors, can be cancelled while loading, and ignore late events from previous previews. Background waveform downloads leave connections available for playback.
 
 - Disable or enable selected timeline clips with Shift+E or the clip menu, with undo and redo. Their source trims, levels and neighbouring clips stay in place; disabled clips are neither drawn nor heard, and export to editing projects disabled.
 
