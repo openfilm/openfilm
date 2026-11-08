@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import {
-  AlertCircle, AudioWaveform, Bell, Car, Cat, Cpu, Download, Footprints, Laugh, Leaf, Loader2, MousePointerClick, Pause, Play, Plus, RotateCw, Square, Star, Users, Wind, X, Zap,
+  AlertCircle, AudioWaveform, Bell, Car, Cat, Cpu, Download, Footprints, Laugh, Leaf, MousePointerClick, Pause, Play, Plus, RotateCw, Square, Star, Users, Wind, X, Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { useT } from '@/i18n';
@@ -85,11 +85,11 @@ export const ON_PANEL = `grid ${PANEL_ROUND}`;
 export const ADD_HOVER = 'hover:bg-[var(--accent)] hover:text-[var(--on-accent)]';
 
 /**
- * A visual card's download/add control: "+" when its files are here, a download otherwise. Audio rows use a
- * download status badge instead: clicking anywhere on the row downloads and plays it.
+ * The add button is available when the asset is local. A remote asset has a passive status badge: clicking it
+ * reaches the card's preview action, just like clicking anywhere else on the card.
  */
-export function HereButton({ here, addTip, onAdd, onFetch, className, show = '' }: {
-  here: HereState; addTip: string; onAdd: () => void; onFetch: () => void; className: string; show?: string;
+export function HereButton({ here, addTip, onAdd, className, show = '' }: {
+  here: HereState; addTip: string; onAdd: () => void; className: string; show?: string;
 }) {
   const t = useT();
   if (here === 'here') {
@@ -99,12 +99,10 @@ export function HereButton({ here, addTip, onAdd, onFetch, className, show = '' 
       </button>
     );
   }
-  const label = t(here === 'fetching' ? 'assetDrawer.downloading' : here === 'failed' ? 'assetDrawer.downloadFailed' : 'assetDrawer.download');
+  const label = t(here === 'fetching' ? 'assetDrawer.downloading' : here === 'failed' ? 'assetDrawer.previewFailed' : 'assetDrawer.previewDownloadPlay');
   return (
-    <button type="button" title={label} aria-label={label} data-library-download={here} disabled={here === 'fetching'} {...own}
-      onClick={(e) => { e.stopPropagation(); onFetch(); }} className={`${className} ${here === 'failed' ? 'text-[#ff8a80]' : ''} ${ADD_HOVER}`}>
-      {here === 'fetching' ? <Loader2 size={12} strokeWidth={2.6} className="animate-spin" /> : <Download size={12} strokeWidth={2.6} />}
-    </button>
+    <span role="img" aria-label={label} data-library-download={here}
+      className={`grid ${className} ${here === 'failed' ? 'text-[#ff8a80]' : ''}`}><Download size={12} strokeWidth={2.6} /></span>
   );
 }
 
@@ -132,7 +130,7 @@ function Buttons({ item, kept, addTip, onAdd, always, here = 'here', downloading
         className={`${ON_PANEL} ${kept ? 'visible text-[#ffd35a]' : `${show} text-[var(--text)]`}`}>
         <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
       </button>
-      {here === 'here' ? <HereButton here={here} addTip={addTip} onAdd={onAdd} onFetch={onAdd} className={`${ON_PANEL} text-[var(--text)]`} show={show} />
+      {here === 'here' ? <HereButton here={here} addTip={addTip} onAdd={onAdd} className={`${ON_PANEL} text-[var(--text)]`} show={show} />
         : <span role="img" data-library-download={downloading || here === 'fetching' ? 'fetching' : here}
           aria-label={t(downloading ? 'assetDrawer.previewDownloading' : here === 'fetching' ? 'assetDrawer.downloading' : 'assetDrawer.previewDownloadPlay')}
           className={`${ON_PANEL} ${here === 'failed' ? 'text-[#ff8a80]' : 'text-[var(--text-muted)]'}`}>

@@ -21,7 +21,7 @@ import {
 } from '@/lib/library';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
 import { useLibraryVoices, type LibraryVoice, type VoiceAccess } from '@/lib/library-voices';
-import { ADD_HOVER, FOOT_ROOM, HereButton, MiniPlayer, MusicCard, ROUND, SoundRow, libraryArt, usePlayer } from './AudioList';
+import { ADD_HOVER, FOOT_ROOM, HereButton, LoadingBar, MiniPlayer, MusicCard, ROUND, SoundRow, libraryArt, usePlayer } from './AudioList';
 import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane } from './VoicesPane';
@@ -236,7 +236,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
   const addWhenHere = (it: LibraryItem) => {
     const state = hereOf(it.id);
     if (state === 'here') { actions.add(it); return; }
-    if (state !== 'fetching') void fetchLibraryItem(it.id).then((ok) => { if (ok) actions.add(it); });
+    void fetchLibraryItem(it.id).then((ok) => { if (ok) actions.add(it); });
   };
 
   const onKey = (e: React.KeyboardEvent) => {
@@ -484,7 +484,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
                       <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)}
                         /* a template as wide as its film (16:9, two a row: its places, length and buttons side by side) */
                         square={cat === 'sticker' || textSquare || (ON_FILM.has(cat) && cat !== 'template')}
-                        here={hereOf(it.id)} onFetch={() => void fetchLibraryItem(it.id)}
+                        here={hereOf(it.id)}
                         /* a transition plays once: another click plays it again */
                         onPick={() => pick(picked === it.id && it.cat !== 'transition' ? null : it)} onAdd={() => addWhenHere(it)} />
                     ))}
@@ -705,8 +705,8 @@ function useSideways() {
    own picture where they can be */
 const ON_FILM = new Set<Category>(['filter', 'effect', 'transition', 'template']);
 
-function Card({ item, lang, picked, kept, square, here, onFetch, onPick, onAdd }: {
-  item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; here: HereState; onFetch: () => void;
+function Card({ item, lang, picked, kept, square, here, onPick, onAdd }: {
+  item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; here: HereState;
   onPick: () => void; onAdd: () => void;
 }) {
   const t = useT();
@@ -723,6 +723,8 @@ function Card({ item, lang, picked, kept, square, here, onFetch, onPick, onAdd }
   const live = !drawn && !item.still && item.kind === 'page' && (item.cat === 'sticker' || item.cat === 'text') && Boolean(item.w && item.h && item.src);
   return (
     <div
+      data-library-card={item.id}
+      aria-busy={picked && here === 'fetching'}
       className="group relative min-w-0 cursor-default select-none"
       draggable
       onDragStart={dragOf(item, name)}
@@ -750,8 +752,9 @@ function Card({ item, lang, picked, kept, square, here, onFetch, onPick, onAdd }
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
           <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
           {/* to be fetched first: its download, always shown; here: "+" under the pointer */}
-          <HereButton here={here} addTip={addTip(item, t)} onAdd={onAdd} onFetch={onFetch} className={`${ROUND} bg-black/55 text-white`} show={here === 'here' ? 'hidden group-hover:grid' : 'grid'} />
+          <HereButton here={here} addTip={addTip(item, t)} onAdd={onAdd} className={`${ROUND} bg-black/55 text-white`} show={here === 'here' ? 'hidden group-hover:grid' : 'grid'} />
         </span>
+        {picked && here === 'fetching' ? <span className="absolute inset-x-1 bottom-0.5"><LoadingBar label={t('assetDrawer.downloading')} /></span> : null}
         {item.kind === 'group' ? <TemplateBadge item={item} /> : null}
         <SourceBadge source={sourceOf(item)} />
       </div>

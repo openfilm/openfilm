@@ -28,7 +28,7 @@
  * ever written.
  */
 import { createWriteStream, existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
-import { mkdir, rename, rm } from 'node:fs/promises';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -80,16 +80,32 @@ function located(/** @type {string} */ rel) {
   for (const root of [builtInRoot(), libraryCache()]) {
     let at;
     try { at = inside(root, rel); } catch { return null; }
-    if (existsSync(at)) return at;
+    if (existsSync(at)) {
+      /* A failed bundle stays resumable, but is not offered as complete. Older complete caches need no marker. */
+      if (root === libraryCache() && statSync(at).isDirectory() && existsSync(join(at, '.partial'))) continue;
+      return at;
+    }
   }
   return null;
 }
 
 /** @type {Map<string, Promise<string | null>>} */
 const fetching = new Map();
+/** @type {Map<string, Promise<void>>} A bundle and its card's poster can ask for the same file concurrently. */
+const filesFetching = new Map();
+
+/** @param {string} rel */
+function fetchFile(rel) {
+  const pending = filesFetching.get(rel);
+  if (pending) return pending;
+  if (located(rel)) return Promise.resolve();
+  const job = downloadFile(rel).finally(() => filesFetching.delete(rel));
+  filesFetching.set(rel, job);
+  return job;
+}
 
 /** One file of the published library into the cache: whole or not at all. */
-async function fetchFile(/** @type {string} */ rel) {
+async function downloadFile(/** @type {string} */ rel) {
   /* a model is a hundred megabytes: time for a slow line */
   const res = await fetch(`${libraryHost()}/${rel.split('/').map(encodeURIComponent).join('/')}`, { signal: AbortSignal.timeout(rel.startsWith('models/') ? 30 * 60_000 : 60_000) });
   if (!res.ok) throw new Error(`the library's ${rel} came back ${res.status}`);
@@ -113,10 +129,10 @@ async function fetchFile(/** @type {string} */ rel) {
 export function fetchLibrary(/** @type {unknown} */ rel) {
   if (typeof rel !== 'string' || !rel || !SAFE_PLACE.test(rel) || rel.split('/').some((part) => part === '..' || part === '.')) return Promise.resolve(null);
   if (isCommunity(rel)) return fetchCommunity(libraryCache(), rel);
-  const here = located(rel);
-  if (here || !PUBLISHED.some((part) => rel.startsWith(part))) return Promise.resolve(here);
   const was = fetching.get(rel);
   if (was) return was;
+  const here = located(rel);
+  if (here || !PUBLISHED.some((part) => rel.startsWith(part))) return Promise.resolve(here);
   const job = (async () => {
     try {
       /* a file has a name with a dot; a bundle is a folder, its files listed beside it */
@@ -126,7 +142,11 @@ export function fetchLibrary(/** @type {unknown} */ rel) {
         if (!res.ok) return null;
         const files = /** @type {unknown} */ (await res.json());
         if (!Array.isArray(files)) return null;
+        const folder = inside(libraryCache(), rel);
+        await mkdir(folder, { recursive: true });
+        await writeFile(join(folder, '.partial'), '');
         for (const file of files) if (typeof file === 'string') await fetchFile(`${rel}/${file}`);
+        await rm(join(folder, '.partial'), { force: true });
       }
       return located(rel);
     } catch {
