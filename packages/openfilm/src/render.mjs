@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { availableParallelism, freemem, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { clipKind, FILM_FILE } from './film-doc.mjs';
-import { broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, prores709 } from './encoders.mjs';
+import { alphaCompositeFilter, broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, prores709 } from './encoders.mjs';
 import { memoryError } from './browser-memory.mjs';
 import { FilmPage, launch } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
@@ -209,7 +209,8 @@ export async function render(args, opts = {}) {
   const work = store.folder;
   const chunks = chunksOf(f0, f1, fps);
   const settingsFor = (/** @type {typeof format} */ f) => settingsOf({ entry, root, frames: [f0, f1], fps: ffmpegRate(rate), size, scale, samples, shutter, alpha,
-    duration: Number.isFinite(end) ? end : null, fine: !!opts.fine, spans: selection?.spans ?? null, format: f });
+    duration: Number.isFinite(end) ? end : null, fine: !!opts.fine, spans: selection?.spans ?? null, format: f,
+    ...(alpha && samples > 1 ? { alphaMix: 1 } : {}) });
   /* chunks a render that stopped drew with alpha, or without the chip after it gave up, are drawn on so */
   if (clearFormat && store.kept === settingsFor(clearFormat)) { clear = true; format = clearFormat; encoder = encoderOf(format.video); }
   else if (chip && store.kept === settingsFor(own)) { onChip = false; format = own; encoder = encoderOf(own.video); }
@@ -289,7 +290,7 @@ export async function render(args, opts = {}) {
       opts.signal?.addEventListener('abort', quit, { once: true });
       const runs = pages.map(async (film) => {
         for (let c = left.shift(); c && !stop.signal.aborted; c = left.shift()) {
-          await encode({ film, a: c.a, b: c.b, file: store.drawing(c) }, { fps, rate, samples, shutter, duration: end, first: f0, format: f, onFrame: progress, still: alpha || opts.fine ? 'png' : 'jpeg', opaque, signal: stop.signal,
+          await encode({ film, a: c.a, b: c.b, file: store.drawing(c) }, { fps, rate, samples, shutter, alpha, duration: end, first: f0, format: f, onFrame: progress, still: alpha || opts.fine ? 'png' : 'jpeg', opaque, signal: stop.signal,
             sourceFrame: selection ? (frame) => selectionFrame(selection.spans, frame) : (frame) => frame });
           store.finished(c, used);
         }
@@ -469,10 +470,13 @@ function alphaWatch() {
 }
 
 /** Frames [a, b) of one page into one file; sub-frames are averaged by ffmpeg (tmix) and every n-th kept. */
-async function encode({ film, a, b, file }, { fps, rate, samples, shutter, duration, first = a, format, onFrame, still, opaque, signal, sourceFrame = (frame) => frame }) {
+async function encode({ film, a, b, file }, { fps, rate, samples, shutter, alpha, duration, first = a, format, onFrame, still, opaque, signal, sourceFrame = (frame) => frame }) {
   const blur = samples > 1 ? `tmix=frames=${samples},select='eq(mod(n\\,${samples})\\,${samples - 1})',setpts=N/((${ffmpegRate(rate)})*TB),` : '';
-  const enc = ffmpeg(['-f', 'image2pipe', '-framerate', ffmpegRate(rate, samples), '-c:v', still === 'png' ? 'png' : 'mjpeg', '-i', '-',
-    '-vf', blur + format.pix, '-r', ffmpegRate(rate), ...format.video, file], { input: true });
+  /* Chromium omits PNG's alpha plane for an entirely opaque frame. Reinitializing on that format change resets
+     tmix and select's frame index, losing samples or even every frame of a short transparent export. */
+  const enc = ffmpeg(['-f', 'image2pipe', '-framerate', ffmpegRate(rate, samples), '-c:v', still === 'png' ? 'png' : 'mjpeg',
+    ...(alpha && samples > 1 ? ['-reinit_filter', '0'] : []), '-i', '-',
+    '-vf', (alpha && samples > 1 ? `${alphaCompositeFilter(blur.slice(0, -1))},` : blur) + format.pix, '-r', ffmpegRate(rate), ...format.video, file], { input: true });
   /* a page drawn opaque: its alpha read beside the encoder, every frame */
   const watch = opaque ? alphaWatch() : null;
   /* a cancelled render stops its encoder at once: the frames ffmpeg still holds are thrown away, not encoded (a 4K

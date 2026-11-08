@@ -59,6 +59,9 @@ where, and CSS that says how each looks. A page draws a shot.
   - `speed` on videos and sounds: the playback rate, 0.1 to 100, sound keeping its pitch. The clip lasts
     `(out − in) / speed` on the film.
   - `volume` on videos and sounds: linear gain, 1 the file's own level; `muted` is 0.
+  - `disabled` on any clip: neither drawn nor heard. Its timing, source trim and volume stay in place, and its
+    length still counts toward the film's end. Removing the attribute enables that clip again. Studio toggles the
+    selected clips with Shift+E or their context menu; it does not change the track's flags.
   - `size` on pages: `size="1920x1080"`, the CSS pixels a page without its own `width` and `height` (§2) is laid
     out at; without it, the stage's. An editor writes it when the stage changes shape, so such a page is scaled into
     its box like a video rather than laid out again in the new shape.

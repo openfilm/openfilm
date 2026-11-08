@@ -34,7 +34,7 @@ import { exactRate } from '../../src/rate.mjs';
  *   channels?: number, sampleRate?: number, alpha?: boolean, timecode?: NleTimecode }} SourceFacts
  * @typedef {{ id: string, kind: 'page' | 'video' | 'still', src: string, path: string, at: number, end: number,
  *   from: number, speed: number, box?: FilmBox, track: number, hidden: boolean, styled?: boolean, faded?: boolean,
- *   facts: SourceFacts | null }} NlePicture
+ *   facts: SourceFacts | null, animationTiming?: { durations: number[], delays: number[] } }} NlePicture
  *   A picture clip: its film seconds [at, end), its source from `from` at `speed`; `facts` its file's (w × h as the
  *   browser shows it), null for a page
  * @typedef {'voice' | 'music' | 'sfx' | 'footage'} SoundRole
@@ -45,11 +45,11 @@ import { exactRate } from '../../src/rate.mjs';
  *   the sound of; `fade`: its fades in and out, film seconds (fitted to its length)
  * @typedef {{ stage: { w: number, h: number }, duration: number, pictures: NlePicture[], sounds: NleSound[] }} NleFilm
  * @typedef {{ title: string, fps: number, audio: 'clips' | 'stems', media: 'copy' | 'link', mediaDir: string,
- *   stems?: SoundRole[], audioTracks?: 'roles' | 'source', alpha?: NleAlpha }} NlePlanOptions
+ *   stems?: SoundRole[], audioTracks?: 'roles' | 'source', alpha?: NleAlpha, editable?: boolean }} NlePlanOptions
  * @typedef {'png' | 'prores4444'} NleAlpha How a picture with alpha is written, in a MOV (default ProRes 4444)
  * @typedef {{ timebase: number, ntsc: boolean, fps: number }} NleRate
  * @typedef {{ value: string, rate: NleRate }} NleTimecode
- * @typedef {{ kind: 'render', clip: string, frames: number }
+ * @typedef {{ kind: 'render', clip: string, frames: number, fullSource?: boolean }
  *   | { kind: 'copy', from: string }
  *   | { kind: 'link', from: string }
  *   | { kind: 'raster', from: string, src: string, w: number, h: number }
@@ -60,7 +60,7 @@ import { exactRate } from '../../src/rate.mjs';
  * @typedef {{ id: string, name: string, path: string, job: NleMediaJob, durationFrames: number,
  *   video?: { w: number, h: number, alpha: boolean, still: boolean, fps?: number }, audio?: { channels: number, sampleRate: number }, timecode?: NleTimecode }} NleFile
  * @typedef {{ id: string, name: string, fileId: string, start: number, end: number, in: number, out: number, enabled: boolean,
- *   motion?: { scale: number, center: { h: number, v: number } }, gain?: number,
+ *   motion?: { scale: number, center: { h: number, v: number } }, gain?: number, speed?: number,
  *   levels?: { when: number, value: number }[], linkGroup?: string, sourceRow?: string }} NleClip
  *   Sequence frames [start, end), file frames [in, out); `gain` linear; `levels` its gain's keyframes (its fades),
  *   frames from the clip's first
@@ -268,20 +268,32 @@ export function planNleTimeline(film, opts) {
     if (len <= 0) continue;
     const link = sourceTracks && p.kind === 'video' ? { linkGroup: `footage-${p.id}` } : {};
     const bake = () => {
-      const file = addFile({ ...mediaPath(p.id, 'mov'), job: { kind: 'render', clip: p.id, frames: len }, durationFrames: len, video: { w: stage.w, h: stage.h, alpha: true, still: false } });
-      visual.push({ track: p.track, ...span, clip: { id: clipId(), name: p.id, fileId: file.id, ...span, in: 0, out: len, enabled: !p.hidden, ...link } });
+      const native = p.facts?.duration ?? 0;
+      const full = opts.editable && p.kind === 'video' && native > 0;
+      const frames = full ? Math.max(1, toFrame(native, rate)) : len;
+      /* Keep the untouched source in the draft's library too. A processed picture retains its complete source
+         length, with the cut expressed as in/out points, so either edge can still be extended in the editor. */
+      if (full) sourceFile(p, 'video', frames);
+      const file = addFile({ ...mediaPath(p.id, 'mov'), job: { kind: 'render', clip: p.id, frames, ...(full ? { fullSource: true } : {}) }, durationFrames: frames, video: { w: stage.w, h: stage.h, alpha: true, still: false } });
+      const inside = full ? toFrame(p.from, rate) : 0;
+      visual.push({ track: p.track, ...span, clip: { id: clipId(), name: p.id, fileId: file.id, ...span, in: inside,
+        out: full ? Math.min(frames, inside + Math.round(len * p.speed)) : len, enabled: !p.hidden,
+        ...(full && p.speed !== 1 ? { speed: p.speed } : {}), ...link } });
     };
     /* a clip with a look of its own (the film's CSS: a crop, round corners) is drawn as the film draws it */
-    if (p.kind === 'page' || p.styled || p.faded || !p.facts || (p.kind === 'video' && Math.abs(p.speed - 1) > 1e-6)) { bake(); continue; }
+    if (p.kind === 'page' || p.styled || p.faded || !p.facts || (!opts.editable && p.kind === 'video' && Math.abs(p.speed - 1) > 1e-6)) { bake(); continue; }
     const placement = containMotion(p.facts, stage, p.box);
     if (placement.kind === 'bake') { bake(); continue; }
     const inFrame = p.kind === 'still' ? 0 : toFrame(p.from, rate);
-    const file = sourceFile(p, p.kind, inFrame + len);
-    const out = reach(file, inFrame + len);
+    const speed = opts.editable && p.kind === 'video' ? p.speed : 1;
+    const sourceLength = Math.round(len * speed);
+    const file = sourceFile(p, p.kind, inFrame + sourceLength);
+    const out = reach(file, inFrame + sourceLength);
     if (out <= inFrame) continue;
     /** @type {NleClip} */
     const clip = {
-      id: clipId(), name: p.id, fileId: file.id, start: span.start, end: span.start + out - inFrame, in: inFrame, out, enabled: !p.hidden,
+      id: clipId(), name: p.id, fileId: file.id, start: span.start, end: span.start + Math.round((out - inFrame) / speed), in: inFrame, out, enabled: !p.hidden,
+      ...(speed !== 1 ? { speed } : {}),
       ...link,
       ...(placement.kind === 'motion' ? { motion: placement.motion } : {}),
     };
@@ -323,12 +335,12 @@ export function planNleTimeline(film, opts) {
       const len = span.end - span.start;
       if (len <= 0) continue;
       const linked = s.picture ? footage.get(s.picture) : undefined;
-      const own = linked && Math.abs(s.speed - 1) < 1e-6 && Math.abs(linked.picture.from - s.from) < 0.002 && Math.abs(linked.picture.at - s.at) < 0.002;
+      const own = linked && Math.abs(s.speed - (opts.editable ? linked.picture.speed : 1)) < 1e-6 && Math.abs(linked.picture.from - s.from) < 0.002 && Math.abs(linked.picture.at - s.at) < 0.002;
       /** @type {NleFile} */
       let file;
       let inFrame;
       const faded = Boolean(s.fade && (s.fade[0] > 0 || s.fade[1] > 0));
-      if (Math.abs(s.speed - 1) > 1e-6 || faded) {
+      if (!opts.editable && (Math.abs(s.speed - 1) > 1e-6 || faded)) {
         /* another speed: an editor would play the source at its own speed, so the part played comes slowed or sped
            (its pitch kept), as the film plays it, as a WAV of its own exactly as long as its clip: the source seconds
            its frames take, as the picture of a clip at another speed is rendered. A sound that fades too: its
@@ -342,19 +354,21 @@ export function planNleTimeline(film, opts) {
         inFrame = 0;
       } else {
         inFrame = toFrame(s.from, rate);
-        file = own && linked ? linked.file : sourceFile(s, 'audio', inFrame + len);
+        file = own && linked ? linked.file : sourceFile(s, 'audio', inFrame + Math.round(len * (opts.editable ? s.speed : 1)));
       }
       if (!file.audio) continue;
-      const out = reach(file, inFrame + len);
+      const speed = opts.editable ? s.speed : 1;
+      const out = reach(file, inFrame + Math.round(len * speed));
       if (out <= inFrame) continue;
       /** @type {NleClip} */
       const clip = {
-        id: clipId(), name: s.id, fileId: file.id, start: span.start, end: span.start + out - inFrame, in: inFrame, out,
+        id: clipId(), name: s.id, fileId: file.id, start: span.start, end: span.start + Math.round((out - inFrame) / speed), in: inFrame, out,
+        ...(speed !== 1 ? { speed } : {}),
         enabled: s.enabled,
         ...(sourceTracks && s.sourceRow ? { sourceRow: s.sourceRow } : {}),
         ...(Math.abs(s.volume - 1) > 1e-6 ? { gain: round6(Math.min(3.98109, s.volume)) } : {}),
       };
-      if (faded && s.fade) clip.levels = fadeKeyframes(s.fade, out - inFrame, Math.min(3.98109, s.volume), rate);
+      if (faded && s.fade) clip.levels = fadeKeyframes(s.fade, clip.end - clip.start, Math.min(3.98109, s.volume), rate);
       if (own && linked && !sourceTracks) {
         linked.clip.linkGroup = `link-${linked.clip.id}`;
         clip.linkGroup = linked.clip.linkGroup;

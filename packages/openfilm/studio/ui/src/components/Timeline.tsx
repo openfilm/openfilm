@@ -158,6 +158,7 @@ import { BlockThumbs } from './BlockThumbs';
 import { BlockWaveform } from './BlockWaveform';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { MotionLaneHeads, MotionLaneRows, lanesHeight, type MotionLanes } from './MotionLanes';
+import { toggleClipEdits } from '@/lib/film-clip-edits';
 import type { PlaybackClock } from './LiveTime';
 import { inHostPanel, isTypingTarget } from './typing-target';
 import { Popover } from './Popover';
@@ -3199,6 +3200,7 @@ export const Timeline = React.memo(function Timeline({
                 key={block.id}
                 /* data-* for automated UI checks: where a clip is drawn, whether a drag moved it */
                 data-block-id={block.id}
+                data-block-disabled={block.disabled ? '1' : undefined}
                 data-block-kind={block.kind}
                 data-block-title={block.title}
                 data-can-move={able.move ? '1' : '0'}
@@ -3965,6 +3967,16 @@ export const Timeline = React.memo(function Timeline({
         disabled: !heard.length || pickedLocked,
         hint: pickedLocked ? t('timeline.trackLocked') : t('timeline.menuDetachAudioNone'),
         onSelect: () => { void onDetachAudio(heard); },
+      });
+    }
+    const enableEdits = toggleClipEdits(picked);
+    if (onEditBlocks && enableEdits.length) {
+      const enable = enableEdits[0]!.value === null;
+      out.push({
+        id: 'toggle-clip', label: t(enable ? 'timeline.menuEnableClip' : 'timeline.menuDisableClip'),
+        icon: enable ? <Eye size={14} /> : <EyeOff size={14} />, shortcut: keyHint('toggle-clip'),
+        disabled: pickedLocked, hint: t('timeline.trackLocked'),
+        onSelect: () => { void onEditBlocks(enableEdits); },
       });
     }
     /* a clip's own sound: film.html's `volume` 0 is silent; unmuted it plays as is (the inspector sets a level) */

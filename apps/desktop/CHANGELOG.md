@@ -4,6 +4,8 @@
 
 ### Patch Changes
 
+- Studio: Shift+E and the clip menu disable or enable selected clips with undo and redo. Jianying and CapCut drafts retain complete sources and editable trim handles. Transparent video exports preserve edge colors when resized or motion-blurred and retain frames across transparency changes.
+
 - [#381](https://github.com/openfilm/openfilm/pull/381) [`b108090`](https://github.com/openfilm/openfilm/commit/b1080902e6847f55323dbc092981c0cc685a4578) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Undoing a chat turn restores its canvas boards along with its files. A turn that only changes the canvas can be undone too. Open boards refresh after the restore and forget undo steps that could bring back references to files the turn's undo removed.
 
 - [#362](https://github.com/openfilm/openfilm/pull/362) [`90fed06`](https://github.com/openfilm/openfilm/commit/90fed06b47e510c92ab31c1a8d5843e6901ab5c6) Thanks [@deepankar-sah](https://github.com/deepankar-sah)! - Desktop: support Google Antigravity as a coding agent via the Agent Client Protocol (ACP).

@@ -71,7 +71,7 @@ import { homedir, setPriority, tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FilmPage, launch } from '../../src/host.mjs';
-import { broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, onTheChip, prores709, proresOptions } from '../../src/encoders.mjs';
+import { alphaCompositeFilter, broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, onTheChip, prores709, proresOptions } from '../../src/encoders.mjs';
 import { COMMAND_ROOM, filmSound, filterScriptOption, kill as killProcess, mix, open } from '../../src/shared.mjs';
 import { defaultWorkers, machine } from '../../src/render.mjs';
 import { isLoudness, LOUDNESS_RANGE } from '../../src/loudness.mjs';
@@ -197,12 +197,13 @@ export function framing(stage, frame, fill, out, alpha) {
   const box = frameBox(stage, frame, fill);
   const scale = (out.w / box.w) * box.scale;
   const native = frame === 'native' || Math.abs(stage.w / stage.h - out.w / out.h) < 0.01;
-  if (native) return { scale: out.w / stage.w, vf: `scale=${out.w}:${out.h}:flags=lanczos` };
+  const mix = (/** @type {string} */ vf) => alpha ? alphaCompositeFilter(vf) : vf;
+  if (native) return { scale: out.w / stage.w, vf: mix(`scale=${out.w}:${out.h}:flags=lanczos`) };
   const w = Math.round(stage.w * scale), h = Math.round(stage.h * scale);
-  if (fill === 'cover') return { scale, vf: `scale=${Math.max(out.w, w)}:${Math.max(out.h, h)}:flags=lanczos,crop=${out.w}:${out.h}` };
+  if (fill === 'cover') return { scale, vf: mix(`scale=${Math.max(out.w, w)}:${Math.max(out.h, h)}:flags=lanczos,crop=${out.w}:${out.h}`) };
   return {
     scale,
-    vf: `scale=${Math.min(out.w, w)}:${Math.min(out.h, h)}:flags=lanczos,pad=${out.w}:${out.h}:(ow-iw)/2:(oh-ih)/2:color=${alpha ? 'black@0' : 'black'}`,
+    vf: mix(`scale=${Math.min(out.w, w)}:${Math.min(out.h, h)}:flags=lanczos,pad=${out.w}:${out.h}:(ow-iw)/2:(oh-ih)/2:color=${alpha ? 'black@0' : 'black'}`),
   };
 }
 
@@ -559,6 +560,34 @@ async function clipFilm(root, clipId, { change = {}, doc = filmDoc(root) } = {})
   await mkdir(dir, { recursive: true });
   await filmElsewhere(root, dir, { stage: doc.stage, tracks: [{ clips: [{ ...clip, ...change, at: 0 }], ...(track.muted ? { muted: true } : {}) }] });
   return { dir, stage: doc.stage, remove: () => tidy(dir) };
+}
+
+/** A processed video's entire source, retaining its cut's fades inside the source handles.
+ * @param {string} root @param {import('./nle.mjs').NlePicture} picture @param {number} native
+ * @param {import('../../src/film-doc.mjs').FilmDoc} doc */
+async function sourceClipFilm(root, picture, native, doc) {
+  const clip = doc.tracks.flatMap((t) => t.clips).find((c) => c.id === picture.id);
+  if (!clip) throw new ExportError(`no clip "${picture.id}"`);
+  const from = picture.from;
+  const to = Math.min(native, from + (picture.end - picture.at) * picture.speed);
+  const tweaks = clip.overrides?.filter((o) => o.at !== undefined) ?? [];
+  const fade = fittedFade(clipFade(clip), picture.end - picture.at);
+  const plain = { ...clip, disabled: undefined, speed: 1, overrides: tweaks.length ? tweaks : undefined };
+  /* The source is drawn at 1x and the draft plays it at its native speed. Keep CSS motion on the original film's
+     clock too, including the handles before and after the cut. */
+  const timed = (/** @type {number} */ at) => picture.animationTiming ? { style: [clip.style,
+    `animation-duration: ${picture.animationTiming.durations.map((v) => `${v * picture.speed}s`).join(', ')}`,
+    `animation-delay: ${picture.animationTiming.delays.map((v) => `${v * picture.speed + from - at}s`).join(', ')}`,
+  ].filter(Boolean).join('; ') } : {};
+  const clips = [
+    ...(from > 0 ? [{ ...plain, ...timed(0), id: `${clip.id}-head`, at: 0, time: [0, from] }] : []),
+    { ...plain, ...timed(from), at: from, time: [from, to], ...(fade ? { overrides: [{ fade: fade.map((v) => v * picture.speed) }, ...tweaks] } : {}) },
+    ...(to < native ? [{ ...plain, ...timed(to), id: `${clip.id}-tail`, at: to, time: [to, native] }] : []),
+  ];
+  const dir = join(root, '.film', 'cache', 'export', `source-${process.pid}-${randomBytes(4).toString('hex')}`);
+  await mkdir(dir, { recursive: true });
+  await filmElsewhere(root, dir, { stage: doc.stage, tracks: [{ clips }] });
+  return { dir, remove: () => tidy(dir) };
 }
 
 
@@ -1227,13 +1256,18 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       await mkdir(scratch, { recursive: true });
       await filmElsewhere(root, scratch, { stage: doc.stage, tracks: doc.tracks.map((t) => ({ clips: t.clips })) });
       const probe = await open(scratch, { root });
-      /** @type {{ id: string, at: number, end: number, from: number, to: number, speed: number, native: number | null, w: number | null, h: number | null }[]} */
+      /** @type {{ id: string, at: number, end: number, from: number, to: number, speed: number, native: number | null, w: number | null, h: number | null,
+       * animationTiming?: { durations: number[], delays: number[] } }[]} */
       let loaded;
       try {
-        loaded = await probe.film.page.evaluate(() => /** @type {any} */ (window).__filmEditor.stage.clips().map((/** @type {any} */ c) => ({
-          id: c.id, at: c.at, end: c.end, from: c.span.from, to: c.span.to, speed: c.span.speed,
-          native: Number.isFinite(c.native) ? c.native : null, w: c.nw ?? null, h: c.nh ?? null,
-        })));
+        loaded = await probe.film.page.evaluate(() => /** @type {any} */ (window).__filmEditor.stage.clips().map((/** @type {any} */ c) => {
+          const css = c.el ? getComputedStyle(c.el) : null;
+          const seconds = (/** @type {string} */ value) => value.split(',').map((v) => parseFloat(v) * (v.trim().endsWith('ms') ? 0.001 : 1));
+          const timing = css && css.animationName !== 'none' ? { durations: seconds(css.animationDuration), delays: seconds(css.animationDelay) } : null;
+          return { id: c.id, at: c.at, end: c.end, from: c.span.from, to: c.span.to, speed: c.span.speed,
+            native: Number.isFinite(c.native) ? c.native : null, w: c.nw ?? null, h: c.nh ?? null,
+            ...(timing && [...timing.durations, ...timing.delays].every(Number.isFinite) ? { animationTiming: timing } : {}) };
+        }));
       } finally {
         await probe.close();
       }
@@ -1270,7 +1304,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           if (!c || !kind) continue;
           const path = clipPath(root, row.src);
           const volume = /** @type {{ volume?: number }} */ (row).volume ?? 1;
-          const heard = !track.muted && !track.hidden && volume > 0;
+          const heard = !track.muted && !track.hidden && !row.disabled && volume > 0;
           const fade = fittedFade(clipFade(row), c.end - c.at);
           if (!track.hidden) duration = Math.max(duration, c.end);
           if (kind !== 'sound') {
@@ -1282,7 +1316,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
               f = { ...f, w: Math.max(1, Math.round(f.w * k)), h: Math.max(1, Math.round(f.h * k)) };
             }
             pictures.push({ id: row.id, kind, src: row.src, path, at: c.at, end: c.end, from: c.from, speed: c.speed, box: row.box,
-              track: ti, hidden: Boolean(track.hidden), styled: Boolean(row.class || row.style), ...(fade ? { faded: true } : {}), facts: f });
+              track: ti, hidden: Boolean(track.hidden || row.disabled), styled: Boolean(row.class || row.style), ...(fade ? { faded: true } : {}), facts: f,
+              ...(c.animationTiming ? { animationTiming: c.animationTiming } : {}) });
           }
           if (kind === 'sound' || kind === 'video') {
             const f = await factsOf(path);
@@ -1315,7 +1350,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
 
       const timeline = planNleTimeline({ stage: doc.stage, duration: duration || 0.001, pictures, sounds },
         { title, fps, audio: mode, media: ask.media ?? 'copy', mediaDir: join(final, 'media'), stems: [...stems.keys()],
-          audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png' });
+          audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app) });
       const staged = (/** @type {import('./nle.mjs').NleFile} */ f) => join(staging, 'media', basename(f.path));
 
       /* each web page (and each picture Basic Motion can't place) drawn alone, full frame, with alpha. Several are drawn at
@@ -1367,9 +1402,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       };
       /** @param {import('./nle.mjs').NleFile} file @param {number} workers @param {() => void} drawn */
       const page = async (file, workers, drawn) => {
-        const { clip: id, frames } = /** @type {Extract<import('./nle.mjs').NleMediaJob, { kind: 'render' }>} */ (file.job);
+        const { clip: id, frames, fullSource } = /** @type {Extract<import('./nle.mjs').NleMediaJob, { kind: 'render' }>} */ (file.job);
         const p = /** @type {import('./nle.mjs').NlePicture} */ (pictures.find((x) => x.id === id));
-        const native = byId.get(id)?.native ?? Infinity;
+        const native = byId.get(id)?.native ?? p.facts?.duration ?? Infinity;
         /* as long as its frames on the sequence: a page holds its last frame, a still lasts as long as it is told */
         const time = p.kind === 'video' ? [p.from, Math.min(native, p.from + (frames / timeline.rate.fps) * p.speed)] : [p.from, p.from + frames / timeline.rate.fps];
         /* a draft's page with no clear pixel in any frame needs no alpha (each frame's alpha is read as it is drawn, so
@@ -1385,7 +1420,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         });
         let clear = true;
         try {
-          const one = await clipFilm(root, id, { change: { time }, doc });
+          const one = fullSource ? await sourceClipFilm(root, p, native, doc)
+            : await clipFilm(root, id, { change: { time, disabled: undefined }, doc });
           try {
             /** @param {Record<string, unknown>} how */
             const draw = async (how) => {
@@ -1413,7 +1449,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         const made = await countFrames(staged(file));
         if (made > 0 && made !== frames) {
           file.durationFrames = made;
-          for (const t of timeline.video) for (const c of t.clips) if (c.fileId === file.id) { c.out = made; c.end = c.start + made; }
+          for (const t of timeline.video) for (const c of t.clips) if (c.fileId === file.id) {
+            c.out = fullSource ? Math.min(c.out, made) : made;
+            c.end = c.start + Math.round((c.out - c.in) / (c.speed ?? 1));
+          }
         }
         /* a draft's PNG page keeps each picture once, for as long as it shows (剪映 plays a picture's own length): a
            fraction of the frames, the same pixels */

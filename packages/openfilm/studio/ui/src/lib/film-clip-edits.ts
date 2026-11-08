@@ -15,6 +15,13 @@ export interface ClipEdit {
   from?: number;
 }
 
+/** A mixed selection is disabled together; an entirely disabled selection is enabled together. */
+export function toggleClipEdits(blocks: readonly Pick<TimelineBlock, 'loc' | 'disabled'>[]): ClipEdit[] {
+  const clips = blocks.filter((b) => b.loc && /^film\.html#\d+\.\d+$/.test(b.loc));
+  const enable = clips.length > 0 && clips.every((b) => b.disabled);
+  return clips.map((b) => ({ loc: b.loc!, prop: 'disabled', value: enable ? null : true }));
+}
+
 /** film.html's field names that the inspector calls otherwise, at the start of a refusal */
 const FIELD_WORDS: Record<string, string> = { at: 'Start' };
 
