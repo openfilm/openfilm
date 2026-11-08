@@ -290,7 +290,7 @@ export function useLibraryFavorites(): readonly string[] {
 /* ── what of the library is here: a sound, a piece of music, a template's music are fetched before they go in ── */
 
 /** Whether a thing may need fetching before it goes in (a published part of the library, or a template's music). */
-export const mayNeedFetch = (item: Pick<LibraryItem, 'id' | 'music'>): boolean => item.id.startsWith('audio/') || item.id.startsWith('community/') || Boolean(item.music);
+export const mayNeedFetch = (item: Pick<LibraryItem, 'id' | 'music'>): boolean => item.id.startsWith('audio/') || item.id.startsWith('stickers/emoji/') || item.id.startsWith('community/') || Boolean(item.music);
 const asked = new Set<string>();
 /** asked, not answered yet: shown as to be fetched, never as one to put in that is not here */
 const asking = new Set<string>();
