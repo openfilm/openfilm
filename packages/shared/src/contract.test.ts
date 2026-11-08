@@ -11,6 +11,17 @@ test('clipped text fits the limit, the note included, and says how much was cut'
   assert.ok(publicGenerationEventSchema.safeParse({ type: 'agent-text', turnNo: 0, text: clipped }).success);
 });
 
+test('a clipped transcript line does not lose half a character', () => {
+  const text = `aaaaa😀zzz${'x'.repeat(60)}`;
+  for (let max = 8; max <= 45; max++) {
+    const clipped = clipTranscriptText(text, max);
+    assert.ok(clipped.length <= max, `max ${max}: the note still fits the limit`);
+    /* a lone surrogate is not a URI's character: encodeURI would refuse it */
+    assert.doesNotThrow(() => encodeURI(clipped.split('\n')[0]!), `max ${max}: no half a character`);
+  }
+  assert.equal(clipTranscriptText(text, 13).split('\n')[0], 'aaaaa');
+});
+
 test('streamed text merges without repeats', () => {
   assert.equal(mergeStreamText('', 'Hel'), 'Hel');
   assert.equal(mergeStreamText('Hel', 'Hello'), 'Hello');

@@ -64,6 +64,32 @@ test('doctor: the report says how much the projects\' .film folders hold', async
   }
 });
 
+test('doctor: the log\'s errors hide keys and email addresses, as the report promises', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'openfilm-doctor-log-'));
+  const data = join(home, '.openfilm');
+  mkdirSync(join(data, 'logs'), { recursive: true });
+  writeFileSync(join(data, 'logs', 'studio.log'),
+    'Error: request failed with Authorization: Bearer abcdefgh12345678 and sk-proj-ABCDEFGHIJKLMNOP from alice@example.com\n');
+  const before = { home: process.env.OPENFILM_HOME, library: process.env.OPENFILM_LIBRARY };
+  process.env.OPENFILM_HOME = data;
+  process.env.OPENFILM_LIBRARY = join(home, 'Projects');
+  try {
+    const { text } = await doctor({ studio: { origin: 'http://127.0.0.1:4848', version: '0.3.0' }, browser: false, network: false, home });
+    assert.match(text, /\(hidden\)/);
+    assert.match(text, /\(key hidden\)/);
+    assert.match(text, /\(email\)/);
+    assert.ok(!text.includes('abcdefgh12345678'), 'no bearer token');
+    assert.ok(!text.includes('sk-proj-'), 'no key');
+    assert.ok(!text.includes('alice@example.com'), 'no email address');
+    assert.ok(!text.includes(home), 'no full home path');
+  } finally {
+    for (const [name, value] of [['OPENFILM_HOME', before.home], ['OPENFILM_LIBRARY', before.library]]) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('doctor: the folders and the log, paths under home as ~', async () => {
   const home = mkdtempSync(join(tmpdir(), 'openfilm-doctor-'));
   const data = join(home, '.openfilm');
