@@ -184,7 +184,7 @@ export function clipCues(lines, span, extra = {}) {
 function heardClips(root, doc) {
   return doc.tracks.flatMap((track) => (track.muted || track.hidden ? [] : track.clips.filter((clip) => {
     const kind = kindOf(clip);
-    return (kind === 'sound' || kind === 'video') && !(clip.volume !== undefined && clip.volume <= 0) && inProject(root, clip.src) !== null;
+    return !clip.disabled && (kind === 'sound' || kind === 'video') && !(clip.volume !== undefined && clip.volume <= 0) && inProject(root, clip.src) !== null;
   })));
 }
 

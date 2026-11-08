@@ -130,7 +130,7 @@ export function DesktopDialog({ open, onClose }: { open: boolean; onClose: () =>
         role="dialog"
         aria-modal="true"
         aria-labelledby="desktop-title"
-        className="relative grid max-h-[calc(100vh-32px)] w-full max-w-[1040px] overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--bg-raised)] shadow-[0_32px_80px_-24px_rgba(0,0,0,0.6)] md:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]"
+        className="relative grid max-h-[calc(100vh-32px)] w-full max-w-[1040px] overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--bg-topbar-popover)] shadow-[0_32px_80px_-24px_rgba(0,0,0,0.6)] md:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]"
       >
         <button
           type="button"

@@ -1,11 +1,30 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coverLook, libraryBox, cutTrack, cutsOf, fromLibrary, isFilterLayer, isLibraryEffect, isTextClip, withRootVars, libraryDragItem, lookOf, onCut, placedGroup, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
+import { coverLook, fetchLibraryItem, libraryBox, cutTrack, cutsOf, fromLibrary, isFilterLayer, isLibraryEffect, isTextClip, withRootVars, libraryDragItem, lookOf, onCut, placedGroup, soundLook, waveUrl, withLook, type LibraryItem } from './library.ts';
 import { gradeFilter } from './grade.ts';
 
 const page: LibraryItem = { id: 'effects/snow', cat: 'effect', group: 'ambience', name: { en: 'Snow' }, kind: 'page', durationMs: 4000, src: 'snow.html' };
 const sound: LibraryItem = { id: 'sounds/whoosh.m4a', cat: 'sound', group: 'transition', name: { en: 'Whoosh' }, kind: 'sound', durationMs: 700 };
 const look: LibraryItem = { id: 'filters/bw', cat: 'filter', group: 'mono', name: { en: 'Black and white' }, kind: 'look', filter: 'grayscale(1)' };
+
+test('preview and insertion await one shared download, then a failed attempt can be retried', async () => {
+  const fetch = globalThis.fetch;
+  let requests = 0;
+  let finish!: (response: Response) => void;
+  globalThis.fetch = () => { requests += 1; return new Promise<Response>((done) => { finish = done; }); };
+  try {
+    const preview = fetchLibraryItem('stickers/emoji/shared');
+    const insertion = fetchLibraryItem('stickers/emoji/shared');
+    assert.equal(requests, 1);
+    assert.equal(preview, insertion);
+    finish(new Response('{"ok":false}', { headers: { 'content-type': 'application/json' } }));
+    assert.deepEqual(await Promise.all([preview, insertion]), [false, false]);
+    const retry = fetchLibraryItem('stickers/emoji/shared');
+    assert.equal(requests, 2);
+    finish(new Response('{"ok":true}', { headers: { 'content-type': 'application/json' } }));
+    assert.equal(await retry, true);
+  } finally { globalThis.fetch = fetch; }
+});
 
 test('a page or a sound is dragged as a thing to take into the project; a look as what goes on a clip', () => {
   assert.deepEqual(libraryDragItem(page, 'Snow'), {

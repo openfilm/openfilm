@@ -9,9 +9,9 @@
  * in the page (shell/bridge.ts); this process does what only the app can: the window, the agents, files on the disk,
  * ffmpeg, updates (preload.cjs). The window opens straight into the last project.
  */
-import { BaseWindow, Menu, WebContentsView, app, clipboard, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
+import { BaseWindow, Menu, Notification, WebContentsView, app, clipboard, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FLAVOR, IDENTITY, PRODUCT_NAME } from './flavor.mjs';
 import { folderDialogOptions, programDialogOptions } from './folder-dialog.mjs';
@@ -19,7 +19,7 @@ import { childEnvironment, lastPathSource, loginShellEnvironment } from './envir
 import { gatherAppReport } from './app-report.mjs';
 import { startWindowStudio } from './studio.mjs';
 import { CHAT_MIN, STUDIO_MIN, WINDOW_MIN, placeOnDisplays, readWindowState, writeWindowState } from './window-state.mjs';
-import { createPagePresentation, preparePage, revealPage } from './page-presentation.mjs';
+import { createPagePresentation, paintPage, preparePage, revealPage, syncPagePointer } from './page-presentation.mjs';
 import { closeTabOrWindow, keepWindowOnClose, quitAfterStudio } from './window-lifecycle.mjs';
 import { appLanguage } from './i18n/language.mjs';
 import { applicationMenuTemplate } from './menu.mjs';
@@ -27,7 +27,8 @@ import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
 import { registerSkillsIpc } from './skills-ipc.mjs';
 import { createRoster } from './agent-roster.mjs';
-import { checkAgentProgram, closeEverySession, diagnoseAgent, forgetAgentStatus, listAgents, localAgent, openAgentInstaller, openAgentSignIn, setChosenPaths, signOutAgent } from './agents.mjs';
+import { createOpenFilmAgent } from './openfilm-agent.mjs';
+import { AGENTS, checkAgentProgram, closeEverySession, diagnoseAgent, forgetAgentStatus, listAgents, localAgent, openAgentInstaller, openAgentSignIn, setChosenPaths, signOutAgent } from './agents.mjs';
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
 import { installOpenfilmCommand } from './openfilm-command.mjs';
 import { startUpdates } from './updates.mjs';
@@ -36,6 +37,7 @@ import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegIn, ffmpegOnPath } f
 import { PATH_SEP } from './environment.mjs';
 import { firstWindowsApps } from './windows-apps.mjs';
 import { createTabs, projectGone } from './tabs.mjs';
+import { turnNotice } from './turn-notices.mjs';
 import { restartDelay } from './studio-restart.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
@@ -60,6 +62,8 @@ if (mac) {
 
 /* each flavour its own name, data folder and single-instance lock (flavor.mjs) */
 app.setName(PRODUCT_NAME);
+/* Windows shows a notification only for the app ID the Start menu shortcut carries: the installer's appId (release.mjs) */
+if (windows) app.setAppUserModelId(IDENTITY.bundleId);
 app.setPath('userData', IDENTITY.userData ?? join(app.getPath('appData'), PRODUCT_NAME));
 const DATA = app.getPath('userData');
 const LOGS = join(DATA, 'logs');
@@ -117,7 +121,7 @@ let localAgents = null;
 let roster = null;
 
 /** the board Studio's panes sit on (its --bg-app), so the window never flashes another color */
-const BACKGROUND = { light: '#e9e9eb', dark: '#111114' };
+const BACKGROUND = { light: '#e4e4e8', dark: '#141414' };
 
 function focusWindow() {
   if (!win) return;
@@ -201,25 +205,36 @@ function tellTabs() {
 }
 
 function presentation() {
+  if (pagePresentation) return pagePresentation;
+  const frameOptions = id => ({ readySelector: id === HOME ? '[data-titlebar]' : `[data-project-tab="${id}"], [data-page-ready="error"]` });
+  const stage = (id, v, paint) => {
+    // Restoring a hidden NSView invalidates its old surface. Refresh it underneath the outgoing page first.
+    win.contentView.addChildView(v, 0);
+    v.setVisible(true);
+    v.webContents.setBackgroundThrottling(false);
+    if (win.isFocused()) syncPagePointer(v.webContents, screen.getCursorScreenPoint(), win.getContentBounds());
+    const settle = (failed = false) => {
+      if (v.webContents.isDestroyed()) return;
+      const current = pagePresentation?.currentId() === id;
+      if (failed || current || pagePresentation?.wantedId() !== id) v.webContents.setBackgroundThrottling(true);
+      if (!current && (failed || pagePresentation?.wantedId() !== id)) v.setVisible(false);
+    };
+    // Keep the destination painting until present() raises it; throttling it while still occluded can invalidate
+    // the refreshed surface again. Obsolete/failed requests go back to sleep without ever being exposed.
+    return paint().then(value => { settle(); return value; }, error => { settle(true); throw error; });
+  };
   return pagePresentation ??= createPagePresentation({
     fallback: HOME,
     prepare(id) {
       const v = makeView(id);
-      // A never-visible native view produces no frames. Paint it underneath the outgoing page.
-      win.contentView.addChildView(v, 0);
-      v.setVisible(true);
-      v.webContents.setBackgroundThrottling(false);
-      const ready = preparePage(v.webContents, pageAddress(id === HOME ? null : tabs?.get(id)))
-        .finally(() => {
-          if (v.webContents.isDestroyed()) return;
-          v.webContents.setBackgroundThrottling(true);
-          if (pagePresentation?.currentId() !== id && pagePresentation?.wantedId() !== id) v.setVisible(false);
-        });
+      const ready = stage(id, v, () => preparePage(v.webContents, pageAddress(id === HOME ? null : tabs?.get(id)), frameOptions(id)));
       return { view: v, ready };
     },
+    resume(id, v) { return stage(id, v, () => paintPage(v.webContents, frameOptions(id))); },
     present(_id, v) {
       if (!win) return;
       revealPage(win.contentView, v, views.values());
+      v.webContents.setBackgroundThrottling(true);
       /* the pages now behind it are told: one waiting to be covered (its projects window opening another tab) is done */
       for (const page of views.values()) if (page !== v && !page.webContents.isDestroyed()) page.webContents.send('desktop:tabs:covered');
     },
@@ -395,6 +410,43 @@ function setTheme(next) {
   if (windows) win?.setTitleBarOverlay?.(overlayColours(theme));
 }
 
+/** the notifications shown and not yet clicked or closed: one let go is garbage collected, and its click lost (macOS) */
+const notices = new Set();
+/** how many of them a long session keeps: an older one is closed, in Notification Center and Action Center too */
+const NOTICES_KEPT = 20;
+
+/**
+ * A turn of the chat's done, stopped by an error, or waiting for the person's answer: a notification of the system's,
+ * while the window is not in front and Settings › General leaves them on (turn-notices.mjs). Clicking it brings the
+ * window back on that project's tab. The taskbar button flashes (Windows), the Dock icon bounces once (macOS).
+ * @param {{ kind: 'done' | 'failed' | 'asking', agent: string, cwd: string, meta: any, error?: string }} turn
+ */
+async function noticeTurn({ kind, agent, cwd, meta, error }) {
+  if (!win || quitting || !Notification.isSupported()) return;
+  const project = typeof meta?.projectTitle === 'string' && meta.projectTitle ? meta.projectTitle : basename(cwd);
+  const notice = turnNotice(kind, {
+    project, agent: agent === 'byok' ? null : AGENTS[agent]?.label ?? agent, error, inFront: win.isFocused() && win.isVisible(),
+    on: readPreferences(DATA).notify, language: appLanguage(state.language, app.getPreferredSystemLanguages()),
+  });
+  if (!notice) return;
+  const shown = new Notification({ title: notice.title, body: notice.body });
+  const done = () => notices.delete(shown);
+  shown.on('click', () => {
+    done();
+    focusWindow();
+    void (async () => {
+      if (!projectPaths.has(cwd)) projectPaths = new Map((await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects.map((p) => [p.path, p.id]));
+      newTab(projectPaths.get(cwd));
+    })();
+  });
+  shown.on('close', done);
+  notices.add(shown);
+  for (const old of notices) { if (notices.size <= NOTICES_KEPT) break; notices.delete(old); old.close(); }
+  shown.show();
+  if (windows) win.flashFrame(true);
+  else app.dock?.bounce('informational');
+}
+
 /** Tell Studio which folders the chat's agents are working in now. */
 function tellWorking(/** @type {string[]} */ folders) {
   studio?.child.postMessage({ type: 'working', folders });
@@ -503,6 +555,7 @@ async function start() {
     shell: shellEnv,
     extra: {
       OPENFILM_HOME: IDENTITY.studioHome ?? process.env.OPENFILM_HOME ?? join(app.getPath('home'), '.openfilm'),
+      ...(FLAVOR !== 'release' ? { OPENFILM_ACCOUNT_DEVICE: PRODUCT_NAME } : {}),
       ...((IDENTITY.library ?? process.env.OPENFILM_LIBRARY) ? { OPENFILM_LIBRARY: IDENTITY.library ?? process.env.OPENFILM_LIBRARY } : {}),
       /* a flavour with a home of its own still shares the person's library (src/locations.mjs) */
       ...(IDENTITY.sharedHome ? { OPENFILM_SHARED_HOME: IDENTITY.sharedHome } : {}),
@@ -550,6 +603,8 @@ async function start() {
   launch.dismiss();
 
   win.on('resize', layout);
+  /* the taskbar button a turn's notification set flashing (noticeTurn) stops once the window is in front */
+  if (windows) win.on('focus', () => win?.flashFrame(false));
   win.on('resized', saveState);
   win.on('moved', saveState);
   win.on('enter-full-screen', () => broadcast('desktop:full-screen', true));
@@ -646,6 +701,8 @@ async function start() {
     onWorking: tellWorking,
     /* a tab says when its agent waits for the person's answer */
     onAsking: (folders) => void tellTabsWorking({ asking: folders }),
+    /* a turn done, stopped or waiting, told by the system while the window is not in front */
+    onTurn: (turn) => void noticeTurn(turn),
     onConnectionResult: (id, error) => roster?.recordConnectionResult(id, error),
     /* the `openfilm` command first (with the app's ffmpeg and browser in it); the app's ffmpeg last, for a computer
        that has none of its own: the person's own ffmpeg and browsers are what the agent's commands use */
@@ -653,6 +710,7 @@ async function start() {
     fallbackDir: ffmpegHere,
     env: {
       OPENFILM_HOME: env.OPENFILM_HOME,
+      ...(env.OPENFILM_API_URL ? { OPENFILM_API_URL: env.OPENFILM_API_URL } : {}),
       ...(env.OPENFILM_LIBRARY ? { OPENFILM_LIBRARY: env.OPENFILM_LIBRARY } : {}),
       ...(env.OPENFILM_SHARED_HOME ? { OPENFILM_SHARED_HOME: env.OPENFILM_SHARED_HOME } : {}),
     },
@@ -676,7 +734,20 @@ async function start() {
     log,
   });
   /* Settings → Agents (in Studio's page) and the chat's agent menu: one roster, both told of every change */
+  const openfilmAgent = createOpenFilmAgent({
+    dataDir: DATA,
+    readAccount: (options) => studio.readAccount(options),
+    signIn: () => studioApi('/api/providers/openfilm/sign-in', 'POST'),
+    cancelSignIn: () => studioApi('/api/providers/openfilm/sign-in/cancel', 'POST'),
+    signOut: () => studioApi('/api/providers/openfilm/key', 'DELETE'),
+    closeSessions: () => localAgents?.closeAgent('openfilm'),
+    refreshSessions: () => localAgents?.refreshSkills('openfilm'),
+    onChange: () => { if (roster) broadcast('desktop:agents', roster.list()); },
+  });
+  // Services and Agents may both change the account. Read the shared state even when its settings page is closed.
+  setInterval(() => { void openfilmAgent.refresh(); }, 2000).unref();
   roster = createRoster({
+    openfilm: openfilmAgent,
     dataDir: DATA,
     localAgents: listAgents,
     localAgent,
@@ -708,8 +779,8 @@ async function start() {
   agentHandle('desktop:agents:list', () => { void roster.refresh(); return roster.list(); });
   agentHandle('desktop:agents:refresh', () => roster.recheck());
   agentHandle('desktop:agents:connect', ({ id }) => roster.connect(String(id)));
-  agentHandle('desktop:agents:cancel-sign-in', ({ id }) => { roster.cancelSignIn(String(id)); return { ok: true }; });
-  agentHandle('desktop:agents:disconnect', ({ id }) => { roster.disconnect(String(id)); return { ok: true }; });
+  agentHandle('desktop:agents:cancel-sign-in', async ({ id }) => (await roster.cancelSignIn(String(id))) ?? { ok: true });
+  agentHandle('desktop:agents:disconnect', async ({ id }) => (await roster.disconnect(String(id))) ?? { ok: true });
   agentHandle('desktop:agents:switch-account', ({ id }) => roster.switchAccount(String(id)));
   /* what is left of Claude Code's and Codex's plan, on OpenFilm's sign-in (agent-usage.mjs); null when it can't say */
   agentHandle('desktop:agents:usage', ({ id, fresh }) => agentUsage(String(id), { fresh: fresh === true }));
@@ -741,6 +812,7 @@ async function start() {
     return { ok: true };
   });
   agentHandle('desktop:agents:shown', ({ id, shown }) => { roster.setShown(String(id), shown === true); return { ok: true }; });
+  agentHandle('desktop:agents:openfilm-models', ({ config }) => openfilmAgent.saveModels(config));
   agentHandle('desktop:agents:own-model', ({ config }) => roster.saveOwnModel(config));
   agentHandle('desktop:agents:own-model-remove', ({ id }) => { roster.removeOwnModel(String(id)); return { ok: true }; });
   ipcMain.handle('desktop:reveal', (event, path) => { if (fromPage(event) && typeof path === 'string' && path) shell.showItemInFolder(path); });

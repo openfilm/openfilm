@@ -19,6 +19,8 @@ import { studioHost } from './lib/host';
 import { WhatsNew } from './components/WhatsNew';
 import { sourcesApi } from './lib/project-sources';
 import { LIST_WAIT_MS, within } from './lib/projects-page';
+import { afterPaintIdle } from './lib/after-paint-idle';
+import { loadCanvas } from './components/canvas/load';
 
 /**
  * `to` with this page's key in its address (the server puts it there): the address bar is what a person copies, and
@@ -45,6 +47,8 @@ export function App() {
 
   /* the examples and skills, read as Studio opens: a gallery opened later shows them at once */
   useEffect(() => { sourcesApi.preload(); }, []);
+  /* The launcher is usable first. Warm the optional board's code without opening any project's canvas. */
+  useEffect(() => afterPaintIdle(() => { void loadCanvas().catch(() => {}); }), []);
 
   useEffect(() => {
     const onPop = () => setPath(location.pathname);

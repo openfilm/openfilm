@@ -143,9 +143,10 @@ export function jianyingDraft(timeline, opts) {
   const library = [];
   /** @type {Map<string, string>} a file's entry in the library, by its path */
   const entryOf = new Map();
-  const register = (/** @type {NleFile} */ file, /** @type {'video' | 'photo' | 'music'} */ kind, /** @type {string} */ name) => {
+  const register = (/** @type {NleFile} */ file, /** @type {'video' | 'photo' | 'music'} */ wanted, /** @type {string} */ name) => {
     const known = entryOf.get(file.path);
     if (known) return known;
+    const kind = file.video ? file.video.still ? 'photo' : 'video' : wanted;
     const id = randomUUID().toUpperCase();
     library.push({
       ai_group_type: '', create_time: -1, duration: kind === 'photo' ? 5_000_000 : us(file.durationFrames), enter_from: 0,
@@ -184,9 +185,9 @@ export function jianyingDraft(timeline, opts) {
     materialOf.set(key, id);
     return id;
   };
-  const speed = () => {
+  const speed = (value = 1) => {
     const id = hex();
-    materials.speeds.push({ curve_speed: null, id, mode: 0, speed: 1, type: 'speed' });
+    materials.speeds.push({ curve_speed: null, id, mode: 0, speed: value, type: 'speed' });
     return id;
   };
 
@@ -201,10 +202,10 @@ export function jianyingDraft(timeline, opts) {
   });
 
   /* footage's own sound, by the picture it belongs to: the video clip plays it at its level */
-  /** @type {Map<string, number>} linkGroup → level */
+  /** @type {Map<string, { level: number, kept: number }>} linkGroup → current and original levels */
   const ownSound = new Map();
   for (const t of timeline.audio) {
-    for (const c of t.clips) if (c.linkGroup && !c.levels) ownSound.set(c.linkGroup, t.enabled && c.enabled ? c.gain ?? 1 : 0);
+    for (const c of t.clips) if (c.linkGroup && !c.levels) ownSound.set(c.linkGroup, { level: t.enabled && c.enabled ? c.gain ?? 1 : 0, kept: c.gain ?? 1 });
   }
 
   /* pictures: the plan's first track is the bottom one, as 剪映's first video track (its main track) is */
@@ -219,12 +220,13 @@ export function jianyingDraft(timeline, opts) {
         const fit = Math.min(timeline.width / w, timeline.height / h);
         const scale = round6((c.motion ? c.motion.scale / 100 : 1) / fit);
         const x = round6((c.motion?.center.h ?? 0) * 2), y = round6(-(c.motion?.center.v ?? 0) * 2);
-        const level = c.linkGroup && ownSound.has(c.linkGroup) ? /** @type {number} */ (ownSound.get(c.linkGroup)) : 0;
+        const sound = c.linkGroup ? ownSound.get(c.linkGroup) : undefined;
+        const level = sound?.level ?? 0;
         return segment({
           material_id: material(file, 'video'), target_timerange: span(c.start, c.end),
           source_timerange: file.video?.still ? { start: 0, duration: us(c.end) - us(c.start) } : span(c.in, c.out),
-          visible: t.enabled && c.enabled, volume: level, last_nonzero_volume: level || 1,
-          extra_material_refs: [speed()], clip: clipSettings(scale, x, y), uniform_scale: { on: true, value: 1 },
+          visible: t.enabled && c.enabled, volume: level, last_nonzero_volume: sound?.kept || 1,
+          speed: c.speed ?? 1, extra_material_refs: [speed(c.speed)], clip: clipSettings(scale, x, y), uniform_scale: { on: true, value: 1 },
           hdr_settings: { intensity: 1, mode: 1, nits: 1000 }, render_index: index,
         });
       }),
@@ -241,7 +243,7 @@ export function jianyingDraft(timeline, opts) {
       segments: clips.map((c) => {
         const file = /** @type {NleFile} */ (files.get(c.fileId));
         const level = c.levels ? Math.max(...c.levels.map((k) => k.value)) : c.gain ?? 1;
-        const refs = [speed()];
+        const refs = [speed(c.speed)];
         /* a fade: the plan's level keyframes (silent at an end) as 剪映's fade in and out */
         if (c.levels && c.levels.length > 1) {
           const keys = c.levels;
@@ -256,6 +258,7 @@ export function jianyingDraft(timeline, opts) {
         }
         return segment({
           material_id: material(file, 'audio'), target_timerange: span(c.start, c.end), source_timerange: span(c.in, c.out),
+          speed: c.speed ?? 1,
           volume: c.enabled ? round6(level) : 0, last_nonzero_volume: round6(level) || 1,
           extra_material_refs: refs, clip: null, hdr_settings: null, render_index: index,
         });
@@ -303,6 +306,8 @@ export function jianyingDraft(timeline, opts) {
   }
 
   const duration = us(timeline.durationFrames);
+  /* A processed clip can have an untouched original beside its rendered file, ready to replace it in the editor. */
+  for (const file of timeline.files) if (file.video || !entryOf.has(file.path)) material(file, file.video ? 'video' : 'audio');
   const draftId = randomUUID().toUpperCase();
   const now = opts.now ?? Date.now();
   const info = {

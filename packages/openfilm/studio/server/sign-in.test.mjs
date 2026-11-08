@@ -2,12 +2,18 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { cancelSignIn, signInState, signOut, startSignIn } from './sign-in.mjs';
+import { cancelSignIn, deviceName, signInState, signOut, startSignIn } from './sign-in.mjs';
 
 /** A fake provider website: the token exchange checks the verifier against the challenge the browser carried. */
 let site, base;
 const seen = [];
 let challenge = '';
+test('development and preview apps use distinct computer names and cannot replace the installed app login', () => {
+  assert.equal(deviceName({}, 'My Mac.local'), 'My Mac');
+  assert.equal(deviceName({ OPENFILM_ACCOUNT_DEVICE: 'OpenFilm Dev' }, 'My Mac.local'), 'My Mac · OpenFilm Dev');
+  assert.equal(deviceName({ OPENFILM_ACCOUNT_DEVICE: 'OpenFilm Preview' }, 'My Mac.local'), 'My Mac · OpenFilm Preview');
+  assert.ok(deviceName({ OPENFILM_ACCOUNT_DEVICE: 'x'.repeat(200) }, 'y'.repeat(200)).length <= 60);
+});
 before(async () => {
   site = createServer(async (req, res) => {
     const chunks = [];

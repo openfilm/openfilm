@@ -418,7 +418,7 @@ const ConversationTurn = React.memo(function ConversationTurn({
           in the tree: a log opened from it stays open as the turn finishes. An interruption doesn't
           show Failed here: the reason and Resume appear above the composer (the last turn's, even after a
           restart); an older one's reason is on its footer's Interrupted, on hover. */}
-      {running ? <StatusLine items={rows ?? NO_ROWS} fallback={liveActivity} ownAgent={entry.agent === 'byok'} /> : null}
+      {running ? <StatusLine items={rows ?? NO_ROWS} fallback={liveActivity} ownAgent={entry.agent === 'byok' || entry.agent === 'openfilm'} /> : null}
       <TurnFooter entry={entry} items={items} running={running} last={isLast} />
       </div>
     </div>

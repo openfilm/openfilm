@@ -1,5 +1,28 @@
 # @openfilm/desktop
 
+## 0.3.1
+
+### Patch Changes
+
+- Layout → Edit layout opens a temporary editor for the current work mode. Move any panel into nested splits, swap panels, dock at workspace edges and resize live. Done saves the layout; Cancel restores it, with undo and redo while editing. The library retains its original UI without an extra header. Edit and canvas presets stay within their own mode, and canvas resizing preserves the current view center. Named layouts support import and export.
+
+- OpenFilm is available as a built-in agent with the same account as Services. Choose from seven Claude, GPT and DeepSeek models, and manage their visibility and order with live drag reordering. Advanced library categories use the same drag controls, with Media fixed first. The matching cloud release enables provider caching and settles actual model costs without rounding up each small call separately.
+
+- Studio: Shift+E and the clip menu disable or enable selected clips with undo and redo. Jianying and CapCut drafts retain complete sources and editable trim handles. Transparent video exports preserve edge colors when resized or motion-blurred and retain frames across transparency changes.
+
+- [#381](https://github.com/openfilm/openfilm/pull/381) [`b108090`](https://github.com/openfilm/openfilm/commit/b1080902e6847f55323dbc092981c0cc685a4578) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Undoing a chat turn restores its canvas boards along with its files. A turn that only changes the canvas can be undone too. Open boards refresh after the restore and forget undo steps that could bring back references to files the turn's undo removed.
+
+- [#362](https://github.com/openfilm/openfilm/pull/362) [`90fed06`](https://github.com/openfilm/openfilm/commit/90fed06b47e510c92ab31c1a8d5843e6901ab5c6) Thanks [@deepankar-sah](https://github.com/deepankar-sah)! - Desktop: support Google Antigravity as a coding agent via the Agent Client Protocol (ACP).
+
+- [#382](https://github.com/openfilm/openfilm/pull/382) [`e8fed38`](https://github.com/openfilm/openfilm/commit/e8fed38034e46bad5f54b9e7c15612055a20acfd) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Update the agent and packaging dependencies to a minimatch version that bounds glob-pattern preprocessing, fixing GHSA-g3hv-75wg-m249.
+
+- [#374](https://github.com/openfilm/openfilm/pull/374) [`8cea0e9`](https://github.com/openfilm/openfilm/commit/8cea0e949648ddc860b7fd0c92c65a14161c4869) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Undo of a chat turn: the film goes back as the turn found it. Studio took the film put back for a write of the agent's and merged the turn's clips into it, so a clip came back whose page the undo had just moved to the trash.
+
+- [#378](https://github.com/openfilm/openfilm/pull/378) [`d881a37`](https://github.com/openfilm/openfilm/commit/d881a37f1358392dadd7e11b3133d2d8ea7cd21e) Thanks [@WEBGRS](https://github.com/WEBGRS)! - The Windows installer keeps the library's preview videos. They were left out, so a transition, effect, sticker or text card in the library showed only its still picture under the pointer.
+
+- Updated dependencies [[`46811b0`](https://github.com/openfilm/openfilm/commit/46811b0a2359666cfc03e3dd6f64e0f1e08db764), [`b108090`](https://github.com/openfilm/openfilm/commit/b1080902e6847f55323dbc092981c0cc685a4578), [`c4e178a`](https://github.com/openfilm/openfilm/commit/c4e178ae5aaf2a9a61342b32f530e1bff006214f), [`873eb0e`](https://github.com/openfilm/openfilm/commit/873eb0e7257e354d38b5aac1930a4b868dc60ca3), [`90fed06`](https://github.com/openfilm/openfilm/commit/90fed06b47e510c92ab31c1a8d5843e6901ab5c6), [`111b513`](https://github.com/openfilm/openfilm/commit/111b51362e9d76c2f304bbdf1fe0f5cb88a42a73), [`574e6fe`](https://github.com/openfilm/openfilm/commit/574e6fee757e6e77fb49f050702f98ad23cefcde), [`916e845`](https://github.com/openfilm/openfilm/commit/916e845614ff10c5360c9d4e057b1e3db138ec36), [`af52c5c`](https://github.com/openfilm/openfilm/commit/af52c5c096aab2584711e96fa505ba76477deb35), [`4df6f94`](https://github.com/openfilm/openfilm/commit/4df6f941cd6803f0b597994e30391be4531202ab), [`9bdcbb5`](https://github.com/openfilm/openfilm/commit/9bdcbb54cf5bbe4e1975590301b537284ae8dc0f), [`8cea0e9`](https://github.com/openfilm/openfilm/commit/8cea0e949648ddc860b7fd0c92c65a14161c4869), [`684d04d`](https://github.com/openfilm/openfilm/commit/684d04d2041d1442ec14d85d175e1413e7628d86)]:
+  - openfilm@0.3.1
+
 ## 0.3.0
 
 ### Minor Changes

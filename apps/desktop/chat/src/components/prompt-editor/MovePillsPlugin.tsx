@@ -169,7 +169,35 @@ export function MovePillsPlugin({ showsCaret }: { showsCaret?: (data: DataTransf
       const root = editor.getRootElement();
       if (!root?.contains(event.relatedTarget as Node | null)) setCaret(null);
     };
+    /* External drops and cancelled OS drags need not send dragend to Lexical. A portal must not keep its
+       insertion hint over the composer after that gesture (or after the window/layout changes). */
+    const clearCaret = () => setCaret(null);
+    const outside = (event: DragEvent) => {
+      if (!(event.target instanceof Node) || !editor.getRootElement()?.contains(event.target)) clearCaret();
+    };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') done(); };
+    const hidden = () => { if (document.hidden) done(); };
+    window.addEventListener('drop', clearCaret, true);
+    window.addEventListener('dragend', done, true);
+    window.addEventListener('dragover', outside, true);
+    window.addEventListener('pointerdown', done, true);
+    window.addEventListener('blur', done);
+    window.addEventListener('keydown', escape, true);
+    window.addEventListener('scroll', clearCaret, true);
+    window.addEventListener('resize', clearCaret);
+    document.addEventListener('visibilitychange', hidden);
     return mergeRegister(
+      () => {
+        window.removeEventListener('drop', clearCaret, true);
+        window.removeEventListener('dragend', done, true);
+        window.removeEventListener('dragover', outside, true);
+        window.removeEventListener('pointerdown', done, true);
+        window.removeEventListener('blur', done);
+        window.removeEventListener('keydown', escape, true);
+        window.removeEventListener('scroll', clearCaret, true);
+        window.removeEventListener('resize', clearCaret);
+        document.removeEventListener('visibilitychange', hidden);
+      },
       editor.registerCommand(DRAGSTART_COMMAND, (event) => {
         const target = event.target instanceof Element ? event.target.closest('[data-lexical-decorator]') : null;
         const node = target ? $getNearestNodeFromDOMNode(target) : null;
@@ -216,6 +244,7 @@ export function MovePillsPlugin({ showsCaret }: { showsCaret?: (data: DataTransf
   return caret ? createPortal(
     <div
       aria-hidden
+      data-prompt-drop-caret=""
       className="pointer-events-none fixed z-[1000] w-[2px] rounded-full bg-[var(--accent)]"
       style={{ left: caret.left - 1, top: caret.top, height: caret.height }}
     />,

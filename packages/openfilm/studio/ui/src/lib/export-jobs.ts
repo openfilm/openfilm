@@ -27,6 +27,7 @@ export type ExportRequest = { range?: [number, number]; ranges?: [number, number
   | (Framing & { kind: 'slides'; format: 'pptx' | 'pdf'; shortEdge: number; at?: number[] })
   /* for an editing program: an XML and media folder; `media: 'link'` points at the sources where they are instead of cloning them */
   | { kind: 'nle'; format?: 'xml' | 'fcpxml' | 'jianying' | 'capcut'; fps: number; audio: 'clips' | 'stems'; media?: 'copy' | 'link'; subtitles: boolean;
+      footage?: 'source' | 'render';
       /* how the pages, rendered with their alpha, are written */
       alpha?: NleAlpha }
   /* the project itself: its work, and the parts of its .film asked; a zip of its folder, or the folder */
