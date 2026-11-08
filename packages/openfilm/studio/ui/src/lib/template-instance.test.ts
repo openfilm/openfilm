@@ -141,6 +141,8 @@ test('a template stretched: its places in proportion, a transition on its cut, i
 test('a color in a scheme', () => {
   assert.equal(schemeColor('mono', '#ff0000'), '#808080');
   assert.equal(schemeColor('mono', '#ff000080'), '#80808080', 'its alpha kept');
+  assert.equal(schemeColor('mono', 'rgba(255, 0, 0, 0.5)'), '#80808080', 'rgba() keeps its alpha');
+  assert.equal(schemeColor('mono', 'rgb(255, 0, 0)'), '#808080');
   assert.equal(schemeColor('warm', 'not a color'), null);
   assert.match(schemeColor('cool', '#ff9a3c')!, /^#[0-9a-f]{6}$/);
 });

@@ -293,13 +293,14 @@ const hexOf = (h: number, s: number, l: number): string => {
 export function hslOf(color: string): { h: number; s: number; l: number; a: string } | null {
   let r: number, g: number, b: number, a = '';
   const hex = /^#([0-9a-f]{3,8})$/i.exec(color.trim());
-  const rgb = /^rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/i.exec(color.trim());
+  const rgb = /^rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)(?:[ ,/]+([\d.]+))?/i.exec(color.trim());
   if (hex) {
     const x = hex[1]!.length <= 4 ? hex[1]!.split('').map((c) => c + c).join('') : hex[1]!;
     [r, g, b] = [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16) / 255) as [number, number, number];
     a = x.length === 8 ? x.slice(6) : '';
   } else if (rgb) {
     [r, g, b] = [rgb[1], rgb[2], rgb[3]].map((v) => Number(v) / 255) as [number, number, number];
+    if (rgb[4] !== undefined) a = Math.round(Math.min(1, Math.max(0, Number(rgb[4]))) * 255).toString(16).padStart(2, '0');
   } else return null;
   const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
   const d = max - min;

@@ -11,6 +11,7 @@
  */
 import { create } from 'zustand';
 import { isAgentId as isAgent } from '../../../src/agent-definitions.mjs';
+import { orderedModels } from '../../../src/openfilm-models.mjs';
 import {
   desktopBridge,
   type LocalAgentId,
@@ -114,8 +115,29 @@ const EFFORT_NAMES: Record<string, string> = { auto: 'Auto', off: 'Off', minimal
  * `effort` options, apps/desktop/src/pi-config.mjs). The person's own agents' is the one a session last reported.
  */
 export function agentOptions(state: Pick<LocalAgentStore, 'options' | 'roster'> & Partial<Pick<LocalAgentStore, 'prefs'>>, agent: LocalAgentId): ConfigOptions | undefined {
+  if (agent === 'openfilm') {
+    const settings = state.roster?.find((a) => a.id === 'openfilm')?.openfilm;
+    if (settings) {
+      const models = settings.models.filter((m) => m.shown);
+      if (!models.length) return undefined;
+      const available = models.filter((m) => m.available);
+      const model = available.find((m) => m.id === state.prefs?.openfilm?.model) ?? available.find((m) => m.id === settings.model) ?? available[0];
+      const options: ConfigOptions = [{ id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: model?.id, options: models.map((m) => ({ value: m.id, name: m.name, disabled: !m.available })) }];
+      if (model?.levels && model.levels.length > 1) options.push({ id: 'effort', name: 'Effort', category: 'thought_level', type: 'select', currentValue: model.effort,
+        options: model.levels.map((level) => ({ value: level, name: EFFORT_NAMES[level] ?? level })) });
+      return options;
+    }
+  }
   if (agent !== 'byok') {
-    const options = state.options[agent];
+    let options = state.options[agent];
+    if (agent === 'openfilm' && options) {
+      const settings = state.roster?.find((a) => a.id === 'openfilm')?.openfilm;
+      options = options.map((o) => {
+        if (o.category !== 'model') return o;
+        const choices = orderedModels(o.options ?? [], settings ?? {}, (m) => m.value);
+        return { ...o, options: choices, currentValue: choices.some((c) => c.value === o.currentValue) ? o.currentValue : choices.find((c) => c.value === settings?.model)?.value ?? choices[0]?.value };
+      });
+    }
     const model = options?.find((o) => o.category === 'model');
     const picked = model && state.prefs?.[agent]?.[model.id];
     // Until the new model answers, none of the previous model's effort/speed/context options belong in its menu.
@@ -242,7 +264,7 @@ export const useLocalAgents = create<LocalAgentStore>((set, get) => ({
   async ensureOptions(agent, { retry = false } = {}) {
     /* the own key's are known from Settings (agentOptions); a failed probe is not tried again on every render, each
        try being a whole session of the agent's */
-    if (agent === 'byok' || probing.has(agent)) return;
+    if (agent === 'byok' || agent === 'openfilm' && get().roster?.some((a) => a.id === agent && a.openfilm) || probing.has(agent)) return;
     if (!get().roster?.some((a) => a.id === agent && a.shown && a.status === 'ready')) return;
     const model = probeModel(get(), agent);
     const currentKey = () => probeKey(agent, probeModel(get(), agent), get().roster?.find((a) => a.id === agent)?.configurationRevision ?? 0);
@@ -277,6 +299,7 @@ export const useLocalAgents = create<LocalAgentStore>((set, get) => ({
  * take no flag.
  */
 const AGENT_FORCED_PREFS: Partial<Record<LocalAgentId, Record<string, unknown>>> = {
+  openfilm: { mode: 'agent-full-access' },
   claude: { mode: 'bypassPermissions' },
   codex: { mode: 'agent-full-access' },
   kimi: { mode: 'yolo' },
@@ -300,7 +323,7 @@ export function effectivePrefs(prefs: Persisted['prefs'], agent: LocalAgentId, r
   const offers = (id: string, value: unknown) => {
     if (!options) return true;
     const option = options?.find((o) => o.id === id);
-    return !!option && (!option.options?.length || option.options.some((o) => o.value === value));
+    return !!option && (!option.options?.length || option.options.some((o) => o.value === value && !o.disabled));
   };
   const models = agent === 'byok' ? byokModels(roster ?? null) : null;
   const own = Object.entries(prefs[agent] ?? {}).map(([id, value]): [string, unknown] => (models && id === 'model' ? [id, ownModelPicked(models, value)?.id ?? null] : [id, value]));

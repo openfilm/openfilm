@@ -13,7 +13,7 @@ import type { Balance } from './balance';
 export type DesktopAgentId = 'claude' | 'codex' | 'cursor' | 'copilot' | 'opencode' | 'codebuddy' | 'devin';
 
 /** The chat's agents: the person's own (Codex, Claude Code, Qwen Code, …), and the app's own on their own key. */
-export type LocalAgentId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'minimax' | 'deepseek' | 'antigravity' | 'byok';
+export type LocalAgentId = 'openfilm' | 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'minimax' | 'deepseek' | 'antigravity' | 'byok';
 
 /** One agent as the app's roster has it (apps/desktop/src/agent-roster.mjs; Studio's lib/host.ts HostAgent). */
 export interface RosterAgent {
@@ -24,6 +24,7 @@ export interface RosterAgent {
   install?: string | null;
   setupRequired?: string | null;
   configurationRevision?: number;
+  openfilm?: { order: string[]; hidden: string[]; defaultOrder: string[]; model?: string; models: Array<{ id: string; name: string; shown: boolean; available: boolean; levels?: string[]; effort?: string }> };
   error?: string;
   /** Whose sign-in it uses, when the agent tells (no key or token). */
   account?: { method: string; email?: string; org?: string; plan?: string };
@@ -59,7 +60,7 @@ export interface LocalAgentSessionInfo {
   mcp: boolean;
   models: { availableModels: Array<{ modelId: string; name: string; description?: string }>; currentModelId: string } | null;
   modes: { availableModes: Array<{ id: string; name: string; description?: string }>; currentModeId: string } | null;
-  configOptions: Array<{ id: string; name: string; description?: string; category?: string; type?: string; currentValue?: unknown; options?: Array<{ value: unknown; name: string; description?: string }> }> | null;
+  configOptions: Array<{ id: string; name: string; description?: string; category?: string; type?: string; currentValue?: unknown; options?: Array<{ value: unknown; name: string; description?: string; disabled?: boolean }> }> | null;
 }
 
 /** session/update as is (ACP's SessionUpdate); the UI picks what to draw by `sessionUpdate`. */

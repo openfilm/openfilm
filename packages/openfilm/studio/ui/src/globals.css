@@ -30,6 +30,7 @@
   --font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
   --radius-lg: 16px;
+  --bg-topbar-popover: var(--bg-raised);
 
   /* a host window's controls (lib/host.ts); nothing to make room for in a browser */
   --titlebar-logo-x: 6px;
@@ -42,6 +43,7 @@
   color-scheme: light;
 
   --bg-app: #e4e4e8;
+  --bg-titlebar: var(--bg-app);
   --bg-panel: #fbfbfc;
   --bg-raised: #ffffff;
   /* the viewer's pane, round the picture: the panels' own white (rgb 251, 251, 252) */
@@ -122,8 +124,9 @@
   /* the window's ground (rgb 20): what shows between the panes; every pane's inside, its top bars, the viewer round
      the picture and the canvas's board among them, the panels' (rgb 24) */
   --bg-app: #141414;
+  --bg-titlebar: #202020;
   --bg-panel: #181818;
-  --bg-raised: #242424;
+  --bg-raised: #202020;
   --bg-viewer: #181818;
   --dock-line: #000000;
   --bg-field: rgba(255, 255, 255, 0.08);
@@ -562,6 +565,7 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
 }
 
 /* in a host window with no title bar (lib/host.ts): the top bars drag the window, their controls do not */
+[data-host-titlebar-inset='none'] [data-titlebar] { padding-left:0; }
 [data-host-titlebar] [data-titlebar] { -webkit-app-region: drag; app-region: drag; }
 /* menus and dialogs drawn over a top bar (often from a portal, so not inside it) take their clicks too */
 [data-host-titlebar] [data-titlebar] :is(button, a, input, select, textarea, [role='button'], [role='tab']),
@@ -678,3 +682,10 @@ html[data-file-drag] iframe { pointer-events: none; }
 .openfilm-canvas .react-flow__node-frame .cv-group-head,
 .openfilm-canvas .react-flow__node-frame .react-flow__resize-control { pointer-events: auto; }
 .openfilm-canvas .react-flow__edge-textbg { rx: 6; }
+
+/* The layout gap owns the normal 1px divider. Pointer targets stay transparent; keyboard focus paints only the center hairline. */
+.workspace-resize-handle { background:transparent; outline:none; }
+.workspace-resize-handle::after { content:''; position:absolute; pointer-events:none; background:transparent; }
+.workspace-resize-handle[aria-orientation='vertical']::after { top:0; bottom:0; left:calc(50% - .5px); width:1px; }
+.workspace-resize-handle[aria-orientation='horizontal']::after { left:0; right:0; top:calc(50% - .5px); height:1px; }
+.workspace-resize-handle:focus-visible::after { background:var(--accent); }

@@ -123,10 +123,10 @@ const pair = (v, ok) => Array.isArray(v) && v.length === 2 && ok(v[0]) && ok(v[1
 
 /** The fields each kind of clip takes, in the order they are written back. */
 const CLIP_FIELDS = {
-  page: ['src', 'id', 'at', 'time', 'box', 'size', 'class', 'style', 'overrides', 'attrs'],
-  video: ['src', 'id', 'at', 'time', 'box', 'volume', 'speed', 'class', 'style', 'overrides', 'attrs'],
-  still: ['src', 'id', 'at', 'time', 'box', 'class', 'style', 'overrides', 'attrs'],
-  sound: ['src', 'id', 'sound', 'at', 'time', 'volume', 'speed', 'overrides', 'attrs'],
+  page: ['src', 'id', 'at', 'time', 'disabled', 'box', 'size', 'class', 'style', 'overrides', 'attrs'],
+  video: ['src', 'id', 'at', 'time', 'disabled', 'box', 'volume', 'speed', 'class', 'style', 'overrides', 'attrs'],
+  still: ['src', 'id', 'at', 'time', 'disabled', 'box', 'class', 'style', 'overrides', 'attrs'],
+  sound: ['src', 'id', 'sound', 'at', 'time', 'disabled', 'volume', 'speed', 'overrides', 'attrs'],
 };
 /** Attributes a clip keeps that say nothing to the film: a description, a person's own data. */
 const KEPT_ATTRIBUTE = /^(alt|title|lang|dir|data-[a-z0-9-]+|aria-[a-z]+)$/;
@@ -231,6 +231,7 @@ function readClip(raw, where, problems) {
   if (typeof raw.id !== 'string' || !raw.id) problems.push(`${at}every clip needs an id, unique across the film`);
   if (raw.at !== undefined && !(isFinite(raw.at) && raw.at >= 0)) problems.push(`${at}at has to be seconds from the film's start (0 or more).`);
   if (raw.time !== undefined) checkTime(raw.time, at, problems);
+  if (raw.disabled !== undefined && raw.disabled !== true) problems.push(`${at}disabled is true, or not written.`);
   if (raw.volume !== undefined && CLIP_FIELDS[kind].includes('volume') && !(isFinite(raw.volume) && raw.volume >= 0)) problems.push(`${at}volume has to be 0 or more (1 is the original level).`);
   if (raw.speed !== undefined && CLIP_FIELDS[kind].includes('speed') && !(isFinite(raw.speed) && raw.speed >= SPEED_MIN && raw.speed <= SPEED_MAX)) {
     problems.push(`${at}speed has to be a number from ${SPEED_MIN} to ${SPEED_MAX}.`);
@@ -595,7 +596,7 @@ const keyframesText = (/** @type {string} */ name, /** @type {string} */ body) =
 /** A keyframes name: one CSS identifier. */
 const KEYFRAMES_NAME = /^-?[A-Za-z_][\w-]*$/;
 /** A clip's attributes, each with what it says. */
-const CLIP_ATTRIBUTES = new Set(['id', 'src', 'at', 'speed', 'volume', 'muted', 'size', 'class', 'style', 'overrides']);
+const CLIP_ATTRIBUTES = new Set(['id', 'src', 'at', 'disabled', 'speed', 'volume', 'muted', 'size', 'class', 'style', 'overrides']);
 
 /** What one kind of clip does not take, and why. */
 const NO_SOUND = 'has no sound: a sound is a clip of its own, an <audio> (or a <video>\'s own sound)';
@@ -810,6 +811,7 @@ function clipOfTag(tag, where, problems) {
       else raw.size = { w: Number(m[1]), h: Number(m[2]) };
     }
     else if (name === 'muted') muted = true;
+    else if (name === 'disabled') raw.disabled = true;
     else if (name === 'overrides') {
       try { raw.overrides = JSON.parse(value); }
       catch { problems.push(`${where}: overrides is Studio's list of the person's changes, as JSON — it does not read as JSON.`); }
@@ -1020,6 +1022,7 @@ export function clipTag(clip) {
   if (clip.id) parts.push(`id="${escapeAttr(clip.id)}"`);
   parts.push(`src="${escapeAttr(src)}"`);
   if (clip.at) parts.push(`at="${num(clip.at)}"`);
+  if (clip.disabled) parts.push('disabled');
   if (clip.speed != null && clip.speed !== 1) parts.push(`speed="${clip.speed}"`);
   if (clip.volume === 0) parts.push('muted');
   else if (clip.volume != null && clip.volume !== 1) parts.push(`volume="${clip.volume}"`);

@@ -133,7 +133,7 @@ export function agentDefaults(id, shell = {}) {
 }
 
 /** The app's own agent: Pi (pi-agent.mjs), on the person's own key (agent-roster.mjs). */
-export const HARNESS_AGENTS = Object.freeze(['byok']);
+export const HARNESS_AGENTS = Object.freeze(['openfilm', 'byok']);
 export const isChatAgent = (id) => isAgentId(id) || HARNESS_AGENTS.includes(id);
 
 /** How the person points at things in Studio, and how the agent points back: told to every agent, the app's own too. */
@@ -1186,7 +1186,7 @@ export class AgentSession {
     if (HARNESS_AGENTS.includes(opts.agent) && !opts.harness) throw Object.assign(new Error('Connect this agent in Settings → Agents first.'), { code: 'not-ready' });
     this.opts = opts;
     /* the app's own agent runs Pi (pi-agent.mjs), the person's their own program through its adapter */
-    this.spec = HARNESS_AGENTS.includes(opts.agent) ? { label: 'Own key', env: () => ({}) } : AGENTS[opts.agent];
+    this.spec = HARNESS_AGENTS.includes(opts.agent) ? { label: opts.agent === 'openfilm' ? 'OpenFilm' : 'Own key', env: () => ({}) } : AGENTS[opts.agent];
     this.sessionId = null;
     this.info = null;
     this.stderr = '';

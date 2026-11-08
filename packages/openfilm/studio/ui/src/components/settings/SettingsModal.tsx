@@ -1,5 +1,5 @@
 /**
- * Settings, opened from the logo at the top left: a search and the sections in groups on the left, the section on the
+ * Settings, opened from the app menu at the top left: a search and the sections in groups on the left, the section on the
  * right as a page of titled groups. General (the theme and the language), Agents (in an app with a chat: the agents
  * it can use), Services (which model makes each kind of media, and the services connected for it), the keyboard
  * shortcuts, Advanced and Developer; the search finds a section by any phrase on it. At the
@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, Search, SquareTerminal, Loader2, SlidersHorizontal, ChevronUp, ChevronDown } from 'lucide-react';
+import { X, Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, Search, SquareTerminal, Loader2, SlidersHorizontal } from 'lucide-react';
 import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type LanguageChoice } from '@/i18n';
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
 import { showWhatsNew } from '@/lib/whats-new';
@@ -24,10 +24,7 @@ import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegm
 import { useThemeMode, type ThemeMode } from './theme';
 import { StorageGroup } from './StorageGroup';
 import { LARGE_DIALOG_SIZE } from '../dialog-chrome';
-import { CATEGORIES } from '../library/LibraryDrawer';
-import { CategoryIcon } from '../library/icons';
-import { keepArrangement, useLibraryArrangement } from '../library/arrangement';
-import { arrangedCategories, FIRST_CATEGORY } from '@/lib/library-categories';
+import { LibraryCategoriesGroup } from './LibraryCategoriesGroup';
 
 export type SettingsSection = 'general' | 'agents' | 'models' | 'developer' | 'shortcuts' | 'advanced';
 
@@ -54,9 +51,10 @@ const SECTION_ICON: Record<SettingsSection, React.ReactNode> = {
   advanced: <SlidersHorizontal size={18} strokeWidth={1.75} />,
 };
 
-/** what a search through each section reads: its name and every phrase it shows */
+/** what a search through each section reads: its name and every phrase it shows (Notifications only where it shows:
+    inside an app that offers them, lib/host.ts `notifications`) */
 const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
-  general: ['settings.appearance', 'settings.storage'],
+  general: ['settings.appearance', ...(studioHost?.notifications ? ['settings.notifications'] : []), 'settings.storage'],
   agents: 'settings.agents',
   models: ['settings.models', 'settings.providers'],
   developer: ['settings.developer', 'settings.report'],
@@ -136,7 +134,7 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
-        className={`relative flex ${LARGE_DIALOG_SIZE} overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5),0_4px_16px_rgba(0,0,0,0.14)]`}
+        className={`relative flex ${LARGE_DIALOG_SIZE} overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-topbar-popover)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5),0_4px_16px_rgba(0,0,0,0.14)]`}
       >
         <nav aria-label={t('settings.title')} className="flex w-[264px] shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] px-3 pb-4 pt-3">
           <label className="mb-3 flex h-10 shrink-0 items-center gap-2.5 rounded-[9px] border border-[var(--border)] px-3 text-[var(--text-muted)] transition focus-within:border-[var(--text-muted)]">
@@ -245,9 +243,32 @@ function GeneralSection() {
           )}
         />
       </SettingsGroup>
+      {studioHost?.notifications ? <NotificationsGroup /> : null}
       <StorageGroup />
       {studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}
     </SettingsPage>
+  );
+}
+
+/** In the app: the system's notification of a chat's turn done, stopped or waiting, while its window is not in front. */
+function NotificationsGroup() {
+  const t = useT();
+  const notifications = studioHost?.notifications;
+  const [on, setOn] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    if (!notifications) return undefined;
+    void notifications.get().then(setOn);
+    return notifications.onChange(setOn);
+  }, [notifications]);
+  return (
+    <SettingsGroup title={t('settings.notifications.group')}>
+      <SettingsItem
+        title={t('settings.notifications.turns')}
+        description={t('settings.notifications.turnsHint')}
+        /* drawn once the app has said whether they are on: no switch slid on each time the page opens */
+        control={on === null ? null : <SettingsSwitch checked={on} label={t('settings.notifications.turns')} onChange={(next) => { setOn(next); void notifications?.set(next); }} />}
+      />
+    </SettingsGroup>
   );
 }
 
@@ -321,43 +342,6 @@ function VersionsGroup() {
         description={t('settings.versions.autoHint')}
         control={<SettingsSwitch checked={prefs.autoVersions === true} onChange={(on) => change({ autoVersions: on })} label={t('settings.versions.auto')} />}
       />
-    </SettingsGroup>
-  );
-}
-
-/**
- * The library's categories (its drawer's top bar): their order, moved up or down, and which are shown. The media is
- * always first and shown (lib/library-categories).
- */
-function LibraryCategoriesGroup() {
-  const t = useT();
-  const arranged = useLibraryArrangement();
-  const [list, setList] = React.useState<{ id: string; on: boolean }[] | null>(null);
-  const now = list ?? arrangedCategories(CATEGORIES, arranged);
-  const keep = (next: { id: string; on: boolean }[]) => { setList(next); void keepArrangement(next).catch(() => setList(null)); };
-  const move = (i: number, by: -1 | 1) => {
-    const next = [...now];
-    [next[i], next[i + by]] = [next[i + by]!, next[i]!];
-    keep(next);
-  };
-  return (
-    <SettingsGroup title={t('settings.libraryCategories.group')} footnote={t('settings.libraryCategories.hint')}>
-      {now.map((c, i) => {
-        const first = c.id === FIRST_CATEGORY;
-        const name = t(`assetDrawer.cat_${c.id}`);
-        const arrow = 'grid h-7 w-7 place-items-center rounded-md text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-30 disabled:hover:bg-transparent';
-        return (
-          <div key={c.id} data-library-category={c.id} className="flex min-h-12 items-center gap-3 py-2">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-[var(--bg-field)] text-[var(--text)]"><CategoryIcon id={c.id as never} on={false} size={16} /></span>
-            <span className="min-w-0 flex-1 truncate text-[14px] text-[var(--text)]">{name}</span>
-            <button type="button" aria-label={t('settings.libraryCategories.up').replace('{name}', name)} title={t('settings.libraryCategories.up').replace('{name}', name)}
-              disabled={first || i <= 1} onClick={() => move(i, -1)} className={arrow}><ChevronUp size={16} /></button>
-            <button type="button" aria-label={t('settings.libraryCategories.down').replace('{name}', name)} title={t('settings.libraryCategories.down').replace('{name}', name)}
-              disabled={first || i === now.length - 1} onClick={() => move(i, 1)} className={arrow}><ChevronDown size={16} /></button>
-            <SettingsSwitch checked={c.on} disabled={first} label={name} onChange={(on) => keep(now.map((x) => (x.id === c.id ? { ...x, on } : x)))} />
-          </div>
-        );
-      })}
     </SettingsGroup>
   );
 }

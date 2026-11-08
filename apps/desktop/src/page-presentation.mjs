@@ -1,5 +1,5 @@
 /** Switch native pages without exposing the empty window between their frames. No Electron dependency. */
-export function createPagePresentation({ prepare, present, discard, fallback = null, onError = () => {} }) {
+export function createPagePresentation({ prepare, resume, present, discard, fallback = null, onError = () => {} }) {
   const pages = new Map();
   const retired = new Set();
   let current = null;
@@ -45,9 +45,15 @@ export function createPagePresentation({ prepare, present, discard, fallback = n
     const ticket = ++request;
     let page;
     try { page = ensure(id); } catch (error) { return failed(id, ticket, error); }
-    // Already painted background pages switch in this call, without a promise turn.
-    if (page.loaded) return Promise.resolve(commit(id, page, ticket));
-    return page.ready.then(() => commit(id, page, ticket), (error) => failed(id, ticket, error));
+    // Returning to the current page cancels a pending switch without disturbing its native surface.
+    if (page.loaded && current === id && !retired.has(id)) return Promise.resolve(true);
+    // A hidden native view may have lost its compositor surface, even though its document is loaded. Resume it
+    // underneath the outgoing page, and wait for its new frame before exposing it.
+    if (page.loaded && !resume) return Promise.resolve(commit(id, page, ticket));
+    const ready = page.loaded
+      ? (page.resuming ??= Promise.resolve().then(() => resume(id, page.view)).finally(() => { page.resuming = null; }))
+      : page.ready;
+    return ready.then(() => commit(id, page, ticket), (error) => failed(id, ticket, error));
   }
   return {
     currentId: () => current,
@@ -68,7 +74,7 @@ export function createPagePresentation({ prepare, present, discard, fallback = n
 }
 
 /** Load first, then allow two paint frames; neither a hung navigation nor a throttled frame waits forever. */
-export async function preparePage(contents, url, { loadTimeoutMs = 15_000, paintTimeoutMs = 500 } = {}) {
+export async function preparePage(contents, url, { loadTimeoutMs = 15_000, ...frameOptions } = {}) {
   let timer;
   try {
     await Promise.race([
@@ -82,23 +88,47 @@ export async function preparePage(contents, url, { loadTimeoutMs = 15_000, paint
     ]);
   } finally { clearTimeout(timer); }
   if (contents.isDestroyed()) throw new Error('Page closed while loading');
+  await paintPage(contents, frameOptions);
+}
+
+/** Wait for the editor's DOM and a refreshed compositor frame, for new documents and resumed native views alike. */
+export async function paintPage(contents, { paintTimeoutMs = 500, readySelector = null, readyTimeoutMs = 15_000 } = {}) {
+  let timer;
+  const timeout = readySelector ? readyTimeoutMs : paintTimeoutMs;
   try {
-    await Promise.race([
-      contents.executeJavaScript(`(${waitForPageFrame.toString()})(${paintTimeoutMs})`),
+    const painted = await Promise.race([
+      contents.executeJavaScript(`(${waitForPageFrame.toString()})(${timeout}, ${JSON.stringify(readySelector)})`),
       // Also bound the host-side wait if the renderer stops responding before it can run its timer.
-      new Promise((resolve) => { timer = setTimeout(resolve, paintTimeoutMs); }),
+      new Promise((resolve) => { timer = setTimeout(() => resolve(false), timeout); }),
     ]);
+    if (readySelector && !painted) throw new Error('Editor did not become ready');
   } finally { clearTimeout(timer); }
   if (contents.isDestroyed()) throw new Error('Page closed while painting');
+  // requestAnimationFrame runs before paint. A tiny capture also waits for Chromium's submitted surface, without
+  // retaining a full-window bitmap or showing the destination over the outgoing page.
+  if (contents.capturePage) {
+    try {
+      await Promise.race([
+        contents.capturePage({ x: 0, y: 0, width: 1, height: 1 }, { stayHidden: true }),
+        new Promise(resolve => { timer = setTimeout(resolve, paintTimeoutMs); }),
+      ]);
+    } finally { clearTimeout(timer); }
+    if (contents.isDestroyed()) throw new Error('Page closed while capturing its frame');
+  }
 }
 
 /** Runs inside the loaded page. A hidden/throttled renderer may not produce animation frames. */
-export function waitForPageFrame(timeoutMs) {
+export function waitForPageFrame(timeoutMs, readySelector = null) {
   return new Promise((resolve) => {
-    let frame;
-    const finish = () => { clearTimeout(timer); cancelAnimationFrame(frame); resolve(); };
-    const timer = setTimeout(finish, timeoutMs);
-    frame = requestAnimationFrame(() => { frame = requestAnimationFrame(finish); });
+    let frame, count = 0;
+    const finish = (painted) => { clearTimeout(timer); cancelAnimationFrame(frame); resolve(painted); };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    const tick = () => {
+      if (readySelector && !document.querySelector(readySelector)) count = 0;
+      else if (++count === 2) { finish(true); return; }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
   });
 }
 
@@ -108,4 +138,13 @@ export function revealPage(parent, target, pages) {
   parent.addChildView(target);
   for (const page of pages) if (page !== target) page.setVisible(false);
   target.webContents.focus();
+}
+
+/** Native views remember their old hover target while hidden. Refresh it at the real cursor before painting. */
+export function syncPagePointer(contents, cursor, bounds) {
+  const x = Math.round(cursor.x - bounds.x), y = Math.round(cursor.y - bounds.y);
+  contents.sendInputEvent({
+    type: x >= 0 && y >= 0 && x < bounds.width && y < bounds.height ? 'mouseMove' : 'mouseLeave',
+    x, y, globalX: cursor.x, globalY: cursor.y,
+  });
 }

@@ -9,7 +9,7 @@ import { useT } from '@/i18n';
 import type { ProjectSessionItem } from '@/lib/project-sessions';
 import { useLocalAgentTurn } from '@/lib/local-agent-run';
 import { PANE_BAR, PANE_TITLE } from './dock-pane-bar';
-import { useHoverOpen } from 'openfilm/studio-ui/lib/hover-open.ts';
+import { useClickOpen } from 'openfilm/studio-ui/lib/click-open.ts';
 import menu from 'openfilm/studio-ui/components/WorkspaceMenu.module.css';
 
 /** What a conversation's menus do: rename, pin, archive. */
@@ -91,7 +91,7 @@ const LIGHT: Record<SessionStatus, string> = {
   error: 'bg-[var(--err)]',
 };
 
-/** The conversation's hover card: a new one, the search and the history, each row with its own actions; double clicking renames in place. */
+/** The conversation's popup card: a new one, the search and the history, each row with its own actions; double clicking renames in place. */
 export function ConversationBar({
   sessions,
   currentSessionId,
@@ -111,12 +111,12 @@ export function ConversationBar({
   onNewSession: () => boolean;
 }) {
   const t = useT();
-  const hover = useHoverOpen();
+  const popup = useClickOpen();
   const untitled = t('project.untitledSession');
   const current = sessions.find((s) => s.id === currentSessionId);
   const label = current?.title.trim() || untitled;
   const [renaming, setRenaming] = React.useState(false);
-  React.useEffect(() => { setRenaming(false); hover.dismiss(); }, [currentSessionId, hover.dismiss]);
+  React.useEffect(() => { setRenaming(false); popup.dismiss(); }, [currentSessionId, popup.dismiss]);
   const [alreadyNew, setAlreadyNew] = React.useState(false);
   React.useEffect(() => {
     if (!alreadyNew) return;
@@ -125,17 +125,17 @@ export function ConversationBar({
   }, [alreadyNew]);
   const otherRunning = [...running].find(([id]) => id !== currentSessionId)?.[1] ?? null;
   const otherUnseen = [...unseen].find(([id]) => id !== currentSessionId)?.[1];
-  const go = (run: () => void) => { hover.dismiss(); run(); };
+  const go = (run: () => void) => { popup.dismiss(); run(); };
 
   return (
     <div className={PANE_BAR}>
       <div data-conversation-title className="relative inline-flex min-w-0 max-w-full">
-        <Popover open={hover.open && !renaming} onOpenChange={(next) => { if (next) hover.setOpen(true); else hover.dismiss(); }} bare
+        <Popover open={popup.open && !renaming} onOpenChange={(next) => { if (next) popup.setOpen(true); else popup.dismiss(); }} bare
           trigger={(
-            <button {...hover.trigger} type="button" aria-haspopup="dialog" aria-expanded={hover.open && !renaming}
+            <button type="button" aria-haspopup="dialog" aria-expanded={popup.open && !renaming}
               aria-hidden={renaming || undefined} tabIndex={renaming ? -1 : undefined}
-              onClick={(event) => { event.stopPropagation(); hover.toggle(); }}
-              onDoubleClick={() => { if (onRenameSession) { hover.dismiss(); setRenaming(true); } }}
+              onClick={(event) => { event.stopPropagation(); popup.toggle(); }}
+              onDoubleClick={() => { if (onRenameSession) { popup.dismiss(); setRenaming(true); } }}
               className={`flex h-[22px] min-w-0 max-w-[16rem] items-center gap-1.5 rounded px-1.5 outline-none transition-colors hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)] ${renaming ? 'invisible' : ''}`}
             >
               <span className={`${PANE_TITLE} ${current?.title.trim() ? '' : 'text-[var(--text-faint)]'}`}>{label}</span>
@@ -144,11 +144,11 @@ export function ConversationBar({
             </button>
           )}
         >
-          <div {...hover.card} data-conversation-menu role="dialog" aria-label={t('project.sessionHistory')} className={`${menu.menu} ${menu.chatMenu}`}>
+          <div data-conversation-menu role="dialog" aria-label={t('project.sessionHistory')} className={`${menu.menu} ${menu.chatMenu}`}>
             <SessionHistory sessions={sessions} currentSessionId={currentSessionId} running={running} unseen={unseen}
               onSelectSession={(id) => go(() => onSelectSession(id))}
               onRenameSession={onRenameSession} onPinSession={onPinSession} onArchiveSession={onArchiveSession}>
-              <button type="button" onClick={() => { if (onNewSession()) hover.dismiss(); else setAlreadyNew(true); }} className={menu.newButton}>
+              <button type="button" onClick={() => { if (onNewSession()) popup.dismiss(); else setAlreadyNew(true); }} className={menu.newButton}>
                 <Plus size={13} strokeWidth={2} /><span>{t('projectMenu.newSession')}</span>
               </button>
               {alreadyNew ? <div role="status" className={menu.notice}>{t('project.alreadyNew')}</div> : null}
@@ -168,10 +168,10 @@ export function ConversationBar({
   );
 }
 
-/** A conversation's own buttons in the history, on hover: pin, rename, archive. */
+/** A conversation's own buttons in the history: pin, rename, archive. */
 const ROW_BTN = menu.iconButton;
 
-/** One conversation in the history: its title, a running one turning; on hover its buttons. */
+/** One conversation in the history: its title, a running one turning; each row has its own actions. */
 function SessionRow({ item, label, active, turnId, unseen, onSelect, onRenameSession, onPinSession, onArchiveSession }: SessionActions & {
   item: ProjectSessionItem; label: string; active: boolean; turnId: string | null; unseen?: 'done' | 'error'; onSelect: () => void;
 }) {

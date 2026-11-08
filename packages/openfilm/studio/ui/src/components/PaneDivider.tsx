@@ -106,7 +106,13 @@ export function usePaneSize(storageKey: string, fallback = 420, min = 0) {
     }
   }, [storageKey]);
 
-  return { width, commit, saved };
+  const reset = React.useCallback(() => {
+    setSaved(false);
+    setWidth(Math.max(min, fallback));
+    try { localStorage.removeItem(storageKey); } catch { /* the current session still resets */ }
+  }, [storageKey, fallback, min]);
+
+  return { width, commit, saved, reset };
 }
 
 export function PaneDivider({
@@ -117,6 +123,8 @@ export function PaneDivider({
   min,
   minRest,
   side = 'start',
+  relative = false,
+  style,
 }: {
   /** Current width (px) of the measured pane; `side` decides which one it is. */
   width: number;
@@ -129,9 +137,12 @@ export function PaneDivider({
   minRest: number;
   /** Which pane is measured. Use 'end' when the fixed-width pane is on the right: the math runs from the right edge. */
   side?: 'start' | 'end';
+  relative?: boolean;
+  style?: React.CSSProperties;
 }) {
   const [dragging, setDragging] = React.useState(false);
   const fromEnd = side === 'end';
+  const start = React.useRef<{ x: number; width: number } | null>(null);
 
   const applyFromClientX = React.useCallback((clientX: number) => {
     const box = containerRef.current?.getBoundingClientRect();
@@ -139,9 +150,9 @@ export function PaneDivider({
     /* Measure inward from the measured pane's own outer edge. When the fixed-width pane is on the
        right, dragging left widens it, so the measurement is reversed; computing from the left
        would make the drag direction and the width change opposite. */
-    const next = fromEnd ? box.right - clientX : clientX - box.left;
+    const next = relative && start.current ? start.current.width + (clientX - start.current.x) * (fromEnd ? -1 : 1) : fromEnd ? box.right - clientX : clientX - box.left;
     onResize(clampAside(next, box.width, min, minRest));
-  }, [containerRef, fromEnd, onResize, min, minRest]);
+  }, [containerRef, fromEnd, relative, onResize, min, minRest]);
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -149,6 +160,7 @@ export function PaneDivider({
     // come back here instead of being swallowed by the iframe; without it the drag breaks as
     // soon as the mouse enters the viewer.
     event.currentTarget.setPointerCapture(event.pointerId);
+    start.current = { x: event.clientX, width };
     setDragging(true);
   };
 
@@ -188,18 +200,13 @@ export function PaneDivider({
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       onKeyDown={onKeyDown}
-      style={{ width: GRAB, marginLeft: -BLEED, marginRight: -BLEED }}
+      style={{ width: GRAB, marginLeft: -BLEED, marginRight: -BLEED, ...style }}
       /* pointer-events-auto is for canvas mode: the whole pane layer then ignores the mouse
          (see ProjectView), so the seam must opt back in or the side pane could not be resized. */
-      className={`group pointer-events-auto relative z-10 flex shrink-0 cursor-col-resize touch-none items-stretch justify-center outline-none ${
+      className={`workspace-resize-handle pointer-events-auto relative z-10 flex shrink-0 cursor-col-resize touch-none items-stretch justify-center outline-none ${
         dragging ? 'select-none' : ''
       }`}
-    >
-      <div
-        style={{ width: DOCK_GAP }}
-        className="pointer-events-none rounded-full bg-[var(--text-faint)] opacity-0 transition-opacity duration-150 group-focus-visible:opacity-40"
-      />
-    </div>
+    />
   );
 }
 
@@ -217,6 +224,8 @@ export function DockPaneDivider({
   label,
   min = MIN_DOCK_H,
   minRest = MIN_STAGE_H,
+  edge = 'bottom',
+  style,
 }: {
   /** Current height (px) of the lower pane. */
   height: number;
@@ -226,14 +235,16 @@ export function DockPaneDivider({
   /** Shortest the lower pane may get; the part above must keep at least minRest. Defaults suit the viewer / timeline pair. */
   min?: number;
   minRest?: number;
+  edge?: 'top' | 'bottom';
+  style?: React.CSSProperties;
 }) {
   const [dragging, setDragging] = React.useState(false);
 
   const applyFromClientY = React.useCallback((clientY: number) => {
     const box = containerRef.current?.getBoundingClientRect();
     if (!box) return;
-    onResize(clampDock(box.bottom - clientY, box.height, min, minRest));
-  }, [containerRef, onResize, min, minRest]);
+    onResize(clampDock(edge === 'top' ? clientY - box.top : box.bottom - clientY, box.height, min, minRest));
+  }, [containerRef, edge, onResize, min, minRest]);
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -259,10 +270,10 @@ export function DockPaneDivider({
     // Up arrow makes the lower pane taller (it grows from the bottom, so dragging up enlarges it).
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-      onResize(clampDock(height + step, box.height, min, minRest));
+      onResize(clampDock(height + (edge === 'top' ? -step : step), box.height, min, minRest));
     } else if (event.key === 'ArrowDown') {
       event.preventDefault();
-      onResize(clampDock(height - step, box.height, min, minRest));
+      onResize(clampDock(height + (edge === 'top' ? step : -step), box.height, min, minRest));
     }
   };
 
@@ -278,15 +289,10 @@ export function DockPaneDivider({
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       onKeyDown={onKeyDown}
-      style={{ height: GRAB, marginTop: -BLEED, marginBottom: -BLEED }}
-      className={`group relative z-10 flex shrink-0 cursor-row-resize touch-none items-center justify-stretch outline-none ${
+      style={{ height: GRAB, marginTop: -BLEED, marginBottom: -BLEED, ...style }}
+      className={`workspace-resize-handle relative z-10 flex shrink-0 cursor-row-resize touch-none items-center justify-stretch outline-none ${
         dragging ? 'select-none' : ''
       }`}
-    >
-      <div
-        style={{ height: DOCK_GAP }}
-        className="pointer-events-none w-full rounded-full bg-[var(--text-faint)] opacity-0 transition-opacity duration-150 group-focus-visible:opacity-40"
-      />
-    </div>
+    />
   );
 }

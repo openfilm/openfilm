@@ -92,18 +92,20 @@ export class SourceError extends Error {
   }
 }
 
-async function call<T>(path: string, method = 'GET', json?: unknown): Promise<T> {
+async function call<T>(path: string, method = 'GET', json?: unknown, timeout?: number): Promise<T> {
   const res = await fetch(`/api/${path}`, {
     method,
+    ...(timeout ? { signal: AbortSignal.timeout(timeout) } : {}),
     ...(json === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(json) }),
   });
-  const body = await res.json().catch(() => ({}));
+  const body = await res.json().catch((error) => { if (timeout && res.ok) throw error; return {}; });
   if (!res.ok) throw new SourceError(String(body.error ?? `Studio answered ${res.status}`), res.status, typeof body.code === 'string' ? body.code : null);
   return body as T;
 }
 
 /* what the galleries read last: shown at once when one opens, and asked for again behind it */
 const seen: { examples: Example[] | null; skills: Map<string, SkillEntry[]>; catalog: string | null } = { examples: null, skills: new Map(), catalog: null };
+const skillReads = new Map<string, number>();
 /** The examples read last, or null. */
 export const seenExamples = (): Example[] | null => seen.examples;
 /** When Discover's index was last read (ISO time), as the skills read last say; null: never. */
@@ -138,14 +140,24 @@ export const sourcesApi = {
   exampleFolder: (id: string) => call<{ folder: string }>(`examples/${encodeURIComponent(id)}/folder`, 'POST').then((r) => r.folder),
   /** an example's canvas, the steps it was made with (null: it has none), fetched with its folder */
   exampleCanvas: (id: string) => call<{ canvas: unknown }>(`examples/${encodeURIComponent(id)}/canvas`).then((r) => r.canvas),
-  skills: (projectId?: string | null) => call<{ skills: SkillEntry[]; catalog?: { read: string } | null }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`)
-    .then((r) => { seen.skills.set(projectId ?? '', r.skills); seen.catalog = r.catalog?.read ?? null; return r.skills; }, () => seenSkills(projectId) ?? []),
+  skills: (projectId?: string | null) => {
+    const key = projectId ?? '', revision = (skillReads.get(key) ?? 0) + 1;
+    skillReads.set(key, revision);
+    return call<{ skills: SkillEntry[]; catalog?: { read: string } | null }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'GET', undefined, 10_000)
+      .then((r) => {
+        if (r.catalog?.read && Number.isFinite(Date.parse(r.catalog.read)) && (!seen.catalog || Date.parse(r.catalog.read) >= Date.parse(seen.catalog))) seen.catalog = r.catalog.read;
+        if (revision !== skillReads.get(key)) return seenSkills(projectId) ?? r.skills;
+        seen.skills.set(key, r.skills);
+        return r.skills;
+      }, () => seenSkills(projectId) ?? []);
+  },
   /** Discover's index read again from GitHub, unless read less than `fresh` ms ago (the skills it names fetched): → when,
    *  or throws when it cannot be read */
   readDiscover: async (fresh = 0): Promise<string> => {
-    const r = await call<{ catalog: { read: string } }>('skills/catalog', 'POST', { fresh });
-    seen.catalog = r.catalog.read;
+    const r = await call<{ catalog: { read: string; incomplete?: number } }>('skills/catalog', 'POST', { fresh }, 20_000);
+    if (!seen.catalog || Date.parse(r.catalog.read) >= Date.parse(seen.catalog)) seen.catalog = r.catalog.read;
     window.dispatchEvent(new Event(SKILLS_CHANGED));
+    if (r.catalog.incomplete) throw new SourceError('Some skills could not be refreshed.', 502, 'partial');
     return r.catalog.read;
   },
   /** an installed skill updated to the version Discover has; whoever lists skills reads them again */
