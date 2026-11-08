@@ -1,14 +1,18 @@
 /**
  * A saved group of clips put on the timeline (lib/saved, studio/server/saved.mjs): each of its tracks a new track,
  * the top one at `insertAt` and the others under it in their order, each clip at `atSec` plus its time in the group.
- * Clips linked in the group are linked anew there (a link of their own, not one a clip of the film has).
+ * Clips linked in the group are linked anew there (a link of their own, not one a clip of the film has). The @keyframes
+ * it plays (`keyframes`, as the server fitted them to this film) go in first.
  *
  * Pure: no React, so `node --test` runs it (lib/saved-insert.test.ts).
  */
 import type { Op, SavedGroupClip } from '../api.ts';
 import { freshLink, type EditModel } from './timeline-edit.ts';
 
-export function groupInsertOps(clips: readonly SavedGroupClip[], atSec: number, insertAt: number, model: EditModel): Op[] {
+/** The edit that puts a saved thing's @keyframes in the film; none when it plays none. */
+export const keyframesOps = (keyframes: Record<string, string> | undefined): Op[] => (keyframes && Object.keys(keyframes).length ? [{ op: 'keyframes', set: keyframes } as Op] : []);
+
+export function groupInsertOps(clips: readonly SavedGroupClip[], atSec: number, insertAt: number, model: EditModel, keyframes?: Record<string, string>): Op[] {
   const links = new Map<string, string>();
   const taken = new Set<string>();
   const linkOf = (clip: SavedGroupClip['clip']): string | null => {
@@ -18,7 +22,7 @@ export function groupInsertOps(clips: readonly SavedGroupClip[], atSec: number, 
     return links.get(was)!;
   };
   const opened = new Set<number>();
-  return [...clips]
+  return [...keyframesOps(keyframes), ...[...clips]
     .sort((a, b) => a.track - b.track || a.at - b.at)
     .map(({ track, at, clip }) => {
       const link = linkOf(clip);
@@ -31,7 +35,7 @@ export function groupInsertOps(clips: readonly SavedGroupClip[], atSec: number, 
         track: first ? { insert: insertAt + track } : insertAt + track,
         ...(link ? { link } : {}),
       };
-    });
+    })];
 }
 
 /** Where a group's top track goes for a drop: a new track asked for, above the track dropped on, else on top. */

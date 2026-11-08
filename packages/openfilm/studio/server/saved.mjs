@@ -5,9 +5,10 @@
  * a project, and what Studio saves from a film, each as a folder of its own holding what it needs (a bundle):
  *
  *   <bundle>/saved.json   { version, savedAt, kind: 'clip' | 'group' | 'page', clip | clips | path, durationMs?, w?,
- *                           h? }   a clip as the film has it (its place, its look, the changes made in its page, the
+ *                           h?, keyframes? }   a clip as the film has it (its place, its look, the changes made in its page, the
  *                           properties it offers; no time, no id), clips saved together (each one's track from the top
- *                           one they had and `at` seconds from the first), or a page of a project with what it loads
+ *                           one they had and `at` seconds from the first), or a page of a project with what it loads;
+ *                           `keyframes`: the film's @keyframes they play, by name, so they still move where they are put
  *   <bundle>/files/…      the clip's file and what it loads (closure.mjs), at the places they had in its project, so a
  *                         page's own references still find what they name
  *   <bundle>/poster.jpg   its picture, when one could be drawn
@@ -25,6 +26,7 @@ import { basename, dirname, join, posix } from 'node:path';
 import { FILM_FILE, clipKind, filmHtml } from '../../src/film-doc.mjs';
 import { savedRoot } from '../../src/locations.mjs';
 import { STUDIO_STATE, filmClosure, folderView } from './closure.mjs';
+import { playedBy } from './compound.mjs';
 import { readProjectFilm } from './film.mjs';
 import { cleanName, importFile, inside, kindOf } from './files.mjs';
 import { BUILT_IN, builtInRoot, fetchLibrary } from './library.mjs';
@@ -222,6 +224,38 @@ const sizes = (/** @type {{ durationMs?: number, w?: number, h?: number }} */ o)
  *   poster?: (clip: Record<string, unknown> & { src: string }) => Promise<Buffer | null> }} SaveOptions
  */
 
+/** The film's @keyframes the clips play, by name; nothing when they play none. */
+function keptKeyframes(/** @type {any} */ value, /** @type {any[]} */ clips) {
+  /** @type {Record<string, string>} */
+  const kept = {};
+  for (const clip of clips) for (const name of playedBy(clip)) if (typeof value?.keyframes?.[name] === 'string') kept[name] = value.keyframes[name];
+  return Object.keys(kept).length ? { keyframes: kept } : {};
+}
+
+/**
+ * A bundle's @keyframes as a film takes them, and its clips playing them: a name the film has for other keyframes gets
+ * another (`pop-2`), so what the film's own clips play stays as it is.
+ */
+export function fittedKeyframes(/** @type {Record<string, string>} */ keyframes, /** @type {Record<string, string> | undefined} */ film) {
+  /** @type {Record<string, string>} */
+  const set = {};
+  /** @type {Map<string, string>} */
+  const renamed = new Map();
+  for (const [name, body] of Object.entries(keyframes)) {
+    let free = name;
+    for (let n = 2; film?.[free] != null && film[free] !== body; n++) free = `${name}-${n}`;
+    set[free] = body;
+    if (free !== name) renamed.set(name, free);
+  }
+  const named = (/** @type {any} */ clip) => {
+    if (!renamed.size || typeof clip.style !== 'string') return clip;
+    let style = clip.style;
+    for (const [was, now] of renamed) style = style.replace(new RegExp(`(?<![\\w-])${was.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`, 'g'), now);
+    return { ...clip, style };
+  };
+  return { keyframes: set, named };
+}
+
 /**
  * Saves the clip `clipId` of the project at `root` into the library (`o.into`, a `saved/` path; its top by default): the
  * clip as the film has it, without its place in time or its id (it gets a new one where it is put), and every file it
@@ -242,7 +276,7 @@ export async function saveClip(root, clipId, o = {}) {
   const files = await clipFiles(root, clip);
   if (!files.includes(clip.src)) throw new SavedError('That clip’s file is not in the project.', 409);
   const name = o.name?.trim() || clip.src.split('/').pop()?.replace(/\.[^.]+$/, '') || clipId;
-  return keep(root, files, { kind: 'clip', clip, ...sizes(o) }, name, libraryRel(o.into ?? LIBRARY), o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(clip) : null);
+  return keep(root, files, { kind: 'clip', clip, ...keptKeyframes(value, [clip]), ...sizes(o) }, name, libraryRel(o.into ?? LIBRARY), o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(clip) : null);
 }
 
 /**
@@ -279,7 +313,7 @@ export async function saveGroup(root, clipIds, o = {}) {
   }
   const top = clips.find(({ clip }) => clipKind(clip.src) !== 'sound' && clip.sound !== true)?.clip ?? null;
   const name = o.name?.trim() || `${clips.length} clips`;
-  return keep(root, [...files], { kind: 'group', clips, ...sizes(o) }, name, libraryRel(o.into ?? LIBRARY), top && o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(top) : null);
+  return keep(root, [...files], { kind: 'group', clips, ...keptKeyframes(value, clips.map((c) => c.clip)), ...sizes(o) }, name, libraryRel(o.into ?? LIBRARY), top && o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(top) : null);
 }
 
 /**
@@ -328,7 +362,7 @@ async function copyIn(from, files, to, fresh = false) {
  * files copied to `saved/<its place>/` there (a file there already is kept as it is, but OpenFilm's line of words) and
  * the clip, a group's clips or the page, with their files' places there. OpenFilm's things go to `saved/openfilm/<its place, one name>/`.
  * @param {string} root @param {unknown} path
- * @returns {Promise<{ clip: Record<string, unknown> & { src: string } } | { clips: { track: number, at: number, clip: Record<string, unknown> & { src: string } }[] } | { path: string }>}
+ * @returns {Promise<{ clip: Record<string, unknown> & { src: string }, keyframes?: Record<string, string> } | { clips: { track: number, at: number, clip: Record<string, unknown> & { src: string } }[], keyframes?: Record<string, string> } | { path: string }>}
  */
 export async function takeSaved(root, path) {
   const builtIn = typeof path === 'string' && path.startsWith(`${BUILT_IN}/`);
@@ -357,8 +391,12 @@ export async function takeSaved(root, path) {
      its variables: a project's copy follows the library's (its motions kept within its box, say), never kept as it was */
   await copyIn(from, files, join(root, base), builtIn && rel === TEXT_COMPONENT);
   if (item.kind === 'page') return { path: `${base}/${item.path}` };
-  if (item.kind === 'group') return { clips: item.clips.map((/** @type {any} */ c) => ({ track: c.track, at: c.at, clip: { ...c.clip, src: `${base}/${c.clip.src}` } })) };
-  return { clip: { ...item.clip, src: `${base}/${item.clip.src}` } };
+  /* the @keyframes they play go with them, under names free in this film */
+  const fitted = item.keyframes && typeof item.keyframes === 'object' ? fittedKeyframes(item.keyframes, /** @type {any} */ ((await readProjectFilm(root).catch(() => null))?.value)?.keyframes) : null;
+  const named = fitted?.named ?? ((/** @type {any} */ c) => c);
+  const keyframes = fitted ? { keyframes: fitted.keyframes } : {};
+  if (item.kind === 'group') return { clips: item.clips.map((/** @type {any} */ c) => ({ track: c.track, at: c.at, clip: named({ ...c.clip, src: `${base}/${c.clip.src}` }) })), ...keyframes };
+  return { clip: named({ ...item.clip, src: `${base}/${item.clip.src}` }), ...keyframes };
 }
 
 /**

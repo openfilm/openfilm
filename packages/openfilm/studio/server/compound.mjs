@@ -48,7 +48,7 @@ export function srcOutOf(/** @type {string} */ src, /** @type {string} */ folder
 }
 
 /** The @keyframes a clip's style plays, by name. */
-const playedBy = (/** @type {Clip} */ clip) => animationsOf(typeof clip.style === 'string' ? clip.style : undefined)
+export const playedBy = (/** @type {Clip} */ clip) => animationsOf(typeof clip.style === 'string' ? clip.style : undefined)
   .map((entry) => entry.trim().split(/\s+/)[0]).filter((name) => typeof name === 'string' && name.length > 0);
 
 /**
