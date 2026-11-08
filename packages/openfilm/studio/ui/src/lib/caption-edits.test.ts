@@ -104,6 +104,16 @@ test('texts are cut at a word, or between characters, never before a closing mar
   assert.equal(joinText('', 'x'), 'x');
 });
 
+test('a cue split at its middle keeps a character written with a surrogate pair whole', () => {
+  for (const [text, halves] of [['a😀b', ['a', '😀b']], ['😀😀😀😀', ['😀😀', '😀😀']]]) {
+    const v = withIds(readVtt(`WEBVTT\n\na\n00:00:00.000 --> 00:00:02.000\n${text}\n`));
+    const got = splitCue(v, 'a', 1).vtt.cues.slice(0, 2).map((c) => c.text);
+    assert.deepEqual(got, halves);
+    for (const half of got) assert.doesNotThrow(() => encodeURI(half), `${half} has no half a character`);
+    assert.equal(got.join(''), text, 'the words are all still there');
+  }
+});
+
 test('cues apart after an edit: one that stayed cut short where a moved one reaches it, or left whole', () => {
   const v = withIds(readVtt(FILE));
   const moved = v.cues.map((c) => (c.id === 'a' ? { ...c, start: 3, end: 4.5 } : c));
