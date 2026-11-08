@@ -23,6 +23,7 @@ import type { MaskChange, MaskKeys, MaskParam, maskModel } from '@/lib/mask-moti
 import { TEXT_PRESETS, textAnimDefault, type TextAnim, type TextPreset } from '@/lib/text-animator';
 import { BLEND_MODES } from '@/lib/clip-look';
 import { ANIM_GROUPS, type Rest } from '@/lib/motion-presets';
+import { keyAction } from '@/lib/keymap-store';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { FILTER_EFFECTS, ITEM_DRAG, applyItem, itemApplies, itemOfKey, type MotionItem } from './motion-items';
 import { Stopwatch } from './KeyframesSection';
@@ -349,6 +350,8 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
         if (done) { e.preventDefault(); e.stopPropagation(); return; }
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      /* The selected clips' enable switch takes precedence over revealing a property (Shift+E by default). */
+      if (keyAction(e) === 'toggle-clip') return;
       const key = e.key.toLowerCase();
       const targets = now.layers.filter((l) => now.picked.includes(l.clipId));
       if (key in SOLO || key === 'u' || key === 'e') {
