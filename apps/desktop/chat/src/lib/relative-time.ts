@@ -20,8 +20,10 @@ export function relativeTime(iso: string | undefined, locale: string, now: numbe
   const fmt = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
   const abs = Math.abs(sec);
   if (abs < 45) return fmt.format(0, 'second');
-  if (abs < 3600) return fmt.format(Math.round(sec / 60), 'minute');
-  if (abs < 86_400) return fmt.format(Math.round(sec / 3600), 'hour');
+  const minutes = Math.round(sec / 60);
+  if (minutes > -60) return fmt.format(minutes, 'minute');
+  const hours = Math.round(sec / 3600);
+  if (hours > -24) return fmt.format(hours, 'hour');
   if (abs < 7 * 86_400) return fmt.format(Math.round(sec / 86_400), 'day');
   return new Date(at).toLocaleDateString(locale, { month: 'short', day: 'numeric', ...(new Date(at).getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}) });
 }
