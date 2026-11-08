@@ -13,11 +13,11 @@
  * page has Install). A star keeps a skill among the favorites (the side bar's Favorites), as the library's things are.
  */
 import React from 'react';
-import { ChevronDown, Compass, FolderDown, Plus, Star } from 'lucide-react';
+import { ChevronDown, Compass, FolderDown, Plus, RefreshCw, Star } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
 import { toggleFavorite, useLibraryFavorites } from '@/lib/library';
-import { communityOf, makerOf, seenCatalog, seenSkills, sourcesApi, watchSkills, type SkillEntry } from '@/lib/project-sources';
+import { communityOf, makerOf, seenCatalog, seenSkills, sourcesApi, SourceError, watchSkills, type SkillEntry } from '@/lib/project-sources';
 import { byOrder, SkillCover, SkillMark, SkillPage, useSkillWords } from '../SkillPage';
 import { SettingsSwitch } from '../settings/ui';
 import { ADD_HOVER, PANEL_ROUND, ROUND } from './AudioList';
@@ -29,7 +29,8 @@ const installedOf = (skill: SkillEntry) => skill.installed !== false;
 /* Discover is read again as it opens, unless it was a minute ago; what it last read shows meanwhile */
 const FRESH_MS = 60 * 1000;
 /* Discover could not be read when last asked, while Studio is open */
-let discoverFailed = false;
+let discoverFailed: 'failed' | 'partial' | null = null;
+let discoverRequest = 0;
 
 export type SkillsLine = 'favorites' | 'installed' | 'discover';
 
@@ -65,17 +66,19 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
 
   /* Discover: what it last read shows at once, and it is read again behind it (Studio reads it as it starts too); before
      anything was ever read, its tiles' places show while it is */
-  const [discover, setDiscover] = React.useState<'reading' | 'read' | 'failed'>(() => (seenCatalog() ? (discoverFailed ? 'failed' : 'read') : 'reading'));
+  const [discover, setDiscover] = React.useState<'reading' | 'read' | 'failed' | 'partial'>(() => (seenCatalog() ? discoverFailed ?? 'read' : 'reading'));
+  const [retry, setRetry] = React.useState(0);
   React.useEffect(() => {
     if (line !== 'discover') return;
     let live = true;
-    if (!seenCatalog()) setDiscover('reading');
-    void sourcesApi.readDiscover(FRESH_MS).then(
-      () => { discoverFailed = false; if (live) setDiscover('read'); },
-      () => { discoverFailed = true; if (live) setDiscover('failed'); },
+    const request = ++discoverRequest;
+    setDiscover(seenCatalog() ? 'read' : 'reading');
+    void sourcesApi.readDiscover(retry ? 0 : FRESH_MS).then(
+      () => { if (request !== discoverRequest) return; discoverFailed = null; if (live) setDiscover('read'); },
+      (error) => { if (request !== discoverRequest) return; discoverFailed = error instanceof SourceError && error.code === 'partial' ? 'partial' : 'failed'; if (live) setDiscover(discoverFailed); },
     );
     return () => { live = false; };
-  }, [line]);
+  }, [line, retry]);
 
   const installed = line === 'installed';
   const favorites = useLibraryFavorites();
@@ -125,7 +128,7 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
   if (line === 'discover') {
     /* what Discover could not read now: the skills it had when it last could, said with when; none ever read */
     const read = seenCatalog();
-    const note = discover === 'failed'
+    const note = discover === 'partial' ? t('assetDrawer.discoverPartial') : discover === 'failed'
       ? (read ? t('assetDrawer.discoverOffline').replace('{when}', new Date(read).toLocaleString()) : t('assetDrawer.discoverNever'))
       : null;
     const anyThere = skills.some((k) => k.source === 'official' && !k.core);
@@ -133,7 +136,7 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
     const waiting = discover === 'reading' && !toInstall.length && !q;
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        {note ? <p role="status" className="shrink-0 px-3 pb-2 text-[12px] leading-[18px] text-[var(--text-muted)]">{note}</p> : null}
+        {note ? <div role="status" className="flex shrink-0 items-start gap-2 px-3 pb-2 text-[12px] leading-[18px] text-[var(--text-muted)]"><p className="min-w-0 flex-1">{note}</p><button type="button" onClick={() => setRetry((n) => n + 1)} className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 text-[var(--text)] hover:bg-[var(--bg-hover)]"><RefreshCw size={12} />{t('assetDrawer.discoverRetry')}</button></div> : null}
         <SourceChips sources={whoseThere} value={whose} onChange={setWhose} />
         {toInstall.length || waiting ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">

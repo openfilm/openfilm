@@ -12,6 +12,33 @@ import { filmHead, filmHtml } from './film-doc.mjs';
 const page = (word, seconds) => `<!doctype html><body style="margin:0;background:#123"><p>${word}</p>
 <script>window.film={duration:${seconds},width:320,height:180,frame(){}}</script></body>`;
 
+test('a disabled clip retains its length and level, stays on the timeline, and can be enabled without hiding its neighbours', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-disabled-'));
+  writeFileSync(join(dir, 'card.html'), page('card', 4));
+  writeFileSync(join(dir, 'tone.wav'), silence(4));
+  const value = { stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ id: 'off', src: 'card.html', time: [0, 4], disabled: true }, { id: 'later', src: 'card.html', at: 4, time: [0, 4] }] },
+    { clips: [{ id: 'sound', src: 'tone.wav', volume: 0.37, disabled: true }] },
+  ] };
+  writeFileSync(join(dir, 'film.html'), filmHtml(value));
+  const s = await open(dir);
+  try {
+    await s.film.seek(1);
+    assert.equal(s.film.meta.duration, 8);
+    assert.deepEqual(await s.film.page.evaluate(() => window.__filmSounds()), []);
+    assert.equal(await s.film.page.locator('#off').evaluate((el) => el.style.visibility), 'hidden');
+    assert.equal((await s.film.page.evaluate(() => window.__filmSpans())).length, 3);
+    delete value.tracks[0].clips[0].disabled;
+    delete value.tracks[1].clips[0].disabled;
+    assert.equal(await s.film.page.evaluate((v) => window.__filmEditor.update(v), value), true);
+    await s.film.seek(1);
+    assert.equal(await s.film.page.locator('#off').evaluate((el) => el.style.visibility), 'visible');
+    assert.equal((await s.film.page.evaluate(() => window.__filmSounds()))[0].volume, 0.37);
+    await s.film.seek(5);
+    assert.equal(await s.film.page.locator('#later').evaluate((el) => el.style.visibility), 'visible');
+  } finally { await s.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('a hidden track\'s clips are still placed for an editor, but neither drawn nor counted in the film\'s length', { timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-hidden-'));
   writeFileSync(join(dir, 'top.html'), page('top', 3));

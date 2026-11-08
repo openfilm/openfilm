@@ -49,7 +49,7 @@ test('a pill is dragged between two words, a caret shows where it lands, one und
       }
       return null;
     }, word);
-    const caret = page.locator('body > div.fixed.w-\\[2px\\]');
+    const caret = page.locator('[data-prompt-drop-caret]');
     const drag = async (from, to, { drop = true } = {}) => {
       const box = await from.boundingBox();
       await page.mouse.move(box.x + 12, box.y + box.height / 2);
@@ -109,6 +109,25 @@ test('a pill is dragged between two words, a caret shows where it lands, one und
     await page.locator('#elsewhere').focus();
     await pill('file').click();
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'elsewhere', 'the click did not take the focus into the editor');
+
+    /* A file/reference drag can finish outside Lexical, or be interrupted when switching windows. */
+    const showDropCaret = async () => {
+      const at = await before('Put');
+      await editor.evaluate((el, point) => {
+        const data = new DataTransfer();
+        data.items.add(new File(['picture'], 'picture.png', { type: 'image/png' }));
+        el.dispatchEvent(new DragEvent('dragover', { bubbles: true, clientX: point.x, clientY: point.y, dataTransfer: data }));
+      }, at);
+      await caret.waitFor({ state: 'attached' });
+    };
+    for (const end of ['blur', 'drop', 'dragend', 'escape', 'pointerdown']) {
+      await showDropCaret();
+      if (end === 'escape') await page.keyboard.press('Escape');
+      else if (end === 'pointerdown') await page.locator('#elsewhere').click();
+      else await page.evaluate((type) => window.dispatchEvent(new Event(type)), end);
+      await caret.waitFor({ state: 'detached' });
+      assert.equal(await text(), 'Put [file:assets/strip.jpg] behind the title, and', `${end} only dismisses the hint`);
+    }
     assert.deepEqual(errors, []);
   } finally { await browser?.close(); await server.close(); }
 });

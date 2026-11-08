@@ -14,12 +14,15 @@
  *   ← { type: 'answer', id, text | error, code? }    its answer
  *   ← { type: 'quit' }                               stop (history is written first)
  *   ← { type: 'working', folders }                   the folders the chat's agents are working in now (not deletable)
+ *   ← { type: 'account:read', id }                   read the Services account for the built-in agent
+ *   → { type: 'account', id, account | error }       credentials, only on this private process channel
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { startStudio } from 'openfilm/studio';
+import { desktopAccount } from 'openfilm/desktop-account';
 import { launch } from 'openfilm/host';
 
 const parent = process.parentPort;
@@ -41,6 +44,12 @@ parent.on('message', ({ data }) => {
   if (data?.type === 'quit') void stop();
   if (data?.type === 'working' && Array.isArray(data.folders)) working = data.folders.filter((f) => typeof f === 'string');
   if (data?.type === 'answer') asking.get(data.id)?.(data);
+  if (data?.type === 'account:read') {
+    void desktopAccount({ fresh: data.fresh === true }).then(
+      (account) => send({ type: 'account', id: data.id, account }),
+      () => send({ type: 'account', id: data.id, error: 'The OpenFilm account could not be read.' }),
+    );
+  }
 });
 
 /**

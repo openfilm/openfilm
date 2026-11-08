@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { chromium } from 'playwright-core';
 import shellConfig from '../shell/vite.config.ts';
+import { AGENT_DOWNLOADS, installCommand } from '../src/agent-installation.mjs';
 
 test('agent setup guides desktop-only installs, folder selection and model failures without losing a working program', { timeout: 90_000 }, async () => {
   const server = await createServer({
@@ -25,11 +26,14 @@ test('agent setup guides desktop-only installs, folder selection and model failu
       const page = await browser.newPage({ viewport: { width: 1100, height: 780 } });
       const errors = [];
       page.on('pageerror', (error) => errors.push(error.message));
-      await page.addInitScript((locale) => {
+      const antigravityInstaller = installCommand('antigravity');
+      assert.ok(antigravityInstaller, 'Antigravity uses the terminal installer registry');
+      await page.addInitScript(({ locale, antigravityInstaller, antigravityPage }) => {
         localStorage.setItem('openfilm.language', locale);
         let agents = [
           { id: 'claude', name: 'Claude Code', shown: true, status: 'missing', setupRequired: 'code-tab' },
           { id: 'cursor', name: 'Cursor', shown: false, status: 'missing', app: 'Cursor', installer: 'official-install-command' },
+          { id: 'antigravity', name: 'Google Antigravity', shown: false, status: 'missing', app: 'Antigravity', installer: antigravityInstaller, install: antigravityPage },
           { id: 'opencode', name: 'OpenCode', shown: true, status: 'ready', path: 'C:/Apps/OpenCode/resources/opencode-cli.exe', connectionIssue: { kind: 'quota', message: 'Free usage limit reached. Raw quota fixture.' } },
           { id: 'deepseek', name: 'DeepSeek Harness', shown: true, status: 'ready', path: 'D:/Apps/DeepSeek/resources/runtime/cli/bin/dsh.cmd', connectionIssue: { kind: 'credentials', message: 'no API key for provider route "deepseek-official"' } },
         ];
@@ -43,7 +47,7 @@ test('agent setup guides desktop-only installs, folder selection and model failu
           connect: async (id) => { calls.connect.push(id); return { ok: true }; },
           disconnect: async () => {}, setShown: async () => {},
           openSetup: async (id) => { calls.setup.push(id); return { ok: true }; },
-          install: async (id) => { calls.install.push(id); return { ok: true }; },
+          install: async (id) => { calls.install.push(id); publish(id, { installing: true }); return { ok: true }; },
           locate: async (id, words) => {
             calls.locate.push({ id, kind: words.kind });
             if (calls.locate.length === 1) return { ok: false, code: 'not-a-program', error: 'no component in folder' };
@@ -54,7 +58,7 @@ test('agent setup guides desktop-only installs, folder selection and model failu
           onChange: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
         } };
         window.agentSetupFixture = { calls, publish };
-      }, locale);
+      }, { locale, antigravityInstaller, antigravityPage: AGENT_DOWNLOADS.antigravity });
       await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/agent-setup-ui`);
       const zh = locale === 'zh-CN';
       await page.evaluate((dark) => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; }, zh);
@@ -88,11 +92,21 @@ test('agent setup guides desktop-only installs, folder selection and model failu
       assert.equal(await helpButton('Cursor').evaluate((button) => button === document.activeElement), true, 'focus returns to the help icon');
       await page.getByRole('button', { name: zh ? '打开 Claude' : 'Open Claude', exact: true }).click();
       assert.deepEqual(await page.evaluate(() => window.agentSetupFixture.calls.setup), ['claude']);
-      await page.getByRole('button', { name: zh ? '安装连接组件' : 'Install connection component', exact: true }).click();
+      await row('Cursor').getByRole('button', { name: zh ? '安装连接组件' : 'Install connection component', exact: true }).click();
       assert.equal(await page.getByText('official-install-command', { exact: true }).isVisible(), true);
       assert.deepEqual(await page.evaluate(() => window.agentSetupFixture.calls.install), [], 'the install command still needs an explicit user action');
       await page.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click();
-      assert.equal(await page.getByRole('switch').count(), 4, 'visibility switches remain directly accessible');
+      assert.equal(await page.getByRole('switch').count(), 5, 'visibility switches remain directly accessible');
+      const antigravity = row('Google Antigravity');
+      const installLabel = zh ? '安装连接组件' : 'Install connection component';
+      assert.equal(await antigravity.getByRole('link', { name: installLabel, exact: true }).count(), 0, 'Antigravity installation does not open a download website');
+      await antigravity.getByRole('button', { name: installLabel, exact: true }).click();
+      await antigravity.getByText(antigravityInstaller, { exact: true }).waitFor();
+      await antigravity.getByRole('button', { name: zh ? '运行安装' : 'Run installer', exact: true }).click();
+      assert.deepEqual(await page.evaluate(() => window.agentSetupFixture.calls.install), ['antigravity'], 'the same host terminal installation action is used');
+      await antigravity.getByText(zh ? '正在安装连接组件…完成后会自动检测。' : 'Installing the connection component… It will be detected automatically.', { exact: true }).waitFor();
+      await page.evaluate(() => window.agentSetupFixture.publish('antigravity', { status: 'off', installing: undefined, path: '/home/test/.local/bin/agy' }));
+      await antigravity.getByRole('button', { name: zh ? '连接' : 'Connect', exact: true }).waitFor();
       assert.equal(await page.getByRole('button', { name: /More actions for|的更多操作/ }).count(), 0);
       await helpButton('Cursor').click();
       await manual().click();

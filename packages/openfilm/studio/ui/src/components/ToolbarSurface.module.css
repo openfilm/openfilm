@@ -1,0 +1,1 @@
+.surface { border:1px solid var(--border-strong); border-radius:10px; background:var(--bg-raised); color:var(--text); box-shadow:var(--shadow-lg); font-size:13px; line-height:18px; }

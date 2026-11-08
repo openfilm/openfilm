@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     switchAccount: (id) => ipcRenderer.invoke('desktop:agents:switch-account', { id }),
     usage: (id, fresh) => ipcRenderer.invoke('desktop:agents:usage', { id, fresh: fresh === true }),
     setShown: (id, shown) => ipcRenderer.invoke('desktop:agents:shown', { id, shown: shown === true }),
+    saveOpenFilmModels: (config) => ipcRenderer.invoke('desktop:agents:openfilm-models', { config }),
     locate: (id, words) => ipcRenderer.invoke('desktop:agents:locate', { id, words }),
     useAutomatic: (id) => ipcRenderer.invoke('desktop:agents:automatic', { id }),
     install: (id) => ipcRenderer.invoke('desktop:agents:install', { id }),

@@ -1,19 +1,19 @@
 /**
- * The project in front, named in the middle of the top bar, and its card, which opens while the pointer rests on the
- * name (lib/hover-open: its arrow keeps it): the film's picture, its name and folder, what it is (its length, frame,
+ * The project in front, named in the middle of the top bar, and its card, opened by clicking the
+ * name or its arrow (lib/click-open): the film's picture, its name and folder, what it is (its length, frame,
  * rate, clips), what can be done to it (rename, cover from this frame, show its folder), then the other projects. In an
  * app that keeps several open (lib/host.ts `tabs`) they come first, each with its light while it has something to
  * say: breathing while its agent works, amber while it waits for an answer, its percent while it exports; the name has
  * a dot while another one waits or works. All projects (`onAll`) keeps the recent projects.
  *
- * Rename stays in the card's actions; the title opens Projects without a double-click delay.
+ * Rename stays in the card's actions; All projects opens the complete project library.
  */
 import React from 'react';
 import { ArrowUpRight, ChevronDown, Clapperboard, FolderOpen, Image as ImageIcon, LayoutGrid, Pencil, X } from 'lucide-react';
 import { api, type Project } from '@/api';
 import { useT } from '@/i18n';
 import { formatDuration } from '@/lib/export-jobs';
-import { useHoverOpen } from '@/lib/hover-open';
+import { useClickOpen } from '@/lib/click-open';
 import { posterRetryDelay, posterTry } from '@/lib/projects-page';
 import { studioHost, type HostTab } from '@/lib/host';
 import { Popover } from './Popover';
@@ -63,7 +63,7 @@ export interface ProjectActions {
 export function ProjectCard({ name, facts, actions = {}, onAll, trigger, disabled = false }: {
   /** the project in front (none: the window with no project) */
   name?: string;
-  trigger?: (hover: ReturnType<typeof useHoverOpen>, activity: 'asking' | 'working' | null) => React.ReactNode;
+  trigger?: (popup: ReturnType<typeof useClickOpen>, activity: 'asking' | 'working' | null) => React.ReactNode;
   disabled?: boolean;
   facts?: ProjectFacts;
   actions?: ProjectActions;
@@ -72,23 +72,23 @@ export function ProjectCard({ name, facts, actions = {}, onAll, trigger, disable
   const t = useT();
   const host = studioHost?.tabs;
   const { tabs, self } = useHostTabs();
-  const hover = useHoverOpen();
-  React.useEffect(() => { if (disabled) hover.dismiss(); }, [disabled, hover.dismiss]);
+  const popup = useClickOpen();
+  React.useEffect(() => { if (disabled) popup.dismiss(); }, [disabled, popup.dismiss]);
   const cover = facts ? posterUrl(facts.project) : null;
   const [coverAttempt, setCoverAttempt] = React.useState<{ url: string; n: number; failed: boolean } | null>(null);
   const tried = coverAttempt && coverAttempt.url === cover ? coverAttempt : { url: cover ?? '', n: 0, failed: false };
   const again = tried.failed ? posterRetryDelay(tried.n) : null;
   React.useEffect(() => {
-    if (!hover.open || again == null) return undefined;
+    if (!popup.open || again == null) return undefined;
     const timer = setTimeout(() => setCoverAttempt({ url: tried.url, n: tried.n + 1, failed: false }), again);
     return () => clearTimeout(timer);
-  }, [hover.open, again, tried.url, tried.n]);
+  }, [popup.open, again, tried.url, tried.n]);
   const hasCover = facts && (facts.project.cover != null || (facts.clips > 0 && facts.durationMs > 0));
   const [projects, setProjects] = React.useState<Project[] | null>(null);
   React.useEffect(() => {
-    if (!hover.open) return;
+    if (!popup.open) return;
     void api.projects().then(setProjects, () => setProjects([]));
-  }, [hover.open]);
+  }, [popup.open]);
 
   const names = new Map((projects ?? []).map((p) => [p.id, p.name]));
   const titleOf = (tab: HostTab) => tab.title || names.get(tab.projectId) || t('project.untitled');
@@ -96,22 +96,22 @@ export function ProjectCard({ name, facts, actions = {}, onAll, trigger, disable
   /* another open project waits for the person, or works: said on the name, so it is seen without opening the card */
   const waiting = others.some((tab) => tab.asking);
   const working = others.some((tab) => tab.working);
-  const go = (run: () => void) => { hover.dismiss(); run(); };
+  const go = (run: () => void) => { popup.dismiss(); run(); };
 
   return (
     <Popover
-      open={hover.open && !disabled}
-      onOpenChange={(next) => { if (next) hover.setOpen(true); else hover.dismiss(); }}
+      open={popup.open && !disabled}
+      onOpenChange={(next) => { if (next) popup.setOpen(true); else popup.dismiss(); }}
       align="center"
-      trigger={trigger ? trigger(hover, waiting ? 'asking' : working ? 'working' : null) : (
+      trigger={trigger ? trigger(popup, waiting ? 'asking' : working ? 'working' : null) : (
         <button
           type="button"
           aria-label={t('switcher.label')}
           aria-haspopup="dialog"
-          aria-expanded={hover.open}
-          {...hover.trigger}
-          onClick={(event) => { event.stopPropagation(); hover.toggle(); }}
-          className={`flex h-[26px] min-w-0 max-w-[28ch] items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${hover.open ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}
+          aria-expanded={popup.open}
+
+          onClick={(event) => { event.stopPropagation(); popup.toggle(); }}
+          className={`flex h-[26px] min-w-0 max-w-[28ch] items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${popup.open ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}
         >
           <span className="min-w-0 truncate">{name || t('switcher.label')}</span>
           {waiting ? <span aria-label={t('switcher.asking')} className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--warn)]" />
@@ -120,7 +120,7 @@ export function ProjectCard({ name, facts, actions = {}, onAll, trigger, disable
         </button>
       )}
     >
-      <div {...hover.card} data-project-card role="dialog" aria-label={t('switcher.label')} className={menu.menu}>
+      <div data-project-card role="dialog" aria-label={t('switcher.label')} className={`${menu.menu} ${menu.topbar}`}>
         {facts ? (
           <>
             <div className={menu.summary}>
@@ -146,7 +146,7 @@ export function ProjectCard({ name, facts, actions = {}, onAll, trigger, disable
             </div>
             <div className={`${menu.actions} ${menu.projectActions}`}>
               {actions.onRename ? <button type="button" className={menu.action} onClick={() => go(actions.onRename!)}><Pencil size={12} /><span>{t('projectMenu.rename')}</span></button> : null}
-              {actions.onCoverFromFrame ? <button type="button" className={menu.action} onClick={() => go(actions.onCoverFromFrame!)}><ImageIcon size={12} /><span>{t('switcher.cover')}</span></button> : null}
+              {actions.onCoverFromFrame ? <button type="button" className={menu.action} title={t('switcher.cover')} aria-label={t('switcher.cover')} onClick={() => go(actions.onCoverFromFrame!)}><ImageIcon size={12} /><span>{t('switcher.coverShort')}</span></button> : null}
               {actions.onReveal ? <button type="button" className={menu.action} onClick={() => go(actions.onReveal!)}><FolderOpen size={12} /><span>{t('switcher.reveal')}</span></button> : null}
             </div>
           </>

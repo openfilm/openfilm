@@ -60,7 +60,7 @@ import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
 import { coreSkills, keeps, listSkills, offeredSkills, removeSkill, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
-import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, uninstallSkill } from './skill-catalog.mjs';
+import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
@@ -522,6 +522,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        are both there; `as` is the name agents are given it by. An installed one says when Discover has a newer commit
        of it (`update`) or no longer has it (`retired`); `catalog`: when Discover's index was last read */
     if (parts[0] === 'skills' && parts.length === 1 && req.method === 'GET') {
+      await seedCatalog().catch(() => null);
       const id = url.searchParams.get('project');
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
       const skills = listSkills({ project: project?.path ?? null });
@@ -561,7 +562,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const fresh = Number((await readJson(req).catch(() => ({})))?.fresh) || 0;
       try {
         const catalog = await readDiscover({ fresh });
-        return json(res, 200, { catalog: { read: catalog.read } });
+        return json(res, 200, { catalog: { read: catalog.read, incomplete: catalog.incomplete?.length ?? 0 } });
       } catch (e) {
         throw new HttpError(502, `Discover could not be read now: ${e instanceof Error ? e.message : String(e)}`);
       }

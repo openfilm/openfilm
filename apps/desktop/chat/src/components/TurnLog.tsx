@@ -154,7 +154,7 @@ function TurnLogViewer({ project, turnId, live, onClose }: { project: string; tu
   return createPortal(
     <div className="fixed inset-0 z-[10045] grid place-items-center bg-black/40 p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-label={t('turnLog.title')}
-        className="flex h-[min(940px,94vh)] w-[min(1320px,96vw)] flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
+        className="flex h-[min(940px,94vh)] w-[min(1320px,96vw)] flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-raised)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
         <div className="flex shrink-0 items-start gap-3 border-b border-[var(--border)] px-5 py-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 text-[15px] font-semibold text-[var(--text)]">

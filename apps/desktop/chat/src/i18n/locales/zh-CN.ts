@@ -143,6 +143,8 @@ export const zhCN: Words = {
     agentPermissionTitle: '{name} 想要执行以下操作',
     agentSection: '智能体',
     agentSetUp: '设置',
+    modelUnavailable: "服务待更新",
+    modelUnavailableInfo: "该模型已设为显示，但当前连接的服务尚未提供。服务更新后即可使用，无需重新开启开关。",
     agentWaiting: '正在登录…',
     agentWas: '这段对话原来用的是 {name}，现在用不了，下一条消息会发给下面选的智能体。',
     effort: '思考强度',

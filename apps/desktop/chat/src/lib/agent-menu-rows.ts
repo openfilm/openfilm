@@ -7,7 +7,7 @@ export type MenuOption = {
   id: string;
   name: string;
   category?: string;
-  options?: Array<{ value: unknown; name: string; description?: string }>;
+  options?: Array<{ value: unknown; name: string; description?: string; disabled?: boolean }>;
   /** a row the agent offers no choice of: its one value, shown and never set */
   fixed?: boolean;
 };

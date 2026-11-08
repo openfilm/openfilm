@@ -40,7 +40,11 @@ export function cancelSignIn() {
 }
 
 /** This computer's name, as the connect page and the key's label show it. */
-const deviceName = () => hostname().replace(/\.local$/i, '').slice(0, 60);
+export const deviceName = (env = process.env, host = hostname()) => {
+  const name = host.replace(/\.local$/i, '');
+  const app = env.OPENFILM_ACCOUNT_DEVICE?.trim();
+  return app ? `${name.slice(0, 35)} · ${app.slice(0, 20)}` : name.slice(0, 60);
+};
 
 /**
  * Start signing in to `provider`: the browser is opened on its connect page, and `done` is called with the key once

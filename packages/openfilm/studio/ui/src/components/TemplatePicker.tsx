@@ -86,7 +86,7 @@ export function TemplatePicker({ name, slots, media, used, onImport, onUse, onCl
   const count = (path: string) => picks.filter((p) => p === path).length;
   return (
     <div data-template-picker="" className="fixed inset-0 z-[80] grid place-items-center bg-black/55" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div role="dialog" aria-label={name} className="flex max-h-[min(640px,90vh)] w-[min(760px,92vw)] flex-col overflow-hidden rounded-[10px] bg-[var(--bg-panel)] shadow-[0_18px_60px_rgba(0,0,0,0.55)] ring-1 ring-[var(--border)]">
+      <div role="dialog" aria-label={name} className="flex max-h-[min(640px,90vh)] w-[min(760px,92vw)] flex-col overflow-hidden rounded-[10px] bg-[var(--bg-raised)] shadow-[0_18px_60px_rgba(0,0,0,0.55)] ring-1 ring-[var(--border)]">
         <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--border)] px-4">
           <span className="truncate text-[13px] font-semibold text-[var(--text)]">{name}</span>
           <span className="text-[12px] text-[var(--text-muted)]">{t('template.pickTitle').replace('{n}', String(slots.length))}</span>

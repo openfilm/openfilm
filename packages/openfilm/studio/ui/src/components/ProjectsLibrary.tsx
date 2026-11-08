@@ -451,7 +451,7 @@ export function ProjectsPopover({
         role="dialog"
         aria-label={t('project.projects')}
         aria-modal="true"
-        className={`fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-panel)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]`}
+        className={`fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-topbar-popover)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]`}
         onDragOver={onDragOver}
         onDrop={onDrop}
       >

@@ -291,7 +291,7 @@ function clipInfo(
 ): ClipInfo | null {
   const at = parseFilmDocLoc(loc);
   const clip = at ? doc.tracks[at.track]?.clips[at.clip] : undefined;
-  if (!clip) return null;
+  if (!clip || clip.disabled) return null;
   const kind = filmClipKind(clip);
   if (kind === 'audio') return null;
   const span = spans.find((s) => s.id === clip.id);

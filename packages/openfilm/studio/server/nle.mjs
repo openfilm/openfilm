@@ -21,6 +21,8 @@
  *   · Fades (film.html `overrides`' `fade`): a picture that fades is rendered, its fades in its alpha; a sound that
  *     fades comes as a WAV of its own part, from its first frame, with Audio Levels keyframes for its ramps (counted
  *     from the file's start, which is the clip's, so editors that count keyframes from either agree).
+ *   · Original-footage mode keeps complete source videos instead of baking their page-specific effects. Native
+ *     cuts and speed stay editable; sources can be linked or copied. Web pages still need rendering.
  */
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
@@ -34,7 +36,7 @@ import { exactRate } from '../../src/rate.mjs';
  *   channels?: number, sampleRate?: number, alpha?: boolean, timecode?: NleTimecode }} SourceFacts
  * @typedef {{ id: string, kind: 'page' | 'video' | 'still', src: string, path: string, at: number, end: number,
  *   from: number, speed: number, box?: FilmBox, track: number, hidden: boolean, styled?: boolean, faded?: boolean,
- *   facts: SourceFacts | null }} NlePicture
+ *   facts: SourceFacts | null, animationTiming?: { durations: number[], delays: number[] } }} NlePicture
  *   A picture clip: its film seconds [at, end), its source from `from` at `speed`; `facts` its file's (w × h as the
  *   browser shows it), null for a page
  * @typedef {'voice' | 'music' | 'sfx' | 'footage'} SoundRole
@@ -45,11 +47,11 @@ import { exactRate } from '../../src/rate.mjs';
  *   the sound of; `fade`: its fades in and out, film seconds (fitted to its length)
  * @typedef {{ stage: { w: number, h: number }, duration: number, pictures: NlePicture[], sounds: NleSound[] }} NleFilm
  * @typedef {{ title: string, fps: number, audio: 'clips' | 'stems', media: 'copy' | 'link', mediaDir: string,
- *   stems?: SoundRole[], audioTracks?: 'roles' | 'source', alpha?: NleAlpha }} NlePlanOptions
+ *   stems?: SoundRole[], audioTracks?: 'roles' | 'source', alpha?: NleAlpha, editable?: boolean, footage?: 'source' | 'render' }} NlePlanOptions
  * @typedef {'png' | 'prores4444'} NleAlpha How a picture with alpha is written, in a MOV (default ProRes 4444)
  * @typedef {{ timebase: number, ntsc: boolean, fps: number }} NleRate
  * @typedef {{ value: string, rate: NleRate }} NleTimecode
- * @typedef {{ kind: 'render', clip: string, frames: number }
+ * @typedef {{ kind: 'render', clip: string, frames: number, fullSource?: boolean }
  *   | { kind: 'copy', from: string }
  *   | { kind: 'link', from: string }
  *   | { kind: 'raster', from: string, src: string, w: number, h: number }
@@ -58,9 +60,10 @@ import { exactRate } from '../../src/rate.mjs';
  *   How a file is made: a clip rendered, a source cloned or pointed at, a still drawn to PNG, a source converted
  *   (`segment`: only those source seconds, at that speed, `seconds` long), a mixed stem
  * @typedef {{ id: string, name: string, path: string, job: NleMediaJob, durationFrames: number,
- *   video?: { w: number, h: number, alpha: boolean, still: boolean, fps?: number }, audio?: { channels: number, sampleRate: number }, timecode?: NleTimecode }} NleFile
+ *   video?: { w: number, h: number, alpha: boolean, still: boolean, fps?: number }, audio?: { channels: number, sampleRate: number }, timecode?: NleTimecode,
+ *   nativeRate?: NleRate }} NleFile
  * @typedef {{ id: string, name: string, fileId: string, start: number, end: number, in: number, out: number, enabled: boolean,
- *   motion?: { scale: number, center: { h: number, v: number } }, gain?: number,
+ *   motion?: { scale: number, center: { h: number, v: number } }, gain?: number, speed?: number,
  *   levels?: { when: number, value: number }[], linkGroup?: string, sourceRow?: string }} NleClip
  *   Sequence frames [start, end), file frames [in, out); `gain` linear; `levels` its gain's keyframes (its fades),
  *   frames from the clip's first
@@ -187,6 +190,8 @@ function sourceAudioGroups(sounds) {
  */
 export function planNleTimeline(film, opts) {
   const rate = nleRate(opts.fps);
+  const originalFootage = opts.footage === 'source';
+  const editable = originalFootage || opts.editable;
   const sourceTracks = opts.audioTracks === 'source';
   const { stage } = film;
   /** @type {NleFile[]} */
@@ -239,7 +244,7 @@ export function planNleTimeline(film, opts) {
       const video = want === 'video' ? facts.hasVideo !== false : facts.hasVideo === true;
       const audio = facts.hasAudio ? { channels: facts.channels ?? 2, sampleRate: facts.sampleRate ?? 48_000 } : undefined;
       let made;
-      if (video && VIDEO_CONVERT.has(ext)) made = { ...mediaPath(stem, 'mov'), job: /** @type {NleMediaJob} */ ({ kind: 'transcode', from: s.path, to: facts.alpha ? opts.alpha ?? 'prores4444' : 'prores422hq' }) };
+      if (video && VIDEO_CONVERT.has(ext) && !originalFootage) made = { ...mediaPath(stem, 'mov'), job: /** @type {NleMediaJob} */ ({ kind: 'transcode', from: s.path, to: facts.alpha ? opts.alpha ?? 'prores4444' : 'prores422hq' }) };
       else if (!video && !AUDIO_COPY.has(ext)) made = { ...mediaPath(stem, 'wav'), job: /** @type {NleMediaJob} */ ({ kind: 'transcode', from: s.path, to: 'wav' }) };
       else made = original();
       const converted = made.job.kind === 'transcode';
@@ -248,6 +253,7 @@ export function planNleTimeline(film, opts) {
         durationFrames: facts.duration ? Math.max(1, toFrame(facts.duration, rate)) : Math.max(1, minFrames),
         ...(video ? { video: { w: facts.w ?? stage.w, h: facts.h ?? stage.h, alpha: Boolean(facts.alpha), still: false, fps: facts.fps } } : {}),
         ...(audio ? { audio: converted ? { channels: audio.channels, sampleRate: 48_000 } : audio } : {}),
+        ...(originalFootage && video && facts.fps ? { nativeRate: nleRate(facts.fps) } : {}),
         ...(!converted && facts.timecode ? { timecode: facts.timecode } : {}),
       });
       if (facts.duration) measured.add(file.id);
@@ -268,20 +274,35 @@ export function planNleTimeline(film, opts) {
     if (len <= 0) continue;
     const link = sourceTracks && p.kind === 'video' ? { linkGroup: `footage-${p.id}` } : {};
     const bake = () => {
-      const file = addFile({ ...mediaPath(p.id, 'mov'), job: { kind: 'render', clip: p.id, frames: len }, durationFrames: len, video: { w: stage.w, h: stage.h, alpha: true, still: false } });
-      visual.push({ track: p.track, ...span, clip: { id: clipId(), name: p.id, fileId: file.id, ...span, in: 0, out: len, enabled: !p.hidden, ...link } });
+      const native = p.facts?.duration ?? 0;
+      const full = editable && p.kind === 'video' && native > 0;
+      const frames = full ? Math.max(1, toFrame(native, rate)) : len;
+      /* Keep the untouched source in the draft's library too. A processed picture retains its complete source
+         length, with the cut expressed as in/out points, so either edge can still be extended in the editor. */
+      if (full) sourceFile(p, 'video', frames);
+      const file = addFile({ ...mediaPath(p.id, 'mov'), job: { kind: 'render', clip: p.id, frames, ...(full ? { fullSource: true } : {}) }, durationFrames: frames, video: { w: stage.w, h: stage.h, alpha: true, still: false } });
+      const inside = full ? toFrame(p.from, rate) : 0;
+      visual.push({ track: p.track, ...span, clip: { id: clipId(), name: p.id, fileId: file.id, ...span, in: inside,
+        out: full ? Math.min(frames, inside + Math.round(len * p.speed)) : len, enabled: !p.hidden,
+        ...(full && p.speed !== 1 ? { speed: p.speed } : {}), ...link } });
     };
     /* a clip with a look of its own (the film's CSS: a crop, round corners) is drawn as the film draws it */
-    if (p.kind === 'page' || p.styled || p.faded || !p.facts || (p.kind === 'video' && Math.abs(p.speed - 1) > 1e-6)) { bake(); continue; }
-    const placement = containMotion(p.facts, stage, p.box);
-    if (placement.kind === 'bake') { bake(); continue; }
+    const original = originalFootage && p.kind === 'video';
+    if (!original && (p.kind === 'page' || p.styled || p.faded || !p.facts || (!editable && p.kind === 'video' && Math.abs(p.speed - 1) > 1e-6))) { bake(); continue; }
+    /* Original footage keeps the source even when page effects cannot be represented by the target editor.
+       Retain the basic placement; the export option explains that page-specific effects need rebuilding. */
+    const placement = containMotion(p.facts ?? {}, stage, original && p.box ? { ...p.box, r: 0 } : p.box);
+    if (placement.kind === 'bake' && !original) { bake(); continue; }
     const inFrame = p.kind === 'still' ? 0 : toFrame(p.from, rate);
-    const file = sourceFile(p, p.kind, inFrame + len);
-    const out = reach(file, inFrame + len);
+    const speed = editable && p.kind === 'video' ? p.speed : 1;
+    const sourceLength = Math.round(len * speed);
+    const file = sourceFile(p, p.kind === 'still' ? 'still' : 'video', inFrame + sourceLength);
+    const out = reach(file, inFrame + sourceLength);
     if (out <= inFrame) continue;
     /** @type {NleClip} */
     const clip = {
-      id: clipId(), name: p.id, fileId: file.id, start: span.start, end: span.start + out - inFrame, in: inFrame, out, enabled: !p.hidden,
+      id: clipId(), name: p.id, fileId: file.id, start: span.start, end: span.start + Math.round((out - inFrame) / speed), in: inFrame, out, enabled: !p.hidden,
+      ...(speed !== 1 ? { speed } : {}),
       ...link,
       ...(placement.kind === 'motion' ? { motion: placement.motion } : {}),
     };
@@ -323,12 +344,12 @@ export function planNleTimeline(film, opts) {
       const len = span.end - span.start;
       if (len <= 0) continue;
       const linked = s.picture ? footage.get(s.picture) : undefined;
-      const own = linked && Math.abs(s.speed - 1) < 1e-6 && Math.abs(linked.picture.from - s.from) < 0.002 && Math.abs(linked.picture.at - s.at) < 0.002;
+      const own = linked && Math.abs(s.speed - (editable ? linked.picture.speed : 1)) < 1e-6 && Math.abs(linked.picture.from - s.from) < 0.002 && Math.abs(linked.picture.at - s.at) < 0.002;
       /** @type {NleFile} */
       let file;
       let inFrame;
       const faded = Boolean(s.fade && (s.fade[0] > 0 || s.fade[1] > 0));
-      if (Math.abs(s.speed - 1) > 1e-6 || faded) {
+      if (!editable && (Math.abs(s.speed - 1) > 1e-6 || faded)) {
         /* another speed: an editor would play the source at its own speed, so the part played comes slowed or sped
            (its pitch kept), as the film plays it, as a WAV of its own exactly as long as its clip: the source seconds
            its frames take, as the picture of a clip at another speed is rendered. A sound that fades too: its
@@ -342,19 +363,21 @@ export function planNleTimeline(film, opts) {
         inFrame = 0;
       } else {
         inFrame = toFrame(s.from, rate);
-        file = own && linked ? linked.file : sourceFile(s, 'audio', inFrame + len);
+        file = own && linked ? linked.file : sourceFile(s, 'audio', inFrame + Math.round(len * (editable ? s.speed : 1)));
       }
       if (!file.audio) continue;
-      const out = reach(file, inFrame + len);
+      const speed = editable ? s.speed : 1;
+      const out = reach(file, inFrame + Math.round(len * speed));
       if (out <= inFrame) continue;
       /** @type {NleClip} */
       const clip = {
-        id: clipId(), name: s.id, fileId: file.id, start: span.start, end: span.start + out - inFrame, in: inFrame, out,
+        id: clipId(), name: s.id, fileId: file.id, start: span.start, end: span.start + Math.round((out - inFrame) / speed), in: inFrame, out,
+        ...(speed !== 1 ? { speed } : {}),
         enabled: s.enabled,
         ...(sourceTracks && s.sourceRow ? { sourceRow: s.sourceRow } : {}),
         ...(Math.abs(s.volume - 1) > 1e-6 ? { gain: round6(Math.min(3.98109, s.volume)) } : {}),
       };
-      if (faded && s.fade) clip.levels = fadeKeyframes(s.fade, out - inFrame, Math.min(3.98109, s.volume), rate);
+      if (faded && s.fade) clip.levels = fadeKeyframes(s.fade, clip.end - clip.start, Math.min(3.98109, s.volume), rate);
       if (own && linked && !sourceTracks) {
         linked.clip.linkGroup = `link-${linked.clip.id}`;
         clip.linkGroup = linked.clip.linkGroup;
@@ -425,17 +448,19 @@ const timecodeXml = (/** @type {NleRate} */ rate, /** @type {string} */ pad, /**
 
 /** @param {NleFile} file @param {NleRate} rate @param {string} pad */
 function fileXml(file, rate, pad) {
+  const native = file.nativeRate ?? rate;
+  const duration = Math.round(file.durationFrames / rate.fps * native.fps);
   const lines = [
     `${pad}<file id="${xmlEscape(file.id)}">`,
     `${pad}  <name>${xmlEscape(file.name)}</name>`,
     `${pad}  <pathurl>${xmlEscape(nlePathUrl(file.path))}</pathurl>`,
-    rateXml(rate, `${pad}  `),
-    `${pad}  <duration>${file.durationFrames}</duration>`,
-    timecodeXml(rate, `${pad}  `, file.timecode),
+    rateXml(native, `${pad}  `),
+    `${pad}  <duration>${duration}</duration>`,
+    timecodeXml(native, `${pad}  `, file.timecode),
     `${pad}  <media>`,
   ];
   if (file.video) {
-    lines.push(`${pad}    <video>`, `${pad}      <samplecharacteristics>`, rateXml(rate, `${pad}        `),
+    lines.push(`${pad}    <video>`, `${pad}      <samplecharacteristics>`, rateXml(native, `${pad}        `),
       `${pad}        <width>${file.video.w}</width>`, `${pad}        <height>${file.video.h}</height>`,
       `${pad}        <anamorphic>FALSE</anamorphic>`, `${pad}        <pixelaspectratio>square</pixelaspectratio>`,
       `${pad}        <fielddominance>none</fielddominance>`, `${pad}      </samplecharacteristics>`, `${pad}    </video>`);
@@ -473,6 +498,17 @@ const motionXml = (m, pad) => [
   `${pad}    </parameter>`, `${pad}  </effect>`, `${pad}</filter>`,
 ].join('\n');
 
+/** Native constant-speed effect: cuts still address the complete original media. */
+const speedXml = (/** @type {number} */ speed, /** @type {'video' | 'audio'} */ media, /** @type {string} */ pad) => [
+  `${pad}<filter>`, `${pad}  <effect>`, `${pad}    <name>Time Remap</name>`, `${pad}    <effectid>timeremap</effectid>`,
+  `${pad}    <effectcategory>motion</effectcategory>`, `${pad}    <effecttype>motion</effecttype>`, `${pad}    <mediatype>${media}</mediatype>`,
+  ...[['variablespeed', '0'], ['speed', num(speed * 100)], ['reverse', 'FALSE'], ['frameblending', 'FALSE']].flatMap(([id, value]) => [
+    `${pad}    <parameter authoringApp="PremierePro">`, `${pad}      <parameterid>${id}</parameterid>`,
+    `${pad}      <name>${id}</name>`, `${pad}      <value>${value}</value>`, `${pad}    </parameter>`,
+  ]),
+  `${pad}  </effect>`, `${pad}</filter>`,
+].join('\n');
+
 /**
  * The timeline as an xmeml v4 document. A file is written whole the first time a clip uses it and referred to after
  * (one source used three times is one source in the editor, not three); links name the other clip's track and place
@@ -494,11 +530,14 @@ export function xmemlDocument(timeline) {
   const clipXml = (/** @type {NleClip} */ clip, /** @type {'video' | 'audio'} */ media, /** @type {string} */ pad) => {
     const file = files.get(clip.fileId);
     if (!file) throw new Error(`clip ${clip.id} points at a missing file ${clip.fileId}`);
+    /* Sequence placement uses sequence frames; original-media cuts use that file's native frame clock. */
+    const native = file.nativeRate ?? rate;
+    const sourceFrame = (/** @type {number} */ frame) => Math.round(frame / rate.fps * native.fps);
     const lines = [
       `${pad}<clipitem id="${xmlEscape(clip.id)}">`, `${pad}  <name>${xmlEscape(clip.name)}</name>`,
-      `${pad}  <enabled>${bool(clip.enabled)}</enabled>`, `${pad}  <duration>${file.durationFrames}</duration>`,
-      rateXml(rate, `${pad}  `),
-      `${pad}  <start>${clip.start}</start>`, `${pad}  <end>${clip.end}</end>`, `${pad}  <in>${clip.in}</in>`, `${pad}  <out>${clip.out}</out>`,
+      `${pad}  <enabled>${bool(clip.enabled)}</enabled>`, `${pad}  <duration>${sourceFrame(file.durationFrames)}</duration>`,
+      rateXml(native, `${pad}  `),
+      `${pad}  <start>${clip.start}</start>`, `${pad}  <end>${clip.end}</end>`, `${pad}  <in>${sourceFrame(clip.in)}</in>`, `${pad}  <out>${sourceFrame(clip.out)}</out>`,
     ];
     if (media === 'video') {
       lines.push(`${pad}  <alphatype>${file.video?.alpha ? 'straight' : 'none'}</alphatype>`, `${pad}  <pixelaspectratio>square</pixelaspectratio>`, `${pad}  <anamorphic>FALSE</anamorphic>`);
@@ -507,8 +546,10 @@ export function xmemlDocument(timeline) {
     else { written.add(file.id); lines.push(fileXml(file, rate, `${pad}  `)); }
     if (media === 'audio') {
       lines.push(`${pad}  <sourcetrack>`, `${pad}    <mediatype>audio</mediatype>`, `${pad}    <trackindex>1</trackindex>`, `${pad}  </sourcetrack>`);
-      if (clip.gain != null || clip.levels) lines.push(levelXml(clip.gain ?? 1, `${pad}  `, clip.levels));
+      if (clip.gain != null || clip.levels) lines.push(levelXml(clip.gain ?? 1, `${pad}  `,
+        clip.levels?.map((key) => ({ ...key, when: sourceFrame(clip.in + key.when * (clip.speed ?? 1)) }))));
     } else if (clip.motion) lines.push(motionXml(clip.motion, `${pad}  `));
+    if (clip.speed !== undefined && Math.abs(clip.speed - 1) > 1e-6) lines.push(speedXml(clip.speed, media, `${pad}  `));
     const group = clip.linkGroup ? groups.get(clip.linkGroup) : undefined;
     if (group && group.length > 1) {
       for (const p of group) {
