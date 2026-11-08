@@ -11,7 +11,7 @@ import { startStudio } from './server/server.mjs';
 const PAGE = '<!doctype html><body style="margin:0;background:#224"><script>window.film={duration:4,frame(){}}</script></body>';
 
 /** Studio on a project of one page clip, in English, the library's given category open. */
-async function withLibrary(category, run) {
+async function withLibrary(category, run, prepare = async (_page) => {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'of-library-trial-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
   const saved = new Map(names.map((n) => [`OPENFILM_${n}`, process.env[`OPENFILM_${n}`]]));
@@ -26,6 +26,7 @@ async function withLibrary(category, run) {
     studio = await startStudio({ port: 0, openBrowser: () => {} });
     browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
     const page = await browser.newPage({ viewport: { width: 1500, height: 950 }, locale: 'en-US' });
+    await prepare(page);
     /* the library's drawer is the app's: over its panel */
     await page.addInitScript(() => {
       window.openfilmHost = {
@@ -96,4 +97,104 @@ test('an effect tried in the library stays on the picture until it is let go', {
     assert.equal(after.showing, true);
     assert.equal(after.clickable, true);
   });
+});
+
+/** A real, locally generated tone, so playback tests need no library download or third-party voice service. */
+function sampleWav() {
+  const rate = 8000, frames = rate * 3;
+  const wav = Buffer.alloc(44 + frames * 2);
+  wav.write('RIFF'); wav.writeUInt32LE(36 + frames * 2, 4); wav.write('WAVEfmt ', 8);
+  wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 2, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
+  wav.write('data', 36); wav.writeUInt32LE(frames * 2, 40);
+  for (let i = 0; i < frames; i++) wav.writeInt16LE(Math.round(Math.sin(i * 440 * 2 * Math.PI / rate) * 8000), 44 + i * 2);
+  return wav;
+}
+
+test('a slow audio preview shows loading and a slow hint, can be cancelled and never starts later', { timeout: 60_000 }, async () => {
+  let finish;
+  const waiting = new Promise((done) => { finish = done; });
+  await withLibrary('Sounds', async ({ page }) => {
+    const row = page.locator('[title="Slow preview"]');
+    await row.click();
+    const player = page.locator('[data-audio-player]');
+    await page.locator('[data-audio-player="loading"]').waitFor({ timeout: 2000 });
+    assert.equal(await player.getByRole('status').textContent(), 'Loading preview…Cancel');
+    assert.equal(await row.getAttribute('aria-busy'), 'true');
+    await page.getByText('Still loading… You can cancel and try again.', { exact: true }).waitFor({ timeout: 7000 });
+    await player.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+    await page.locator('[data-audio-player="paused"]').waitFor();
+    assert.equal(await page.evaluate(() => window.__libraryPreviews[0].getAttribute('src')), null);
+    finish();
+    await page.getByTitle('Ready preview', { exact: true }).click();
+    await page.locator('[data-audio-player="playing"]').waitFor({ timeout: 5000 });
+    assert.equal(await page.evaluate(() => window.__libraryPreviews[0].paused), true);
+    await player.getByRole('button', { name: 'Close', exact: true }).click();
+    assert.equal(await player.count(), 0);
+    assert.equal(await page.evaluate(() => window.__libraryPreviews.every((a) => a.paused)), true);
+  }, async (page) => {
+    await page.addInitScript(() => {
+      const Audio = window.Audio;
+      window.__libraryPreviews = [];
+      window.Audio = function (src) { const a = new Audio(src); window.__libraryPreviews.push(a); return a; };
+    });
+    await page.route('**/api/library', (route) => route.fulfill({ json: { version: 1, groups: {}, items: [
+      { id: 'audio/sfx/slow.wav', cat: 'sound', kind: 'sound', group: 'ui', name: { en: 'Slow preview' }, durationMs: 3000 },
+      { id: 'audio/sfx/ready.wav', cat: 'sound', kind: 'sound', group: 'ui', name: { en: 'Ready preview' }, durationMs: 3000 },
+    ] } }));
+    await page.route('**/api/library/file?*', async (route) => {
+      const path = new URL(route.request().url()).searchParams.get('path');
+      if (path === 'audio/sfx/slow.wav') await waiting;
+      await route.fulfill(path?.endsWith('.wav') ? { body: sampleWav(), contentType: 'audio/wav' } : { status: 404 }).catch(() => {});
+    });
+  });
+});
+
+test('a failed voice sample offers retry and plays from its sample URL on the next attempt', { timeout: 60_000 }, async () => {
+  let asks = 0;
+  await withLibrary('Voices', async ({ page }) => {
+    await page.getByText('Test voice', { exact: true }).click();
+    const player = page.locator('[data-audio-player]');
+    await page.locator('[data-audio-player="error"]').waitFor({ timeout: 5000 });
+    assert.match(await player.getByRole('status').textContent(), /Could not play this preview/);
+    await player.getByRole('button', { name: 'Try again', exact: true }).last().click();
+    await page.locator('[data-audio-player="playing"]').waitFor({ timeout: 5000 });
+    assert.equal(asks, 2);
+    await page.getByRole('button', { name: 'Sounds', exact: true }).click();
+    assert.equal(await player.count(), 0, 'leaving the voices panel closes its own preview');
+  }, async (page) => {
+    await page.route('**/api/library', (route) => route.fulfill({ json: { version: 1, groups: {}, items: [] } }));
+    await page.route('**/api/library/voices', (route) => route.fulfill({ json: { version: 1, providers: [{ id: 'elevenlabs', name: 'ElevenLabs', models: [] }], voices: [
+      { provider: 'elevenlabs', id: 'test', name: 'Test voice', gender: 'f', language: 'en', tags: [], sample: 'voices/elevenlabs/test.m4a' },
+    ] } }));
+    await page.route('**/api/library/file?*', (route) => {
+      assert.equal(new URL(route.request().url()).searchParams.get('path'), 'voices/elevenlabs/test.m4a');
+      asks += 1;
+      return route.fulfill(asks === 1 ? { status: 503 } : { body: sampleWav(), contentType: 'audio/wav' });
+    });
+  });
+});
+
+test('uncached waveform pictures leave connections for the audio preview', { timeout: 60_000 }, async () => {
+  let waveRequests = 0, release;
+  const waiting = new Promise((done) => { release = done; });
+  try {
+    await withLibrary('Sounds', async ({ page }) => {
+      try {
+        await page.getByTitle('Queued sound 0', { exact: true }).click();
+        await page.locator('[data-audio-player="playing"]').waitFor({ timeout: 5000 });
+        assert.ok(waveRequests > 0 && waveRequests <= 2, `${waveRequests} waveforms started while their downloads were blocked`);
+        assert.equal(await page.locator('[data-audio-preview]').count(), 1);
+      } finally { release(); }
+    }, async (page) => {
+      await page.route('**/api/library', (route) => route.fulfill({ json: { version: 1, groups: {}, items:
+        Array.from({ length: 80 }, (_, i) => ({ id: `audio/sfx/sound-${i}.wav`, cat: 'sound', kind: 'sound', group: 'ui', name: { en: `Queued sound ${i}` }, durationMs: 3000 })),
+      } }));
+      await page.route('**/api/library/file?*', async (route) => {
+        const path = new URL(route.request().url()).searchParams.get('path');
+        if (path?.includes('/waves/')) { waveRequests += 1; await waiting; }
+        await route.fulfill(path?.endsWith('.wav') ? { body: sampleWav(), contentType: 'audio/wav' } : { status: 404 }).catch(() => {});
+      });
+    });
+  } finally { release(); }
 });
