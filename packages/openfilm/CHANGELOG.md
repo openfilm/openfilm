@@ -1,5 +1,53 @@
 # openfilm
 
+## 0.3.1
+
+### Patch Changes
+
+- [#375](https://github.com/openfilm/openfilm/pull/375) [`46811b0`](https://github.com/openfilm/openfilm/commit/46811b0a2359666cfc03e3dd6f64e0f1e08db764) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Back on the edit from the canvas, the canvas's cards no longer stay on top of the picture and the inspector.
+
+- [#381](https://github.com/openfilm/openfilm/pull/381) [`b108090`](https://github.com/openfilm/openfilm/commit/b1080902e6847f55323dbc092981c0cc685a4578) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Undoing a chat turn restores its canvas boards along with its files. A turn that only changes the canvas can be undone too. Open boards refresh after the restore and forget undo steps that could bring back references to files the turn's undo removed.
+
+- [#393](https://github.com/openfilm/openfilm/pull/393) [`8d9efb6`](https://github.com/openfilm/openfilm/commit/8d9efb61c9491be2caa299e32d23891992b92136) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: splitting a caption cue at its middle keeps an emoji whole, instead of writing half a character into each cue.
+
+- [#376](https://github.com/openfilm/openfilm/pull/376) [`c4e178a`](https://github.com/openfilm/openfilm/commit/c4e178ae5aaf2a9a61342b32f530e1bff006214f) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Canvas characters: a picture is kept only from inside the project. On Windows a path written with backslashes could reach a picture outside it.
+
+- [#372](https://github.com/openfilm/openfilm/pull/372) [`873eb0e`](https://github.com/openfilm/openfilm/commit/873eb0e7257e354d38b5aac1930a4b868dc60ca3) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Studio and `openfilm get` can discover, preview and use reviewed community sounds, music, transitions and effects from the OpenFilm library.
+
+- [#392](https://github.com/openfilm/openfilm/pull/392) [`b5c6ff8`](https://github.com/openfilm/openfilm/commit/b5c6ff8bdd3e03f30ce3a662550f2debf80182f2) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a cookie whose value is not percent-encoded is ignored, instead of stopping the request it came on.
+
+- [#386](https://github.com/openfilm/openfilm/pull/386) [`6e00efa`](https://github.com/openfilm/openfilm/commit/6e00efae10663922c4da62f99ec75e3c874ecbb7) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - doctor: a report takes keys and email addresses out of the Studio log lines it quotes, as it says it does
+
+- [#362](https://github.com/openfilm/openfilm/pull/362) [`90fed06`](https://github.com/openfilm/openfilm/commit/90fed06b47e510c92ab31c1a8d5843e6901ab5c6) Thanks [@deepankar-sah](https://github.com/deepankar-sah)! - Desktop: support Google Antigravity as a coding agent via the Agent Client Protocol (ACP).
+
+- [#396](https://github.com/openfilm/openfilm/pull/396) [`49b2401`](https://github.com/openfilm/openfilm/commit/49b2401a22631bde0822372c67d02d7f24ccc58a) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - HEVC master exports use finer grain-aware software encoding so subtle changing texture is not flattened into a still pattern. Master files can be larger and take longer to encode.
+
+- [#385](https://github.com/openfilm/openfilm/pull/385) [`111b513`](https://github.com/openfilm/openfilm/commit/111b51362e9d76c2f304bbdf1fe0f5cb88a42a73) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Local model installation is reported complete only after its provider settings have had a chance to refresh. A fast download could previously show a model as installed while its media kind was still unselected.
+
+- [#388](https://github.com/openfilm/openfilm/pull/388) [`c1a4a0d`](https://github.com/openfilm/openfilm/commit/c1a4a0deef8dbdcdf19125fe9523c4fd03570719) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a long file name is not cut in the middle of a character
+
+- [#387](https://github.com/openfilm/openfilm/pull/387) [`a3e22ce`](https://github.com/openfilm/openfilm/commit/a3e22ce31781d8c364a6c7af0db1ff1015a04b7c) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a byte range past a media file's end is answered, not left hanging
+
+- [#395](https://github.com/openfilm/openfilm/pull/395) [`e846002`](https://github.com/openfilm/openfilm/commit/e8460024fedcac6e7fe9b19fb2ac196d044c92e8) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a file replaced under the same name, size and date gets a new preview, instead of the old one being kept.
+
+- [#384](https://github.com/openfilm/openfilm/pull/384) [`574e6fe`](https://github.com/openfilm/openfilm/commit/574e6fee757e6e77fb49f050702f98ad23cefcde) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - The project title's hover card retries a poster that is still being drawn, using the same bounded delays as the Projects list. A first request that arrived too early used to leave its cover permanently blank.
+
+- [#309](https://github.com/openfilm/openfilm/pull/309) [`916e845`](https://github.com/openfilm/openfilm/commit/916e845614ff10c5360c9d4e057b1e3db138ec36) Thanks [@rick-mingyu-liu](https://github.com/rick-mingyu-liu)! - Render: a render that stops on its own (an error, a crash, the computer asleep or out of power, the app quit) is resumed by the next one of the same file with the same settings, which draws only what is left. The film is drawn in chunks of whole seconds, one to ten, that the browsers take in turn, and each chunk finished is kept with the files it was drawn from, those it asked for and did not find included: a render that finds one of them changed, or other settings, starts clean. Studio's export resumes the same way; one cancelled on purpose leaves nothing behind. Chunks no one resumes are removed after two weeks, and so are the parts a crashed render left before.
+
+- [#348](https://github.com/openfilm/openfilm/pull/348) [`af52c5c`](https://github.com/openfilm/openfilm/commit/af52c5c096aab2584711e96fa505ba76477deb35) Thanks [@rick-mingyu-liu](https://github.com/rick-mingyu-liu)! - Restoring a version no longer stops half way when the trash will not take a file (on Windows, the Recycle Bin refusing one too big for it): the version is put back around it, the file stays where it is, and Studio names the files that stayed. Before, the files already written stayed written, the rest did not, and History still showed the version the person was on.
+
+- [#389](https://github.com/openfilm/openfilm/pull/389) [`0def7c0`](https://github.com/openfilm/openfilm/commit/0def7c0844ee98b806603dc847b964dc3dafbcda) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - CLI: a skill named with capitals is found by its name alone
+
+- [#394](https://github.com/openfilm/openfilm/pull/394) [`43daa9b`](https://github.com/openfilm/openfilm/commit/43daa9bac517d053a67fcf3f0fc84de01eccee38) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a template's object-position is read as CSS reads it, so its framing control starts where the picture actually sits.
+
+- [#377](https://github.com/openfilm/openfilm/pull/377) [`4df6f94`](https://github.com/openfilm/openfilm/commit/4df6f941cd6803f0b597994e30391be4531202ab) Thanks [@WEBGRS](https://github.com/WEBGRS)! - A transition clicked in the library plays once on the picture, and a click on it plays it again. It used to repeat until it was let go. Enter and "+" still put it in.
+
+- [#361](https://github.com/openfilm/openfilm/pull/361) [`9bdcbb5`](https://github.com/openfilm/openfilm/commit/9bdcbb54cf5bbe4e1975590301b537284ae8dc0f) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Studio on Linux: deleting a file, a folder or a skill on another disk than the home folder (a project on a second drive) failed with "cross-device link not permitted". It is now copied into the trash with its record and then removed, so it can still be restored.
+
+- [#374](https://github.com/openfilm/openfilm/pull/374) [`8cea0e9`](https://github.com/openfilm/openfilm/commit/8cea0e949648ddc860b7fd0c92c65a14161c4869) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Undo of a chat turn: the film goes back as the turn found it. Studio took the film put back for a write of the agent's and merged the turn's clips into it, so a clip came back whose page the undo had just moved to the trash.
+
+- [#383](https://github.com/openfilm/openfilm/pull/383) [`684d04d`](https://github.com/openfilm/openfilm/commit/684d04d2041d1442ec14d85d175e1413e7628d86) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - A page is loaded again when Windows briefly has no network buffer for a module needed to initialize the film. Previously only a failed page navigation was retried, so a transient failure of captions or overrides could stop an export. Permanent errors are still reported without retrying.
+
 ## 0.3.0
 
 ### Minor Changes

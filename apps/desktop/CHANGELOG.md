@@ -1,5 +1,22 @@
 # @openfilm/desktop
 
+## 0.3.1
+
+### Patch Changes
+
+- [#381](https://github.com/openfilm/openfilm/pull/381) [`b108090`](https://github.com/openfilm/openfilm/commit/b1080902e6847f55323dbc092981c0cc685a4578) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Undoing a chat turn restores its canvas boards along with its files. A turn that only changes the canvas can be undone too. Open boards refresh after the restore and forget undo steps that could bring back references to files the turn's undo removed.
+
+- [#362](https://github.com/openfilm/openfilm/pull/362) [`90fed06`](https://github.com/openfilm/openfilm/commit/90fed06b47e510c92ab31c1a8d5843e6901ab5c6) Thanks [@deepankar-sah](https://github.com/deepankar-sah)! - Desktop: support Google Antigravity as a coding agent via the Agent Client Protocol (ACP).
+
+- [#382](https://github.com/openfilm/openfilm/pull/382) [`e8fed38`](https://github.com/openfilm/openfilm/commit/e8fed38034e46bad5f54b9e7c15612055a20acfd) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Update the agent and packaging dependencies to a minimatch version that bounds glob-pattern preprocessing, fixing GHSA-g3hv-75wg-m249.
+
+- [#374](https://github.com/openfilm/openfilm/pull/374) [`8cea0e9`](https://github.com/openfilm/openfilm/commit/8cea0e949648ddc860b7fd0c92c65a14161c4869) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Undo of a chat turn: the film goes back as the turn found it. Studio took the film put back for a write of the agent's and merged the turn's clips into it, so a clip came back whose page the undo had just moved to the trash.
+
+- [#378](https://github.com/openfilm/openfilm/pull/378) [`d881a37`](https://github.com/openfilm/openfilm/commit/d881a37f1358392dadd7e11b3133d2d8ea7cd21e) Thanks [@WEBGRS](https://github.com/WEBGRS)! - The Windows installer keeps the library's preview videos. They were left out, so a transition, effect, sticker or text card in the library showed only its still picture under the pointer.
+
+- Updated dependencies [[`46811b0`](https://github.com/openfilm/openfilm/commit/46811b0a2359666cfc03e3dd6f64e0f1e08db764), [`b108090`](https://github.com/openfilm/openfilm/commit/b1080902e6847f55323dbc092981c0cc685a4578), [`8d9efb6`](https://github.com/openfilm/openfilm/commit/8d9efb61c9491be2caa299e32d23891992b92136), [`c4e178a`](https://github.com/openfilm/openfilm/commit/c4e178ae5aaf2a9a61342b32f530e1bff006214f), [`873eb0e`](https://github.com/openfilm/openfilm/commit/873eb0e7257e354d38b5aac1930a4b868dc60ca3), [`b5c6ff8`](https://github.com/openfilm/openfilm/commit/b5c6ff8bdd3e03f30ce3a662550f2debf80182f2), [`6e00efa`](https://github.com/openfilm/openfilm/commit/6e00efae10663922c4da62f99ec75e3c874ecbb7), [`90fed06`](https://github.com/openfilm/openfilm/commit/90fed06b47e510c92ab31c1a8d5843e6901ab5c6), [`49b2401`](https://github.com/openfilm/openfilm/commit/49b2401a22631bde0822372c67d02d7f24ccc58a), [`111b513`](https://github.com/openfilm/openfilm/commit/111b51362e9d76c2f304bbdf1fe0f5cb88a42a73), [`c1a4a0d`](https://github.com/openfilm/openfilm/commit/c1a4a0deef8dbdcdf19125fe9523c4fd03570719), [`a3e22ce`](https://github.com/openfilm/openfilm/commit/a3e22ce31781d8c364a6c7af0db1ff1015a04b7c), [`e846002`](https://github.com/openfilm/openfilm/commit/e8460024fedcac6e7fe9b19fb2ac196d044c92e8), [`574e6fe`](https://github.com/openfilm/openfilm/commit/574e6fee757e6e77fb49f050702f98ad23cefcde), [`916e845`](https://github.com/openfilm/openfilm/commit/916e845614ff10c5360c9d4e057b1e3db138ec36), [`af52c5c`](https://github.com/openfilm/openfilm/commit/af52c5c096aab2584711e96fa505ba76477deb35), [`0def7c0`](https://github.com/openfilm/openfilm/commit/0def7c0844ee98b806603dc847b964dc3dafbcda), [`43daa9b`](https://github.com/openfilm/openfilm/commit/43daa9bac517d053a67fcf3f0fc84de01eccee38), [`4df6f94`](https://github.com/openfilm/openfilm/commit/4df6f941cd6803f0b597994e30391be4531202ab), [`9bdcbb5`](https://github.com/openfilm/openfilm/commit/9bdcbb54cf5bbe4e1975590301b537284ae8dc0f), [`8cea0e9`](https://github.com/openfilm/openfilm/commit/8cea0e949648ddc860b7fd0c92c65a14161c4869), [`684d04d`](https://github.com/openfilm/openfilm/commit/684d04d2041d1442ec14d85d175e1413e7628d86)]:
+  - openfilm@0.3.1
+
 ## 0.3.0
 
 ### Minor Changes
