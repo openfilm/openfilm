@@ -358,7 +358,8 @@ export function warmProjectMedia(projectId: string, listing: MediaListing | null
  */
 export function srcHitsAsset(src: string, path: string): boolean {
   if (!src) return false;
-  return src === path || path.endsWith(`/${src}`) || src.endsWith(`/${path}`);
+  const file = src.split('#')[0]!;
+  return file === path || path.endsWith(`/${file}`) || file.endsWith(`/${path}`);
 }
 
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
