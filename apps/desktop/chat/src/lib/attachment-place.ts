@@ -9,6 +9,7 @@ export function attachmentPlace(path: string): string {
   const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
   if (cut <= 0) return '';
   const parent = trimmed.slice(0, cut);
+  if (/^[A-Za-z]:$/.test(parent)) return '';
   const home = parent.match(/^(?:\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:[\\/]Users[\\/][^\\/]+)(?=$|[\\/])/);
   const rest = (home ? parent.slice(home[0].length) : parent).split(/[\\/]/).filter(Boolean);
   if (rest.length > 2) return ['…', ...rest.slice(-2)].join(sep);
