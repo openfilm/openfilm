@@ -64,6 +64,12 @@ test('the API needs the key; /open sets it as a cookie and goes where it was ask
   assert.equal(write.status, 403);
 });
 
+test('a key written with other characters is refused, not thrown', async () => {
+  const bad = '😀'.repeat(studio.key.length / 2);
+  const res = await fetch(`${studio.origin}/open?key=${encodeURIComponent(bad)}`, { redirect: 'manual' });
+  assert.equal(res.status, 403);
+});
+
 test('a page\'s address with the key signs a browser in (a copied address opens anywhere); one signed in gets the key in its address', async () => {
   const page = await api(`/projects/x?key=${studio.key}`, { key: null });
   assert.equal(page.status, 200);
