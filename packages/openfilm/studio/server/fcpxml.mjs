@@ -11,7 +11,7 @@ const BASIC_TITLE = '.../Titles.localized/Bumper:Opener.localized/Basic Title.lo
  * @typedef {import('./nle.mjs').NleClip} NleClip
  * @typedef {{ start: number, end: number, in: number, clip?: NleClip, children: string[] }} PrimarySegment
  * @typedef {{ enabled: boolean, lane: number, offset: number, kind: 'video' | 'audio',
- *   children?: string[], audio?: string[], audioRole?: string }} ClipPlacement
+ *   children?: string[], audio?: string[], audioRole?: string, inheritedSpeed?: number }} ClipPlacement
  */
 
 /** XML attributes must preserve whitespace in names; text nodes keep literal line breaks. @param {string} value */
@@ -53,12 +53,16 @@ function connectionAt(primary, frame) {
 export function fcpxmlDocument(timeline, { cues = [] } = {}) {
   const { rate, width, height } = timeline;
   /** Exact rational seconds, including 1001-based rates, without decimal time drift. @param {number} frames @param {typeof rate} [r] */
-  const time = (frames, r = rate) => `${frames * (r.ntsc ? 1001 : 1)}/${r.timebase * (r.ntsc ? 1000 : 1)}s`;
+  const time = (frames, r = rate) => {
+    const precision = Number.isInteger(frames) ? 1 : 1_000_000;
+    return `${Math.round(frames * precision) * (r.ntsc ? 1001 : 1)}/${r.timebase * (r.ntsc ? 1000 : 1) * precision}s`;
+  };
   const decimal = (/** @type {number} */ n) => String(Math.round(n * 1e6) / 1e6);
   const decibels = (/** @type {number} */ gain) => `${decimal(20 * Math.log10(Math.max(0.000001, gain)))}dB`;
   const format = (/** @type {string} */ id, /** @type {number} */ w, /** @type {number} */ h, r = rate) =>
     `    <format id="${id}" frameDuration="${time(1, r)}" width="${w}" height="${h}" colorSpace="1-1-1 (Rec. 709)"/>`;
   const resources = [format('sequence-format', width, height)];
+  const files = new Map(timeline.files.map((file) => [file.id, file]));
   for (const file of timeline.files) {
     const video = file.video;
     if (video) resources.push(format(`format-${file.id}`, video.w, video.h, video.fps ? nleRate(video.fps) : rate));
@@ -71,18 +75,28 @@ export function fcpxmlDocument(timeline, { cues = [] } = {}) {
     );
   }
   /** @param {NleClip} clip @param {ClipPlacement} placement */
-  const clipXml = (clip, { enabled, lane, offset, kind, children = [], audio = [], audioRole }) => {
+  const clipXml = (clip, { enabled, lane, offset, kind, children = [], audio = [], audioRole, inheritedSpeed = 1 }) => {
     const tag = kind === 'video' ? 'clip' : 'audio';
+    const speed = (clip.speed ?? 1) / inheritedSpeed;
+    const duration = (clip.end - clip.start) * inheritedSpeed;
     const pad = lane === 0 ? '            ' : '              ';
     const attrs = [
       ...(kind === 'audio' ? [`ref="${clip.fileId}"`] : ['format="sequence-format"']), `name="${attribute(clip.name)}"`, `lane="${lane}"`,
-      `offset="${time(offset)}"`, `start="${time(clip.in)}"`, `duration="${time(clip.end - clip.start)}"`,
+      `offset="${time(offset)}"`, `start="${time(kind === 'audio' ? clip.in / speed : clip.in)}"`, `duration="${time(duration)}"`,
       `enabled="${enabled && clip.enabled ? 1 : 0}"`,
     ];
     if (audioRole) attrs.push(`role="${attribute(audioRole)}"`);
     const lines = [`${pad}<${tag} ${attrs.join(' ')}>`];
+    const retime = () => {
+      if (Math.abs(speed - 1) <= 1e-6) return;
+      const length = files.get(clip.fileId)?.durationFrames ?? clip.out;
+      lines.push(`${pad}  <timeMap preservesPitch="1">`,
+        `${pad}    <timept time="0s" value="0s" interp="linear"/>`,
+        `${pad}    <timept time="${time(length / speed)}" value="${time(length)}" interp="linear"/>`, `${pad}  </timeMap>`);
+    };
     if (kind === 'video') {
-      lines.push(`${pad}  <video ref="${clip.fileId}" name="${attribute(clip.name)}" offset="${time(clip.in)}" start="${time(clip.in)}" duration="${time(clip.end - clip.start)}">`);
+      lines.push(`${pad}  <video ref="${clip.fileId}" name="${attribute(clip.name)}" offset="${time(clip.in)}" start="${time(clip.in / speed)}" duration="${time(duration)}">`);
+      retime();
       // Disable automatic fitting: the planner's scale is relative to the source's own pixels.
       lines.push(`${pad}  <adjust-conform type="none"/>`);
       if (clip.motion) {
@@ -92,13 +106,16 @@ export function fcpxmlDocument(timeline, { cues = [] } = {}) {
       }
       // FCP keeps footage audio connected when it is nested inside the video component.
       lines.push(...audio, `${pad}  </video>`);
-    } else if (clip.levels?.length) {
-      lines.push(`${pad}  <adjust-volume>`, `${pad}    <param name="amount">`, `${pad}      <keyframeAnimation>`);
-      for (const key of clip.levels) {
-        lines.push(`${pad}        <keyframe time="${time(clip.in + key.when)}" value="${decibels(key.value)}"/>`);
-      }
-      lines.push(`${pad}      </keyframeAnimation>`, `${pad}    </param>`, `${pad}  </adjust-volume>`);
-    } else if (clip.gain !== undefined) lines.push(`${pad}  <adjust-volume amount="${decibels(clip.gain)}"/>`);
+    } else {
+      retime();
+      if (clip.levels?.length) {
+        lines.push(`${pad}  <adjust-volume>`, `${pad}    <param name="amount">`, `${pad}      <keyframeAnimation>`);
+        for (const key of clip.levels) {
+          lines.push(`${pad}        <keyframe time="${time(clip.in + key.when * (clip.speed ?? 1))}" value="${decibels(key.value)}"/>`);
+        }
+        lines.push(`${pad}      </keyframeAnimation>`, `${pad}    </param>`, `${pad}  </adjust-volume>`);
+      } else if (clip.gain !== undefined) lines.push(`${pad}  <adjust-volume amount="${decibels(clip.gain)}"/>`);
+    }
     return [...lines, ...children, `${pad}</${tag}>`];
   };
   const main = timeline.video[0];
@@ -107,18 +124,18 @@ export function fcpxmlDocument(timeline, { cues = [] } = {}) {
     .sort((a, b) => a - b);
   const audioRoles = new Map(sourceTracks.map((track, i) => [track, `OpenFilm A${i + 1}`]));
   /** Paired footage sound follows its own picture; unrelated sound stays connected to the primary storyline.
-   * @type {Map<string, { start: number, in: number, children: string[] }>}
+   * @type {Map<string, { start: number, in: number, speed: number, children: string[] }>}
    */
   const linked = new Map();
   for (const segment of primary) {
     if (!segment.clip?.linkGroup) continue;
     const children = /** @type {string[]} */ ([]);
-    linked.set(segment.clip.linkGroup, { start: segment.start, in: segment.in, children });
+    linked.set(segment.clip.linkGroup, { start: segment.start, in: segment.in, speed: segment.clip.speed ?? 1, children });
   }
   const overlays = timeline.video.slice(1).flatMap((track, i) => track.clips.map((clip) => {
     const { parent, offset } = connectionAt(primary, clip.start);
     const audio = /** @type {string[]} */ ([]);
-    if (clip.linkGroup) linked.set(clip.linkGroup, { start: clip.start, in: clip.in, children: audio });
+    if (clip.linkGroup) linked.set(clip.linkGroup, { start: clip.start, in: clip.in, speed: clip.speed ?? 1, children: audio });
     return { clip, parent, offset, lane: i + 1, enabled: track.enabled, audio };
   }));
   timeline.audio.forEach((track, i) => {
@@ -127,8 +144,9 @@ export function fcpxmlDocument(timeline, { cues = [] } = {}) {
       const audioRole = clip.sourceRow ? `OpenFilm ${clip.sourceRow}` : role;
       const picture = clip.linkGroup ? linked.get(clip.linkGroup) : undefined;
       const parent = picture ?? connectionAt(primary, clip.start).parent;
-      const offset = parent.in + clip.start - parent.start;
-      parent.children.push(...clipXml(clip, { enabled: track.enabled, lane: -i - 1, offset, kind: 'audio', audioRole }));
+      const inheritedSpeed = picture?.speed ?? 1;
+      const offset = parent.in + (clip.start - parent.start) * inheritedSpeed;
+      parent.children.push(...clipXml(clip, { enabled: track.enabled, lane: -i - 1, offset, kind: 'audio', audioRole, inheritedSpeed }));
     }
   });
   for (const { clip, parent, ...placement } of overlays) {

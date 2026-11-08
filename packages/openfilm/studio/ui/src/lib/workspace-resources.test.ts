@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatClipDuration, mediaListingOf, mediaNameMatches, renameChangesKind, renamedPath, safeName } from './workspace-resources.ts';
+import { formatClipDuration, mediaListingOf, mediaNameMatches, renameChangesKind, renamedPath, safeName, srcHitsAsset } from './workspace-resources.ts';
 
 test('names keep spaces and every script; only what file systems refuse goes (the server’s rule, files.mjs)', () => {
   assert.equal(safeName('镜头 01.mp4'), '镜头 01.mp4');
@@ -73,4 +73,10 @@ test('links to media kept elsewhere ride on their files and folders', () => {
   });
   assert.deepEqual(listing.linkedDirs, { nas: { to: '/Volumes/NAS/shoot' } });
   assert.deepEqual(listing.files.map((f) => f.link ?? null), [null, { to: '/Volumes/NAS/off.png', missing: true }]);
+});
+
+test('a clip with a fragment in its src still hits its file', () => {
+  assert.equal(srcHitsAsset('scenes/intro.html#t=0,3', 'assets/scenes/intro.html'), true);
+  assert.equal(srcHitsAsset('scenes/intro.html', 'assets/scenes/intro.html'), true);
+  assert.equal(srcHitsAsset('scenes/other.html#t=0,3', 'assets/scenes/intro.html'), false);
 });

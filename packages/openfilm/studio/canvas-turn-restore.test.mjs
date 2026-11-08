@@ -21,7 +21,7 @@ test('a restored chat turn refreshes the canvas and clears steps that could brin
     const before = { nodes: [{ id: 'note', x: 0, y: 0, w: 350, h: 200, text: 'Before the turn' }], edges: [] };
     await writeFile(join(root, '.film', 'canvas.json'), JSON.stringify(before));
     const project = await openProject(root);
-    studio = await startStudio({ port: 0, openBrowser: () => {} });
+    studio = await startStudio({ port: 0, openBrowser: () => {}, editorDir: process.env.OPENFILM_TEST_EDITOR_DIR });
     const post = async (path, body) => {
       const response = await fetch(`${studio.origin}${path}`, {
         method: 'POST', headers: { 'x-studio-key': studio.key, 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}),

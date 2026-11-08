@@ -102,6 +102,7 @@ interface Settings {
   /** the app it is for: `draft` 剪映 (in Chinese) or CapCut (elsewhere), the same draft; `auto`: the draft when that app
       is on this computer, else Premiere Pro */
   nle: { app: 'auto' | 'draft' | keyof typeof NLE_APPS; fps: number | 'source'; audio: 'clips' | 'stems'; subtitles: boolean;
+    footage: 'source' | 'render'; media: 'link' | 'copy';
     /** How the pages are written: for a draft, and for Premiere Pro or DaVinci Resolve (Final Cut Pro takes ProRes). */
     alphaDraft: NleAlpha; alphaXml: NleAlpha };
   subtitles: { format: 'srt' | 'vtt' | 'txt' };
@@ -118,7 +119,7 @@ const DEFAULTS: Settings = {
   gif: { width: 640, fps: 15, frame: 'current', fill: 'contain', burn: true },
   alpha: { codec: 'prores4444', source: WHOLE_FILM, shortEdge: 1080, scale: 1, fps: 30, audio: true },
   audio: { format: 'wav', mix: true, stems: false },
-  nle: { app: 'auto', fps: 'source', audio: 'clips', subtitles: true, alphaDraft: 'auto', alphaXml: 'prores4444' },
+  nle: { app: 'auto', fps: 'source', audio: 'clips', subtitles: true, footage: 'source', media: 'copy', alphaDraft: 'auto', alphaXml: 'prores4444' },
   subtitles: { format: 'srt' },
   images: { as: 'files', format: 'png', shortEdge: 1080, frame: 'current', fill: 'contain', burn: false },
   project: { as: 'zip', history: false, chat: false, logs: false },
@@ -138,6 +139,8 @@ function loadSettings(language: string, projectFps: number): Settings {
     }) | null;
     if (!raw || typeof raw !== 'object') return first;
     const nle = { ...DEFAULTS.nle, ...raw.nle };
+    if (nle.footage !== 'source' && nle.footage !== 'render') nle.footage = DEFAULTS.nle.footage;
+    if (nle.media !== 'link' && nle.media !== 'copy') nle.media = DEFAULTS.nle.media;
     if (nle.app !== 'auto' && nle.app !== 'draft' && !Object.hasOwn(NLE_APPS, nle.app)) nle.app = 'auto';
     const images = { ...DEFAULTS.images, ...raw.images };
     if (!IMAGE_OUTPUTS.includes(images.as)) images.as = 'files';
@@ -441,7 +444,7 @@ export function ExportCenter(props: ExportCenterProps) {
       }
       case 'nle':
         return [{
-          kind: 'nle', format: nleApp === 'draft' ? draftApp : NLE_APPS[nleApp].format, fps: s.nle.fps === 'source' ? (nleSourceFps ?? projectFps) : s.nle.fps, audio: s.nle.audio, media: 'copy', alpha: nleAlpha,
+          kind: 'nle', format: nleApp === 'draft' ? draftApp : NLE_APPS[nleApp].format, fps: s.nle.fps === 'source' ? (nleSourceFps ?? projectFps) : s.nle.fps, audio: s.nle.audio, media: s.nle.media, footage: s.nle.footage, alpha: nleAlpha,
           subtitles: s.nle.subtitles, label: nleApp === 'draft' ? tApp('exportCenter.nleDraftTitle') : `${NLE_APPS[nleApp].name} XML`,
         }];
       case 'subtitles':
@@ -856,6 +859,20 @@ export function ExportCenter(props: ExportCenterProps) {
                       ]}
                       onChange={(app) => patch('nle', { app })}
                     />
+                  </Field>
+                  <Field label={t('exportCenter.nleFootage')}>
+                    <Segmented value={s.nle.footage} options={[
+                      { value: 'source', label: t('exportCenter.nleFootageSource') },
+                      { value: 'render', label: t('exportCenter.nleFootageRender') },
+                    ]} onChange={(footage) => patch('nle', { footage })} />
+                    <Hint>{t(s.nle.footage === 'source' ? 'exportCenter.nleFootageSourceHint' : 'exportCenter.nleFootageRenderHint')}</Hint>
+                  </Field>
+                  <Field label={t('exportCenter.nleMedia')}>
+                    <Segmented value={s.nle.media} options={[
+                      { value: 'link', label: t('exportCenter.nleMediaLink') },
+                      { value: 'copy', label: t('exportCenter.nleMediaCopy') },
+                    ]} onChange={(media) => patch('nle', { media })} />
+                    <Hint>{t(s.nle.media === 'link' ? 'exportCenter.nleMediaLinkHint' : 'exportCenter.nleMediaCopyHint')}</Hint>
                   </Field>
                   {nleAlphaKind && (
                     <Field label={t('exportCenter.nleAlpha')}>

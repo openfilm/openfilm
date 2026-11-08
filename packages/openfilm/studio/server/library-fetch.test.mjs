@@ -54,6 +54,31 @@ test('a published bundle comes with every file its list names', async () => {
   for (const file of ['saved.json', 'files/emoji.html', 'files/emoji.png']) assert.ok(libraryFile(`stickers/emoji/alien/${file}`), file);
 });
 
+test('an incomplete bundle retries the missing files instead of being offered as complete', async () => {
+  const { existsSync } = await import('node:fs');
+  put('stickers/emoji/retry/files.json', JSON.stringify(['saved.json', 'files/image.png']));
+  put('stickers/emoji/retry/saved.json', '{}');
+  assert.equal(await fetchLibrary('stickers/emoji/retry'), null);
+  const folder = join(libraryCache(), 'stickers/emoji/retry');
+  assert.equal(existsSync(join(folder, '.partial')), true);
+  put('stickers/emoji/retry/files/image.png', 'complete image');
+  assert.equal(await fetchLibrary('stickers/emoji/retry'), folder);
+  assert.equal(readFileSync(join(folder, 'files/image.png'), 'utf8'), 'complete image');
+  assert.equal(existsSync(join(folder, '.partial')), false);
+});
+
+test('a card preview and its bundle share one file download', async () => {
+  put('stickers/emoji/parallel/files.json', JSON.stringify(['saved.json', 'files/image.png']));
+  put('stickers/emoji/parallel/saved.json', '{}');
+  put('stickers/emoji/parallel/files/image.png', 'one image');
+  const [file, bundle] = await Promise.all([
+    fetchLibrary('stickers/emoji/parallel/files/image.png'), fetchLibrary('stickers/emoji/parallel'),
+  ]);
+  assert.equal(file, join(libraryCache(), 'stickers/emoji/parallel/files/image.png'));
+  assert.equal(bundle, join(libraryCache(), 'stickers/emoji/parallel'));
+  assert.equal(asked.filter((url) => url.endsWith('/parallel/files/image.png')).length, 1);
+});
+
 test('nothing is fetched for what is not published, missing, or outside the library', async () => {
   const before = asked.length;
   assert.equal(await fetchLibrary('effects/snow/poster.jpg'), null, 'shipped with the package: never fetched');

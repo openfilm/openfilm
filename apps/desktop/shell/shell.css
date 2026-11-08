@@ -16,3 +16,12 @@
 #of-chat-layer { height: 0; background: transparent; }
 /* focused by a click to keep the keyboard in the chat (index.html), never ringed */
 #of-chat:focus, #of-chat-layer:focus { outline: none; }
+
+#of-chat .workspace-chat-divider { right:-5px; }
+#of-chat[data-side='right'] .workspace-chat-divider { right:auto; left:-5px; }
+
+#of-chat[data-workspace-bounds] .workspace-chat-divider { display:none; }
+
+/* Legacy side chat owns its one-pixel edge. Custom workspaces already reserve the separator gap. */
+#of-chat:not([data-workspace-bounds])[data-side='left'] { border-right:1px solid var(--dock-line); }
+#of-chat:not([data-workspace-bounds])[data-side='right'] { border-left:1px solid var(--dock-line); }

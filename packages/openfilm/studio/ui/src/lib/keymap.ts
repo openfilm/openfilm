@@ -41,6 +41,7 @@ export const ACTIONS = [
   { id: 'prev-marker', tab: 'timeline', keys: ['alt+m', 'alt+shift+m'] },
   { id: 'speed', tab: 'timeline', keys: ['mod+r'] },
   { id: 'detach-audio', tab: 'timeline', keys: ['ctrl+shift+s'] },
+  { id: 'toggle-clip', tab: 'timeline', keys: ['shift+e'] },
   { id: 'compound', tab: 'timeline', keys: ['alt+g'] },
   { id: 'uncompound', tab: 'timeline', keys: ['alt+shift+g'] },
   /* the player */

@@ -16,6 +16,7 @@ import { HttpError, json, readJson } from '../http.mjs';
 import { changeSettings, cleanKey, envKey, kindOf, modelFor, providerKey, readSettings } from '../keys.mjs';
 import { shownService, withService } from '../custom-services.mjs';
 import { cancelSignIn, signInState, signOut, startSignIn } from '../sign-in.mjs';
+import { desktopAccount } from '../account.mjs';
 import elevenlabs from './elevenlabs.mjs';
 import inworld from './inworld.mjs';
 import cartesia from './cartesia.mjs';
@@ -159,15 +160,18 @@ export function shownChoices(settings) {
 async function state() {
   await freshProviders();
   const settings = await readSettings();
+  const account = await desktopAccount();
   return {
     providers: OWN.map((p) => {
       const key = providerKey(p, settings);
+      const invalid = p.id === 'openfilm' && account.connection?.status === 401;
       /* `envKey`: the environment has one (connected or not), so connecting can use it */
       const inEnv = envKey(p);
       return {
         id: p.id, name: p.name, verbs: p.verbs, models: p.models ?? {}, keysUrl: p.keysUrl, pricingUrl: p.pricingUrl, env: key?.env ?? inEnv?.env ?? p.env, envKey: Boolean(inEnv),
         /* `keyless`: it connects without a key; connected so, it has no last four */
-        ...(p.keyless ? { keyless: true } : {}), source: key?.source ?? null, last4: key?.key ? key.key.slice(-4) : null,
+        ...(p.keyless ? { keyless: true } : {}), source: invalid ? null : key?.source ?? null, last4: key?.key ? key.key.slice(-4) : null,
+        ...(invalid ? { connectionError: 'This OpenFilm connection is no longer valid. Connect again.' } : {}),
         /* connected by signing in (sign-in.mjs), and as whom */
         signIn: Boolean(p.signIn), account: key?.source === 'file' ? settings.accounts[p.id] ?? null : null,
         /* one the person added (added.mjs), not built in */

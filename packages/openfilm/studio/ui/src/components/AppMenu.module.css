@@ -1,0 +1,18 @@
+.menu { composes:surface from './ToolbarSurface.module.css'; display:flex; flex-direction:column; width:208px; max-width:calc(100vw - 24px); max-height:var(--popover-max-h,80vh); overflow-y:auto; overscroll-behavior:contain; padding:5px; outline:none; }
+.flyout { composes:surface from './ToolbarSurface.module.css'; position:absolute; width:220px; max-width:calc(100vw - 20px); padding:13px; outline:none; }
+.row { display:flex; align-items:center; gap:8px; width:100%; min-height:31px; padding:6px 9px; border-radius:5px; color:var(--text); text-align:left; outline:none; transition:background-color .12s ease; }
+.row:hover,.row:focus-visible,.active { background:var(--bg-hover); }
+.row:focus-visible { box-shadow:inset 0 0 0 1px var(--accent); }
+.icon { display:flex; flex-shrink:0; align-items:center; color:var(--text-muted); }
+.icon svg { stroke-width:1.6; }
+.label { flex:1; min-width:0; }
+.end { flex-shrink:0; color:var(--text-faint); }
+.communityGroup + .communityGroup { margin-top:18px; }
+.groupLabel { margin-bottom:9px; color:var(--text-muted); font-size:11px; font-weight:500; line-height:16px; }
+.logos { display:flex; align-items:center; isolation:isolate; padding-left:1px; }
+.logo { position:relative; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:34px; height:34px; border:2px solid var(--bg-topbar-popover); border-radius:50%; outline:none; background:color-mix(in srgb,var(--text) 8%,var(--bg-topbar-popover)); color:var(--text-muted); box-shadow:0 0 0 1px var(--border); transition:color .12s ease,background-color .12s ease,transform .12s ease; }
+.logo + .logo { margin-left:-5px; }
+.logo:hover,.logo:focus-visible { z-index:2; color:var(--text); background:color-mix(in srgb,var(--text) 15%,var(--bg-topbar-popover)); transform:translateY(-2px); }
+.logo:focus-visible { box-shadow:0 0 0 1px var(--accent); }
+@keyframes appear { from { opacity:0; } to { opacity:1; } }
+@media (prefers-reduced-motion: reduce) { .menu,.flyout { animation:none; } .logo { transition:none; } .logo:hover,.logo:focus-visible { transform:none; } }

@@ -139,6 +139,8 @@ export const ko: Words = {
     agentPermissionTitle: '{name}이(가) 다음 작업을 하려고 합니다',
     agentSection: '에이전트',
     agentSetUp: '설정',
+    modelUnavailable: "서비스 업데이트 대기",
+    modelUnavailableInfo: "이 모델은 표시하도록 설정되었지만 연결된 서비스에서 아직 제공하지 않습니다. 서비스 업데이트 후 사용할 수 있으며 스위치를 다시 켤 필요는 없습니다.",
     agentWaiting: '로그인하는 중…',
     agentWas: '이 대화는 {name}을(를) 사용했지만 지금은 사용할 수 없습니다. 다음 메시지는 아래에서 선택한 에이전트로 전송됩니다.',
     effort: '추론 강도',

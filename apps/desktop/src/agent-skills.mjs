@@ -41,7 +41,7 @@ const require = createRequire(import.meta.url);
 const skillsLib = () => import(pathToFileURL(require.resolve('openfilm/skills')).href);
 
 /** The agents whose own skills can be hidden in OpenFilm (byok: the app's own agent, Pi). */
-export const FILTERED_AGENTS = Object.freeze(['claude', 'codex', 'opencode', 'qwen', 'byok']);
+export const FILTERED_AGENTS = Object.freeze(['claude', 'codex', 'opencode', 'qwen', 'openfilm', 'byok']);
 /** The agents whose own MCP servers can be hidden in OpenFilm. */
 export const MCP_AGENTS = Object.freeze(['claude', 'codex', 'opencode', 'qwen', 'copilot']);
 
@@ -354,7 +354,7 @@ export async function sessionSkills(agent, { cwd, env = {}, dataDir, mine, prefs
         args: mcpHidden.flatMap((n) => ['--disable-mcp-server', n]),
         log,
       };
-    case 'byok':
+    case 'openfilm': case 'byok':
       return { piSkills: { paths: [join(dir, 'skills')], names }, log };
     default:
       return { log };

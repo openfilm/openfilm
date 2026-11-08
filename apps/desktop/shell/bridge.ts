@@ -62,16 +62,18 @@ const events = <T,>() => signal<T>(undefined as T);
 /* ── the chat's column, left of Studio: open or not, how wide, and the assets drawer over it ── */
 const TOP_BAR = 32;
 const column = document.getElementById('of-chat')!;
-const layout = { open: true, width: 420, min: 340, studioMin: 640 };
+const layout = { open: true, width: 420, min: 340, studioMin: 640, side: 'left' as 'left' | 'right', libraryDock: 'left' as 'left' | 'right' | 'bottom' | 'chat' };
 /** the assets open in the column (Studio draws them, above the composer); `bottom`: the composer's height, all the
     chat shows then */
 const assets = { open: false, bottom: 120 };
 const assetsSignal = signal(false);
+const assetsOverlaySignal = signal(false);
 const chatOpenSignal = signal(true);
 
 /** The column's width as the window allows it: Studio keeps its least width, the chat its own while it fits. */
-const shownWidth = () => (layout.open ? Math.max(Math.min(layout.width, innerWidth - layout.studioMin), Math.min(layout.min, innerWidth)) : 0);
-const panelState = () => ({ open: layout.open, width: shownWidth(), assets: { open: assets.open && layout.open, bottom: assets.bottom } });
+let workspaceBounds: { left: number; top: number; width: number; height: number } | null = null;
+const shownWidth = () => workspaceBounds && layout.open ? workspaceBounds.width : (layout.open ? Math.max(Math.min(layout.width, innerWidth - layout.studioMin), Math.min(layout.min, innerWidth)) : 0);
+const panelState = () => ({ open: layout.open, width: shownWidth(), preferredWidth: layout.width, assets: { open: assets.open && (layout.libraryDock !== 'chat' || layout.open), bottom: assets.bottom } });
 const panelListeners = new Set<Listener<ReturnType<typeof panelState>>>();
 
 /** The page shows a project (not a new tab's launcher): only then is there a chat to show. */
@@ -79,10 +81,19 @@ const onProject = () => /^\/projects\/[\w-]+/.test(location.pathname);
 function place() {
   column.hidden = !layout.open || !onProject();
   column.style.width = `${shownWidth()}px`;
-  column.style.top = `${TOP_BAR}px`;
+  column.style.top = `${workspaceBounds?.top ?? TOP_BAR}px`;
+  column.style.left = workspaceBounds ? `${workspaceBounds.left}px` : layout.side === 'left' ? '0px' : 'auto';
+  column.style.right = workspaceBounds ? 'auto' : layout.side === 'right' ? '0px' : 'auto';
+  column.style.bottom = workspaceBounds ? 'auto' : '0px';
+  column.style.height = workspaceBounds ? `${workspaceBounds.height}px` : 'auto';
+  column.style.borderTopWidth = !workspaceBounds || workspaceBounds.top === TOP_BAR ? '1px' : '0px';
+  column.toggleAttribute('data-workspace-bounds', workspaceBounds !== null);
+  column.dataset.side = layout.side;
   /* the column never moves or resizes for the assets: the chat shows only its composer then, and the rest of the
      column lets the drawer under it be seen and used (shell.css) */
-  column.toggleAttribute('data-assets-open', assets.open && layout.open);
+  const overlay = assets.open && layout.open && layout.libraryDock === 'chat';
+  column.toggleAttribute('data-assets-open', overlay);
+  assetsOverlaySignal.set(overlay);
   const state = panelState();
   for (const listener of panelListeners) listener(state);
 }
@@ -92,7 +103,7 @@ function setChatOpen(open: boolean) {
   if (open === layout.open) return;
   layout.open = open;
   flushSync(() => {
-    if (!open && assets.open) { assets.open = false; assetsSignal.set(false); }
+    if (!open && assets.open && layout.libraryDock === 'chat') { assets.open = false; assetsSignal.set(false); }
     place();
     chatOpenSignal.set(open);
   });
@@ -100,13 +111,13 @@ function setChatOpen(open: boolean) {
 }
 function setChatWidth(width: number, done = false) {
   if (!Number.isFinite(width)) return;
-  layout.width = Math.round(Math.max(layout.min, Math.min(width, innerWidth - layout.studioMin)));
+  layout.width = Math.round(Math.max(layout.min, Math.min(width, 800)));
   place();
   if (done) native.saveLayout({ chatOpen: layout.open, chatWidth: layout.width });
 }
 function setAssetsOpen(open: boolean) {
-  if (open && !layout.open) setChatOpen(true);
-  assets.open = open && layout.open;
+  if (open && !layout.open && layout.libraryDock === 'chat') setChatOpen(true);
+  assets.open = open && (layout.libraryDock !== 'chat' || layout.open);
   /* the chat folding to its composer and Studio's drawer appearing are one frame: neither is seen without the other */
   flushSync(() => {
     assetsSignal.set(assets.open);
@@ -223,7 +234,7 @@ const asks = signal<HostAsk[]>([]);
 let answerAsk: (id: string, allow: boolean) => void = () => {};
 
 /* ── Settings → Developer (kept by the app): Studio switches it, the chat shows each turn's log and changes by it ── */
-interface AppPrefs { developer: boolean; changes: boolean }
+interface AppPrefs { developer: boolean; changes: boolean; notify?: boolean }
 const developerOf = (prefs: AppPrefs) => ({ logs: prefs.developer === true, changes: prefs.changes !== false });
 const developer = {
   get: async () => developerOf(await native.prefs.get()),
@@ -232,6 +243,13 @@ const developer = {
     ...(typeof next.changes === 'boolean' ? { changes: next.changes } : {}),
   }),
   onChange: (listener: Listener<{ logs: boolean; changes: boolean }>) => native.prefs.onChange((prefs) => listener(developerOf(prefs))),
+};
+
+/* ── Settings → General (kept by the app): the system's notifications of a turn done, stopped or waiting ── */
+const notifications = {
+  get: async () => (await native.prefs.get()).notify !== false,
+  set: (on: boolean) => native.prefs.set({ notify: on }),
+  onChange: (listener: Listener<boolean>) => native.prefs.onChange((prefs) => listener(prefs.notify !== false)),
 };
 
 /* ── the app's update, for Studio's top bar: a version downloaded and ready (src/updates.mjs), Restart to install it ── */
@@ -271,8 +289,8 @@ const host: StudioHost = {
   version: 1,
   name: 'OpenFilm',
   projectChanged,
-  ...(mac ? { titlebar: { inset: INSET, onChange: (listener: Listener<number>) => { fullScreen.on((full) => listener(full ? 6 : INSET)); } } } : {}),
-  ...(windows ? { titlebar: { inset: 6, insetRight: INSET_RIGHT } } : {}),
+  ...(mac ? { titlebar: { get inset() { return fullScreen.get() ? 0 : INSET; }, onChange: (listener: Listener<number>) => { fullScreen.on((full) => listener(full ? 0 : INSET)); } } } : {}),
+  ...(windows ? { titlebar: { get inset() { return fullScreen.get() ? 0 : 6; }, insetRight: INSET_RIGHT, onChange: (listener: Listener<number>) => { fullScreen.on(full => listener(full ? 0 : 6)); } } } : {}),
   /* in order, each with its picture: two pointed at quickly must not swap or share a screenshot */
   refer: (ref) => {
     if (!layout.open) setChatOpen(true);
@@ -287,15 +305,29 @@ const host: StudioHost = {
     label: 'Chat',
     get open() { return layout.open; },
     get width() { return shownWidth(); },
+    get preferredWidth() { return layout.width; },
     get assets() { return panelState().assets; },
     setOpen: setChatOpen,
     setAssetsOpen,
     setWidth: (width, done) => setChatWidth(width, done === true),
-    onChange: (listener) => { panelListeners.add(listener); listener(panelState()); },
+    setBounds(bounds) {
+      if (bounds && !Object.values(bounds).every(value => Number.isFinite(value) && value >= 0)) return;
+      if (JSON.stringify(workspaceBounds) === JSON.stringify(bounds)) return;
+      workspaceBounds = bounds;
+      place();
+    },
+    setPlacement(placement) {
+      if (layout.side === placement.side && layout.libraryDock === placement.libraryDock) return;
+      layout.side = placement.side; layout.libraryDock = placement.libraryDock;
+      if (assets.open && layout.libraryDock === 'chat' && !layout.open) setChatOpen(true);
+      place();
+    },
+    onChange: (listener) => { panelListeners.add(listener); listener(panelState()); return () => { panelListeners.delete(listener); }; },
   },
   agents: native.agents,
   asks: { show: (list, answer) => { answerAsk = answer; asks.set(list); } },
   developer,
+  notifications,
   update,
   folders: { pick: native.pickFolder, pathOf: native.pathForFile },
   tabs: native.tabs,
@@ -419,6 +451,8 @@ function commandFor(ref: StudioRef): StudioCommand {
   assetsOpen: () => assets.open,
   setAssetsOpen,
   onAssets: assetsSignal.on,
+  assetsOverlay: () => assetsOverlaySignal.get(),
+  onAssetsOverlay: assetsOverlaySignal.on,
   setComposerHeight(px: number) {
     const bottom = Math.round(px);
     if (!Number.isFinite(bottom) || bottom < 40 || bottom === assets.bottom) return;

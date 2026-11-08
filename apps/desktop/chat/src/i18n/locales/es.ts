@@ -143,6 +143,8 @@ export const es: Words = {
     agentPermissionTitle: '{name} quiere hacer esto',
     agentSection: 'Agente',
     agentSetUp: 'Configurar',
+    modelUnavailable: "Actualización pendiente",
+    modelUnavailableInfo: "Este modelo está activado para mostrarse, pero el servicio conectado aún no lo ofrece. Estará disponible tras actualizar el servicio; no necesitas volver a activarlo.",
     agentWaiting: 'Iniciando sesión…',
     agentWas: 'Esta conversación usaba {name}, que ahora no está disponible. El siguiente mensaje irá al agente de abajo.',
     effort: 'Esfuerzo',
