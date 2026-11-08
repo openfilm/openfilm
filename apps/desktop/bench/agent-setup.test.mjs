@@ -105,7 +105,7 @@ test('agent setup guides desktop-only installs, folder selection and model failu
       await antigravity.getByRole('button', { name: zh ? '运行安装' : 'Run installer', exact: true }).click();
       assert.deepEqual(await page.evaluate(() => window.agentSetupFixture.calls.install), ['antigravity'], 'the same host terminal installation action is used');
       await antigravity.getByText(zh ? '正在安装连接组件…完成后会自动检测。' : 'Installing the connection component… It will be detected automatically.', { exact: true }).waitFor();
-      await page.evaluate(() => window.agentSetupFixture.publish('antigravity', { status: 'off', installing: undefined, path: '/home/test/.local/bin/agy' }));
+      await page.evaluate(() => window.agentSetupFixture.publish('antigravity', { status: 'off', installing: undefined, path: '/agents/agy' }));
       await antigravity.getByRole('button', { name: zh ? '连接' : 'Connect', exact: true }).waitFor();
       assert.equal(await page.getByRole('button', { name: /More actions for|的更多操作/ }).count(), 0);
       await helpButton('Cursor').click();
