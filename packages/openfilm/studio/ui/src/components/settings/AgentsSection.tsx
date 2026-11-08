@@ -60,6 +60,7 @@ function useHostAgents(): HostAgent[] | null {
 
 /** The person's own agents (the app's AGENTS), in the roster's order. */
 const OWN: readonly HostAgentId[] = ['codex', 'claude', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi', 'minimax', 'deepseek', 'antigravity'];
+const MORE_ORDER: Partial<Record<HostAgentId, number>> = { antigravity: 0, deepseek: 1 };
 /** whose maker's mark is its company's */
 function AgentMark({ id }: { id: HostAgentId }) {
   return id === 'byok' ? <KeyRound size={16} /> : <ProviderMark id={agentMark(id)} size={17} />;
@@ -109,7 +110,7 @@ function UsageBar({ window: w }: { window: HostAgentUsage['windows'][number] }) 
       <div className="h-1.5 min-w-[80px] flex-1 overflow-hidden rounded-full bg-[var(--bg-field)]" role="progressbar" aria-label={label} aria-valuenow={used} aria-valuemin={0} aria-valuemax={100}>
         <div className={`h-full rounded-full ${used >= 90 ? 'bg-[var(--err)]' : used >= 70 ? 'bg-[var(--warn)]' : 'bg-[var(--accent)]'}`} style={{ width: `${Math.max(used, 1.5)}%` }} />
       </div>
-      <span className="w-[64px] shrink-0 text-right tabular-nums text-[var(--text)]">{t('settings.agents.usageUsed').replace('{percent}', String(used))}</span>
+      <span className="w-[84px] shrink-0 whitespace-nowrap text-right tabular-nums text-[var(--text)]">{t('settings.agents.usageUsed').replace('{percent}', String(used))}</span>
       <span className="w-[120px] shrink-0 truncate text-[var(--text-faint)]">{resets ?? ''}</span>
     </div>
   );
@@ -406,7 +407,7 @@ export function AgentsSection() {
   /* always yours: Codex, Claude Code and your own key; then the others switched on, the rest under "More" */
   const always = (['codex', 'claude', 'byok'] as const).map(byId).filter((a): a is HostAgent => Boolean(a));
   const others = list.filter((a) => OWN.includes(a.id) && !always.includes(a));
-  const more = others.filter((a) => !a.shown);
+  const more = others.filter((a) => !a.shown).sort((a, b) => (MORE_ORDER[a.id] ?? 2) - (MORE_ORDER[b.id] ?? 2));
   return (
     <SettingsPage note={t('settings.agents.intro')}>
       <div className="mb-3 flex justify-end">
