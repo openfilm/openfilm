@@ -73,7 +73,15 @@ const menu = page => page.locator('[data-layout-menu]');
 async function openLayout(page) { if (!await menu(page).count()) await page.getByRole('button', { name: 'Layout', exact: true }).click(); return menu(page); }
 async function closeLayout(page) { if (await menu(page).count()) await page.keyboard.press('Escape'); }
 async function rect(locator) { const value = await locator.boundingBox(); assert.ok(value); return value; }
-async function profile(page, mode = 'edit') { await page.waitForTimeout(150); return page.evaluate(mode => JSON.parse(localStorage.getItem('openfilm.workspace.current.v2'))[mode], mode); }
+async function profile(page, mode = 'edit', { hasTree, libraryDock, changedFrom } = {}) {
+  await page.waitForFunction(({ mode, hasTree, libraryDock, changedFrom }) => {
+    const value = JSON.parse(localStorage.getItem('openfilm.workspace.current.v2') ?? 'null')?.[mode];
+    return value && (hasTree === undefined || Boolean(value.tree) === hasTree)
+      && (libraryDock === undefined || value.libraryDock === libraryDock)
+      && (changedFrom === undefined || JSON.stringify(value) !== changedFrom);
+  }, { mode, hasTree, libraryDock, changedFrom });
+  return page.evaluate(mode => JSON.parse(localStorage.getItem('openfilm.workspace.current.v2'))[mode], mode);
+}
 async function shot(page, name) { if (output) await page.screenshot({ path: join(output,name) }); }
 
 const editor = page => page.locator('[data-workspace-editor]');
@@ -178,10 +186,10 @@ test('finished layouts move chat and all panel boundaries, persist and restore i
     assert.equal(await editor(page).count(),0);
     const chat=await rect(page.locator('#test-chat'));
     assert.equal(chat.x,0);assert.equal(chat.width,1800);assert.equal(chat.y+chat.height,1100);
-    const beforeHeight=chat.height;
+    const beforeHeight=chat.height, beforeResize=JSON.stringify(await profile(page,'edit',{hasTree:true}));
     await page.locator('[data-workspace-seam=""]').focus();await page.keyboard.press('ArrowDown');
     assert.ok((await rect(page.locator('#test-chat'))).height<beforeHeight,'a split resizes actual native chat bounds');
-    const edit=await profile(page);assert.ok(edit.tree);
+    const edit=await profile(page,'edit',{hasTree:true,changedFrom:beforeResize});assert.ok(edit.tree);
     await page.reload();await page.locator('[data-work-mode="edit"]').waitFor();
     assert.deepEqual(await profile(page),edit);
     assert.equal((await rect(page.locator('#test-chat'))).width,1800);
@@ -195,7 +203,7 @@ test('finished layouts move chat and all panel boundaries, persist and restore i
     await editor(page).locator('[data-layout-palette=library]').click();
     await editor(page).getByRole('button',{name:'Move Library',exact:true}).press('ArrowUp');
     await editor(page).getByRole('button',{name:'Done',exact:true}).click();
-    const canvas=await profile(page,'canvas');assert.ok(canvas.tree);
+    const canvas=await profile(page,'canvas',{hasTree:true});assert.ok(canvas.tree);
     assert.equal((await rect(library(page))).y,32);
     assert.equal((await rect(library(page))).width,1800);
     assert.equal(await page.locator('.react-flow__node').count(),1);
@@ -206,6 +214,10 @@ test('finished layouts move chat and all panel boundaries, persist and restore i
     assert.equal((await rect(page.locator('#test-chat'))).width,1800);
     assert.deepEqual(await profile(page,'canvas'),canvas);
     await page.setViewportSize({width:980,height:600});
+    await page.waitForFunction(() => ['#test-chat','[data-viewer-pane]','[data-workspace-timeline]','[data-workspace-library]'].every(selector => {
+      const box=document.querySelector(selector)?.getBoundingClientRect();
+      return box && box.left>=0 && box.top>=32 && box.right<=980 && box.bottom<=600;
+    }));
     for(const selector of ['#test-chat','[data-viewer-pane]','[data-workspace-timeline]','[data-workspace-library]']){
       const box=await rect(page.locator(selector));assert.ok(box.x>=0&&box.y>=32&&box.x+box.width<=980&&box.y+box.height<=600);
     }
@@ -262,7 +274,7 @@ test('library placement is a reversible separate switch and visibility never cha
         assert.deepEqual(await rect(library(page)),outside,'turning placement off restores the independent slot');
       }
       await editor(page).getByRole('button',{name:'Done',exact:true}).click();
-      assert.equal((await profile(page,mode)).libraryDock,'left');
+      assert.equal((await profile(page,mode,{libraryDock:'left'})).libraryDock,'left');
       await beginEdit(page);assert.equal(await editor(page).getByRole('switch',{name:'Library inside chat'}).getAttribute('aria-checked'),'false');
       await editor(page).getByRole('button',{name:'Done',exact:true}).click();
     }

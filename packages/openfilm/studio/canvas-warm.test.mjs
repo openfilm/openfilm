@@ -109,7 +109,7 @@ test('a failed optional canvas preload leaves the edit usable', { timeout: 60_00
     await page.goto(url);
     await page.locator('[data-work-mode="edit"]').waitFor({ state: 'visible' });
     await warming;
-    await page.waitForTimeout(300); // let both optional preload callers handle the failed import
+    await page.waitForTimeout(1800); // also cover the old delayed preload's unhandled rejection
     assert.equal(await page.locator('[data-work-mode="edit"]').isVisible(), true);
     assert.equal(await page.locator('[data-studio-canvas]').count(), 0);
   });

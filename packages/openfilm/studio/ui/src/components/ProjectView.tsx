@@ -2156,8 +2156,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (picked) { setCaptionSelection({ src, ids: new Set([picked]) }); showCaptionLook(); }
     return src;
   }, [projectId, totalMs, editOps, showCaptionLook, toast, t]);
-  /* the canvas's code fetched while the editor sits idle, so the first switch to it shows it at once, not a blank */
-  React.useEffect(() => { const id = window.setTimeout(() => { void loadCanvas(); }, 1500); return () => window.clearTimeout(id); }, []);
   /** A caption at the playhead (the library's captions): on the top caption track, else on a new one. */
   const captionHere = React.useCallback(async () => {
     const src = captionRow?.captions?.src;
