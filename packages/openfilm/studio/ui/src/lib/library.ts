@@ -306,12 +306,17 @@ export function askHere(ids: readonly string[]): void {
   const fresh = ids.filter((id) => !asked.has(id));
   if (!fresh.length) return;
   for (const id of fresh) { asked.add(id); asking.add(id); }
+  tellHere();
   void fetch('/api/library/missing', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: fresh }) })
-    .then((r) => (r.ok ? r.json() : null))
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null)
     .then((body: { ids?: string[] } | null) => {
-      for (const id of fresh) asking.delete(id);
-      if (!body) { for (const id of fresh) asked.delete(id); tellHere(); return; }
-      for (const id of body.ids ?? []) missing.add(id);
+      const absent = new Set(body?.ids ?? []);
+      for (const id of fresh) {
+        /* A preview may already have fetched it while this older availability lookup was in flight. */
+        if (!asking.delete(id)) continue;
+        if (!body) asked.delete(id);
+        else if (absent.has(id)) missing.add(id);
+      }
       tellHere();
     });
 }
@@ -324,7 +329,7 @@ export async function fetchLibraryItem(id: string): Promise<boolean> {
   try {
     const r = await fetch('/api/library/fetch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
     const ok = r.ok && Boolean(((await r.json()) as { ok?: boolean }).ok);
-    if (ok) missing.delete(id); else failed.add(id);
+    if (ok) heardHere(id); else failed.add(id);
     return ok;
   } catch {
     failed.add(id);
@@ -337,8 +342,9 @@ export async function fetchLibraryItem(id: string): Promise<boolean> {
 
 /** A thing heard in full (a sound played): here now. */
 export function heardHere(id: string): void {
-  const was = missing.delete(id);
-  if (failed.delete(id) || was) tellHere();
+  const was = missing.delete(id), pending = asking.delete(id), hadFailed = failed.delete(id);
+  asked.add(id);
+  if (hadFailed || was || pending) tellHere();
 }
 
 /** Where a thing is: here, to be fetched, being fetched, or its fetch failed. */

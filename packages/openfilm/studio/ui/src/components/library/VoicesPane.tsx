@@ -11,7 +11,7 @@ import { AudioLines, Loader2, Pause, Play, Plus, Star } from 'lucide-react';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import { toggleFavorite } from '@/lib/library';
-import { ADD_HOVER, FOOT_ROOM, MiniPlayer, PANEL_ROUND, usePlayer } from './AudioList';
+import { ADD_HOVER, FOOT_ROOM, MiniPlayer, PANEL_ROUND, previewMessage, usePlayer } from './AudioList';
 import { Empty } from './icons';
 import { SpeakDialog } from './SpeakDialog';
 import {
@@ -130,6 +130,7 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak }
             <VoiceRow
               key={key} voice={v} service={byId.get(v.provider)} access={access[v.provider]} showService={group === '' || group === STARRED || group === FEATURED}
               picked={picked === key} sounding={sounding === key} loading={player.item?.id === key && player.loading} kept={favorites.includes(key)} languageName={languageName}
+              hint={player.item?.id === key && player.loading ? previewMessage(player, t) : t('assetDrawer.previewPlayHint')}
               onPlay={() => play(v)} onUse={() => use(v)} onServices={onServices}
               onSpeak={speak && access[v.provider] ? () => { player.pause(); setSpeaking(v); } : undefined}
             />
@@ -161,9 +162,10 @@ const SHADE_HOVER = 'group-hover:bg-[linear-gradient(to_right,transparent,var(--
 /** A press on a row's own button: not a play, nor a double click's use. */
 const own = { onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
 
-function VoiceRow({ voice, service, access, showService, picked, sounding, loading, kept, languageName, onPlay, onUse, onServices, onSpeak }: {
+function VoiceRow({ voice, service, access, showService, picked, sounding, loading, kept, hint, languageName, onPlay, onUse, onServices, onSpeak }: {
   voice: LibraryVoice; service: VoiceService | undefined; access: VoiceAccess | undefined; showService: boolean;
   picked: boolean; sounding: boolean; loading: boolean; kept: boolean; languageName: (code: string) => string;
+  hint: string;
   onPlay: () => void; onUse: () => void; onServices: () => void; onSpeak?: () => void;
 }) {
   const t = useT();
@@ -180,7 +182,7 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, loadi
       className={`group relative grid cursor-default select-none grid-cols-[40px_minmax(0,1fr)] items-center gap-2.5 rounded-lg px-2 py-2 ${picked ? 'bg-[var(--bg-field)]' : 'hover:bg-[var(--bg-field)]'}`}
       onClick={onPlay}
       onDoubleClick={onUse}
-      title={[voice.name, voice.description, voice.tags.join(', ')].filter(Boolean).join('\n')}
+      title={[voice.name, voice.description, voice.tags.join(', '), hint].filter(Boolean).join('\n')}
     >
       <VoiceAvatar voice={voice} sounding={sounding} loading={loading} label={loading ? t('assetDrawer.previewCancel') : sounding ? t('assetDrawer.stop') : t('assetDrawer.play')} />
       {/* the words take the whole row; only a star kept holds a little room at its end */}
@@ -190,7 +192,7 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, loadi
           <span className={`shrink-[0.2] truncate text-[12.5px] font-medium ${picked ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{voice.name}</span>
           <span className="min-w-0 shrink-[5] truncate text-[11px] text-[var(--text-faint)]">{facts}</span>
         </span>
-        <span className="mt-0.5 block truncate text-[11.5px] text-[var(--text-muted)]">{voice.description ?? voice.tags.join(', ')}</span>
+        <span className="mt-0.5 block truncate text-[11.5px] text-[var(--text-muted)]">{loading ? hint : voice.description ?? voice.tags.join(', ')}</span>
       </span>
       {/* what it offers, over the row's end under the pointer, the words fading out under the row's own color; else a
           star kept */}

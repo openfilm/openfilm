@@ -12,7 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { coverLook, heardHere, libraryUrl, soundLook, toggleFavorite, waveUrl, type HereState, type LibraryItem } from '@/lib/library';
+import { coverLook, heardHere, libraryUrl, mayNeedFetch, soundLook, toggleFavorite, useLibraryHere, waveUrl, type HereState, type LibraryItem } from '@/lib/library';
 import { createPreviewPlayer, type Playable, type PreviewError, type PreviewState } from '@/lib/library-player';
 import { useMediaImage } from '@/lib/media-queue';
 
@@ -36,6 +36,7 @@ export interface Player<T extends Playable = LibraryItem> {
   item: T | null;
   playing: boolean;
   loading: boolean;
+  downloading: boolean;
   slow: boolean;
   error: PreviewError | null;
   status: PreviewState<T>['status'];
@@ -54,6 +55,7 @@ export interface Player<T extends Playable = LibraryItem> {
 export function usePlayer<T extends Playable = LibraryItem>(): Player<T> {
   const [player] = React.useState(() => createPreviewPlayer<T>({ onReady: heardHere }));
   const state = React.useSyncExternalStore(player.subscribe, player.getSnapshot, player.getSnapshot);
+  const hereOf = useLibraryHere();
   const playing = state.status === 'playing';
   React.useEffect(() => player.close, [player]);
   React.useEffect(() => {
@@ -65,6 +67,7 @@ export function usePlayer<T extends Playable = LibraryItem>(): Player<T> {
   }, [playing, player]);
   return {
     ...state, playing, loading: state.status === 'loading',
+    downloading: state.status === 'loading' && !state.ready && Boolean(state.item && mayNeedFetch(state.item) && hereOf(state.item.id) !== 'here'),
     toggle: (next, src) => player.toggle(next, src ?? (state.item?.id === next.id ? undefined : libraryUrl(next.id))),
     pause: player.pause, seek: player.seek, close: player.close,
   };
@@ -81,8 +84,8 @@ export const ON_PANEL = `grid ${PANEL_ROUND}`;
 export const ADD_HOVER = 'hover:bg-[var(--accent)] hover:text-[var(--on-accent)]';
 
 /**
- * The way a thing of the library goes in: "+" when it is here; one still to be fetched (a sound, a piece of music, a
- * template's music) shows its download instead, always, turning while it comes, and "+" once it is here.
+ * A visual card's download/add control: "+" when its files are here, a download otherwise. Audio rows use a
+ * download status badge instead: clicking anywhere on the row downloads and plays it.
  */
 export function HereButton({ here, addTip, onAdd, onFetch, className, show = '' }: {
   here: HereState; addTip: string; onAdd: () => void; onFetch: () => void; className: string; show?: string;
@@ -104,8 +107,15 @@ export function HereButton({ here, addTip, onAdd, onFetch, className, show = '' 
   );
 }
 
-function Buttons({ item, kept, addTip, onAdd, always, here = 'here', onFetch }: {
-  item: LibraryItem; kept: boolean; addTip: string; onAdd: () => void; always?: boolean; here?: HereState; onFetch?: () => void;
+/** The pending preview's promise, shared by the row and the player. */
+export function previewMessage(player: Pick<Player, 'error' | 'slow' | 'downloading'>, t: (path: string) => string): string {
+  return t(player.error === 'timeout' ? 'assetDrawer.previewTimeout' : player.error ? 'assetDrawer.previewFailed'
+    : player.downloading ? player.slow ? 'assetDrawer.previewDownloadSlow' : 'assetDrawer.previewDownloading'
+      : player.slow ? 'assetDrawer.previewSlow' : 'assetDrawer.previewLoading');
+}
+
+function Buttons({ item, kept, addTip, onAdd, always, here = 'here', downloading }: {
+  item: LibraryItem; kept: boolean; addTip: string; onAdd: () => void; always?: boolean; here?: HereState; downloading: boolean;
 }) {
   const t = useT();
   const show = always ? '' : 'invisible group-hover:visible';
@@ -116,7 +126,13 @@ function Buttons({ item, kept, addTip, onAdd, always, here = 'here', onFetch }: 
         className={`${ON_PANEL} ${kept ? 'visible text-[#ffd35a]' : `${show} text-[var(--text)]`}`}>
         <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
       </button>
-      <HereButton here={here} addTip={addTip} onAdd={onAdd} onFetch={onFetch ?? onAdd} className={`${ON_PANEL} text-[var(--text)]`} show={here === 'here' ? show : ''} />
+      {here === 'here' ? <HereButton here={here} addTip={addTip} onAdd={onAdd} onFetch={onAdd} className={`${ON_PANEL} text-[var(--text)]`} show={show} />
+        : <span role="img" data-library-download={downloading || here === 'fetching' ? 'fetching' : here}
+          title={t(downloading ? 'assetDrawer.previewDownloading' : here === 'fetching' ? 'assetDrawer.downloading' : 'assetDrawer.previewDownloadPlay')}
+          aria-label={t(downloading ? 'assetDrawer.previewDownloading' : here === 'fetching' ? 'assetDrawer.downloading' : 'assetDrawer.previewDownloadPlay')}
+          className={`${ON_PANEL} ${here === 'failed' ? 'text-[#ff8a80]' : 'text-[var(--text-muted)]'}`}>
+          {downloading || here === 'fetching' ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+        </span>}
     </span>
   );
 }
@@ -154,23 +170,26 @@ function Wave({ item, played }: { item: LibraryItem; played: number }) {
   );
 }
 
-export function SoundRow({ item, name, group, picked, player, kept, addTip, onPick, onAdd, drag, here, onFetch }: {
-  here?: HereState; onFetch?: () => void;
+export function SoundRow({ item, name, group, picked, player, kept, addTip, onPick, onAdd, drag, here }: {
+  here?: HereState;
   item: LibraryItem; name: string; group: string; picked: boolean; player: Player; kept: boolean; addTip: string;
   onPick: () => void; onAdd: () => void; drag: React.HTMLAttributes<HTMLDivElement>;
 }) {
   const t = useT();
   const mine = player.item?.id === item.id;
+  const pending = mine && (player.loading || Boolean(player.error));
+  const hint = pending ? previewMessage(player, t) : here && here !== 'here' ? t('assetDrawer.previewDownloadPlay') : '';
   return (
     <div
       {...drag}
       draggable
+      data-library-audio={item.id}
       data-audio-preview={mine ? player.status : undefined}
       aria-busy={mine && player.loading}
       className={`group grid h-[60px] cursor-default select-none grid-cols-[44px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 ${picked || mine ? 'bg-[var(--bg-field)]' : 'hover:bg-[var(--bg-field)]'}`}
       onClick={() => { onPick(); player.toggle(item); }}
       onDoubleClick={onAdd}
-      title={name}
+      title={hint ? `${name}\n${hint}` : name}
     >
       <Tile item={item} playing={mine && player.playing} loading={mine && player.loading} size={44} />
       <span className="flex min-w-0 flex-col justify-center gap-1">
@@ -178,37 +197,43 @@ export function SoundRow({ item, name, group, picked, player, kept, addTip, onPi
           <span className={`truncate text-[12.5px] font-medium ${picked || mine ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{name}</span>
           <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
           <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--text-faint)]">{lengthOf(item.durationMs ?? 0, t)}</span>
-          <Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} {...(here ? { here } : {})} {...(onFetch ? { onFetch } : {})} />
+          <Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} here={here} downloading={mine && player.downloading} />
         </span>
-        <Wave item={item} played={mine && player.duration ? player.time / player.duration : 0} />
+        <span className="flex h-4 min-w-0 items-center gap-2">
+          {!pending ? <span className="min-w-0 flex-1"><Wave item={item} played={mine && player.duration ? player.time / player.duration : 0} /></span> : null}
+          {hint ? <span className={`truncate text-[10.5px] ${mine && player.error ? 'text-[#ff8a80]' : 'text-[var(--text-muted)]'}`}>{hint}</span> : null}
+        </span>
       </span>
     </div>
   );
 }
 
-export function MusicCard({ item, name, group, picked, player, kept, addTip, onPick, onAdd, drag, here, onFetch }: {
-  here?: HereState; onFetch?: () => void;
+export function MusicCard({ item, name, group, picked, player, kept, addTip, onPick, onAdd, drag, here }: {
+  here?: HereState;
   item: LibraryItem; name: string; group: string; picked: boolean; player: Player; kept: boolean; addTip: string;
   onPick: () => void; onAdd: () => void; drag: React.HTMLAttributes<HTMLDivElement>;
 }) {
   const t = useT();
   const mine = player.item?.id === item.id;
+  const hint = mine && (player.loading || player.error) ? previewMessage(player, t) : here && here !== 'here' ? t('assetDrawer.previewDownloadPlay') : '';
   return (
     <div
       {...drag}
       draggable
+      data-library-audio={item.id}
       data-audio-preview={mine ? player.status : undefined}
       aria-busy={mine && player.loading}
       className={`group flex h-[92px] cursor-default select-none gap-2.5 rounded-xl p-2 ring-1 ${picked || mine ? 'bg-[var(--bg-field)] ring-[var(--accent)]' : 'bg-[var(--bg-raised)] ring-transparent hover:bg-[var(--bg-field)]'}`}
       onClick={() => { onPick(); player.toggle(item); }}
       onDoubleClick={onAdd}
-      title={name}
+      title={hint ? `${name}\n${hint}` : name}
     >
       <Tile item={item} playing={mine && player.playing} loading={mine && player.loading} size={76} cover />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className={`line-clamp-2 text-[12.5px] font-medium leading-[17px] ${picked || mine ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{name}</span>
         <span className="mt-0.5 truncate text-[11px] text-[var(--text-faint)]">{group} · {lengthOf(item.durationMs ?? 0, t)}</span>
-        <span className="mt-auto flex justify-end"><Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} always {...(here ? { here } : {})} {...(onFetch ? { onFetch } : {})} /></span>
+        {hint ? <span className={`truncate text-[10.5px] ${mine && player.error ? 'text-[#ff8a80]' : 'text-[var(--text-muted)]'}`}>{hint}</span> : null}
+        <span className="mt-auto flex justify-end"><Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} always here={here} downloading={mine && player.downloading} /></span>
       </span>
     </div>
   );
@@ -240,7 +265,7 @@ export function MiniPlayer<T extends Playable>({ player, name, group, art }: {
   return (
     /* on the drawer's own ground, a hairline above it: the composer's card under it sits on the same ground, as one
        stack, not a lighter strip ending on the card */
-    <div className="mb-[var(--drawer-under,0px)] flex h-[60px] shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-panel)] px-4" data-studio-host-panel="" data-audio-player={player.status}>
+    <div className={`mb-[var(--drawer-under,0px)] flex shrink-0 items-center gap-3 border-t border-[var(--border)] bg-[var(--bg-panel)] px-4 ${player.loading || player.error ? 'min-h-[72px] py-2' : 'h-[60px]'}`} data-studio-host-panel="" data-audio-player={player.status}>
       <button type="button" className="group relative shrink-0 cursor-default" onClick={() => player.toggle(item)}
         aria-label={t(player.loading ? 'assetDrawer.previewCancel' : player.error ? 'assetDrawer.previewRetry' : player.playing ? 'assetDrawer.pause' : 'assetDrawer.play')}>
         {art(item, player.playing)}
@@ -252,9 +277,9 @@ export function MiniPlayer<T extends Playable>({ player, name, group, art }: {
           <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
         </span>
         {player.loading || player.error ? (
-          <span className="flex min-w-0 items-center gap-2 text-[11px]" role="status" aria-live="polite">
-            <span className={`min-w-0 truncate ${player.error ? 'text-[#ff8a80]' : 'text-[var(--text-muted)]'}`}>
-              {t(player.error === 'timeout' ? 'assetDrawer.previewTimeout' : player.error ? 'assetDrawer.previewFailed' : player.slow ? 'assetDrawer.previewSlow' : 'assetDrawer.previewLoading')}
+          <span className="flex min-w-0 items-start gap-2 text-[11px] leading-4" role="status" aria-live="polite">
+            <span className={`min-w-0 ${player.error ? 'text-[#ff8a80]' : 'text-[var(--text-muted)]'}`}>
+              {previewMessage(player, t)}
             </span>
             <button type="button" className="shrink-0 text-[var(--accent)] hover:underline" onClick={() => player.error ? player.toggle(item) : player.pause()}>
               {t(player.error ? 'assetDrawer.previewRetry' : 'assetDrawer.previewCancel')}
