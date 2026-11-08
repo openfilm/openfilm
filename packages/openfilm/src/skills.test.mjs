@@ -99,6 +99,8 @@ test('a SKILL.md front matter: plain, quoted and block values; the body after it
   assert.deepEqual(fields, { name: 'lyric-pv', description: 'Lyric videos: words on the beat', license: 'MIT', when: 'a song\nwith words', note: 'folded into one', long: 'starts here and goes on' });
   assert.equal(body, '# Lyric PV');
   assert.deepEqual(parseSkillFile('no front matter').fields, {});
+  assert.deepEqual(parseSkillFile('---\n---\nBody'), { fields: {}, body: 'Body' });
+  assert.deepEqual(parseSkillFile('---\r\n---\r\nBody'), { fields: {}, body: 'Body' });
 });
 
 test('skills are listed from the project, yours and the official ones, each by its uid: the first holding a uid winning, two of a name both there', () => {

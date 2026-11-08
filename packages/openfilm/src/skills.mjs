@@ -186,7 +186,7 @@ export const skillUid = (source, name, origin) => `${skillOwner(source, origin)}
  * @returns {{ fields: Record<string, string>, body: string }}
  */
 export function parseSkillFile(text) {
-  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  const m = /^\uFEFF?---\r?\n((?:[\s\S]*?\r?\n)?)---[ \t]*(?:\r?\n|$)/.exec(text);
   if (!m) return { fields: {}, body: text.trim() };
   /** @type {Record<string, string>} */
   const fields = {};
