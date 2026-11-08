@@ -9,6 +9,7 @@
  */
 import type { Clip } from '../api.ts';
 import { replaceClip, type ReplaceFile } from './clip-replace.ts';
+import { framingOf } from './clip-look.ts';
 import { propsOf, propValue, type ComponentProp } from './component-props.ts';
 import type { FilmOverride } from './film.ts';
 
@@ -206,11 +207,12 @@ const r3 = (n: number) => Math.round(n * 1000) / 1000;
 /** A place's framing as its style says (`object-fit`, `object-position`, `object-view-box: inset(…)`). */
 export function placeFrame(style: string | undefined): PlaceFrame {
   const d = new Map(decls(style));
-  const [px, py] = (d.get('object-position') ?? '50% 50%').split(/\s+/);
+  /* the inspector reads a clip's object-position the same way: one value, keywords, or units it cannot use */
+  const framing = framingOf(d.get('object-position'));
   const inset = /^inset\(([^)]*)\)$/.exec(d.get('object-view-box') ?? '')?.[1]?.split(/\s+/).map((v) => pctOf(v, 0));
   /* inset(top right bottom left): what is left of the picture's width is 1/zoom */
   const zoom = inset && inset.length === 4 ? 1 / Math.max(0.05, 1 - inset[1]! - inset[3]!) : 1;
-  return { fit: d.get('object-fit') === 'contain' ? 'contain' : 'cover', x: pctOf(px, 0.5), y: pctOf(py ?? px, 0.5), zoom: r3(zoom) };
+  return { fit: d.get('object-fit') === 'contain' ? 'contain' : 'cover', x: framing ? framing[0] / 100 : 0.5, y: framing ? framing[1] / 100 : 0.5, zoom: r3(zoom) };
 }
 
 /** The style with a place framed so (its other declarations as they were). */
