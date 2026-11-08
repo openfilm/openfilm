@@ -19,7 +19,8 @@ const CHUNKS = 16;
 /** A stopped render's chunks wait this long to be resumed; a later render in the project then removes them. */
 const KEPT_DAYS = 14;
 /** Files up to this size are known by what is in them (a film.html saved again unchanged is the same film); larger ones
- * (the footage) by their size and when they were last written. */
+ * (the footage) by their size, nanosecond time, inode and change time: an atomic replacement keeps the old size
+ * and date, but not those. */
 const READ_UP_TO = 2 ** 20;
 const MANIFEST = 'resume.json';
 const OWNER = 'owner';
@@ -50,9 +51,10 @@ export const chunkFolder = (renderDir, out) => join(renderDir, `.chunks-${hash(B
 /** What a file is now: its content's hash when small, else its size and time; '' when it is gone. @param {string} file */
 export function signature(file) {
   try {
-    const stat = statSync(file);
+    const stat = statSync(file, { bigint: true });
     if (!stat.isFile()) return '';
-    return stat.size <= READ_UP_TO ? createHash('sha1').update(readFileSync(file)).digest('hex') : `${stat.size}:${stat.mtimeMs}`;
+    return stat.size <= READ_UP_TO ? createHash('sha1').update(readFileSync(file)).digest('hex')
+      : `${stat.size}:${stat.mtimeNs}:${stat.ino}:${stat.ctimeNs}`;
   } catch {
     return '';
   }
