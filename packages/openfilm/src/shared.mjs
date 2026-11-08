@@ -168,7 +168,8 @@ export async function write(stream, buf) {
  * src/media-links.mjs), as the file server does.
  */
 export function fileOf(root, entry, src) {
-  const path = decodeURIComponent(new URL(String(src), `http://film/${entry}`).pathname);
+  const path = new URL(String(src), `http://film/${entry}`).pathname
+    .replace(/(?:%[0-9a-f]{2})+/gi, (m) => { try { return decodeURIComponent(m); } catch { return m; } });
   /* the URL takes care of `..` before the path is decoded: `%2F` decoded after it is a `/` the join resolves, so
      the file is checked to be inside the folder, and, when it is there, not a link out of it */
   const home = resolve(root);
