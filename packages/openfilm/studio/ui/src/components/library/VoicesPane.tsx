@@ -1,7 +1,7 @@
 /**
  * The assets drawer's voices (lib/library-voices): the ready-made voices of the voice-over services, narrowed by the
  * side bar (a service, or the starred ones), the search, a language and a gender. A click on a voice plays its
- * service's sample in the viewer's player (again: pauses it); a double click, Enter or its "+" puts it in the chat
+ * service's sample in the viewer's player (again: pauses it); Enter or its "+" puts it in the chat
  * as a reference, the voice
  * the agent makes the voice-over in; its "Generate" speaks words typed in it there and then, onto the film at the
  * playhead (SpeakDialog). A voice whose service is not connected says so; its "Connect" opens Services.
@@ -10,8 +10,8 @@ import React from 'react';
 import { AudioLines, Pause, Play, Plus, Square, Star } from 'lucide-react';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { studioHost } from '@/lib/host';
-import { toggleFavorite, useLibraryHere } from '@/lib/library';
-import { ADD_HOVER, DownloadBadge, FOOT_ROOM, MiniPlayer, PANEL_ROUND, type Player } from './AudioList';
+import { toggleFavorite, askHere, useLibraryHere, type HereState } from '@/lib/library';
+import { ADD_COLOR, ADD_HOVER, DownloadBadge, FOOT_ROOM, MiniPlayer, PANEL_ROUND, ROUND, type Player } from './AudioList';
 import { Empty } from './icons';
 import { SpeakDialog } from './SpeakDialog';
 import {
@@ -56,14 +56,14 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak, 
   const [gender, setGender] = React.useState<'' | 'm' | 'f'>('');
   const [speaking, setSpeaking] = React.useState<LibraryVoice | null>(null);
   const hereOf = useLibraryHere();
-  const sounding = player.playing ? player.item?.id ?? null : null;
+  const sounding = player.playing || player.loading ? player.item?.id ?? null : null;
 
   const byId = React.useMemo(() => new Map((library?.providers ?? []).map((s) => [s.id, s])), [library]);
-  const shown = (library?.voices ?? []).filter((v) => (group === STARRED ? favorites.includes(voiceKey(v))
-    : group === FEATURED ? v.featured : !group || v.provider === group));
+  const shown = React.useMemo(() => (library?.voices ?? []).filter((v) => (group === STARRED ? favorites.includes(voiceKey(v))
+    : group === FEATURED ? v.featured : !group || v.provider === group)), [library, group, favorites]);
   const q = query.trim().toLowerCase();
-  const voices = shown.filter((v) => (!language || languageOf(v) === language) && (!gender || v.gender === gender)
-    && (!q || [v.name, v.description, v.accent, ...v.tags].some((s) => s?.toLowerCase().includes(q))));
+  const voices = React.useMemo(() => shown.filter((v) => (!language || languageOf(v) === language) && (!gender || v.gender === gender)
+    && (!q || [v.name, v.description, v.accent, ...v.tags].some((s) => s?.toLowerCase().includes(q)))), [shown, language, gender, q]);
 
   /* the languages the voices shown speak: the person's, then the five the app speaks, then the rest by how many */
   const languages = React.useMemo(() => {
@@ -77,6 +77,7 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak, 
   /* a long list is drawn a page at a time, from its top again when what it lists changes */
   const [drawn, setDrawn] = React.useState(PAGE);
   React.useEffect(() => setDrawn(PAGE), [group, query, language, gender]);
+  React.useEffect(() => { askHere(voices.slice(0, drawn).flatMap((v) => v.sample ? [v.sample] : [])); }, [voices, drawn]);
 
   const play = (v: LibraryVoice) => {
     const src = sampleUrl(v);
@@ -132,11 +133,13 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak, 
               : group === STARRED ? <Empty icon="star" text={t('assetDrawer.noFavorites')} action={t('assetDrawer.seeAll')} onAction={onAll} /> : null
         ) : voices.slice(0, drawn).map((v) => {
           const key = voiceKey(v);
+          const loading = player.item?.id === key && player.downloading;
+          const here = v.sample ? hereOf(v.sample) : 'here';
           return (
             <VoiceRow
               key={key} voice={v} service={byId.get(v.provider)} access={access[v.provider]} showService={group === '' || group === STARRED || group === FEATURED}
-              picked={picked === key} sounding={sounding === key} loading={player.item?.id === key && player.loading} kept={favorites.includes(key)} languageName={languageName}
-              failed={player.item?.id === key && player.error != null || hereOf(key) === 'failed'}
+              picked={picked === key} sounding={sounding === key} kept={favorites.includes(key)} languageName={languageName}
+              here={loading ? 'fetching' : player.item?.id === key && player.error != null ? 'failed' : here}
               onPlay={() => play(v)} onUse={() => use(v)} onServices={onServices}
               onSpeak={speak && access[v.provider] ? () => { player.pause(); setSpeaking(v); } : undefined}
             />
@@ -164,15 +167,13 @@ function useLanguageName(lang: Language) {
 /** What the words fade into under a row's buttons: the row's own color (its field over the drawer), so solid */
 const SHADE_HOVER = 'group-hover:bg-[linear-gradient(to_right,transparent,var(--bg-field)_36px),linear-gradient(to_right,transparent,var(--bg-panel)_36px)]';
 
-/** A press on a row's own button: not a play, nor a double click's use. */
-const own = { onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
-
-function VoiceRow({ voice, service, access, showService, picked, sounding, loading, failed, kept, languageName, onPlay, onUse, onServices, onSpeak }: {
+function VoiceRow({ voice, service, access, showService, picked, sounding, here, kept, languageName, onPlay, onUse, onServices, onSpeak }: {
   voice: LibraryVoice; service: VoiceService | undefined; access: VoiceAccess | undefined; showService: boolean;
-  picked: boolean; sounding: boolean; loading: boolean; failed: boolean; kept: boolean; languageName: (code: string) => string;
+  picked: boolean; sounding: boolean; here: HereState; kept: boolean; languageName: (code: string) => string;
   onPlay: () => void; onUse: () => void; onServices: () => void; onSpeak?: () => void;
 }) {
   const t = useT();
+  const loading = here === 'fetching';
   const facts = [
     voice.gender === 'f' ? t('assetDrawer.female') : voice.gender === 'm' ? t('assetDrawer.male') : null,
     voice.age ? t(`assetDrawer.age_${voice.age}`) : null,
@@ -182,11 +183,11 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, loadi
   const useTip = access ? t('assetDrawer.useVoice') : t('assetDrawer.connectFirst').replace('{service}', service?.name ?? voice.provider);
   return (
     <div
+      data-library-voice=""
       aria-busy={loading}
       className={`group relative grid cursor-default select-none grid-cols-[40px_minmax(0,1fr)] items-center gap-2.5 rounded-lg px-2 py-2 ${picked ? 'bg-[var(--bg-field)]' : 'hover:bg-[var(--bg-field)]'}`}
-      onClick={onPlay}
-      onDoubleClick={onUse}
-      title={[voice.name, voice.description, voice.tags.join(', ')].filter(Boolean).join('\n')}
+      onClick={(e) => { if (e.detail < 2) onPlay(); }}
+      aria-label={voice.name}
     >
       <VoiceAvatar voice={voice} sounding={sounding} loading={loading} label={loading ? t('assetDrawer.previewCancel') : sounding ? t('assetDrawer.stop') : t('assetDrawer.play')} />
       {/* the words take the whole row; only a star kept holds a little room at its end */}
@@ -201,30 +202,31 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, loadi
       {/* what it offers, over the row's end under the pointer, the words fading out under the row's own color; else a
           star kept */}
       <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-10 pr-2 ${SHADE_HOVER}`}>
-        {loading || failed ? <DownloadBadge state={loading ? 'fetching' : 'failed'} onRetry={onPlay} className={PANEL_ROUND} /> : null}
         <button
           type="button"
           aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')}
           aria-pressed={kept}
           onClick={(e) => { e.stopPropagation(); toggleFavorite(voiceKey(voice)); }}
-          {...own}
+
           className={`${PANEL_ROUND} ${kept ? 'grid text-[#ffd35a]' : 'hidden text-[var(--text)] group-hover:grid'}`}
         >
           <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
         </button>
         {access && onSpeak ? (
-          <button type="button" data-voice-speak="" title={t('voiceSpeak.open')} aria-label={t('voiceSpeak.open')} onClick={(e) => { e.stopPropagation(); onSpeak(); }} {...own}
+          <button type="button" data-voice-speak="" aria-label={t('voiceSpeak.open')} onClick={(e) => { e.stopPropagation(); onSpeak(); }}
             className={`${PANEL_ROUND} ${ADD_HOVER} hidden text-[var(--text)] group-hover:grid`}>
             <AudioLines size={12} strokeWidth={2.4} />
           </button>
         ) : null}
-        {access ? (
-          <button type="button" title={useTip} aria-label={useTip} onClick={(e) => { e.stopPropagation(); onUse(); }} {...own}
-            className={`${PANEL_ROUND} ${ADD_HOVER} hidden text-[var(--text)] group-hover:grid`}>
+        {here !== 'here' ? (
+          <DownloadBadge state={here} onDownload={onPlay} onRetry={onPlay} className={PANEL_ROUND} />
+        ) : access ? (
+          <button type="button" aria-label={useTip} onClick={(e) => { e.stopPropagation(); onUse(); }}
+            className={`${ROUND} ${ADD_COLOR} ${picked ? 'grid' : 'hidden group-hover:grid'}`}>
             <Plus size={12} strokeWidth={2.6} />
           </button>
         ) : (
-          <button type="button" title={useTip} onClick={(e) => { e.stopPropagation(); onServices(); }} {...own}
+          <button type="button" aria-label={useTip} onClick={(e) => { e.stopPropagation(); onServices(); }}
             className="hidden whitespace-nowrap text-[11px] text-[var(--accent)] hover:underline group-hover:inline">
             {t('assetDrawer.connect')}
           </button>

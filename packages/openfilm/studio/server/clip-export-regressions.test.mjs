@@ -53,7 +53,7 @@ test('a Jianying draft retains untouched sources, full processed video handles, 
     { clips: [{ id: 'under', src: 'under.html', time: [0, 7] }] },
     { clips: [{ id: 'voice', src: 'voice.wav', time: [2, 4], speed: 0.5, volume: 0.35, overrides: [{ fade: [0.3, 0.2] }] }] },
   ] }));
-  const folder = dirname(await exported(root, { kind: 'nle', format: 'jianying', fps: 30, subtitles: false }));
+  const folder = dirname(await exported(root, { kind: 'nle', format: 'jianying', fps: 30, subtitles: false, footage: 'render' }));
   const info = JSON.parse(readFileSync(join(folder, 'draft_info.json'), 'utf8'));
   const top = info.tracks.filter((t) => t.type === 'video').at(-1);
   const [processed, slow, disabled, animated] = top.segments;
@@ -78,6 +78,68 @@ test('a Jianying draft retains untouched sources, full processed video handles, 
   const voice = info.materials.audios.find((m) => m.path.endsWith('voice.wav'));
   assert.deepEqual(readFileSync(voice.path), readFileSync(join(root, 'voice.wav')));
   assert.equal(voice.duration, 6_000_000);
+});
+
+test('Jianying keeps a mask, the edit timing and the complete original by default', ffmpeg, async () => {
+  const root = join(scratch, 'masked-original'); mkdirSync(root);
+  const original = join(root, 'source.mp4');
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=160x90:rate=30:duration=6',
+    '-f', 'lavfi', '-i', 'sine=frequency=220:duration=6', '-shortest', '-pix_fmt', 'yuv420p', original]);
+  writeFileSync(join(root, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+    { clips: [
+      { id: 'mask', src: 'source.mp4', at: 1, time: [2, 4], speed: 2,
+        style: 'mask-image: radial-gradient(circle 28px at center, black 100%, transparent 100%)' },
+      { id: 'plain', src: 'source.mp4', at: 2, time: [4, 6], speed: 2 },
+    ] },
+  ] }));
+  const folder = dirname(await exported(root, { kind: 'nle', format: 'jianying', fps: 30, subtitles: false }));
+  const info = JSON.parse(readFileSync(join(folder, 'draft_info.json'), 'utf8'));
+  const [mask, plain] = info.tracks.find((t) => t.type === 'video').segments;
+  const rendered = info.materials.videos.find((m) => m.id === mask.material_id);
+  const untouched = info.materials.videos.find((m) => m.id === plain.material_id);
+  assert.deepEqual(mask.target_timerange, { start: 1_000_000, duration: 1_000_000 });
+  assert.deepEqual(mask.source_timerange, { start: 0, duration: 1_000_000 });
+  assert.equal(rendered.duration, 1_000_000, 'only the used masked range is drawn');
+  const rgba = execFileSync('ffmpeg', ['-v', 'error', '-i', rendered.path, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
+  assert.equal(rgba[3], 0, 'the corner outside the mask is transparent even on the bottom track');
+  assert.equal(rgba[(45 * 160 + 80) * 4 + 3], 255, 'the middle of the mask remains visible');
+  assert.equal(plain.speed, 2);
+  assert.deepEqual(plain.source_timerange, { start: 4_000_000, duration: 2_000_000 });
+  assert.deepEqual(readFileSync(untouched.path), readFileSync(original));
+  assert.equal(untouched.duration, 6_000_000);
+  const sound = info.tracks.find((t) => t.type === 'audio').segments[0];
+  assert.deepEqual(sound.target_timerange, mask.target_timerange);
+  assert.deepEqual(sound.source_timerange, { start: 2_000_000, duration: 2_000_000 });
+  assert.equal(sound.speed, 2);
+});
+
+test('Jianying exports native controls for opacity, rotation and a hard rectangle mask', ffmpeg, async () => {
+  const root = join(scratch, 'native-draft'); mkdirSync(root);
+  const original = join(root, 'source.mp4');
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=160x90:rate=30:duration=3',
+    '-pix_fmt', 'yuv420p', original]);
+  const rect = 'linear-gradient(90deg, transparent 45%, #000 45%, #000 80%, transparent 80%), linear-gradient(180deg, transparent 32.5%, #000 32.5%, #000 92.5%, transparent 92.5%)';
+  writeFileSync(join(root, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [{ clips: [
+    { id: 'adjust', src: 'source.mp4', time: [0, 1], style: 'opacity: 0.45', box: { x: 0, y: 0, w: 160, h: 90, r: 25 } },
+    { id: 'rect', src: 'source.mp4', at: 1, time: [1, 2], style: `mask-image: ${rect}; mask-composite: intersect` },
+    { id: 'soft', src: 'source.mp4', at: 2, time: [2, 3], style: `mask-image: ${rect.replace('#000 45%', '#000 47%')}; mask-composite: intersect` },
+  ] }] }));
+  const folder = dirname(await exported(root, { kind: 'nle', format: 'jianying', fps: 30, subtitles: false, media: 'link' }));
+  const info = JSON.parse(readFileSync(join(folder, 'draft_info.json'), 'utf8'));
+  const [adjust, rectangle, soft] = info.tracks[0].segments;
+  assert.equal(adjust.clip.alpha, 0.45);
+  assert.equal(adjust.clip.rotation, 25);
+  assert.equal(adjust.material_id, rectangle.material_id);
+  const video = info.materials.videos.find((m) => m.id === rectangle.material_id);
+  assert.equal(video.path, original);
+  assert.equal(video.duration, 3_000_000);
+  assert.deepEqual(rectangle.source_timerange, { start: 1_000_000, duration: 1_000_000 });
+  const [mask] = info.materials.common_mask;
+  assert.ok(rectangle.extra_material_refs.includes(mask.id));
+  assert.equal(info.materials.masks[0].id, mask.id);
+  assert.deepEqual([mask.config.centerX, mask.config.centerY, mask.config.width, mask.config.height], [0.25, -0.25, 0.35, 0.6]);
+  assert.notEqual(soft.material_id, adjust.material_id, 'a soft edge continues to render');
+  assert.ok(!soft.extra_material_refs.includes(mask.id));
 });
 
 test('transparent resizing weights bright pixels by their opacity', ffmpeg, () => {

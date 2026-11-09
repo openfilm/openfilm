@@ -19,6 +19,11 @@ import { animationsOf } from '../../src/clip-motion.mjs';
 /** Where the films of compound clips are kept. */
 export const PARTS = 'parts';
 
+/** The editable folder named by a compound clip's source, or null for an ordinary page. */
+export function compoundFolder(/** @type {string | undefined} */ src) {
+  return /^(parts\/[^/]+)\/film\.html$/.exec((src ?? '').replace(/#.*$/, ''))?.[1] ?? null;
+}
+
 /** A file's path as written in a film, made relative to a film `up` folders below (none: as it is). */
 const hasScheme = (/** @type {string} */ src) => /^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith('/') || src.startsWith('#');
 

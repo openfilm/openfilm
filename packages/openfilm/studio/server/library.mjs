@@ -172,13 +172,25 @@ export function partsOf(item) {
 export function notHere(ids) {
   if (!Array.isArray(ids)) return [];
   const byId = new Map((/** @type {{ items: { id: string, music?: string }[] }} */ (libraryIndex())).items.map((i) => [i.id, i]));
-  return ids.filter((id) => { const item = typeof id === 'string' ? byId.get(id) : undefined; return Boolean(item && partsOf(item).some((rel) => isCommunity(rel) ? !communityReady(libraryCache(), rel) : !located(rel))); });
+  return ids.filter((id) => {
+    if (typeof id !== 'string') return false;
+    const item = byId.get(id);
+    if (item) return partsOf(item).some((rel) => isCommunity(rel) ? !communityReady(libraryCache(), rel) : !located(rel));
+    /* The samples and examples are played directly and are not items in the add-to-project index. */
+    return /^(voices|examples)\//.test(id) && SAFE_PLACE.test(id) && !id.split('/').some((part) => part === '..' || part === '.') && !located(id);
+  });
 }
 
-/** Fetch what a thing of the library needs (partsOf); whether it is all here now. @param {unknown} id */
+/** Fetch an indexed asset's dependencies or a template's published preview. @param {unknown} id */
 export async function fetchItem(id) {
-  if (typeof id === 'string' && isCommunity(id)) await refreshCommunity();
-  const item = (/** @type {{ items: { id: string, music?: string }[] }} */ (libraryIndex())).items.find((i) => i.id === id);
+  if (typeof id !== 'string') return false;
+  if (isCommunity(id)) await refreshCommunity();
+  const items = /** @type {{ items: { id: string, kind?: string, music?: string }[] }} */ (libraryIndex()).items;
+  if (id.startsWith('examples/') && id.endsWith('.mp4')) {
+    const template = items.find((item) => item.id === id.slice('examples/'.length, -'.mp4'.length) && item.kind === 'group');
+    return Boolean(template && await fetchLibrary(id));
+  }
+  const item = items.find((i) => i.id === id);
   if (!item) return false;
   for (const rel of partsOf(item)) if (!(await fetchLibrary(rel))) return false;
   return true;

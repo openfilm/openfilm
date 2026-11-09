@@ -34,7 +34,7 @@ before(async () => {
 });
 after(() => server.close());
 
-const { fetchLibrary, libraryCache, libraryFile, libraryFileFetched } = await import('./library.mjs');
+const { fetchLibrary, libraryCache, libraryFile, libraryFileFetched, notHere } = await import('./library.mjs');
 
 test('a published sound is fetched on first use, kept, and never asked for again', async () => {
   assert.equal(libraryFile('audio/music/calm-piano-1a2b3c.mp3'), null, 'not on this computer yet');
@@ -46,6 +46,16 @@ test('a published sound is fetched on first use, kept, and never asked for again
   assert.equal(await libraryFileFetched('audio/music/calm-piano-1a2b3c.mp3'), one);
   assert.equal(libraryFile('audio/music/calm-piano-1a2b3c.mp3'), one);
   assert.equal(asked.length, before, 'kept: no second fetch');
+});
+
+test('checking preview files distinguishes a cached sample and an uncached example without downloading either', () => {
+  const voice = 'voices/demo/cached.m4a';
+  const example = 'examples/templates/uncached.mp4';
+  mkdirSync(join(libraryCache(), voice, '..'), { recursive: true });
+  writeFileSync(join(libraryCache(), voice), 'sample bytes');
+  const before = asked.length;
+  assert.deepEqual(notHere([voice, example, 'voices/../outside']), [example]);
+  assert.equal(asked.length, before);
 });
 
 test('a published bundle comes with every file its list names', async () => {
@@ -97,8 +107,16 @@ test('which things still need fetching before they go in (a sound, a template\'s
     { id: 'audio/music/calm-piano-1a2b3c.mp3', cat: 'music', kind: 'sound' },
   ] }));
   put('audio/music/tune-9f9f9f.mp3', 'tune bytes');
+  put('examples/templates/trip.mp4', 'example bytes');
   /* the piano was fetched above; the snow comes with the package; nothing is no thing */
   assert.deepEqual(notHere(['templates/trip', 'effects/snow', 'audio/music/calm-piano-1a2b3c.mp3', 'nothing']), ['templates/trip']);
+  const example = 'examples/templates/trip.mp4';
+  const before = asked.length;
+  assert.deepEqual(await Promise.all([fetchItem(example), fetchItem(example)]), [true, true]);
+  assert.equal(await libraryFileFetched(example), join(libraryCache(), example));
+  assert.deepEqual(asked.slice(before), [`/library/${example}`], 'hover, click and playback share the cached example');
+  assert.deepEqual(notHere([example, 'templates/trip']), ['templates/trip'], 'preview did not download the separate music');
+  assert.equal(await fetchItem('examples/effects/snow.mp4'), false, 'only indexed template examples can be prepared');
   assert.equal(await fetchItem('templates/trip'), true);
   assert.deepEqual(notHere(['templates/trip']), [], 'here now');
   assert.equal(await fetchItem('nothing'), false);

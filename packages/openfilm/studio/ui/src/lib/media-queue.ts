@@ -9,7 +9,8 @@
  * wait there, each holding a connection); a media file's come from ffmpeg, MEDIA_IN_FLIGHT at a time. The editor's own
  * requests always find a connection. A media file's facts go before its pictures (a video's length decides which
  * frames are asked for); a page's pictures go before its facts (they are what the person waits to see, and a page
- * clip's length is in film.html already).
+ * clip's length is in film.html already). Visible cards go first. A scan of the whole project waits behind the
+ * work for the parts the person is looking at.
  */
 import * as React from 'react';
 
@@ -17,29 +18,37 @@ export const MEDIA_IN_FLIGHT = 2;
 export const PAGES_IN_FLIGHT = 1;
 
 /** `first`: what waits there goes before `then` */
-type Line = { running: number; most: number; first: Array<() => void>; then: Array<() => void>; picturesFirst: boolean };
-const files: Line = { running: 0, most: MEDIA_IN_FLIGHT, first: [], then: [], picturesFirst: false };
-const pages: Line = { running: 0, most: PAGES_IN_FLIGHT, first: [], then: [], picturesFirst: true };
+type Priority = 'visible' | 'normal' | 'background';
+type Line = {
+  running: number; most: number; picturesFirst: boolean;
+  visible: Array<() => void>; first: Array<() => void>; then: Array<() => void>; background: Array<() => void>;
+};
+const files: Line = { running: 0, most: MEDIA_IN_FLIGHT, picturesFirst: false, visible: [], first: [], then: [], background: [] };
+const pages: Line = { running: 0, most: PAGES_IN_FLIGHT, picturesFirst: true, visible: [], first: [], then: [], background: [] };
 
 /** A request about a web page (its `path`) is drawn in the headless browser. */
 const lineOf = (url: string): Line => (/\.html?$/i.test(new URL(url, 'http://studio').searchParams.get('path') ?? '') ? pages : files);
 
 /** Wait for a turn, run, give the turn on. `still`: asked when the turn comes; false skips it (not wanted any more). */
-async function inTurn<T>(run: () => Promise<T>, line: Line, picture: boolean, still?: () => boolean): Promise<T | undefined> {
-  if (line.running >= line.most) await new Promise<void>((go) => (picture === line.picturesFirst ? line.first : line.then).push(go));
-  line.running += 1;
+async function inTurn<T>(run: () => Promise<T>, line: Line, picture: boolean, priority: Priority, still?: () => boolean): Promise<T | undefined> {
+  if (line.running >= line.most) {
+    const waiting = priority === 'visible' ? line.visible : priority === 'background' ? line.background
+      : picture === line.picturesFirst ? line.first : line.then;
+    await new Promise<void>((go) => waiting.push(go));
+  } else line.running += 1;
   try {
     if (still && !still()) return undefined;
     return await run();
   } finally {
-    line.running -= 1;
-    (line.first.shift() ?? line.then.shift())?.();
+    const next = line.visible.shift() ?? line.first.shift() ?? line.then.shift() ?? line.background.shift();
+    if (next) next();
+    else line.running -= 1;
   }
 }
 
 /** `fetch`, waiting its turn among the media requests. */
-export async function mediaFetch(url: string, init?: RequestInit): Promise<Response> {
-  return (await inTurn(() => fetch(url, init), lineOf(url), false))!;
+export async function mediaFetch(url: string, init?: RequestInit, priority: Priority = 'normal'): Promise<Response> {
+  return (await inTurn(() => fetch(url, init), lineOf(url), false, priority))!;
 }
 
 /** Pictures loaded once: the browser has them, so they are shown again without waiting a turn. */
@@ -53,7 +62,7 @@ const WAITING = new Map<string, { done: Promise<boolean | null>; stills: Array<(
  * asked when its turn comes: a picture not wanted any more by then (another zoom, a tile scrolled away) is not asked
  * for at all (null).
  */
-export async function mediaImage(url: string, still?: () => boolean): Promise<boolean | null> {
+export async function mediaImage(url: string, still?: () => boolean, priority: Priority = 'normal'): Promise<boolean | null> {
   if (LOADED.has(url)) return true;
   /* asked again while waiting (the timeline asks again on every change): one request, wanted while anyone wants it */
   const queued = WAITING.get(url);
@@ -64,7 +73,7 @@ export async function mediaImage(url: string, still?: () => boolean): Promise<bo
     img.onload = () => loaded(true);
     img.onerror = () => loaded(false);
     img.src = url;
-  }), lineOf(url), true, () => stills.some((s) => s())).then((ok) => {
+  }), lineOf(url), true, priority, () => stills.some((s) => s())).then((ok) => {
     WAITING.delete(url);
     if (ok) {
       LOADED.add(url);
@@ -80,14 +89,14 @@ export async function mediaImage(url: string, still?: () => boolean): Promise<bo
  * A picture's address once it has had its turn (loaded or not: a failure is the `<img>`'s to show and retry), else
  * the last one that had it, so a picture made again never flickers. `wanted` false: not asked for yet (off screen).
  */
-export function useMediaImage(url: string | null | undefined, wanted = true): string | null {
+export function useMediaImage(url: string | null | undefined, wanted = true, priority: Priority = 'normal'): string | null {
   const [ready, setReady] = React.useState<string | null>(() => (url && LOADED.has(url) ? url : null));
   React.useEffect(() => {
     if (!url || !wanted || ready === url) return undefined;
     let live = true;
-    void mediaImage(url, () => live).then((had) => { if (live && had !== null) setReady(url); });
+    void mediaImage(url, () => live, priority).then((had) => { if (live && had !== null) setReady(url); });
     return () => { live = false; };
-  }, [url, wanted, ready]);
+  }, [url, wanted, priority, ready]);
   return url && LOADED.has(url) ? url : ready;
 }
 

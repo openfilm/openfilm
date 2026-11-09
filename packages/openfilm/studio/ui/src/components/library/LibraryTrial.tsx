@@ -9,9 +9,9 @@
  */
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { LoaderCircle, Pause, Play, RotateCw } from 'lucide-react';
+import { Pause, Play, RotateCw } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { TEXT_COMPONENT, builtInItem, BUILT_IN, defaultTextWords, libraryBox, libraryUrl, nameOf, pageUrl, previewUrl, type LibraryItem } from '@/lib/library';
+import { TEXT_COMPONENT, builtInItem, BUILT_IN, defaultTextWords, libraryBox, nameOf, pageUrl, previewUrl, templatePreviewUrl, type LibraryItem } from '@/lib/library';
 import { TransitionOnPicture } from './OnPicture';
 import { useAssetPlaybackKey } from './AudioList';
 import { PANE_BAR, PANE_BTN, PANE_ICON } from '../dock-pane-bar';
@@ -19,7 +19,7 @@ import { PANE_BAR, PANE_BTN, PANE_ICON } from '../dock-pane-bar';
 /* a motion tried again and again: in, a while shown, out */
 const MOTION_SECONDS = 2.6;
 
-export type TemplatePreviewState = 'fetching' | 'failed' | 'closed' | null;
+export type TemplatePreviewState = 'failed' | null;
 
 export function LibraryTrial({ item, frame = null, target, onLetGo, onTemplateState, onDownloadFailed }: {
   item: LibraryItem;
@@ -30,7 +30,7 @@ export function LibraryTrial({ item, frame = null, target, onLetGo, onTemplateSt
   onDownloadFailed: () => void;
 }) {
   const lang = useLanguage();
-  if (item.kind === 'group') return <TemplateTrial item={item} target={target} onState={onTemplateState} onFailed={onDownloadFailed} />;
+  if (item.kind === 'group') return <TemplateTrial item={item} target={target} onLetGo={onLetGo} onState={onTemplateState} onFailed={onDownloadFailed} />;
   const name = nameOf(item.name, lang);
   return <>
     <PictureTrial item={item} frame={frame} onLetGo={onLetGo} />
@@ -95,15 +95,16 @@ function PictureTrial({ item, frame, onLetGo }: { item: LibraryItem; frame: stri
 const clock = (s: number) => { const n = Math.max(0, Math.floor(s)); return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`; };
 
 /** A template plays over the film while its transport replaces the one beneath the viewer. */
-function TemplateTrial({ item, target, onState, onFailed }: {
+function TemplateTrial({ item, target, onLetGo, onState, onFailed }: {
   item: LibraryItem; target: HTMLDivElement | null;
+  onLetGo: () => void;
   onState: (id: string, state: TemplatePreviewState) => void;
   onFailed: () => void;
 }) {
   const t = useT();
   const lang = useLanguage();
   const video = React.useRef<HTMLVideoElement>(null);
-  const [src, setSrc] = React.useState(() => libraryUrl(`examples/${item.id}.mp4`));
+  const [src, setSrc] = React.useState(() => templatePreviewUrl(item));
   const [playing, setPlaying] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [failed, setFailed] = React.useState(false);
@@ -130,29 +131,26 @@ function TemplateTrial({ item, target, onState, onFailed }: {
     wanted.current = true;
     setLoading(true);
     setFailed(false);
-    const example = libraryUrl(`examples/${item.id}.mp4`);
-    if (failed && src !== example) { setSrc(example); return; }
     if (failed) v.load();
     void v.play().catch((error) => { if (wanted.current && error?.name !== 'AbortError') { setLoading(false); setFailed(true); } });
   };
   useAssetPlaybackKey(Boolean(target), toggle);
   React.useEffect(() => {
-    onState(item.id, failed ? 'failed' : loading ? 'fetching' : null);
-  }, [item.id, loading, failed, onState]);
+    onState(item.id, failed ? 'failed' : null);
+  }, [item.id, failed, onState]);
   const reportFailure = React.useRef(onFailed);
   reportFailure.current = onFailed;
   React.useEffect(() => { if (failed) reportFailure.current(); }, [failed]);
-  React.useEffect(() => () => {
-    onState(item.id, 'closed');
-  }, [item.id, onState]);
   const seek = (s: number) => { const v = video.current; if (v) { v.currentTime = s; setTime(s); } };
   const name = nameOf(item.name, lang);
   const label = t(failed ? 'assetDrawer.previewRetry' : playing || loading ? 'assetDrawer.pause' : 'assetDrawer.play');
   return (<>
-    <div data-library-trial="" data-template-trial={item.id} className="absolute inset-0 z-[6] cursor-default overflow-hidden bg-black"
-      onPointerDown={(e) => { e.stopPropagation(); toggle(); }}>
+    <div data-library-trial="" data-template-trial={item.id} className="absolute inset-0 z-[6] grid cursor-default grid-cols-1 grid-rows-1 place-items-center overflow-hidden bg-black"
+      onPointerDown={(e) => { e.stopPropagation(); onLetGo(); }}>
       <video
         ref={video}
+        data-asset-preview-control=""
+        onPointerDown={(e) => { e.stopPropagation(); toggle(); }}
         src={src}
         autoPlay={wanted.current}
         loop
@@ -164,21 +162,23 @@ function TemplateTrial({ item, target, onState, onFailed }: {
         }}
         onWaiting={() => { if (wanted.current) { setLoading(true); setPlaying(false); } }}
         onPause={() => { setPlaying(false); setLoading(false); }}
-        onLoadedMetadata={(e) => { if (Number.isFinite(e.currentTarget.duration)) setLength(e.currentTarget.duration); }}
+        onLoadedMetadata={(e) => {
+          if (Number.isFinite(e.currentTarget.duration)) setLength(e.currentTarget.duration);
+        }}
         /* the example not had (offline, not published yet): the card's own preview */
         onError={() => {
           if (src !== previewUrl(item)) { setSrc(previewUrl(item)); if (wanted.current) setLoading(true); }
           else { setLoading(false); setPlaying(false); setFailed(true); }
         }}
-        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+        className="block max-h-full max-w-full object-contain"
       />
     </div>
     {target ? createPortal(
       <div data-template-trial-bar="" className={`${PANE_BAR} gap-2 px-2 text-[11px] tabular-nums text-[var(--text)]`}>
         <button type="button" data-template-trial-play={playing ? 'playing' : 'paused'} title={label} aria-label={label}
           onMouseDown={(e) => e.preventDefault()} onClick={toggle} className={PANE_BTN}>
-          {failed ? <RotateCw size={PANE_ICON} /> : loading ? <LoaderCircle size={PANE_ICON} className="animate-spin motion-reduce:animate-none" />
-            : playing ? <Pause size={PANE_ICON} fill="currentColor" /> : <Play size={PANE_ICON} fill="currentColor" />}
+          {failed ? <RotateCw size={PANE_ICON} />
+            : playing || loading ? <Pause size={PANE_ICON} fill="currentColor" /> : <Play size={PANE_ICON} fill="currentColor" />}
         </button>
         <span className="min-w-0 max-w-[36%] truncate text-[12px]" title={name}>{name}</span>
         <span data-template-trial-time="" className="shrink-0 text-[var(--text-muted)]">{clock(time)}</span>

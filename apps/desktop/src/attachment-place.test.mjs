@@ -20,4 +20,7 @@ test('a deep folder keeps only the last two folders above it', () => {
 test('a folder at the top of a disk has no place to show', () => {
   assert.equal(attachmentPlace('/temp'), '');
   assert.equal(attachmentPlace('temp'), '');
+  assert.equal(attachmentPlace('C:\\temp'), '');
+  assert.equal(attachmentPlace('D:\\footage'), '');
+  assert.equal(attachmentPlace('C:\\temp\\'), '');
 });

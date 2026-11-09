@@ -104,6 +104,11 @@ export function readWorkspaceProfiles(storage: Pick<Storage, 'getItem'>): Worksp
   } catch { return defaults; }
 }
 
+/** The chat's width in the desktop shell, even when computing an inactive workspace's layout. */
+export function workspaceChatWidth(width: number, preferred: number, min = 340, studioMin = 640): number {
+  return Math.max(Math.min(preferred, width - studioMin), Math.min(min, width));
+}
+
 /** Geometry for the independent library. A narrow window temporarily uses the bottom without overwriting its dock. */
 export function workspaceGeometry(layout: WorkspaceLayout, viewport: { width: number; height: number }, chatWidth = 0) {
   const width = Math.max(0, viewport.width), height = Math.max(0, viewport.height - 32);

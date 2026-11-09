@@ -18,7 +18,7 @@ import {
 import { useT } from '@/i18n';
 import {
   layerKey, layerLines, movedOrder, moverFor, openTo, rowsBetween, sameTree, selectionTones, withCaptions,
-  type LayerCaption, type LayerClip, type LayerLine, type LayerRow, type LayerRowKind, type RowTone,
+  type LayerCaption, type LayerClip, type LayerLine, type LayerRow, type LayerRowKind, type LayerSelection, type RowTone,
 } from '@/lib/layers-tree';
 import type { StageArrangeResult } from './stage-menu';
 import { PANE_BAR, PANE_BTN, PANE_ICON, PANE_TITLE } from './dock-pane-bar';
@@ -61,9 +61,8 @@ export interface LayersPanelProps {
   selectedClipLocs: readonly string[];
   /** The captions shown at the playhead (their tracks not hidden); the stage's tree has only clips. */
   captions: readonly LayerCaption[];
-  /** Select these layers together; `toggle`: each added to what is selected, or taken away (a ⌘-click). */
-  onSelectLayers: (layers: readonly { clipId: string; loc: string }[], toggle: boolean) => void;
-  onSelectClip: (clipLoc: string, toggle?: boolean) => void;
+  /** Set the selection of both whole clips and layers within them. */
+  onSelectRows: (rows: readonly LayerSelection[]) => void;
   /** The pointer is on a row (its layer outlined on the picture), or left them (null). */
   onPoint: (target: { clipId: string; loc: string } | null) => void;
   /** The eye or the lock of a row. */
@@ -126,7 +125,7 @@ export function LayersPanel(p: LayersPanelProps) {
     const keys = p.selected.flatMap((s) => (s.clipId && s.loc ? [{ clipId: s.clipId, loc: s.loc }] : []));
     if (!clips || !keys.length) return;
     setToggled((cur) => keys.reduce((open, s) => openTo(clips, open, s.clipId, s.loc), cur));
-    requestAnimationFrame(() => {
+    if (keys.length === 1 && !p.selectedClipLocs.length) requestAnimationFrame(() => {
       list.current?.querySelector(`[data-layer-key="${CSS.escape(layerKey(keys[0]!.clipId, keys[0]!.loc))}"]`)?.scrollIntoView({ block: 'nearest' });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,37 +203,40 @@ export function LayersPanel(p: LayersPanelProps) {
   const isSelected = (line: LayerLine) => {
     if (!line.row) {
       const caption = p.captions.find((c) => c.clip === line.clipId);
-      if (caption) return caption.selected;
+      if (caption?.selected) return true;
       const loc = p.clipOf(line.clipId)?.loc;
-      return !p.selected.length && Boolean(loc && p.selectedClipLocs.includes(loc));
+      return Boolean(loc && p.selectedClipLocs.includes(loc));
     }
     return picked.includes(layerKey(line.clipId, line.row.loc));
   };
   /* each line selected ('on'), inside one selected ('in': what it holds, tinted with it), or neither */
   const tones = selectionTones(lines, isSelected);
 
-  /* the row a Shift-click selects from: the last one clicked, else the last layer selected (on the picture too) */
+  /* Shift extends from the last row clicked, or the last selected row when the anchor is gone. */
   const anchor = React.useRef<string | null>(null);
+  const rows = lines.filter(isSelected);
+  const selectedRows = [
+    ...p.selected.flatMap(({ clipId, loc }) => (clipId && loc != null ? [{ clipId, loc }] : [])),
+    ...rows.filter((line) => !line.row).map((line) => ({ clipId: line.clipId, loc: null })),
+  ];
+  const rowSelection = (line: LayerLine): LayerSelection => ({ clipId: line.clipId, loc: line.row?.loc ?? null });
+  const matches = (a: LayerSelection, b: LayerSelection) => a.clipId === b.clipId && a.loc === b.loc;
   const selectRange = (start: LayerLine, end: LayerLine, add: boolean) => {
-    const range = rowsBetween(lines, start, end).map((l) => ({ clipId: l.clipId, loc: l.row!.loc }));
-    const kept = add ? p.selected.flatMap((s) => (s.clipId && s.loc && !range.some((r) => r.clipId === s.clipId && r.loc === s.loc) ? [{ clipId: s.clipId, loc: s.loc }] : [])) : [];
-    p.onSelectLayers([...kept, ...range], false);
+    const range = rowsBetween(lines, start, end).map(rowSelection);
+    const kept = add ? selectedRows.filter((s) => !range.some((r) => matches(r, s))) : [];
+    p.onSelectRows([...kept, ...range]);
   };
   const clickRow = (line: LayerLine, e: React.MouseEvent) => {
     const add = e.altKey || e.metaKey || e.ctrlKey;
-    if (!line.row) {
-      const loc = p.clipOf(line.clipId)?.loc;
-      if (loc) p.onSelectClip(loc, add);
-      return;
-    }
-    const from = e.shiftKey ? lines.find((l) => l.key === (anchor.current && picked.includes(anchor.current) ? anchor.current : picked[picked.length - 1])) : null;
+    const from = e.shiftKey ? rows.find((l) => l.key === anchor.current) ?? rows.at(-1) : undefined;
     if (from) {
-      /* the rows shown between the two (a closed group's are not), with ⌘ (Ctrl) added to what is selected */
       selectRange(from, line, add);
       return;
     }
     anchor.current = line.key;
-    p.onSelectLayers([{ clipId: line.clipId, loc: line.row.loc }], add || e.shiftKey);
+    const row = rowSelection(line);
+    if (!add) { p.onSelectRows([row]); return; }
+    p.onSelectRows(selectedRows.some((s) => matches(s, row)) ? selectedRows.filter((s) => !matches(s, row)) : [...selectedRows, row]);
   };
 
   return (
@@ -286,7 +288,7 @@ export function LayersPanel(p: LayersPanelProps) {
               dragging={drag?.line.key === line.key || drag?.mover.key === line.key}
               onToggleOpen={() => toggleOpen(line)}
               onPress={(e) => {
-                if (e.button !== 0 || !line.row || (!e.shiftKey && (e.altKey || e.metaKey || e.ctrlKey))) return;
+                if (e.button !== 0 || (!e.shiftKey && (!line.row || e.altKey || e.metaKey || e.ctrlKey))) return;
                 press.current = { line, x: e.clientX, y: e.clientY, id: e.pointerId, range: e.shiftKey };
               }}
               onClick={(e) => { if (!dragRef.current) clickRow(line, e); }}

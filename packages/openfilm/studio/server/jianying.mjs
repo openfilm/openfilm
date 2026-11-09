@@ -30,11 +30,13 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { filmSubtitleLanguageOf } from './film-subtitle.mjs';
+import { declarations } from '../../src/film-doc.mjs';
 
 /**
  * @typedef {import('./nle.mjs').NleTimeline} NleTimeline
  * @typedef {import('./nle.mjs').NleClip} NleClip
  * @typedef {import('./nle.mjs').NleFile} NleFile
+ * @typedef {import('./nle.mjs').DraftClipLook} DraftClipLook
  * @typedef {{ text: string, startMs: number, durMs: number }} JianyingCue
  */
 
@@ -89,7 +91,7 @@ const PHOTO_US = 10_800_000_000;
 /** The material kinds an empty draft lists (剪映 reads the draft whether or not they are there). */
 const MATERIAL_KINDS = [
   'ai_translates', 'audio_balances', 'audio_effects', 'audio_fades', 'audio_track_indexes', 'audios', 'beats', 'canvases',
-  'chromas', 'color_curves', 'digital_humans', 'drafts', 'effects', 'flowers', 'green_screens', 'handwrites', 'hsl', 'images',
+  'chromas', 'color_curves', 'common_mask', 'digital_humans', 'drafts', 'effects', 'flowers', 'green_screens', 'handwrites', 'hsl', 'images',
   'log_color_wheels', 'loudnesses', 'manual_deformations', 'masks', 'material_animations', 'material_colors',
   'multi_language_refs', 'placeholders', 'plugin_effects', 'primary_color_wheels', 'realtime_denoises', 'shapes',
   'smart_crops', 'smart_relights', 'sound_channel_mappings', 'speeds', 'stickers', 'tail_leaders', 'text_templates', 'texts',
@@ -102,9 +104,38 @@ const PLATFORM = /** @type {Record<DraftApp, object>} */ ({
   capcut: { app_id: 359289, app_source: 'cc', app_version: '5.9.0', os: 'windows' },
 });
 
-/** A clip's picture settings: none (as placed), or scaled and moved. */
-const clipSettings = (/** @type {number} */ scale, /** @type {number} */ x, /** @type {number} */ y) => ({
-  alpha: 1, flip: { horizontal: false, vertical: false }, rotation: 0, scale: { x: scale, y: scale }, transform: { x, y },
+/** @typedef {{ opacity: number, maskImage: string, maskComposite: string, simple: boolean }} DraftStyle */
+
+/* The inspector writes a square-cornered, unfeathered rectangle as two intersecting bands with hard stops.
+   Keep the parser narrow: another shape, a soft edge, or an additional effect must still render. */
+const percent = String.raw`(-?(?:\d+(?:\.\d+)?|\.\d+))%`;
+const black = String.raw`(?:#000(?:000)?|black|rgb\(\s*0,\s*0,\s*0\s*\))`;
+const transparent = String.raw`(?:transparent|rgba\(\s*0,\s*0,\s*0,\s*0\s*\))`;
+const band = (/** @type {string} */ direction) => String.raw`linear-gradient\(\s*${direction}${transparent}\s+${percent}\s*,\s*${black}\s+${percent}\s*,\s*${black}\s+${percent}\s*,\s*${transparent}\s+${percent}\s*\)`;
+const rectangle = new RegExp(String.raw`^${band(String.raw`90deg\s*,\s*`)}\s*,\s*${band(String.raw`(?:(?:180deg|to bottom)\s*,\s*)?`)}$`, 'i');
+const nativeProperties = new Set(['opacity', 'mask-image', 'mask-composite']);
+
+/**
+ * A static look that can be recreated with editable 剪映 controls.
+ * @param {string} style @param {DraftStyle | null} css @param {number} rotation @param {boolean} maskFits
+ * @returns {DraftClipLook | undefined}
+ */
+export function jianyingClipLook(style, css, rotation, maskFits) {
+  if (!css?.simple || declarations(style).some(([key]) => !nativeProperties.has(key))) return;
+  const { opacity, maskImage, maskComposite } = css;
+  if (maskImage === 'none') return { opacity, rotation };
+  // A draft mask is relative to the actual picture. CSS masks may be relative to a letterboxed clip box.
+  if (!maskFits || rotation !== 0 || !/^intersect(?:,\s*intersect)?$/.test(maskComposite)) return;
+  const match = rectangle.exec(maskImage);
+  if (!match) return;
+  const [x1, x2, x3, x4, y1, y2, y3, y4] = match.slice(1).map((v) => Number(v) / 100);
+  if (x1 !== x2 || x3 !== x4 || y1 !== y2 || y3 !== y4 || x1 < 0 || y1 < 0 || x3 > 1 || y3 > 1 || x1 >= x3 || y1 >= y3) return;
+  return { opacity, rotation, rectangle: { left: x1, top: y1, right: x3, bottom: y3 } };
+}
+
+/** A clip's picture settings, as the controls in the editor read them. */
+const clipSettings = (/** @type {number} */ scale, /** @type {number} */ x, /** @type {number} */ y, /** @type {DraftClipLook | undefined} */ look = undefined) => ({
+  alpha: look?.opacity ?? 1, flip: { horizontal: false, vertical: false }, rotation: look?.rotation ?? 0, scale: { x: scale, y: scale }, transform: { x, y },
 });
 
 /**
@@ -191,6 +222,25 @@ export function jianyingDraft(timeline, opts) {
     return id;
   };
 
+  /** @param {NonNullable<DraftClipLook['rectangle']>} rect */
+  const mask = ({ left, top, right, bottom }) => {
+    const id = hex();
+    const material = {
+      id, name: '矩形', type: 'mask', platform: 'all', position_info: '', resource_type: 'rectangle', resource_id: '6791700809454195207',
+      config: { aspectRatio: 1, centerX: round6(left + right - 1), centerY: round6(1 - top - bottom),
+        width: round6(right - left), height: round6(bottom - top), feather: 0, rotation: 0, roundCorner: 0, invert: false },
+    };
+    materials.masks.push(material);
+    materials.common_mask.push({
+      ...material, config: { ...material.config, expansion: 0 },
+      category: 'video', category_id: 'jichu', category_name: '基础', is_old_version: false, loader_work_space: '',
+      panel: '', source_platform: 0, track_segment: '',
+      text_config: { align_type: 15, bold_width: 0, char_spacing: 0, content: '', font_name: '', font_path: '', font_resource_id: '',
+        font_size: 15, has_underline: false, italic_degree: 0, line_gap: 0, scale: 1 },
+    });
+    return id;
+  };
+
   /** @type {Record<string, any>[]} */
   const tracks = [];
   let renderIndex = 0;
@@ -222,11 +272,13 @@ export function jianyingDraft(timeline, opts) {
         const x = round6((c.motion?.center.h ?? 0) * 2), y = round6(-(c.motion?.center.v ?? 0) * 2);
         const sound = c.linkGroup ? ownSound.get(c.linkGroup) : undefined;
         const level = sound?.level ?? 0;
+        const refs = [speed(c.speed)];
+        if (c.draftLook?.rectangle) refs.push(mask(c.draftLook.rectangle));
         return segment({
           material_id: material(file, 'video'), target_timerange: span(c.start, c.end),
           source_timerange: file.video?.still ? { start: 0, duration: us(c.end) - us(c.start) } : span(c.in, c.out),
           visible: t.enabled && c.enabled, volume: level, last_nonzero_volume: sound?.kept || 1,
-          speed: c.speed ?? 1, extra_material_refs: [speed(c.speed)], clip: clipSettings(scale, x, y), uniform_scale: { on: true, value: 1 },
+          speed: c.speed ?? 1, extra_material_refs: refs, clip: clipSettings(scale, x, y, c.draftLook), uniform_scale: { on: true, value: 1 },
           hdr_settings: { intensity: 1, mode: 1, nits: 1000 }, render_index: index,
         });
       }),

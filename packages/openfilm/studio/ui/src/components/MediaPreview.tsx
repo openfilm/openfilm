@@ -81,7 +81,7 @@ export function MediaPreview({
   const poster = thumbable ? sources.poster?.(file) : undefined;
   const picture = file.kind === 'image' ? (poster && !failed ? poster : sources.file(file)) : file.kind === 'video' ? poster : undefined;
   /* asked for in turn with Studio's other media (lib/media-queue), once the tile is near the screen */
-  const shown = useMediaImage(thumbable ? picture : null, near);
+  const shown = useMediaImage(thumbable ? picture : null, near, 'visible');
 
   if (file.kind === 'audio') return <AudioPreview file={file} sources={sources} />;
 

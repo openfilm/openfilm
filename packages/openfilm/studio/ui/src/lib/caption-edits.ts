@@ -180,7 +180,9 @@ export function splitCue(vtt: Vtt, id: string, at: number): { vtt: Vtt; id: stri
     right = cue.text.slice(cut.index);
   } else {
     const plain = cuePlain(cue.text);
-    const k = cutIndex(plain, (at - cue.start) / (cue.end - cue.start)) || Math.ceil(plain.length / 2);
+    let k = cutIndex(plain, (at - cue.start) / (cue.end - cue.start)) || Math.ceil(plain.length / 2);
+    /* a cut between a surrogate pair's halves would write half a character into each cue */
+    if (/[\uD800-\uDBFF]/.test(plain[k - 1] ?? '')) k -= 1;
     left = cueEscape(plain.slice(0, k).trim());
     right = cueEscape(plain.slice(k).trim());
   }

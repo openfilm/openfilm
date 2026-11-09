@@ -38,8 +38,8 @@
  *   { kind: 'nle', format?: 'xml' (default) | 'fcpxml' | 'jianying' | 'capcut', fps? (snapped to 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60;
  *     default 30), audio?: 'clips' (default) | 'stems', media?: 'copy' (default) | 'link', subtitles?: boolean (default true),
  *     alpha?: 'auto' | 'png' | 'prores' | 'prores4444', footage?: 'source' | 'render' }
- *       footage: 'source' keeps complete original videos and native cuts/speed, without baking page-specific looks;
- *       'render' (default) preserves the existing rendered appearance. Pages always need rendering.
+ *       By default, keep complete sources, convert incompatible formats and render only the used range of effects
+ *       the editor cannot represent. The legacy 'source' and 'render' overrides remain accepted.
  *       a folder an editing program opens (see nle.mjs): `<name>.xml` (xmeml: Premiere Pro, DaVinci Resolve) or `<name>.fcpxml` (Final Cut Pro), each
  *       web page rendered with its alpha to a MOV in media/ (`alpha`, for a draft: `auto`, the default, a page with no
  *       clear pixel in any frame as H.264 and the others as lossless PNG, each picture kept once for as long as it
@@ -82,8 +82,9 @@ import { filmVideos } from '../../src/seekable.mjs';
 import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFilmFile } from '../../src/film-doc.mjs';
 import { layerBlocks, rowBadges, trackKind } from './track-layout.mjs';
 import { fcpxmlDocument } from './fcpxml.mjs';
+import { markHevcStraightAlpha } from './hevc-alpha.mjs';
 import { frameSpan, NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
-import { draftsRoot, jianyingDraft } from './jianying.mjs';
+import { draftsRoot, jianyingClipLook, jianyingDraft } from './jianying.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
 import { subtitlesForExport } from './captions.mjs';
 import { burned, even, frameBox, frameRatio, stageOf } from '../../src/burn.mjs';
@@ -114,7 +115,7 @@ export { exportsRoot };
  * @typedef {Framing & { kind: 'poster', format?: 'png' | 'jpg', shortEdge?: number, at?: number }} PosterAsk
  * @typedef {{ kind: 'subtitles', format?: 'srt' | 'vtt' | 'txt' }} SubtitlesAsk
  * @typedef {Framing & { kind: 'slides', format?: 'pptx' | 'pdf', shortEdge?: number, at?: number[] }} SlidesAsk
- * @typedef {{ kind: 'nle', format?: 'xml' | 'fcpxml' | 'jianying' | 'capcut', fps?: number, audio?: 'clips' | 'stems', media?: 'copy' | 'link', footage?: 'source' | 'render', subtitles?: boolean, alpha?: 'auto' | 'png' | 'prores' | 'prores4444' }} NleAsk
+ * @typedef {{ kind: 'nle', format?: 'xml' | 'fcpxml' | 'jianying' | 'capcut', fps?: number, audio?: 'clips' | 'stems', media?: 'copy' | 'link', footage?: 'source' | 'render', alpha?: 'auto' | 'png' | 'prores' | 'prores4444' }} NleAsk
  * @typedef {{ kind: 'project', parts?: ProjectPart[], as?: 'zip' | 'folder' }} ProjectAsk
  * @typedef {typeof PROJECT_PARTS[number]} ProjectPart
  * @typedef {VideoAsk | GifAsk | AudioAsk | StillsAsk | PosterAsk | SubtitlesAsk | SlidesAsk | NleAsk | ProjectAsk} ExportSpec
@@ -386,7 +387,6 @@ function checked(/** @type {ExportAsk} */ ask) {
       if (ask.audio !== undefined && ask.audio !== 'clips' && ask.audio !== 'stems') throw new ExportError('audio: clips or stems');
       if (ask.media !== undefined && ask.media !== 'copy' && ask.media !== 'link') throw new ExportError('media: copy or link');
       if (ask.footage !== undefined && ask.footage !== 'source' && ask.footage !== 'render') throw new ExportError('footage: source or render');
-      if (ask.subtitles !== undefined && typeof ask.subtitles !== 'boolean') throw new ExportError('subtitles: true or false');
       if (ask.alpha !== undefined) {
         const draft = ask.format === 'jianying' || ask.format === 'capcut';
         const can = ask.format === 'fcpxml' ? ['prores4444'] : draft ? ['auto', 'png', 'prores'] : ['prores4444', 'png'];
@@ -609,7 +609,7 @@ async function sourceClipFilm(root, picture, native, doc) {
 
 
 const H264_CRF = { standard: 23, high: 18, master: 14 };
-const X265_CRF = { standard: 28, high: 23, master: 19 };
+const X265_CRF = { standard: 28, high: 23, master: 14 };
 const VP9_CRF = { standard: 36, high: 30, master: 20 };
 /** Bits per pixel per frame by quality, for encoders that take a bitrate (the same scale as the dialog's estimate). */
 const BPP = { standard: 0.07, high: 0.11, master: 0.2 };
@@ -649,8 +649,9 @@ function encoding(codec, quality, size, fps, have, hw = null) {
     case 'hevc':
       if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(0.8), { gop }), ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
       if (have.has('libx265')) {
-        /* master in 10 bits (Main 10): a dark gradient keeps steps 8 bits break into bands */
-        return { encoder: 'libx265', format: { video: ['-c:v', 'libx265', '-preset', 'medium', '-crf', String(X265_CRF[quality]), '-x265-params', 'log-level=error', '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709], ...(quality === 'master' ? { pix: YUV_709('yuv420p10le') } : {}) } };
+        /* master in 10 bits (Main 10), with finer grain-aware encoding: small changing dither must not become one
+           frozen texture. It costs more time and bytes; the smaller delivery qualities keep their settings. */
+        return { encoder: 'libx265', format: { video: ['-c:v', 'libx265', '-preset', quality === 'master' ? 'slow' : 'medium', '-crf', String(X265_CRF[quality]), ...(quality === 'master' ? ['-tune', 'grain'] : []), '-x265-params', 'log-level=error', '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709], ...(quality === 'master' ? { pix: YUV_709('yuv420p10le') } : {}) } };
       }
       if (have.has('hevc_videotoolbox')) return { encoder: 'hevc_videotoolbox', format: { video: ['-c:v', 'hevc_videotoolbox', '-b:v', bitrate(0.8), '-g', String(gop), '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
       throw new ExportError('this computer\'s ffmpeg has no HEVC encoder (libx265 or hevc_videotoolbox)');
@@ -838,7 +839,7 @@ const STOP_WAIT_MS = 8000;
  * `captions(root)`: a film's subtitle cues and the person's style for them, `tracks` when they are its caption tracks
  * (captions.mjs by default).
  * `drafts(app)`: 剪映's or CapCut's drafts folder, where its draft goes (null: the exports folder); this computer's by default.
- * @param {{ onChange?: (job: ExportJob) => void, captions?: (root: string) => Promise<{ cues: Cue[], style: SubtitleStyle, tracks?: boolean }>,
+ * @param {{ onChange?: (job: ExportJob) => void, captions?: (root: string, options?: { timelineOnly?: boolean }) => Promise<{ cues: Cue[], style: SubtitleStyle, tracks?: boolean }>,
  *   drafts?: (app: 'jianying' | 'capcut') => string | null }} [options]
  */
 export function createExports({ onChange = () => {}, captions = subtitlesForExport, drafts = defaultDrafts } = {}) {
@@ -855,8 +856,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
   const update = (/** @type {ExportJob} */ job, /** @type {Partial<ExportJob>} */ change) => { Object.assign(job, change); onChange({ ...job, outputs: [...job.outputs] }); };
 
   /** The cues as the person's style shows them (the language picked, or both), and the style. @param {string} root */
-  const subtitlesOf = async (root) => {
-    const { cues, style } = await captions(root);
+  const subtitlesOf = async (root, timelineOnly = false) => {
+    const { cues, style } = await captions(root, { timelineOnly });
     return { cues: filmSubtitleShown(cues, style).filter((c) => c.durMs > 0 && c.text.trim()), style };
   };
   /** The film with its subtitles burned in, or null (burn.mjs). @param {string} root @param {Framing} ask @param {boolean} [transparent] */
@@ -953,6 +954,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             update(job, { phase: 'encoding', progress: 0.86, rate: 0, etaMs: null });
             const { format } = encoding(codec, quality, size, fps ?? 30, have);
             await run(['-i', frames, '-map', '0:v:0', '-map', '0:a?', '-vf', /** @type {{ pix: string }} */ (format).pix, ...format.video, '-c:a', 'copy', part], signal);
+            await markHevcStraightAlpha(part);
           } else {
             /* named by the file it makes, not the partial one: an export the app quit or crashed in is resumed by the next
                (render-resume.mjs); one cancelled here leaves nothing */
@@ -1262,7 +1264,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     update(job, { encoder: prores && !app ? (await hardwareEncoder('prores', have)) ?? 'prores_ks' : 'png' });
     /* a source out of the project fails the export before anything is drawn */
     for (const track of doc.tracks) for (const row of track.clips) clipPath(root, row.src);
-    const { cues, style: shown } = ask.subtitles === false ? { cues: [], style: null } : await subtitlesOf(root).catch((error) => {
+    const { cues, style: shown } = await subtitlesOf(root, true).catch((error) => {
       if (fcp) throw error;
       return { cues: [], style: null };
     });
@@ -1274,14 +1276,23 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       await filmElsewhere(root, scratch, { stage: doc.stage, tracks: doc.tracks.map((t) => ({ clips: t.clips })) });
       const probe = await open(scratch, { root });
       /** @type {{ id: string, at: number, end: number, from: number, to: number, speed: number, native: number | null, w: number | null, h: number | null,
-       * animationTiming?: { durations: number[], delays: number[] } }[]} */
+       * hasEffect: boolean, draftStyle: import('./jianying.mjs').DraftStyle | null, animationTiming?: { durations: number[], delays: number[] } }[]} */
       let loaded;
       try {
         loaded = await probe.film.page.evaluate(() => /** @type {any} */ (window).__filmEditor.stage.clips().map((/** @type {any} */ c) => {
           const css = c.el ? getComputedStyle(c.el) : null;
           const seconds = (/** @type {string} */ value) => value.split(',').map((v) => parseFloat(v) * (v.trim().endsWith('ms') ? 0.001 : 1));
           const timing = css && css.animationName !== 'none' ? { durations: seconds(css.animationDuration), delays: seconds(css.animationDelay) } : null;
-          return { id: c.id, at: c.at, end: c.end, from: c.span.from, to: c.span.to, speed: c.span.speed,
+          const all = (/** @type {string} */ value, /** @type {string} */ expected) => value.split(',').every((part) => part.trim() === expected);
+          const standardMask = !css || css.maskImage === 'none' || (all(css.maskSize, 'auto') && all(css.maskPosition, '0% 0%')
+            && all(css.maskOrigin, 'border-box') && all(css.maskClip, 'border-box') && all(css.maskMode, 'match-source'));
+          const simple = Boolean(css && standardMask && css.clipPath === 'none' && css.filter === 'none' && css.backdropFilter === 'none'
+            && css.mixBlendMode === 'normal' && css.borderRadius === '0px' && css.borderWidth === '0px' && css.boxShadow === 'none'
+            && css.backgroundColor === 'rgba(0, 0, 0, 0)' && css.backgroundImage === 'none'
+            && css.objectFit === 'contain' && css.objectPosition === '50% 50%' && !timing);
+          const hasEffect = Boolean(css && (css.maskImage !== 'none' || css.clipPath !== 'none' || css.filter !== 'none' || css.opacity !== '1' || timing));
+          const draftStyle = css ? { opacity: Number(css.opacity), maskImage: css.maskImage, maskComposite: css.maskComposite, simple } : null;
+          return { id: c.id, at: c.at, end: c.end, from: c.span.from, to: c.span.to, speed: c.span.speed, hasEffect, draftStyle,
             native: Number.isFinite(c.native) ? c.native : null, w: c.nw ?? null, h: c.nh ?? null,
             ...(timing && [...timing.durations, ...timing.delays].every(Number.isFinite) ? { animationTiming: timing } : {}) };
         }));
@@ -1332,8 +1343,15 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
               const k = pictureRect(kind, { w: f.w, h: f.h }, doc.stage, row.box).w / f.w;
               f = { ...f, w: Math.max(1, Math.round(f.w * k)), h: Math.max(1, Math.round(f.h * k)) };
             }
+            let draftLook;
+            if (app === 'jianying' && kind === 'video' && f?.w && f.h && !row.class && !fade && !row.overrides?.length) {
+              const rect = pictureRect(kind, { w: f.w, h: f.h }, doc.stage, row.box);
+              const maskFits = Math.abs(rect.w / rect.h - f.w / f.h) < 1e-6;
+              draftLook = jianyingClipLook(row.style ?? '', c.draftStyle, rect.r, maskFits);
+            }
             pictures.push({ id: row.id, kind, src: row.src, path, at: c.at, end: c.end, from: c.from, speed: c.speed, box: row.box,
-              track: ti, hidden: Boolean(track.hidden || row.disabled), styled: Boolean(row.class || row.style), ...(fade ? { faded: true } : {}), facts: f,
+              ...(draftLook ? { draftLook } : {}),
+              track: ti, hidden: Boolean(track.hidden || row.disabled), styled: Boolean(row.class || row.style || c.hasEffect), ...(fade ? { faded: true } : {}), facts: f,
               ...(c.animationTiming ? { animationTiming: c.animationTiming } : {}) });
           }
           if (kind === 'sound' || kind === 'video') {
@@ -1367,7 +1385,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
 
       const timeline = planNleTimeline({ stage: doc.stage, duration: duration || 0.001, pictures, sounds },
         { title, fps, audio: mode, media: ask.media ?? 'copy', mediaDir: join(final, 'media'), stems: [...stems.keys()],
-          audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app), footage: ask.footage });
+          audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app), footage: ask.footage ?? 'auto' });
       const staged = (/** @type {import('./nle.mjs').NleFile} */ f) => join(staging, 'media', basename(f.path));
 
       /* each web page (and each picture Basic Motion can't place) drawn alone, full frame, with alpha. Several are drawn at
@@ -1426,12 +1444,12 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         const time = p.kind === 'video' ? [p.from, Math.min(native, p.from + (frames / timeline.rate.fps) * p.speed)] : [p.from, p.from + frames / timeline.rate.fps];
         /* a draft's page with no clear pixel in any frame needs no alpha (each frame's alpha is read as it is drawn, so
            it is what Studio shows): written opaque as it is drawn, nothing written twice. At the first pixel that shows
-           through it is drawn again with its alpha: as lossless PNG, or as ProRes 4444 (`prores`). A draft's footage or
-           still with no picture under it while it shows (on the lowest track) is drawn on the film's own background, as
-           the film shows it: opaque, never a lossless PNG of every frame of a video. Under it is on the sequence's
-           frames, so a clip just before it, ending a hair past its cut, is not */
+           through it is drawn again with its alpha: as lossless PNG, or as ProRes 4444 (`prores`). By default a
+           rendered layer keeps its transparency so it can be moved over other footage. In legacy render mode a draft's
+           footage or still with no picture under it can be drawn opaque on the film's own background. Overlaps are
+           checked on the sequence's frame grid. */
         const own = frameSpan(p.at, p.end, timeline.rate);
-        const ground = app && alpha !== 'png' && p.kind !== 'page' && !pictures.some((q) => {
+        const ground = app && ask.footage === 'render' && alpha !== 'png' && p.kind !== 'page' && !pictures.some((q) => {
           const span = frameSpan(q.at, q.end, timeline.rate);
           return q !== p && q.track >= p.track && span.start < own.end && own.start < span.end;
         });
@@ -1532,9 +1550,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         'Original-media editing project', '',
         ask.media === 'link' ? 'Original media is referenced at its existing paths. Keep those files available; relink them if moved.'
           : 'Complete original media is copied into the media folder, without cutting or re-encoding the source videos.',
-        'Timeline cuts retain source in/out points and speed, with the rest of each source available for trimming.',
+        'Unprocessed footage on the timeline retains original in/out points, speed and handles.',
         'The target editor must support the original video codecs.',
-        'Web pages/motion graphics are still rendered. Page-specific picture effects are not baked into original footage; rebuild them in the target editor.', '',
+        'Clips with effects use rendered media for the timeline range, with the complete original video kept separately.', '',
       ].join('\n'), 'utf8');
       if (app) {
         /* the app on Windows reads draft_content.json, on a Mac draft_info.json: the same draft in both */

@@ -83,6 +83,11 @@
       if (editor()) {
         editor().learned = () => post({ type: 'spans', spans: facts(f).spans });
         editor().appeared = () => post({ type: 'shown' });
+        editor().redraw = () => {
+          if (line || refreshStill) return;
+          refreshStill = true;
+          requestAnimationFrame(draw);
+        };
       }
       return f;
     } catch (e) { fail(e); return null; }
@@ -95,13 +100,17 @@
   const BEHIND_WAIT_MS = 20_000;
   let drawing = false;
   let next = null;
+  let refreshStill = false;
   /* the moment last asked for (drawn, being drawn or waiting): what an edit changed in place is drawn at */
   let asked = 0;
   const draw = async () => {
-    if (drawing || !next) return;
+    if (drawing || (!next && !refreshStill)) return;
     drawing = true;
-    const { t, seq, behind } = next;
+    const seek = next;
+    const t = seek?.t ?? asked;
+    const behind = seek?.behind;
     next = null;
+    refreshStill = false;
     try {
       const f = await loaded;
       if (!f) { drawing = false; return; }
@@ -114,7 +123,7 @@
       let timer;
       await Promise.race([watch && !behind ? watch(t) : drawn(f, t), new Promise((done) => { timer = setTimeout(done, behind ? BEHIND_WAIT_MS : FRAME_WAIT_MS); })]);
       clearTimeout(timer);
-      post({ type: 'seeked', t, seq });
+      if (seek) post({ type: 'seeked', t, seq: seek.seq });
     } catch (e) { fail(e); }
     drawing = false;
     if (line) requestFrame(); else draw();
@@ -208,6 +217,7 @@
       const fps = Number(m.fps);
       line = { t: Number(m.t), at: Number(m.at), rate: Number(m.rate) || 1, fps: fps > 0 ? fps : 0 };
       next = null;
+      refreshStill = false;
       lastT = null;
       requestFrame();
       return;

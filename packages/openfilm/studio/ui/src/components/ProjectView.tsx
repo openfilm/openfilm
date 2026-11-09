@@ -13,7 +13,7 @@ import { CanvasLoading } from './canvas/CanvasLoading';
 import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Layers, MessageSquarePlus, MonitorDown, Scissors, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { withPreset } from '../../../../src/clip-motion.mjs';
-import { PARTS, compoundOf, dissolvedOf, srcInto, srcOutOf } from '../../../server/compound.mjs';
+import { PARTS, compoundFolder, compoundOf, dissolvedOf, srcInto, srcOutOf } from '../../../server/compound.mjs';
 import type { FilmValue } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
@@ -98,7 +98,7 @@ import { cueClipId, cueEditOf, cueOf, cueStandIn, isCueClip, withCueBlocks, type
 
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider } from './PaneDivider';
-import { defaultWorkspace, workspaceGeometry, type WorkspaceLayout } from '@/lib/workspaces';
+import { defaultWorkspace, workspaceChatWidth, workspaceGeometry, type WorkspaceLayout } from '@/lib/workspaces';
 import { useWorkspaceDraft, useWorkspaceLayouts } from '@/lib/use-workspaces';
 import { defaultDockTree, dockFrames, visibleDockPanels, type DockPanel } from '@/lib/workspace-dock';
 import { WorkspaceEditor, WorkspaceSeams } from './WorkspaceEditor';
@@ -112,7 +112,7 @@ import { AppMenu } from './AppMenu';
 import { UpdateButton, WebUpdateButton } from './UpdateButton';
 import { MediaPool, type ImportProgress } from './MediaPool';
 import { LayersPanel } from './LayersPanel';
-import type { LayerRow } from '@/lib/layers-tree';
+import type { LayerRow, LayerSelection } from '@/lib/layers-tree';
 import { SourcePreview } from './SourcePreview';
 import { ResourceInspector } from './ResourceInspector';
 import { FilmInspector } from './FilmInspector';
@@ -225,7 +225,6 @@ const WHITE_SRC = 'transitions/white.html';
 /** An edit-history label naming the clips it was done to (see OperationHistory's stepText): "Deleted slow". */
 const clipStep = (key: string, ids: readonly string[]) => `${key}|${ids.join(', ')}`;
 /** A compound clip's folder (`parts/<name>`), from its src; null for any other clip. */
-const compoundFolder = (src: string | undefined) => /^(parts\/[^/]+)\/film\.html$/.exec((src ?? '').replace(/#.*$/, ''))?.[1] ?? null;
 
 /** The project's id-named clips by their place in film.html (`film.html#t.c`). */
 function clipIdAt(film: Film | null, loc: string): string | null {
@@ -370,7 +369,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       const key = `${f.path}@${f.mtime}`;
       if (probed.current.has(key)) continue;
       probed.current.add(key);
-      void mediaFetch(`/api/projects/${encodeURIComponent(projectId)}/media?what=probe&path=${encodeURIComponent(f.path)}&v=${f.mtime}`)
+      void mediaFetch(`/api/projects/${encodeURIComponent(projectId)}/media?what=probe&path=${encodeURIComponent(f.path)}&v=${f.mtime}`, undefined, 'background')
         .then((r) => (r.ok ? r.json() : null))
         .then((probe) => {
           if (!probe) return;
@@ -835,21 +834,23 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const dockColRef = React.useRef<HTMLDivElement | null>(null);
   const viewerRowRef = React.useRef<HTMLDivElement | null>(null);
   const workspaceMode = canvasOpen ? 'canvas' : 'edit';
-  const { layout: storedWorkspace, update: commitWorkspace, viewport: workspaceViewport, storageFailed: workspaceStorageFailed } = useWorkspaceLayouts(workspaceMode);
+  const { layout: storedWorkspace, profiles: workspaceProfiles, update: commitWorkspace, viewport: workspaceViewport, storageFailed: workspaceStorageFailed } = useWorkspaceLayouts(workspaceMode);
   const layoutDraft = useWorkspaceDraft();
   const workspacePrefs = layoutDraft.draft ?? storedWorkspace;
+  const editPrefs = workspaceMode === 'edit' ? workspacePrefs : workspaceProfiles.edit;
+  const canvasPrefs = workspaceMode === 'canvas' ? workspacePrefs : workspaceProfiles.canvas;
   layoutEditingRef.current = layoutDraft.draft !== null;
   const updateWorkspace = React.useCallback((patch: Partial<WorkspaceLayout>) => {
     if (layoutDraft.active.current) layoutDraft.update(patch); else commitWorkspace(patch);
   }, [layoutDraft.active, layoutDraft.update, commitWorkspace]);
-  const storedTimelineHeight = workspacePrefs.timelineHeight;
+  const storedTimelineHeight = editPrefs.timelineHeight;
   const timelineHeightSaved = storedTimelineHeight !== null;
-  const inspectorWidth = workspacePrefs.inspectorWidth;
+  const inspectorWidth = editPrefs.inspectorWidth;
   const assetsPaneOpen = workspacePrefs.assets;
-  const layersPaneOpen = workspacePrefs.layers;
-  const layersWidth = workspacePrefs.layersWidth;
-  const timelineOpen = workspacePrefs.timeline;
-  const inspectorOpen = workspacePrefs.inspector;
+  const layersPaneOpen = editPrefs.layers;
+  const layersWidth = editPrefs.layersWidth;
+  const timelineOpen = editPrefs.timeline;
+  const inspectorOpen = editPrefs.inspector;
   const commitTimelineHeight = React.useCallback((value: number) => updateWorkspace({ timelineHeight: value }), [updateWorkspace]);
   const commitInspectorWidth = React.useCallback((value: number) => updateWorkspace({ inspectorWidth: value }), [updateWorkspace]);
   const setLayersWidth = React.useCallback((value: number) => updateWorkspace({ layersWidth: value }), [updateWorkspace]);
@@ -899,6 +900,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [pickedMedia, setPickedMedia] = React.useState<WorkspaceResource | null>(null);
   const dismissLibraryPreview = React.useRef<() => boolean>(() => false);
   const [libraryPreviewBar, setLibraryPreviewBar] = React.useState<HTMLDivElement | null>(null);
+  const [libraryPreviewPicture, setLibraryPreviewPicture] = React.useState<HTMLDivElement | null>(null);
   /* the file picked is one of Saved (lib/saved): shown from there, and brought into the project when it is used */
   const [pickedSaved, setPickedSaved] = React.useState(false);
   const [inspectorContent, setInspectorContent] = React.useState<'selection' | 'captions' | WorkspaceResource>('selection');
@@ -918,6 +920,23 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (file) { setInspectorContent(file); setInspectorOpen(true); }
     else setInspectorContent((c) => (typeof c === 'object' ? 'selection' : c));
   }, [pause]);
+  /* Blank space anywhere in the workspace dismisses a source preview. Controls and selectable items handle their
+     own presses, including the timeline, which also returns from preview on a clip click. */
+  React.useEffect(() => {
+    const interactive = [
+      'button, a[href], input, select, textarea, [contenteditable], [draggable="true"]',
+      '[role="button"], [role="tab"], [role="slider"], [role="treeitem"], [role="menu"], [role="listbox"], [role="dialog"]',
+      '[data-media-key], [data-library-card], [data-library-audio], [data-library-voice], [data-asset-preview-control]',
+      '[data-workspace-timeline], [data-popover-panel]',
+    ].join(', ');
+    const onDown = (event: PointerEvent) => {
+      if (event.button !== 0 || !(event.target instanceof Element) || event.target.closest(interactive)) return;
+      dismissLibraryPreview.current();
+      if (pickedMedia) pickMedia(null);
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    return () => window.removeEventListener('pointerdown', onDown, true);
+  }, [pickedMedia, pickMedia]);
   /* a caption's cues picked on the timeline are the picked cues of the caption inspector and the picture too, and
      those picked there are picked on the timeline (one selection, seen in three places) */
   const fromTimeline = React.useRef(false);
@@ -949,16 +968,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return next.length === keys.length && next.every((k, i) => k === keys[i]) ? keys : next;
     });
   }, [cuePick]);
-  const freeGeometry = workspacePrefs.tree ? dockFrames(workspacePrefs.tree, workspaceViewport, visibleDockPanels(workspacePrefs, Boolean(studioHost?.panel))) : null;
+  const freeFrames = (layout: WorkspaceLayout) => layout.tree ? dockFrames(layout.tree, workspaceViewport, visibleDockPanels(layout, Boolean(studioHost?.panel))) : null;
+  const editFree = freeFrames(editPrefs);
+  const canvasFree = freeFrames(canvasPrefs);
+  const freeGeometry = canvasOpen ? canvasFree : editFree;
   const freeStyle = (panel: DockPanel): React.CSSProperties => {
-    const rect = freeGeometry?.panels[panel];
+    const rect = (panel === 'canvas' ? canvasFree : editFree)?.panels[panel];
     return rect ? { position: 'fixed', zIndex: 30, ...rect, paddingTop:0, borderTop:rect.top===HOST_PANEL_TOP?'1px solid var(--dock-line)':0 } : {};
   };
   const rowNarrow = rowWidth > 0 && rowWidth < MIN_VIEWER + DEFAULT_INSPECTOR + 240;
   const inspectorIdle = inspectorContent === 'selection' && !stageElement && !selectedBlocks.length;
-  const inspectorShown = inspectorOpen && (Boolean(freeGeometry) || !(rowNarrow && inspectorIdle));
+  const inspectorShown = inspectorOpen && (Boolean(editFree) || !(rowNarrow && inspectorIdle));
   const inspectorWanted = inspectorWidth ?? DEFAULT_INSPECTOR;
-  const inspectorShownWidth = freeGeometry?.panels.inspector?.width ?? (rowWidth && inspectorShown ? Math.max(200, Math.min(inspectorWanted, rowWidth - MIN_VIEWER - 8)) : inspectorWanted);
+  const inspectorShownWidth = editFree?.panels.inspector?.width ?? (rowWidth && inspectorShown ? Math.max(200, Math.min(inspectorWanted, rowWidth - MIN_VIEWER - 8)) : inspectorWanted);
 
   /* ── edits: the timeline's and the inspector's, turned into the server's operations by clip id ── */
   /* the picture's controls, set by FilmStageSelect (declared here: every edit asks it to write its arrow keys' first) */
@@ -1804,25 +1826,23 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /*
    * OpenFilm's library in the assets drawer (components/library/LibraryDrawer, lib/library). A click tries a thing in
    * the viewer, nothing written (components/library/LibraryTrial; a look through the stage's look preview, on the clip
-   * it would go on). A double click, Enter or "+" puts it in: a page or a sound taken into the project and put at the
+   * it would go on). Enter or "+" puts it in: a page or a sound taken into the project and put at the
    * playhead (a sound as a file of the project goes, a page on a new track at the top, a transition's middle on the
    * cut), a look written into the clips' style, a fade made on a cut as the timeline's menu makes one; what was put
    * in is then picked on the timeline, so the inspector shows what can be changed in it. A drag onto the timeline
    * goes through dropAsset, or for a look or a fade through applyDrop.
    */
   const [libraryTrial, setLibraryTrial] = React.useState<LibraryItem | null>(null);
-  const [templateStatus, setTemplateStatus] = React.useState<Partial<Record<string, 'fetching' | 'failed'>>>({});
+  const [templateStatus, setTemplateStatus] = React.useState<Partial<Record<string, 'failed'>>>({});
   const { show: showToast } = toast;
   const onLibraryDownloadFailed = React.useCallback(() => showToast(t('assetDrawer.networkRetry')), [showToast, t]);
   const onTemplateState = React.useCallback((id: string, state: TemplatePreviewState) => {
     setTemplateStatus((current) => {
-      if (state === 'closed' && current[id] !== 'fetching') return current;
-      const next = state === 'closed' ? null : state;
-      if (next === null) {
+      if (state === null) {
         if (!(id in current)) return current;
         const copy = { ...current }; delete copy[id]; return copy;
       }
-      return current[id] === next ? current : { ...current, [id]: next };
+      return current[id] === state ? current : { ...current, [id]: state };
     });
   }, []);
   const beginLibraryPreview = React.useCallback(() => { pause(); pickMedia(null); }, [pause, pickMedia]);
@@ -2651,12 +2671,25 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     setSelectedKeys((current) => toggle ? [...current.filter((key) => !keys.includes(key)), ...keys.filter((key) => !current.includes(key))] : keys);
   }, []);
   /* the picture and the timeline share one selection of clips; a layer picked in the picture drops the timeline's */
-  const selectStageElement = React.useCallback((element: StageElement | null) => {
+  const selectStageElement = React.useCallback((element: StageElement | null, rowClipLocs?: readonly string[]) => {
     setStageElement(element);
     if (element) setInspectorContent('selection');
-    if (element && element.kind !== 'clip') { setInspectorOpen(true); setSelectedLocs([]); return; }
-    setSelectedLocs(element?.clipLoc ? [element.clipLoc] : []);
-  }, [setSelectedLocs]);
+    if (element && element.kind !== 'clip') setInspectorOpen(true);
+    if (rowClipLocs) {
+      const cues = rowClipLocs.flatMap((loc) => { const cue = cueOf(loc); return cue ? [cue] : []; });
+      const src = cues[0]?.src;
+      const next = src && cues.every((c) => c.src === src) ? { src, ids: new Set(cues.map((c) => c.id)) } : null;
+      const now = captionSelectionNow();
+      if (next?.src !== now?.src || next?.ids.size !== now?.ids.size || [...(next?.ids ?? [])].some((id) => !now?.ids.has(id))) {
+        fromTimeline.current = true;
+        setCaptionSelection(next);
+      }
+      if (next && cues.length === rowClipLocs.length && !element) showCaptionLook();
+      setSelectedLocs(rowClipLocs);
+      return;
+    }
+    setSelectedLocs(element?.kind === 'clip' && element.clipLoc ? [element.clipLoc] : []);
+  }, [setSelectedLocs, showCaptionLook]);
 
   /* ── the app Studio is embedded in (lib/host.ts): what the person points at, handed to it; what it asks to be shown ── */
   const hostPanel = useHostPanel();
@@ -2707,14 +2740,23 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return () => { live = false; };
   }, [boundsKey]);
   React.useEffect(() => () => studioHost?.panel?.setBounds?.(null), []);
-  const dockGeometry = workspaceGeometry(!hostAssets && workspaceLayout.libraryDock === 'chat' ? { ...workspaceLayout, libraryDock: 'left' } : workspaceLayout, workspaceViewport, hostPanel?.open ? hostPanel.width : 0);
+  const dockOf = (layout: WorkspaceLayout) => workspaceGeometry(
+    !hostAssets && layout.libraryDock === 'chat' ? { ...layout, libraryDock: 'left' } : layout,
+    workspaceViewport, hostPanel && layout.chat ? workspaceChatWidth(workspaceViewport.width, layout.chatWidth) : 0,
+  );
+  const editDock = dockOf(editPrefs);
+  const canvasDock = dockOf(canvasPrefs);
+  const dockGeometry = canvasOpen ? canvasDock : editDock;
+  const chatWidth = dockGeometry.inset[workspacePrefs.chatSide];
+  const chatLibraryRect = chatBounds ?? { left: workspacePrefs.chatSide === 'right' ? workspaceViewport.width - chatWidth : 0,
+    top: HOST_PANEL_TOP, width: chatWidth, height: workspaceViewport.height - HOST_PANEL_TOP };
   const independentLibrary = workspacePrefs.libraryDock !== 'chat' || !hostAssets;
   const libraryOpen = independentLibrary ? assetsPaneOpen : Boolean(hostAssets?.open);
   const openLibrary = (open: boolean) => { updateWorkspace({ assets: open }); hostAssets?.setOpen(open); };
-  const workspaceInset = freeGeometry ? {} : { marginLeft: dockGeometry.inset.left, marginRight: dockGeometry.inset.right, marginBottom: dockGeometry.inset.bottom };
+  const insetStyle = ({ inset }: typeof dockGeometry): React.CSSProperties => ({ marginLeft: inset.left, marginRight: inset.right, marginBottom: inset.bottom });
   const layersRoom = rowWidth - (inspectorShown ? inspectorShownWidth : 0) - MIN_VIEWER - 16;
-  const layersShownWidth = freeGeometry?.panels.layers?.width ?? (rowWidth ? Math.min(layersWidth, layersRoom) : layersWidth);
-  const layersFit = Boolean(freeGeometry) || !rowWidth || layersShownWidth >= 180;
+  const layersShownWidth = editFree?.panels.layers?.width ?? (rowWidth ? Math.min(layersWidth, layersRoom) : layersWidth);
+  const layersFit = Boolean(editFree) || !rowWidth || layersShownWidth >= 180;
   const layersShown = layersPaneOpen && layersFit;
   /* the media pane shows the project's media, or Saved (lib/saved): the same pane, the button beside Upload switches */
   const [mediaScope, setMediaScope] = React.useState<MediaScope>(() => MEDIA_SCOPE.current);
@@ -3196,13 +3238,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       ...(isLibraryClip(b.src) ? { whole: true } : {}), ...(b.words != null ? { words: true } : {}),
     } : null;
   }, [language]);
-  const selectLayerRows = React.useCallback((layers: readonly { clipId: string; loc: string }[], toggle = false) => {
-    const found = layers.flatMap(({ clipId, loc }) => {
+  const selectLayerRows = React.useCallback((rows: readonly LayerSelection[]) => {
+    const layers: FilmStageSelectRequest['layers'][number][] = [];
+    const clipLocs: string[] = [];
+    for (const { clipId, loc } of rows) {
       const clipLoc = blocksRef.current.find((b) => b.clipId === clipId)?.loc;
-      return clipLoc ? [{ loc, clipLoc }] : [];
-    });
-    if (found.length) selectStageLayers(found, toggle);
-  }, [selectStageLayers]);
+      if (!clipLoc) continue;
+      if (loc == null) clipLocs.push(clipLoc);
+      else layers.push({ loc, clipLoc });
+    }
+    setStageSelectRequest((cur) => ({ layers, clipLocs, seq: (cur?.seq ?? 0) + 1 }));
+  }, []);
   const layerElement = (clipId: string, at: string, n: number | undefined, label: string): StageElement => (
     { kind: 'box', loc: n ? `${at}#${n}` : at, label, clipId, ...(n ? { instance: n } : {}) }
   );
@@ -3612,7 +3658,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return `/api/projects/${encodeURIComponent(projectId)}/media?what=frame&path=${encodeURIComponent(b.src!)}&ms=${ms}&w=360&v=${mtimeOf.get(b.src!) ?? 0}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frameSec, timelineTracks, projectId, mtimeOf, folder, listing]);
-  const waveUrl = React.useCallback((src: string) => `/api/projects/${encodeURIComponent(projectId)}/media?what=wave&path=${encodeURIComponent(src)}&v=${mtimeOf.get(src) ?? 0}`, [projectId, mtimeOf]);
+  const waveEpoch = React.useRef(Date.now());
+  const waveUrl = React.useCallback((src: string) => {
+    const mtime = mtimeOf.get(src) ?? 0;
+    const version = compoundFolder(src) ? `${mtime}.${waveEpoch.current}.${filesTick}` : mtime;
+    return `/api/projects/${encodeURIComponent(projectId)}/media?what=wave&path=${encodeURIComponent(src)}&v=${version}`;
+  }, [projectId, mtimeOf, filesTick]);
   /* clips whose files are gone, and where the same name may be now. A file a clip names that the listing does not have
      is gone only once a listing read after it was first named still lacks it: one just brought in as its clip was put
      on the timeline (from Saved, the library) is not in the listing read before, and is not shown missing meanwhile */
@@ -4485,6 +4536,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 </button>
               </Tooltip>
               </>)}
+              <ExportTray ref={exportTrayRef} projectId={projectId} onError={toast.showError} />
               {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
               <Tooltip label={[t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas'), keyHint('work-mode')].filter(Boolean).join(' · ')} side="bottom">
                 <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} disabled={Boolean(layoutDraft.draft)} onClick={() => setCanvasOpen(!canvasOpen)}
@@ -4500,11 +4552,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           {/* the panes, edge to edge on the board of lines (--dock-line): a line under the top bar, and one beside the
               app's own panel (lib/host.ts `panel`), which sits left of this, under the top bar: room left for it */}
           <section ref={dockColRef} inert={canvasOpen} aria-hidden={canvasOpen} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
-            style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...workspaceInset, ...(canvasOpen ? { visibility: 'hidden' } : null) }}>
-            <div ref={viewerRowRef} className="relative flex min-h-0 min-w-0 flex-1 flex-row" style={{ order: workspacePrefs.timelineEdge === 'top' ? 2 : 0 }}>
+            style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(editFree ? null : insetStyle(editDock)), ...(canvasOpen ? { visibility: 'hidden', opacity: 0 } : null) }}>
+            <div ref={viewerRowRef} className="relative flex min-h-0 min-w-0 flex-1 flex-row" style={{ order: editPrefs.timelineEdge === 'top' ? 2 : 0 }}>
               {layersShown ? (
                 <>
-                  <div ref={layersPaneRef} className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-layers style={{ width: layersShownWidth, order: workspacePrefs.layersSide === 'left' ? 10 : 70, ...freeStyle('layers') }}>
+                  <div ref={layersPaneRef} className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-layers style={{ width: layersShownWidth, order: editPrefs.layersSide === 'left' ? 10 : 70, ...freeStyle('layers') }}>
                     <LayersPanel
                       ask={askStage}
                       timeMs={timeMs}
@@ -4514,8 +4566,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                       selected={layersSelected}
                       selectedClipLocs={selectedLocs}
                       captions={layerCaptions}
-                      onSelectLayers={selectLayerRows}
-                      onSelectClip={selectStageClip}
+                      onSelectRows={selectLayerRows}
                       onPoint={setPointedLayer}
                       onToggle={toggleLayerRow}
                       onDelete={deleteLayerRow}
@@ -4527,9 +4578,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     />
                   </div>
                   {/* the divider measures from the row's left edge: the assets left of this pane are taken off */}
-                  {!freeGeometry ? <PaneDivider width={layersShownWidth} containerRef={viewerRowRef} label={t('layers.resize')} min={180} minRest={MIN_VIEWER}
-                    relative side={workspacePrefs.layersSide === 'left' ? 'start' : 'end'}
-                    style={{ order: workspacePrefs.layersSide === 'left' ? 11 : 69 }} onResize={setLayersWidth} /> : null}
+                  {!editFree ? <PaneDivider width={layersShownWidth} containerRef={viewerRowRef} label={t('layers.resize')} min={180} minRest={MIN_VIEWER}
+                    relative side={editPrefs.layersSide === 'left' ? 'start' : 'end'}
+                    style={{ order: editPrefs.layersSide === 'left' ? 11 : 69 }} onResize={setLayersWidth} /> : null}
                 </>
               ) : null}
 
@@ -4588,6 +4639,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     browser's own text selection went with it over the film's video and frames and tinted them blue */}
                 <div className="relative flex min-h-0 flex-1 select-none items-center justify-center px-3 py-2.5" style={{ containerType: 'size' }} {...pictureDropProps}
                   data-viewer-picture="" data-viewer-focus={viewerFocus ? '1' : '0'}>
+                  <div ref={setLibraryPreviewPicture} className="contents" />
                   {pictureDrop ? (
                     <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] ring-2 ring-inset ring-[var(--accent)]">
                       <span className="rounded-md bg-[var(--bg-raised)] px-2.5 py-1 text-[12.5px] text-[var(--text)] shadow-sm">{t('project.dropOnPicture')}</span>
@@ -4746,8 +4798,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
               {inspectorShown ? (
                 <>
-                  {!freeGeometry ? <PaneDivider width={inspectorShownWidth} onResize={commitInspectorWidth} containerRef={viewerRowRef} label={t('inspector.resize')} min={MIN_INSPECTOR} minRest={MIN_VIEWER} relative side={workspacePrefs.inspectorSide === 'left' ? 'start' : 'end'} style={{ order: workspacePrefs.inspectorSide === 'left' ? 21 : 79 }} /> : null}
-                  <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-inspector style={{ width: inspectorShownWidth, order: workspacePrefs.inspectorSide === 'left' ? 20 : 80, ...freeStyle('inspector') }}>
+                  {!editFree ? <PaneDivider width={inspectorShownWidth} onResize={commitInspectorWidth} containerRef={viewerRowRef} label={t('inspector.resize')} min={MIN_INSPECTOR} minRest={MIN_VIEWER} relative side={editPrefs.inspectorSide === 'left' ? 'start' : 'end'} style={{ order: editPrefs.inspectorSide === 'left' ? 21 : 79 }} /> : null}
+                  <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-inspector style={{ width: inspectorShownWidth, order: editPrefs.inspectorSide === 'left' ? 20 : 80, ...freeStyle('inspector') }}>
                   {typeof inspectorContent === 'object' ? (
                     <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? savedSources : mediaSources).file(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
                   ) : inspectorContent === 'captions' ? (
@@ -4816,9 +4868,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               ) : null}
             </div>
 
-            {timelineOpen && !freeGeometry ? <DockPaneDivider height={timelineShownHeight} onResize={commitTimelineHeight} containerRef={dockColRef} label={t('timeline.resize')} edge={workspacePrefs.timelineEdge} style={{ order: 1 }} /> : null}
+            {timelineOpen && !editFree ? <DockPaneDivider height={timelineShownHeight} onResize={commitTimelineHeight} containerRef={dockColRef} label={t('timeline.resize')} edge={editPrefs.timelineEdge} style={{ order: 1 }} /> : null}
             {timelineOpen && value ? (
-              <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-timeline style={{ height: timelineShownHeight, order: workspacePrefs.timelineEdge === 'top' ? 0 : 2, ...freeStyle('timeline') }}
+              <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-timeline style={{ height: timelineShownHeight, order: editPrefs.timelineEdge === 'top' ? 0 : 2, ...freeStyle('timeline') }}
                 onPointerDownCapture={() => { dismissLibraryPreview.current(); if (pickedMedia) pickMedia(null); }}>
                 <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main" style={{ right: METERS_W }}>
                   <Timeline
@@ -4897,7 +4949,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           {canvasKept || canvasOpen ? (
             /* hidden with opacity too: the canvas's library writes `visibility: visible` on each of its nodes */
             <div data-workspace-canvas className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]" aria-hidden={!canvasOpen} inert={!canvasOpen}
-              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...workspaceInset, ...freeStyle('canvas'), ...(canvasOpen ? null : { visibility: 'hidden', opacity: 0, zIndex: 0 }) }}>
+              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(canvasFree ? null : insetStyle(canvasDock)), ...freeStyle('canvas'), ...(canvasOpen ? null : { visibility: 'hidden', opacity: 0, zIndex: 0 }) }}>
               <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
                 <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
                   <React.Suspense fallback={<CanvasLoading />}>
@@ -4946,11 +4998,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       ) : null}
       {!freeGeometry && !independentLibrary && hostAssets?.open && hostPanel ? <PanelSeam panel={hostPanel} bottom={hostAssets.bottom} side={workspacePrefs.chatSide} /> : null}
       <WorkspaceLibraryPane open={libraryOpen} dock={independentLibrary ? dockGeometry.dock : 'chat'}
-        rect={independentLibrary ? freeGeometry?.panels.library ?? dockGeometry.library : chatBounds ?? { left: workspacePrefs.chatSide === 'right' ? workspaceViewport.width - (hostPanel?.width ?? 0) : 0, top: HOST_PANEL_TOP, width: hostPanel?.width ?? 0, height: workspaceViewport.height - HOST_PANEL_TOP }}
+        rect={independentLibrary ? freeGeometry?.panels.library ?? dockGeometry.library : chatLibraryRect}
         free={Boolean(freeGeometry)}
         onResize={updateWorkspace}>
           <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={canvasOpen ? { ...library.actions, add: item => { if (['page', 'sound', 'group'].includes(item.kind)) void requestCanvasFiles(`${BUILT_IN}/${item.id}`, true); else { setCanvasOpen(false); library.actions.add(item); } }, tryOut: () => {} } : library.actions}
-            tried={libraryTrial?.id ?? null} templateStatus={templateStatus} previewBar={canvasOpen ? null : libraryPreviewBar} dismissRef={dismissLibraryPreview}
+            tried={libraryTrial?.id ?? null} templateStatus={templateStatus} previewBar={canvasOpen ? null : libraryPreviewBar} previewPicture={canvasOpen || fullscreen ? null : libraryPreviewPicture} dismissRef={dismissLibraryPreview}
             onPreviewStart={canvasOpen ? pause : beginLibraryPreview} onDownloadFailed={onLibraryDownloadFailed} shown={libraryOpen} under={!independentLibrary ? hostAssets?.bottom ?? 0 : 0}
             captions={{
               heard: heardClips, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
@@ -4986,7 +5038,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         missingFiles={[...mediaTrouble].flatMap(([src, why]) => (why === 'missing' ? [src] : []))}
       />
       <PasteAttrsDialog attrs={pasteAttrsOpen ? copiedAttrs : null} onPaste={doPasteAttrs} onCancel={() => setPasteAttrsOpen(false)} />
-      <ExportTray ref={exportTrayRef} projectId={projectId} onError={toast.showError} />
       <SpendAsks projectId={projectId} />
       <Toast toast={toast.current} />
     </div>

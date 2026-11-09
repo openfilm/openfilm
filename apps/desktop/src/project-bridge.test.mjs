@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { workspaceChatWidth } from '../../../packages/openfilm/studio/ui/src/lib/workspaces.ts';
 
 const bridgeSource = readFileSync(new URL('../shell/bridge.ts', import.meta.url), 'utf8');
 const apiSource = readFileSync(new URL('../../../packages/openfilm/studio/ui/src/api.ts', import.meta.url), 'utf8');
@@ -38,6 +39,7 @@ function harness() {
     setTimeout: (fn) => { timers.push(fn); return timers.length; },
     clearTimeout: (id) => { timers[id - 1] = null; },
     innerWidth: 1280,
+    workspaceChatWidth,
     addEventListener: (name, listener) => events.set(name, listener),
     flushSync: (fn) => fn(),
     fetch: (url, init) => new Promise((resolve) => {
@@ -89,7 +91,7 @@ test('film reads cannot restore an old folder after a confirmed rename', async (
   const rename = h.api.rename('a', 'My film');
   h.requests[2].respond({ project: project('My film') });
   await rename;
-  h.requests[1].respond({ project: project(), text: '' });
+  h.requests[1].respond({ project: project(), text: '', rev: '' });
   await oldFilm;
   assert.deepEqual({ ...(await h.bridge.hello()).project }, shown(project('My film')));
   assert.deepEqual(h.changed.map((p) => p.name), ['Untitled', 'My film']);

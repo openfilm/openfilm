@@ -403,7 +403,7 @@ export interface TimelineBlock {
   duck?: boolean;
   /** Video: without its own sound. */
   silent?: boolean;
-  /** A video with sound of its own: its audio band shows the sound's waveform. */
+  /** A video or compound clip with sound: its audio band shows the waveform. */
   ownAudio?: boolean;
   /** The clip's id in film.html. */
   clipId?: string;
@@ -495,6 +495,7 @@ export interface TimelineFilm {
     z?: number;
     silent?: boolean;
     volume?: number;
+    ownAudio?: boolean;
   }[];
   sounds: readonly {
     key: string; kind: 'voice' | 'music' | 'sfx'; src: string; startMs: number; durMs: number;
@@ -907,6 +908,8 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
          thing of the library's is pulled out as far as there is room: it lengthens (film-shape: as a still) */
       ...(filmSrcIsLibrary(s.src) ? {} : { room: { headMs: Math.max(0, s.inMs ?? 0) } }),
       ...visualExtras(s),
+      ...(s.ownAudio ? { ownAudio: true } : {}),
+      ...audioExtras(s),
       ...metaFields(s.meta),
     });
   }

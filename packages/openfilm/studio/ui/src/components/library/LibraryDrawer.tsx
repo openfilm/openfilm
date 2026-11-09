@@ -6,8 +6,8 @@
  * its groups under it. What is shown is in
  * the accent color; a category's icon fills faintly too.
  *
- * A click picks a thing and tries it in the viewer (nothing is written); a sound is heard. A double
- * click, Enter, or its "+" puts it in the film where the try showed it; a drag puts it where it is let go. A star keeps
+ * A click picks a thing and tries it in the viewer. Hovering previews inside the library.
+ * Enter or its "+" puts it in the film where the try showed it; a drag puts it where it is let go. A star keeps
  * it among the favorites, for every project.
  */
 import React from 'react';
@@ -15,12 +15,12 @@ import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
-  BUILT_IN, TEXT_COMPONENT, askHere, builtInItem, fetchLibraryItem, isLibraryItemReady, libraryDragItem, libraryUrl, mayNeedFetch, nameOf, posterUrl, toggleFavorite,
+  BUILT_IN, TEXT_COMPONENT, askHere, builtInItem, prepareLibraryItem, isLibraryItemReady, libraryDragItem, libraryUrl, mayNeedFetch, nameOf, posterUrl, prepareTemplatePreview, previewUrl, templateExamplePath, templatePreviewUrl, toggleFavorite,
   useLibraryFavorites, useLibraryHere, useLibraryIndex, type HereState, type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
 import { useLibraryVoices, type LibraryVoice, type VoiceAccess } from '@/lib/library-voices';
-import { ADD_HOVER, FOOT_ROOM, HereButton, MiniPlayer, MusicCard, ROUND, SoundRow, usePlayer } from './AudioList';
+import { ADD_COLOR, AudioArtwork, FOOT_ROOM, HereButton, MiniPlayer, MusicCard, ROUND, SoundRow, usePlayer, type LibraryHover } from './AudioList';
 import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane, type VoiceSample } from './VoicesPane';
@@ -44,6 +44,7 @@ const FAVORITES = STARRED;
 /* rows of a long list drawn at first, and more each time it is scrolled near its end */
 const PAGE = 80;
 const STICKER_PAGE = 32;
+const HOVER_PREVIEW_MS = 280;
 
 /* the text category's lines: a new line of words; the person's own (starred, presets); the library's looks (word art,
    `art:<group>` one of its groups) and its templates (`tpl:<group>`). Its motions are not here: they go on a line of
@@ -83,7 +84,7 @@ const SHOWN = {
 const firstLine = (cat: Category) => SHOWN.group[cat] ?? (cat === 'text' ? NEW_TEXT : cat === 'sticker' ? LIVE : '');
 
 export interface LibraryActions {
-  /** A double click, Enter or "+": a page or a sound at the playhead (a transition on the cut), a look on the clip. */
+  /** Enter or "+": a page or a sound at the playhead (a transition on the cut), a look on the clip. */
   add: (item: LibraryItem) => void;
   /** A click: tried in the viewer (null: no longer). */
   tryOut: (item: LibraryItem | null) => void;
@@ -92,15 +93,16 @@ export interface LibraryActions {
 /** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
 export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried, templateStatus, previewBar, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, showSkills, under = 0, shown: isShown = true }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, showSkills, under = 0, shown: isShown = true }: {
   media: React.ReactNode;
   /** the project's own media, or Saved */
   mediaScope: 'project' | 'saved';
   onMediaScope: (next: 'project' | 'saved') => void;
   actions: LibraryActions;
   tried?: string | null;
-  templateStatus: Partial<Record<string, 'fetching' | 'failed'>>;
+  templateStatus: Partial<Record<string, 'failed'>>;
   previewBar: HTMLDivElement | null;
+  previewPicture: HTMLDivElement | null;
   dismissRef: React.RefObject<() => boolean>;
   onPreviewStart: () => void;
   onDownloadFailed: () => void;
@@ -145,22 +147,55 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
   const tryOut = React.useRef(actions.tryOut);
   tryOut.current = actions.tryOut;
   const player = usePlayer<LibraryItem>(onDownloadFailed);
-  const voicePlayer = usePlayer<VoiceSample>(onDownloadFailed);
+  const voicePlayer = usePlayer<VoiceSample>(onDownloadFailed, (sample) => sample.voice.sample ?? sample.id, true);
+  const [hoverVisual, setHoverVisual] = React.useState<string | null>(null);
+  const hovering = React.useRef<{ id: string; timer: number } | null>(null);
+  const stopHover = React.useCallback(() => {
+    if (hovering.current) window.clearTimeout(hovering.current.timer);
+    hovering.current = null;
+    setHoverVisual(null);
+  }, []);
+  React.useEffect(() => {
+    window.addEventListener('blur', stopHover);
+    return () => { window.removeEventListener('blur', stopHover); if (hovering.current) window.clearTimeout(hovering.current.timer); hovering.current = null; };
+  }, [stopHover]);
+  const hoverProps = (id: string, start: () => void): LibraryHover => ({
+    onPointerEnter: (e) => {
+      if (!isShown || e.pointerType !== 'mouse' || e.buttons) return;
+      stopHover();
+      hovering.current = { id, timer: window.setTimeout(start, HOVER_PREVIEW_MS) };
+    },
+    onPointerLeave: () => { if (hovering.current?.id === id) stopHover(); },
+  });
+  const prepareCard = async (item: LibraryItem): Promise<boolean> => {
+    if (item.kind !== 'group') return !mayNeedFetch(item) || isLibraryItemReady(item.id) || prepareLibraryItem(item.id);
+    await prepareTemplatePreview(item);
+    // An unavailable example still has its bundled preview. Insertion prepares its music separately.
+    return true;
+  };
+  const hoverCard = (item: LibraryItem): LibraryHover => hoverProps(item.id, () => {
+    const request = hovering.current;
+    void prepareCard(item).then((ok) => {
+      if (ok && hovering.current === request && !item.still && ['page', 'group', 'motion'].includes(item.kind)) setHoverVisual(item.id);
+    });
+  });
   const closePreview = React.useCallback(() => {
     intent.current += 1;
+    stopHover();
     player.close();
     voicePlayer.close();
     setPicked(null);
     tryOut.current(null);
-  }, [player.close, voicePlayer.close]);
+  }, [player.close, voicePlayer.close, stopHover]);
   React.useLayoutEffect(() => {
     dismissRef.current = () => {
+      stopHover();
       if (!picked && !tried && !player.item && !voicePlayer.item) return false;
       closePreview();
       return true;
     };
     return () => { dismissRef.current = () => false; };
-  }, [dismissRef, closePreview, picked, tried, player.item, voicePlayer.item]);
+  }, [dismissRef, closePreview, stopHover, picked, tried, player.item, voicePlayer.item]);
   const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(firstLine(next)); setQuery(''); setSource(''); setSkillOpen(null); closePreview(); };
   const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); setSkillOpen(null); closePreview(); };
   /* a section of the text category opened or closed; opened, it shows its first line unless one of its lines is shown */
@@ -244,6 +279,13 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
   const pickedItem = picked ? index?.items.find((i) => i.id === picked) ?? presetItems.find((i) => i.id === picked) : null;
   /* what of it still needs fetching (a sound, a piece of music, a template's music): its download shown first, then "+" */
   const hereOf = useLibraryHere();
+  const cardHere = (item: LibraryItem): HereState => {
+    const asset = hereOf(item.id);
+    if (item.kind !== 'group') return asset;
+    const example = hereOf(templateExamplePath(item));
+    if (asset === 'fetching' || example === 'fetching') return 'fetching';
+    return templateStatus[item.id] ?? (example === 'missing' ? 'missing' : 'here');
+  };
   const pick = (item: LibraryItem) => {
     if (item.kind === 'sound') {
       setPicked(item.id);
@@ -251,25 +293,25 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
       return;
     }
     if (!previewBar) { setPicked(item.id); return; }
-    const state = templateStatus[item.id] ?? hereOf(item.id);
+    const state = cardHere(item);
     if (picked === item.id && state === 'fetching') return;
     if (tried === item.id && item.cat !== 'transition' && state !== 'failed') { closePreview(); return; }
     const round = ++intent.current;
     setPicked(item.id);
     onPreviewStart();
-    if (!mayNeedFetch(item) || isLibraryItemReady(item.id)) { tryOut.current(item); return; }
+    if (item.kind !== 'group' && (!mayNeedFetch(item) || isLibraryItemReady(item.id))) { tryOut.current(item); return; }
     tryOut.current(null);
-    void fetchLibraryItem(item.id).then((ok) => {
+    void prepareCard(item).then((ok) => {
       if (round !== intent.current) return;
       if (ok) tryOut.current(item);
       else onDownloadFailed();
     });
   };
-  /* put in: fetched first when it is not here (a double click on one still to fetch fetches it, then puts it in) */
+  /* prepare any required assets before adding */
   const addWhenHere = (it: LibraryItem) => {
     closePreview();
     if (!mayNeedFetch(it) || isLibraryItemReady(it.id)) { actions.add(it); return; }
-    void fetchLibraryItem(it.id).then((ok) => { if (ok) actions.add(it); else onDownloadFailed(); });
+    void prepareLibraryItem(it.id).then((ok) => { if (ok) actions.add(it); else onDownloadFailed(); });
   };
 
   const onKey = (e: React.KeyboardEvent) => {
@@ -351,15 +393,24 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
     return () => observer.disconnect();
   }, [isShown, cat, drawn, items.length, pageKey, pageSize]);
   React.useEffect(() => {
-    if (isShown) askHere(items.slice(0, drawn).filter(mayNeedFetch).map((i) => i.id));
+    if (!isShown) return;
+    const visible = items.slice(0, drawn);
+    askHere([...visible.filter(mayNeedFetch).map((i) => i.id),
+      ...visible.filter((i) => i.kind === 'group').map(templateExamplePath)]);
   }, [isShown, items, drawn]);
 
   /* the bars and the library's things are the app's panel's (data-studio-host-panel): a press there keeps what is
      picked on the timeline and the picture, which a look or a transition goes on */
   return (
     /* a drag let go back in the drawer ends at once (lib/resource-drag) */
-    <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey} data-drag-home="" data-studio-library=""
+    <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey} onPointerDownCapture={stopHover} onDragStartCapture={stopHover} data-drag-home="" data-studio-library=""
       style={{ '--drawer-under': `${under}px` } as React.CSSProperties}>
+      {isShown && previewPicture && voicePlayer.item ? (
+        <AudioArtwork target={previewPicture} voice={voicePlayer.item.voice} name={voicePlayer.item.voice.name} playing={voicePlayer.playing} readLevel={voicePlayer.readLevel} />
+      ) : isShown && previewPicture && player.item ? (
+        <AudioArtwork target={previewPicture} item={player.item} name={nameOf(player.item.name, lang)} playing={player.playing}
+          progress={player.duration > 0 ? Math.min(1, player.time / player.duration) : 0} />
+      ) : null}
       {/* the categories, as high as the inspector's tabs beside it (40 px) so their lines meet; they keep their own
           spacing however wide the panel is, and more than fit scroll sideways (a wheel too), fading at the edge while
           the line under them runs whole; a button at the end takes them to their last (») and back to their first («),
@@ -468,7 +519,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
                   <Search size={14} />
                   <input
                     value={query}
-                    onChange={(e) => setQuery(e.target.value)}
+                    onChange={(e) => { stopHover(); setQuery(e.target.value); }}
                     placeholder={t('assetDrawer.search').replace('{what}', t(`assetDrawer.cat_${cat}`))}
                     className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
                   />
@@ -530,13 +581,13 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
                     ))}
                   </div>
                 ) : (
-                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(68px,1fr))]' : cat === 'template' ? 'grid-cols-[repeat(auto-fill,minmax(150px,1fr))]' : textSquare || ON_FILM.has(cat) ? 'grid-cols-[repeat(auto-fill,minmax(84px,1fr))]' : cat === 'text' ? 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
+                  <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(104px,1fr))]' : cat === 'template' ? 'grid-cols-[repeat(auto-fill,minmax(150px,1fr))]' : textSquare || ON_FILM.has(cat) ? 'grid-cols-[repeat(auto-fill,minmax(84px,1fr))]' : cat === 'text' ? 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
                     {/* a page at a time as it is scrolled, as the sounds are (the emoji alone are some 1,600) */}
                     {items.slice(0, drawn).map((it) => (
                       <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)}
                         /* a template as wide as its film (16:9, two a row: its places, length and buttons side by side) */
                         square={cat === 'sticker' || textSquare || (ON_FILM.has(cat) && cat !== 'template')}
-                        here={templateStatus[it.id] ?? hereOf(it.id)}
+                        here={cardHere(it)} hover={hoverCard(it)} previewing={hoverVisual === it.id}
                         onPick={() => pick(it)} onAdd={() => addWhenHere(it)} />
                     ))}
                   </div>
@@ -643,7 +694,7 @@ function SideLine({ on, onClick, children }: { on: boolean; onClick: () => void;
   );
 }
 
-/** Where its "+" (and a double click) puts it, said in its tooltip. */
+/** Where its "+" puts it, said in its tooltip. */
 function addTip(item: LibraryItem, t: (path: string) => string): string {
   return t(item.cat === 'transition' ? 'assetDrawer.addCut' : item.kind === 'look' || item.kind === 'motion' ? 'assetDrawer.addLook' : 'assetDrawer.addPlayhead');
 }
@@ -654,11 +705,8 @@ function dragOf(item: LibraryItem, name: string) {
   return drag ? (e: React.DragEvent) => { setResourceDragData(e.dataTransfer, drag); dragPicture(e); e.dataTransfer.effectAllowed = 'copyMove'; } : undefined;
 }
 
-/** A press on a card's own button: not a pick, nor a double click's add. */
-const own = { onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
-
 /**
- * A look the person saved (in the Text inspector's word art, or a caption's): drawn as it is; a drag or a double click
+ * A look the person saved (in the Text inspector's word art, or a caption's): drawn as it is; a drag or "+"
  * puts a new line of words in it (`onAdd` with it as a text style), "×" lets it go.
  */
 function PresetCard({ item, lang, picked, onPick, onAdd, onDrop }: {
@@ -671,15 +719,15 @@ function PresetCard({ item, lang, picked, onPick, onAdd, onDrop }: {
   const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
   const drag = text ? libraryDragItem(text, name) : null;
   return (
-    <div className="group relative min-w-0 cursor-default select-none" title={name} draggable={Boolean(drag)}
+    <div className="group relative min-w-0 cursor-default select-none" aria-label={name} data-library-card={item.id} draggable={Boolean(drag)}
       onDragStart={drag ? (e) => { setResourceDragData(e.dataTransfer, { ...drag, vars }); dragPicture(e); e.dataTransfer.effectAllowed = 'copyMove'; } : undefined}
-      onDragEnd={() => clearResourceDrag()} onClick={onPick} onDoubleClick={onAdd}>
+      onDragEnd={() => clearResourceDrag()} onClick={(e) => { if (e.detail < 2) onPick(); }}>
       <div className={`relative aspect-square overflow-hidden rounded-md ${picked ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
         <TextStyleSample vars={vars} lang={lang} />
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
-          <button type="button" aria-label={t('assetDrawer.textDropPreset')} title={t('assetDrawer.textDropPreset')} onClick={(e) => { e.stopPropagation(); onDrop(); }} {...own}
+          <button type="button" aria-label={t('assetDrawer.textDropPreset')} onClick={(e) => { e.stopPropagation(); onDrop(); }}
             className={`${ROUND} hidden bg-black/55 text-white group-hover:grid`}><X size={11} strokeWidth={2.6} /></button>
-          <AddButton item={item} onAdd={onAdd} className={`${ROUND} ${ADD_HOVER} hidden bg-black/55 text-white group-hover:grid`} />
+          <AddButton item={item} onAdd={onAdd} className={`${ROUND} ${ADD_COLOR} ${picked ? 'grid' : 'hidden group-hover:grid'}`} />
         </span>
       </div>
       <div className="mt-1.5 truncate px-0.5 text-[11.5px] text-[var(--text-muted)] group-hover:text-[var(--text)]">{name}</div>
@@ -695,7 +743,7 @@ function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolea
       aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')}
       aria-pressed={kept}
       onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
-      {...own}
+
       className={className}
     >
       {/* hollow until starred, then filled in the star's own color */}
@@ -708,7 +756,7 @@ function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolea
 function AddButton({ item, onAdd, className }: { item: LibraryItem; onAdd: () => void; className: string }) {
   const t = useT();
   return (
-    <button type="button" title={addTip(item, t)} aria-label={addTip(item, t)} onClick={(e) => { e.stopPropagation(); onAdd(); }} {...own} className={className}>
+    <button type="button" aria-label={addTip(item, t)} onClick={(e) => { e.stopPropagation(); onAdd(); }} className={className}>
       <Plus size={12} strokeWidth={2.6} />
     </button>
   );
@@ -758,8 +806,8 @@ function useSideways() {
    own picture where they can be */
 const ON_FILM = new Set<Category>(['filter', 'effect', 'transition', 'template']);
 
-function Card({ item, lang, picked, kept, square, here, onPick, onAdd }: {
-  item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; here: HereState;
+function Card({ item, lang, picked, kept, square, here, hover, previewing, onPick, onAdd }: {
+  item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; here: HereState; hover: LibraryHover; previewing: boolean;
   onPick: () => void; onAdd: () => void;
 }) {
   const t = useT();
@@ -771,14 +819,14 @@ function Card({ item, lang, picked, kept, square, here, onPick, onAdd }: {
   return (
     <div
       data-library-card={item.id}
+      {...hover}
       aria-busy={here === 'fetching'}
       className="group relative min-w-0 cursor-default select-none"
       draggable
       onDragStart={dragOf(item, name)}
       onDragEnd={() => clearResourceDrag()}
-      onClick={onPick}
-      onDoubleClick={onAdd}
-      title={item.by ? `${name} · @${item.by}` : name}
+      onClick={(e) => { if (e.detail < 2) onPick(); }}
+      aria-label={name}
     >
       <div className={`relative overflow-hidden rounded-md bg-[var(--bg-field)] ${square ? 'aspect-square' : 'aspect-video'} ${picked ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
         {item.kind === 'look'
@@ -786,11 +834,16 @@ function Card({ item, lang, picked, kept, square, here, onPick, onAdd }: {
           /* a sticker whole in its square card (a wide one is not cut at its ends); loaded as it comes into view */
           : drawn ? <TextStyleSample lang={lang} vars={item.vars} {...(item.id === TEXT_COMPONENT ? { words: name } : {})} />
           : <img src={posterUrl(item)} alt="" draggable={false} loading="lazy" decoding="async" className={`absolute inset-0 h-full w-full ${fit}`} />}
-        {/* the star and the "+" side by side, of one size, dark glass over the picture */}
+        {previewing ? (
+          <video src={item.kind === 'group' ? templatePreviewUrl(item) : previewUrl(item)} data-library-hover-preview="" autoPlay muted loop playsInline
+            onPlaying={(e) => { e.currentTarget.style.opacity = '1'; }}
+            className={`pointer-events-none absolute inset-0 h-full w-full opacity-0 ${fit}`} />
+        ) : null}
+        {/* the star and the download or add control side by side */}
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
           <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
-          {/* to be fetched first: its download, always shown; here: "+" under the pointer */}
-          <HereButton here={here} addTip={addTip(item, t)} onAdd={onAdd} onRetry={onPick} className={`${ROUND} bg-black/55 text-white`} show="hidden group-hover:grid focus-visible:grid" />
+          {/* the download badge changes to an add button when the asset is ready */}
+          <HereButton here={here} addTip={addTip(item, t)} onAdd={onAdd} onRetry={onPick} className={`${ROUND} bg-black/55 text-white`} show={picked ? 'grid' : 'hidden group-hover:grid'} />
         </span>
         {item.kind === 'group' ? <TemplateBadge item={item} /> : null}
         <SourceBadge source={sourceOf(item)} />

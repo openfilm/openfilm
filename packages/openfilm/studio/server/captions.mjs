@@ -480,20 +480,34 @@ export async function captionRoutes(req, res, root, rest, { translate = async ()
  * For an export: the project's cues and style in one read (the style as the person left it, or the default). A film
  * with caption tracks (SPEC §1 Captions) has its subtitles there: the first one shown is the subtitle file's, and
  * `tracks` says they are drawn by the film itself (nothing to burn in). @param {string} root
+ * @param {{ timelineOnly?: boolean }} [options] Editing project exports include every visible caption track.
  */
-export async function subtitlesForExport(root) {
-  const tracked = await captionTrackCues(root);
+export async function subtitlesForExport(root, { timelineOnly = false } = {}) {
+  const tracked = await captionTrackCues(root, timelineOnly);
   if (tracked) return { cues: tracked, style: { ...parseFilmSubtitleStyle(null), language: null, bilingual: false }, tracks: true };
   const [{ cues }, style] = await Promise.all([filmCaptions(root), readSubtitleStyle(root)]);
   return { cues, style: style ?? parseFilmSubtitleStyle(null) };
 }
 
-/** The cues of the film's first caption track that is shown, as subtitle lines (film ms, their words); null without one. @param {string} root */
-async function captionTrackCues(root) {
+/**
+ * Subtitle files read the first visible caption track. Editing project exports gather the visible timeline cues,
+ * and a project with only hidden caption tracks has no visible cues to export.
+ * @param {string} root @param {boolean} timelineOnly
+ */
+async function captionTrackCues(root, timelineOnly) {
   const film = await readProjectFilm(root);
-  const track = /** @type {import('../../src/film-doc.d.mts').FilmDoc | null} */ (film.doc)?.tracks.find((t) => t.captions && !t.hidden);
-  if (!track?.captions) return null;
-  const file = inProject(root, track.captions.src);
+  const tracks = /** @type {import('../../src/film-doc.d.mts').FilmDoc | null} */ (film.doc)?.tracks ?? [];
+  const visible = tracks.flatMap((t) => (t.captions && !t.hidden ? [t.captions.src] : []));
+  if (timelineOnly) {
+    return (await Promise.all(visible.map((src) => captionFileCues(root, src)))).flatMap((cues) => cues ?? [])
+      .sort((a, b) => a.startMs - b.startMs);
+  }
+  return visible[0] ? captionFileCues(root, visible[0]) : null;
+}
+
+/** @param {string} root @param {string} src */
+async function captionFileCues(root, src) {
+  const file = inProject(root, src);
   const text = file ? await readFile(file, 'utf8').catch(() => null) : null;
   if (text == null) return null;
   return readVtt(text).cues.map((c) => ({ startMs: Math.round(c.start * 1000), durMs: Math.round((c.end - c.start) * 1000), text: cuePlain(c.text).trim() }));

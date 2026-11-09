@@ -23,17 +23,17 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { EditError, editProjectFilm, pageClipLook, readProjectFilm, settleProjectFilm } from './film.mjs';
 import { compoundOuter, readPartFilm, writePartFilm } from './parts.mjs';
-import { PARTS, srcInto } from './compound.mjs';
+import { PARTS, compoundFolder, srcInto } from './compound.mjs';
 import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { mediaReferences } from '../../src/media-links.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
-import { MediaError, frame, loudness, poster, probe, waveform } from './derived.mjs';
+import { MediaError, frame, loudness, mixedWaveform, poster, probe, waveform } from './derived.mjs';
 import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, restoreFilm, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
 import * as personEdits from './person-edits.mjs';
 import { createAutoVersions } from './auto-versions.mjs';
 import { createHistoryPreviews } from './history-previews.mjs';
-import { ownHost, startPages } from './pages.mjs';
+import { ownHost, servable, startPages } from './pages.mjs';
 import { HttpError, cookie, json, readJson } from './http.mjs';
 import { acceptWebSocket } from './websocket.mjs';
 import {
@@ -52,7 +52,7 @@ import { createWatchers } from './watch.mjs';
 import { projectMissing } from './project-presence.mjs';
 import { installedFonts } from './fonts.mjs';
 import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-fonts.mjs';
-import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
+import { FILM_PAGE, PageFrameError, closePageFrames, compoundSound, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
@@ -432,7 +432,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, await libraryFileFetched(url.searchParams.get('path')), { check: true });
       /* which of these things still need fetching before they go in (a sound, an emoji, a template's music): { ids } */
       if (parts[1] === 'missing' && parts.length === 2 && req.method === 'POST') return json(res, 200, { ids: notHere((/** @type {{ ids?: unknown }} */ (await readJson(req) ?? {})).ids) });
-      /* one of them fetched now: { ok } */
+      /* an asset or a template example fetched now: { ok } */
       if (parts[1] === 'fetch' && parts.length === 2 && req.method === 'POST') return json(res, 200, { ok: await fetchItem((/** @type {{ id?: unknown }} */ (await readJson(req) ?? {})).id) });
       /* a page of it, as a page: what a click tries over the viewer's picture */
       if (parts[1] === 'pages' && parts.length > 2 && req.method === 'GET') {
@@ -1061,6 +1061,23 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         }));
       }
       if (what === 'probe') return json(res, 200, await probe(project.path, at));
+      if (what === 'wave' && compoundFolder(at)) {
+        const base = pages.folderUrl(project);
+        const root = compoundOuter(project.path);
+        const outer = new URL(pages.folderUrl({ id: project.id, path: root }));
+        const { duration, sounds } = await compoundSound(project.path, base, at, url.searchParams.get('v') ?? '').catch((e) => {
+          throw new HttpError(e instanceof PageFrameError ? 404 : 422, String(e?.message ?? e));
+        });
+        if (duration == null) return json(res, 200, { duration: 0, peaks: [] });
+        // The preview names sounds on its own origin. Resolve only files that origin serves for this project.
+        const local = sounds.flatMap((sound) => {
+          const source = new URL(sound.src, base);
+          if (source.origin !== outer.origin || !source.pathname.startsWith(outer.pathname)) return [];
+          const path = source.pathname.slice(outer.pathname.length);
+          return path && servable(root, decodeURIComponent(path)) ? [{ ...sound, src: `/${path}` }] : [];
+        });
+        return json(res, 200, await mixedWaveform(root, local, duration));
+      }
       if (what === 'wave') return json(res, 200, await waveform(project.path, at));
       /* the loudness of a part of its sound (`from`, `to`: its own seconds): what "Normalize loudness" sets volumes by */
       if (what === 'loudness') {
@@ -1506,6 +1523,13 @@ function sendMedia(req, res, file, { keep = false, check = false } = {}) {
   }[extname(file).toLowerCase()] ?? 'application/octet-stream';
   const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''));
   const [from, to] = range ? [range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2])), range[2] && range[1] ? Math.min(size - 1, Number(range[2])) : size - 1] : [0, size - 1];
+  /* A file made shorter, or a proxy's old offset, asks past its end. The film host answers 416 to the same request:
+     without it a 206 goes out with a negative content-length, and the stream's ERR_OUT_OF_RANGE leaves the request
+     hanging. */
+  if (range && (from > to || from >= size)) {
+    res.writeHead(416, { 'content-range': `bytes */${size}`, 'accept-ranges': 'bytes' }).end();
+    return undefined;
+  }
   res.writeHead(range ? 206 : 200, { 'content-type': type, 'content-length': to - from + 1, 'accept-ranges': 'bytes', ...kept, ...(range ? { 'content-range': `bytes ${from}-${to}/${size}` } : {}) });
   /* A cancelled preview is normal: pipeline closes its file; its callback deliberately ignores the error. */
   pipeline(createReadStream(file, { start: from, end: to }), res, () => {});

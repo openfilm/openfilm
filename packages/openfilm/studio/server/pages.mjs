@@ -102,7 +102,7 @@ export function ownHost(req, port) {
  * src/media-links.mjs) and not hidden by its real name either (on Windows `ENV~1` is the short name of `.env`).
  * @param {string} root @param {string} plain
  */
-function servable(root, plain) {
+export function servable(root, plain) {
   const parts = plain.split(/[\\/]+/).filter(Boolean);
   if (parts.some((part) => part.startsWith('.') || part.includes(':'))) return false;
   let real;

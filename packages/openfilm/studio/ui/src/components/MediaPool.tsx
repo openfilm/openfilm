@@ -1411,7 +1411,7 @@ function PagePoster({ file, sources }: { file: WorkspaceResource; sources: Media
   const own = sources.pagePoster?.(file);
   /* drawn in the headless browser: asked for in turn with Studio's other media (lib/media-queue), once near the screen */
   const [nearRef, near] = useNearViewport<HTMLSpanElement>();
-  const turn = useMediaImage(own && failed !== own ? own : null, near);
+  const turn = useMediaImage(own && failed !== own ? own : null, near, 'visible');
   const src = turn && failed !== turn ? turn : null;
   const shown = src != null && loaded != null;
   return (

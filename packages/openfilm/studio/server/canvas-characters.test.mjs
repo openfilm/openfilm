@@ -66,3 +66,19 @@ test('a character is kept only from pictures inside the project, however a path 
   const kept = await saveCharacter(root, { name: 'In', pictures: [{ role: 'face', path: 'assets/../../out.png' }, { role: 'body', path: 'assets/in.png' }] });
   assert.deepEqual(kept.pictures.map((p) => p.role), ['body'], 'only the one inside');
 });
+
+test('a damaged character record does not hide the others', async (t) => {
+  const scratch = mkdtempSync(join(tmpdir(), 'of-characters-'));
+  const before = process.env.OPENFILM_SHARED_HOME;
+  process.env.OPENFILM_SHARED_HOME = join(scratch, 'home');
+  t.after(() => {
+    if (before === undefined) delete process.env.OPENFILM_SHARED_HOME; else process.env.OPENFILM_SHARED_HOME = before;
+    rmSync(scratch, { recursive: true, force: true });
+  });
+  const dir = process.env.OPENFILM_SHARED_HOME;
+  mkdirSync(join(dir, 'canvas-characters', 'good'), { recursive: true });
+  mkdirSync(join(dir, 'canvas-characters', 'damaged'), { recursive: true });
+  writeFileSync(join(dir, 'canvas-characters', 'good', 'character.json'), JSON.stringify({ name: 'Mia', created: 1, pictures: [] }));
+  writeFileSync(join(dir, 'canvas-characters', 'damaged', 'character.json'), '{');
+  assert.deepEqual((await listCharacters()).map((c) => c.name), ['Mia']);
+});

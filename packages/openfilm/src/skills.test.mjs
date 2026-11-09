@@ -99,6 +99,8 @@ test('a SKILL.md front matter: plain, quoted and block values; the body after it
   assert.deepEqual(fields, { name: 'lyric-pv', description: 'Lyric videos: words on the beat', license: 'MIT', when: 'a song\nwith words', note: 'folded into one', long: 'starts here and goes on' });
   assert.equal(body, '# Lyric PV');
   assert.deepEqual(parseSkillFile('no front matter').fields, {});
+  assert.deepEqual(parseSkillFile('---\n---\nBody'), { fields: {}, body: 'Body' });
+  assert.deepEqual(parseSkillFile('---\r\n---\r\nBody'), { fields: {}, body: 'Body' });
 });
 
 test('skills are listed from the project, yours and the official ones, each by its uid: the first holding a uid winning, two of a name both there', () => {
@@ -462,4 +464,21 @@ test('the folder walk reads asynchronously: same bytes, and Studio still runs wh
   await folderSizeAsync(dir);
   walking = false;
   assert.ok(turns > 0, 'the event loop turned while the walk waited for the disk');
+});
+
+test('a skill named with capitals is found by its name alone', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-capitals-'));
+  const mine = join(root, 'mine');
+  const none = join(root, 'none');
+  mkdirSync(none, { recursive: true });
+  skill(join(mine, 'myskill'), 'MySkill', 'A skill written with capitals');
+  try {
+    const where = { mine, official: none };
+    for (const key of ['myskill', 'MySkill', '  MYSKILL  ']) {
+      assert.deepEqual(skillsNamed(key, where).map((s) => s.name), ['MySkill']);
+    }
+    assert.deepEqual(skillsNamed('local-myskill', where).map((s) => s.name), ['MySkill']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

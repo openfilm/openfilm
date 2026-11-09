@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chunkFolder, chunkStore, chunksOf, settingsOf, signature, sweep } from './render-resume.mjs';
@@ -53,6 +53,15 @@ test('a small file is known by what is in it, a large one by its size and time; 
     utimesSync(large, new Date(), new Date(Date.now() + 5000));
     assert.notEqual(signature(large), big, 'written again');
     assert.equal(signature(join(dir, 'gone.mp4')), '');
+    const when = new Date(Date.now() - 60_000);
+    when.setMilliseconds(0);
+    utimesSync(large, when, when);
+    const keptSign = signature(large);
+    const part = join(dir, 'a.mp4.next');
+    writeFileSync(part, Buffer.alloc(2 ** 20 + 1, 1));
+    utimesSync(part, when, when);
+    renameSync(part, large);
+    assert.notEqual(signature(large), keptSign, 'a whole new file under the same name, size and date');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

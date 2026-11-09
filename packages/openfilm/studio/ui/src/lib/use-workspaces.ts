@@ -33,7 +33,7 @@ export function useWorkspaceLayouts(mode: WorkspaceMode) {
   const reset = React.useCallback(() => update(defaultWorkspace(modeRef.current)), [update]);
   const [viewport, setViewport] = React.useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   React.useEffect(() => { let frame = 0; const resize = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => setViewport({ width: window.innerWidth, height: window.innerHeight })); }; window.addEventListener('resize', resize); return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', resize); }; }, []);
-  return { layout: profiles[mode], update, reset, viewport, storageFailed };
+  return { layout: profiles[mode], profiles, update, reset, viewport, storageFailed };
 }
 
 /** Layout editing is a transaction. Pointer previews never write preferences until Done. */

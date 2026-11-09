@@ -9,16 +9,19 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import {
-  AudioWaveform, Bell, Car, Cat, Cpu, Download, Footprints, Laugh, Leaf, LoaderCircle, MousePointerClick, Pause, Play, Plus, RotateCw, Square, Star, Users, Wind, Zap,
+  AudioWaveform, Bell, Car, Cat, Cpu, Download, Footprints, Laugh, Leaf, LoaderCircle, MousePointerClick, Music2, Pause, Play, Plus, RotateCw, Square, Star, Users, Wind, Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { coverLook, failedHere, heardHere, libraryUrl, soundLook, toggleFavorite, waveUrl, type HereState, type LibraryItem } from '@/lib/library';
+import { coverLook, failedHere, heardHere, isLibraryItemReady, libraryUrl, soundLook, toggleFavorite, useLibraryHere, waveUrl, type HereState, type LibraryItem } from '@/lib/library';
 import { createPreviewPlayer, type Playable, type PreviewError, type PreviewState } from '@/lib/library-player';
 import { keyAction } from '@/lib/keymap-store';
 import { useMediaImage } from '@/lib/media-queue';
 import { PANE_BAR, PANE_BTN, PANE_ICON } from '../dock-pane-bar';
 import { isTextField, isTypingTarget } from '../typing-target';
+import { voicePalette, voicePaletteLook } from '@/lib/library-voices';
+import artwork from './AudioArtwork.module.css';
+import { VoiceOrbCanvas } from './VoiceOrbCanvas';
 
 /** each group of sounds its mark on its tile */
 const MARKS: Record<string, LucideIcon> = {
@@ -40,6 +43,7 @@ export interface Player<T extends Playable = LibraryItem> {
   item: T | null;
   playing: boolean;
   loading: boolean;
+  downloading: boolean;
   error: PreviewError | null;
   status: PreviewState<T>['status'];
   /** seconds played, and its length */
@@ -50,21 +54,26 @@ export interface Player<T extends Playable = LibraryItem> {
   toggle: (item: T, src?: string) => void;
   pause: () => void;
   seek: (sec: number) => void;
+  readLevel: () => number;
   close: () => void;
 }
 
 /** The drawer's player: what plays, how far, and its controls. Stops when the drawer goes. */
-export function usePlayer<T extends Playable>(onFailed: () => void): Player<T> {
-  const [player] = React.useState(() => createPreviewPlayer<T>({ onReady: heardHere }));
+export function usePlayer<T extends Playable>(onFailed: () => void, cacheKey: (item: T) => string = (item) => item.id, analyse = false): Player<T> {
+  const [player] = React.useState(() => createPreviewPlayer<T>({ analyse, onReady: (item) => heardHere(cacheKey(item)) }));
   const state = React.useSyncExternalStore(player.subscribe, player.getSnapshot, player.getSnapshot);
+  const hereOf = useLibraryHere();
+  const id = state.item ? cacheKey(state.item) : null;
   const reportFailure = React.useRef(onFailed);
   reportFailure.current = onFailed;
   React.useEffect(() => {
-    if (!state.error || !state.item) return;
-    if (!state.ready) failedHere(state.item.id);
+    if (!state.error || !id) return;
+    if (!state.ready && !isLibraryItemReady(id)) failedHere(id);
     reportFailure.current();
-  }, [state.error, state.item, state.ready]);
+  }, [state.error, id, state.ready]);
   const playing = state.status === 'playing';
+  const loading = state.status === 'loading';
+  const downloading = Boolean(loading && id && hereOf(id, true) !== 'here');
   React.useEffect(() => player.close, [player]);
   React.useEffect(() => {
     if (!playing) return undefined;
@@ -74,14 +83,11 @@ export function usePlayer<T extends Playable>(onFailed: () => void): Player<T> {
     return () => cancelAnimationFrame(frame);
   }, [playing, player]);
   return {
-    ...state, playing, loading: state.status === 'loading',
+    ...state, playing, loading, downloading,
     toggle: (next, src) => player.toggle(next, src ?? (state.item?.id === next.id ? undefined : libraryUrl(next.id))),
-    pause: player.pause, seek: player.seek, close: player.close,
+    pause: player.pause, seek: player.seek, readLevel: player.readLevel, close: player.close,
   };
 }
-
-/** A press on a button of a row or card: not its click, nor its double click. */
-const own = { onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
 
 /** A row's or card's star and "+": round, of one size; on the panel tinted with the words' color, the "+" in the
     accent under the pointer. Over a picture they are dark glass instead (LibraryDrawer's cards). */
@@ -89,17 +95,18 @@ export const ROUND = 'h-5 w-5 shrink-0 place-items-center rounded-full';
 export const PANEL_ROUND = `${ROUND} bg-[var(--bg-pressed)]`;
 export const ON_PANEL = `grid ${PANEL_ROUND}`;
 export const ADD_HOVER = 'hover:bg-[var(--accent)] hover:text-[var(--on-accent)]';
+export const ADD_COLOR = 'bg-[var(--accent)] text-[var(--on-accent)] hover:brightness-110';
 
 /**
  * The add button is available when the asset is local. A remote asset has a passive status badge: clicking it
  * reaches the card's preview action, just like clicking anywhere else on the card.
  */
-export function HereButton({ here, addTip, onAdd, onRetry, className, show = '' }: {
+export function HereButton({ here, addTip, onAdd, onRetry, className, show = 'grid' }: {
   here: HereState; addTip: string; onAdd: () => void; onRetry: () => void; className: string; show?: string;
 }) {
   if (here === 'here') {
     return (
-      <button type="button" title={addTip} aria-label={addTip} {...own} onClick={(e) => { e.stopPropagation(); onAdd(); }} className={`${className} ${ADD_HOVER} ${show}`}>
+      <button type="button" aria-label={addTip} onClick={(e) => { e.stopPropagation(); onAdd(); }} className={`${ROUND} ${ADD_COLOR} ${show}`}>
         <Plus size={12} strokeWidth={2.6} />
       </button>
     );
@@ -107,11 +114,13 @@ export function HereButton({ here, addTip, onAdd, onRetry, className, show = '' 
   return <DownloadBadge state={here} onRetry={onRetry} className={className} />;
 }
 
-export function DownloadBadge({ state, onRetry, className }: { state: Exclude<HereState, 'here'>; onRetry: () => void; className: string }) {
+export function DownloadBadge({ state, onRetry, onDownload, className }: {
+  state: Exclude<HereState, 'here'>; onRetry: () => void; onDownload?: () => void; className: string;
+}) {
   const t = useT();
   if (state === 'failed') {
     const label = t('assetDrawer.previewRetry');
-    return <button type="button" data-library-download={state} title={label} aria-label={label} {...own}
+    return <button type="button" data-library-download={state} aria-label={label}
       onClick={(e) => { e.stopPropagation(); onRetry(); }}
       className={`grid ${className} !bg-[#622824] text-white hover:!bg-[#853630]`}>
       <RotateCw size={13} strokeWidth={2.4} />
@@ -121,6 +130,12 @@ export function DownloadBadge({ state, onRetry, className }: { state: Exclude<He
     <span role="progressbar" aria-label={t('assetDrawer.downloading')} data-library-download={state} className={`grid ${className}`}>
       <LoaderCircle size={14} strokeWidth={2.4} className="animate-spin motion-reduce:animate-none" />
     </span>
+  );
+  if (onDownload) return (
+    <button type="button" aria-label={t('assetDrawer.previewDownloadPlay')} data-library-download={state}
+      onClick={(e) => { e.stopPropagation(); onDownload(); }} className={`grid ${className}`}>
+      <Download size={12} strokeWidth={2.6} />
+    </button>
   );
   return (
     <span role="img" aria-label={t('assetDrawer.previewDownloadPlay')} data-library-download={state}
@@ -132,10 +147,10 @@ function Buttons({ item, kept, addTip, onAdd, onRetry, always, here = 'here' }: 
   item: LibraryItem; kept: boolean; addTip: string; onAdd: () => void; onRetry: () => void; always?: boolean; here?: HereState;
 }) {
   const t = useT();
-  const show = always ? '' : 'invisible group-hover:visible';
+  const show = always ? 'grid' : 'grid invisible group-hover:visible focus-visible:visible';
   return (
     <span className="flex shrink-0 items-center gap-1.5">
-      <button type="button" aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')} aria-pressed={kept} {...own}
+      <button type="button" aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')} aria-pressed={kept}
         onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
         className={`${ON_PANEL} ${kept ? 'visible text-[#ffd35a]' : `${show} text-[var(--text)]`}`}>
         <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
@@ -164,19 +179,55 @@ export function Tile({ item, playing, loading = false, size, cover }: { item: Li
 }
 
 /** Its waveform as a mask: lit in the accent as far as it has played, the rest quiet. */
-function Wave({ item, played }: { item: LibraryItem; played: number }) {
+function Wave({ item, played, className = 'h-4' }: { item: LibraryItem; played: number; className?: string }) {
   const lit = Math.round(played * 1000) / 10;
   /* Eighty rows may be drawn at once. Their cloud waveforms share the bounded background queue so a click's
      audio request has a free connection, even when none of those pictures is cached yet. */
   const image = useMediaImage(waveUrl(item));
   return (
-    <span aria-hidden className="block h-4 w-full" style={{
+    <span aria-hidden className={`block w-full ${className}`} style={{
       visibility: image ? 'visible' : 'hidden',
       WebkitMaskImage: image ? `url(${image})` : undefined, maskImage: image ? `url(${image})` : undefined, WebkitMaskSize: '100% 100%', maskSize: '100% 100%',
       background: `linear-gradient(to right, var(--accent) ${lit}%, var(--text-faint) ${lit}%)`,
     }} />
   );
 }
+
+/** A cover in the viewer, independent of the transport beneath it. */
+export function AudioArtwork({ target, item, voice, name, playing, progress = 0, readLevel }: {
+  target: HTMLDivElement;
+  item?: LibraryItem;
+  voice?: Parameters<typeof voicePalette>[0];
+  name: string;
+  playing: boolean;
+  progress?: number;
+  readLevel?: () => number;
+}) {
+  const t = useT();
+  const kind = item?.cat === 'music' ? 'music' : item ? 'sound' : 'voice';
+  const cover = useMediaImage(kind === 'music' && item?.cover ? libraryUrl(item.cover) : null, true, 'visible');
+  const Mark = kind === 'music' ? Music2 : MARKS[item?.group ?? ''] ?? AudioWaveform;
+  const look = item ? (kind === 'music' ? coverLook(item) : soundLook(item)) : undefined;
+  const palette = React.useMemo(() => voice ? voicePalette(voice) : null, [voice]);
+  const lighting = palette ? { '--voice-glow': palette.spots[1].color } as React.CSSProperties : undefined;
+  return createPortal(
+    <div className={artwork.surface} style={lighting} data-library-audio-cover={kind} data-playing={playing}>
+      <div className={artwork.content}>
+        <div className={`${artwork.art} ${kind === 'voice' ? artwork.orb : kind === 'sound' ? artwork.sound : ''}`} style={look} aria-hidden="true">
+          {palette ? <VoiceOrbCanvas palette={palette} playing={playing} readLevel={readLevel}><span data-voice-avatar-base="" className={artwork.fallback} style={voicePaletteLook(palette)} /></VoiceOrbCanvas> : cover ? <img src={cover} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+            : <Mark size={48} strokeWidth={1.55} />}
+        </div>
+        <div className="min-w-0 max-w-full text-center">
+          <div className="truncate text-[15px] font-semibold leading-tight">{name}</div>
+          <div className="mt-1 text-[11px] text-[var(--text-muted)]">{t(`assetDrawer.cat_${kind}`)}</div>
+        </div>
+        {item && kind === 'sound' ? <Wave item={item} played={progress} className="h-5" /> : null}
+      </div>
+    </div>, target,
+  );
+}
+
+export type LibraryHover = Pick<React.HTMLAttributes<HTMLDivElement>, 'onPointerEnter' | 'onPointerLeave'>;
 
 export function SoundRow({ item, name, group, picked, player, kept, addTip, onPick, onAdd, drag, here }: {
   here?: HereState;
@@ -186,25 +237,25 @@ export function SoundRow({ item, name, group, picked, player, kept, addTip, onPi
   const t = useT();
   const mine = player.item?.id === item.id;
   const play = () => { onPick(); player.toggle(item); };
+  const downloading = mine && player.downloading;
   return (
     <div
       {...drag}
       draggable
       data-library-audio={item.id}
       data-audio-preview={mine ? player.status : undefined}
-      aria-busy={mine && player.loading}
+      aria-busy={downloading}
       className={`group grid h-[60px] cursor-default select-none grid-cols-[44px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 ${picked || mine ? 'bg-[var(--bg-field)]' : 'hover:bg-[var(--bg-field)]'}`}
-      onClick={play}
-      onDoubleClick={onAdd}
-      title={name}
+      onClick={(e) => { if (e.detail < 2) play(); }}
+      aria-label={name}
     >
-      <Tile item={item} playing={mine && player.playing} loading={mine && player.loading} size={44} />
+      <Tile item={item} playing={mine && (player.playing || player.loading)} loading={downloading} size={44} />
       <span className="flex min-w-0 flex-col justify-center gap-1">
         <span className="flex h-6 min-w-0 items-center gap-2">
           <span className={`truncate text-[12.5px] font-medium ${picked || mine ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{name}</span>
           <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{group}</span>
           <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--text-faint)]">{lengthOf(item.durationMs ?? 0, t)}</span>
-          <Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} onRetry={play} here={mine && player.loading ? 'fetching' : mine && player.error ? 'failed' : here} />
+          <Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} onRetry={play} always={picked} here={downloading ? 'fetching' : here} />
         </span>
         <span className="flex h-4 min-w-0 items-center gap-2">
           <Wave item={item} played={mine && player.duration ? player.time / player.duration : 0} />
@@ -222,23 +273,23 @@ export function MusicCard({ item, name, group, picked, player, kept, addTip, onP
   const t = useT();
   const mine = player.item?.id === item.id;
   const play = () => { onPick(); player.toggle(item); };
+  const downloading = mine && player.downloading;
   return (
     <div
       {...drag}
       draggable
       data-library-audio={item.id}
       data-audio-preview={mine ? player.status : undefined}
-      aria-busy={mine && player.loading}
+      aria-busy={downloading}
       className={`group flex h-[92px] cursor-default select-none gap-2.5 rounded-xl p-2 ring-1 ${picked || mine ? 'bg-[var(--bg-field)] ring-[var(--accent)]' : 'bg-[var(--bg-raised)] ring-transparent hover:bg-[var(--bg-field)]'}`}
-      onClick={play}
-      onDoubleClick={onAdd}
-      title={name}
+      onClick={(e) => { if (e.detail < 2) play(); }}
+      aria-label={name}
     >
-      <Tile item={item} playing={mine && player.playing} loading={mine && player.loading} size={76} cover />
+      <Tile item={item} playing={mine && (player.playing || player.loading)} loading={downloading} size={76} cover />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className={`line-clamp-2 text-[12.5px] font-medium leading-[17px] ${picked || mine ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{name}</span>
         <span className="mt-0.5 truncate text-[11px] text-[var(--text-faint)]">{group} · {lengthOf(item.durationMs ?? 0, t)}</span>
-        <span className="mt-auto flex justify-end"><Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} onRetry={play} always here={mine && player.loading ? 'fetching' : mine && player.error ? 'failed' : here} /></span>
+        <span className="mt-auto flex justify-end"><Buttons item={item} kept={kept} addTip={addTip} onAdd={onAdd} onRetry={play} always here={downloading ? 'fetching' : here} /></span>
       </span>
     </div>
   );
@@ -281,15 +332,16 @@ export function MiniPlayer<T extends Playable>({ target, player, name }: {
   const at = dragged ?? player.time;
   const length = player.duration || (item.durationMs ?? 0) / 1000;
   const say = (sec: number) => (length < 10 ? sec.toFixed(1) : clock(sec));
-  const label = t(player.loading ? 'assetDrawer.previewCancel' : player.error ? 'assetDrawer.previewRetry' : player.playing ? 'assetDrawer.pause' : 'assetDrawer.play');
+  const active = player.playing || player.loading;
+  const label = t(player.downloading ? 'assetDrawer.previewCancel' : player.error ? 'assetDrawer.previewRetry' : active ? 'assetDrawer.pause' : 'assetDrawer.play');
   const bar = (
     <div className={`${PANE_BAR} gap-2 px-2 text-[11px] tabular-nums text-[var(--text)] ${target ? '' : 'mb-[var(--drawer-under,0px)] border-t border-[var(--border)]'}`} data-audio-player={player.status}>
       <button type="button" className={PANE_BTN} onMouseDown={(e) => e.preventDefault()} onClick={toggle} title={label} aria-label={label}>
-        {player.error ? <RotateCw size={PANE_ICON} /> : player.loading ? <Square size={PANE_ICON - 3} fill="currentColor" />
-          : player.playing ? <Pause size={PANE_ICON} fill="currentColor" /> : <Play size={PANE_ICON} fill="currentColor" />}
+        {player.error ? <RotateCw size={PANE_ICON} /> : player.downloading ? <Square size={PANE_ICON - 3} fill="currentColor" />
+          : active ? <Pause size={PANE_ICON} fill="currentColor" /> : <Play size={PANE_ICON} fill="currentColor" />}
       </button>
       <span className="min-w-0 max-w-[36%] truncate text-[12px]" title={name}>{name}</span>
-      {player.loading || player.error ? null : <>
+      {player.downloading || player.error ? null : <>
         <span className="shrink-0 text-[var(--text-muted)]">{say(at)}</span>
         <Scrub at={Math.min(at, length)} length={length} label={t('assetDrawer.seek')}
           onDrag={setDragged} onLet={(sec) => { player.seek(sec); setDragged(null); }} />

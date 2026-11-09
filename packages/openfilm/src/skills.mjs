@@ -186,7 +186,7 @@ export const skillUid = (source, name, origin) => `${skillOwner(source, origin)}
  * @returns {{ fields: Record<string, string>, body: string }}
  */
 export function parseSkillFile(text) {
-  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  const m = /^\uFEFF?---\r?\n((?:[\s\S]*?\r?\n)?)---[ \t]*(?:\r?\n|$)/.exec(text);
   if (!m) return { fields: {}, body: text.trim() };
   /** @type {Record<string, string>} */
   const fields = {};
@@ -410,7 +410,8 @@ export function skillsNamed(key, where) {
   if (full) return all.filter((s) => s.uid === full).slice(0, 1);
   const asGiven = all.filter((s) => agentName(s) === k);
   if (asGiven.length) return asGiven.slice(0, 1);
-  return all.filter((s) => s.name === k);
+  /* a skill's name is read as written in its SKILL.md; the key is lowercased, so both sides are compared as such */
+  return all.filter((s) => s.name.toLowerCase() === k);
 }
 
 /**

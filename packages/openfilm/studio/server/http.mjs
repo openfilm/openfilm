@@ -33,8 +33,11 @@ export async function readJson(/** @type {Req} */ req, limit = 4 << 20) {
   catch { throw new HttpError(400, 'the body is not JSON'); }
 }
 
-/** The value of a cookie on the request. */
+/** The value of a cookie on the request; null when it is not there or its % escapes are broken. */
 export function cookie(/** @type {Req} */ req, /** @type {string} */ name) {
   const match = new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(req.headers.cookie ?? '');
-  return match ? decodeURIComponent(match[1]) : null;
+  if (!match) return null;
+  /* a cookie is written by a browser we do not control: a stray % must not throw out of every request */
+  try { return decodeURIComponent(match[1]); }
+  catch { return null; }
 }

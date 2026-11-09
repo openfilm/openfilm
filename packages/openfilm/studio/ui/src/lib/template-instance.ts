@@ -9,6 +9,7 @@
  */
 import type { Clip } from '../api.ts';
 import { replaceClip, type ReplaceFile } from './clip-replace.ts';
+import { framingOf } from './clip-look.ts';
 import { propsOf, propValue, type ComponentProp } from './component-props.ts';
 import type { FilmOverride } from './film.ts';
 
@@ -206,11 +207,12 @@ const r3 = (n: number) => Math.round(n * 1000) / 1000;
 /** A place's framing as its style says (`object-fit`, `object-position`, `object-view-box: inset(…)`). */
 export function placeFrame(style: string | undefined): PlaceFrame {
   const d = new Map(decls(style));
-  const [px, py] = (d.get('object-position') ?? '50% 50%').split(/\s+/);
+  /* the inspector reads a clip's object-position the same way: one value, keywords, or units it cannot use */
+  const framing = framingOf(d.get('object-position'));
   const inset = /^inset\(([^)]*)\)$/.exec(d.get('object-view-box') ?? '')?.[1]?.split(/\s+/).map((v) => pctOf(v, 0));
   /* inset(top right bottom left): what is left of the picture's width is 1/zoom */
   const zoom = inset && inset.length === 4 ? 1 / Math.max(0.05, 1 - inset[1]! - inset[3]!) : 1;
-  return { fit: d.get('object-fit') === 'contain' ? 'contain' : 'cover', x: pctOf(px, 0.5), y: pctOf(py ?? px, 0.5), zoom: r3(zoom) };
+  return { fit: d.get('object-fit') === 'contain' ? 'contain' : 'cover', x: framing ? framing[0] / 100 : 0.5, y: framing ? framing[1] / 100 : 0.5, zoom: r3(zoom) };
 }
 
 /** The style with a place framed so (its other declarations as they were). */
@@ -291,13 +293,14 @@ const hexOf = (h: number, s: number, l: number): string => {
 export function hslOf(color: string): { h: number; s: number; l: number; a: string } | null {
   let r: number, g: number, b: number, a = '';
   const hex = /^#([0-9a-f]{3,8})$/i.exec(color.trim());
-  const rgb = /^rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/i.exec(color.trim());
+  const rgb = /^rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)(?:[ ,/]+([\d.]+))?/i.exec(color.trim());
   if (hex) {
     const x = hex[1]!.length <= 4 ? hex[1]!.split('').map((c) => c + c).join('') : hex[1]!;
     [r, g, b] = [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16) / 255) as [number, number, number];
     a = x.length === 8 ? x.slice(6) : '';
   } else if (rgb) {
     [r, g, b] = [rgb[1], rgb[2], rgb[3]].map((v) => Number(v) / 255) as [number, number, number];
+    if (rgb[4] !== undefined) a = Math.round(Math.min(1, Math.max(0, Number(rgb[4]))) * 255).toString(16).padStart(2, '0');
   } else return null;
   const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
   const d = max - min;

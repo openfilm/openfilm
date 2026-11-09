@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatClipDuration, mediaListingOf, mediaNameMatches, renameChangesKind, renamedPath, safeName } from './workspace-resources.ts';
+import { formatClipDuration, mediaListingOf, mediaNameMatches, renameChangesKind, renamedPath, safeName, srcHitsAsset } from './workspace-resources.ts';
 
 test('names keep spaces and every script; only what file systems refuse goes (the server’s rule, files.mjs)', () => {
   assert.equal(safeName('镜头 01.mp4'), '镜头 01.mp4');
@@ -8,6 +8,15 @@ test('names keep spaces and every script; only what file systems refuse goes (th
   assert.equal(safeName('  a: b / c?.png '), 'a b c .png');
   assert.equal(safeName('.hidden'), 'hidden');
   assert.equal(safeName(' ... '), '');
+});
+
+test('a long name is not cut in the middle of a character', () => {
+  const split = `${'a'.repeat(115)}😀${'b'.repeat(80)}.mp4`;
+  const cut = safeName(split);
+  assert.ok(cut.length <= 120);
+  assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(cut), 'no half a character');
+  assert.equal(cut, `${'a'.repeat(115)}.mp4`);
+  assert.equal(safeName(`${'x'.repeat(200)}.mp4`), `${'x'.repeat(116)}.mp4`);
 });
 
 test('a rename lands beside the old name and keeps the extension when none is typed', () => {
@@ -64,4 +73,10 @@ test('links to media kept elsewhere ride on their files and folders', () => {
   });
   assert.deepEqual(listing.linkedDirs, { nas: { to: '/Volumes/NAS/shoot' } });
   assert.deepEqual(listing.files.map((f) => f.link ?? null), [null, { to: '/Volumes/NAS/off.png', missing: true }]);
+});
+
+test('a clip with a fragment in its src still hits its file', () => {
+  assert.equal(srcHitsAsset('scenes/intro.html#t=0,3', 'assets/scenes/intro.html'), true);
+  assert.equal(srcHitsAsset('scenes/intro.html', 'assets/scenes/intro.html'), true);
+  assert.equal(srcHitsAsset('scenes/other.html#t=0,3', 'assets/scenes/intro.html'), false);
 });

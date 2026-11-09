@@ -98,6 +98,14 @@ test("a place's picture framed: filling or whole, the point looked at, how near;
   assert.equal(withPlaceFrame(style, { fit: 'contain', x: 0.5, y: 0.5, zoom: 1 }), 'object-fit: contain; animation: kb 8s infinite');
 });
 
+test("a template's object-position is read as CSS reads it: one value, keywords, and other units", () => {
+  assert.deepEqual(placeFrame('object-position: top'), { fit: 'cover', x: 0.5, y: 0, zoom: 1 });
+  assert.deepEqual(placeFrame('object-position: 30%'), { fit: 'cover', x: 0.3, y: 0.5, zoom: 1 }, 'one value is across, not both axes');
+  assert.deepEqual(placeFrame('object-position: right bottom'), { fit: 'cover', x: 1, y: 1, zoom: 1 });
+  assert.deepEqual(placeFrame('object-position: 30% 80%'), { fit: 'cover', x: 0.3, y: 0.8, zoom: 1 });
+  assert.deepEqual(placeFrame('object-position: 10px 20px'), { fit: 'cover', x: 0.5, y: 0.5, zoom: 1 }, 'px are not percentages');
+});
+
 test('a template stretched: its places in proportion, a transition on its cut, its opening held, its end with it', () => {
   const film = { tracks: [
     { clips: [
@@ -133,6 +141,8 @@ test('a template stretched: its places in proportion, a transition on its cut, i
 test('a color in a scheme', () => {
   assert.equal(schemeColor('mono', '#ff0000'), '#808080');
   assert.equal(schemeColor('mono', '#ff000080'), '#80808080', 'its alpha kept');
+  assert.equal(schemeColor('mono', 'rgba(255, 0, 0, 0.5)'), '#80808080', 'rgba() keeps its alpha');
+  assert.equal(schemeColor('mono', 'rgb(255, 0, 0)'), '#808080');
   assert.equal(schemeColor('warm', 'not a color'), null);
   assert.match(schemeColor('cool', '#ff9a3c')!, /^#[0-9a-f]{6}$/);
 });

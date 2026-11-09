@@ -1,0 +1,72 @@
+.surface {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 42%, color-mix(in srgb, var(--voice-glow, var(--accent)) 10%, var(--bg-viewer)), var(--bg-viewer) 73%);
+  color: var(--text);
+}
+
+.content {
+  display: flex;
+  width: min(80%, 420px);
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(6px, 3cqh, 18px);
+}
+
+.art {
+  position: relative;
+  display: grid;
+  width: clamp(52px, min(33cqw, 48cqh), 176px);
+  aspect-ratio: 1;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 18%;
+  color: white;
+  box-shadow: 0 12px 40px #0005, inset 0 0 0 1px #fff3;
+}
+
+.art > svg {
+  width: 42%;
+  height: 42%;
+  filter: drop-shadow(0 2px 6px #0005);
+}
+
+.sound {
+  width: clamp(48px, min(24cqw, 36cqh), 112px);
+}
+
+.orb {
+  width: clamp(60px, min(36cqw, 50cqh), 196px);
+  overflow: visible;
+  box-shadow: none;
+}
+
+.orbCanvas {
+  position: absolute;
+  inset: -9%;
+  width: 118%;
+  height: 118%;
+  visibility: hidden;
+}
+
+.orbCanvas[data-ready] {
+  visibility: visible;
+}
+
+.orbCanvas[data-ready] + .fallback {
+  visibility: hidden;
+}
+
+.orb > .fallback {
+  border-radius: 50%;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scale(calc(1 + var(--voice-level, 0) * .082));
+  filter: brightness(calc(1 + var(--voice-level, 0) * .15));
+}
