@@ -151,8 +151,10 @@ export async function changes(root, before) {
   for (const path of paths) {
     const was = before.files.get(path);
     const now = after.files.get(path);
-    if (was && now && was.size === now.size && was.mtimeMs === now.mtimeMs) continue;
-    if (was?.text != null && now?.text != null && was.text === now.text) continue;
+    if (was && now) {
+      if (was.text != null && now.text != null) { if (was.text === now.text) continue; }
+      else if (was.size === now.size && was.mtimeMs === now.mtimeMs) continue;
+    }
     const change = !was ? 'added' : !now ? 'removed' : 'changed';
     /* lines only when both ends are text (or one end is no file at all) */
     const from = was ? was.text : '';
@@ -189,8 +191,10 @@ export async function undoTurn(root, before, hold, { trash }) {
     const was = before.files.get(path);
     const now = after.files.get(path);
     const to = join(root, ...path.split('/'));
-    if (was && now && was.size === now.size && was.mtimeMs === now.mtimeMs) continue;
-    if (was?.text != null && now?.text != null && was.text === now.text) continue;
+    if (was && now) {
+      if (was.text != null && now.text != null) { if (was.text === now.text) continue; }
+      else if (was.size === now.size && was.mtimeMs === now.mtimeMs) continue;
+    }
     try {
       /* A board path may have been replaced by a link since the turn began. Check again at restore time,
          including its parents, before writing a saved document or sending a new one to the trash. */
