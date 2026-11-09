@@ -42,6 +42,8 @@ const MODELS = {
     m('kwaivgi/kling-v3.0-std', 'Kling 3.0 Standard'),
     m('kwaivgi/kling-v3.0-pro', 'Kling 3.0 Pro'),
     m('google/gemini-omni-1.2-flash', 'Gemini Omni 1.2 Flash'),
+    m('tbc/mischief-1', 'TBC mischief 1'),
+    m('x-ai/grok-imagine-video-1.5-lite', 'Grok Imagine Video 1.5 Lite'),
   ],
 };
 
@@ -60,9 +62,9 @@ const MAX_REFS = 16;
  * first and a last frame), shapes, the most reference pictures it takes (`refs`, 0 for none), whether it takes a voice
  * (`voice`) or a clip (`clip`: to edit or continue, or as a reference beside its pictures), whether it takes a recording or a clip inline (`inline`; else only
  * from a web address), and its sizes (`sizes`, as OpenRouter lists them): --resolution, else 720p, else the nearest it
- * makes (`resolution`, its own default when it makes no 720p). Every clip has sound: asked for, or (`audio: false`) made
- * with it unasked.
- * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], framed?: number, ratios: string[], refs: number, voice?: true, clip?: 'edit' | 'reference', inline?: true, sizes?: string[], resolution?: string, audio?: false }>}
+ * makes (`resolution`, its own default when it makes no 720p). `audio: false` lets the model use its own sound default,
+ * while `silent` marks a model that returns no audio track.
+ * @type {Record<string, { name: string, seconds?: [number, number], only?: number[], framed?: number, frames?: 'first' | 'first-required', ratios: string[], refs: number, voice?: true, clip?: 'edit' | 'reference', inline?: true, sizes?: string[], resolution?: string, audio?: false, silent?: true }>}
  */
 const VIDEO = {
   'bytedance/seedance-2.0-mini': { name: 'Seedance', seconds: [4, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, voice: true, clip: 'reference', sizes: ['480p', '720p'] },
@@ -78,12 +80,14 @@ const VIDEO = {
   'kwaivgi/kling-v3.0-std': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], refs: 0 },
   'kwaivgi/kling-v3.0-pro': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], refs: 0 },
   'google/gemini-omni-1.2-flash': { name: 'Gemini Omni', seconds: [3, 15], framed: 10, ratios: ['16:9', '9:16'], refs: 6, clip: 'edit', inline: true, sizes: ['360p', '720p', '1080p', '4K'] },
+  'tbc/mischief-1': { name: 'TBC mischief 1', only: [3, 5], frames: 'first-required', ratios: ['16:9'], refs: 0, sizes: ['480p', '720p'], audio: false, silent: true },
+  'x-ai/grok-imagine-video-1.5-lite': { name: 'Grok Imagine Video 1.5 Lite', seconds: [1, 15], frames: 'first', ratios: ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3'], refs: 0, sizes: ['480p', '720p', '1080p'], audio: false },
 };
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
 for (const model of MODELS.image) Object.assign(model, { spec: { ratios: RATIOS, refs: MAX_REFS, sizes: ['1k', '2k', '4k'], ...(QUALITY[model.id] ? { qualities: QUALITY[model.id], transparent: true } : {}) } });
 for (const model of MODELS.video) {
   const v = VIDEO[model.id];
-  if (v) Object.assign(model, { spec: { ratios: v.ratios, ...(v.only ? { only: v.only } : v.seconds ? { seconds: v.seconds } : {}), refs: v.refs, frames: true, ...(v.voice ? { voice: true } : {}), ...(v.clip ? { clip: true } : {}), ...(v.sizes ? { sizes: v.sizes } : {}) } });
+  if (v) Object.assign(model, { spec: { ratios: v.ratios, ...(v.only ? { only: v.only } : v.seconds ? { seconds: v.seconds } : {}), refs: v.refs, frames: v.frames ?? true, ...(v.voice ? { voice: true } : {}), ...(v.clip ? { clip: true } : {}), ...(v.sizes ? { sizes: v.sizes } : {}) } });
 }
 const RESOLUTION = '720p';
 /** Each size's lines of picture, to find the nearest a model makes. */
@@ -201,6 +205,8 @@ async function video(args, ctx) {
   const editing = Boolean(clip) && spec.clip === 'edit';
   const first = editing ? '' : text(args['first-frame']);
   const last = clip ? '' : text(args['last-frame']);
+  if (spec.frames === 'first-required' && !first) throw new Error(`--first-frame: ${spec.name} requires a starting picture.`);
+  if (spec.frames && last) throw new Error(`--last-frame: ${spec.name} takes only a first frame.`);
   if (editing) for (const name of ['first-frame', 'last-frame']) if (text(args[name])) said.push(`--${name}: ${spec.name} makes it from the clip: it was left out`);
   if (clip && !editing && text(args['last-frame'])) said.push(`--last-frame: ${spec.name} made from a reference clip takes no last frame: it was left out`);
   let refs = list(args['input-reference']);
@@ -225,7 +231,10 @@ async function video(args, ctx) {
   if (seconds !== asked) said.push(`${spec.name} makes ${lengths} second clips${framed ? ' between two frames' : ''}: ${seconds} s`);
   const ratio = text(args['aspect-ratio']);
   const tall = ['9:21', '2:3', '3:4', '9:16'].includes(ratio);
-  const aspect = !ratio || ratio === 'adaptive' ? null : spec.ratios.includes(ratio) ? ratio : tall ? '9:16' : ['4:3', '1:1'].includes(ratio) && spec.ratios.includes('1:1') ? '1:1' : '16:9';
+  const aspect = !ratio || ratio === 'adaptive' ? null : spec.ratios.includes(ratio) ? ratio
+    : tall && spec.ratios.includes('9:16') ? '9:16'
+      : ['4:3', '1:1'].includes(ratio) && spec.ratios.includes('1:1') ? '1:1'
+        : spec.ratios.includes('16:9') ? '16:9' : spec.ratios[0];
   if (aspect && aspect !== ratio) said.push(`${spec.name} makes ${spec.ratios.join(', ')} clips: ${aspect}`);
   const askedSize = text(args.resolution);
   const resolution = sizeOf(spec, askedSize);
@@ -273,13 +282,14 @@ async function video(args, ctx) {
   const facts = mp4Facts(bytes);
   const dur = facts?.seconds ?? seconds;
   const size = facts?.w && facts.h ? { w: facts.w, h: facts.h } : {};
+  const hasAudio = !spec.silent;
   return {
     files: [{ path, bytes }],
-    index: [{ src: path, kind: 'video', ...size, dur, hasAudio: true, from: {
+    index: [{ src: path, kind: 'video', ...size, dur, hasAudio, from: {
       mode: 'generate', prompt, provider: 'openrouter', model, resolution, sec: dur,
       ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length && !frames.length ? { refs } : {}), ...(voice ? { voice } : {}), ...(clip ? { clip } : {}),
     } }],
-    receipt: { provider: 'openrouter', model, src: path, dur, ...(size.w ? { width: size.w, height: size.h } : {}), hasAudio: true, resolution, ...reported(state.usage), ...notes(said) },
+    receipt: { provider: 'openrouter', model, src: path, dur, ...(size.w ? { width: size.w, height: size.h } : {}), hasAudio, resolution, ...reported(state.usage), ...notes(said) },
     cost: billedBy(NAME),
   };
 }

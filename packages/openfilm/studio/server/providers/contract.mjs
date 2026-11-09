@@ -77,8 +77,8 @@
  * What a picture or clip model makes, as Studio's canvas offers it (nothing said: the canvas offers the usual):
  * `ratios`, its shapes; `seconds`, a clip's lengths (a range in whole seconds) or `only` some; `refs`, the most pictures
  * it is made from (`--ref` for a picture, `--input-reference` for a clip; 0: none); `frames`, a clip from a first (and
- * last) frame; `qualities`, a picture's `--quality`, the finest last; `needs`, a clip made only from another clip
- * (`--video`) or a recording spoken (`--audio`); `voice`, a clip that also takes a recording of whose voice speaks in it
+ * last) frame, or just a first frame (optional or required); `qualities`, a picture's `--quality`, the finest last;
+ * `needs`, a clip made only from another clip (`--video`) or a recording spoken (`--audio`); `voice`, a clip that also takes a recording of whose voice speaks in it
  * (`--voice`); `clip`, one that also takes a clip to continue or change (`--video`); `sizes`, a picture's `--size` or
  * a clip's `--resolution`, as it makes them; `transparent`, a picture with no background (`--transparent`); `formats`,
  * a picture's `--format` beyond PNG (gif, svg); `mask` and `markup`, a picture redrawn where a mask leaves it clear
@@ -88,7 +88,7 @@
  *   seconds?: [number, number],
  *   only?: number[],
  *   refs?: number,
- *   frames?: boolean,
+ *   frames?: boolean | 'first' | 'first-required',
  *   qualities?: string[],
  *   needs?: 'clip' | 'audio',
  *   voice?: boolean,
