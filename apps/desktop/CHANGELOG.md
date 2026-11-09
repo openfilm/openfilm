@@ -4,6 +4,7 @@
 
 ### Patch Changes
 
+- Keep the assets drawer and workspace aligned with the chat divider while resizing. Show in Assets briefly highlights the canvas file in the library.
 - 6ed82d0: Desktop: an agent installed as a beta or release candidate is compared by its version numbers
 - dc1be1c: Desktop: an attachment path containing a backtick is no longer cut short in the prompt
 - aff935f: Desktop: an attachment with an unknown extension is no longer sent with an empty media type

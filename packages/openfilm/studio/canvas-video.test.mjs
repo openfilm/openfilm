@@ -316,13 +316,16 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     const reveal = node.getByRole('button', { name: 'Show in Assets', exact: true });
     const library = page.locator('[data-workspace-library]');
     const asset = library.locator('[data-media-path="assets/clip.webm"]');
+    const highlighted = library.locator('[data-media-path="assets/clip.webm"][data-media-revealed]');
     await reveal.click();
     await asset.waitFor();
+    await highlighted.waitFor();
+    await highlighted.waitFor({ state: 'hidden' });
     assert.equal(await page.locator('[data-work-mode="canvas"]').count(), 1);
     await library.getByRole('button', { name: 'Favorites', exact: true }).click();
     await library.getByRole('button', { name: 'Effects', exact: true }).click();
     await reveal.click();
-    await asset.waitFor();
+    await highlighted.waitFor();
     assert.equal(await library.getByRole('button', { name: 'Media', exact: true }).getAttribute('aria-pressed'), 'true');
     assert.equal(await page.locator('[data-work-mode="canvas"]').count(), 1);
     assert.deepEqual(errors, []);

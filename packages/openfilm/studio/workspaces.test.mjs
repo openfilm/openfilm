@@ -85,6 +85,38 @@ async function profile(page, mode = 'edit', { hasTree, libraryDock, changedFrom 
 async function shot(page, name) { if (output) await page.screenshot({ path: join(output,name) }); }
 
 const editor = page => page.locator('[data-workspace-editor]');
+test('dragging the chat edge with its library open keeps the library and active workspace aligned', { timeout: 45_000 }, async () => {
+  await withWorkspace(async page => {
+    for (const [mode, panel, delta] of [['edit', '[data-viewer-pane]', 120], ['canvas', '[data-studio-canvas]', 160]]) {
+      if (mode === 'canvas') await page.locator('[data-work-mode="edit"]').click();
+      await page.evaluate(() => window.openfilmHost.panel.setAssetsOpen(true));
+      await library(page).waitFor();
+      await page.waitForFunction(mode => JSON.parse(localStorage.getItem('openfilm.workspace.current.v2'))?.[mode]?.assets, mode);
+      const chat = page.locator('#test-chat');
+      const start = await rect(chat);
+      const seam = await rect(page.getByRole('separator', { name: 'Chat', exact: true }));
+      const y = seam.y + 20;
+      const x = seam.x + seam.width - 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + delta, y, { steps: 6 });
+      const aligned = () => page.waitForFunction(({ width, panel }) => {
+        const edge = document.querySelector('#test-chat').getBoundingClientRect().right;
+        return Math.abs(edge - width) <= 1
+          && Math.abs(document.querySelector('[data-workspace-library]').getBoundingClientRect().right - edge) <= 1
+          && Math.abs(document.querySelector(panel).getBoundingClientRect().left - edge) <= 1;
+      }, { width: start.width + delta, panel }, { timeout: 3500 });
+      await aligned();
+      await page.mouse.up();
+      await aligned();
+      await page.waitForFunction(({ mode, width }) => JSON.parse(localStorage.getItem('openfilm.workspace.current.v2'))?.[mode]?.chatWidth === width, { mode, width: start.width + delta });
+    }
+    await page.locator('[data-work-mode="canvas"]').click();
+    await page.waitForFunction(() => document.querySelector('#test-chat').getBoundingClientRect().width === 540
+      && document.querySelector('[data-workspace-library]').getBoundingClientRect().width === 540);
+  });
+});
+
 async function beginEdit(page) { await openLayout(page); await menu(page).getByRole('button',{name:'Edit layout',exact:true}).click(); await editor(page).waitFor(); }
 async function dragPanel(page, source, target, edge) {
   const grip=editor(page).locator(`[data-layout-panel=${source}]`);
