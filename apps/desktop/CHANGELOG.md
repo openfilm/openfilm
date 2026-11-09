@@ -4,6 +4,7 @@
 
 ### Patch Changes
 
+- Move Notifications to Advanced settings. Show “Not connected” for OpenFilm when signed out in the Agents list.
 - Keep the assets drawer and workspace aligned with the chat divider while resizing. Show in Assets briefly highlights the canvas file in the library.
 - 6ed82d0: Desktop: an agent installed as a beta or release candidate is compared by its version numbers
 - dc1be1c: Desktop: an attachment path containing a backtick is no longer cut short in the prompt

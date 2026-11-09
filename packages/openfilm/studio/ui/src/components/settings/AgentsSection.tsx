@@ -211,7 +211,7 @@ export function AgentsSection() {
     if (agent.connectionIssue && (agent.status === 'ready' || agent.status === 'off')) return t(`settings.agents.${agent.connectionIssue.kind === 'quota' ? 'quotaReached' : 'modelCredentials'}`);
     switch (agent.status) {
       case 'off': return t(agent.shown ? 'settings.agents.off' : 'settings.agents.available');
-      case 'sign-in': return t('settings.agents.signedOut');
+      case 'sign-in': return t(agent.id === 'openfilm' ? 'settings.agents.off' : 'settings.agents.signedOut');
       case 'waiting': return t('settings.agents.waiting');
       case 'missing':
         if (agent.setupRequired === 'code-tab') return t('settings.agents.claudeSetup');
