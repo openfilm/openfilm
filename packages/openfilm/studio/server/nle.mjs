@@ -168,7 +168,7 @@ const AUDIO_COPY = new Set(['wav', 'aif', 'aiff', 'mp3', 'm4a', 'aac', 'mp4', 'm
 const ROLE_ORDER = /** @type {SoundRole[]} */ (['footage', 'voice', 'sfx', 'music']);
 const ROLE_NAME = { footage: 'Footage', voice: 'Voice', sfx: 'SFX', music: 'Music' };
 const safeStem = (/** @type {string} */ name) => name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'clip';
-const stemOf = (/** @type {string} */ src) => (src.split('/').pop() ?? src).replace(/\.[^.]+$/, '');
+const stemOf = (/** @type {string} */ src) => (src.split(/[\\/]/).pop() ?? src).replace(/\.[^.]+$/, '');
 
 /** Stable source-row identity, independent of file names and export formats.
  * @param {readonly NleSound[]} sounds
