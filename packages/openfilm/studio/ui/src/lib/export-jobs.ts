@@ -148,9 +148,11 @@ export function basenameOf(path: string): string {
 
 export function formatBytes(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '—';
-  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB`;
-  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  const kb = n / 1024;
+  if (kb < 1023.5) return `${Math.max(1, Math.round(kb))} KB`;
+  const mb = n / (1024 * 1024);
+  if (mb < 1023.5) return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+  return `${(n / (1024 ** 3)).toFixed(2)} GB`;
 }
 
 export function formatDuration(ms: number): string {
