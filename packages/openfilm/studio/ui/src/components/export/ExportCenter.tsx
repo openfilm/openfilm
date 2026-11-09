@@ -861,7 +861,6 @@ export function ExportCenter(props: ExportCenterProps) {
                       onChange={(app) => patch('nle', { app })}
                     />
                   </Field>
-                  <Hint>{t('exportCenter.nleEffectsHint')}</Hint>
                   <Field label={t('exportCenter.nleMedia')}>
                     <Segmented value={s.nle.media} options={[
                       { value: 'link', label: t('exportCenter.nleMediaLink') },

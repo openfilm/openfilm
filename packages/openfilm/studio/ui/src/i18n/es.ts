@@ -545,7 +545,6 @@ export const es: Words = {
     nleHintResolve: 'Crea una carpeta con el XML y una carpeta de medios. En DaVinci Resolve: Archivo › Importar › Línea de tiempo. Deja la carpeta donde está o vuelve a vincular los medios tras moverla.',
     nleHintDraft: 'Crea un borrador en la carpeta de borradores de {app}, así aparece en la pantalla de inicio de {app} (si {app} está abierto, reinícialo). Las páginas llegan como clips con alfa.',
     nleHintDraftNone: '{app} no está en este equipo: el borrador se crea en la carpeta de exportación. Muévelo a la carpeta de borradores de {app} (Ajustes › Ubicación de borradores).',
-    nleEffectsHint: "Conserva el aspecto de OpenFilm. Los ajustes compatibles se pueden editar; los demás efectos se renderizan como clips.",
     nleMedia: "Archivos multimedia",
     nleMediaLink: "Vincular archivos originales",
     nleMediaCopy: "Copiar medios completos",

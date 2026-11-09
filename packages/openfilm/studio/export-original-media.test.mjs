@@ -45,7 +45,6 @@ test('editing-project exports keep effects automatically and remember whether to
       await open();
       await dialog.getByRole('button', { name: app, exact: true }).click();
       assert.equal(await dialog.getByRole('button', { name: /Keep original media|Keep effects automatically|Keep rendered effects/ }).count(), 0);
-      assert.equal(await dialog.getByText('Keeps the OpenFilm look.', { exact: false }).isVisible(), true);
       if (queued.length === 0) assert.equal(await dialog.getByRole('button', { name: 'Copy complete media', exact: true }).getAttribute('aria-pressed'), 'true');
       await dialog.getByRole('button', { name: 'Link original files', exact: true }).click();
       assert.equal(await dialog.getByRole('button', { name: 'Link original files', exact: true }).getAttribute('aria-pressed'), 'true');
