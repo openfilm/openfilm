@@ -681,3 +681,9 @@ test("Codex on Windows: never the copy in the Store app's own folder, which Wind
   assert.deepEqual(codexAppCopies(home), [recent, old]);
   assert.deepEqual(detectAgentInstallation('codex', { ...none, others: [store] }), { installed: true, cli: recent, source: 'app', install: detectAgentInstallation('codex', none).install });
 });
+
+test('a pre-release version is still compared by its numbers', () => {
+  assert.equal(laterVersion('2.1.295-beta.1', '2.1.294'), true);
+  assert.equal(laterVersion('2.1.294', '2.1.295-rc.1'), false);
+  assert.equal(laterVersion('2.1.10', '2.1.9'), true);
+});
