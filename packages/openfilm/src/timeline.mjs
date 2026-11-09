@@ -826,13 +826,11 @@ function wakePage(c) {
     /* A paused preview may have drawn a canvas before its images arrived. Ask the editor to paint the same
        moment when they load, including lazy images that arrive after the document's load event. */
     const loadedImages = new Set();
-    win.addEventListener('load', ({ target }) => {
-      if (c.waking !== mine || !c.shown) return;
-      if (target?.localName === 'img') {
-        const src = target.currentSrc || target.src;
-        if (!src || loadedImages.has(src)) return;
-        loadedImages.add(src);
-      } else if (target !== win.document) return;
+    win.document.addEventListener('load', ({ target }) => {
+      if (c.waking !== mine || !c.shown || target?.localName !== 'img') return;
+      const src = target.currentSrc || target.src;
+      if (!src || loadedImages.has(src)) return;
+      loadedImages.add(src);
       window.__filmEditor.redraw?.();
     }, { capture: true });
     /* its own size, when it says one (else its clip's size, or the stage's: see settle) */

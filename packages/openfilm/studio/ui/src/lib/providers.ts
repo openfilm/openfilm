@@ -5,7 +5,7 @@
  * gets back where a key comes from and its last four characters.
  */
 import React from 'react';
-import { studioHost } from './host';
+import { studioHost } from './host.ts';
 
 export type ProviderVerb = 'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'cutout' | 'image-search' | 'video-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch';
 

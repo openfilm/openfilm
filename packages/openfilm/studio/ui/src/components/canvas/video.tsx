@@ -62,6 +62,7 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
   const t = useT();
   const src = board.sources.file(file);
   const player = React.useRef<HTMLVideoElement>(null);
+  const firstFrame = React.useRef<HTMLCanvasElement>(null);
   const captureButton = React.useRef<HTMLButtonElement>(null);
   const volumeButton = React.useRef<HTMLButtonElement>(null);
   const volumeSlider = React.useRef<HTMLInputElement>(null);
@@ -70,6 +71,8 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
   const [ready, setReady] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
   const [playing, setPlaying] = React.useState(false);
+  const [firstFrameReady, setFirstFrameReady] = React.useState(false);
+  const [atStart, setAtStart] = React.useState(true);
   const sharedMuted = React.useSyncExternalStore(watchSound, readMute, () => false);
   const volume = React.useSyncExternalStore(watchSound, readVolume, () => 1);
   const [autoplayMuted, setAutoplayMuted] = React.useState(false);
@@ -112,6 +115,7 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
       }
     }
     setSeconds(0);
+    setAtStart(true);
     setAutoplayMuted(false);
   }, []);
   React.useEffect(() => () => cancelAnimationFrame(rewindFrame.current), []);
@@ -163,10 +167,29 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
       }}>
       <video ref={player} src={src} muted={muted} playsInline preload={board.shown === false ? 'metadata' : 'auto'} draggable={false}
         onLoadedMetadata={(event) => updateLength(event.currentTarget)} onDurationChange={(event) => updateLength(event.currentTarget)}
-        onLoadedData={() => setReady(true)} onError={() => setFailed(true)}
+        onLoadedData={(event) => {
+          const video = event.currentTarget;
+          const still = firstFrame.current;
+          if (still && !firstFrameReady && video.videoWidth && video.videoHeight) {
+            // A paused seek can finish decoding before Chromium replaces its previous compositor frame.
+            const scale = Math.min(1, 960 / Math.max(video.videoWidth, video.videoHeight));
+            still.width = Math.max(1, Math.round(video.videoWidth * scale));
+            still.height = Math.max(1, Math.round(video.videoHeight * scale));
+            const context = still.getContext('2d');
+            if (context) {
+              context.drawImage(video, 0, 0, still.width, still.height);
+              setFirstFrameReady(true);
+            }
+          }
+          setReady(true);
+        }} onError={() => setFailed(true)}
         onTimeUpdate={(event) => setSeconds(event.currentTarget.currentTime)}
         onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
+        onPlaying={() => setAtStart(false)}
         className="pointer-events-none absolute inset-0 size-full object-contain" />
+      <canvas ref={firstFrame} width={1} height={1} aria-hidden="true"
+        className="pointer-events-none absolute inset-0 size-full object-contain"
+        hidden={!firstFrameReady || !atStart || failed} />
       {failed ? (
         <div role="status" className="pointer-events-none absolute inset-0 grid place-content-center justify-items-center gap-2 bg-black/50 px-3 text-center text-xs text-white">
           <VideoOff size={20} />{t('canvas.video.unavailable')}
@@ -196,7 +219,11 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
               style={{ '--played': `${length ? Math.min(seconds / length, 1) * 100 : 0}%` } as React.CSSProperties}
               onChange={(event) => {
                 const video = player.current;
-                if (video) { video.currentTime = event.currentTarget.valueAsNumber; setSeconds(video.currentTime); }
+                if (video) {
+                  video.currentTime = event.currentTarget.valueAsNumber;
+                  setSeconds(video.currentTime);
+                  setAtStart(video.currentTime === 0);
+                }
               }} />
             <span className="hidden shrink-0 text-xs tabular-nums @[260px]:inline">{time(length)}</span>
             <div className="relative shrink-0" {...popupEvents('volume')}>

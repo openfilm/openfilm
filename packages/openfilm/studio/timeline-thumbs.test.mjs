@@ -173,7 +173,7 @@ test('a paused preview redraws a page when its pictures finish loading', { timeo
     await mkdir(root, { recursive: true });
     await writeFile(join(root, 'cards.html'), `<!doctype html><body>
       <canvas id="cards" width="320" height="180"></canvas>
-      <img id="photo" src="cards.svg" hidden>
+      <img id="photo" hidden>
       <script>
         const ctx = cards.getContext('2d');
         window.film = { duration: 3, width: 320, height: 180, frame() {
@@ -190,15 +190,27 @@ test('a paused preview redraws a page when its pictures finish loading', { timeo
     studio = await startStudio({ port: 0, openBrowser: () => {} });
     browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-    // Keep the first live frame in view even if Studio warms a replacement at a different scale.
-    await page.route(/\/film\.html\?load=(?!1(?:&|$))/, route => route.fulfill({ contentType: 'text/html', body: '' }));
+    // Verify the same preview is redrawn, even if Studio starts warming a replacement.
+    const previewRequest = /\/film\.html\?load=\d+&/;
+    let firstLoad;
+    await page.route(previewRequest, route => {
+      const load = new URL(route.request().url()).searchParams.get('load');
+      firstLoad ??= load;
+      return load === firstLoad ? route.continue() : route.fulfill({ contentType: 'text/html', body: '' });
+    });
     await page.route('**/cards.svg', async route => {
       await holdImage;
       await route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="red"/></svg>' }).catch(() => {});
     });
+    const firstPreview = page.waitForRequest(previewRequest);
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
-    const frame = page.frameLocator('[data-viewer-picture] iframe[title="film"][src*="load=1&"]').frameLocator('iframe');
+    const load = new URL((await firstPreview).url()).searchParams.get('load');
+    const frame = page.frameLocator(`[data-viewer-picture] iframe[title="film"][src*="load=${load}&"]`).frameLocator('iframe');
     await frame.locator('#cards[data-painted="0"]').waitFor();
+    // Start the image request after the initial paint, so it cannot hold the document's own load event.
+    const image = page.waitForRequest('**/cards.svg');
+    await frame.locator('#photo').evaluate(element => { element.src = 'cards.svg'; });
+    await image;
     release();
     await frame.locator('#cards[data-painted="255"]').waitFor({ timeout: 6000 });
   } finally {
