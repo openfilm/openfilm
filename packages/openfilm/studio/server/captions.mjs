@@ -516,7 +516,7 @@ async function captionFileCues(root, src, withLook = false) {
   const overrides = new Map();
   if (withLook) for (const { prelude, block } of cssRules(vtt.styles.join('\n'))) {
     const selector = prelude.trim();
-    const id = /^::cue\(\s*#((?:\\.|[^\s)])+)\s*\)$/.exec(selector)?.[1]?.replace(/\\(.)/g, '$1');
+    const id = /^::cue\(\s*#((?:\\.|[^\\\s)])+)\s*\)$/.exec(selector)?.[1]?.replace(/\\(.)/g, '$1');
     if (selector !== '::cue' && !id) continue;
     const rule = id ? overrides.get(id) ?? new Map() : base;
     for (const [key, value] of declarations(block)) rule.set(key, value);

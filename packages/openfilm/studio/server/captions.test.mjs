@@ -46,6 +46,22 @@ test('editing project subtitles come from all visible timeline tracks', async ()
   assert.deepEqual((await subtitlesForExport(audio, { timelineOnly: true })).cues, []);
 });
 
+test('editing project subtitles accept escaped cue IDs and ignore malformed selectors', async () => {
+  const vtt = `WEBVTT
+
+STYLE
+::cue(#${'\\!'.repeat(2048)})) { color: red; }
+::cue(#part\\)2) { color: blue; }
+
+part)2
+00:00:01.000 --> 00:00:02.000
+Caption
+`;
+  const root = project([{ clips: [], captions: { src: 'captions.vtt' } }], { 'captions.vtt': vtt });
+  const { cues } = await subtitlesForExport(root, { timelineOnly: true });
+  assert.equal(cues[0].draftLook.css.color, 'blue');
+});
+
 test('a transcript breaks into lines at sentence ends, timed by its words', () => {
   assert.deepEqual(spokenLines(TEXT, WORDS, 3000).map(({ text, startMs, endMs }) => ({ text, startMs, endMs })), [
     { text: 'One two three.', startMs: 0, endMs: 1500 },

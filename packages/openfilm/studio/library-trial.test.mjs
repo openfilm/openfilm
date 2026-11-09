@@ -286,7 +286,7 @@ test('an uncached voice downloads and plays only on click', { timeout: 60_000 },
           const canvas = document.querySelector('[data-voice-orb][data-ready]');
           if (!canvas) return null;
           const energy = Number(canvas.dataset.energy);
-          if (quiet ? energy !== 0 || window.__voiceAudio.currentTime >= 1.5 : energy <= 55) return null;
+          if (quiet ? energy !== 0 || window.__voiceAudio.currentTime >= 8 : energy <= 55) return null;
           const { width, height } = canvas;
           const gl = canvas.getContext('webgl');
           const pixels = new Uint8Array(width * height * 4);
@@ -308,12 +308,14 @@ test('an uncached voice downloads and plays only on click', { timeout: 60_000 },
           return { area, color, edgeSpread: farthestPainted - nearestClear };
         }, quiet)).jsonValue();
         const quiet = await readOrbFrame(true);
+        await page.evaluate(() => { window.__voiceAudio.currentTime = 8; });
         const loud = await readOrbFrame(false);
         assert.ok(quiet.area > 0 && quiet.edgeSpread < 2 && loud.edgeSpread < 2, 'the painted outline is circular in both frames');
         assert.ok(loud.area > quiet.area * 1.07, 'the circle expands evenly with the voice');
         assert.notEqual(loud.color, quiet.color, 'the color inside the circle changes');
         if (process.env.OPENFILM_TEST_ARTIFACTS) await cover.screenshot({ path: join(process.env.OPENFILM_TEST_ARTIFACTS, 'voice-preview.png') });
-        await page.waitForFunction(() => window.__voiceAudio.currentTime > 3.5
+        await page.evaluate(() => { window.__voiceAudio.currentTime = 16; });
+        await page.waitForFunction(() => window.__voiceAudio.currentTime > 16
           && document.querySelector('[data-voice-orb]')?.getAttribute('data-energy') === '0');
         await page.locator('[data-library-preview-bar]').getByRole('button', { name: 'Pause', exact: true }).click();
         assert.equal(await cover.getAttribute('data-playing'), 'false');
@@ -349,7 +351,7 @@ test('an uncached voice downloads and plays only on click', { timeout: 60_000 },
       await page.route('**/api/library/file?*', async (route) => {
         requests += 1;
         await sample;
-        await route.fulfill({ body: sampleWav({ seconds: 6, amplitude: t => t >= 1.5 && t < 3 ? 12000 : 0 }), contentType: 'audio/wav' }).catch(() => {});
+        await route.fulfill({ body: sampleWav({ seconds: 24, amplitude: t => t >= 8 && t < 16 ? 12000 : 0 }), contentType: 'audio/wav' }).catch(() => {});
       });
     });
   } finally { release(); }
