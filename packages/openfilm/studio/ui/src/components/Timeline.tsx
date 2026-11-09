@@ -2180,11 +2180,13 @@ export const Timeline = React.memo(function Timeline({
       if (isTypingTarget(e.target)) return;
       if ((e.target as Element | null)?.closest?.('[role="dialog"]')) return;
       const picked = tracks.flatMap((tr) => tr.blocks).filter((b) => selected.includes(b.id) && b.loc);
-      if (e.key === 'Escape' && (selected.length || gap || pickedTransition) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (e.key === 'Escape' && (selected.length || gap || pickedTransition || range) && !e.metaKey && !e.ctrlKey && !e.altKey
+        && !document.querySelector('[role="menu"], [role="listbox"], [data-popover-panel]')) {
         e.preventDefault();
         setSelected([]);
         setGap(null);
         onPickTransition?.(null);
+        onRangeChange?.(null);
         return;
       }
       const action = keyAction(e);
@@ -2245,7 +2247,7 @@ export const Timeline = React.memo(function Timeline({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     /* the playhead is read from a ref: as a dependency the listener would be swapped twenty times a second */
-  }, [onRemove, onRemoveMany, onEditOps, onCopy, onPaste, hasClipboard, removeMany, rippleRemove, magnetRemove, selected, tracks, setSelected, playable, zoomByStable, zoomToStable, gap, closeGap, pickedTransition, onTransition, onPickTransition, t]);
+  }, [onRemove, onRemoveMany, onEditOps, onCopy, onPaste, hasClipboard, removeMany, rippleRemove, magnetRemove, selected, tracks, setSelected, playable, zoomByStable, zoomToStable, gap, closeGap, pickedTransition, onTransition, onPickTransition, range, onRangeChange, t]);
 
   /* whether the last press was on the timeline (for ⌘A); capture phase, since presses here are often stopped */
   React.useEffect(() => {
@@ -4558,10 +4560,20 @@ export const Timeline = React.memo(function Timeline({
                       e.dataTransfer.setData('text/plain', label);
                       e.dataTransfer.effectAllowed = 'copy';
                     }}
-                    className={`absolute top-0 origin-left whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-[var(--on-accent)] tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.25)] ${rangeRef ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : ''}`}
+                    className={`absolute top-0 inline-flex origin-left items-center gap-1 whitespace-nowrap rounded-[4px] px-1.5 py-[2px] text-[10.5px] font-medium leading-[15px] text-[var(--on-accent)] tabular-nums shadow-[0_1px_4px_rgba(0,0,0,.25)] ${rangeRef ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : ''}`}
                     style={{ left: Math.max(4, fromX + 4), background: 'var(--accent)' }}
                   >
-                    {label}
+                    <span>{label}</span>
+                    {range && !rangeDraft && onRangeChange ? (
+                      <button type="button" draggable={false} aria-label={t('timeline.menuClearRange')}
+                        title={`${t('timeline.menuClearRange')} · Esc`}
+                        className="pointer-events-auto flex h-[15px] w-[15px] cursor-pointer items-center justify-center rounded-sm hover:bg-black/15 focus-visible:outline focus-visible:outline-1"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onClick={(e) => { e.stopPropagation(); onRangeChange(null); }}>
+                        <X size={11} />
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -4798,7 +4810,7 @@ function ModePicker({
       >
         <div
           className="min-w-[150px] rounded-[8px] border p-1 shadow-lg"
-          style={{ background: 'var(--bg-panel)', borderColor: 'var(--border)' }}
+          style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)' }}
         >
           {items.map((item) => (
             <button

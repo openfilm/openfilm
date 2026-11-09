@@ -7,6 +7,7 @@ import { crc32, deflateSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AgentSession } from './agents.mjs';
+import { agentOffer } from './openfilm-agent.mjs';
 
 /** A service on the Chat Completions API that answers "ok" and notes the model each request named (and each request, and its key). */
 async function service({ broke = false, fails = null, busyOnce = false, largest = Infinity } = {}) {
@@ -39,6 +40,34 @@ async function service({ broke = false, fails = null, busyOnce = false, largest 
 
 /** One of the person's own models, as the roster's harness gives it (pi-config.mjs OwnModel). */
 const own = (id, url, over = {}) => ({ id, name: id, api: 'openai-completions', baseUrl: url, keyEnv: `OPENFILM_BYOK_KEY_${id}`, model: id, levels: ['auto'], effort: 'auto', ...over });
+
+test('OpenFilm runs Pi on the shared account, switches cloud models and sends OpenRouter reasoning through the relay', { timeout: 60_000 }, async () => {
+  const svc = await service();
+  const deepseek = 'deepseek/deepseek-v4.1-flash-1017';
+  const haiku = 'anthropic/claude-haiku-5.5';
+  const offer = agentOffer({ default: deepseek, data: [
+    { id: deepseek, name: 'DeepSeek V4.1 Flash 1017', efforts: ['low', 'high', 'max'], default_effort: 'high', context_length: 1_048_576 },
+    { id: haiku, name: 'Claude Haiku 5.5', efforts: ['off', 'low', 'medium', 'high'], default_effort: 'high', context_length: 1_000_000 },
+  ] }, svc.url);
+  const session = new AgentSession({ agent: 'openfilm', cwd: mkdtempSync(join(tmpdir(), 'of-built-in-')),
+    harness: { home: mkdtempSync(join(tmpdir(), 'of-built-in-home-')), ...offer, env: { OPENFILM_ACCOUNT_KEY: 'ofk-test-account' } },
+  });
+  try {
+    const info = await session.start();
+    assert.equal(svc.asked.length, 0, 'listing models spends nothing');
+    assert.equal(info.configOptions.find((o) => o.id === 'model').currentValue, deepseek);
+    await session.prompt([{ type: 'text', text: 'hello' }]);
+    await session.setConfigOption('model', haiku);
+    await session.setConfigOption('effort', 'off');
+    await session.prompt([{ type: 'text', text: 'hello again' }]);
+    assert.deepEqual(svc.asked, [deepseek, haiku]);
+    assert.deepEqual(svc.keys, ['Bearer ofk-test-account', 'Bearer ofk-test-account']);
+    assert.deepEqual(svc.bodies[0].reasoning, { effort: 'high' });
+    assert.deepEqual(svc.bodies[1].reasoning, { effort: 'none' });
+    assert.ok(svc.bodies[0].tools.length > 0, 'the built-in agent can use its tools');
+    assert.ok(svc.bodies[0].messages.some((m) => m.role === 'system'));
+  } finally { session.close(); svc.close(); }
+});
 
 test("the own key's models, each on its own service and key, are the session's model option; a turn after a switch goes to the other service", { timeout: 60_000 }, async () => {
   const first = await service();

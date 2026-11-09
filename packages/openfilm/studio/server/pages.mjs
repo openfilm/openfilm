@@ -25,7 +25,7 @@ import { mkdir, rename } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { HOST_FLAG, folderFiles, listenLocal } from '../../src/host.mjs';
-import { readableLink } from '../../src/media-links.mjs';
+import { readableLink, referenceSource } from '../../src/media-links.mjs';
 import { clipKind } from '../../src/film-doc.mjs';
 import { readPrefs } from './prefs.mjs';
 import { readyProxy, undecodable } from './proxies.mjs';
@@ -48,12 +48,14 @@ const making = new Map();
  * @param {string} root @param {string} rel
  */
 async function playableCopy(root, rel) {
-  const file = normalize(join(root, rel));
-  if (!file.startsWith(root + sep)) return null;
+  const asked = normalize(join(root, rel));
+  if (!asked.startsWith(root + sep)) return null;
+  const linked = referenceSource(root, asked);
+  const file = linked ?? asked;
   let info;
   try {
     info = statSync(file);
-    if (!realpathSync(file).startsWith(realpathSync(root) + sep) && !readableLink(root, file)) return null;
+    if (!linked && !realpathSync(file).startsWith(realpathSync(root) + sep) && !readableLink(root, file)) return null;
   } catch { return null; }
   const name = `${createHash('sha1').update(`${rel}\0${info.size}\0${info.mtimeMs}`).digest('hex').slice(0, 20)}.wav`;
   const out = join(root, PLAYABLE_DIR, name);
@@ -140,7 +142,7 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
       if (clipKind(file) !== 'video') return null;
       const { proxies } = readPrefs();
       const rel = relative(root, file).split(sep).join('/');
-      return (proxies.on || undecodable(root, rel) ? readyProxy(root, rel, proxies.height) : null) ?? madeCopy(file, root);
+      return (proxies.on || undecodable(root, rel) ? readyProxy(root, rel, proxies.height) : null) ?? madeCopy(referenceSource(root, file) ?? file, root);
     },
   });
 

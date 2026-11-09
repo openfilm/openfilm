@@ -11,6 +11,7 @@
  * the window, agents' `openfilm` commands and run.json are the app's from the start.
  */
 import { utilityProcess } from 'electron';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +20,27 @@ const ENTRY = fileURLToPath(new URL('./studio-process.mjs', import.meta.url));
 const QUIT_WAIT_MS = 10_000;
 const START_WAIT_MS = 30_000;
 const EXPORT_RETRY_MS = 5_000;
+
+/** Credentials cross only the private utility-process channel, never Studio's HTTP API or renderer IPC. */
+function readAccount(child, { fresh = false } = {}) {
+  return new Promise((resolve, reject) => {
+    const id = randomUUID();
+    const finish = (error, account) => {
+      clearTimeout(timer);
+      child.removeListener('message', receive);
+      child.removeListener('exit', exited);
+      if (error) reject(error); else resolve(account);
+    };
+    const receive = (message) => {
+      if (message?.type === 'account' && message.id === id) finish(message.error ? new Error(message.error) : null, message.account);
+    };
+    const exited = () => finish(new Error('Studio stopped while reading the OpenFilm account.'));
+    const timer = setTimeout(() => finish(new Error('Studio did not answer about the OpenFilm account.')), 8000);
+    child.on('message', receive);
+    child.once('exit', exited);
+    child.postMessage({ type: 'account:read', id, fresh });
+  });
+}
 
 /** The Studio `openfilm open` started, if it answers. */
 async function advertised(home) {
@@ -61,7 +83,7 @@ async function takeOver(home, log) {
 /**
  * @param {{ home: string, port: number, env: Record<string, string>, onOpen: (url: string) => void,
  *           onBrowser: (state: { state: string, message?: string }) => void, onAsk?: AskHandler, log: (line: string) => void }} options
- * @returns {Promise<{ origin: string, filmOrigin: string, key: string, child: Electron.UtilityProcess }>}
+ * @returns {Promise<{ origin: string, filmOrigin: string, key: string, child: Electron.UtilityProcess, readAccount: (options?: { fresh?: boolean }) => Promise<any> }>}
  */
 function fork({ port, env, onOpen, onBrowser, onAsk, log }) {
   return new Promise((resolve, reject) => {
@@ -78,7 +100,7 @@ function fork({ port, env, onOpen, onBrowser, onAsk, log }) {
       if (message?.type === 'ready' && !settled) {
         settled = true;
         clearTimeout(timer);
-        resolve({ origin: message.origin, filmOrigin: message.filmOrigin, key: message.key, child });
+        resolve({ origin: message.origin, filmOrigin: message.filmOrigin, key: message.key, child, readAccount: (options) => readAccount(child, options) });
       } else if (message?.type === 'failed' && !settled) {
         settled = true;
         clearTimeout(timer);

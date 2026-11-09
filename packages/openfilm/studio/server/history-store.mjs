@@ -23,6 +23,12 @@ import { debuglog, promisify } from 'node:util';
 import { replaceFile, tempPath, writeAtomic } from './atomic.mjs';
 import { isMediaFile } from './closure.mjs';
 import { TOOL_DIR } from './projects.mjs';
+import { referenceSource } from '../../src/media-links.mjs';
+
+const sourcePath = (/** @type {string} */ root, /** @type {string} */ rel) => {
+  const path = join(root, rel);
+  return referenceSource(root, path) ?? path;
+};
 
 const run = promisify(execFile);
 const debug = debuglog('openfilm-history');
@@ -200,7 +206,7 @@ function hashesOf(/** @type {string} */ root, /** @type {'sha1' | 'sha256'} */ a
     return e;
   };
   const statOf = async (/** @type {string} */ rel) => {
-    const st = await stat(join(root, rel), { bigint: true }).catch(() => null);
+    const st = await stat(sourcePath(root, rel), { bigint: true }).catch(() => null);
     return st?.isFile() ? st : null;
   };
   /** @type {Hashes} */
@@ -210,14 +216,14 @@ function hashesOf(/** @type {string} */ root, /** @type {'sha1' | 'sha256'} */ a
       const info = st ?? await statOf(rel);
       if (!info) throw new HistoryError(`${rel} is not there`, 404);
       const e = entry(rel, info);
-      if (!e.sha256) { e.sha256 = /** @type {string} */ (await sha256File(join(root, rel))); dirty = true; }
+      if (!e.sha256) { e.sha256 = /** @type {string} */ (await sha256File(sourcePath(root, rel))); dirty = true; }
       return e.sha256;
     },
     async blob(rel, st) {
       const info = st ?? await statOf(rel);
       if (!info) throw new HistoryError(`${rel} is not there`, 404);
       const e = entry(rel, info);
-      if (!e.blob) { e.blob = /** @type {string} */ (await hashFile(join(root, rel), algo, `blob ${info.size}\0`)); dirty = true; }
+      if (!e.blob) { e.blob = /** @type {string} */ (await hashFile(sourcePath(root, rel), algo, `blob ${info.size}\0`)); dirty = true; }
       return e.blob;
     },
     know(rel, st, ids) {
@@ -365,7 +371,7 @@ export async function keepMedia(/** @type {Repo} */ repo, /** @type {string} */ 
   const before = await repo.hashes.stat(rel);
   const tmp = tempPath(target);
   try {
-    await cloneFile(join(repo.root, rel), tmp);
+    await cloneFile(sourcePath(repo.root, rel), tmp);
     /* what was hashed is what was copied when the file did not change meanwhile; otherwise the copy is read */
     const after = await repo.hashes.stat(rel);
     const same = before && after && before.size === after.size && before.mtimeNs === after.mtimeNs && before.ino === after.ino;
@@ -454,7 +460,7 @@ export async function writeFiles(repo, version, { paths, progress } = {}) {
     await mkdir(dirname(target), { recursive: true });
     const mode = entry.mode === '100755' ? 0o755 : 0o644;
     if (entry.media) {
-      const sources = [mediaPath(repo.gitDir, entry.media.sha256), ...repo.hashes.withSha256(entry.media.sha256).filter((r) => r !== rel).map((r) => join(repo.root, r))];
+      const sources = [mediaPath(repo.gitDir, entry.media.sha256), ...repo.hashes.withSha256(entry.media.sha256).filter((r) => r !== rel).map((r) => sourcePath(repo.root, r))];
       const from = sources.find((p) => existsSync(p));
       if (!from) { missing.push(rel); continue; }
       const tmp = tempPath(target);

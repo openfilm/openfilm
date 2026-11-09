@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckSquare, FolderInput, FolderOpen, FolderSearch, Image, ImageOff, ImagePlus, ListX, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { CheckSquare, Copy, FolderInput, FolderOpen, FolderSearch, Image, ImageOff, ImagePlus, ListX, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { Tooltip } from './Tooltip';
 import { useT } from '@/i18n';
@@ -9,7 +9,7 @@ import { useT } from '@/i18n';
  *
  * Each item shows only when its callback is passed: the editor's title (a right click: `projectMenuItems`) passes
  * Rename, the current frame as the cover and Reveal in Finder; a card in the Projects popover passes Open /
- * Rename / Select / Move to folder / Change cover / Restore cover / Reveal / Delete, or Locate… and Remove from list
+ * Rename / Duplicate / Select / Move to folder / Change cover / Restore cover / Reveal / Delete, or Locate… and Remove from list
  * when the project's folder is gone. The order is fixed here, not by the props, so the same menu looks the same wherever it
  * appears. It is a ContextMenu hanging from the button: it flips above it near the bottom of the window, and Esc
  * closes only the menu.
@@ -67,6 +67,7 @@ export interface ProjectMenuActions {
   /** Open the project. Clicking the cover is quicker, but only once you know the cover can be clicked. */
   onOpen?: () => void;
   onRename?: () => void;
+  onDuplicate?: () => void;
   /** Enter multi-select with this item already ticked. */
   onSelect?: () => void;
   /** Pick a folder of the Projects list to put it in. */
@@ -88,13 +89,14 @@ export interface ProjectMenuActions {
 
 /** The menu's items, in their fixed order: for the "…" button, and for a right click on the editor's title. */
 export function projectMenuItems(t: ReturnType<typeof useT>, actions: ProjectMenuActions): ContextMenuEntry[] {
-  const { onOpen, onRename, onSelect, onMoveToFolder, onChangeCover, onRestoreCover, onCoverFromFrame, onReveal, onLocate, onRemove, onDelete } = actions;
+  const { onOpen, onRename, onDuplicate, onSelect, onMoveToFolder, onChangeCover, onRestoreCover, onCoverFromFrame, onReveal, onLocate, onRemove, onDelete } = actions;
   const entries: ContextMenuEntry[] = [];
   const add = (id: string, icon: React.ReactNode, label: string, run: (() => void) | undefined) => {
     if (run) entries.push({ id, icon, label, onSelect: run });
   };
   add('open', <FolderOpen size={15} />, t('projectMenu.open'), onOpen);
   add('rename', <Pencil size={15} />, t('projectMenu.rename'), onRename);
+  add('duplicate', <Copy size={15} />, t('projectMenu.duplicate'), onDuplicate);
   add('select', <CheckSquare size={15} />, t('library.select'), onSelect);
   add('move', <FolderInput size={15} />, t('projects.moveToFolder'), onMoveToFolder);
   add('cover', <ImagePlus size={15} />, t('projects.changeCover'), onChangeCover);

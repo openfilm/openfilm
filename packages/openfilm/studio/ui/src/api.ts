@@ -158,6 +158,7 @@ export const api = {
       cancelled; throws (501) where this system has none */
   pickFolder: (title: string, at?: string) => call<{ path: string | null }>('pick-folder', { method: 'POST', json: { title, ...(at ? { at } : {}) } }).then((r) => r.path),
   newProject: (name?: string, subtitleStyle?: SubtitleStyle) => call<{ project: Project }>('projects', { method: 'POST', json: { name, subtitleStyle } }).then((r) => r.project),
+  duplicateProject: (id: string, name: string) => call<{ project: Project }>(`${p(id)}/duplicate`, { method: 'POST', json: { name } }).then((r) => r.project),
   /** open a folder (its full path) as a project: made one when it is not yet */
   openFolder: (path: string) => call<{ project: Project }>('projects', { method: 'POST', json: { path } }).then((r) => r.project),
   rename: (id: string, name: string) => call<{ project: Project }>(p(id), { method: 'PATCH', json: { name } }).then((r) => {
@@ -165,7 +166,11 @@ export const api = {
     return r.project;
   }),
   forget: (id: string) => call<object>(p(id), { method: 'DELETE' }),
-  film: (id: string) => call<ProjectFilm>(p(id)),
+  film: async (id: string, signal?: AbortSignal) => {
+    const film = await call<ProjectFilm>(p(id), { signal });
+    if (typeof film?.rev !== 'string' || !film.project) throw new Error('Studio did not return the project film.');
+    return film;
+  },
   /** the person opened it here: the one `openfilm open` alone comes back to */
   opened: (id: string) => call<{ project: Project }>(`${p(id)}/opened`, { method: 'POST' }),
   /* `undo`: the edit puts back an earlier one (Studio keeps the person's edits over an agent's writes until then) */

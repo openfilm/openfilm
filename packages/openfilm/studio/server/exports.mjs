@@ -37,7 +37,9 @@
  *       PDF, one page each
  *   { kind: 'nle', format?: 'xml' (default) | 'fcpxml' | 'jianying' | 'capcut', fps? (snapped to 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60;
  *     default 30), audio?: 'clips' (default) | 'stems', media?: 'copy' (default) | 'link', subtitles?: boolean (default true),
- *     alpha?: 'auto' | 'png' | 'prores' | 'prores4444' }
+ *     alpha?: 'auto' | 'png' | 'prores' | 'prores4444', footage?: 'source' | 'render' }
+ *       footage: 'source' keeps complete original videos and native cuts/speed, without baking page-specific looks;
+ *       'render' (default) preserves the existing rendered appearance. Pages always need rendering.
  *       a folder an editing program opens (see nle.mjs): `<name>.xml` (xmeml: Premiere Pro, DaVinci Resolve) or `<name>.fcpxml` (Final Cut Pro), each
  *       web page rendered with its alpha to a MOV in media/ (`alpha`, for a draft: `auto`, the default, a page with no
  *       clear pixel in any frame as H.264 and the others as lossless PNG, each picture kept once for as long as it
@@ -90,6 +92,7 @@ import { filmSubtitleCuesInRange, filmSubtitleCuesInRanges, filmSubtitleShown, f
 import { zipFiles } from './zip.mjs';
 import { inProject } from './files.mjs';
 import { filmClosure, folderView } from './closure.mjs';
+import { mediaReferences, referenceSource } from '../../src/media-links.mjs';
 import { PROJECT_PARTS, TOOL_DIR } from './projects.mjs';
 import { exportsRoot } from '../../src/locations.mjs';
 import { recordProblem } from '../../src/problems.mjs';
@@ -111,7 +114,7 @@ export { exportsRoot };
  * @typedef {Framing & { kind: 'poster', format?: 'png' | 'jpg', shortEdge?: number, at?: number }} PosterAsk
  * @typedef {{ kind: 'subtitles', format?: 'srt' | 'vtt' | 'txt' }} SubtitlesAsk
  * @typedef {Framing & { kind: 'slides', format?: 'pptx' | 'pdf', shortEdge?: number, at?: number[] }} SlidesAsk
- * @typedef {{ kind: 'nle', format?: 'xml' | 'fcpxml' | 'jianying' | 'capcut', fps?: number, audio?: 'clips' | 'stems', media?: 'copy' | 'link', subtitles?: boolean, alpha?: 'auto' | 'png' | 'prores' | 'prores4444' }} NleAsk
+ * @typedef {{ kind: 'nle', format?: 'xml' | 'fcpxml' | 'jianying' | 'capcut', fps?: number, audio?: 'clips' | 'stems', media?: 'copy' | 'link', footage?: 'source' | 'render', subtitles?: boolean, alpha?: 'auto' | 'png' | 'prores' | 'prores4444' }} NleAsk
  * @typedef {{ kind: 'project', parts?: ProjectPart[], as?: 'zip' | 'folder' }} ProjectAsk
  * @typedef {typeof PROJECT_PARTS[number]} ProjectPart
  * @typedef {VideoAsk | GifAsk | AudioAsk | StillsAsk | PosterAsk | SubtitlesAsk | SlidesAsk | NleAsk | ProjectAsk} ExportSpec
@@ -382,6 +385,7 @@ function checked(/** @type {ExportAsk} */ ask) {
       if (!between(ask.fps, 1, 120)) throw new ExportError(`fps: ${NLE_FPS.join(', ')}`);
       if (ask.audio !== undefined && ask.audio !== 'clips' && ask.audio !== 'stems') throw new ExportError('audio: clips or stems');
       if (ask.media !== undefined && ask.media !== 'copy' && ask.media !== 'link') throw new ExportError('media: copy or link');
+      if (ask.footage !== undefined && ask.footage !== 'source' && ask.footage !== 'render') throw new ExportError('footage: source or render');
       if (ask.subtitles !== undefined && typeof ask.subtitles !== 'boolean') throw new ExportError('subtitles: true or false');
       if (ask.alpha !== undefined) {
         const draft = ask.format === 'jianying' || ask.format === 'capcut';
@@ -445,6 +449,19 @@ export async function projectFiles(root, parts, skip) {
     }
   };
   await walk(root, '');
+  for (const ref of mediaReferences(root)) {
+    if (ref.directory) {
+      used ??= filmClosure(folderView(root));
+      for (const [name, size] of await used) {
+        if (!name.startsWith(`${ref.name}/`)) continue;
+        const file = referenceSource(root, join(root, name));
+        if (file) files.push({ name, file, size });
+      }
+    } else {
+      const file = referenceSource(root, join(root, ref.name));
+      if (file) files.push({ name: ref.name, file, size: statSync(file).size });
+    }
+  }
   const style = join(root, TOOL_DIR, 'subtitles.json');
   if (existsSync(style)) files.push({ name: `${TOOL_DIR}/subtitles.json`, file: style, size: statSync(style).size });
   const settings = join(root, TOOL_DIR, 'settings.json');
@@ -1350,7 +1367,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
 
       const timeline = planNleTimeline({ stage: doc.stage, duration: duration || 0.001, pictures, sounds },
         { title, fps, audio: mode, media: ask.media ?? 'copy', mediaDir: join(final, 'media'), stems: [...stems.keys()],
-          audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app) });
+          audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app), footage: ask.footage });
       const staged = (/** @type {import('./nle.mjs').NleFile} */ f) => join(staging, 'media', basename(f.path));
 
       /* each web page (and each picture Basic Motion can't place) drawn alone, full frame, with alpha. Several are drawn at
@@ -1511,6 +1528,14 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       }
 
       update(job, { phase: 'finishing', progress: 0.98 });
+      if (ask.footage === 'source') await writeFile(join(staging, 'Original media.txt'), [
+        'Original-media editing project', '',
+        ask.media === 'link' ? 'Original media is referenced at its existing paths. Keep those files available; relink them if moved.'
+          : 'Complete original media is copied into the media folder, without cutting or re-encoding the source videos.',
+        'Timeline cuts retain source in/out points and speed, with the rest of each source available for trimming.',
+        'The target editor must support the original video codecs.',
+        'Web pages/motion graphics are still rendered. Page-specific picture effects are not baked into original footage; rebuild them in the target editor.', '',
+      ].join('\n'), 'utf8');
       if (app) {
         /* the app on Windows reads draft_content.json, on a Mac draft_info.json: the same draft in both */
         /* the subtitles' language: a translation shown alone is in its own; else told from the words (jianying.mjs) */

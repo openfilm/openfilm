@@ -359,6 +359,19 @@ export function heardHere(id: string): void {
 /** Where a thing is: here, to be fetched, being fetched, or its fetch failed. */
 export type HereState = 'here' | 'missing' | 'fetching' | 'failed';
 
+/** A positive cache result; an item that has not been checked still needs preparing on click. */
+export function isLibraryItemReady(id: string): boolean {
+  return asked.has(id) && !asking.has(id) && !missing.has(id) && !fetching.has(id) && !failed.has(id);
+}
+
+/** Keep a failed direct media download retryable after its player has been dismissed. */
+export function failedHere(id: string): void {
+  asking.delete(id);
+  asked.add(id);
+  failed.add(id);
+  tellHere();
+}
+
 /** What of the library is here, kept current as things are fetched. */
 export function useLibraryHere(): (id: string) => HereState {
   React.useSyncExternalStore((fn) => { hereSeen.add(fn); return () => { hereSeen.delete(fn); }; }, () => hereTick, () => hereTick);

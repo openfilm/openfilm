@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { applyOps, EditError } from '../../../server/ops.mjs';
 import { filmHead } from '../../../../src/film-doc.mjs';
-import { api, ApiError, projectEvents, type Film, type Op } from '../api';
+import { api, ApiError, projectEvents, type Film, type Op, type ProjectFilm } from '../api';
 import { inverse } from './undo';
 import { dropStep, inTurn, moveStep, nextStep, pushStep, type Steps } from './steps';
 
@@ -35,7 +35,7 @@ export type OutsideStep = { undo: () => Promise<string | null>; redo: () => Prom
  * it in place), `server` for the film as the folder has it now (the agent wrote it, or an edit was refused), with its
  * file's head when known (a changed one is the film loaded again: its styles are not in the value).
  */
-export function useFilm(projectId: string, initial: FilmState | null, onChange: (value: Film, kind: 'edit' | 'server', head?: string) => void) {
+export function useFilm(projectId: string, initial: FilmState | null, onChange: (value: Film, kind: 'edit' | 'server', head?: string) => void, onRead: (latest: ProjectFilm) => void) {
   const [state, setState] = useState<FilmState | null>(initial);
   const [error, setError] = useState<string | null>(null);
   /** why film.html cannot be read now (null: it can) */
@@ -52,54 +52,92 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
     setStepsState(stepsRef.current);
   }, []);
   const ref = useRef(state);
-  ref.current = state;
   const queue = useRef(Promise.resolve());
-  /**
-   * revisions this editor wrote, oldest first: their echo from the folder watcher is not news. The watcher reports the
-   * file as it is once writes settle, so an echo also stands for every write before it, unreported; those are
-   * forgotten with it, or an outside write that happens to match one of them (the agent putting back an earlier text)
-   * would be taken for an echo and never shown.
-   */
-  const ours = useRef(new Set<string>());
-  const echoOf = (rev: string) => {
-    if (!ours.current.has(rev)) return false;
-    for (const r of ours.current) { ours.current.delete(r); if (r === rev) break; }
-    return true;
-  };
   const changed = useRef(onChange);
   changed.current = onChange;
-  useEffect(() => { if (initial && !ref.current) setState(initial); }, [initial]);
+  const read = useRef(onRead);
+  read.current = onRead;
+  useEffect(() => { if (initial && !ref.current) { ref.current = initial; setState(initial); } }, [initial]);
 
-  /** The film as the folder has it now; false when film.html cannot be read (`broken` says why). */
-  const fromServer = useCallback(async (): Promise<boolean> => {
-    const latest = await api.film(projectId);
-    if (!latest.doc || !latest.value) {
+  /** Accept a disk snapshot only while it still belongs to this view and no newer edit superseded it. */
+  const fromServer = useCallback(async ({ signal, accept = () => true, force = false }: { signal?: AbortSignal; accept?: () => boolean; force?: boolean } = {}) => {
+    const latest = await api.film(projectId, signal);
+    if (!accept()) return 'stale';
+    read.current(latest);
+    if (latest.filmMissing || !latest.doc || !latest.value) {
       brokenRev.current = latest.rev;
-      setBroken(latest.problems.join('\n') || 'film.html cannot be read');
-      return false;
+      setBroken(latest.filmMissing ? null : latest.problems.join('\n') || 'film.html cannot be read');
+      return 'broken';
     }
+    if (!force && !brokenRev.current && latest.rev === ref.current?.rev) return 'current';
     if (brokenRev.current) { brokenRev.current = null; setBroken(null); setError(null); }
     const next = { value: latest.value, rev: latest.rev };
     ref.current = next;
     setState(next);
     changed.current(next.value, 'server', filmHead(latest.text));
-    return true;
+    return 'current';
   }, [projectId]);
 
-  /* the agent's writes: the film becomes the folder's. Judged once the writes sent before it are answered: the folder
-     can tell of a write of ours before its answer comes, and read then, it is the film without the edits here still on
-     their way (shown as if a write from outside took them back). While one is on its way, its answer brings the
-     folder's film itself (the server applies it on top of any write in between), so nothing is read here */
-  useEffect(() => projectEvents(projectId, (event) => {
-    if (event.type !== 'film') return;
-    void queue.current.then(() => {
-      if (echoOf(event.rev) || pending.current > 0) return undefined;
-      /* the same text as here is news only after the file could not be read (written whole again) */
-      if (event.rev === ref.current?.rev && !brokenRev.current) return undefined;
-      return fromServer();
-    /* not read: Studio went away (it was stopping) — it tells again when it is back */
-    }).catch(() => {});
-  }), [projectId, fromServer]);
+  /* One refresh at a time. A transient read failure must not lose the folder's only change event. A read started
+     before another change or an optimistic edit is rechecked after it, instead of painting an older timeline. */
+  useEffect(() => {
+    const life = new AbortController();
+    let wanted: { rev?: string; force: boolean } | null = null;
+    let reading = false, failures = 0;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    const sync = async () => {
+      if (reading || retry || !wanted || life.signal.aborted) return;
+      reading = true;
+      try {
+        await queue.current;
+        if (life.signal.aborted || pending.current) return;
+        const job = wanted;
+        wanted = null;
+        if (!job.force && job.rev && job.rev === ref.current?.rev && !brokenRev.current) return;
+        const before = ref.current;
+        try {
+          const result = await fromServer({
+            signal: AbortSignal.any([life.signal, AbortSignal.timeout(8000)]), force: job.force,
+            accept: () => !life.signal.aborted && !wanted && !pending.current && ref.current === before,
+          });
+          if (result === 'stale') wanted ??= job;
+          failures = 0;
+        } catch (error) {
+          if (life.signal.aborted || wanted || (error instanceof ApiError && [401, 404, 410].includes(error.status))) return;
+          if (failures < 4) {
+            wanted = job;
+            retry = setTimeout(() => { retry = null; void sync(); }, 250 * 2 ** failures++);
+          }
+        }
+      } finally {
+        reading = false;
+        if (wanted) void sync();
+      }
+    };
+    const request = (rev?: string, force = false) => {
+      wanted = { rev, force: force || Boolean(wanted?.force) };
+      failures = 0;
+      if (retry) { clearTimeout(retry); retry = null; }
+      void sync();
+    };
+    const stop = projectEvents(projectId, (event) => {
+      if (event.type === 'film') request(event.rev, !event.rev);
+      /* The stream's initial project snapshot comes after the watcher is attached. Catch a write between the
+         first HTTP read and that attachment, and recheck when a temporarily missing file is reported. */
+      else if (event.type === 'project') request();
+      else if (event.type === 'film-missing') { brokenRev.current ??= 'missing'; request(); }
+    });
+    const visible = () => { if (document.visibilityState === 'visible') request(); };
+    document.addEventListener('visibilitychange', visible);
+    window.addEventListener('focus', visible);
+    return () => {
+      life.abort();
+      if (retry) clearTimeout(retry);
+      stop();
+      document.removeEventListener('visibilitychange', visible);
+      window.removeEventListener('focus', visible);
+    };
+  }, [projectId, fromServer]);
 
   /**
    * Apply `ops` here at once, then write them. Resolves once written: null, or why it was not (the film here is then
@@ -130,42 +168,45 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
     const step: Step = { undo: inverse(before, after, ops), redo: ops, label, at: Date.now(), ...(outside ? { outside } : {}) };
     setSteps((s) => (record === 'do' ? pushStep(s, step) : one ? moveStep(s, one, record) : s));
     const written = queue.current.then(async (): Promise<string | null> => {
+      let done;
       try {
-        const done = await api.edit(projectId, ref.current?.rev ?? null, ops, record === 'undo');
-        ours.current.delete(done.rev);
-        ours.current.add(done.rev);
-        pending.current -= 1;
-        const here = ref.current;
-        if (!here) return null;
-        /* every edit here written: the folder's film is the truth (another write came in under this one) */
-        const theirs = pending.current === 0 ? done.value : null;
-        if (theirs && (done.rebased || JSON.stringify(theirs) !== JSON.stringify(here.value))) {
-          ref.current = { value: theirs, rev: done.rev };
-          setState(ref.current);
-          changed.current(theirs, 'server', filmHead(done.text));
-        } else {
-          ref.current = { ...here, rev: done.rev };
-          setState((s) => (s ? { ...s, rev: done.rev } : s));
-        }
-        return null;
+        done = await api.edit(projectId, ref.current?.rev ?? null, ops, record === 'undo');
+        if (typeof done?.rev !== 'string' || !done.value) throw new Error('Studio did not return the saved film.');
       } catch (e) {
         pending.current -= 1;
         const why = e instanceof ApiError ? e.message : String(e);
         /* what was not written is not a step to undo */
         if (record === 'do') setSteps((s) => ({ ...s, done: s.done.filter((x) => x !== step) }));
-        if (!(await fromServer())) {
+        const recovered = pending.current ? 'stale' : await fromServer({
+          signal: AbortSignal.timeout(8000), accept: () => !pending.current, force: true,
+        }).catch(() => 'failed');
+        if ((recovered === 'broken' || recovered === 'failed') && !pending.current) {
           /* the folder's film cannot be read: back to the film as it was before this edit (the note on the film says
              why, so it is not said again) */
           ref.current = current;
           setState(current);
           changed.current(current.value, 'server');
-          return null;
+          if (recovered === 'broken') return null;
         }
         if (!quiet) setError(why);
         return why;
       }
+      pending.current -= 1;
+      const here = ref.current;
+      if (!here) return null;
+      /* Every edit here written: the folder's film is the truth (another write came in under this one). */
+      const theirs = pending.current === 0 ? done.value : null;
+      if (theirs && (done.rebased || JSON.stringify(theirs) !== JSON.stringify(here.value))) {
+        ref.current = { value: theirs, rev: done.rev };
+        setState(ref.current);
+        changed.current(theirs, 'server', filmHead(done.text));
+      } else {
+        ref.current = { ...here, rev: done.rev };
+        setState(ref.current);
+      }
+      return null;
     });
-    queue.current = written.then(() => {});
+    queue.current = written.then(() => {}, () => {});
     return written;
   }, [projectId, fromServer, setSteps]);
 
@@ -182,7 +223,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
       }
       return !why;
     });
-    queue.current = written.then(() => {});
+    queue.current = written.then(() => {}, () => {});
     return written;
   }, [setSteps]);
   /* a step of the film: one whose ops cannot be applied or written now (the agent removed its clip since) leaves both

@@ -32,6 +32,8 @@ export interface OwnProvider {
   signIn: boolean;
   /** signed in: the account's email */
   account: string | null;
+  /** The saved account credential was rejected by OpenFilm; reconnect in either Agents or Services. */
+  connectionError?: string;
 }
 
 /**

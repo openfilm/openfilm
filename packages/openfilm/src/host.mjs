@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { chromium } from 'playwright-core';
 import { DEFAULT_STAGE, FILM_FILE, readFilmFile } from './film-doc.mjs';
-import { readableLink } from './media-links.mjs';
+import { readableLink, referenceSource } from './media-links.mjs';
 import { guard } from './browser-memory.mjs';
 
 // Media seeks that land inside the frame they name. A plain `video.currentTime = t` at a frame boundary otherwise
@@ -142,14 +142,15 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     if (rel.endsWith('/')) rel += 'index.html';
     const asked = normalize(join(root, rel));
     if (asked !== root && !asked.startsWith(root + sep)) return false;
-    try { statSync(asked); } catch { missed?.(asked); res.writeHead(404, extraHeaders).end('not found'); return true; }
+    const linked = referenceSource(root, asked);
+    try { statSync(linked ?? asked); } catch { missed?.(asked); res.writeHead(404, extraHeaders).end('not found'); return true; }
     // a link out of the folder is not followed: a film from elsewhere can bring one to any of the person's files. Only
     // media the person linked is (src/media-links.mjs)
-    let inRoot = false;
-    try { inRoot = within(realpathSync(root), realpathSync(asked)) || readableLink(root, asked); } catch { /* gone meanwhile */ }
+    let inRoot = Boolean(linked);
+    if (!inRoot) try { inRoot = within(realpathSync(root), realpathSync(asked)) || readableLink(root, asked); } catch { /* gone meanwhile */ }
     if (!inRoot) { missed?.(asked); return false; }
     /* what a file is (its length and size: `film-facts`) is the file's own, never its copy's */
-    const file = (query?.has('film-facts') ? null : swap?.(asked)) ?? asked;
+    const file = (query?.has('film-facts') ? null : swap?.(asked)) ?? linked ?? asked;
     let stat;
     try { stat = statSync(file); } catch { res.writeHead(404, extraHeaders).end('not found'); return true; }
     if (stat.isDirectory()) { res.writeHead(302, { ...extraHeaders, location: `${path}/` }).end(); return true; }
@@ -196,7 +197,11 @@ function fileInRoot(root, address) {
   if (!rel.startsWith('/') || rel.includes('\\') || rel.includes('\0')) return null;
   const file = normalize(join(root, rel));
   if (!file.startsWith(root + sep)) return null;
-  try { return (within(realpathSync(root), realpathSync(file)) || readableLink(root, file)) && statSync(file).isFile() ? file : null; } catch { return null; }
+  try {
+    const linked = referenceSource(root, file);
+    if (linked) return statSync(linked).isFile() ? linked : null;
+    return (within(realpathSync(root), realpathSync(file)) || readableLink(root, file)) && statSync(file).isFile() ? file : null;
+  } catch { return null; }
 }
 
 /** @type {Map<string, Promise<number | null>>} */

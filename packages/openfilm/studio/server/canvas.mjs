@@ -62,7 +62,7 @@ const VERSIONS_MAX = 50;
 const SHORT_MAX = 120;
 
 /**
- * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string } | { path: string } | { group: string, color: string } | { make: string } | { cut: true })} CanvasNode
+ * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string } | { path: string, title?: string } | { group: string, color: string } | { make: string, title?: string } | { cut: true })} CanvasNode
  * @typedef {{ id: string, from: string, to: string, order?: number }} CanvasEdge
  * @typedef {{ nodes: CanvasNode[], edges: CanvasEdge[], name?: string }} Canvas
  */
@@ -95,9 +95,11 @@ export function parseCanvas(raw) {
     const h = size(n.h);
     const box = { id: /** @type {string} */ (n.id), x, y, ...(w ? { w } : {}), ...(h ? { h } : {}) };
     const parent = { ...(isId(n.parent) ? { parent: /** @type {string} */ (n.parent) } : {}), ...readBy(n.by) };
-    if (MAKE_KINDS.includes(String(n.make))) out.nodes.push({ ...box, ...parent, ...readMake(n), make: String(n.make) });
+    const title = typeof n.title === 'string' ? n.title.trim().slice(0, SHORT_MAX) : '';
+    const named = title ? { title } : {};
+    if (MAKE_KINDS.includes(String(n.make))) out.nodes.push({ ...box, ...parent, ...named, ...readMake(n), make: String(n.make) });
     else if (n.cut === true) out.nodes.push({ ...box, ...parent, cut: true });
-    else if (projectPath(n.path)) out.nodes.push({ ...box, ...parent, path: /** @type {string} */ (n.path) });
+    else if (projectPath(n.path)) out.nodes.push({ ...box, ...parent, ...named, path: /** @type {string} */ (n.path) });
     else if (typeof n.text === 'string') out.nodes.push({ ...box, ...parent, text: n.text.slice(0, TEXT_MAX) });
     else if (typeof n.group === 'string') {
       out.nodes.push({ ...box, ...readBy(n.by), group: n.group.trim().slice(0, NAME_MAX), color: GROUP_COLORS.includes(String(n.color)) ? String(n.color) : 'gray' });

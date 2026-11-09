@@ -10,10 +10,11 @@ import { CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, makeSize, readCanvas
 import type { ProvidersState } from '@/lib/providers';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 
-export type FileData = { path: string; by?: CanvasNode['by'] };
+export type UploadStatus = { name: string; kind: WorkspaceResource['kind']; progress: number };
+export type FileData = { path: string; title?: string; by?: CanvasNode['by']; upload?: UploadStatus };
 export type NoteData = { text: string; by?: CanvasNode['by'] };
 export type FrameData = { label: string; color: GroupColor };
-export type MakeData = Pick<CanvasNode, 'prompt' | 'via' | 'model' | 'opts' | 'preset' | 'versions' | 'path' | 'made' | 'by'> & { make: MakeKind };
+export type MakeData = Pick<CanvasNode, 'prompt' | 'via' | 'model' | 'opts' | 'preset' | 'versions' | 'path' | 'made' | 'by' | 'title'> & { make: MakeKind };
 export type CutData = { by?: CanvasNode['by'] };
 export type FileNode = Node<FileData, 'file'>;
 export type NoteNode = Node<NoteData, 'note'>;
@@ -39,7 +40,7 @@ export function toFlow(doc: CanvasDoc): { nodes: BoardNode[]; edges: Edge[] } {
       }
       if (n.cut) return { ...base, type: 'cut', width: n.w ?? CUT_W, height: n.h ?? CARD_H, data: { ...by } };
       /* a file is as its picture draws it until resized */
-      if (n.path != null) return { ...base, type: 'file', ...(n.w != null && n.h != null ? { width: n.w, height: n.h } : {}), data: { path: n.path, ...by } };
+      if (n.path != null) return { ...base, type: 'file', ...(n.w != null && n.h != null ? { width: n.w, height: n.h } : {}), data: { path: n.path, ...(n.title ? { title: n.title } : {}), ...by } };
       return { ...base, type: 'note', width: n.w ?? NOTE_W, height: n.h ?? NOTE_H, data: { text: n.text ?? '', ...by } };
     }),
     edges: doc.edges.map((e) => ({ id: e.id, source: e.from, target: e.to, ...(e.order != null ? { data: { order: e.order } } : {}) })),
@@ -53,7 +54,7 @@ export function fromFlow(nodes: readonly BoardNode[], edges: readonly Edge[]): C
       const w = Math.round(n.width ?? n.measured?.width ?? (n.type === 'note' ? NOTE_W : n.type === 'cut' ? CUT_W : FILE_W));
       const h = () => Math.round(n.height ?? n.measured?.height ?? (n.type === 'note' ? NOTE_H : CARD_H));
       const by = 'by' in n.data && n.data.by ? { by: n.data.by } : {};
-      if (n.type === 'file') return { ...box, ...by, ...(n.width != null && n.height != null ? { w, h: h() } : {}), path: n.data.path };
+      if (n.type === 'file') return { ...box, ...by, ...(n.width != null && n.height != null ? { w, h: h() } : {}), path: n.data.path, ...(n.data.title ? { title: n.data.title } : {}) };
       if (n.type === 'make') return { ...box, w, h: h(), ...n.data };
       if (n.type === 'cut') return { ...box, ...by, w, h: h(), cut: true as const };
       if (n.type === 'frame') return { id: n.id, x: box.x, y: box.y, w, h: h(), group: n.data.label, color: n.data.color };
@@ -316,6 +317,9 @@ export interface Board {
   spawn: (id: string, kind: SpawnKind, data?: Partial<MakeData>) => void;
   /** files made from a node on this computer (its picture's cells, a frame of its clip): into the project, beside it */
   bring: (id: string, files: File[]) => void;
+  uploading?: (id: string) => UploadStatus | undefined;
+  shown?: boolean;
+  reportError?: (error: string) => void;
   /** a picture's background taken out by the person's service: a new picture beside it */
   cutout: (id: string, path: string) => void;
   remove: (ids: string[]) => void;

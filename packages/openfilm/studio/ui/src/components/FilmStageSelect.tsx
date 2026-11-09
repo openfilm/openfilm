@@ -1430,9 +1430,8 @@ function FilmStageSelectImpl({
         || el?.closest('[data-popover-panel]')
       ) return;
       if (el?.closest('[data-timeline]') && !multiRef.current && (!pickedRef.current?.element || pickedRef.current.element.kind === 'clip')) return;
-      /* a Layers row ⌘-clicked (Ctrl) adds its layer to what is selected or takes it away, Shift-clicked selects the
-         rows from the last one clicked: what is selected now is still needed */
-      if (el?.closest('[data-layers-panel] [role="treeitem"]') && (e.shiftKey || e.metaKey || e.ctrlKey)) return;
+      /* Modified clicks in Layers need the current selection for a toggle or a range. */
+      if (el?.closest('[data-layers-panel] [role="treeitem"]') && (e.altKey || e.shiftKey || e.metaKey || e.ctrlKey)) return;
       dropPick();
       onSelectElement?.(null);
     };

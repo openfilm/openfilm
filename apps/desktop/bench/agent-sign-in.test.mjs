@@ -49,7 +49,7 @@ test('Settings allows cancelling sign-in and restores the login button on termin
       }, locale);
       await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/agent-sign-in-ui`);
       const cancel = page.getByRole('button', { name: locale === 'en' ? 'Cancel' : '取消', exact: true });
-      const login = page.getByRole('button', { name: locale === 'en' ? 'Sign in and connect' : '登录并连接', exact: true });
+      const login = page.getByRole('button', { name: locale === 'en' ? 'Connect' : '连接', exact: true });
       await cancel.click();
       await login.waitFor();
       assert.equal(await login.isEnabled(), true);

@@ -161,6 +161,30 @@ test('a clip that failed says why; the key goes only to OpenRouter\'s own addres
   await assert.rejects(openrouter.run('video', { prompt: 'x', out: 'x' }, ctx()), /not its own; your key was not sent there/);
 });
 
+test('mischief requires a single first frame, while Grok can also start from text', async () => {
+  seen.length = 0;
+  reply = clip(1);
+  const files = { 'assets/image/a.png': png(854, 480) };
+  const args = { prompt: 'a red ball rolls', out: 'ball', 'first-frame': 'assets/image/a.png' };
+  const mischief = ctx(files, 'tbc/mischief-1');
+  await assert.rejects(openrouter.run('video', { prompt: args.prompt, out: args.out }, mischief), /requires a starting picture/);
+  assert.equal(seen.length, 0);
+  const silent = await openrouter.run('video', { ...args, duration: 4, 'aspect-ratio': '9:16' }, mischief);
+  const tbcBody = JSON.parse(seen[0].body);
+  assert.deepEqual([tbcBody.duration, tbcBody.aspect_ratio, tbcBody.generate_audio], [5, '16:9', undefined]);
+  assert.deepEqual(tbcBody.frame_images.map((f) => f.frame_type), ['first_frame']);
+  assert.equal(silent.index[0].hasAudio, false);
+
+  seen.length = 0;
+  const grok = ctx(files, 'x-ai/grok-imagine-video-1.5-lite');
+  await assert.rejects(openrouter.run('video', { ...args, 'last-frame': args['first-frame'] }, grok), /takes only a first frame/);
+  assert.equal(seen.length, 0);
+  const withSound = await openrouter.run('video', { prompt: args.prompt, out: args.out, duration: 1, resolution: '1080p' }, grok);
+  const grokBody = JSON.parse(seen[0].body);
+  assert.deepEqual([grokBody.duration, grokBody.resolution, grokBody.frame_images, grokBody.generate_audio], [1, '1080p', undefined, undefined]);
+  assert.equal(withSound.index[0].hasAudio, true);
+});
+
 test('a person speaks the words of the prompt with the clip\'s own sound: --voice is whose voice, a reference beside the picture; --audio is fal\'s', async () => {
   seen.length = 0;
   reply = clip();

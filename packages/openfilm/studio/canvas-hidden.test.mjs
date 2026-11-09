@@ -20,7 +20,7 @@ test('back on the edit, nothing of the canvas shows over the panes, and it comes
     await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1280, h: 720 }, tracks: [] }));
     await writeFile(join(root, '.film', 'canvas.json'), JSON.stringify({ nodes: [{ id: 'n1', x: 0, y: 0, w: 350, h: 200, text: 'A note on the board' }], edges: [] }));
     const project = await openProject(root);
-    studio = await startStudio({ port: 0, openBrowser: () => {} });
+    studio = await startStudio({ port: 0, openBrowser: () => {}, editorDir: process.env.OPENFILM_TEST_EDITOR_DIR });
     browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
     const page = await browser.newPage({ viewport: { width: 1400, height: 900 }, locale: 'en-US', reducedMotion: 'reduce' });
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);

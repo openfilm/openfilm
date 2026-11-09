@@ -23,6 +23,7 @@ export function Popover({
   align = 'start',
   layer = 10000,
   block = false,
+  onEscapeKeyDown,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -35,6 +36,8 @@ export function Popover({
   layer?: number;
   /** the trigger takes the width it is given (a field), not only its own */
   block?: boolean;
+  /** A nested menu can consume Escape to close only its own submenu first. */
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
 }) {
   const ref = React.useRef<HTMLDivElement | null>(null);
   const panelRef = React.useRef<HTMLDivElement | null>(null);
@@ -116,6 +119,8 @@ export function Popover({
    */
   const latest = React.useRef(onOpenChange);
   latest.current = onOpenChange;
+  const escape = React.useRef(onEscapeKeyDown);
+  escape.current = onEscapeKeyDown;
   React.useEffect(() => {
     if (!open) return;
     const close = (e: Event) => {
@@ -125,7 +130,11 @@ export function Popover({
     };
     /* first, and said to be handled: Esc closes the popover, not a dialog it is in */
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); latest.current(false); }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (escape.current) escape.current(e);
+        else latest.current(false);
+      }
     };
     window.addEventListener('pointerdown', close, true);
     window.addEventListener('blur', close);

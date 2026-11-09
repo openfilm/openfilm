@@ -1,7 +1,7 @@
 /**
  * The assets drawer's voices (lib/library-voices): the ready-made voices of the voice-over services, narrowed by the
  * side bar (a service, or the starred ones), the search, a language and a gender. A click on a voice plays its
- * service's sample in the player under the list (again: pauses it); a double click, Enter or its "+" puts it in the chat
+ * service's sample in the viewer's player (again: pauses it); a double click, Enter or its "+" puts it in the chat
  * as a reference, the voice
  * the agent makes the voice-over in; its "Generate" speaks words typed in it there and then, onto the film at the
  * playhead (SpeakDialog). A voice whose service is not connected says so; its "Connect" opens Services.
@@ -10,8 +10,8 @@ import React from 'react';
 import { AudioLines, Pause, Play, Plus, Square, Star } from 'lucide-react';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { studioHost } from '@/lib/host';
-import { toggleFavorite } from '@/lib/library';
-import { ADD_HOVER, FOOT_ROOM, LoadingBar, MiniPlayer, PANEL_ROUND, previewMessage, usePlayer } from './AudioList';
+import { toggleFavorite, useLibraryHere } from '@/lib/library';
+import { ADD_HOVER, DownloadBadge, FOOT_ROOM, MiniPlayer, PANEL_ROUND, type Player } from './AudioList';
 import { Empty } from './icons';
 import { SpeakDialog } from './SpeakDialog';
 import {
@@ -29,7 +29,9 @@ const PAGE = 80;
 /* the languages offered first, in this order, after the person's own */
 const FIRST = ['en', 'zh', 'ja', 'ko', 'es'];
 
-export function VoicesPane({ group, query, favorites, onServices, onAll, speak }: {
+export type VoiceSample = { id: string; voice: LibraryVoice };
+
+export function VoicesPane({ group, query, favorites, onServices, onAll, speak, player, previewBar, picked, onPick, onClosePreview }: {
   /** '' all, STARRED, FEATURED, or a service's id */
   group: string;
   query: string;
@@ -39,6 +41,11 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak }
   onAll: () => void;
   /** Words spoken in a voice, put on the film at the playhead: null, or why not. */
   speak?: (voice: LibraryVoice, access: VoiceAccess, text: string) => Promise<string | null>;
+  player: Player<VoiceSample>;
+  previewBar: HTMLDivElement | null;
+  picked: string | null;
+  onPick: (id: string) => void;
+  onClosePreview: () => void;
 }) {
   const t = useT();
   const lang = useLanguage();
@@ -47,10 +54,8 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak }
   const access = React.useMemo(() => voiceAccess(library?.providers ?? [], services), [library, services]);
   const [language, setLanguage] = React.useState('');
   const [gender, setGender] = React.useState<'' | 'm' | 'f'>('');
-  const [picked, setPicked] = React.useState<string | null>(null);
   const [speaking, setSpeaking] = React.useState<LibraryVoice | null>(null);
-  /* the sample heard, in the drawer's player (AudioList): its id is the voice's key */
-  const player = usePlayer<{ id: string; voice: LibraryVoice }>();
+  const hereOf = useLibraryHere();
   const sounding = player.playing ? player.item?.id ?? null : null;
 
   const byId = React.useMemo(() => new Map((library?.providers ?? []).map((s) => [s.id, s])), [library]);
@@ -74,8 +79,9 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak }
   React.useEffect(() => setDrawn(PAGE), [group, query, language, gender]);
 
   const play = (v: LibraryVoice) => {
-    setPicked(voiceKey(v));
     const src = sampleUrl(v);
+    if (!src) player.close();
+    onPick(voiceKey(v));
     if (src) player.toggle({ id: voiceKey(v), voice: v }, src);
   };
   const use = (v: LibraryVoice) => {
@@ -88,9 +94,9 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak }
   };
   const onKey = (e: React.KeyboardEvent) => {
     const v = picked ? voices.find((x) => voiceKey(x) === picked) : null;
-    if (!v || (e.target as HTMLElement).tagName === 'SELECT') return;
+    if (!v || (e.target as HTMLElement).closest('button, input, select, [role="slider"]')) return;
     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); use(v); }
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); player.pause(); setPicked(null); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClosePreview(); }
   };
 
   const chip = (on: boolean) => `whitespace-nowrap text-[11.5px] ${on ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`;
@@ -116,8 +122,8 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak }
       </div>
       {/* a click on nothing lets the picked voice go */}
       <div
-        className={`min-h-0 flex-1 overflow-y-auto px-3 ${player.item ? 'pb-3' : FOOT_ROOM}`}
-        onClick={(e) => { if (e.target === e.currentTarget) { player.pause(); setPicked(null); } }}
+        className={`min-h-0 flex-1 overflow-y-auto px-3 ${!previewBar && player.item ? 'pb-3' : FOOT_ROOM}`}
+        onClick={(e) => { if (e.target === e.currentTarget) onClosePreview(); }}
         onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop + el.clientHeight > el.scrollHeight - 600 && drawn < voices.length) setDrawn(drawn + PAGE); }}
       >
         {!voices.length ? (
@@ -130,15 +136,14 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak }
             <VoiceRow
               key={key} voice={v} service={byId.get(v.provider)} access={access[v.provider]} showService={group === '' || group === STARRED || group === FEATURED}
               picked={picked === key} sounding={sounding === key} loading={player.item?.id === key && player.loading} kept={favorites.includes(key)} languageName={languageName}
-              loadingLabel={previewMessage(player, t)}
+              failed={player.item?.id === key && player.error != null || hereOf(key) === 'failed'}
               onPlay={() => play(v)} onUse={() => use(v)} onServices={onServices}
               onSpeak={speak && access[v.provider] ? () => { player.pause(); setSpeaking(v); } : undefined}
             />
           );
         })}
       </div>
-      <MiniPlayer player={player} name={player.item?.voice.name ?? ''} group={player.item ? byId.get(player.item.voice.provider)?.name ?? '' : ''}
-        art={(it, on) => <VoiceAvatar voice={it.voice} sounding={on} label={on ? t('assetDrawer.stop') : t('assetDrawer.play')} />} />
+      <MiniPlayer target={previewBar} player={player} name={player.item?.voice.name ?? ''} />
       {speaking && speak && access[speaking.provider] ? (
         <SpeakDialog voice={speaking} service={byId.get(speaking.provider)?.name ?? speaking.provider} onClose={() => setSpeaking(null)}
           onSpeak={(text) => speak(speaking, access[speaking.provider]!, text)} />
@@ -162,10 +167,9 @@ const SHADE_HOVER = 'group-hover:bg-[linear-gradient(to_right,transparent,var(--
 /** A press on a row's own button: not a play, nor a double click's use. */
 const own = { onDoubleClick: (e: React.MouseEvent) => e.stopPropagation() };
 
-function VoiceRow({ voice, service, access, showService, picked, sounding, loading, kept, loadingLabel, languageName, onPlay, onUse, onServices, onSpeak }: {
+function VoiceRow({ voice, service, access, showService, picked, sounding, loading, failed, kept, languageName, onPlay, onUse, onServices, onSpeak }: {
   voice: LibraryVoice; service: VoiceService | undefined; access: VoiceAccess | undefined; showService: boolean;
-  picked: boolean; sounding: boolean; loading: boolean; kept: boolean; languageName: (code: string) => string;
-  loadingLabel: string;
+  picked: boolean; sounding: boolean; loading: boolean; failed: boolean; kept: boolean; languageName: (code: string) => string;
   onPlay: () => void; onUse: () => void; onServices: () => void; onSpeak?: () => void;
 }) {
   const t = useT();
@@ -192,12 +196,12 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, loadi
           <span className={`shrink-[0.2] truncate text-[12.5px] font-medium ${picked ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{voice.name}</span>
           <span className="min-w-0 shrink-[5] truncate text-[11px] text-[var(--text-faint)]">{facts}</span>
         </span>
-        {loading ? <span className="mt-0.5 flex h-4 items-center"><LoadingBar label={loadingLabel} /></span>
-          : <span className="mt-0.5 block truncate text-[11.5px] text-[var(--text-muted)]">{voice.description ?? voice.tags.join(', ')}</span>}
+        <span className="mt-0.5 block truncate text-[11.5px] text-[var(--text-muted)]">{voice.description ?? voice.tags.join(', ')}</span>
       </span>
       {/* what it offers, over the row's end under the pointer, the words fading out under the row's own color; else a
           star kept */}
       <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-10 pr-2 ${SHADE_HOVER}`}>
+        {loading || failed ? <DownloadBadge state={loading ? 'fetching' : 'failed'} onRetry={onPlay} className={PANEL_ROUND} /> : null}
         <button
           type="button"
           aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')}

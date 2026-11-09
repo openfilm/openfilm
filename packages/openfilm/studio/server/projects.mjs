@@ -16,10 +16,10 @@
  */
 import { moveToTrash } from './trash.mjs';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { cp, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { constants, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { cp, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { EMPTY_FILM } from './film.mjs';
 import { FILM_FILE, filmHtml } from '../../src/film-doc.mjs';
 import { writeAtomic } from './atomic.mjs';
@@ -187,6 +187,93 @@ function folderName(/** @type {string} */ name) {
   const clean = String(name).replace(/\s*[/\\:*?"<>|\u0000-\u001f\u007f]+\s*/g, ' ').trim().replace(/^[.\s]+/, '').slice(0, 120).trimEnd();
   if (!clean) throw new ProjectError('a project needs a name');
   return clean;
+}
+
+const DUPLICATE_SKIP = new Set(['id', '.gitignore', 'cache', ...PROJECT_PARTS]);
+
+/** True for a relative path still inside its starting folder (including the folder itself). */
+function staysInside(/** @type {string} */ back) {
+  return !isAbsolute(back) && back.split(sep)[0] !== '..';
+}
+
+/** Internal links must point into the copy; external media links keep their existing source. */
+async function rebaseCopyLinks(/** @type {string} */ source, /** @type {string} */ copy) {
+  for (const entry of await readdir(copy, { recursive: true, withFileTypes: true })) {
+    if (!entry.isSymbolicLink()) continue;
+    const path = join(entry.parentPath, entry.name);
+    const from = join(source, relative(copy, path));
+    const link = await readlink(path);
+    const target = resolve(dirname(from), link);
+    const back = relative(source, target);
+    if (entry.name === TOOL_DIR || (entry.name === FILM_FILE && !staysInside(back))) {
+      throw new ProjectError('The project’s editable files must be inside its own folder.', 409);
+    }
+    const to = staysInside(back) ? relative(dirname(path), join(copy, back)) || '.' : target;
+    if (link === to) continue;
+    const type = process.platform === 'win32' && (await stat(from).catch(() => null))?.isDirectory() ? 'dir' : 'file';
+    await unlink(path);
+    await symlink(to, path, type);
+  }
+}
+
+/** Copy the current work into the library, with fresh version and chat history and its own project id. */
+export async function duplicateProject(/** @type {string} */ id, /** @type {string | undefined} */ name) {
+  const source = (await readState()).recent.find((r) => r.id === id);
+  if (!source) throw new ProjectError('no such project', 404);
+  if (projectMissing(source.path)) throw new ProjectError('The project is missing.', 410);
+  const clean = folderName(name ?? `${basename(source.path)} copy`);
+  const root = resolve(libraryRoot());
+  if (staysInside(relative(source.path, root))) throw new ProjectError('The projects library cannot be inside the project being copied.', 409);
+  await mkdir(root, { recursive: true });
+  const library = realpathSync(root);
+  if (staysInside(relative(source.path, library))) throw new ProjectError('The projects library cannot be inside the project being copied.', 409);
+
+  /* While large media files are copied, the half-built copy is hidden and the Projects list stays available. */
+  const staging = await mkdtemp(join(library, '.duplicate-'));
+  try {
+    await cp(source.path, staging, {
+      recursive: true, preserveTimestamps: true, verbatimSymlinks: true, mode: constants.COPYFILE_FICLONE,
+      filter: (path) => {
+        const parts = relative(source.path, path).split(sep);
+        return !parts.includes('.git') && !parts.some((part, i) => part === TOOL_DIR && DUPLICATE_SKIP.has(parts[i + 1]));
+      },
+    });
+    await rebaseCopyLinks(source.path, staging);
+    if (projectMissing(staging)) throw new ProjectError('The project’s film could not be copied.', 409);
+    await mkdir(join(staging, TOOL_DIR), { recursive: true });
+    await writeFile(join(staging, TOOL_DIR, '.gitignore'), '*\n');
+
+    return await exclusive(async () => {
+      const state = await readState();
+      const current = state.recent.find((r) => r.id === id);
+      if (current?.path !== source.path || projectMissing(source.path)) throw new ProjectError('The project moved or was removed while it was being copied.', 409);
+      let path = join(library, clean);
+      for (let n = 2; ; n++) {
+        try { await mkdir(path); break; }
+        catch (e) { if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EEXIST') throw e; }
+        path = join(library, `${clean} ${n}`);
+      }
+      try {
+        /* Reserve the name without replacing anything; make the copy discoverable once its other files are there. */
+        for (const child of await readdir(staging)) {
+          if (child !== FILM_FILE) await rename(join(staging, child), join(path, child));
+        }
+        await rename(join(staging, FILM_FILE), join(path, FILM_FILE));
+        const copyId = await folderId(path, state);
+        const group = state.folders.some((f) => f.id === current.folderId) ? current.folderId : undefined;
+        const entry = { id: copyId, path, openedAt: Date.now(), ...(group ? { folderId: group } : {}) };
+        const project = describe(entry);
+        state.recent.unshift(entry);
+        await writeState(state);
+        return project;
+      } catch (e) {
+        await rm(path, { recursive: true, force: true }).catch(() => {});
+        throw e;
+      }
+    });
+  } finally {
+    await rm(staging, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 /**

@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
-import { filmHtml } from '../src/film-doc.mjs';
+import { filmHtml, readFilmFile } from '../src/film-doc.mjs';
 import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
 
@@ -15,18 +15,19 @@ const card = (words) => `<!doctype html><body style="margin:0;background:#123">
 const film = (src) => filmHtml({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [{ id: 'card', src, time: [0, 4] }] }] });
 
 /** Studio on a throwaway home and library, a project in it, and a page on that project. */
-async function open(t, name) {
+async function open(t, name, setup) {
   const scratch = await mkdtemp(join(tmpdir(), 'of-film-missing-'));
-  const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS', 'TRASH_DIR'];
+  const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS', 'TRASH_DIR', 'SKILLS_INDEX'];
   const saved = new Map(names.map((n) => [`OPENFILM_${n}`, process.env[`OPENFILM_${n}`]]));
   for (const n of names) process.env[`OPENFILM_${n}`] = join(scratch, n.toLowerCase());
+  await writeFile(process.env.OPENFILM_SKILLS_INDEX, '{"version":1,"skills":[]}');
   await mkdir(process.env.OPENFILM_TRASH_DIR, { recursive: true });
   const root = join(process.env.OPENFILM_LIBRARY, name);
   await mkdir(root, { recursive: true });
   await writeFile(join(root, 'card.html'), card('Before'));
   await writeFile(join(root, 'film.html'), film('card.html'));
   const project = await openProject(root);
-  const studio = await startStudio({ port: 0, openBrowser: () => {} });
+  const studio = await startStudio({ port: 0, openBrowser: () => {}, editorDir: process.env.OPENFILM_TEST_EDITOR_DIR });
   const browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
   t.after(async () => {
     await browser.close();
@@ -37,6 +38,7 @@ async function open(t, name) {
   });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: 'en-US', reducedMotion: 'reduce' });
   const address = `/projects/${project.id}`;
+  await setup?.({ root, page, address });
   await page.goto(`${studio.origin}${address}?key=${studio.key}`);
   await page.locator('[data-viewer-picture] iframe').first().waitFor({ state: 'attached' });
   const api = (path, init = {}) => fetch(`${studio.origin}/api/projects/${project.id}${path}`, {
@@ -46,6 +48,107 @@ async function open(t, name) {
 }
 
 const notice = (page) => page.locator('[data-film-missing]');
+const shown = (page, src = 'card.html') => page.frameLocator('[data-viewer-picture] iframe[title="film"]:not([data-loading]):not([data-leaving])').frameLocator(`iframe[src*="/${src}"]`);
+
+test('an outside write refreshes the open timeline and preview even when its first read fails', { timeout: 30_000 }, async (t) => {
+  const { root, page, address } = await open(t, 'Live refresh');
+  await shown(page).getByRole('heading', { name: 'Before' }).waitFor();
+  const original = page.url();
+  let reads = 0;
+  await page.route((url) => url.pathname === `/api${address}`, (route) => {
+    if (route.request().method() === 'GET' && ++reads === 1) return route.fulfill({ status: 503, json: { error: 'Still saving' } });
+    return route.continue();
+  });
+  await writeFile(join(root, 'card2.html'), card('After'));
+  const replacement = join(root, 'film.html.0123456789ab.tmp');
+  await writeFile(replacement, film('card2.html'));
+  await rename(replacement, join(root, 'film.html'));
+  await page.locator('[data-block-title="card2"]').waitFor({ timeout: 6000 });
+  await shown(page, 'card2.html').getByRole('heading', { name: 'After' }).waitFor({ timeout: 6000 });
+  assert.ok(reads >= 2, 'a failed read is retried without another change or reopening');
+  assert.equal(page.url(), original);
+});
+
+test('a failed edit and a failed recovery read cannot stall later disk changes or edits', { timeout: 30_000 }, async (t) => {
+  const { root, page, address } = await open(t, 'Recover a failed edit');
+  await shown(page).getByRole('heading', { name: 'Before' }).waitFor();
+  let failedEdit = false, failedRead = false;
+  await page.route((url) => url.pathname === `/api${address}/edit`, (route) => {
+    if (failedEdit) return route.continue();
+    failedEdit = true;
+    return route.fulfill({ status: 503, json: { error: 'Save temporarily unavailable' } });
+  });
+  await page.route((url) => url.pathname === `/api${address}`, (route) => {
+    if (!failedEdit || failedRead) return route.continue();
+    failedRead = true;
+    return route.fulfill({ status: 503, json: { error: 'Read temporarily unavailable' } });
+  });
+  const recovery = page.waitForResponse((res) => new URL(res.url()).pathname === `/api${address}` && res.status() === 503);
+  const block = page.locator('[data-block-id]').first();
+  await block.click({ position: { x: 18, y: 10 } });
+  await page.keyboard.press('Shift+E');
+  await recovery;
+  await page.locator('[data-block-disabled="1"]').waitFor({ state: 'detached', timeout: 4000 });
+  await writeFile(join(root, 'card2.html'), card('After failed save'));
+  await writeFile(join(root, 'film.html'), film('card2.html'));
+  await shown(page, 'card2.html').getByRole('heading', { name: 'After failed save' }).waitFor({ timeout: 6000 });
+  await block.click({ position: { x: 18, y: 10 } });
+  const saved = page.waitForResponse((res) => new URL(res.url()).pathname === `/api${address}/edit` && res.ok());
+  await page.keyboard.press('Shift+E');
+  await saved;
+  const { doc } = readFilmFile(await readFile(join(root, 'film.html'), 'utf8'));
+  assert.equal(doc.tracks[0].clips[0].disabled, true);
+  assert.equal(doc.tracks[0].clips[0].src, 'card2.html');
+});
+
+test('a write between the first project read and the event subscription is picked up without reopening', { timeout: 30_000 }, async (t) => {
+  const { page } = await open(t, 'Opening race', async ({ root, page, address }) => {
+    await writeFile(join(root, 'card2.html'), card('Changed while opening'));
+    await page.routeWebSocket((url) => url.pathname === `/api${address}/events`, async (ws) => {
+      await page.locator('[data-block-title="card"]').waitFor({ timeout: 5000 });
+      await writeFile(join(root, 'film.html'), film('card2.html'));
+      ws.connectToServer();
+    });
+  });
+  await page.locator('[data-block-title="card2"]').waitFor({ timeout: 6000 });
+  await shown(page, 'card2.html').getByRole('heading', { name: 'Changed while opening' }).waitFor({ timeout: 6000 });
+});
+
+test('an older refresh response cannot undo a newer edit in the open timeline', { timeout: 30_000 }, async (t) => {
+  const { root, page, address } = await open(t, 'Keep latest edit');
+  await shown(page).getByRole('heading', { name: 'Before' }).waitFor();
+  await writeFile(join(root, 'card2.html'), card('Extra'));
+  const captured = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  let held = false;
+  await page.route((url) => url.pathname === `/api${address}`, async (route) => {
+    if (held || route.request().method() !== 'GET') return route.continue();
+    held = true;
+    const response = await route.fetch();
+    captured.resolve();
+    await release.promise;
+    await route.fulfill({ response });
+  });
+  try {
+    await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [
+      { id: 'card', src: 'card.html', time: [0, 4] }, { id: 'extra', src: 'card2.html', at: 4, time: [0, 4] },
+    ] }] }));
+    await captured.promise;
+    const first = page.locator('[data-block-id^="card#"]');
+    await first.click({ position: { x: 18, y: 10 } });
+    const saved = page.waitForResponse((res) => new URL(res.url()).pathname === `/api${address}/edit` && res.ok());
+    await page.keyboard.press('Shift+E');
+    await saved;
+    const extra = page.locator('[data-block-title="card2"]');
+    await extra.waitFor({ timeout: 5000 });
+    const older = page.waitForResponse((res) => new URL(res.url()).pathname === `/api${address}` && res.request().method() === 'GET');
+    release.resolve();
+    await older;
+    await page.waitForTimeout(350);
+    assert.equal(await first.getAttribute('data-block-disabled'), '1');
+    assert.equal(await extra.count(), 1);
+  } finally { release.resolve(); }
+});
 
 test('film.html deleted and written again 3 s later (an agent replacing it whole): the project stays open, says so, then goes on (#304)', { timeout: 90_000 }, async (t) => {
   const { root, page, address } = await open(t, 'Rewritten');

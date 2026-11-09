@@ -1,7 +1,7 @@
 /**
  * The Layers panel: what is on the picture at the playhead as layers, the top one first. Each picture clip shown is a
  * row, and each caption shown (a row that picks its cue, as a click on the picture does); a page clip opens into its layers, each level in the order the page draws it. A row selects its layer on the
- * picture; ⌘-clicked (Ctrl) it adds it to what is selected there or takes it away, Shift-clicked it selects the rows
+ * picture; Alt-clicked (or ⌘ / Ctrl) it adds it to what is selected there or takes it away, Shift-clicked or dragged it selects the rows
  * shown from the last one clicked to it (and the picture's selection opens the rows down to each layer of it). Rows
  * selected one after another are one block, and what a selected layer holds is tinted with it. Its eye hides it, its
  * lock keeps it from being moved and its bin deletes it (lib/layer-delete; Delete or Backspace does too, for the layer
@@ -63,7 +63,7 @@ export interface LayersPanelProps {
   captions: readonly LayerCaption[];
   /** Select these layers together; `toggle`: each added to what is selected, or taken away (a ⌘-click). */
   onSelectLayers: (layers: readonly { clipId: string; loc: string }[], toggle: boolean) => void;
-  onSelectClip: (clipLoc: string) => void;
+  onSelectClip: (clipLoc: string, toggle?: boolean) => void;
   /** The pointer is on a row (its layer outlined on the picture), or left them (null). */
   onPoint: (target: { clipId: string; loc: string } | null) => void;
   /** The eye or the lock of a row. */
@@ -142,13 +142,22 @@ export function LayersPanel(p: LayersPanelProps) {
   /* kept in step at once: pointer events can come faster than renders, and the release must see the last move */
   const dragRef = React.useRef(drag);
   const setDrag = (next: typeof drag) => { dragRef.current = next; setDragState(next); };
-  const press = React.useRef<{ line: LayerLine; x: number; y: number; id: number } | null>(null);
+  const press = React.useRef<{ line: LayerLine; x: number; y: number; id: number; range: boolean } | null>(null);
+  const rangeEnd = React.useRef<LayerLine | null>(null);
+  const [rangeBox, setRangeBox] = React.useState<{ top: number; height: number } | null>(null);
+  const lineAt = (y: number) => {
+    const box = list.current;
+    if (!box || !lines.length) return undefined;
+    const top = box.getBoundingClientRect().top - box.scrollTop;
+    return lines[Math.max(0, Math.min(lines.length - 1, Math.floor((y - top) / ROW_H)))];
+  };
   /** Where a pointer at `y` (client px) drops the dragged row: the line that moves, the gap of its level, its line. */
   const dropAt = (dragged: LayerLine, y: number): { mover: LayerLine; to: number; y: number } | null => {
     const box = list.current;
     if (!box || !lines.length) return null;
     const top = box.getBoundingClientRect().top - box.scrollTop;
-    const over = lines[Math.max(0, Math.min(lines.length - 1, Math.floor((y - top) / ROW_H)))]!;
+    const over = lineAt(y);
+    if (!over) return null;
     const mover = moverFor(lines, dragged, over);
     if (!mover) return null;
     const own = lines.filter((l) => l.parentKey === mover.parentKey && l.row);
@@ -168,8 +177,17 @@ export function LayersPanel(p: LayersPanelProps) {
   };
   const endDrag = (commit: boolean) => {
     const d = dragRef.current;
+    const start = press.current?.line;
+    const end = rangeEnd.current;
     setDrag(null);
     press.current = null;
+    rangeEnd.current = null;
+    setRangeBox(null);
+    if (commit && start && end) {
+      selectRange(start, end, false);
+      anchor.current = start.key;
+      return;
+    }
     if (!commit || !d?.mover.row) return;
     const order = movedOrder(d.mover.siblings, d.mover.index, d.to);
     if (!order) return;
@@ -197,19 +215,22 @@ export function LayersPanel(p: LayersPanelProps) {
 
   /* the row a Shift-click selects from: the last one clicked, else the last layer selected (on the picture too) */
   const anchor = React.useRef<string | null>(null);
+  const selectRange = (start: LayerLine, end: LayerLine, add: boolean) => {
+    const range = rowsBetween(lines, start, end).map((l) => ({ clipId: l.clipId, loc: l.row!.loc }));
+    const kept = add ? p.selected.flatMap((s) => (s.clipId && s.loc && !range.some((r) => r.clipId === s.clipId && r.loc === s.loc) ? [{ clipId: s.clipId, loc: s.loc }] : [])) : [];
+    p.onSelectLayers([...kept, ...range], false);
+  };
   const clickRow = (line: LayerLine, e: React.MouseEvent) => {
+    const add = e.altKey || e.metaKey || e.ctrlKey;
     if (!line.row) {
       const loc = p.clipOf(line.clipId)?.loc;
-      if (loc) p.onSelectClip(loc);
+      if (loc) p.onSelectClip(loc, add);
       return;
     }
-    const add = e.metaKey || e.ctrlKey;
     const from = e.shiftKey ? lines.find((l) => l.key === (anchor.current && picked.includes(anchor.current) ? anchor.current : picked[picked.length - 1])) : null;
     if (from) {
       /* the rows shown between the two (a closed group's are not), with ⌘ (Ctrl) added to what is selected */
-      const range = rowsBetween(lines, from, line).map((l) => ({ clipId: l.clipId, loc: l.row!.loc }));
-      const kept = add ? p.selected.flatMap((s) => (s.clipId && s.loc && !range.some((r) => r.clipId === s.clipId && r.loc === s.loc) ? [{ clipId: s.clipId, loc: s.loc }] : [])) : [];
-      p.onSelectLayers([...kept, ...range], false);
+      selectRange(from, line, add);
       return;
     }
     anchor.current = line.key;
@@ -231,24 +252,32 @@ export function LayersPanel(p: LayersPanelProps) {
       {clips && !clips.length ? (
         <p className="px-4 pt-6 text-center text-[12px] leading-relaxed text-[var(--text-muted)]">{t('layers.empty')}</p>
       ) : null}
-      <div ref={list} role="tree" aria-label={t('layers.title')}
+      <div ref={list} role="tree" aria-label={t('layers.title')} aria-multiselectable="true"
         className="relative min-h-0 flex-1 select-none overflow-y-auto overscroll-contain pb-4"
         onPointerMove={(e) => {
           const pr = press.current;
           if (!pr || pr.id !== e.pointerId) return;
           /* let go outside the panel before a drag began */
-          if (!(e.buttons & 1)) { press.current = null; return; }
+          if (!(e.buttons & 1)) { endDrag(false); return; }
           const dragging = dragRef.current;
-          if (!dragging) {
+          if (!dragging && !rangeEnd.current) {
             if (Math.hypot(e.clientX - pr.x, e.clientY - pr.y) < 4) return;
             /* held from here on (not at the press: a click must still reach its row) */
             e.currentTarget.setPointerCapture(e.pointerId);
+          }
+          if (pr.range) {
+            const over = lineAt(e.clientY);
+            if (!over) return;
+            rangeEnd.current = over;
+            const a = lines.indexOf(pr.line), b = lines.indexOf(over);
+            setRangeBox({ top: Math.min(a, b) * ROW_H, height: (Math.abs(a - b) + 1) * ROW_H });
+            return;
           }
           const drop = dropAt(pr.line, e.clientY);
           if (drop) setDrag({ line: pr.line, ...drop });
           else if (!dragging) setDrag({ line: pr.line, mover: pr.line, to: pr.line.index, y: lines.indexOf(pr.line) * ROW_H });
         }}
-        onPointerUp={(e) => { if (press.current?.id === e.pointerId) endDrag(Boolean(dragRef.current)); }}
+        onPointerUp={(e) => { if (press.current?.id === e.pointerId) endDrag(Boolean(dragRef.current || rangeEnd.current)); }}
         onPointerCancel={() => endDrag(false)}>
         <div className="relative" style={{ height: lines.length * ROW_H }}>
           {lines.map((line, i) => (
@@ -257,8 +286,8 @@ export function LayersPanel(p: LayersPanelProps) {
               dragging={drag?.line.key === line.key || drag?.mover.key === line.key}
               onToggleOpen={() => toggleOpen(line)}
               onPress={(e) => {
-                if (e.button !== 0 || !line.row) return;
-                press.current = { line, x: e.clientX, y: e.clientY, id: e.pointerId };
+                if (e.button !== 0 || !line.row || (!e.shiftKey && (e.altKey || e.metaKey || e.ctrlKey))) return;
+                press.current = { line, x: e.clientX, y: e.clientY, id: e.pointerId, range: e.shiftKey };
               }}
               onClick={(e) => { if (!dragRef.current) clickRow(line, e); }}
               onPoint={() => p.onPoint({ clipId: line.clipId, loc: line.row ? line.row.loc : '' })}
@@ -270,6 +299,7 @@ export function LayersPanel(p: LayersPanelProps) {
                 p.onMenu({ clipId: line.clipId, ...(line.row ? { loc: line.row.loc } : {}) }, { x: e.clientX, y: e.clientY });
               }} />
           ))}
+          {rangeBox ? <div aria-hidden className="pointer-events-none absolute inset-x-1 z-10 rounded border border-[var(--accent)] bg-[var(--accent-soft)]" style={rangeBox} /> : null}
           {drag ? (
             <div aria-hidden className="pointer-events-none absolute right-2 h-0.5 rounded-full bg-[var(--accent)]"
               style={{ top: drag.y - 1, left: 8 + drag.mover.depth * INDENT }}>

@@ -66,6 +66,8 @@ async function withLibrary(category, run, prepare = async (_page) => {}) {
 }
 
 const card = (page, name) => page.locator(`div.group[title="${name}"]`).first();
+const projectBar = (page) => page.locator('[data-project-player]');
+const clickTimeline = (page) => page.locator('[data-timeline]').click({ position: { x: 250, y: 85 } });
 
 test('a transition tried in the library plays once, leaves the film free, and plays again on another click', { timeout: 120_000 }, async () => {
   await withLibrary('Transitions', async ({ page, trial, watch }) => {
@@ -97,6 +99,11 @@ test('an effect tried in the library stays on the picture until it is let go', {
     const after = await watch(3000);
     assert.equal(after.showing, true);
     assert.equal(after.clickable, true);
+    await page.locator('[data-library-preview-bar] [data-library-picture-bar]').waitFor();
+    assert.equal(await projectBar(page).isVisible(), false);
+    await clickTimeline(page);
+    await trial.waitFor({ state: 'detached' });
+    await projectBar(page).waitFor();
   });
 });
 
@@ -112,16 +119,16 @@ function sampleWav() {
   return wav;
 }
 
-test('a pending audio preview shows only a loading bar, can be cancelled and never starts later', { timeout: 60_000 }, async () => {
+test('a pending audio preview shows a spinner, can be cancelled and never starts later', { timeout: 60_000 }, async () => {
   let finish;
   const waiting = new Promise((done) => { finish = done; });
   await withLibrary('Sounds', async ({ page }) => {
     const row = page.locator('[data-library-audio="audio/sfx/slow.wav"]');
     await row.click();
-    const player = page.locator('[data-audio-player]');
+    const player = page.locator('[data-library-preview-bar] [data-audio-player]');
     await page.locator('[data-audio-player="loading"]').waitFor({ timeout: 2000 });
-    await player.getByRole('progressbar').waitFor();
-    assert.equal(await player.getByRole('progressbar').innerText(), '');
+    await row.getByRole('progressbar').waitFor();
+    assert.equal(await projectBar(page).isVisible(), false);
     assert.equal((await player.innerText()).trim(), 'Slow preview');
     assert.equal(await row.getAttribute('aria-busy'), 'true');
     await player.getByRole('button', { name: 'Cancel', exact: true }).last().click();
@@ -131,8 +138,9 @@ test('a pending audio preview shows only a loading bar, can be cancelled and nev
     await page.locator('[data-library-audio="audio/sfx/ready.wav"]').click();
     await page.locator('[data-audio-player="playing"]').waitFor({ timeout: 5000 });
     assert.equal(await page.evaluate(() => window.__libraryPreviews[0].paused), true);
-    await player.getByRole('button', { name: 'Close', exact: true }).click();
-    assert.equal(await player.count(), 0);
+    await clickTimeline(page);
+    await player.waitFor({ state: 'detached' });
+    await projectBar(page).waitFor();
     assert.equal(await page.evaluate(() => window.__libraryPreviews.every((a) => a.paused)), true);
   }, async (page) => {
     await page.route('**/api/library/missing', (route) => route.fulfill({ json: { ids: ['audio/sfx/slow.wav', 'audio/sfx/ready.wav'] } }));
@@ -156,15 +164,17 @@ test('a pending audio preview shows only a loading bar, can be cancelled and nev
 test('a failed voice sample offers retry and plays from its sample URL on the next attempt', { timeout: 60_000 }, async () => {
   let asks = 0;
   await withLibrary('Voices', async ({ page }) => {
-    await page.getByText('Test voice', { exact: true }).click();
+    const row = page.locator('div[title="Test voice"]').first();
+    await row.click();
     const player = page.locator('[data-audio-player]');
     await page.locator('[data-audio-player="error"]').waitFor({ timeout: 5000 });
-    assert.match(await player.getByRole('status').textContent(), /Could not load. Retry to play/);
-    await player.getByRole('button', { name: 'Try again', exact: true }).last().click();
+    await page.getByText('Network error. Please try again.', { exact: true }).waitFor();
+    await row.getByRole('button', { name: 'Try again', exact: true }).click();
     await page.locator('[data-audio-player="playing"]').waitFor({ timeout: 5000 });
     assert.equal(asks, 2);
-    await page.getByRole('button', { name: 'Sounds', exact: true }).click();
-    assert.equal(await player.count(), 0, 'leaving the voices panel closes its own preview');
+    await clickTimeline(page);
+    await player.waitFor({ state: 'detached' });
+    await projectBar(page).waitFor();
   }, async (page) => {
     await page.route('**/api/library', (route) => route.fulfill({ json: { version: 1, groups: {}, items: [] } }));
     await page.route('**/api/library/voices', (route) => route.fulfill({ json: { version: 1, providers: [{ id: 'elevenlabs', name: 'ElevenLabs', models: [] }], voices: [
@@ -217,19 +227,19 @@ test('one click on an uncached music card downloads and plays automatically, wit
         const player = page.locator('[data-audio-player]');
         await page.locator('[data-audio-player="loading"]').waitFor();
         await card.locator('[data-library-download="fetching"]').waitFor();
-        const bar = player.getByRole('progressbar');
-        await bar.waitFor();
-        assert.equal(await bar.innerText(), '');
-        assert.equal(await bar.getAttribute('aria-valuenow'), null, 'an unknown download size has no invented percentage');
+        const spinner = card.getByRole('progressbar');
+        await spinner.waitFor();
+        assert.equal(await spinner.innerText(), '');
+        assert.equal(await spinner.getAttribute('aria-valuenow'), null, 'an unknown download size has no invented percentage');
         assert.equal((await player.innerText()).trim(), 'Automatic music', 'loading adds no visible explanatory text');
         assert.equal(await card.getByRole('progressbar').count(), 1);
         if (process.env.OPENFILM_TEST_ARTIFACTS) {
           await player.screenshot({ path: join(process.env.OPENFILM_TEST_ARTIFACTS, 'automatic-download.png') });
           await page.evaluate(() => { localStorage.setItem('openfilm.language', 'zh-CN'); window.dispatchEvent(new StorageEvent('storage', { key: 'openfilm.language' })); });
-          await player.getByRole('progressbar', { name: '正在下载，完成后自动播放', exact: true }).waitFor();
+          await card.getByRole('progressbar', { name: '正在下载…', exact: true }).waitFor();
           await player.screenshot({ path: join(process.env.OPENFILM_TEST_ARTIFACTS, 'automatic-download-zh.png') });
           await page.evaluate(() => { localStorage.setItem('openfilm.language', 'en'); window.dispatchEvent(new StorageEvent('storage', { key: 'openfilm.language' })); });
-          await player.getByRole('progressbar', { name: 'Downloading… Playback starts when ready.', exact: true }).waitFor();
+          await card.getByRole('progressbar', { name: 'Downloading…', exact: true }).waitFor();
         }
         fileReady();
         await page.locator('[data-audio-player="playing"]').waitFor({ timeout: 5000 });
@@ -270,15 +280,19 @@ test('one click on an uncached Emoji prepares its bundle and opens the preview w
   try {
     await withLibrary('Stickers', async ({ page, trial }) => {
       try {
+        const moving = page.locator('[data-library-card="stickers/animated"]');
+        await moving.locator('img').waitFor();
+        await moving.hover();
+        assert.equal(await moving.locator('iframe, video').count(), 0, 'the sticker grid does not mount a page or video on entry or hover');
+        assert.equal(await trial.count(), 0);
+        assert.equal(downloads, 0);
         await page.getByRole('button', { name: 'Still stickers', exact: true }).click();
         const card = page.locator('[data-library-card="stickers/emoji/automatic"]');
         await card.locator('[data-library-download="missing"]').waitFor();
         assert.equal(await card.getByRole('button', { name: 'Download', exact: true }).count(), 0);
         await card.click();
-        await page.locator('[data-library-preparing="loading"]').waitFor();
-        assert.equal(await card.getByRole('progressbar').count(), 1);
-        assert.equal(await trial.getByRole('progressbar').innerText(), '');
-        assert.equal(await trial.locator('iframe').count(), 0);
+        await card.getByRole('progressbar').waitFor();
+        assert.equal(await trial.count(), 0);
         release();
         await trial.frameLocator('iframe').locator('#automatic-preview').waitFor();
         assert.equal(downloads, 1);
@@ -287,6 +301,7 @@ test('one click on an uncached Emoji prepares its bundle and opens the preview w
       } finally { release(); }
     }, async (page) => {
       await page.route('**/api/library', (route) => route.fulfill({ json: { version: 1, groups: {}, items: [
+        { id: 'stickers/animated', cat: 'sticker', group: 'animated', kind: 'page', src: 'animated.html', w: 240, h: 240, name: { en: 'Animated sticker' } },
         { id: 'stickers/emoji/automatic', cat: 'sticker', group: 'faces', kind: 'page', still: true, src: 'sticker.html', w: 320, h: 180, fit: 0.5, durationMs: 2000, name: { en: 'Automatic Emoji' } },
       ] } }));
       await page.route('**/api/library/missing', (route) => route.fulfill({ json: { ids: ['stickers/emoji/automatic'] } }));
@@ -304,20 +319,26 @@ test('one click on an uncached Emoji prepares its bundle and opens the preview w
   } finally { release(); }
 });
 
-test('a remote effect can retry preparation, cancel the wait, and never preview after cancellation', { timeout: 60_000 }, async () => {
+test('a remote effect shows a network notice and retries from the card; a timeline click dismisses a pending preview', { timeout: 60_000 }, async () => {
   let release, downloads = 0, frames = 0;
   const waiting = new Promise((done) => { release = done; });
   try {
     await withLibrary('Effects', async ({ page, trial }) => {
       try {
         const card = page.locator('[data-library-card="community/v1/effect/automatic"]');
+        await page.evaluate(() => {
+          localStorage.setItem('openfilm.language', 'zh-CN');
+          window.dispatchEvent(new StorageEvent('storage', { key: 'openfilm.language' }));
+        });
         await card.click();
-        await page.locator('[data-library-preparing="error"]').waitFor();
-        assert.equal((await trial.innerText()).trim(), '');
-        await trial.getByRole('button', { name: 'Try again', exact: true }).click();
-        await page.locator('[data-library-preparing="loading"]').waitFor();
+        const retry = card.getByRole('button', { name: '重试', exact: true });
+        await retry.waitFor();
+        await page.getByText('网络异常，请重试', { exact: true }).waitFor();
+        assert.equal(await trial.count(), 0);
+        await retry.click();
+        await card.getByRole('progressbar').waitFor();
         const finished = page.waitForResponse((r) => r.url().endsWith('/api/library/fetch'));
-        await trial.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await clickTimeline(page);
         release();
         await (await finished).finished();
         await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
@@ -325,7 +346,7 @@ test('a remote effect can retry preparation, cancel the wait, and never preview 
         assert.equal(frames, 0, 'the cancelled asset never opens later');
         await card.click();
         await trial.frameLocator('iframe').locator('#effect-preview').waitFor();
-        assert.equal(downloads, 3);
+        assert.equal(downloads, 2, 'a later click reuses the download that completed after the preview was dismissed');
       } finally { release(); }
     }, async (page) => {
       await page.route('**/api/library', (route) => route.fulfill({ json: { version: 1, groups: {}, items: [
@@ -361,18 +382,28 @@ test('an uncached template prepares its assets and autoplays the video when its 
       try {
         const card = page.locator('[data-library-card="templates/automatic"]');
         await card.click();
-        await page.locator('[data-library-preparing="loading"]').waitFor();
+        await card.getByRole('progressbar').waitFor();
         assert.equal(await card.getByRole('button', { name: 'Download', exact: true }).count(), 0);
         prepared();
         const preview = page.locator('[data-template-trial="templates/automatic"]');
-        await preview.getByRole('progressbar').waitFor();
+        const bar = page.locator('[data-library-preview-bar] [data-template-trial-bar]');
+        await bar.waitFor();
+        assert.equal(await projectBar(page).isVisible(), false);
+        assert.equal(await preview.locator('button, input').count(), 0, 'the video picture has no overlay controls or close hint');
         downloaded();
-        await preview.locator('[data-template-trial-play="playing"]').waitFor({ timeout: 8000 });
+        await bar.locator('[data-template-trial-play="playing"]').waitFor({ timeout: 8000 });
         await page.waitForFunction(() => document.querySelector('[data-template-trial] video')?.currentTime > 0.05);
         assert.equal(asks, 1);
         const media = await preview.locator('video').evaluateHandle((v) => v);
-        await preview.locator('[data-template-trial-close]').click();
-        assert.equal(await trial.count(), 0);
+        await bar.getByRole('button', { name: 'Pause', exact: true }).click();
+        await bar.locator('[data-template-trial-play="paused"]').waitFor();
+        const scrub = bar.getByRole('slider');
+        const bounds = await scrub.boundingBox();
+        await scrub.click({ position: { x: bounds.width * 0.75, y: bounds.height / 2 } });
+        await page.waitForFunction((v) => v.currentTime > 1.2 && v.currentTime < 1.8, media, { timeout: 3000 });
+        await clickTimeline(page);
+        await trial.waitFor({ state: 'detached' });
+        await projectBar(page).waitFor();
         assert.equal(await media.evaluate((v) => v.paused && !v.getAttribute('src')), true);
         await media.dispose();
       } finally { prepared(); downloaded(); }
@@ -384,7 +415,14 @@ test('an uncached template prepares its assets and autoplays the video when its 
       await page.route('**/api/library/fetch', async (route) => { asks += 1; await assets; await route.fulfill({ json: { ok: true } }).catch(() => {}); });
       await page.route('**/api/library/file?*', async (route) => {
         if (new URL(route.request().url()).searchParams.get('path') === 'examples/templates/automatic.mp4') {
-          await video; await route.fulfill({ body: mp4, contentType: 'video/mp4' }).catch(() => {});
+          await video;
+          const range = /^bytes=(\d+)-(\d*)$/.exec(route.request().headers().range ?? '');
+          const start = range ? Number(range[1]) : 0;
+          const end = range?.[2] ? Math.min(Number(range[2]), mp4.length - 1) : mp4.length - 1;
+          await route.fulfill({
+            status: range ? 206 : 200, body: mp4.subarray(start, end + 1), contentType: 'video/mp4',
+            headers: { 'accept-ranges': 'bytes', ...(range ? { 'content-range': `bytes ${start}-${end}/${mp4.length}` } : {}) },
+          }).catch(() => {});
         } else await route.fulfill({ status: 404 });
       });
     });

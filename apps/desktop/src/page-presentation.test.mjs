@@ -1,13 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPagePresentation, preparePage, revealPage, waitForPageFrame } from './page-presentation.mjs';
+import { createPagePresentation, paintPage, preparePage, revealPage, syncPagePointer, waitForPageFrame } from './page-presentation.mjs';
 import { createTabs } from './tabs.mjs';
 import { runInNewContext } from 'node:vm';
 
-function fixture() {
+function fixture({ resume } = {}) {
   const events = [], loads = new Map();
   const pages = createPagePresentation({
     fallback: 'home',
+    resume,
     prepare(id) {
       events.push(`prepare:${id}`);
       let resolve, reject;
@@ -22,6 +23,18 @@ function fixture() {
   async function show(id) { const showing = pages.show(id); loads.get(id).resolve(); assert.equal(await showing, true); }
   return { pages, events, loads, show };
 }
+
+test('resuming a page refreshes the hover target in content coordinates, including displays left of the main screen', () => {
+  const events = [];
+  const contents = { sendInputEvent: event => events.push(event) };
+  const bounds = { x: -1600, y: 40, width: 1200, height: 800 };
+  syncPagePointer(contents, { x: -1250, y: 56 }, bounds);
+  assert.deepEqual(events[0], { type: 'mouseMove', x: 350, y: 16, globalX: -1250, globalY: 56 });
+  syncPagePointer(contents, { x: -1601, y: 56 }, bounds);
+  assert.equal(events[1].type, 'mouseLeave', 'a cursor outside the window clears the old hover target');
+  syncPagePointer(contents, { x: -400, y: 56 }, bounds);
+  assert.equal(events[2].type, 'mouseLeave', 'the right edge belongs outside the content');
+});
 
 test('closing a page retains its frame until the cold replacement is ready', async () => {
   const f = fixture();
@@ -47,6 +60,49 @@ test('warming never focuses a page; an already ready page is presented synchrono
   assert.equal(f.pages.currentId(), 'home', 'no asynchronous gap for a painted background page');
   assert.deepEqual(f.events.slice(-2), ['present:home', 'discard:front']);
   assert.equal(await shown, true);
+});
+
+test('switching to a cached native page retains the outgoing frame until its compositor resumes', async () => {
+  let finish;
+  const f = fixture({ resume: () => new Promise(resolve => { finish = resolve; }) });
+  await f.show('a'); await f.show('b');
+  const before = f.events.length;
+  const switching = f.pages.show('a');
+  await Promise.resolve();
+  assert.equal(f.pages.currentId(), 'b', 'a loaded document is not yet a restored native frame');
+  assert.deepEqual(f.events.slice(before), [], 'the outgoing view stays in front');
+  finish();
+  assert.equal(await switching, true);
+  assert.equal(f.pages.currentId(), 'a');
+});
+
+test('rapid cached-page switches expose only the latest refreshed frame', async () => {
+  const frames = new Map();
+  const f = fixture({ resume: id => new Promise(resolve => frames.set(id, resolve)) });
+  await f.show('a'); await f.show('b'); await f.show('c');
+  const before = f.events.length;
+  const a = f.pages.show('a'); const b = f.pages.show('b');
+  await Promise.resolve();
+  frames.get('a')();
+  assert.equal(await a, false);
+  assert.equal(f.pages.currentId(), 'c');
+  frames.get('b')();
+  assert.equal(await b, true);
+  assert.deepEqual(f.events.slice(before), ['present:b']);
+});
+
+test('returning to the current page cancels an in-flight cached switch without repainting the current view', async () => {
+  let finish, resumes = 0;
+  const f = fixture({ resume: () => { resumes++; return new Promise(resolve => { finish = resolve; }); } });
+  await f.show('b'); await f.show('a');
+  const b = f.pages.show('b'); const again = f.pages.show('b');
+  await Promise.resolve();
+  assert.equal(resumes, 1, 'repeated clicks share the same frame refresh');
+  assert.equal(await f.pages.show('a'), true);
+  finish();
+  assert.equal(await b, false); assert.equal(await again, false);
+  assert.equal(resumes, 1);
+  assert.equal(f.pages.currentId(), 'a');
 });
 
 test('rapid closes cannot reveal a retired or superseded replacement', async () => {
@@ -166,6 +222,28 @@ test('a rejected load never waits for or presents a frame', async () => {
   await assert.rejects(preparePage(contents, 'https://studio.invalid/'), /offline/);
 });
 
+test('a Windows view can open and switch back without a frame from the covered renderer', async () => {
+  const events = [];
+  const pages = createPagePresentation({
+    prepare(id) {
+      const contents = {
+        loadURL: async () => { events.push(`load:${id}`); },
+        isDestroyed: () => false,
+        executeJavaScript: () => assert.fail('a covered Windows view need not run animation frames'),
+      };
+      return { view: contents, ready: preparePage(contents, 'https://studio.invalid/', { waitForPaint: false }) };
+    },
+    present: (id) => events.push(`show:${id}`),
+    discard: () => assert.fail('switching keeps the other tabs open'),
+  });
+  assert.equal(await pages.show('a'), true);
+  assert.equal(await pages.show('b'), true);
+  const back = pages.show('a');
+  assert.equal(pages.currentId(), 'a', 'a loaded tab is raised in the same turn');
+  assert.equal(await back, true);
+  assert.deepEqual(events, ['load:a', 'show:a', 'load:b', 'show:b', 'show:a']);
+});
+
 test('a successful load requests bounded paint readiness', async () => {
   const events = [];
   const contents = {
@@ -202,6 +280,50 @@ test('two painted frames clear their fallback timer; timeout cancels the pending
   const throttled = paintFixture();
   throttled.tickTimeout(); await throttled.promise;
   assert.deepEqual(throttled.events, ['clear:timer', 'cancel:frame']);
+});
+
+test('frame readiness waits for the destination tab strip before counting paint frames', async () => {
+  let frame, ready = false;
+  const promise = runInNewContext(`(${waitForPageFrame.toString()})(500, '[data-project-tab="next"]')`, {
+    setTimeout, clearTimeout,
+    requestAnimationFrame: callback => { frame = callback; return 1; },
+    cancelAnimationFrame: () => {},
+    document: { querySelector: () => ready ? {} : null },
+  });
+  let done = false;
+  void promise.then(() => { done = true; });
+  frame(); frame(); await Promise.resolve();
+  assert.equal(done, false, 'initial loading frames must not replace the outgoing editor');
+  ready = true;
+  frame(); await Promise.resolve(); assert.equal(done, false);
+  frame(); assert.equal(await promise, true);
+});
+
+test('native readiness includes a submitted compositor surface, with a bounded tiny capture', async () => {
+  let submitted;
+  const contents = {
+    isDestroyed: () => false,
+    async executeJavaScript() { return true; },
+    capturePage(rect, options) {
+      assert.deepEqual(rect, { x: 0, y: 0, width: 1, height: 1 });
+      assert.equal(options.stayHidden, true);
+      return new Promise(resolve => { submitted = resolve; });
+    },
+  };
+  let done = false;
+  const ready = paintPage(contents, { readySelector: '[data-titlebar]' }).then(() => { done = true; });
+  await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  assert.equal(done, false);
+  submitted(); await ready; assert.equal(done, true);
+  await paintPage({ ...contents, capturePage: () => new Promise(() => {}) }, { paintTimeoutMs: 5 });
+});
+
+test('an editor that never mounts is not presented as a ready destination', async () => {
+  await assert.rejects(paintPage({
+    isDestroyed: () => false,
+    executeJavaScript: () => new Promise(() => {}),
+    capturePage: () => assert.fail('an unready editor must not be exposed'),
+  }, { readySelector: '[data-titlebar]', readyTimeoutMs: 5 }), /did not become ready/);
 });
 
 test('a loaded but unresponsive renderer cannot leave the host waiting for frames forever', async () => {

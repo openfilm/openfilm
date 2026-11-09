@@ -26,6 +26,7 @@ import { compoundOuter, readPartFilm, writePartFilm } from './parts.mjs';
 import { PARTS, srcInto } from './compound.mjs';
 import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
+import { mediaReferences } from '../../src/media-links.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
 import { MediaError, frame, loudness, poster, probe, waveform } from './derived.mjs';
 import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, restoreFilm, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
@@ -36,7 +37,7 @@ import { ownHost, startPages } from './pages.mjs';
 import { HttpError, cookie, json, readJson } from './http.mjs';
 import { acceptWebSocket } from './websocket.mjs';
 import {
-  ProjectError, createFolder, createProject, deleteFolder, deleteProject, libraryRoot, listFolders, listProjects, locateProject, markOpened, moveFolder, moveLibrary,
+  ProjectError, createFolder, createProject, deleteFolder, deleteProject, duplicateProject, libraryRoot, listFolders, listProjects, locateProject, markOpened, moveFolder, moveLibrary,
   moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
 } from './projects.mjs';
 import { FetchError, createFetches, fetchFilm, parseRepoUrl } from './fetch-repo.mjs';
@@ -60,7 +61,7 @@ import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
 import { coreSkills, keeps, listSkills, offeredSkills, removeSkill, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
-import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, uninstallSkill } from './skill-catalog.mjs';
+import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
@@ -522,6 +523,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        are both there; `as` is the name agents are given it by. An installed one says when Discover has a newer commit
        of it (`update`) or no longer has it (`retired`); `catalog`: when Discover's index was last read */
     if (parts[0] === 'skills' && parts.length === 1 && req.method === 'GET') {
+      await seedCatalog().catch(() => null);
       const id = url.searchParams.get('project');
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) : null;
       const skills = listSkills({ project: project?.path ?? null });
@@ -561,7 +563,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const fresh = Number((await readJson(req).catch(() => ({})))?.fresh) || 0;
       try {
         const catalog = await readDiscover({ fresh });
-        return json(res, 200, { catalog: { read: catalog.read } });
+        return json(res, 200, { catalog: { read: catalog.read, incomplete: catalog.incomplete?.length ?? 0 } });
       } catch (e) {
         throw new HttpError(502, `Discover could not be read now: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -676,8 +678,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (typeof folder !== 'string' || !isAbsolute(folder)) throw new HttpError(400, 'the folder\'s full path, please');
       return json(res, 200, { project: await locateProject(parts[1], folder) });
     }
+    if (parts.length === 3 && parts[2] === 'duplicate' && req.method === 'POST') {
+      const { name } = /** @type {{ name?: string }} */ (await readJson(req));
+      return json(res, 200, { project: await duplicateProject(parts[1], name) });
+    }
     const project = await projectById(parts[1]);
     const rest = parts.slice(2).join('/');
+    /** A reference changes .film metadata, which the project file watcher skips. @template T @param {() => Promise<T>} work */
+    const notifyReferences = async (work) => {
+      const before = mediaReferences(project.path);
+      try { return await work(); }
+      finally { if (before !== mediaReferences(project.path)) watchers.emit(project.path, { type: 'files' }); }
+    };
     /* Never enter or write into a project removed outside Studio, even if cache writers left its folder behind.
        `film`: false where film.html alone missing is no reason to refuse (the project itself, as its page opens) */
     const requireProject = ({ film = true } = {}) => {
@@ -916,7 +928,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
       const picked = Array.isArray(paths) ? paths.map(String)
         : await (folder === true ? pickFolder(ask).then((p) => (p ? [p] : [])) : pickFiles(ask)).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); });
-      return json(res, 200, { landed: await bringIn(project.path, String(into ?? 'assets'), picked, how) });
+      return json(res, 200, { landed: await notifyReferences(() => bringIn(project.path, String(into ?? 'assets'), picked, how)) });
     }
     /* a link pointed somewhere else (files.mjs relink): the path given, else the person's pick. { path } (null: cancelled) */
     if (rest === 'files/relink' && req.method === 'POST') {
@@ -924,7 +936,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
       const where = typeof to === 'string' ? to
         : await (folder === true ? pickFolder(ask) : pickFiles(ask).then((p) => p[0] ?? null)).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); });
-      return json(res, 200, { path: where ? await relink(project.path, String(rel ?? ''), where) : null });
+      return json(res, 200, { path: where ? await notifyReferences(() => relink(project.path, String(rel ?? ''), where)) : null });
     }
     /* the proxies the preview plays heavy footage from (proxies.mjs), asked for when not made yet: each heavy video's
        state (off: none), and each one's the editor's browser does not decode (`undecoded`, which it tells by `checks`)
@@ -953,7 +965,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* what a link leads to copied into the project in its place (files.mjs collect) */
     if (rest === 'files/collect' && req.method === 'POST') {
       const { path: rel } = /** @type {{ path?: unknown }} */ (await readJson(req));
-      return json(res, 200, { path: await collect(project.path, String(rel ?? '')) });
+      return json(res, 200, { path: await notifyReferences(() => collect(project.path, String(rel ?? ''))) });
     }
     /* a video's frame made a still beside it (files.mjs freezeFrame): the timeline's freeze frame */
     if (rest === 'files/still' && req.method === 'POST') {
@@ -988,10 +1000,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const { from, to, check } = /** @type {{ from?: string, to?: string, check?: boolean }} */ (await readJson(req));
         /* `check`: what the move could not keep true (paths a page makes while it runs), nothing moved */
         if (check === true) return json(res, 200, { unseen: await moveCheck(project.path, String(from ?? ''), String(to ?? '')) });
-        return json(res, 200, await moveFile(project.path, String(from ?? ''), String(to ?? '')));
+        return json(res, 200, await notifyReferences(() => moveFile(project.path, String(from ?? ''), String(to ?? ''))));
       }
       if (req.method === 'DELETE') {
-        await trashFile(project.path, at);
+        await notifyReferences(() => trashFile(project.path, at));
         return json(res, 200, {});
       }
     }

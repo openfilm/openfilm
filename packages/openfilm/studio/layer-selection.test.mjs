@@ -36,7 +36,7 @@ async function withCard(name, run, { chat = false, again = false } = {}) {
     const clips = [{ id: 'card', src: 'card.html', time: [0, 4] }, ...(again ? [{ id: 'again', src: 'card.html', at: 4, time: [0, 4] }] : [])];
     await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1080, h: 1920 }, tracks: [{ clips }] }));
     const project = await openProject(root);
-    studio = await startStudio({ port: 0, openBrowser: () => {} });
+    studio = await startStudio({ port: 0, openBrowser: () => {}, editorDir: process.env.OPENFILM_TEST_EDITOR_DIR });
     browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
     const page = await browser.newPage({ viewport: { width: 1400, height: 1000 }, locale: 'en-US', reducedMotion: 'reduce' });
     await page.addInitScript((withChat) => {
@@ -179,11 +179,15 @@ test('Shift-click on the picture, ⌘ / Ctrl-click in Layers, adds a layer to wh
     await click(on(300, 1350), ['Shift']);
     await is(['On time'], 'the picture and the rows are one selection');
     assert.deepEqual(await rows(), ['On time']);
+    await row('#box3').click({ modifiers: ['Alt'] });
+    await is(['#box3', 'On time'], 'Alt-click adds a separate layer');
+    await row('On time').click({ modifiers: ['Alt'] });
+    await is(['#box3'], 'Alt-click toggles an already selected layer off');
   }, { chat: true });
 });
 
 test('in Layers, Shift-click selects the rows shown from the last one clicked, and the rows selected are one block', { timeout: 120_000 }, async () => {
-  await withCard('Range', async ({ page, on, until, selection, click }) => {
+  await withCard('Range', async ({ page, on, until, selection, click, drag }) => {
     const is = (want, what) => until(async () => {
       const now = await selection();
       return now.many === (want.length > 1 ? want.length : null) && JSON.stringify(now.rows.sort()) === JSON.stringify([...want].sort());
@@ -220,6 +224,12 @@ test('in Layers, Shift-click selects the rows shown from the last one clicked, a
     await is(['#box1'], 'a click on the picture selects one row');
     await row('Parcel').click({ modifiers: ['Shift'] });
     await is(['#box1', 'On time', 'Parcel'], 'a range from the layer selected on the picture');
+    const from = await row('#box3').boundingBox();
+    const to = await row('#box1').boundingBox();
+    await page.keyboard.down('Shift');
+    await drag({ x: from.x + 60, y: from.y + from.height / 2 }, { x: to.x + 60, y: to.y + to.height / 2 });
+    await page.keyboard.up('Shift');
+    await is(['#box3', '#box2', '#box1'], 'Shift-drag selects the visible rows in its box');
   });
 });
 

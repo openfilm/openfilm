@@ -110,9 +110,11 @@ export function App({ initialProject, initialSelection, initialFfmpeg }: {
   const [selection, setSelection] = React.useState<StudioSelection | null>(initialSelection);
   /* the project's assets open over this column (Studio draws them; the chat keeps only its composer, below them) */
   const [assetsOpen, setAssetsOpen] = React.useState<boolean>(() => app.assetsOpen?.() ?? false);
+  const [assetsOverlay, setAssetsOverlay] = React.useState(() => app.assetsOverlay?.() ?? app.assetsOpen?.() ?? false);
   React.useEffect(() => {
     const stops = [
-      app.onAssets(setAssetsOpen),
+      app.onAssets(open => { setAssetsOpen(open); if (!app.onAssetsOverlay) setAssetsOverlay(open); }),
+      ...(app.onAssetsOverlay ? [app.onAssetsOverlay(setAssetsOverlay)] : []),
       app.onProject(setProject),
       app.onSelection(setSelection),
       app.onFfmpeg(setFfmpeg),
@@ -148,18 +150,17 @@ export function App({ initialProject, initialSelection, initialFfmpeg }: {
 
   const onProject = Boolean(project) && /^\/projects\//.test(location.pathname);
   return (
-    <div className={`relative flex h-full flex-col ${assetsOpen ? '' : 'bg-[var(--bg-app)] pt-px'}`}>
+    <div className={`relative flex h-full flex-col ${assetsOverlay ? '' : 'bg-[var(--bg-app)]'}`}>
       {addingSkill ? (
         <AddSkillDialog onClose={() => setAddingSkill(false)} onAdded={async () => { window.dispatchEvent(new Event(SKILLS_CHANGED)); }}
           onPick={onProject ? (skill) => app.useSkill?.(skill) : undefined}
           onMake={onProject ? () => window.dispatchEvent(new Event(MAKE_SKILL)) : undefined} />
       ) : null}
-      {/* under Studio's top bar (it runs over this, across the window), a line below it: the seam on the right, the
-          line between this and Studio's panes, is the handle */}
+      {/* shell.css owns the single line below the window's top bar. The seam on the right is the resize handle. */}
       <Divider />
       <div className="flex min-h-0 flex-1 flex-col">
         {project && chatReady
-          ? <ChatPane key={`${project.id}:${project.path}`} project={project} banners={banners} selection={selection && selection.projectId === project.id ? selection : null} assetsOpen={assetsOpen} />
+          ? <ChatPane key={`${project.id}:${project.path}`} project={project} banners={banners} selection={selection && selection.projectId === project.id ? selection : null} assetsOpen={assetsOpen} assetsOverlay={assetsOverlay} />
           : (
             <aside className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--bg-panel)]">
               <div className="flex flex-1 items-center justify-center"><Loader2 size={16} className="animate-spin text-[var(--text-faint)]" /></div>
@@ -175,7 +176,7 @@ export function App({ initialProject, initialSelection, initialFfmpeg }: {
  * One project's conversation column: the session bar, the conversation and the composer, and the turns run with
  * the person's agent (start a turn, put back a turn a reload interrupted, settle and keep it).
  */
-function ChatPane({ project, banners, selection, assetsOpen }: { project: Project; banners: React.ReactNode; selection: StudioSelection | null; assetsOpen: boolean }) {
+function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { project: Project; banners: React.ReactNode; selection: StudioSelection | null; assetsOpen: boolean; assetsOverlay: boolean }) {
   const t = useT();
   const projectKey = project.path;
 
@@ -883,7 +884,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
     if (blocker) { setFollowUpError(blocker); return; }
     setFollowUpError(null);
     /* sent with the assets open: they close (as they were, for next time) and the conversation shows */
-    if (assetsOpen) app.setAssetsOpen(false);
+    if (assetsOverlay) app.setAssetsOpen(false);
     const promptDisplay = buildPromptDisplay(followUp, followUpRefs.map(sentPill));
     thread.scrollToBottom({ smooth: true });
     composerRef.current?.clear();
@@ -1119,8 +1120,8 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
           <StickToBottomContext.Provider value={thread}>
             {/* with the assets open only the composer shows, at the bottom, floating over Studio's drawer: the drawer
                 runs on under it, fading out behind it so the words under the composer stay clear */}
-            <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden ${assetsOpen ? 'mt-auto shrink-0 bg-[linear-gradient(to_bottom,transparent,var(--bg-panel)_36px)]' : 'flex-1 bg-[var(--bg-panel)]'}`}>
-              <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOpen ? 'hidden' : 'flex'}`}>
+            <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden ${assetsOverlay ? 'mt-auto shrink-0 bg-[linear-gradient(to_bottom,transparent,var(--bg-panel)_36px)]' : 'flex-1 bg-[var(--bg-panel)]'}`}>
+              <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOverlay ? 'hidden' : 'flex'}`}>
                 <ConversationBar
                   sessions={shownSessions}
                   currentSessionId={sessionId}
@@ -1186,7 +1187,7 @@ function ChatPane({ project, banners, selection, assetsOpen }: { project: Projec
                 <div className="flex flex-col gap-2" data-composer-cards="">
                   {/* what is said apart from the conversation, each a notice on the composer (NoticeCard): Studio's
                       own trouble, the asks waiting on the person, then this conversation's */}
-                  {assetsOpen ? null : banners}
+                  {assetsOverlay ? null : banners}
                   {spendAsk ? (
                     <ComposerCard role="alertdialog" icon={<Coins size={14} />} title={spendAsk.title}
                       body={spendAsk.body ? <span className="break-words">{spendAsk.body}</span> : undefined}>

@@ -14,13 +14,14 @@ import {
   Square, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { CARD_H, MAKE_MEDIA, NOTE_H, NOTE_W, type CanvasNode, type GroupColor } from '@/lib/canvas';
+import { CARD_H, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, type CanvasNode, type GroupColor } from '@/lib/canvas';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Tooltip } from '../Tooltip';
-import { useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode } from './board';
+import { useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode, type UploadStatus } from './board';
 import { ActionBar, CutPanel, MakePanel, NotePanel } from './panels';
 import { Words, WritingBar, useDraft } from './words';
 import { SoundCard } from './sound';
+import { CanvasVideo } from './video';
 
 /** below this zoom a node is only its outline (its picture, its words are not drawn) */
 export const FAR = 0.35;
@@ -69,9 +70,48 @@ function ByAgent({ by }: { by: NonNullable<CanvasNode['by']> }) {
 
 /* where wires meet a card: the middle of its sides, unseen */
 const ANCHOR = '!h-px !w-px !min-h-0 !min-w-0 !border-0 !bg-transparent';
-/* the ⊕ off each side, under the pointer or while selected */
-/* a ⊕ beside a card: 24 across as drawn; round it, what takes the pointer too, 24 further out and 16 above and below */
-const PLUS = "!flex !h-6 !w-6 items-center justify-center !rounded-full before:absolute before:-inset-y-4 before:rounded-full before:content-[''] !border !border-[var(--cv-ring)] !bg-[var(--cv-bg)] !text-[var(--cv-ink)] transition-[opacity,transform] duration-150 hover:!scale-110";
+const SIDE_BUTTON_SIZE = 28;
+const PLUS = "group/side z-10 !size-7 !border-0 !bg-transparent before:absolute before:-inset-y-10 before:content-[''] transition-opacity duration-150 [&.connectingfrom]:!opacity-0 [&.connectingfrom]:!transition-none";
+
+function SideHandle({ id, side, selected }: { id: string; side: 'source' | 'target'; selected: boolean }) {
+  const board = useBoard();
+  const t = useT();
+  const out = side === 'source';
+  const direction = out ? 1 : -1;
+  const follow = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'mouse' || event.buttons) return;
+    const handle = event.currentTarget;
+    const rect = handle.getBoundingClientRect();
+    if (!rect.width) return;
+    // Keep the connection's hit area in place and move just the visible plus, in canvas pixels.
+    const zoom = rect.width / SIDE_BUTTON_SIZE;
+    const x = (event.clientX - rect.left - rect.width / 2) / zoom;
+    const y = (event.clientY - rect.top - rect.height / 2) / zoom;
+    handle.style.setProperty('--cv-side-x', `${direction * Math.max(-14, Math.min(26, direction * x))}px`);
+    handle.style.setProperty('--cv-side-y', `${Math.max(-36, Math.min(36, y))}px`);
+  };
+  return (
+    <Handle id={out ? 'out' : 'in'} type={side} position={out ? Position.Right : Position.Left}
+      className={`${PLUS} ${out ? '!-right-[34px] before:-left-5 before:-right-9' : '!-left-[34px] before:-left-9 before:-right-5'} ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 hover:opacity-100'}`}
+      onPointerMove={follow}
+      onPointerLeave={(event) => {
+        event.currentTarget.style.removeProperty('--cv-side-x');
+        event.currentTarget.style.removeProperty('--cv-side-y');
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+        board.sideMenu(id, side, { x: event.clientX, y: event.clientY });
+      }}
+      title={t(out ? 'canvas.side.out' : 'canvas.side.in')}>
+      <span data-canvas-side-plus="" className={`pointer-events-none absolute inset-0 grid place-items-center rounded-full border transition-[scale,background-color,border-color,color] duration-150 group-hover/side:scale-110 ${selected
+        ? '!border-[var(--cv-edge-lit)] bg-[color-mix(in_srgb,var(--cv-bg)_84%,var(--cv-edge-lit))] text-[var(--cv-ink)] group-hover/side:bg-[color-mix(in_srgb,var(--cv-bg)_72%,var(--cv-edge-lit))]'
+        : '!border-[var(--cv-line-hover)] bg-[var(--cv-bg)] text-[var(--cv-ink-2)] group-hover/side:!border-[var(--cv-ring)] group-hover/side:text-[var(--cv-ink)]'}`}
+        style={{ translate: 'var(--cv-side-x, 0px) var(--cv-side-y, 0px)' }}>
+        <Plus size={16} strokeWidth={2} />
+      </span>
+    </Handle>
+  );
+}
 
 /**
  * A node's sides: the wires' anchors at the middle of each (first, so a wire without a handle named meets them), and
@@ -79,26 +119,12 @@ const PLUS = "!flex !h-6 !w-6 items-center justify-center !rounded-full before:a
  */
 function Sides({ id, selected, ins = true, outs = true }: { id: string; selected: boolean; ins?: boolean; outs?: boolean }) {
   const board = useBoard();
-  const t = useT();
-  const shown = board.readOnly ? '!pointer-events-none !opacity-0' : selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
-  const side = (which: 'source' | 'target') => (event: React.MouseEvent) => {
-    event.stopPropagation();
-    board.sideMenu(id, which, { x: event.clientX, y: event.clientY });
-  };
   return (
     <>
       <Handle type="target" position={Position.Left} className={ANCHOR} isConnectable={!board.readOnly} />
       <Handle type="source" position={Position.Right} className={ANCHOR} isConnectable={!board.readOnly} />
-      {ins ? (
-        <Handle id="in" type="target" position={Position.Left} className={`${PLUS} !-left-[31px] before:-left-6 before:-right-1 ${shown}`} onClick={side('target')} title={t('canvas.side.in')}>
-          <Plus size={14} strokeWidth={2} className="pointer-events-none" />
-        </Handle>
-      ) : null}
-      {outs ? (
-        <Handle id="out" type="source" position={Position.Right} className={`${PLUS} !-right-[31px] before:-right-6 before:-left-1 ${shown}`} onClick={side('source')} title={t('canvas.side.out')}>
-          <Plus size={14} strokeWidth={2} className="pointer-events-none" />
-        </Handle>
-      ) : null}
+      {!board.readOnly && ins ? <SideHandle id={id} side="target" selected={selected} /> : null}
+      {!board.readOnly && outs ? <SideHandle id={id} side="source" selected={selected} /> : null}
     </>
   );
 }
@@ -113,19 +139,47 @@ function useNumber(id: string): number {
 }
 
 /** What every node is drawn in: its name row above, its card, its sides. */
-function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card' }: {
+function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card', onRename, pending }: {
   id: string; selected: boolean; icon: React.ComponentType<{ size?: number; className?: string }>; title: string; meta?: string | null;
   by?: CanvasNode['by']; note?: React.ReactNode; stack?: number; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
+  onRename?: (title: string) => void; pending?: boolean;
 }) {
   const far = useStore(farSelector);
+  const t = useT();
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const cancel = React.useRef(false);
+  const rename = () => { cancel.current = false; setDraft(title); };
   const card = `relative h-full w-full overflow-hidden rounded-[12px] border transition-[border-color] duration-150 ${tone === 'quiet' ? 'bg-[var(--cv-card-2)]' : 'bg-[var(--cv-card)]'} ${selected ? '!border-[var(--cv-ring)]' : '!border-[var(--cv-line)] group-hover:!border-[var(--cv-line-hover)]'}`;
   return (
     <div className="group relative h-full w-full">
-      {far ? null : (
-        <div className={`pointer-events-none absolute bottom-full left-0 right-0 z-10 flex h-6 items-center gap-1 text-[13px] leading-5 text-[var(--cv-label)] ${stack > 1 ? 'mb-3' : 'mb-0.5'}`}>
+      {far && draft === null ? null : (
+        <div data-canvas-node-header={onRename ? '' : undefined}
+          className={`absolute bottom-full left-0 right-0 z-10 flex h-6 items-center gap-1 text-[13px] leading-5 text-[var(--cv-label)] ${onRename ? 'nopan cursor-grab active:cursor-grabbing' : 'pointer-events-none'} ${stack > 1 ? 'mb-3' : 'mb-0.5'}`}>
           <Icon size={14} className="shrink-0" />
-          <span className="truncate">{title}</span>
-          <span className="flex-1" />
+          {onRename && draft !== null ? (
+            <input data-canvas-title="" aria-label={t('canvas.video.rename')} autoFocus maxLength={120}
+              value={draft} onChange={(event) => setDraft(event.currentTarget.value)}
+              onFocus={(event) => event.currentTarget.select()}
+              onClick={(event) => event.stopPropagation()}
+              onBlur={() => {
+                if (!cancel.current && draft.trim() !== title) onRename(draft.trim());
+                setDraft(null);
+              }}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.nativeEvent.isComposing) return;
+                if (event.key === 'Escape') cancel.current = true;
+                if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur();
+              }}
+              className="nodrag min-w-0 flex-1 rounded bg-[var(--cv-float)] px-1 text-[var(--cv-ink)] outline outline-[var(--cv-ring)]" />
+          ) : onRename ? (
+            <span data-canvas-title="" role="button" tabIndex={0} title={t('canvas.video.renameHint')} className="truncate rounded-sm focus-visible:outline"
+              onDoubleClick={(event) => { event.stopPropagation(); rename(); }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); event.stopPropagation(); rename(); }
+              }}>{title}</span>
+          ) : <span className="truncate">{title}</span>}
+          {draft === null ? <span className="flex-1" /> : null}
           {note}
           {by ? <ByAgent by={by} /> : null}
           {meta ? <span className="shrink-0 tabular-nums">{meta}</span> : null}
@@ -139,21 +193,18 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
         </>
       ) : null}
       <div className={card}>{children}</div>
-      <Sides id={id} selected={selected} ins={ins} outs={outs} />
+      {!pending ? <Sides id={id} selected={selected} ins={ins} outs={outs} /> : null}
     </div>
   );
 }
 
-/** A file shown in a card: a picture as it is, a clip's poster (playing under the pointer or while selected), a sound's player. */
-function Shown({ file, play, words }: { file: WorkspaceResource; play: boolean; words?: string }) {
+/** A file shown in a card: a picture as it is, or a clip or sound with a player. */
+function Shown({ id, file, selected, words }: { id: string; file: WorkspaceResource; selected: boolean; words?: string }) {
   const board = useBoard();
   const src = board.sources.file(file);
-  const poster = board.sources.poster?.(file);
   if (file.kind === 'image') return <img src={src} alt="" draggable={false} loading="lazy" className="block h-full w-full object-cover" />;
   if (file.kind === 'video') {
-    return play || !poster
-      ? <video src={src} poster={poster} muted loop playsInline autoPlay={play} preload="metadata" className="block h-full w-full bg-black object-cover" />
-      : <img src={poster} alt="" draggable={false} className="block h-full w-full object-cover" />;
+    return <CanvasVideo key={src} id={id} file={file} selected={selected} />;
   }
   if (file.kind === 'audio') return <SoundCard file={file} words={words} />;
   const page = file.kind === 'mg' ? board.sources.pagePoster?.(file) : undefined;
@@ -166,12 +217,24 @@ function Shown({ file, play, words }: { file: WorkspaceResource; play: boolean; 
  * The box a file or what is made is drawn in: the card itself once it is sized (made, laid down, resized), else its
  * own shape at the cards' height (a picture, a clip), a sound's box.
  */
-function boxStyle(sized: boolean, file: WorkspaceResource | null, ratio?: string): React.CSSProperties {
+function boxStyle(sized: boolean, file: WorkspaceResource | null): React.CSSProperties {
   if (sized) return { width: '100%', height: '100%' };
   if (file?.kind === 'audio') return { width: 320, height: CARD_H };
-  if (file?.w && file.h) return { height: CARD_H, aspectRatio: `${file.w} / ${file.h}` };
-  const [w, h] = (ratio ?? '16:9').split(':').map(Number) as [number, number];
-  return { height: CARD_H, aspectRatio: `${w} / ${h}` };
+  return { width: cardWidth(file?.w && file.h ? `${file.w}:${file.h}` : undefined), height: CARD_H };
+}
+
+function UploadPanel({ upload }: { upload: UploadStatus }) {
+  const t = useT();
+  const known = upload.progress >= 0 && upload.progress < 1;
+  const label = t(upload.progress === 1 ? 'canvas.importPreparing' : 'canvas.importUploading');
+  return (
+    <div role="status" className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--cv-card)] px-4 text-center text-[var(--cv-ink)]">
+      <Loader2 size={22} className="animate-spin text-[var(--cv-label)]" />
+      <div className="w-full truncate text-[13px]">{upload.name}</div>
+      <div className="text-xs text-[var(--cv-label)]">{label}{known ? ` ${Math.floor(upload.progress * 100)}%` : ''}</div>
+      {known ? <progress aria-label={label} max={1} value={upload.progress} className="h-1 w-full max-w-[140px] accent-[var(--cv-edge-lit)]" /> : null}
+    </div>
+  );
 }
 
 /** A quick start in an empty node ("Try:"), as a line with its icon. */
@@ -206,18 +269,26 @@ function Empty({ icon: Icon, tries }: { icon: React.ComponentType<{ size?: numbe
 
 
 /** A file of the project on the board: as its picture draws it, 350 high, until resized. */
-export function FileNodeView({ id, data, selected, width, height }: NodeProps<FileNode>) {
+export function FileNodeView({ id, data, selected }: NodeProps<FileNode>) {
   const t = useT();
   const board = useBoard();
-  const [over, setOver] = React.useState(false);
+  const sized = useStore((state) => {
+    const node = state.nodeLookup.get(id);
+    return node?.width != null && node.height != null;
+  });
   const file = board.fileOf(data.path);
-  const Icon = KIND_ICON[file?.kind ?? 'other'];
+  const Icon = KIND_ICON[data.upload?.kind ?? file?.kind ?? 'other'];
+  const title = data.upload?.name ?? data.title ?? file?.name ?? data.path.split('/').pop() ?? data.path;
+  const rename = file?.kind === 'video' && !board.readOnly ? (name: string) => {
+    board.willChange();
+    board.setData(id, { title: name || undefined });
+  } : undefined;
   return (
-    <div className="h-full w-full" onMouseEnter={() => setOver(true)} onMouseLeave={() => setOver(false)}>
+    <div className="h-full w-full">
       <ActionBar id={id} file={file} />
-      <Frame id={id} selected={selected} icon={Icon} title={file?.name ?? data.path.split('/').pop() ?? data.path} meta={sizeOf(file)} by={data.by}>
-        <div className="relative" style={boxStyle(width != null && height != null, file)}>
-          {file ? <Shown file={file} play={over || selected} />
+      <Frame id={id} selected={selected} icon={Icon} title={title} meta={sizeOf(file)} by={data.by} onRename={rename} pending={Boolean(data.upload)}>
+        <div className="relative" style={boxStyle(sized, file)}>
+          {data.upload ? <UploadPanel upload={data.upload} /> : file ? <Shown id={id} file={file} selected={selected} />
               : <div className="flex h-full w-full items-center justify-center gap-2 px-3 text-center text-[12px] text-[var(--cv-label)]"><FileQuestion size={14} />{t('canvas.missing')}</div>}
         </div>
       </Frame>
@@ -381,25 +452,29 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
   const n = useNumber(id);
   /* something wired in: it is made from that, so nothing to start with is offered */
   const fed = useStore((s) => s.edges.some((e) => e.target === id));
-  const [over, setOver] = React.useState(false);
   const [versionsOpen, setVersionsOpen] = React.useState(false);
   const run = board.run(id);
   const Icon = MAKE_ICON[data.make];
   const media = MAKE_MEDIA[data.make];
   const versions = data.versions ?? [];
   const file = data.path ? board.fileOf(data.path) : null;
+  const uploading = board.uploading?.(id);
+  const rename = media === 'video' && !board.readOnly ? (name: string) => {
+    board.willChange();
+    board.setData(id, { title: name || undefined });
+  } : undefined;
   const ratio = data.opts?.ratio ?? '16:9';
   React.useEffect(() => { if (!selected) setVersionsOpen(false); }, [selected]);
   const meta = sizeOf(file) ?? (media === 'audio' ? null : ratio);
   return (
-    <div className="h-full w-full" onMouseEnter={() => setOver(true)} onMouseLeave={() => setOver(false)}>
+    <div className="h-full w-full">
       <ActionBar id={id} file={file} />
       <MakePanel id={id} data={data} />
-      <Frame id={id} selected={selected} icon={Icon} title={data.preset ? t(`canvas.presets.names.${data.preset}`) : t(`canvas.titles.${data.make}`).replace('{n}', String(n))} meta={meta} by={data.by} stack={versions.length}
+      <Frame id={id} selected={selected} icon={Icon} title={data.title ?? (data.preset ? t(`canvas.presets.names.${data.preset}`) : t(`canvas.titles.${data.make}`).replace('{n}', String(n)))} meta={meta} by={data.by} stack={versions.length} onRename={rename}
         ins={media !== 'audio'}
         note={board.stale.has(id) ? <span className="pointer-events-auto shrink-0 text-amber-500/90" title={t('canvas.make.staleTip')}>{t('canvas.make.stale')}</span> : null}>
         <div className="relative h-full w-full">
-          {file ? <Shown file={file} play={over || selected} words={data.make === 'tts' ? data.prompt : undefined} />
+          {file ? <Shown id={id} file={file} selected={selected} words={data.make === 'tts' ? data.prompt : undefined} />
               : (
                 <Empty icon={Icon} tries={fed || run ? undefined : media === 'image' ? (
                   <>
@@ -438,7 +513,7 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
               })}
             </div>
           ) : null}
-          {run ? (
+          {uploading ? <UploadPanel upload={uploading} /> : run ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 bg-black/55 text-[12.5px] text-white/90 backdrop-blur-[2px]">
               <Loader2 size={20} className="animate-spin" />
               <span>{t('canvas.make.making')} <Elapsed since={run.started} /></span>

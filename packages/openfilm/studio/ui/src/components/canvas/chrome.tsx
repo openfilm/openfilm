@@ -218,7 +218,7 @@ function nodeRow(n: BoardNode, fileOf: (path: string) => WorkspaceResource | nul
   const kind = n.type === 'make' ? t(`canvas.make.${(n.data as MakeData).make}`) : file ? t(`canvas.outline.kind.${file.kind}`) : '';
   const Icon = n.type === 'make' ? MAKE_ICON[(n.data as MakeData).make] : KIND_ICON[file?.kind ?? 'other'];
   return {
-    label: n.type === 'make' ? ((n.data as MakeData).prompt?.trim().slice(0, 40) || kind) : file?.name ?? path ?? '',
+    label: n.data.title ?? (n.type === 'make' ? (n.data.prompt?.trim().slice(0, 40) || kind) : file?.name ?? path ?? ''),
     kind,
     icon: src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <Icon size={15} />,
   };
