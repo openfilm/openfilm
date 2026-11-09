@@ -26,7 +26,7 @@ import { FILM_FILE, clipKind, filmHtml } from '../../src/film-doc.mjs';
 import { savedRoot } from '../../src/locations.mjs';
 import { STUDIO_STATE, filmClosure, folderView } from './closure.mjs';
 import { readProjectFilm } from './film.mjs';
-import { cleanName, importFile, inside, kindOf } from './files.mjs';
+import { cleanName, importFile, inProject, inside, kindOf, readable } from './files.mjs';
 import { BUILT_IN, builtInRoot, fetchLibrary } from './library.mjs';
 
 export class SavedError extends Error {
@@ -204,7 +204,7 @@ async function keep(root, files, about, name, into, poster) {
   for (const rel of files) {
     const to = join(dir, 'files', rel);
     await mkdir(dirname(to), { recursive: true });
-    await copyFile(join(root, rel), to);
+    await copyFile(readable(root, rel), to);
   }
   const picture = poster ? await poster().catch(() => null) : null;
   if (picture) await writeFile(join(dir, 'poster.jpg'), picture);
@@ -289,8 +289,8 @@ export async function saveGroup(root, clipIds, o = {}) {
  */
 export async function saveFile(root, rel, o = {}) {
   if (typeof rel !== 'string' || !rel || rel.startsWith('/') || rel.split('/').includes('..')) throw new SavedError('a file of the project, please', 400);
-  const info = await stat(join(root, rel)).catch(() => null);
-  if (!info?.isFile()) throw new SavedError('That file is not in the project any more.', 404);
+  const source = inProject(root, rel);
+  if (!source || !(await stat(source).catch(() => null))?.isFile()) throw new SavedError('That file is not in the project any more.', 404);
   const into = libraryRel(o.into ?? LIBRARY);
   if (clipKind(rel) === 'page') {
     const files = await clipFiles(root, { src: rel });
@@ -299,7 +299,7 @@ export async function saveFile(root, rel, o = {}) {
     return keep(root, files, { kind: 'page', path: rel, ...sizes(o) }, name, into, o.poster ?? null);
   }
   const lib = await libraryRoot();
-  const { path } = await importFile(lib, into ? `${into}/${basename(rel)}` : basename(rel), createReadStream(join(root, rel)));
+  const { path } = await importFile(lib, into ? `${into}/${basename(rel)}` : basename(rel), createReadStream(source));
   return libraryPath(path);
 }
 

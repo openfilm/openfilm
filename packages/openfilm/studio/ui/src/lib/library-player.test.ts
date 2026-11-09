@@ -30,7 +30,7 @@ function setup(t: { after: (fn: () => void) => void }, timing = {}) {
   const samples: AudioSample[] = [], heard: string[] = [];
   const player = createPreviewPlayer({ ...timing,
     makeAudio: (src: string) => { const a = new AudioSample(src); samples.push(a); return a as unknown as HTMLAudioElement; },
-    onReady: (id: string) => { heard.push(id); },
+    onReady: (item) => { heard.push(item.id); },
   });
   t.after(player.close);
   return { player, samples, heard, state: player.getSnapshot };

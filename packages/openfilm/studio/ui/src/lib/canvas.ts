@@ -12,10 +12,14 @@ export interface CanvasNode {
   /** its card's size on the board, once sized (a file's follows its picture until resized) */
   w?: number;
   h?: number;
+  /** the card's saved stacking layer */
+  z?: number;
   /** a note: what it says */
   text?: string;
   /** a file of the project, project-relative */
   path?: string;
+  /** a custom display title for a file or making node */
+  title?: string;
   /** a group: its name (and its color, one of GROUP_COLORS) */
   group?: string;
   color?: GroupColor;
@@ -80,7 +84,7 @@ export type VideoMode = typeof VIDEO_MODES[number];
  * picture's qualities (the finest last), and a clip made only from a clip or a recording. Nothing said: the usual.
  */
 export interface ModelSpec {
-  ratios?: string[]; seconds?: [number, number]; only?: number[]; refs?: number; frames?: boolean; qualities?: string[]; needs?: 'clip' | 'audio';
+  ratios?: string[]; seconds?: [number, number]; only?: number[]; refs?: number; frames?: boolean | 'first' | 'first-required'; qualities?: string[]; needs?: 'clip' | 'audio';
   /** a clip that takes a recording of whose voice speaks in it, a clip of its own to continue or change */
   voice?: boolean; clip?: boolean;
   /** a picture's sizes (1k, 2k, 4k) or a clip's resolutions (480p…), as it makes them; a picture with no background */
@@ -138,16 +142,19 @@ export function readCanvasDoc(raw: unknown): CanvasDoc {
   const ids = new Set<string>();
   for (const n of Array.isArray(doc?.nodes) ? doc.nodes as Array<Record<string, unknown>> : []) {
     if (!n || typeof n.id !== 'string' || ids.has(n.id) || !num(n.x) || !num(n.y)) continue;
-    const box = { id: n.id, x: n.x, y: n.y, ...(num(n.w) ? { w: n.w } : {}), ...(num(n.h) ? { h: n.h } : {}) };
+    const box = { id: n.id, x: n.x, y: n.y, ...(num(n.w) ? { w: n.w } : {}), ...(num(n.h) ? { h: n.h } : {}),
+      ...(num(n.z) && Number.isSafeInteger(n.z) && n.z > 0 ? { z: n.z } : {}) };
     const by = n.by as { agent?: unknown; session?: unknown } | undefined;
     const parent = {
       ...(typeof n.parent === 'string' ? { parent: n.parent } : {}),
       ...(by && typeof by.agent === 'string' && by.agent ? { by: { agent: by.agent, ...(typeof by.session === 'string' && by.session ? { session: by.session } : {}) } } : {}),
     };
     const make = MAKE_KINDS.find((k) => k === n.make);
-    if (make) nodes.push({ ...box, ...parent, ...readMake(n), make });
+    const title = typeof n.title === 'string' ? n.title.trim().slice(0, 120) : '';
+    const named = title ? { title } : {};
+    if (make) nodes.push({ ...box, ...parent, ...named, ...readMake(n), make });
     else if (n.cut === true) nodes.push({ ...box, ...parent, cut: true });
-    else if (typeof n.path === 'string' && n.path) nodes.push({ ...box, ...parent, path: n.path });
+    else if (typeof n.path === 'string' && n.path) nodes.push({ ...box, ...parent, ...named, path: n.path });
     else if (typeof n.text === 'string') nodes.push({ ...box, ...parent, text: n.text });
     else if (typeof n.group === 'string') {
       const color = GROUP_COLORS.find((c) => c === n.color) ?? 'gray';
@@ -354,9 +361,11 @@ export function ratioOf(asked: string | undefined, spec?: ModelSpec): string {
   });
 }
 
-/** The ways a model makes a clip (VIDEO_MODES): from words always; from frames, references, or everything, as it takes them. */
+/** The ways a model makes a clip (VIDEO_MODES), as it takes words, frames or references. */
 export function modesFor(spec?: ModelSpec): VideoMode[] {
   if (spec?.needs) return [];
+  if (spec?.frames === 'first-required') return ['first'];
+  if (spec?.frames === 'first') return ['text', 'first'];
   const frames = spec?.frames !== false;
   const refs = spec?.refs !== 0;
   return VIDEO_MODES.filter((m) => m === 'text' || (m === 'first' || m === 'firstLast' ? frames : m === 'refs' ? refs : refs && Boolean(spec?.voice || spec?.clip)));
@@ -368,6 +377,7 @@ export function modesFor(spec?: ModelSpec): VideoMode[] {
  */
 export function modeOf(opts: MakeOptions | undefined, spec: ModelSpec | undefined, pictures: number): VideoMode {
   const can = modesFor(spec);
+  if (spec?.frames === 'first-required') return 'first';
   if (opts?.mode && can.includes(opts.mode)) return opts.mode;
   if (opts?.frames && can.includes('firstLast')) return pictures > 1 ? 'firstLast' : 'first';
   if (!pictures) return 'text';

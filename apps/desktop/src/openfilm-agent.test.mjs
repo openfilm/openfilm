@@ -139,7 +139,7 @@ test('the private Studio catalog is authoritative for the shared login and makes
   s.account.connection = { status: 401, catalog: null, error: 'Invalid key' };
   await s.agent.refresh();
   assert.equal(s.agent.state().status, 'sign-in', 'a shared rejection overrides the previous cached catalog at once');
-  assert.equal(s.agent.state().error, 'Invalid key');
+  assert.equal(s.agent.state().error, undefined, 'a rejected credential asks for sign-in without an API error');
   s.account.connection = { status: 200, catalog, error: null };
   await s.agent.refresh();
   assert.equal(s.agent.state().status, 'ready');

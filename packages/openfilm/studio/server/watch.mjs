@@ -6,7 +6,7 @@
  * by every page showing it, closed when the last one leaves. Studio's own folders and the usual build and dependency
  * folders are not watched.
  */
-import { readdirSync, watch } from 'node:fs';
+import { readdirSync, statSync, watch } from 'node:fs';
 import { join } from 'node:path';
 import { readProjectFilm, settleProjectFilm } from './film.mjs';
 import { settleFiles } from './person-edits.mjs';
@@ -20,7 +20,7 @@ const IGNORED = /(^|[/\\])(\.[^/\\]+|node_modules|dist|build)([/\\]|$)/;
 const SETTLE_MS = 120;
 /** How long missing project files are rechecked before their pages are told (the project gone, or its film.html). */
 const GONE_RECHECK_MS = 400;
-/** A deleted root is not reliably reported by every file system's watcher. */
+/** A native watcher can miss an edit, a replacement, or the loss of its root. */
 const PRESENCE_MS = 1000;
 
 /* Studio's own half-written files (a file written whole through a random-named sibling, atomic.mjs; an import
@@ -46,8 +46,9 @@ const WRITING = /(^|[/\\])([^/\\]+\.[0-9a-f-]{8,}\.tmp|\.\d+\.\d+\.importing)$/;
 /**
  * Watch `root`; `send` gets each change once it settles. Returns `close`.
  * @param {string} root @param {(event: FolderEvent) => void} send
+ * @param {{ watch?: typeof watchTree }} [options]
  */
-export function watchFolder(root, send) {
+export function watchFolder(root, send, { watch: watchFiles = watchTree } = {}) {
   /** @type {Set<'film' | 'files'>} */
   const pending = new Set();
   /** @type {Set<string> | null} null: some change could not say which file */
@@ -59,7 +60,19 @@ export function watchFolder(root, send) {
   let gone = false;
   /* film.html missing from a folder still there, and said so */
   let filmMissing = false;
-  readProjectFilm(root).then((f) => { lastRev = f.rev; }, () => {});
+  const file = join(root, FILM_FILE);
+  const stamp = () => {
+    try {
+      const stat = statSync(file, { bigint: true, throwIfNoEntry: false });
+      return stat?.isFile() ? `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}` : null;
+    } catch { return null; }
+  };
+  /* Poll only the timeline file's metadata. The native watcher still handles immediate updates and media changes. */
+  const initialStamp = stamp();
+  let checkedStamp = initialStamp;
+  readProjectFilm(root).then((f) => {
+    if (!closed && !checking && !lastRev && initialStamp && stamp() === initialStamp) lastRev = f.rev;
+  }, () => { checkedStamp = null; });
 
   const flush = async () => {
     timer = null;
@@ -80,6 +93,7 @@ export function watchFolder(root, send) {
          even with the same text as before */
       if (missing === 'film') {
         pending.delete('film');
+        checkedStamp = null;
         if (!filmMissing) { filmMissing = true; lastRev = ''; send({ type: 'film-missing' }); }
       } else if (filmMissing) { filmMissing = false; pending.add('film'); }
       const kinds = [...pending];
@@ -87,11 +101,14 @@ export function watchFolder(root, send) {
       pending.clear();
       paths = new Set();
       if (kinds.includes('film')) {
+        const before = stamp();
         const { rev } = await settleProjectFilm(root, { stable: true }).catch(() => ({ rev: '' }));
         /* the same text written again (an editor's save, Studio's own write echoed back) is no change */
         if (closed) return;
         /* deleted during the read: wait for presence to settle instead of publishing an empty film */
         if (projectMissing(root)) { pending.add('film'); return; }
+        /* A failed read, or a write during that read, will be checked again on the next tick. */
+        checkedStamp = rev ? before : null;
         if (rev && rev !== lastRev) { lastRev = rev; send({ type: 'film', rev }); }
       }
       if (kinds.includes('files')) {
@@ -99,6 +116,9 @@ export function watchFolder(root, send) {
         if (closed) return;
         send(changed ? { type: 'files', paths: [...changed] } : { type: 'files' });
       }
+    } catch {
+      /* A file may be temporarily locked (for example during replacement on Windows). */
+      checkedStamp = null;
     } finally {
       checking = false;
       if (!closed && !gone && pending.size) schedule();
@@ -106,7 +126,7 @@ export function watchFolder(root, send) {
   };
   const schedule = () => { if (!timer && !checking && !closed && !gone) timer = setTimeout(flush, SETTLE_MS); };
 
-  const close = watchTree(root, (name) => {
+  const close = watchFiles(root, (name) => {
     if (closed || gone) return;
     if (!name) { pending.add('files'); pending.add('film'); paths = null; }
     else {
@@ -117,11 +137,14 @@ export function watchFolder(root, send) {
     }
     schedule();
   });
-  /* the folder gone, or film.html gone or back since last said */
+  /* The folder gone, film.html gone or back, or a write the native watcher did not report. */
   const presence = setInterval(() => {
     if (closed || gone) return;
-    const missing = projectMissing(root);
-    if (missing === 'folder' || (missing === 'film') !== filmMissing) schedule();
+    try {
+      const missing = projectMissing(root);
+      if (!missing && stamp() !== checkedStamp) pending.add('film');
+      if (pending.size || missing === 'folder' || (missing === 'film') !== filmMissing) schedule();
+    } catch { checkedStamp = null; }
   }, PRESENCE_MS);
   presence.unref();
   return () => { closed = true; clearInterval(presence); if (timer) clearTimeout(timer); close(); };

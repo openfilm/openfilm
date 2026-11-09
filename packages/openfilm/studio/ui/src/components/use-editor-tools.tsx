@@ -17,7 +17,7 @@ import {
 } from '@/lib/markers';
 import type { ClipEdit } from '@/lib/film-clip-edits';
 import { historyMoved } from '@/lib/project-history';
-import { heardClips, toggleSolo } from '@/lib/solo';
+import { heardClips, placeSolo, toggleSolo } from '@/lib/solo';
 import type { EditModel } from '@/lib/timeline-edit';
 import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import type { ActionId } from '@/lib/keymap';
@@ -32,6 +32,7 @@ import type { MarkerLaneView } from './Timeline';
 import { ClipMarkers, LaneMarkers, MarkerGlyph, type MarkerActions } from './TimelineMarkers';
 
 type Toast = { show: (text: string) => void; showError: (text: string) => void };
+const NO_SOLO: ReadonlySet<number> = new Set();
 
 /** A file brought in to replace a clip: how long its length is waited for, and how long the file itself. */
 const REPLACE_PROBE_MS = 8000;
@@ -152,14 +153,25 @@ export function useEditorTools({
   }, [addMarkerHere, goMarker]);
 
   /* ── solo: Studio's playback only ── */
-  const [solo, setSolo] = React.useState<ReadonlySet<number>>(new Set());
-  React.useEffect(() => { setSolo(new Set()); }, [projectId]);
+  const [soloState, setSoloState] = React.useState<{ tracks: Film['tracks']; indexes: ReadonlySet<number> } | null>(null);
+  React.useEffect(() => { setSoloState(null); }, [projectId]);
+  const filmTracks = film?.tracks;
+  const solo = React.useMemo(() => soloState && filmTracks ? placeSolo(soloState.tracks, filmTracks, soloState.indexes) : NO_SOLO, [soloState, filmTracks]);
+  React.useEffect(() => {
+    if (soloState && filmTracks && soloState.tracks !== filmTracks) {
+      setSoloState((current) => current === soloState ? (solo.size ? { tracks: filmTracks, indexes: solo } : null) : current);
+    }
+  }, [soloState, filmTracks, solo]);
   const heard = React.useMemo(() => heardClips(film?.tracks ?? [], solo), [film, solo]);
   React.useEffect(() => { player.current.setHeard(heard); }, [player, heard]);
   const soloProp = React.useMemo(() => ({
     tracks: solo,
-    onToggle: (docIndex: number, only: boolean) => setSolo((now) => toggleSolo(now, docIndex, only)),
-  }), [solo]);
+    onToggle: (docIndex: number, only: boolean) => {
+      if (!filmTracks) return;
+      const indexes = toggleSolo(solo, docIndex, only);
+      setSoloState(indexes.size ? { tracks: filmTracks, indexes } : null);
+    },
+  }), [filmTracks, solo]);
 
   /* ── track heights: kept in the project's settings; while an edge is dragged, the height in hand ── */
   const [live, setLive] = React.useState<{ docIndex: number; height: number } | null>(null);

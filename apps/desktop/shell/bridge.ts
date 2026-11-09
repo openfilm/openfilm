@@ -10,6 +10,7 @@
  * (src/preload.cjs). Imported before Studio's modules and the chat's: Studio reads its host as it loads.
  */
 import { flushSync } from 'react-dom';
+import { workspaceChatWidth } from 'openfilm/studio-ui/lib/workspaces.ts';
 import type { CommunityItem, HostAgent, HostAsk, HostProject as Project, HostUpdate, HostUpdateState, StudioCommand, StudioHost, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
 
 type Listener<T> = (value: T) => void;
@@ -72,7 +73,7 @@ const chatOpenSignal = signal(true);
 
 /** The column's width as the window allows it: Studio keeps its least width, the chat its own while it fits. */
 let workspaceBounds: { left: number; top: number; width: number; height: number } | null = null;
-const shownWidth = () => workspaceBounds && layout.open ? workspaceBounds.width : (layout.open ? Math.max(Math.min(layout.width, innerWidth - layout.studioMin), Math.min(layout.min, innerWidth)) : 0);
+const shownWidth = () => workspaceBounds && layout.open ? workspaceBounds.width : (layout.open ? workspaceChatWidth(innerWidth, layout.width, layout.min, layout.studioMin) : 0);
 const panelState = () => ({ open: layout.open, width: shownWidth(), preferredWidth: layout.width, assets: { open: assets.open && (layout.libraryDock !== 'chat' || layout.open), bottom: assets.bottom } });
 const panelListeners = new Set<Listener<ReturnType<typeof panelState>>>();
 
@@ -285,7 +286,7 @@ const windows = native.platform === 'win32';
 const INSET = 74;
 const INSET_RIGHT = 138;
 
-const host: StudioHost = {
+export const host: StudioHost = {
   version: 1,
   name: 'OpenFilm',
   projectChanged,
