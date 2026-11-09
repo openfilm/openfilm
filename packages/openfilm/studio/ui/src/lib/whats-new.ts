@@ -477,8 +477,8 @@ export const RELEASE: ReleaseNotes = {
 /** -1, 0 or 1 as `a` is older than, the same as or newer than `b` (x.y.z; a pre-release is older than its release). */
 export function compareVersions(a: string, b: string): number {
   const parse = (v: string) => {
-    const [core, pre = ''] = v.split('-');
-    return { parts: core.split('.').map((n) => Number(n) || 0), pre };
+    const at = v.indexOf('-');
+    return { parts: (at < 0 ? v : v.slice(0, at)).split('.').map((n) => Number(n) || 0), pre: at < 0 ? '' : v.slice(at + 1) };
   };
   const x = parse(a), y = parse(b);
   for (let i = 0; i < 3; i++) {
@@ -488,7 +488,7 @@ export function compareVersions(a: string, b: string): number {
   if (x.pre === y.pre) return 0;
   if (!x.pre) return 1;
   if (!y.pre) return -1;
-  return x.pre < y.pre ? -1 : 1;
+  return Math.sign(x.pre.localeCompare(y.pre, 'en', { numeric: true }));
 }
 
 /** This release's notes when `version` is this release, else null. */
