@@ -155,9 +155,6 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
       near({ x: plus.x + plus.width / 2, y: plus.y + plus.height / 2 }, pointer);
     }
     const handle = node.locator('[data-handleid="out"]');
-    const plus = await handle.locator('[data-canvas-side-plus]').boundingBox();
-    const start = { x: plus.x + plus.width / 2, y: plus.y + plus.height / 2 };
-    const drop = { x: 1209, y: start.y + 71 };
     const dragWire = page.locator('[data-canvas-wire="drag"]');
     const menuWire = page.locator('[data-canvas-wire="menu"]');
     const endpoints = (wire) => wire.evaluate((path) => {
@@ -176,7 +173,11 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     const dragFlow = page.locator('.react-flow__connectionline .cv-wire-flow');
     await page.getByRole('button', { name: 'Snap to grid' }).click();
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.mouse.move(start.x, start.y);
+    // Moving to the toolbar reset the plus offset. Start from the live handle, not its earlier decoration.
+    await handle.hover();
+    const bounds = await handle.boundingBox();
+    const start = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+    const drop = { x: 1209, y: start.y + 71 };
     await page.mouse.down();
     for (const pointer of [{ x: start.x + 65, y: start.y + 25 }, drop]) {
       await page.mouse.move(pointer.x, pointer.y, { steps: 4 });
@@ -214,10 +215,9 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     assert.deepEqual(await stroke(edge), activeStroke);
 
     const incoming = node.locator('[data-handleid="in"]');
-    await node.hover();
-    const leftPlus = await incoming.locator('[data-canvas-side-plus]').boundingBox();
-    const leftDrop = { x: 227, y: leftPlus.y + 31 };
-    await page.mouse.move(leftPlus.x + leftPlus.width / 2, leftPlus.y + leftPlus.height / 2);
+    await incoming.hover();
+    const leftHandle = await incoming.boundingBox();
+    const leftDrop = { x: 227, y: leftHandle.y + leftHandle.height / 2 + 31 };
     await page.mouse.down();
     await page.mouse.move(leftDrop.x, leftDrop.y, { steps: 8 });
     await page.mouse.up();

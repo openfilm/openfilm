@@ -307,7 +307,7 @@ test('an uncached voice downloads and plays only on click', { timeout: 60_000 },
           return { area, color, edgeSpread: farthestPainted - nearestClear };
         });
         const quiet = await readOrbFrame();
-        await page.waitForFunction(() => Number(document.querySelector('[data-voice-orb]')?.getAttribute('data-energy')) > 40);
+        await page.waitForFunction(() => Number(document.querySelector('[data-voice-orb]')?.getAttribute('data-energy')) > 55);
         const loud = await readOrbFrame();
         assert.ok(quiet.area > 0 && quiet.edgeSpread < 2 && loud.edgeSpread < 2, 'the painted outline is circular in both frames');
         assert.ok(loud.area > quiet.area * 1.07, 'the circle expands evenly with the voice');

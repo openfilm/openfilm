@@ -157,7 +157,8 @@ test('opening before warm-up shows a canvas loading surface until an empty board
     await page.route(`**${path}`, async (route) => { await hold; await route.continue(); });
     try {
       await page.goto(url);
-      await page.locator('[data-work-mode="edit"]').click();
+      // Test the first click while the board request is held, independently of frame scheduling on the runner.
+      await page.locator('[data-work-mode="edit"]').dispatchEvent('click');
       const loading = page.locator('[data-canvas-loading]');
       await loading.waitFor({ state: 'visible' });
       assert.equal(await loading.getAttribute('aria-busy'), 'true');
