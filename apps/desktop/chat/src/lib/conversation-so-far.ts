@@ -15,16 +15,17 @@ const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0
 export function withConversationSoFar(earlier: readonly SavedTurn[], text: string): string {
   const said: string[] = [];
   let size = 0;
+  let cut = false;
   for (const { turn, items } of [...earlier].reverse()) {
     const reply = items.filter((item) => item.kind === 'text' && item.text?.trim()).map((item) => item.text!.trim()).join('\n\n');
     const prompt = turn.prompt?.trim();
     if (!prompt && !reply) continue;
     const one = [prompt ? `Person: ${prompt}` : '', reply ? `You: ${clip(reply, REPLY_MAX)}` : ''].filter(Boolean).join('\n');
-    if (size + one.length > SO_FAR_MAX) break;
+    if (size + one.length > SO_FAR_MAX) { cut = true; break; }
     said.unshift(one);
     size += one.length;
   }
   if (!said.length) return text;
   return 'This conversation went on before, in a session of yours that could not be opened again. What was said so far'
-    + `${said.length < earlier.length ? ' (the latest of it)' : ''}:\n\n<conversation-so-far>\n${said.join('\n\n')}\n</conversation-so-far>\n\n${text}`;
+    + `${cut ? ' (the latest of it)' : ''}:\n\n<conversation-so-far>\n${said.join('\n\n')}\n</conversation-so-far>\n\n${text}`;
 }
