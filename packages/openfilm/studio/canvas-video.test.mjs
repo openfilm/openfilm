@@ -173,14 +173,31 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     const dragFlow = page.locator('.react-flow__connectionline .cv-wire-flow');
     await page.getByRole('button', { name: 'Snap to grid' }).click();
     await page.emulateMedia({ reducedMotion: 'no-preference' });
+    // Check the browser delivered the input before asserting on the connection rendered from it.
+    await page.evaluate(() => {
+      document.addEventListener('mousedown', (event) => {
+        window.__wirePress = event.target.closest?.('[data-handleid]')?.dataset.handleid;
+      }, true);
+      document.addEventListener('mousemove', (event) => {
+        if (event.buttons === 1) window.__wireMove = { x: event.clientX, y: event.clientY };
+      }, true);
+    });
+    const moveWire = async (point, steps) => {
+      await page.mouse.move(point.x, point.y, { steps });
+      await page.waitForFunction(({ x, y }) => {
+        const move = window.__wireMove;
+        return move && Math.hypot(move.x - x, move.y - y) < 2;
+      }, point);
+    };
     // Moving to the toolbar reset the plus offset. Start from the live handle, not its earlier decoration.
     await handle.hover();
     const bounds = await handle.boundingBox();
     const start = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
     const drop = { x: 1209, y: start.y + 71 };
     await page.mouse.down();
+    await page.waitForFunction(() => window.__wirePress === 'out');
     for (const pointer of [{ x: start.x + 65, y: start.y + 25 }, drop]) {
-      await page.mouse.move(pointer.x, pointer.y, { steps: 4 });
+      await moveWire(pointer, 4);
       await dragWire.waitFor({ state: 'attached' });
       const [origin, tip] = await endpoints(dragWire);
       near(origin, cardEdge);
@@ -219,7 +236,8 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     const leftHandle = await incoming.boundingBox();
     const leftDrop = { x: 227, y: leftHandle.y + leftHandle.height / 2 + 31 };
     await page.mouse.down();
-    await page.mouse.move(leftDrop.x, leftDrop.y, { steps: 8 });
+    await page.waitForFunction(() => window.__wirePress === 'in');
+    await moveWire(leftDrop, 8);
     await page.mouse.up();
     await menuWire.waitFor({ state: 'attached' });
     near((await endpoints(menuWire))[1], leftDrop);
