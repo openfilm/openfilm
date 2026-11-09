@@ -67,7 +67,7 @@ export function attachmentsInText<T extends AttachmentRecord>(files: readonly T[
 export function attachmentWords(file: Pick<AttachmentRecord, 'path' | 'folder'>): string | null {
   if (!file.path) return null;
   const path = file.folder ? `${file.path.replace(/[\\/]+$/, '')}/` : file.path;
-  return /\s/.test(path) ? `\`${path}\`` : path;
+  return /\s/.test(path) ? `\`${path.replace(/`/g, '\\`')}\`` : path;
 }
 
 /**
