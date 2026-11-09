@@ -590,7 +590,9 @@ export async function catalog(only, { web = false } = {}) {
 /**
  * One question answered by the person's agent's own model, with no chat (an app with a chat, studio-process.mjs):
  * its words, whole. Throws `code: 'no-agent'` when no agent is ready.
- * @typedef {(text: string, signal?: AbortSignal) => Promise<string>} AskAgent
+ * @typedef {{ agent: string, options: Record<string, string | number | boolean> }} WritingModel
+ * @typedef {{ mimeType: string, data: string }} WritingImage
+ * @typedef {(text: string, signal?: AbortSignal, model?: WritingModel, images?: WritingImage[]) => Promise<string>} AskAgent
  */
 
 /** The JSON in an agent's answer: all of it, or from its first `{` to its last `}` when the agent wrapped it in words. */

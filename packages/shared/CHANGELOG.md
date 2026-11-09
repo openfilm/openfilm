@@ -1,5 +1,11 @@
 # @openfilm/shared
 
+## 0.3.2
+
+### Patch Changes
+
+- 6f3aafe: Desktop: an MCP server named with underscores still names its tools in the chat
+
 ## 0.3.1
 
 ### Patch Changes

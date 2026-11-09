@@ -186,8 +186,10 @@ export interface MediaPoolProps {
    */
   fileRef?: (file: WorkspaceResource) => StudioRef;
   onRefer?: (ref: StudioRef) => void;
-  /** Show this file: its folder opened, the tile scrolled into view. `seq` goes up each time. */
-  reveal?: { path: string; seq: number } | null;
+  /** Open this file's folder, scroll to its tile and optionally highlight it once. */
+  reveal?: { path: string; seq: number; highlight?: boolean; done?: boolean } | null;
+  onRevealed?: (seq: number) => void;
+  shown?: boolean;
   /** The file a pill hovered in the app's chat points at: its tile lit while it is. */
   litPath?: string | null;
   /**
@@ -224,6 +226,8 @@ export function MediaPool({
   fileRef,
   onRefer,
   reveal,
+  onRevealed,
+  shown = true,
   litPath,
   onAdd,
 }: MediaPoolProps) {
@@ -311,19 +315,32 @@ export function MediaPool({
 
   /* a file asked to be shown: its folder opened (pages are at the top), a search or a filter that hides it let go */
   const gridRef = React.useRef<HTMLDivElement>(null);
+  const revealFile = reveal && !reveal.done ? allFiles?.find((f) => f.path === reveal.path) : undefined;
+  const revealFilter = revealFile ? filterOf(revealFile) : null;
+  const revealFolder = revealFile && inMedia(revealFile.path) ? relDir(assetRel(revealFile.path)) : '';
+  const [flash, setFlash] = React.useState<{ path: string; seq: number } | null>(null);
+  const scrolled = React.useRef<number | null>(null);
   React.useEffect(() => {
-    if (!reveal) return undefined;
-    const file = allFiles?.find((f) => f.path === reveal.path);
-    if (!file) return undefined;
+    if (!reveal || !shown || !revealFilter) return;
     setQuery('');
-    setView((v) => (v.filter === 'all' || v.filter === filterOf(file) ? v : { ...v, filter: 'all' }));
-    setAt(inMedia(file.path) ? relDir(assetRel(file.path)) : '');
-    const frame = requestAnimationFrame(() => {
-      gridRef.current?.querySelector(`[data-media-path="${CSS.escape(file.path)}"]`)?.scrollIntoView({ block: 'nearest' });
-    });
-    return () => cancelAnimationFrame(frame);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reveal?.seq]);
+    setView((v) => (v.filter === 'all' || v.filter === revealFilter ? v : { ...v, filter: 'all' }));
+    setAt(revealFolder);
+  }, [reveal, revealFilter, revealFolder, setAt, shown]);
+  React.useEffect(() => {
+    if (!reveal || !revealFilter || !shown || scrolled.current === reveal.seq || query || at !== revealFolder
+      || (view.filter !== 'all' && view.filter !== revealFilter)) return;
+    const tile = gridRef.current?.querySelector(`[data-media-path="${CSS.escape(reveal.path)}"]`);
+    if (!tile?.getClientRects().length) return;
+    scrolled.current = reveal.seq;
+    tile.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (reveal.highlight) setFlash(reveal);
+    onRevealed?.(reveal.seq);
+  }, [reveal, revealFilter, revealFolder, shown, query, at, view.filter, items, onRevealed]);
+  React.useEffect(() => {
+    if (!flash) return;
+    const timer = window.setTimeout(() => setFlash(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [flash]);
 
   /* the open folder went away (deleted, renamed outside): back to All */
   React.useEffect(() => {
@@ -1013,6 +1030,7 @@ export function MediaPool({
                 where={repeated.has(item.file.name) ? item.file.path.slice(0, Math.max(0, item.file.path.lastIndexOf('/'))) || item.file.path : undefined}
                 selected={chosen.includes(item.file.path)}
                 lit={litPath === item.file.path}
+                revealed={flash?.path === item.file.path}
                 {...(item.file.link ? { linkLabel: item.file.link.missing ? t('media.linkMissing') : t('media.linkedFrom').replace('{path}', item.file.link.to) } : {})}
                 {...(item.file.proxy ? { proxyLabel: proxyText(item.file.proxy, t), proxyMark: proxyMark(item.file.proxy) } : {})}
                 renaming={renaming === item.file.path}
@@ -1244,6 +1262,7 @@ function FileTile(p: {
   selected: boolean; renaming: boolean;
   /** What a pill hovered in the app's chat points at. */
   lit?: boolean;
+  revealed?: boolean;
   /** The file as a reference in the app's chat, carried by a drag beside the file itself. */
   studioRef?: () => StudioRef;
   /** What a drag of it moves into a folder: it, or every one picked with it. */
@@ -1264,14 +1283,16 @@ function FileTile(p: {
   componentMark?: string;
 }) {
   const bundle = p.file.bundle;
+  const lit = p.lit || p.revealed;
   return (
     <div
       className={p.row
-        ? `${ROW} outline-none ${p.lit ? 'ring-1 ring-inset ring-[var(--accent)]' : ''} ${p.selected ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'}`
+        ? `${ROW} outline-none ${lit ? 'ring-1 ring-inset ring-[var(--accent)]' : ''} ${p.selected ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'}`
         : 'group min-w-0 cursor-default select-none outline-none'}
       data-media-path={p.file.path}
       data-media-key={p.file.path}
       data-chat-lit={p.lit ? '' : undefined}
+      data-media-revealed={p.revealed ? '' : undefined}
       title={p.where ? p.file.path : p.file.name}
       draggable={!p.renaming}
       /* a drag picks nothing: picking opens the inspector, and the pane laid out again under the pointer (or hidden for
@@ -1314,7 +1335,7 @@ function FileTile(p: {
       ) : <>
       {/* the same room above as a folder's stacked cards, so covers and names line up across a row */}
       <div className="pt-[7px]">
-        <div className={`${TILE_BOX} bg-[var(--bg-hover)] ${p.lit ? 'ring-[var(--accent)] shadow-[0_0_10px_1px_color-mix(in_srgb,var(--accent)_55%,transparent)]' : p.selected ? 'ring-[var(--accent)]' : 'ring-transparent group-hover:ring-[var(--border)]'}`}>
+        <div className={`${TILE_BOX} bg-[var(--bg-hover)] ${lit ? 'ring-[var(--accent)] shadow-[0_0_10px_1px_color-mix(in_srgb,var(--accent)_55%,transparent)]' : p.selected ? 'ring-[var(--accent)]' : 'ring-transparent group-hover:ring-[var(--border)]'}`}>
           {p.file.kind === 'mg' ? <PagePoster file={p.file} sources={p.sources} /> : <MediaPreview file={p.file} sources={p.sources} />}
           {/* a link to media kept elsewhere: marked; one that cannot be reached (a NAS that is off) says so over it */}
           {p.file.link?.missing ? (
@@ -1411,7 +1432,7 @@ function PagePoster({ file, sources }: { file: WorkspaceResource; sources: Media
   const own = sources.pagePoster?.(file);
   /* drawn in the headless browser: asked for in turn with Studio's other media (lib/media-queue), once near the screen */
   const [nearRef, near] = useNearViewport<HTMLSpanElement>();
-  const turn = useMediaImage(own && failed !== own ? own : null, near);
+  const turn = useMediaImage(own && failed !== own ? own : null, near, 'visible');
   const src = turn && failed !== turn ? turn : null;
   const shown = src != null && loaded != null;
   return (

@@ -26,8 +26,7 @@ export type ExportRequest = { range?: [number, number]; ranges?: [number, number
   | { kind: 'subtitles'; format: 'srt' | 'vtt' | 'txt' }
   | (Framing & { kind: 'slides'; format: 'pptx' | 'pdf'; shortEdge: number; at?: number[] })
   /* for an editing program: an XML and media folder; `media: 'link'` points at the sources where they are instead of cloning them */
-  | { kind: 'nle'; format?: 'xml' | 'fcpxml' | 'jianying' | 'capcut'; fps: number; audio: 'clips' | 'stems'; media?: 'copy' | 'link'; subtitles: boolean;
-      footage?: 'source' | 'render';
+  | { kind: 'nle'; format?: 'xml' | 'fcpxml' | 'jianying' | 'capcut'; fps: number; audio: 'clips' | 'stems'; media?: 'copy' | 'link';
       /* how the pages, rendered with their alpha, are written */
       alpha?: NleAlpha }
   /* the project itself: its work, and the parts of its .film asked; a zip of its folder, or the folder */
@@ -148,9 +147,11 @@ export function basenameOf(path: string): string {
 
 export function formatBytes(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '—';
-  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB`;
-  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  const kb = n / 1024;
+  if (kb < 1023.5) return `${Math.max(1, Math.round(kb))} KB`;
+  const mb = n / (1024 * 1024);
+  if (mb < 1023.5) return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+  return `${(n / (1024 ** 3)).toFixed(2)} GB`;
 }
 
 export function formatDuration(ms: number): string {

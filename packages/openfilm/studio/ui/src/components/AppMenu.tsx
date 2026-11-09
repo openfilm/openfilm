@@ -3,8 +3,9 @@ import React from 'react';
 import { ChevronRight, MessageSquare, Settings2, Star, Users } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { useClickOpen } from '@/lib/click-open';
+import { studioHost } from '@/lib/host';
 import { menuStep } from '@/lib/menu-position';
-import { COMMUNITY_CHANNELS, CREATOR_CHANNELS, CREATOR_HANDLE, PRODUCT_LINKS } from '@/lib/product-links';
+import { communityChannels, CREATOR_CHANNELS, CREATOR_HANDLE, PRODUCT_LINKS } from '@/lib/product-links';
 import { BrandLogo } from './BrandLogo';
 import { Popover } from './Popover';
 import { SocialLogo, type SocialPlatform } from './SocialLogo';
@@ -166,7 +167,7 @@ export function AppMenu({ onSettings }: { onSettings: (section: SettingsSection)
       onFocusCapture={() => { focused.current = true; popup.setOpen(true); }} onKeyDown={(event) => onKeyDown(event, true)} onBlur={onBlur}>
       <div className={styles.communityGroup} role="group" aria-label={t('appMenu.officialCommunity')}>
         <p className={styles.groupLabel}>{t('appMenu.officialCommunity')}</p>
-        <div className={styles.logos}>{COMMUNITY_CHANNELS.map(social)}{chinese ? weChat(true) : null}</div>
+        <div className={styles.logos}>{communityChannels(studioHost ? language : 'en').map(social)}{chinese ? weChat(true) : null}</div>
       </div>
       <div className={styles.communityGroup} role="group" aria-label={CREATOR_HANDLE}>
         <p className={styles.groupLabel}>{CREATOR_HANDLE}</p>

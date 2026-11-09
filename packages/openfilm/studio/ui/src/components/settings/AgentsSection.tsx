@@ -211,7 +211,7 @@ export function AgentsSection() {
     if (agent.connectionIssue && (agent.status === 'ready' || agent.status === 'off')) return t(`settings.agents.${agent.connectionIssue.kind === 'quota' ? 'quotaReached' : 'modelCredentials'}`);
     switch (agent.status) {
       case 'off': return t(agent.shown ? 'settings.agents.off' : 'settings.agents.available');
-      case 'sign-in': return t('settings.agents.signedOut');
+      case 'sign-in': return t(agent.id === 'openfilm' ? 'settings.agents.off' : 'settings.agents.signedOut');
       case 'waiting': return t('settings.agents.waiting');
       case 'missing':
         if (agent.setupRequired === 'code-tab') return t('settings.agents.claudeSetup');
@@ -288,7 +288,7 @@ export function AgentsSection() {
     const problem = agent.status === 'ready' && agent.problem ? agent.problem : null;
     /* older than the chat was tried with: it works, but may not list the newest models; how to update it */
     const outdated = chosen && agent.status === 'ready' && agent.outdated ? agent.outdated : null;
-    const said = error?.id === agent.id ? error.text : agent.error ?? (problem ? `${t('settings.agents.unreadable')} ${problem}` : undefined);
+    const said = error?.id === agent.id ? error.text : agent.id === 'openfilm' ? undefined : agent.error ?? (problem ? `${t('settings.agents.unreadable')} ${problem}` : undefined);
     const open = agent.id === 'byok' && keyOpen;
     /* where it is not found: why, on asking (Claude Code waiting for its app's Code tab is not lost) */
     const showHelper = OWN.includes(agent.id) && (['missing', 'off', 'sign-in', 'waiting'].includes(agent.status) || Boolean(said) || Boolean(agent.connectionIssue));

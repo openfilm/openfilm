@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chunkFolder, chunkStore, chunksOf, settingsOf, signature, sweep } from './render-resume.mjs';
+import { chunkFolder, chunkStore, chunksOf, removeLetGo, settingsOf, signature, sweep } from './render-resume.mjs';
 
 const scratch = () => mkdtempSync(join(tmpdir(), 'of-resume-'));
 
@@ -67,7 +67,7 @@ test('a small file is known by what is in it, a large one by its size and time; 
   }
 });
 
-test('a stopped render keeps its whole chunks; the next with the same settings and files uses them, any other starts clean', () => {
+test('a stopped render keeps its whole chunks; the next with the same settings and files uses them, any other starts clean', async () => {
   const dir = scratch();
   const renderDir = join(dir, '.film', 'cache', 'render');
   const out = join(dir, 'film.mp4');
@@ -81,7 +81,7 @@ test('a stopped render keeps its whole chunks; the next with the same settings a
     let store = chunkStore(renderDir, out, '.mp4');
     assert.equal(store.folder, chunkFolder(renderDir, out));
     assert.equal(store.kept, null);
-    store.start(settings);
+    await store.start(settings);
     draw(store, c0);
     store.finished(c0, used);
     draw(store, c1); // cut off as it was drawn
@@ -91,7 +91,7 @@ test('a stopped render keeps its whole chunks; the next with the same settings a
     /* the same settings, the files as they were: the chunk is used, the one cut off drawn again */
     store = chunkStore(renderDir, out, '.mp4');
     assert.equal(store.kept, settings);
-    store.start(settings);
+    await store.start(settings);
     assert.deepEqual([c0, c1, c2].map((c) => store.done(c)), [true, false, false]);
     draw(store, c1);
     store.finished(c1, used);
@@ -101,7 +101,7 @@ test('a stopped render keeps its whole chunks; the next with the same settings a
     writeFileSync(asset, 'another picture');
     store = chunkStore(renderDir, out, '.mp4');
     assert.equal(store.kept, null);
-    store.start(settings);
+    await store.start(settings);
     assert.deepEqual([c0, c1].map((c) => store.done(c)), [false, false]);
     draw(store, c0);
     store.finished(c0, new Map([[asset, signature(asset)]]));
@@ -110,7 +110,7 @@ test('a stopped render keeps its whole chunks; the next with the same settings a
     /* other settings: nothing is used */
     store = chunkStore(renderDir, out, '.mp4');
     assert.equal(store.kept, settings);
-    store.start(settingsOf({ fps: '25', size: { w: 320, h: 180 } }));
+    await store.start(settingsOf({ fps: '25', size: { w: 320, h: 180 } }));
     assert.equal(store.done(c0), false);
 
     /* a render that ended takes its chunks away */
@@ -121,17 +121,17 @@ test('a stopped render keeps its whole chunks; the next with the same settings a
   }
 });
 
-test('a second render of the same file while one draws it draws apart, and takes its own folder away however it ends', () => {
+test('a second render of the same file while one draws it draws apart, and takes its own folder away however it ends', async () => {
   const dir = scratch();
   const renderDir = join(dir, 'render');
   const out = join(dir, 'film.mp4');
   try {
     const first = chunkStore(renderDir, out, '.mp4');
-    first.start('a');
+    await first.start('a');
     const second = chunkStore(renderDir, out, '.mp4');
     assert.equal(second.private, true);
     assert.notEqual(second.folder, first.folder);
-    second.start('a');
+    await second.start('a');
     second.close(false);
     assert.equal(existsSync(second.folder), false);
     first.close(false);
@@ -167,4 +167,46 @@ test('chunks no one resumed in two weeks, and the parts of a process that is gon
     living.kill();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+/** `file` held with no sharing, as an encoder holds what it writes on Windows, for `ms`: says when it is held. */
+function heldFor(file, ms) {
+  const child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', `$f = [IO.File]::Open($env:OPENFILM_TEST_HELD_PATH, 'Open', 'ReadWrite', 'None'); 'held'; Start-Sleep -Milliseconds ${ms}; $f.Close()`], {
+    env: { ...process.env, OPENFILM_TEST_HELD_PATH: file }, stdio: ['ignore', 'pipe', 'inherit'],
+  });
+  const letGo = new Promise((resolve) => child.on('close', resolve));
+  return new Promise((resolve) => child.stdout.once('data', () => resolve({ letGo })));
+}
+
+for (const [settings, what] of [['a', 'the same settings'], ['b', 'other settings']]) {
+  test(`a render started again with ${what} waits for the file its last encoder still holds`, { skip: process.platform === 'win32' ? false : 'Windows keeps a file held' }, async () => {
+    const dir = scratch();
+    const renderDir = join(dir, 'render');
+    const out = join(dir, 'film.mp4');
+    let letGo;
+    try {
+      const first = chunkStore(renderDir, out, '.mp4');
+      await first.start('a');
+      first.close(false);
+      const drawing = join(first.folder, 'drawing-0-30.mp4');
+      writeFileSync(drawing, 'cut off');
+      ({ letGo } = await heldFor(drawing, 800));
+      await chunkStore(renderDir, out, '.mp4').start(settings);
+      assert.equal(existsSync(drawing), false);
+    } finally {
+      await letGo;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('a held file is tried again until it is let go or the wait ends; any other error is told at once', async () => {
+  const held = (code) => Object.assign(new Error(code), { code });
+  let tries = 0;
+  await removeLetGo('x', {}, { every: 1, rm: () => { if (++tries < 3) throw held('EPERM'); } });
+  assert.equal(tries, 3);
+  await assert.rejects(removeLetGo('x', {}, { limit: 5, every: 1, rm: () => { throw held('EBUSY'); } }), { code: 'EBUSY' });
+  tries = 0;
+  await assert.rejects(removeLetGo('x', {}, { rm: () => { tries++; throw held('EISDIR'); } }), { code: 'EISDIR' });
+  assert.equal(tries, 1);
 });

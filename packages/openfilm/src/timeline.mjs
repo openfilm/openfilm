@@ -823,6 +823,16 @@ function wakePage(c) {
     c.child = win.film;
     c.touched = new Map();
     c.drawn = false;
+    /* A paused preview may have drawn a canvas before its images arrived. Ask the editor to paint the same
+       moment when they load, including lazy images that arrive after the document's load event. */
+    const loadedImages = new Set();
+    win.document.addEventListener('load', ({ target }) => {
+      if (c.waking !== mine || !c.shown || target?.localName !== 'img') return;
+      const src = target.currentSrc || target.src;
+      if (!src || loadedImages.has(src)) return;
+      loadedImages.add(src);
+      window.__filmEditor.redraw?.();
+    }, { capture: true });
     /* its own size, when it says one (else its clip's size, or the stage's: see settle) */
     if (c.child.width > 0 && c.child.height > 0) c.own = { w: c.child.width, h: c.child.height };
     /* opened for the first time after the film was up (see load): its own length and size, which the film had not
@@ -1434,6 +1444,7 @@ window.__filmSpans = () => clips.map((c) => ({
   id: c.id, src: c.src, track: c.track, at: c.at, end: c.end, native: Number.isFinite(c.native) ? c.native : null,
   ...(c.kind !== 'sound' && c.nw > 0 && c.nh > 0 ? { w: c.nw, h: c.nh } : {}),
   ...(c.kind === 'page' && !c.own ? { reflows: true } : {}),
+  ...(c.inner?.length ? { nestedAudio: true } : {}),
   ...(c.el ? { look: lookOf(c) } : {}),
 }));
 /**

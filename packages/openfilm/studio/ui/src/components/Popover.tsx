@@ -21,6 +21,7 @@ export function Popover({
   children,
   placement = 'bottom',
   align = 'start',
+  clampToViewport = false,
   layer = 10000,
   block = false,
   onEscapeKeyDown,
@@ -32,6 +33,8 @@ export function Popover({
   placement?: 'top' | 'bottom' | 'auto';
   /** end: align the panel's right edge to the trigger's right edge (avoids overflow for triggers near the right side of the screen); center: under its middle. */
   align?: 'start' | 'end' | 'center';
+  /** Keep the measured card inside the viewport even when its aligned edge leaves too little room. */
+  clampToViewport?: boolean;
   /** its z-index: above a dialog it opens in */
   layer?: number;
   /** the trigger takes the width it is given (a field), not only its own */
@@ -63,12 +66,15 @@ export function Popover({
     const openUp = placement === 'top'
       || (placement === 'auto' && below < need && above > below);
     const room = Math.max(0, openUp ? above : below);
-    const x = align === 'end' ? '-100%' : align === 'center' ? '-50%' : '0%';
+    const anchorX = align === 'end' ? r.right : align === 'center' ? r.left + r.width / 2 : r.left;
+    const x = align === 'end' ? 1 : align === 'center' ? 0.5 : 0;
+    const width = clampToViewport ? inner?.offsetWidth : undefined;
+    const left = width ? Math.max(pad, Math.min(anchorX - x * width, window.innerWidth - pad - width)) : anchorX;
     setPanelStyle({
       position: 'fixed',
-      left: align === 'end' ? r.right : align === 'center' ? r.left + r.width / 2 : r.left,
+      left,
       top: openUp ? r.top - gap : r.bottom + gap,
-      transform: `translate(${x}, ${openUp ? '-100%' : '0%'})`,
+      transform: `translate(${width ? 0 : -x * 100}%, ${openUp ? '-100%' : '0%'})`,
       zIndex: layer,
       /* Hand the remaining height on this side to the card: it uses the value as its own
          max-height, so the scroll viewport is inside the card and the rounded corners and border
@@ -76,7 +82,7 @@ export function Popover({
       ['--popover-max-h' as string]: `${room}px`,
       overflow: 'visible',
     });
-  }, [placement, align, layer]);
+  }, [placement, align, clampToViewport, layer]);
 
   React.useLayoutEffect(() => {
     if (!open) {

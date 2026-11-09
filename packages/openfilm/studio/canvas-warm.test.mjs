@@ -17,14 +17,16 @@ async function withBoard(nodes, run) {
   try {
     const root = join(process.env.OPENFILM_LIBRARY, 'Board');
     await mkdir(join(root, '.film'), { recursive: true });
-    await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1280, h: 720 }, tracks: [] }));
+    await writeFile(join(root, 'page.html'), '<body style="background:#234"><script>window.film={duration:3,frame(){}}</script>');
+    await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1280, h: 720 }, tracks: [{ clips: [{ id: 'page', src: 'page.html', time: [0, 3] }] }] }));
     const board = JSON.stringify({ nodes, edges: [] });
     const file = join(root, '.film', 'canvas.json');
     await writeFile(file, board);
     const project = await openProject(root);
     studio = await startStudio({ port: 0, openBrowser: () => {}, editorDir: process.env.OPENFILM_TEST_EDITOR_DIR });
     browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
-    const page = await browser.newPage({ viewport: { width: 1400, height: 900 }, locale: 'en-US', reducedMotion: 'reduce' });
+    const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: 'en-US', reducedMotion: 'reduce' });
+    const page = await context.newPage();
     page.setDefaultTimeout(8000);
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -47,10 +49,65 @@ async function withBoard(nodes, run) {
   }
 }
 
+test('an open video node picks up a service sign-in without reloading the canvas', { timeout: 45_000 }, async () => {
+  await withBoard([{ id: 'video', x: 0, y: 0, make: 'video', prompt: 'A camera moves toward the sea.' }], async ({ page, url }) => {
+    let status = 'disconnected';
+    const model = 'seedance-fast';
+    const name = 'Seedance 2.0 Fast';
+    await page.context().route((requestUrl) => requestUrl.pathname.startsWith('/api/providers'), async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === '/api/providers/openfilm/sign-in' && route.request().method() === 'POST') status = 'waiting';
+      const connected = status === 'connected';
+      await route.fulfill({ json: {
+        providers: [{ id: 'openfilm', name: 'OpenFilm', verbs: ['video'], models: { video: [{ id: model, name }] },
+          source: connected ? 'file' : null, signIn: true, account: null, keysUrl: '', pricingUrl: '', env: '', envKey: false, last4: null }],
+        use: { video: connected ? 'openfilm' : null }, model: { video: connected ? model : null }, custom: [],
+        signingIn: { provider: status === 'waiting' ? 'openfilm' : null, error: null, errorFor: null }, librarySearch: null,
+      } });
+    });
+    const openNode = async (tab) => {
+      await tab.goto(url);
+      await tab.locator('[data-work-mode]').waitFor();
+      if (await tab.locator('[data-work-mode="edit"]').count()) await tab.locator('[data-work-mode="edit"]').click();
+      await tab.locator('[data-studio-canvas][data-canvas-ready="1"]').waitFor();
+      await tab.getByTestId('rf__node-video').click();
+      await tab.getByRole('button', { name: 'Connect a service', exact: true }).waitFor();
+    };
+    await openNode(page);
+    const other = await page.context().newPage();
+    other.setDefaultTimeout(8000);
+    try {
+      await openNode(other);
+      await page.getByRole('button', { name: 'Connect a service', exact: true }).click();
+      await page.getByRole('button', { name: /Seedance 2\.0 Fast.*Connect/ }).click();
+      const settings = page.getByRole('dialog', { name: 'Services', exact: true });
+      await settings.getByRole('button', { name: 'OpenFilm', exact: true }).click();
+      const provider = page.getByRole('dialog', { name: 'OpenFilm', exact: true });
+      await provider.getByRole('button', { name: 'Connect', exact: true }).click();
+      await provider.getByText('Finish signing in in your browser…').waitFor();
+      await provider.getByRole('button', { name: 'Done', exact: true }).click();
+      await settings.getByRole('button', { name: 'Done', exact: true }).click();
+      status = 'connected';
+      // The modal is gone before the external browser finishes. Both canvases are already open.
+      for (const tab of [page, other]) {
+        await tab.getByRole('button', { name, exact: true }).waitFor();
+        assert.equal(await tab.getByRole('button', { name: 'Connect a service', exact: true }).count(), 0);
+        assert.equal(await tab.getByPlaceholder(/^Describe how the camera moves/).inputValue(), 'A camera moves toward the sea.');
+      }
+    } finally {
+      await other.close();
+    }
+  });
+});
+
 test('the edit warms a fitted hidden canvas without writing it; the first switch reuses that board', { timeout: 60_000 }, async () => {
   /* Overlap forces the display layout to change, so warming cannot silently save that change. */
   const nodes = ['One', 'Two'].map((text, i) => ({ id: `n${i}`, x: 0, y: 0, w: 350, h: 200, text }));
   await withBoard(nodes, async ({ page, url, path, file, board }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openfilm.project.assets', '1');
+      localStorage.setItem('openfilm.project.assetsW', '380');
+    });
     const requests = [];
     page.on('request', (r) => { if (new URL(r.url()).pathname === path) requests.push(r.method()); });
     await page.goto(url);
@@ -64,7 +121,18 @@ test('the edit warms a fitted hidden canvas without writing it; the first switch
     assert.equal(await page.locator('.react-flow__node').evaluateAll((list) => list.some((el) => el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }))), false);
     const viewport = page.locator('[data-studio-canvas] .react-flow__viewport');
     const fitted = await viewport.getAttribute('style');
+    const frame = page.locator('[data-viewer-picture] iframe').first();
+    await frame.waitFor({ state: 'visible' });
+    const size = await frame.evaluate((el) => el.getBoundingClientRect().width);
+    await page.evaluate(() => {
+      window.__editTimeline = document.querySelector('[data-workspace-timeline]');
+      window.__editFrame = document.querySelector('[data-viewer-picture] iframe');
+    });
     await page.locator('[data-work-mode="edit"]').click();
+    assert.equal(await frame.evaluate((el) => el.getBoundingClientRect().width), size, 'the hidden editor keeps its own size');
+    await page.waitForTimeout(800);
+    assert.equal(await page.evaluate(() => window.__editTimeline === document.querySelector('[data-workspace-timeline]')
+      && window.__editFrame === document.querySelector('[data-viewer-picture] iframe')), true, 'timeline and preview stay mounted');
     assert.equal(await page.locator('[data-canvas-loading]').count(), 0, 'the first switch is already prepared');
     assert.equal(await page.locator('.react-flow__node').count(), 2);
     assert.equal(await viewport.getAttribute('style'), fitted, 'no first-open refit');
@@ -89,7 +157,8 @@ test('opening before warm-up shows a canvas loading surface until an empty board
     await page.route(`**${path}`, async (route) => { await hold; await route.continue(); });
     try {
       await page.goto(url);
-      await page.locator('[data-work-mode="edit"]').click();
+      // Test the first click while the board request is held, independently of frame scheduling on the runner.
+      await page.locator('[data-work-mode="edit"]').dispatchEvent('click');
       const loading = page.locator('[data-canvas-loading]');
       await loading.waitFor({ state: 'visible' });
       assert.equal(await loading.getAttribute('aria-busy'), 'true');

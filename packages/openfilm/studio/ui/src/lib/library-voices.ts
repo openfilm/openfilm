@@ -120,23 +120,29 @@ function seeded(text: string, n: number): number {
 const HUES: Record<'f' | 'm' | 'n', [number, number]> = { f: [300, 70], m: [180, 70], n: [85, 70] };
 const TONE: Record<'young' | 'middle' | 'old', { s: number; l: number }> = { young: { s: 78, l: 66 }, middle: { s: 62, l: 56 }, old: { s: 42, l: 44 } };
 
-/**
- * A voice's picture, drawn from what kind of voice it is and its id, the same each time: a soft orb of three colored
- * light spots on a ground of its color, as CSS backgrounds.
- */
-export function voiceLook(v: Pick<LibraryVoice, 'provider' | 'id' | 'gender' | 'age'>): { background: string } {
+/** The colors and light spots shared by a voice's avatar and its preview. */
+export function voicePalette(v: Pick<LibraryVoice, 'provider' | 'id' | 'gender' | 'age'>) {
   const key = `${v.provider}/${v.id}`;
   const [from, span] = HUES[v.gender === 'f' || v.gender === 'm' ? v.gender : 'n'];
   const tone = TONE[v.age ?? 'middle'];
   const hue = (n: number) => Math.round((from + seeded(key, n) * span) % 360);
-  const spots = [0, 1, 2, 3].map((i) => {
+  const spot = (i: number) => {
     const x = Math.round(10 + seeded(key, 10 + i) * 80);
     const y = Math.round(10 + seeded(key, 20 + i) * 80);
-    const r = Math.round(26 + seeded(key, 30 + i) * 30);
+    const radius = Math.round(26 + seeded(key, 30 + i) * 30);
     /* the last spot is the light catching it: paler and brighter */
     const l = i === 3 ? Math.min(tone.l + 22, 90) : tone.l + Math.round((seeded(key, 40 + i) - 0.5) * 34);
     const sat = i === 3 ? Math.round(tone.s * 0.5) : tone.s;
-    return `radial-gradient(circle at ${x}% ${y}%, hsl(${hue(i + 1)} ${sat}% ${l}%) 0%, transparent ${r}%)`;
-  });
-  return { background: `${spots.join(', ')}, hsl(${hue(0)} ${Math.round(tone.s * 0.6)}% ${tone.l - 26}%)` };
+    return { x, y, radius, color: `hsl(${hue(i + 1)} ${sat}% ${l}%)` };
+  };
+  return { base: `hsl(${hue(0)} ${Math.round(tone.s * 0.6)}% ${tone.l - 26}%)`, spots: [spot(0), spot(1), spot(2), spot(3)] as const };
+}
+
+/** A voice's avatar, drawn from its stable palette. */
+export function voiceLook(v: Parameters<typeof voicePalette>[0]): { background: string } {
+  return voicePaletteLook(voicePalette(v));
+}
+
+export function voicePaletteLook({ base, spots }: ReturnType<typeof voicePalette>): { background: string } {
+  return { background: `${spots.map(({ x, y, radius, color }) => `radial-gradient(circle at ${x}% ${y}%, ${color} 0%, transparent ${radius}%)`).join(', ')}, ${base}` };
 }

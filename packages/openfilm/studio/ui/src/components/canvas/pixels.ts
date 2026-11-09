@@ -39,13 +39,36 @@ export async function frameOf(src: string, seconds: number, name: string): Promi
   video.crossOrigin = 'anonymous';
   video.muted = true;
   video.preload = 'auto';
-  video.src = src;
-  await new Promise<void>((done, fail) => { video.onloadeddata = () => done(); video.onerror = () => fail(new Error('the clip did not load')); });
-  video.currentTime = Math.min(Math.max(0, seconds), Math.max(0, video.duration - 0.05));
-  await new Promise<void>((done) => { video.onseeked = () => done(); });
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext('2d')!.drawImage(video, 0, 0);
-  return png(canvas, name);
+  const waitFor = (event: 'loadeddata' | 'seeked') => new Promise<void>((done, fail) => {
+    const listeners = new AbortController();
+    const finish = (error?: Error) => {
+      clearTimeout(timer);
+      listeners.abort();
+      if (error) fail(error);
+      else done();
+    };
+    const timer = window.setTimeout(() => finish(new Error('the clip took too long to load')), 15000);
+    video.addEventListener(event, () => finish(), { signal: listeners.signal });
+    video.addEventListener('error', () => finish(new Error('the clip did not load')), { signal: listeners.signal });
+  });
+  try {
+    const loaded = waitFor('loadeddata');
+    video.src = src;
+    await loaded;
+    /* The end of the media is outside its last frame. Seek just inside it. */
+    const at = Math.min(Math.max(0, seconds), Math.max(0, video.duration - 0.001));
+    if (Number.isFinite(at) && at !== video.currentTime) {
+      const sought = waitFor('seeked');
+      video.currentTime = at;
+      await sought;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')!.drawImage(video, 0, 0);
+    return png(canvas, name);
+  } finally {
+    video.removeAttribute('src');
+    video.load();
+  }
 }

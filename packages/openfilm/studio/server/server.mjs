@@ -23,20 +23,21 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { EditError, editProjectFilm, pageClipLook, readProjectFilm, settleProjectFilm } from './film.mjs';
 import { compoundOuter, readPartFilm, writePartFilm } from './parts.mjs';
-import { PARTS, srcInto } from './compound.mjs';
+import { PARTS, compoundFolder, srcInto } from './compound.mjs';
 import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
+import { mediaReferences } from '../../src/media-links.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
-import { MediaError, frame, loudness, poster, probe, waveform } from './derived.mjs';
+import { MediaError, frame, loudness, mixedWaveform, poster, probe, waveform } from './derived.mjs';
 import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, restoreFilm, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
 import * as personEdits from './person-edits.mjs';
 import { createAutoVersions } from './auto-versions.mjs';
 import { createHistoryPreviews } from './history-previews.mjs';
-import { ownHost, startPages } from './pages.mjs';
+import { ownHost, servable, startPages } from './pages.mjs';
 import { HttpError, cookie, json, readJson } from './http.mjs';
 import { acceptWebSocket } from './websocket.mjs';
 import {
-  ProjectError, createFolder, createProject, deleteFolder, deleteProject, libraryRoot, listFolders, listProjects, locateProject, markOpened, moveFolder, moveLibrary,
+  ProjectError, createFolder, createProject, deleteFolder, deleteProject, duplicateProject, libraryRoot, listFolders, listProjects, locateProject, markOpened, moveFolder, moveLibrary,
   moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
 } from './projects.mjs';
 import { FetchError, createFetches, fetchFilm, parseRepoUrl } from './fetch-repo.mjs';
@@ -51,7 +52,7 @@ import { createWatchers } from './watch.mjs';
 import { projectMissing } from './project-presence.mjs';
 import { installedFonts } from './fonts.mjs';
 import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-fonts.mjs';
-import { FILM_PAGE, PageFrameError, closePageFrames, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
+import { FILM_PAGE, PageFrameError, closePageFrames, compoundSound, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
@@ -165,8 +166,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   /** films fetched from GitHub into the library (fetch-repo.mjs), each opened as a project when it lands */
   const fetches = createFetches({ library: libraryRoot, open: (folder) => openProject(folder) });
 
-  const sameKey = (/** @type {string | null | undefined} */ given) => typeof given === 'string' && given.length === key.length
-    && timingSafeEqual(Buffer.from(given), Buffer.from(key));
+  const sameKey = (/** @type {string | null | undefined} */ given) => {
+    if (typeof given !== 'string') return false;
+    const a = Buffer.from(given), b = Buffer.from(key);
+    return a.length === b.length && timingSafeEqual(a, b);
+  };
 
   /** The caller holds the key; a browser write must also come from the editor's own origin. */
   function authorize(/** @type {Req} */ req) {
@@ -431,7 +435,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, await libraryFileFetched(url.searchParams.get('path')), { check: true });
       /* which of these things still need fetching before they go in (a sound, an emoji, a template's music): { ids } */
       if (parts[1] === 'missing' && parts.length === 2 && req.method === 'POST') return json(res, 200, { ids: notHere((/** @type {{ ids?: unknown }} */ (await readJson(req) ?? {})).ids) });
-      /* one of them fetched now: { ok } */
+      /* an asset or a template example fetched now: { ok } */
       if (parts[1] === 'fetch' && parts.length === 2 && req.method === 'POST') return json(res, 200, { ok: await fetchItem((/** @type {{ id?: unknown }} */ (await readJson(req) ?? {})).id) });
       /* a page of it, as a page: what a click tries over the viewer's picture */
       if (parts[1] === 'pages' && parts.length > 2 && req.method === 'GET') {
@@ -677,8 +681,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (typeof folder !== 'string' || !isAbsolute(folder)) throw new HttpError(400, 'the folder\'s full path, please');
       return json(res, 200, { project: await locateProject(parts[1], folder) });
     }
+    if (parts.length === 3 && parts[2] === 'duplicate' && req.method === 'POST') {
+      const { name } = /** @type {{ name?: string }} */ (await readJson(req));
+      return json(res, 200, { project: await duplicateProject(parts[1], name) });
+    }
     const project = await projectById(parts[1]);
     const rest = parts.slice(2).join('/');
+    /** A reference changes .film metadata, which the project file watcher skips. @template T @param {() => Promise<T>} work */
+    const notifyReferences = async (work) => {
+      const before = mediaReferences(project.path);
+      try { return await work(); }
+      finally { if (before !== mediaReferences(project.path)) watchers.emit(project.path, { type: 'files' }); }
+    };
     /* Never enter or write into a project removed outside Studio, even if cache writers left its folder behind.
        `film`: false where film.html alone missing is no reason to refuse (the project itself, as its page opens) */
     const requireProject = ({ film = true } = {}) => {
@@ -703,7 +717,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (await markersRoute(req, res, project.path, rest)) return;
     /* its canvas (canvas.mjs): Studio's own board beside the edit */
     if (await canvasRoute(req, res, project.path, rest)) return;
-    if (await canvasWriteRoute(req, res, rest, askAgent)) return;
+    if (await canvasWriteRoute(req, res, rest, askAgent, project.path)) return;
     if (await canvasMadeRoute(req, res, project.path, rest, url)) return;
     if (await projectCharactersRoute(req, res, project.path, rest)) return;
     if (await projectTemplatesRoute(req, res, project.path, rest)) return;
@@ -917,7 +931,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
       const picked = Array.isArray(paths) ? paths.map(String)
         : await (folder === true ? pickFolder(ask).then((p) => (p ? [p] : [])) : pickFiles(ask)).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); });
-      return json(res, 200, { landed: await bringIn(project.path, String(into ?? 'assets'), picked, how) });
+      return json(res, 200, { landed: await notifyReferences(() => bringIn(project.path, String(into ?? 'assets'), picked, how)) });
     }
     /* a link pointed somewhere else (files.mjs relink): the path given, else the person's pick. { path } (null: cancelled) */
     if (rest === 'files/relink' && req.method === 'POST') {
@@ -925,7 +939,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
       const where = typeof to === 'string' ? to
         : await (folder === true ? pickFolder(ask) : pickFiles(ask).then((p) => p[0] ?? null)).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); });
-      return json(res, 200, { path: where ? await relink(project.path, String(rel ?? ''), where) : null });
+      return json(res, 200, { path: where ? await notifyReferences(() => relink(project.path, String(rel ?? ''), where)) : null });
     }
     /* the proxies the preview plays heavy footage from (proxies.mjs), asked for when not made yet: each heavy video's
        state (off: none), and each one's the editor's browser does not decode (`undecoded`, which it tells by `checks`)
@@ -954,7 +968,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* what a link leads to copied into the project in its place (files.mjs collect) */
     if (rest === 'files/collect' && req.method === 'POST') {
       const { path: rel } = /** @type {{ path?: unknown }} */ (await readJson(req));
-      return json(res, 200, { path: await collect(project.path, String(rel ?? '')) });
+      return json(res, 200, { path: await notifyReferences(() => collect(project.path, String(rel ?? ''))) });
     }
     /* a video's frame made a still beside it (files.mjs freezeFrame): the timeline's freeze frame */
     if (rest === 'files/still' && req.method === 'POST') {
@@ -989,10 +1003,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const { from, to, check } = /** @type {{ from?: string, to?: string, check?: boolean }} */ (await readJson(req));
         /* `check`: what the move could not keep true (paths a page makes while it runs), nothing moved */
         if (check === true) return json(res, 200, { unseen: await moveCheck(project.path, String(from ?? ''), String(to ?? '')) });
-        return json(res, 200, await moveFile(project.path, String(from ?? ''), String(to ?? '')));
+        return json(res, 200, await notifyReferences(() => moveFile(project.path, String(from ?? ''), String(to ?? ''))));
       }
       if (req.method === 'DELETE') {
-        await trashFile(project.path, at);
+        await notifyReferences(() => trashFile(project.path, at));
         return json(res, 200, {});
       }
     }
@@ -1050,6 +1064,23 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         }));
       }
       if (what === 'probe') return json(res, 200, await probe(project.path, at));
+      if (what === 'wave' && compoundFolder(at)) {
+        const base = pages.folderUrl(project);
+        const root = compoundOuter(project.path);
+        const outer = new URL(pages.folderUrl({ id: project.id, path: root }));
+        const { duration, sounds } = await compoundSound(project.path, base, at, url.searchParams.get('v') ?? '').catch((e) => {
+          throw new HttpError(e instanceof PageFrameError ? 404 : 422, String(e?.message ?? e));
+        });
+        if (duration == null) return json(res, 200, { duration: 0, peaks: [] });
+        // The preview names sounds on its own origin. Resolve only files that origin serves for this project.
+        const local = sounds.flatMap((sound) => {
+          const source = new URL(sound.src, base);
+          if (source.origin !== outer.origin || !source.pathname.startsWith(outer.pathname)) return [];
+          const path = source.pathname.slice(outer.pathname.length);
+          return path && servable(root, decodeURIComponent(path)) ? [{ ...sound, src: `/${path}` }] : [];
+        });
+        return json(res, 200, await mixedWaveform(root, local, duration));
+      }
       if (what === 'wave') return json(res, 200, await waveform(project.path, at));
       /* the loudness of a part of its sound (`from`, `to`: its own seconds): what "Normalize loudness" sets volumes by */
       if (what === 'loudness') {
