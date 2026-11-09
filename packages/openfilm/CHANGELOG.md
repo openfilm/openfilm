@@ -4,6 +4,7 @@
 
 ### Patch Changes
 
+- Refresh canvas models as soon as a media service connects or its model changes in Settings, including sign-in completed in the browser.
 - Keep the assets drawer and workspace aligned with the chat divider while resizing. Show in Assets scrolls to and briefly highlights the canvas file without changing the editing selection.
 - Attach text, images and video references to canvas writing nodes. Organize compatible timeline tracks with undo, and keep picture and sound solo selections independent.
 - 7c6bf43: Show mixed audio waveforms on compound clips, including templates. Mark compound clips on the timeline and offer an Open compound clip action in the context menu.
