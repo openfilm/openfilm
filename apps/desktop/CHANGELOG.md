@@ -13,7 +13,7 @@
 - 7c6bf43: Keep editable subtitle font size, installed font, weight, color and outline when exporting a 剪映 or CapCut draft.
   Keep copied and rendered media linked when a 剪映 draft is renamed.
 - 7c6bf43: Keep static rotation, opacity, and simple hard-edged rectangle masks editable in Jianying drafts. More complex clip effects keep their rendered appearance.
-- 7c6bf43: Keep masks, crops and other rendered clip effects when exporting an editing project in automatic effects mode. Render the part used on the timeline and retain the complete original alongside it for further editing.
+- 7c6bf43: Keep masks, crops and other rendered clip effects when exporting an editing project in automatic effects mode. Render the part used on the timeline and keep full-length footage for further editing, converting containers such as WebM when needed.
 - c8a14b4: Desktop: a late chat record with a repeated id no longer duplicates a conversation or a turn
 - b5f0130: Desktop: long pasted attachment names keep their extension and stay within the name limit
 - 7c6bf43: Link Windows media files and folders even when a network share refuses system links. The project's references keep the originals in place and work for preview and export. Use Alt to toggle whole clips and their layers together in the Layers panel, or Shift to select a range by clicking or dragging. OpenFilm's agent asks for sign-in when its credential is rejected and keeps technical service errors in its connection details.

@@ -63,7 +63,8 @@ test('automatic mode keeps picture effects, retaining complete footage and its s
     const rendered = plan.files.find((f) => f.id === shot.fileId);
     assert.deepEqual(rendered.job, { kind: 'render', clip: 'shot', frames: 90 });
     assert.deepEqual([shot.start, shot.end, shot.in, shot.out, shot.speed], [30, 120, 0, 90, undefined]);
-    const original = plan.files.find((f) => f.path === picture.path);
+    const original = plan.files.find((f) => f.job.kind === 'transcode' && f.job.from === picture.path);
+    assert.deepEqual(original?.job, { kind: 'transcode', from: picture.path, to: 'prores422hq' }, 'automatic mode keeps the whole WebM in an editor-compatible container');
     assert.equal(original.durationFrames, 360);
     const audio = plan.audio[0].clips[0];
     assert.equal(audio.fileId, original.id);
