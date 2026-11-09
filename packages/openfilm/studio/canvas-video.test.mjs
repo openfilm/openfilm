@@ -73,7 +73,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     const sideButtons = node.locator('[data-handleid="in"], [data-handleid="out"]');
     const sideColors = () => node.locator('[data-canvas-side-plus]').evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderColor));
     const card = node.locator('[data-canvas-card]');
-    await video.waitFor();
+    await video.waitFor({ state: 'attached' });
     await video.evaluate((el) => { el.dataset.originalPlayer = 'true'; });
     await page.waitForFunction((nodeId) => document.querySelector(`[data-id="${nodeId}"] video`)?.readyState >= 2, id);
     assert.deepEqual(await node.boundingBox(), beforeUpload, 'the upload slot is the final video box');
@@ -258,7 +258,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
         const request = response.request();
         return response.ok() && request.method() === 'PUT' && new URL(request.url()).pathname === `/api/projects/${project.id}/canvas`
           && request.postDataJSON().nodes.some((item) => item.path === frame);
-      });
+      }, { timeout: 20_000 });
       const camera = node.getByRole('button', { name: 'Take frame' });
       await camera.hover();
       const option = node.getByRole('button', { name: `Capture ${mode} frame` });
@@ -318,7 +318,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     }), id, 'the saved stacking order survives reload');
     const other = page.getByTestId('rf__node-shared-audio');
     const otherVideo = other.locator('video');
-    await otherVideo.waitFor();
+    await otherVideo.waitFor({ state: 'attached' });
     assert.equal(await otherVideo.evaluate((el) => el.muted), true, 'new and restored nodes use the saved sound preference');
     assert.equal(await otherVideo.evaluate((el) => el.volume), 0.5, 'restored videos use the shared volume');
     await other.hover();

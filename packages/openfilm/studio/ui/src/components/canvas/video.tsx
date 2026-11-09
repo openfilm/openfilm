@@ -73,6 +73,7 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
   const [playing, setPlaying] = React.useState(false);
   const [firstFrameReady, setFirstFrameReady] = React.useState(false);
   const [atStart, setAtStart] = React.useState(true);
+  const showFirstFrame = firstFrameReady && atStart && !failed;
   const sharedMuted = React.useSyncExternalStore(watchSound, readMute, () => false);
   const volume = React.useSyncExternalStore(watchSound, readVolume, () => 1);
   const [autoplayMuted, setAutoplayMuted] = React.useState(false);
@@ -97,8 +98,14 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
   const toggle = () => {
     const video = player.current;
     if (!video) return;
-    if (video.paused) void video.play().catch(() => {});
-    else video.pause();
+    if (!video.paused) {
+      video.pause();
+      return;
+    }
+    setAtStart(false);
+    void video.play().catch(() => {
+      if (video.paused && video.currentTime === 0) setAtStart(true);
+    });
   };
   const reset = React.useCallback(() => {
     pointerInside.current = false;
@@ -150,6 +157,7 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
           rewindFrame.current = 0;
           video.currentTime = 0;
         }
+        setAtStart(false);
         void video.play().catch((error: unknown) => {
           // Browser Studio may require a click before it can autoplay with sound.
           if (!(error instanceof DOMException) || error.name !== 'NotAllowedError' || !pointerInside.current || player.current !== video || video.muted) return;
@@ -185,11 +193,10 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
         }} onError={() => setFailed(true)}
         onTimeUpdate={(event) => setSeconds(event.currentTarget.currentTime)}
         onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
-        onPlaying={() => setAtStart(false)}
-        className="pointer-events-none absolute inset-0 size-full object-contain" />
+        className={`pointer-events-none absolute inset-0 size-full object-contain ${showFirstFrame ? 'invisible' : ''}`} />
       <canvas ref={firstFrame} width={1} height={1} aria-hidden="true"
         className="pointer-events-none absolute inset-0 size-full object-contain"
-        hidden={!firstFrameReady || !atStart || failed} />
+        hidden={!showFirstFrame} />
       {failed ? (
         <div role="status" className="pointer-events-none absolute inset-0 grid place-content-center justify-items-center gap-2 bg-black/50 px-3 text-center text-xs text-white">
           <VideoOff size={20} />{t('canvas.video.unavailable')}
