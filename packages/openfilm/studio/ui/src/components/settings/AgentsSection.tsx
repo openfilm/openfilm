@@ -288,7 +288,7 @@ export function AgentsSection() {
     const problem = agent.status === 'ready' && agent.problem ? agent.problem : null;
     /* older than the chat was tried with: it works, but may not list the newest models; how to update it */
     const outdated = chosen && agent.status === 'ready' && agent.outdated ? agent.outdated : null;
-    const said = error?.id === agent.id ? error.text : agent.error ?? (problem ? `${t('settings.agents.unreadable')} ${problem}` : undefined);
+    const said = error?.id === agent.id ? error.text : agent.id === 'openfilm' ? undefined : agent.error ?? (problem ? `${t('settings.agents.unreadable')} ${problem}` : undefined);
     const open = agent.id === 'byok' && keyOpen;
     /* where it is not found: why, on asking (Claude Code waiting for its app's Code tab is not lost) */
     const showHelper = OWN.includes(agent.id) && (['missing', 'off', 'sign-in', 'waiting'].includes(agent.status) || Boolean(said) || Boolean(agent.connectionIssue));

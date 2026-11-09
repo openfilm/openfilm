@@ -222,6 +222,28 @@ test('a rejected load never waits for or presents a frame', async () => {
   await assert.rejects(preparePage(contents, 'https://studio.invalid/'), /offline/);
 });
 
+test('a Windows view can open and switch back without a frame from the covered renderer', async () => {
+  const events = [];
+  const pages = createPagePresentation({
+    prepare(id) {
+      const contents = {
+        loadURL: async () => { events.push(`load:${id}`); },
+        isDestroyed: () => false,
+        executeJavaScript: () => assert.fail('a covered Windows view need not run animation frames'),
+      };
+      return { view: contents, ready: preparePage(contents, 'https://studio.invalid/', { waitForPaint: false }) };
+    },
+    present: (id) => events.push(`show:${id}`),
+    discard: () => assert.fail('switching keeps the other tabs open'),
+  });
+  assert.equal(await pages.show('a'), true);
+  assert.equal(await pages.show('b'), true);
+  const back = pages.show('a');
+  assert.equal(pages.currentId(), 'a', 'a loaded tab is raised in the same turn');
+  assert.equal(await back, true);
+  assert.deepEqual(events, ['load:a', 'show:a', 'load:b', 'show:b', 'show:a']);
+});
+
 test('a successful load requests bounded paint readiness', async () => {
   const events = [];
   const contents = {

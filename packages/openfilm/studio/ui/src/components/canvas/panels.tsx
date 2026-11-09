@@ -5,18 +5,18 @@
  * and a cut its own (onto the timeline). Floating, they keep their size however far the board is zoomed.
  */
 import React from 'react';
-import { NodeToolbar, Position } from '@xyflow/react';
+import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  AlignLeft, ArrowUp, AudioLines, Brush, Camera, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Video, X,
+  AlignLeft, ArrowUp, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Video, X,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type ModelSpec, type VideoMode } from '@/lib/canvas';
+import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
 import { PRESETS, PRESET_GROUPS, presetOf, type CanvasPreset } from '@/lib/canvas-presets';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
 import { modelTime, timeLabel, useBoard, type Choice, type MakeData } from './board';
-import { frameOf, splitGrid } from './pixels';
+import { splitGrid } from './pixels';
 import { ProviderMark } from '../settings/ProviderMark';
 import { useDraft } from './words';
 import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
@@ -52,14 +52,14 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
   const t = useT();
   const board = useBoard();
   const [grid, setGrid] = React.useState(false);
-  if (board.readOnly || !file) return null;
-  const btn = 'flex h-8 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
-  const icon = 'flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+  if (board.readOnly || !file || board.single !== id) return null;
+  const btn = 'nodrag flex h-8 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+  const icon = 'nodrag flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
   const base = file.name.replace(/\.[^.]+$/, '');
   const fail = (e: unknown) => console.warn(e);
-  return (
-    <NodeToolbar nodeId={id} isVisible={board.single === id} position={Position.Top} offset={36}>
-      <div className={`nodrag nopan flex items-center gap-0.5 p-1 ${CARD}`}>
+  const video = file.kind === 'video';
+  const actions = (
+      <div className={`nopan flex w-max items-center gap-0.5 p-1 ${CARD} ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
         {file.kind === 'image' ? (
           <>
             <button type="button" className={btn} onClick={() => board.spawn(id, 'image', { preset: 'cameras9', opts: { ratio: '1:1' } })}><Orbit size={14} />{t('canvas.actions.angles')}</button>
@@ -77,12 +77,6 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
             <button type="button" className={btn} onClick={() => board.cutout(id, file.path)}><Eraser size={14} />{t('canvas.actions.cutout')}</button>
           </>
         ) : null}
-        {file.kind === 'video' ? (
-          <button type="button" className={btn} onClick={() => {
-            const playing = document.querySelector<HTMLVideoElement>(`.react-flow__node[data-id="${CSS.escape(id)}"] video`);
-            void frameOf(board.sources.file(file), playing?.currentTime ?? 0, `${base}-frame.png`).then((frame) => board.bring(id, [frame]), fail);
-          }}><Camera size={14} />{t('canvas.actions.frame')}</button>
-        ) : null}
         {file.kind !== 'other' ? <button type="button" className={btn} onClick={() => board.addToFilm(file)}><Clapperboard size={14} />{t('canvas.addToFilm')}</button> : null}
         <span className="mx-0.5 h-4 w-px bg-[var(--cv-float-line)]" />
         {board.reveal ? (
@@ -97,7 +91,22 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
           <button type="button" aria-label={t('canvas.actions.view')} className={icon} onClick={() => board.view(file.path)}><Maximize2 size={15} /></button>
         </Tooltip>
       </div>
-    </NodeToolbar>
+  );
+  return video ? <VideoActionBar>{actions}</VideoActionBar> : (
+    <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={36}>{actions}</NodeToolbar>
+  );
+}
+
+/** Keep the video tools inside the draggable node while matching the other floating tools' screen size. */
+function VideoActionBar({ children }: { children: React.ReactNode }) {
+  const zoom = useStore((state) => state.transform[2]);
+  return (
+    <div data-canvas-node-header="" data-canvas-video-controls="" data-canvas-video-toolbar="" className="absolute bottom-full left-1/2 z-20 origin-bottom -translate-x-1/2"
+      style={{ scale: 1 / zoom, marginBottom: Math.max(36, 30 * zoom) / zoom }}
+      onKeyDown={(event) => event.stopPropagation()}
+      onClick={(event) => { if ((event.target as Element).closest('button, a')) event.stopPropagation(); }}>
+      {children}
+    </div>
   );
 }
 
@@ -157,24 +166,6 @@ function Choices({ title, items, columns }: { title: string; columns: number; it
   );
 }
 
-/** What a model makes, in a few words: its lengths, the pictures it takes, what it is made from. */
-function specLine(spec: ModelSpec | undefined, t: (key: string) => string): string {
-  if (!spec) return '';
-  const range = spec.only?.length ? [Math.min(...spec.only), Math.max(...spec.only)] : spec.seconds;
-  return [
-    spec.needs === 'clip' ? t('canvas.spec.fromClip') : spec.needs === 'audio' ? t('canvas.spec.fromAudio') : '',
-    range ? t('canvas.spec.seconds').replace('{a}', String(range[0])).replace('{b}', String(range[1])) : '',
-    spec.refs ? t('canvas.spec.refs').replace('{n}', String(spec.refs)) : '',
-    spec.refs === 0 && spec.frames ? t('canvas.spec.frames') : '',
-    spec.sizes?.length ? (spec.sizes.length > 1 ? t('canvas.spec.sizes').replace('{a}', spec.sizes[0]!.toUpperCase()).replace('{b}', spec.sizes[spec.sizes.length - 1]!.toUpperCase()) : spec.sizes[0]!.toUpperCase()) : '',
-    spec.voice ? t('canvas.spec.voice') : '',
-    spec.clip ? t('canvas.spec.clip') : '',
-    spec.transparent ? t('canvas.spec.transparent') : '',
-    spec.formats?.some((f) => f !== 'png') ? spec.formats.filter((f) => f !== 'png').map((f) => f.toUpperCase()).join(' / ') : '',
-    spec.mask || spec.markup ? t('canvas.spec.redraw') : '',
-  ].filter(Boolean).join(' · ');
-}
-
 /**
  * Which model a node makes with: as Settings say, or one of every service's, the person's own first; a service not
  * connected yet is there too, a click away from connecting it.
@@ -187,26 +178,17 @@ function ModelPicker({ choices, picked, fallback, onPick, onConnect }: {
   const q = query.trim().toLowerCase();
   const shown = q ? choices.filter((c) => `${c.name} ${c.provider}`.toLowerCase().includes(q)) : choices;
   const row = (c: Choice) => {
-    const line = specLine(c.spec, t);
     const on = picked?.via === c.via && picked?.model === c.model;
     /* how long it takes, as this person's runs with it took */
     const took = modelTime(c.via, c.model);
     return (
       <button key={`${c.via}|${c.model ?? ''}`} type="button" onClick={() => (c.connected ? onPick(c) : onConnect())}
-        className={`group/model flex w-full min-w-0 items-start gap-2.5 rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-[var(--cv-float-hover)] ${on ? 'bg-[var(--cv-float-hover)]' : ''} ${c.connected ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
+        className={`flex w-full min-w-0 items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-[var(--cv-float-hover)] ${on ? 'bg-[var(--cv-float-hover)]' : ''} ${c.connected ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] bg-[var(--cv-chip)]"><ProviderMark id={c.via} size={13} /></span>
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 flex-1 truncate leading-5">{c.name}</span>
-            {took !== null ? <span className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-ink-2)]" title={t('canvas.panel.models.took')}>{timeLabel(took)}</span> : null}
-            {on ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" />
-              : !c.connected ? <span className="shrink-0 rounded-md border !border-[var(--cv-float-line)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-label)]">{t('canvas.panel.models.connect')}</span> : null}
-          </span>
-          {/* what it is and what it takes, said when pointed at (or picked) */}
-          <span className={`text-[11.5px] leading-snug text-[var(--cv-label)] ${on ? 'block' : 'hidden group-hover/model:block'}`}>
-            {[c.provider, c.kind === 'sfx' || c.kind === 'music' || c.kind === 'tts' ? t(`canvas.make.${c.kind}`) : '', line].filter(Boolean).join(' · ')}
-          </span>
-        </span>
+        <span className="min-w-0 flex-1 truncate leading-5">{c.name}</span>
+        {took !== null ? <span className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-ink-2)]" title={t('canvas.panel.models.took')}>{timeLabel(took)}</span> : null}
+        {on ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" />
+          : !c.connected ? <span className="shrink-0 rounded-md border !border-[var(--cv-float-line)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-label)]">{t('canvas.panel.models.connect')}</span> : null}
       </button>
     );
   };

@@ -165,7 +165,11 @@ export const api = {
     return r.project;
   }),
   forget: (id: string) => call<object>(p(id), { method: 'DELETE' }),
-  film: (id: string) => call<ProjectFilm>(p(id)),
+  film: async (id: string, signal?: AbortSignal) => {
+    const film = await call<ProjectFilm>(p(id), { signal });
+    if (typeof film?.rev !== 'string' || !film.project) throw new Error('Studio did not return the project film.');
+    return film;
+  },
   /** the person opened it here: the one `openfilm open` alone comes back to */
   opened: (id: string) => call<{ project: Project }>(`${p(id)}/opened`, { method: 'POST' }),
   /* `undo`: the edit puts back an earlier one (Studio keeps the person's edits over an agent's writes until then) */

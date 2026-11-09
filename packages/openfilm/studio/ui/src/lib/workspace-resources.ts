@@ -288,21 +288,21 @@ export function warmedWavePeaks(url: string): number[] | null | undefined {
 }
 
 /** The waveform, asked again while the server says it is not ready yet (503: a file an agent has just written). */
-async function fetchWhenReady(url: string, tries = 30): Promise<Response> {
-  const res = await mediaFetch(url);
+async function fetchWhenReady(url: string, background: boolean, tries = 30): Promise<Response> {
+  const res = await mediaFetch(url, undefined, background ? 'background' : 'normal');
   if (res.status !== 503 || tries <= 1) return res;
   const wait = Math.min(Math.max(Number(res.headers.get('retry-after')) || 1, 0.5), 5) * 1000;
   await new Promise((done) => setTimeout(done, wait));
-  return fetchWhenReady(url, tries - 1);
+  return fetchWhenReady(url, background, tries - 1);
 }
 
 /** Load a waveform once and remember it; one request in flight per address. */
-export function loadWavePeaks(url: string): Promise<number[] | null> {
+export function loadWavePeaks(url: string, background = false): Promise<number[] | null> {
   const hit = WAVE_PEAKS.get(url);
   if (hit !== undefined) return Promise.resolve(hit);
   let flight = WAVE_FLIGHT.get(url);
   if (!flight) {
-    flight = fetchWhenReady(url)
+    flight = fetchWhenReady(url, background)
       .then((res) => (res.ok ? res.json() : res.status === 503 ? undefined : null))
       .then((body: { peaks?: number[] } | null | undefined) => {
         /* still not ready after the retries: not "no waveform", so the next look asks again */
@@ -321,33 +321,16 @@ export function loadWavePeaks(url: string): Promise<number[] | null> {
 }
 
 const WARMED = new Set<string>();
-const WARM_POSTER_MAX = 48;
 
-/**
- * Warm a project's thumbnails once, when the pane first opens it, so tiles show at once instead of popping in one by
- * one. Posters first (the browser queues them; low priority so they never compete with what is on screen), at most
- * the first screenful; then waveforms one at a time (the first ask of each runs ffmpeg on the server). Best effort.
- */
+/** Warm a project's waveforms one at a time in the background. Only visible cards ask for their posters. */
 export function warmProjectMedia(projectId: string, listing: MediaListing | null, sources: MediaSources): void {
   if (!projectId || !listing || WARMED.has(projectId)) return;
   /* an empty project has nothing to warm: try again once it has media */
   if (!listing.files.length) return;
   WARMED.add(projectId);
-  let posters = 0;
-  for (const file of listing.files) {
-    if (posters >= WARM_POSTER_MAX) break;
-    if (file.kind !== 'video' && file.kind !== 'image') continue;
-    const src = sources.poster?.(file);
-    if (!src) continue;
-    posters += 1;
-    const img = new Image();
-    img.decoding = 'async';
-    img.setAttribute('fetchpriority', 'low');
-    img.src = src;
-  }
   void (async () => {
     for (const file of listing.files) {
-      if (file.kind === 'audio') await loadWavePeaks(sources.wave(file));
+      if (file.kind === 'audio') await loadWavePeaks(sources.wave(file), true);
     }
   })().catch(() => {});
 }

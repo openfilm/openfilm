@@ -8,54 +8,38 @@
  * example plays in its place with its music, sharp, under controls of its own (TemplateTrial).
  */
 import * as React from 'react';
-import { AlertCircle, Pause, Play, RotateCw, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Pause, Play, RotateCw } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { TEXT_COMPONENT, builtInItem, BUILT_IN, defaultTextWords, fetchLibraryItem, libraryBox, libraryUrl, mayNeedFetch, nameOf, pageUrl, previewUrl, type LibraryItem } from '@/lib/library';
+import { TEXT_COMPONENT, builtInItem, BUILT_IN, defaultTextWords, libraryBox, nameOf, pageUrl, previewUrl, templatePreviewUrl, type LibraryItem } from '@/lib/library';
 import { TransitionOnPicture } from './OnPicture';
-import { LoadingBar } from './AudioList';
+import { useAssetPlaybackKey } from './AudioList';
+import { PANE_BAR, PANE_BTN, PANE_ICON } from '../dock-pane-bar';
 
 /* a motion tried again and again: in, a while shown, out */
 const MOTION_SECONDS = 2.6;
 
-interface TrialProps {
+export type TemplatePreviewState = 'failed' | null;
+
+export function LibraryTrial({ item, frame = null, target, onLetGo, onTemplateState, onDownloadFailed }: {
   item: LibraryItem;
-  /** the film's picture at the playhead (else the person's own in the project), for what moves the picture itself */
   frame?: string | null;
+  target: HTMLDivElement | null;
   onLetGo: () => void;
-}
-
-export function LibraryTrial(props: TrialProps) {
-  return <PreparedTrial key={props.item.id} {...props} />;
-}
-
-function PreparedTrial({ item, frame = null, onLetGo }: TrialProps) {
-  const t = useT();
-  const needed = mayNeedFetch(item);
-  const [status, setStatus] = React.useState(needed ? 'loading' : 'ready');
-  const [attempt, setAttempt] = React.useState(0);
-  React.useEffect(() => {
-    if (!needed) return;
-    let live = true;
-    setStatus('loading');
-    void fetchLibraryItem(item.id).then((ok) => { if (live) setStatus(ok ? 'ready' : 'error'); });
-    return () => { live = false; };
-  }, [item.id, needed, attempt]);
-  if (status !== 'ready') return (
-    <div data-library-trial="" data-library-preparing={status} aria-busy={status === 'loading'}
-      className="absolute inset-0 z-[6] cursor-default" onPointerDown={(e) => e.stopPropagation()}>
-      <div className="absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-md bg-black/65 px-3 py-2 text-white">
-        <span className="min-w-0 flex-1">
-          {status === 'loading' ? <LoadingBar label={t('assetDrawer.downloading')} />
-            : <AlertCircle size={14} className="text-[#ff8a80]" aria-label={t('assetDrawer.previewFailed')} />}
-        </span>
-        {status === 'error' ? <button type="button" aria-label={t('assetDrawer.previewRetry')}
-          className="grid h-6 w-6 place-items-center" onClick={() => setAttempt((n) => n + 1)}><RotateCw size={14} /></button> : null}
-        <button type="button" aria-label={t('assetDrawer.previewCancel')} className="grid h-6 w-6 place-items-center" onClick={onLetGo}><X size={14} /></button>
-      </div>
-    </div>
-  );
-  if (item.kind === 'group') return <TemplateTrial key={item.id} item={item} onLetGo={onLetGo} />;
-  return <PictureTrial item={item} frame={frame} onLetGo={onLetGo} />;
+  onTemplateState: (id: string, state: TemplatePreviewState) => void;
+  onDownloadFailed: () => void;
+}) {
+  const lang = useLanguage();
+  if (item.kind === 'group') return <TemplateTrial item={item} target={target} onLetGo={onLetGo} onState={onTemplateState} onFailed={onDownloadFailed} />;
+  const name = nameOf(item.name, lang);
+  return <>
+    <PictureTrial item={item} frame={frame} onLetGo={onLetGo} />
+    {target ? createPortal(
+      <div className={`${PANE_BAR} px-3`} data-library-picture-bar="">
+        <span className="truncate text-[12px] text-[var(--text)]" title={name}>{name}</span>
+      </div>, target,
+    ) : null}
+  </>;
 }
 
 function PictureTrial({ item, frame, onLetGo }: { item: LibraryItem; frame: string | null; onLetGo: () => void }) {
@@ -110,17 +94,17 @@ function PictureTrial({ item, frame, onLetGo }: { item: LibraryItem; frame: stri
 
 const clock = (s: number) => { const n = Math.max(0, Math.floor(s)); return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`; };
 
-/**
- * A template's example in the viewer, as it plays put in: the whole of it at 1280×720 with its music (a published part
- * of the library, fetched the first time; its card's small silent preview while that cannot be had), over the film,
- * which it hides. Its own controls: what is previewed and a close, play and pause (a click on it, Space), where it is
- * and how long it runs, a bar to move in it. Esc, the close or the film played lets it go.
- */
-function TemplateTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: () => void }) {
+/** A template plays over the film while its transport replaces the one beneath the viewer. */
+function TemplateTrial({ item, target, onLetGo, onState, onFailed }: {
+  item: LibraryItem; target: HTMLDivElement | null;
+  onLetGo: () => void;
+  onState: (id: string, state: TemplatePreviewState) => void;
+  onFailed: () => void;
+}) {
   const t = useT();
   const lang = useLanguage();
   const video = React.useRef<HTMLVideoElement>(null);
-  const [src, setSrc] = React.useState(() => libraryUrl(`examples/${item.id}.mp4`));
+  const [src, setSrc] = React.useState(() => templatePreviewUrl(item));
   const [playing, setPlaying] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [failed, setFailed] = React.useState(false);
@@ -147,32 +131,26 @@ function TemplateTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: () => vo
     wanted.current = true;
     setLoading(true);
     setFailed(false);
-    const example = libraryUrl(`examples/${item.id}.mp4`);
-    if (failed && src !== example) { setSrc(example); return; }
     if (failed) v.load();
     void v.play().catch((error) => { if (wanted.current && error?.name !== 'AbortError') { setLoading(false); setFailed(true); } });
   };
-  const toggleRef = React.useRef(toggle);
-  toggleRef.current = toggle;
-  const letGo = React.useRef(onLetGo);
-  letGo.current = onLetGo;
-  /* Space plays and pauses it, not the film; Esc lets it go (before the editor's own keys) */
+  useAssetPlaybackKey(Boolean(target), toggle);
   React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const at = e.target as HTMLElement | null;
-      if (at && (at.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(at.tagName))) return;
-      if (e.code === 'Space' && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); e.stopImmediatePropagation(); toggleRef.current(); }
-      else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); letGo.current(); }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, []);
-  const stop = (e: React.PointerEvent) => e.stopPropagation();
+    onState(item.id, failed ? 'failed' : null);
+  }, [item.id, failed, onState]);
+  const reportFailure = React.useRef(onFailed);
+  reportFailure.current = onFailed;
+  React.useEffect(() => { if (failed) reportFailure.current(); }, [failed]);
   const seek = (s: number) => { const v = video.current; if (v) { v.currentTime = s; setTime(s); } };
-  return (
-    <div data-library-trial="" data-template-trial={item.id} className="absolute inset-0 z-[6] cursor-default overflow-hidden bg-black" onPointerDown={(e) => { e.stopPropagation(); toggle(); }}>
+  const name = nameOf(item.name, lang);
+  const label = t(failed ? 'assetDrawer.previewRetry' : playing || loading ? 'assetDrawer.pause' : 'assetDrawer.play');
+  return (<>
+    <div data-library-trial="" data-template-trial={item.id} className="absolute inset-0 z-[6] grid cursor-default grid-cols-1 grid-rows-1 place-items-center overflow-hidden bg-black"
+      onPointerDown={(e) => { e.stopPropagation(); onLetGo(); }}>
       <video
         ref={video}
+        data-asset-preview-control=""
+        onPointerDown={(e) => { e.stopPropagation(); toggle(); }}
         src={src}
         autoPlay={wanted.current}
         loop
@@ -184,40 +162,39 @@ function TemplateTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: () => vo
         }}
         onWaiting={() => { if (wanted.current) { setLoading(true); setPlaying(false); } }}
         onPause={() => { setPlaying(false); setLoading(false); }}
-        onLoadedMetadata={(e) => { if (Number.isFinite(e.currentTarget.duration)) setLength(e.currentTarget.duration); }}
+        onLoadedMetadata={(e) => {
+          if (Number.isFinite(e.currentTarget.duration)) setLength(e.currentTarget.duration);
+        }}
         /* the example not had (offline, not published yet): the card's own preview */
         onError={() => {
           if (src !== previewUrl(item)) { setSrc(previewUrl(item)); if (wanted.current) setLoading(true); }
           else { setLoading(false); setPlaying(false); setFailed(true); }
         }}
-        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+        className="block max-h-full max-w-full object-contain"
       />
-      {loading ? <span className="absolute inset-x-3 bottom-12"><LoadingBar label={t('assetDrawer.previewLoading')} /></span> : null}
-      <div onPointerDown={stop} className="absolute left-2 top-2 flex h-7 items-center gap-1.5 rounded-md bg-black/60 pl-2.5 pr-1 text-[12px] text-white/90 backdrop-blur-sm">
-        <span>{t('assetDrawer.previewing')}</span>
-        <span className="text-white/40">·</span>
-        <span className="max-w-[16em] truncate">{nameOf(item.name, lang)}</span>
-        <button type="button" data-template-trial-close="" title={t('assetDrawer.closePreview')} aria-label={t('assetDrawer.closePreview')} onClick={onLetGo} className="ml-0.5 grid h-5 w-5 place-items-center rounded text-white/70 hover:bg-white/15 hover:text-white">
-          <X size={13} strokeWidth={2.2} />
+    </div>
+    {target ? createPortal(
+      <div data-template-trial-bar="" className={`${PANE_BAR} gap-2 px-2 text-[11px] tabular-nums text-[var(--text)]`}>
+        <button type="button" data-template-trial-play={playing ? 'playing' : 'paused'} title={label} aria-label={label}
+          onMouseDown={(e) => e.preventDefault()} onClick={toggle} className={PANE_BTN}>
+          {failed ? <RotateCw size={PANE_ICON} />
+            : playing || loading ? <Pause size={PANE_ICON} fill="currentColor" /> : <Play size={PANE_ICON} fill="currentColor" />}
         </button>
-      </div>
-      <div onPointerDown={stop} className="absolute inset-x-2 bottom-2 flex h-8 items-center gap-2 rounded-md bg-black/60 px-1.5 text-[11px] tabular-nums text-white/85 backdrop-blur-sm">
-        <button type="button" data-template-trial-play={playing ? 'playing' : 'paused'} title={t(failed ? 'assetDrawer.previewRetry' : playing || loading ? 'assetDrawer.pause' : 'assetDrawer.play')} aria-label={t(failed ? 'assetDrawer.previewRetry' : playing || loading ? 'assetDrawer.pause' : 'assetDrawer.play')} onClick={toggle} className="grid h-6 w-6 shrink-0 place-items-center rounded text-white hover:bg-white/15">
-          {failed ? <RotateCw size={13} /> : playing || loading ? <Pause size={13} strokeWidth={2.4} fill="currentColor" /> : <Play size={13} strokeWidth={2.4} fill="currentColor" />}
-        </button>
-        <span data-template-trial-time="">{clock(time)}</span>
+        <span className="min-w-0 max-w-[36%] truncate text-[12px]" title={name}>{name}</span>
+        <span data-template-trial-time="" className="shrink-0 text-[var(--text-muted)]">{clock(time)}</span>
         <input
           type="range"
           min={0}
           max={length || 1}
           step={0.01}
           value={Math.min(time, length || 1)}
-          aria-label={nameOf(item.name, lang)}
+          aria-label={t('assetDrawer.seek')}
           onChange={(e) => seek(Number(e.target.value))}
-          className="h-1 min-w-0 flex-1 cursor-pointer accent-[var(--accent)]"
+          disabled={loading || failed || !length}
+          className="h-1 min-w-0 flex-1 cursor-pointer accent-[var(--accent)] disabled:opacity-40"
         />
-        <span className="text-white/55">{clock(length)}</span>
-      </div>
-    </div>
-  );
+        <span className="shrink-0 text-[var(--text-faint)]">{clock(length)}</span>
+      </div>, target,
+    ) : null}
+  </>);
 }

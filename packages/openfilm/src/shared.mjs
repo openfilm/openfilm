@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, wr
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { FilmPage, FrameError, launch, serve } from './host.mjs';
 import { FILM_FILE, readFilmFile } from './film-doc.mjs';
-import { readableLink } from './media-links.mjs';
+import { readableLink, referenceSource } from './media-links.mjs';
 
 /**
  * A film argument (a project folder with film.html, a folder inside one, a folder with index.html, or an .html file)
@@ -175,6 +175,8 @@ export function fileOf(root, entry, src) {
   const home = resolve(root);
   const file = resolve(join(root, path));
   if (file !== home && !file.startsWith(home + sep)) throw new Error(`${src}: outside the film's folder`);
+  const linked = referenceSource(home, file);
+  if (linked) return linked;
   if (existsSync(file)) {
     const real = realpathSync(file), base = realpathSync(home);
     if (real !== base && !real.startsWith(base + sep) && !readableLink(home, file)) throw new Error(`${src}: a link out of the film's folder`);

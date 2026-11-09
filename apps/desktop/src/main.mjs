@@ -227,14 +227,18 @@ function presentation() {
     fallback: HOME,
     prepare(id) {
       const v = makeView(id);
-      const ready = stage(id, v, () => preparePage(v.webContents, pageAddress(id === HOME ? null : tabs?.get(id)), frameOptions(id)));
+      const url = pageAddress(id === HOME ? null : tabs?.get(id));
+      // A covered Windows view can stop drawing. Load its document and let it paint after it is raised.
+      const ready = windows
+        ? preparePage(v.webContents, url, { waitForPaint: false })
+        : stage(id, v, () => preparePage(v.webContents, url, frameOptions(id)));
       return { view: v, ready };
     },
-    resume(id, v) { return stage(id, v, () => paintPage(v.webContents, frameOptions(id))); },
+    resume: windows ? undefined : (id, v) => stage(id, v, () => paintPage(v.webContents, frameOptions(id))),
     present(_id, v) {
       if (!win) return;
       revealPage(win.contentView, v, views.values());
-      v.webContents.setBackgroundThrottling(true);
+      if (!windows) v.webContents.setBackgroundThrottling(true);
       /* the pages now behind it are told: one waiting to be covered (its projects window opening another tab) is done */
       for (const page of views.values()) if (page !== v && !page.webContents.isDestroyed()) page.webContents.send('desktop:tabs:covered');
     },

@@ -236,7 +236,7 @@ export interface FilmStageControl {
 }
 
 /** Layers to select on the picture, asked from elsewhere (see FilmStageSelectProps.selectRequest). */
-export interface FilmStageSelectRequest { layers: readonly { loc: string; clipLoc?: string }[]; toggle?: boolean; seq: number }
+export interface FilmStageSelectRequest { layers: readonly { loc: string; clipLoc?: string }[]; clipLocs?: readonly string[]; toggle?: boolean; seq: number }
 
 /** One thing in hand on the picture, for a reference: what it is, and its box (stage px) when it is a layer. */
 export interface StagePick { element: StageElement; box: StageBox | null }
@@ -393,7 +393,7 @@ interface FilmStageSelectProps {
   /** Pressing the picture pauses: selecting something that moves is a contradiction. */
   onPause?: () => void;
   /** The selection changed: a layer clicked, the clip from the timeline in hand, or nothing (null). */
-  onSelectElement?: (element: StageElement | null) => void;
+  onSelectElement?: (element: StageElement | null, rowClipLocs?: readonly string[]) => void;
   /** A whole clip moved / scaled / turned on the stage: its box written. Refused: an error message. */
   onEditClip?: (edits: StageClipEdit[]) => Promise<string | null>;
   /** The clips selected elsewhere (`film.html#<track>.<clip>`): one is in hand here, several are outlined. */
@@ -539,6 +539,7 @@ function FilmStageSelectImpl({
   React.useEffect(() => {
     if (!onRegion) return undefined;
     const onKey = (e: KeyboardEvent) => {
+      if (previewRef.current?.frame?.()?.closest('[inert]')) return;
       if (e.key === REGION_KEY) setModAt(e.type === 'keydown' ? pointerAt.current : null);
     };
     const off = () => setModAt(null);
@@ -697,7 +698,9 @@ function FilmStageSelectImpl({
     setEditingTextState(loc);
   }, [previewRef]);
 
+  const rowClipLocs = React.useRef<readonly string[] | undefined>(undefined);
   const dropPick = React.useCallback(() => {
+    rowClipLocs.current = undefined;
     setMulti(null);
     setPickLost(false);
     gestureRef.current = null;
@@ -709,18 +712,19 @@ function FilmStageSelectImpl({
     setPicked(null);
   }, [setMulti, setPicked]);
 
-  const commitHit = React.useCallback((hit: Hit | null) => {
+  const commitHit = React.useCallback((hit: Hit | null, clips?: readonly string[]) => {
+    rowClipLocs.current = hit ? clips : undefined;
     setMulti(null);
     setPickLost(false);
     setPicked(hit);
-    onSelectElement?.(hit?.element ?? null);
+    onSelectElement?.(hit?.element ?? null, clips);
   }, [onSelectElement, setMulti, setPicked]);
 
   /** Select these layers: one is one; several are their union box and each of them (see multi). */
-  const selectMany = React.useCallback((layers: readonly StageLayer[]) => {
-    if (!layers.length) { commitHit(null); return; }
-    if (layers.length === 1) { commitHit(hitOf(layers[0]!)); return; }
-    commitHit({ rect: unionRect(layers.map((l) => l.rect)) });
+  const selectMany = React.useCallback((layers: readonly StageLayer[], clips?: readonly string[]) => {
+    if (!layers.length) { commitHit(null, clips); return; }
+    if (layers.length === 1) { commitHit(hitOf(layers[0]!), clips); return; }
+    commitHit({ rect: unionRect(layers.map((l) => l.rect)) }, clips);
     setMulti(layers.map((layer) => ({ layer, element: elementOf(layer) })));
   }, [commitHit, elementOf, hitOf, setMulti]);
   /** The layers in hand now (one counts too): Shift-click adds to / takes from them. */
@@ -844,8 +848,7 @@ function FilmStageSelectImpl({
         window.setTimeout(() => { if (multiRef.current?.some((it) => it.lost != null)) syncQueue.push(0); }, LOST_PICK_GRACE_MS);
       } else if (drawn.length < 2) {
         /* one left is selected alone; none, nothing is */
-        if (drawn[0]) commitHit(hitOf(drawn[0].layer));
-        else { dropPick(); onSelectElement?.(null); }
+        commitHit(drawn[0] ? hitOf(drawn[0].layer) : null, rowClipLocs.current);
         return;
       }
       setMulti(next);
@@ -866,8 +869,7 @@ function FilmStageSelectImpl({
       if (!fresh || !same) {
         if (fresh && !same) {
           lostSince.current = null;
-          dropPick();
-          onSelectElement?.(null);
+          commitHit(null, rowClipLocs.current);
           return;
         }
         /* the page may still be redrawing: let go only when it stays lost, its frame not drawn meanwhile */
@@ -875,8 +877,7 @@ function FilmStageSelectImpl({
         if (lostSince.current == null) lostSince.current = now;
         if (now - lostSince.current > LOST_PICK_GRACE_MS) {
           lostSince.current = null;
-          dropPick();
-          onSelectElement?.(null);
+          commitHit(null, rowClipLocs.current);
         } else {
           setPickLost(true);
           window.setTimeout(() => { if (pickedRef.current?.layer?.handle === layer.handle) syncQueue.push(0); }, LOST_PICK_GRACE_MS);
@@ -893,7 +894,7 @@ function FilmStageSelectImpl({
         || JSON.stringify(next.style) !== JSON.stringify(el.style)
         || JSON.stringify(next.override) !== JSON.stringify(el.override);
       setPicked({ ...held, rect: fresh.rect, layer: fresh, element: changed ? next : el });
-      if (changed) onSelectElement?.(next);
+      if (changed) onSelectElement?.(next, rowClipLocs.current);
       return;
     }
     if (held?.element?.isMgOuter && held.element.clipLoc && !gestureRef.current && !clipNudge.current) {
@@ -1300,6 +1301,7 @@ function FilmStageSelectImpl({
   React.useEffect(() => {
     if (!picked) { keyHandler.current = null; return undefined; }
     const onKey = (e: KeyboardEvent) => {
+      if (previewRef.current?.frame?.()?.closest('[inert]')) return;
       /* keys pressed in an app's own panel are the app's (typing-target.ts) */
       if (inHostPanel(e.target)) return;
       const typingNow = () => {
@@ -1419,10 +1421,11 @@ function FilmStageSelectImpl({
        points at what is selected). On the timeline only layers let go: a whole clip in hand is the timeline's own
        selection, which it keeps or clears itself. */
     const onDown = (e: PointerEvent) => {
+      if (previewRef.current?.frame?.()?.closest('[inert]')) return;
       const el = e.target as HTMLElement | null;
       if (
         inHostPanel(el)
-        || el?.closest('[data-film-select]')
+        || el?.closest('[data-film-select], [data-work-mode]')
         || el?.closest('[role="menu"]')
         || el?.closest('[data-film-inspector]')
         || el?.closest('[role="separator"]')
@@ -1430,9 +1433,8 @@ function FilmStageSelectImpl({
         || el?.closest('[data-popover-panel]')
       ) return;
       if (el?.closest('[data-timeline]') && !multiRef.current && (!pickedRef.current?.element || pickedRef.current.element.kind === 'clip')) return;
-      /* a Layers row ⌘-clicked (Ctrl) adds its layer to what is selected or takes it away, Shift-clicked selects the
-         rows from the last one clicked: what is selected now is still needed */
-      if (el?.closest('[data-layers-panel] [role="treeitem"]') && (e.shiftKey || e.metaKey || e.ctrlKey)) return;
+      /* Layers owns its click selection, including the combination of clips and their layers. */
+      if (el?.closest('[data-layers-panel] [role="treeitem"]')) return;
       dropPick();
       onSelectElement?.(null);
     };
@@ -1457,6 +1459,7 @@ function FilmStageSelectImpl({
   selectAllRef.current = selectAll;
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (previewRef.current?.frame?.()?.closest('[inert]')) return;
       if (!isSelectAll(e) || textEdit.current || cropRef.current) return;
       const el = e.target as HTMLElement | null;
       if (el && el !== document.body && !el.closest('[data-viewer-pane]') && !el.closest('[data-film-select]')) return;
@@ -1518,6 +1521,11 @@ function FilmStageSelectImpl({
    */
   React.useEffect(() => {
     const locs = linkedLocs ?? [];
+    const mixedClips = rowClipLocs.current;
+    if (mixedClips?.length) {
+      if (locs.length === mixedClips.length && mixedClips.every((loc) => locs.includes(loc))) return;
+      dropPick();
+    }
     if (locs.length !== 1) {
       /* only a clip in hand: a layer clicked on the picture was not selected on the timeline */
       if (pickedRef.current?.element?.isMgOuter) dropPick();
@@ -1650,8 +1658,9 @@ function FilmStageSelectImpl({
     const token = ++pressSeq.current;
     void Promise.all(asked).then((found) => {
       const layers = found.filter((layer): layer is StageLayer => layer != null);
-      if (!layers.length || token !== pressSeq.current) return;
+      if (token !== pressSeq.current || (!layers.length && !selectRequest.clipLocs)) return;
       setHover(null);
+      if (selectRequest.clipLocs) { selectMany(layers, selectRequest.clipLocs); return; }
       if (!selectRequest.toggle) { selectMany(layers); return; }
       /* as a Shift-click on the picture: each one added, or taken away when it is selected already */
       let next = selectedLayers();
@@ -2171,6 +2180,7 @@ function FilmStageSelectImpl({
   nudgeGroupRef.current = nudgeGroup;
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (previewRef.current?.frame?.()?.closest('[inert]')) return;
       if (!e.key.startsWith('Arrow') || !arrowsMoveRef.current || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (inHostPanel(el) || inspectorKey(el) || el?.closest('input, textarea, select, [contenteditable="true"], [data-timeline]')) return;
@@ -2373,6 +2383,7 @@ function FilmStageSelectImpl({
   /* Alt pressed or let go with the pointer resting on the picture sends no pointer move */
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (previewRef.current?.frame?.()?.closest('[inert]')) return;
       if (e.key === 'Alt') measureAtRef.current(e.type === 'keydown' ? pointerAt.current : null);
     };
     const off = () => measureAtRef.current(null);
@@ -2935,7 +2946,7 @@ function FilmStageSelectImpl({
   const draftRect = draft
     ? { left: Math.min(draft.x1, draft.x2), top: Math.min(draft.y1, draft.y2), width: Math.abs(draft.x2 - draft.x1), height: Math.abs(draft.y2 - draft.y1) }
     : null;
-  const linkedShown = linkedOutlines(linkedMarks, picked?.element?.clipLoc, dragging);
+  const linkedShown = linkedOutlines(linkedMarks, picked?.element?.kind === 'clip' ? picked.element.clipLoc : undefined, dragging);
   /* several clips selected: one frame around them all (it moves with them) */
   const groupMarks = clipsMoved ?? (linkedShown.length > 1 ? linkedShown : null);
   const groupStretch = Boolean(groupMarks?.every((m) => infoOf(m.loc)?.kind === 'video'));

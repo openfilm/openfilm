@@ -89,6 +89,27 @@ test('presence is checked even when no native watcher could start, and stops on 
   rmSync(scratch, { recursive: true, force: true });
 });
 
+test('an open film picks up in-place and atomic writes even with no filesystem events', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-watch-no-events-'));
+  const film = join(root, 'film.html');
+  writeFileSync(film, 'old');
+  const seen = [];
+  const stop = watchFolder(root, (event) => seen.push(event), { watch: () => () => {} });
+  try {
+    await settle(100);
+    writeFileSync(film, 'new'); // Same byte length as the original.
+    await until(() => seen.some((e) => e.type === 'film' && e.rev === revOf('new')));
+    const replacement = join(root, 'replacement.tmp');
+    writeFileSync(replacement, 'old');
+    renameSync(replacement, film);
+    await until(() => seen.some((e) => e.type === 'film' && e.rev === revOf('old')));
+    assert.deepEqual(seen, [{ type: 'film', rev: revOf('new') }, { type: 'film', rev: revOf('old') }]);
+  } finally {
+    stop();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('film.html changes come with their revision, other files as one files event; .film/ is not watched', async () => {
   const root = mkdtempSync(join(tmpdir(), 'of-watch-'));
   writeFileSync(join(root, 'film.html'), '{"stage":{"w":1,"h":1},"tracks":[]}');

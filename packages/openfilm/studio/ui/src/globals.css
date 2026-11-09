@@ -660,12 +660,17 @@ html[data-file-drag] iframe { pointer-events: none; }
   font-family: -apple-system, system-ui, 'PingFang SC', Inter, 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
 }
 .openfilm-canvas .react-flow__edge-path { stroke-linecap: round; }
-/* the selected node's wires: blue, glowing, flowing towards what they feed */
+/* The live preview and connections on selected nodes carry the same moving highlight. */
+.openfilm-canvas .cv-wire-flow,
 .openfilm-canvas .react-flow__edge.lit .react-flow__edge-path {
-  stroke: var(--cv-edge-lit); stroke-width: 2; stroke-dasharray: 10 6; animation: cv-flow 0.6s linear infinite;
+  stroke: var(--cv-edge-lit); stroke-width: 2.5; stroke-dasharray: 24 28; animation: cv-flow 0.95s linear infinite;
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--cv-edge-lit) 70%, transparent));
 }
-@keyframes cv-flow { to { stroke-dashoffset: -16; } }
+@keyframes cv-flow { to { stroke-dashoffset: -52; } }
+@media (prefers-reduced-motion: reduce) {
+  .openfilm-canvas .cv-wire-flow,
+  .openfilm-canvas .react-flow__edge.lit .react-flow__edge-path { animation: none; stroke-dasharray: none; }
+}
 /* the canvas's menus, panels and windows come in: a short rise and fade, a window a slight grow */
 @keyframes cv-pop { from { opacity: 0; transform: translateY(4px) scale(0.98); } }
 @keyframes cv-fade { from { opacity: 0; } }

@@ -23,7 +23,7 @@ const CARD = `<!doctype html><body style="margin:0;background:#222">
  * `chat`: inside an app with a chat, where ⌘ (Ctrl) held draws a box to point at instead of selecting. `again`: the
  * page shown a second time after it, by another clip (a paste then gives the first clip a page of its own).
  */
-async function withCard(name, run, { chat = false, again = false } = {}) {
+async function withCard(name, run, { chat = false, again = false, mixed = false } = {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'of-layer-selection-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
   const saved = new Map(names.map((n) => [`OPENFILM_${n}`, process.env[`OPENFILM_${n}`]]));
@@ -34,9 +34,16 @@ async function withCard(name, run, { chat = false, again = false } = {}) {
     await mkdir(root, { recursive: true });
     await writeFile(join(root, 'card.html'), CARD);
     const clips = [{ id: 'card', src: 'card.html', time: [0, 4] }, ...(again ? [{ id: 'again', src: 'card.html', at: 4, time: [0, 4] }] : [])];
-    await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1080, h: 1920 }, tracks: [{ clips }] }));
+    const tracks = [{ clips }];
+    if (mixed) {
+      await writeFile(join(root, 'other.html'), CARD.replace('Parcel', 'Second page').replace('On time', 'Other text'));
+      const still = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+kvE0AAAAASUVORK5CYII=', 'base64');
+      await writeFile(join(root, 'still.png'), still);
+      tracks.unshift({ clips: [{ id: 'other', src: 'other.html', time: [0, 4] }] }, { clips: [{ id: 'still', src: 'still.png', time: [0, 4] }] });
+    }
+    await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1080, h: 1920 }, tracks }));
     const project = await openProject(root);
-    studio = await startStudio({ port: 0, openBrowser: () => {} });
+    studio = await startStudio({ port: 0, openBrowser: () => {}, editorDir: process.env.OPENFILM_TEST_EDITOR_DIR });
     browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
     const page = await browser.newPage({ viewport: { width: 1400, height: 1000 }, locale: 'en-US', reducedMotion: 'reduce' });
     await page.addInitScript((withChat) => {
@@ -179,11 +186,15 @@ test('Shift-click on the picture, ⌘ / Ctrl-click in Layers, adds a layer to wh
     await click(on(300, 1350), ['Shift']);
     await is(['On time'], 'the picture and the rows are one selection');
     assert.deepEqual(await rows(), ['On time']);
+    await row('#box3').click({ modifiers: ['Alt'] });
+    await is(['#box3', 'On time'], 'Alt-click adds a separate layer');
+    await row('On time').click({ modifiers: ['Alt'] });
+    await is(['#box3'], 'Alt-click toggles an already selected layer off');
   }, { chat: true });
 });
 
 test('in Layers, Shift-click selects the rows shown from the last one clicked, and the rows selected are one block', { timeout: 120_000 }, async () => {
-  await withCard('Range', async ({ page, on, until, selection, click }) => {
+  await withCard('Range', async ({ page, on, until, selection, click, drag }) => {
     const is = (want, what) => until(async () => {
       const now = await selection();
       return now.many === (want.length > 1 ? want.length : null) && JSON.stringify(now.rows.sort()) === JSON.stringify([...want].sort());
@@ -220,7 +231,46 @@ test('in Layers, Shift-click selects the rows shown from the last one clicked, a
     await is(['#box1'], 'a click on the picture selects one row');
     await row('Parcel').click({ modifiers: ['Shift'] });
     await is(['#box1', 'On time', 'Parcel'], 'a range from the layer selected on the picture');
+    const from = await row('#box3').boundingBox();
+    const to = await row('#box1').boundingBox();
+    await page.keyboard.down('Shift');
+    await drag({ x: from.x + 60, y: from.y + from.height / 2 }, { x: to.x + 60, y: to.y + to.height / 2 });
+    await page.keyboard.up('Shift');
+    await is(['#box3', '#box2', '#box1'], 'Shift-drag selects the visible rows in its box');
   });
+});
+
+test('Layers mixes whole clips and elements across pages in one selection', { timeout: 120_000 }, async () => {
+  await withCard('Mixed layers', async ({ page, until, drag }) => {
+    const row = (key) => page.locator(`[data-layer-key="${key}"]`);
+    const keys = () => page.locator('[data-layers-panel] [aria-selected="true"]').evaluateAll((rows) => rows.map((r) => r.dataset.layerKey).sort());
+    const is = (want) => until(async () => JSON.stringify(await keys()) === JSON.stringify(want.sort()), `selected ${want.join(', ')}`);
+    const text = 'layer:card:#sub';
+    const still = 'clip:still';
+    const other = 'layer:other:#sub';
+    await row(text).click();
+    await is([text]);
+    await row(still).click({ modifiers: ['Alt'] });
+    await is([text, still]);
+    await row(other).click({ modifiers: ['ControlOrMeta'] });
+    await is([text, still, other]);
+    await row(still).click({ modifiers: ['Alt'] });
+    await is([text, other]);
+    await row(still).click();
+    await is([still]);
+    await row('clip:card').click({ modifiers: ['Shift'] });
+    await is([still, 'clip:card']);
+    await row('clip:card').click({ modifiers: ['Alt'] });
+    await is([still]);
+    const from = await row(still).boundingBox();
+    const to = await row('clip:card').boundingBox();
+    await page.keyboard.down('Shift');
+    await drag({ x: from.x + 60, y: from.y + from.height / 2 }, { x: to.x + 60, y: to.y + to.height / 2 });
+    await page.keyboard.up('Shift');
+    await is([still, 'clip:card']);
+    await row(other).click();
+    await is([other]);
+  }, { mixed: true });
 });
 
 test('a paste undone: no box stays where a copy went, and what is selected keeps the layers still there', { timeout: 150_000 }, async () => {

@@ -293,7 +293,7 @@ export function useLibraryFavorites(): readonly string[] {
 export const mayNeedFetch = (item: Pick<LibraryItem, 'id' | 'music'>): boolean => item.id.startsWith('audio/') || item.id.startsWith('stickers/emoji/') || item.id.startsWith('community/') || Boolean(item.music);
 const asked = new Set<string>();
 /** asked, not answered yet: shown as to be fetched, never as one to put in that is not here */
-const asking = new Set<string>();
+const asking = new Map<string, Promise<void>>();
 const missing = new Set<string>();
 const fetching = new Set<string>();
 const failed = new Set<string>();
@@ -305,9 +305,9 @@ const tellHere = () => { hereTick += 1; for (const fn of hereSeen) fn(); };
 export function askHere(ids: readonly string[]): void {
   const fresh = ids.filter((id) => !asked.has(id));
   if (!fresh.length) return;
-  for (const id of fresh) { asked.add(id); asking.add(id); }
-  tellHere();
-  void fetch('/api/library/missing', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: fresh }) })
+  const check = fetch('/api/library/missing', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: fresh }), signal: AbortSignal.timeout(3000),
+  })
     .then((r) => (r.ok ? r.json() : null)).catch(() => null)
     .then((body: { ids?: string[] } | null) => {
       const absent = new Set(body?.ids ?? []);
@@ -319,11 +319,13 @@ export function askHere(ids: readonly string[]): void {
       }
       tellHere();
     });
+  for (const id of fresh) { asked.add(id); asking.set(id, check); }
+  tellHere();
 }
 
 const fetchJobs = new Map<string, Promise<boolean>>();
 
-/** Preview and insertion share the same download, including a double click while the preview is being prepared. */
+/** Preview and insertion share the same download. */
 export function fetchLibraryItem(id: string): Promise<boolean> {
   const pending = fetchJobs.get(id);
   if (pending) return pending;
@@ -349,6 +351,24 @@ export function fetchLibraryItem(id: string): Promise<boolean> {
   return job;
 }
 
+/** Check local availability before showing download activity for an item. */
+export async function prepareLibraryItem(id: string): Promise<boolean> {
+  askHere([id]);
+  await asking.get(id);
+  return isLibraryItemReady(id) || fetchLibraryItem(id);
+}
+
+/** A template's full example, shared by the card and the viewer, with the bundled preview as a fallback. */
+export const templateExamplePath = (item: LibraryItem): string => `examples/${item.id}.mp4`;
+export const templatePreviewUrl = (item: LibraryItem): string => {
+  const path = templateExamplePath(item);
+  return failed.has(path) ? previewUrl(item) : libraryUrl(path);
+};
+export function prepareTemplatePreview(item: LibraryItem): Promise<boolean> {
+  const path = templateExamplePath(item);
+  return failed.has(path) ? Promise.resolve(false) : prepareLibraryItem(path);
+}
+
 /** A thing heard in full (a sound played): here now. */
 export function heardHere(id: string): void {
   const was = missing.delete(id), pending = asking.delete(id), hadFailed = failed.delete(id);
@@ -359,10 +379,23 @@ export function heardHere(id: string): void {
 /** Where a thing is: here, to be fetched, being fetched, or its fetch failed. */
 export type HereState = 'here' | 'missing' | 'fetching' | 'failed';
 
-/** What of the library is here, kept current as things are fetched. */
-export function useLibraryHere(): (id: string) => HereState {
+/** A positive cache result; an item that has not been checked still needs preparing on click. */
+export function isLibraryItemReady(id: string): boolean {
+  return asked.has(id) && !asking.has(id) && !missing.has(id) && !fetching.has(id) && !failed.has(id);
+}
+
+/** Keep a failed direct media download retryable after its player has been dismissed. */
+export function failedHere(id: string): void {
+  asking.delete(id);
+  asked.add(id);
+  failed.add(id);
+  tellHere();
+}
+
+/** What of the library is here. For download indicators, require a confirmed cache miss. */
+export function useLibraryHere(): (id: string, confirmed?: boolean) => HereState {
   React.useSyncExternalStore((fn) => { hereSeen.add(fn); return () => { hereSeen.delete(fn); }; }, () => hereTick, () => hereTick);
-  return (id) => (fetching.has(id) ? 'fetching' : failed.has(id) ? 'failed' : missing.has(id) || asking.has(id) ? 'missing' : 'here');
+  return (id: string, confirmed = false) => (fetching.has(id) ? 'fetching' : failed.has(id) ? 'failed' : missing.has(id) || (!confirmed && asking.has(id)) ? 'missing' : 'here');
 }
 
 /** Star a thing, or take its star away: shown at once, then kept. */

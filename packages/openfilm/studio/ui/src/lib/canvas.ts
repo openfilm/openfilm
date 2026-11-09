@@ -16,6 +16,8 @@ export interface CanvasNode {
   text?: string;
   /** a file of the project, project-relative */
   path?: string;
+  /** a custom display title for a file or making node */
+  title?: string;
   /** a group: its name (and its color, one of GROUP_COLORS) */
   group?: string;
   color?: GroupColor;
@@ -145,9 +147,11 @@ export function readCanvasDoc(raw: unknown): CanvasDoc {
       ...(by && typeof by.agent === 'string' && by.agent ? { by: { agent: by.agent, ...(typeof by.session === 'string' && by.session ? { session: by.session } : {}) } } : {}),
     };
     const make = MAKE_KINDS.find((k) => k === n.make);
-    if (make) nodes.push({ ...box, ...parent, ...readMake(n), make });
+    const title = typeof n.title === 'string' ? n.title.trim().slice(0, 120) : '';
+    const named = title ? { title } : {};
+    if (make) nodes.push({ ...box, ...parent, ...named, ...readMake(n), make });
     else if (n.cut === true) nodes.push({ ...box, ...parent, cut: true });
-    else if (typeof n.path === 'string' && n.path) nodes.push({ ...box, ...parent, path: n.path });
+    else if (typeof n.path === 'string' && n.path) nodes.push({ ...box, ...parent, ...named, path: n.path });
     else if (typeof n.text === 'string') nodes.push({ ...box, ...parent, text: n.text });
     else if (typeof n.group === 'string') {
       const color = GROUP_COLORS.find((c) => c === n.color) ?? 'gray';

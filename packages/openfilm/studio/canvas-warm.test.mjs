@@ -17,7 +17,8 @@ async function withBoard(nodes, run) {
   try {
     const root = join(process.env.OPENFILM_LIBRARY, 'Board');
     await mkdir(join(root, '.film'), { recursive: true });
-    await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1280, h: 720 }, tracks: [] }));
+    await writeFile(join(root, 'page.html'), '<body style="background:#234"><script>window.film={duration:3,frame(){}}</script>');
+    await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1280, h: 720 }, tracks: [{ clips: [{ id: 'page', src: 'page.html', time: [0, 3] }] }] }));
     const board = JSON.stringify({ nodes, edges: [] });
     const file = join(root, '.film', 'canvas.json');
     await writeFile(file, board);
@@ -51,6 +52,10 @@ test('the edit warms a fitted hidden canvas without writing it; the first switch
   /* Overlap forces the display layout to change, so warming cannot silently save that change. */
   const nodes = ['One', 'Two'].map((text, i) => ({ id: `n${i}`, x: 0, y: 0, w: 350, h: 200, text }));
   await withBoard(nodes, async ({ page, url, path, file, board }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('openfilm.project.assets', '1');
+      localStorage.setItem('openfilm.project.assetsW', '380');
+    });
     const requests = [];
     page.on('request', (r) => { if (new URL(r.url()).pathname === path) requests.push(r.method()); });
     await page.goto(url);
@@ -64,7 +69,18 @@ test('the edit warms a fitted hidden canvas without writing it; the first switch
     assert.equal(await page.locator('.react-flow__node').evaluateAll((list) => list.some((el) => el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }))), false);
     const viewport = page.locator('[data-studio-canvas] .react-flow__viewport');
     const fitted = await viewport.getAttribute('style');
+    const frame = page.locator('[data-viewer-picture] iframe').first();
+    await frame.waitFor({ state: 'visible' });
+    const size = await frame.evaluate((el) => el.getBoundingClientRect().width);
+    await page.evaluate(() => {
+      window.__editTimeline = document.querySelector('[data-workspace-timeline]');
+      window.__editFrame = document.querySelector('[data-viewer-picture] iframe');
+    });
     await page.locator('[data-work-mode="edit"]').click();
+    assert.equal(await frame.evaluate((el) => el.getBoundingClientRect().width), size, 'the hidden editor keeps its own size');
+    await page.waitForTimeout(800);
+    assert.equal(await page.evaluate(() => window.__editTimeline === document.querySelector('[data-workspace-timeline]')
+      && window.__editFrame === document.querySelector('[data-viewer-picture] iframe')), true, 'timeline and preview stay mounted');
     assert.equal(await page.locator('[data-canvas-loading]').count(), 0, 'the first switch is already prepared');
     assert.equal(await page.locator('.react-flow__node').count(), 2);
     assert.equal(await viewport.getAttribute('style'), fitted, 'no first-open refit');

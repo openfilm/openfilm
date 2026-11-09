@@ -20,7 +20,7 @@ import { toggleFavorite, useLibraryFavorites } from '@/lib/library';
 import { communityOf, makerOf, seenCatalog, seenSkills, sourcesApi, SourceError, watchSkills, type SkillEntry } from '@/lib/project-sources';
 import { byOrder, SkillCover, SkillMark, SkillPage, useSkillWords } from '../SkillPage';
 import { SettingsSwitch } from '../settings/ui';
-import { ADD_HOVER, PANEL_ROUND, ROUND } from './AudioList';
+import { ADD_COLOR, PANEL_ROUND, ROUND } from './AudioList';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 
 /** One of Discover's not installed is there only; the person's own and a project's are installed already. */
@@ -323,7 +323,7 @@ function SkillTile({ skill, kept, onOpen, onAdd }: { skill: SkillEntry; kept: bo
           </button>
           {onAdd ? (
             <button type="button" title={t('assetDrawer.skillAdd')} aria-label={t('assetDrawer.skillAdd')} onClick={(e) => { e.stopPropagation(); onAdd(); }}
-              className={`${ROUND} ${ADD_HOVER} hidden bg-black/55 text-white group-hover:grid`}>
+              className={`${ROUND} ${ADD_COLOR} hidden group-hover:grid focus-visible:grid`}>
               <Plus size={12} strokeWidth={2.6} />
             </button>
           ) : null}

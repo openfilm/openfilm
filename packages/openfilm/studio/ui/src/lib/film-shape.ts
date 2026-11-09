@@ -4,6 +4,7 @@
  * and its track's flags. The preview reports what film.html can't say on its own: each clip's span on the film and
  * its source's own length and picture size (`spans`); media facts (whether a video has sound) come from probing.
  */
+import { compoundFolder } from '../../../server/compound.mjs';
 import type { ClipLook } from './clip-look.ts';
 import { fileStem, filmAudioRoleOf, filmClipKind, filmDocLoc, filmSrcIsLibrary, filmSrcIsStill, filmTrackKind, type FilmDoc, type FilmTrack } from './film.ts';
 import type { TimelineFilm, TimelineBlock } from './timeline-layout.ts';
@@ -13,6 +14,8 @@ export type ClipSpan = {
   id: string; src: string; at: number; end: number; native: number | null; w?: number; h?: number;
   /** a page that sets no size of its own: laid out at its clip's `size`, else the stage's */
   reflows?: true;
+  /** The source film has audible clips of its own. */
+  nestedAudio?: true;
   /** a picture's look, as the film's CSS makes it (see clip-look) */
   look?: ClipLook;
 };
@@ -145,6 +148,7 @@ export function filmShape(
         z: -ti,
         anchor,
         ...(kind === 'mg' ? { src: clip.src } : {}),
+        ...(known?.src === clip.src && known.nestedAudio && compoundFolder(clip.src) ? { ownAudio: true } : {}),
         ...(box ? { box } : {}),
         ...(size ? { size } : {}),
         ...(sourceDurMs != null && kind === 'mg' ? { sourceDurMs } : {}),

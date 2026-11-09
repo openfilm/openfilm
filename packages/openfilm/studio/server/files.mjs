@@ -16,7 +16,7 @@ import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep 
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
-import { addLinkedPlaces, readableLink } from '../../src/media-links.mjs';
+import { addLinkedPlaces, changeMediaReferences, mediaReference, mediaReferences, readableLink, referenceSource } from '../../src/media-links.mjs';
 import { changeProjectFilm, readProjectFilm } from './film.mjs';
 import { filesWritten } from './person-edits.mjs';
 import { TOOL_DIR } from './projects.mjs';
@@ -61,6 +61,12 @@ export function inside(root, rel, how = {}) {
     || !(onDiskInside(base, abs) || (how.read === true && readableLink(base, abs)))) {
     throw new FileError(`${rel} is not a path inside the project`);
   }
+  if (mediaReference(base, abs) && !lstatSync(abs, { throwIfNoEntry: false })) {
+    if (!how.read) throw new FileError('Linked media is read-only. Collect it into the project before editing it.');
+    const source = referenceSource(base, abs);
+    if (!source) throw new FileError(`${rel} is not available at its linked location`, 404);
+    return source;
+  }
   return abs;
 }
 
@@ -84,6 +90,15 @@ function entryInside(root, rel) {
     if (lstatSync(abs, { throwIfNoEntry: false })?.isSymbolicLink() && !rel.slice(cut + 1).startsWith('.')) return abs;
   }
   return inside(root, rel);
+}
+
+/** The reference entry itself, as opposed to a file inside a referenced folder. */
+function referenceEntry(/** @type {string} */ root, /** @type {string} */ rel) {
+  const abs = join(root, rel);
+  const match = mediaReference(root, abs);
+  if (!match || match.tail.length || lstatSync(abs, { throwIfNoEntry: false })) return null;
+  inside(root, posix(dirname(rel)));
+  return match.entry;
 }
 
 /**
@@ -191,22 +206,24 @@ export async function listFiles(root) {
   const pages = [];
   /** @type {Record<string, { to: string, missing?: true }>} */
   const links = {};
+  const references = mediaReferences(root);
 
-  async function walk(/** @type {string} */ dir, /** @type {number} */ depth, /** @type {boolean} */ media) {
+  async function walk(/** @type {string} */ dir, /** @type {number} */ depth, /** @type {boolean} */ media, logical = dir) {
     let entries;
     try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
     for (const entry of entries) {
-      if (media && entry.name === KEEP && entry.isFile()) made.push(posix(relative(root, dir)));
+      if (media && logical === dir && entry.name === KEEP && entry.isFile()) made.push(posix(relative(root, dir)));
       if (entry.name.startsWith('.')) continue;
       const abs = join(dir, entry.name);
-      const rel = posix(relative(root, abs));
+      const rel = posix(relative(root, join(logical, entry.name)));
       /* a link the person made to media kept elsewhere: followed to a place they linked; one that leads nowhere (a
          NAS that is off), or out of the project to a place they never linked (a project from elsewhere), is missing */
       if (media && entry.isSymbolicLink()) {
         const to = await readlink(abs).catch(() => '');
-        const info = readableLink(root, abs) ? await stat(abs).catch(() => null) : null;
+        const permitted = logical === dir ? readableLink(root, abs) : Boolean(referenceSource(root, join(logical, entry.name)));
+        const info = permitted ? await stat(abs).catch(() => null) : null;
         links[rel] = { to: isAbsolute(to) ? to : join(dir, to), ...(info ? {} : { missing: true }) };
-        if (info?.isDirectory()) { folders.push(rel); if (depth < 8) await walk(abs, depth + 1, true); continue; }
+        if (info?.isDirectory()) { folders.push(rel); if (depth < 8) await walk(abs, depth + 1, true, join(logical, entry.name)); continue; }
         const own = await lstat(abs).catch(() => null);
         const at = info ?? own;
         /* `added`: when the link was made, not when what it leads to last changed */
@@ -214,7 +231,7 @@ export async function listFiles(root) {
         continue;
       }
       if (entry.isDirectory()) {
-        if (media) { folders.push(rel); if (depth < 8) await walk(abs, depth + 1, true); }
+        if (media) { folders.push(rel); if (depth < 8) await walk(abs, depth + 1, true, join(logical, entry.name)); }
         else if (!SKIP.has(entry.name) && depth < 3) await walk(abs, depth + 1, false);
         continue;
       }
@@ -224,6 +241,17 @@ export async function listFiles(root) {
       if (media) files.push({ path: rel, kind: kindOf(entry.name), size: info.size, mtime: Math.round(info.mtimeMs), added: Math.round(info.mtimeMs) });
       /* the film is not one of its pages */
       else if (/\.html?$/i.test(entry.name) && rel !== FILM_FILE) pages.push({ path: rel, size: info.size, mtime: Math.round(info.mtimeMs) });
+    }
+    if (media && logical === dir) for (const ref of references) {
+      const alias = join(root, ...ref.name.split('/'));
+      if (dirname(alias) !== dir || lstatSync(alias, { throwIfNoEntry: false })) continue;
+      const source = referenceSource(root, alias);
+      const info = source ? await stat(source).catch(() => null) : null;
+      links[ref.name] = { to: ref.to, ...(info ? {} : { missing: true }) };
+      if (ref.directory) {
+        folders.push(ref.name);
+        if (source && info && depth < 8) await walk(source, depth + 1, true, alias);
+      } else files.push({ path: ref.name, kind: kindOf(ref.name), size: info?.size ?? 0, mtime: Math.round(info?.mtimeMs ?? ref.added), added: ref.added });
     }
   }
   await walk(join(root, ASSETS), 0, true);
@@ -395,25 +423,35 @@ async function relinkAfterMove(root, from, to, sidecars = []) {
  * @param {string} root @param {string} from @param {string} asked
  */
 export async function moveFile(root, from, asked) {
-  const src = entryInside(root, from);
+  const alias = referenceEntry(root, from);
+  const src = alias ? join(root, alias.name) : entryInside(root, from);
   askedInside(root, asked);
   const to = cleanLast(asked);
   const dst = inside(root, to);
-  const link = lstatSync(src, { throwIfNoEntry: false })?.isSymbolicLink() === true;
+  const link = alias || lstatSync(src, { throwIfNoEntry: false })?.isSymbolicLink() === true;
   if (!link && !existsSync(src)) throw new FileError(`${from} is not there`, 404);
   /* a file's ending says what it is: a picture renamed .mp3 would be taken for a sound (and fail as one). Another
      ending of the same kind (.jpeg → .jpg) is fine */
   const fromName = posix(from).split('/').pop() ?? '', toName = to.split('/').pop() ?? '';
-  if ((link || (await stat(src)).isFile()) && kindOf(fromName) !== kindOf(toName)) {
+  if (!alias?.directory && (link || (await stat(src)).isFile()) && kindOf(fromName) !== kindOf(toName)) {
     throw new FileError(`${fromName} can't be renamed ${toName}: the ending says what a file is (a picture, a video, a sound or a page), and this one would change it. Keep an ending of the same kind`);
   }
   if (existsSync(dst) && !sameEntry(src, dst)) throw new FileError(`${to} is already there`, 409);
   if (dst.startsWith(src + sep)) throw new FileError('a folder cannot go inside itself');
   const media = !link && (await stat(src)).isFile() && ['audio', 'video'].includes(kindOf(fromName));
   const sidecars = media ? await moveMedia(root, src, dst) : [];
-  if (!media) {
+  if (!media && !alias) {
     await mkdir(dirname(dst), { recursive: true });
     await rename(src, dst);
+  }
+  if (alias) await mkdir(dirname(dst), { recursive: true });
+  const where = movedTo(posix(relative(root, src)), posix(relative(root, dst)));
+  try {
+    changeMediaReferences(root, (entries) => entries.some((entry) => where(entry.name) !== entry.name)
+      ? entries.map((entry) => ({ ...entry, name: where(entry.name) })) : entries);
+  } catch (e) {
+    if (!alias && !media) await rename(dst, src);
+    throw e;
   }
   const moved = await repoint(root, posix(relative(root, src)), posix(relative(root, dst)));
   const pages = await relinkAfterMove(root, posix(relative(root, src)), posix(relative(root, dst)), sidecars);
@@ -534,20 +572,27 @@ export async function freezeFrame(root, rel, ms) {
  * it is kept, untouched.
  */
 export async function trashFile(/** @type {string} */ root, /** @type {string} */ rel) {
+  const alias = referenceEntry(root, rel);
+  if (alias) {
+    changeMediaReferences(root, (entries) => entries.filter((entry) => entry.name !== alias.name));
+    return;
+  }
   const abs = entryInside(root, rel);
   if (lstatSync(abs, { throwIfNoEntry: false })?.isSymbolicLink()) { await unlink(abs); return; }
   if (!existsSync(abs)) throw new FileError(`${rel} is not there`, 404);
   await moveToTrash(abs);
+  changeMediaReferences(root, (entries) => entries.some((entry) => entry.name === rel || entry.name.startsWith(`${rel}/`))
+    ? entries.filter((entry) => entry.name !== rel && !entry.name.startsWith(`${rel}/`)) : entries);
 }
 
 /* ── media kept elsewhere: copied in (cloned where the disk can) or linked (src/media-links.mjs) ── */
 
 /** The first free name for `name` in `dir`: `name.ext`, then `name 2.ext`… (importFile's rule). */
-function freeIn(/** @type {string} */ dir, /** @type {string} */ name) {
+function freeIn(/** @type {string} */ root, /** @type {string} */ dir, /** @type {string} */ name) {
   const ext = extname(name);
   for (let n = 1; ; n++) {
     const candidate = n === 1 ? name : `${name.slice(0, name.length - ext.length)} ${n}${ext}`;
-    if (!lstatSync(join(dir, candidate), { throwIfNoEntry: false })) return candidate;
+    if (!lstatSync(join(dir, candidate), { throwIfNoEntry: false }) && !mediaReference(root, join(dir, candidate))) return candidate;
   }
 }
 
@@ -558,9 +603,9 @@ function freeIn(/** @type {string} */ dir, /** @type {string} */ name) {
  * Returns where each landed. `anywhere`: into any folder of `root` ('' its top), not only assets/ (the Saved library,
  * saved.mjs, whose folder is all media).
  * @param {string} root @param {string} into @param {string[]} paths @param {'copy' | 'link'} mode
- * @param {{ anywhere?: boolean }} [o]
+ * @param {{ anywhere?: boolean, platform?: string, makeLink?: typeof symlink }} [o]
  */
-export async function bringIn(root, into, paths, mode, { anywhere = false } = {}) {
+export async function bringIn(root, into, paths, mode, { anywhere = false, platform = process.platform, makeLink = symlink } = {}) {
   if (!anywhere && into !== ASSETS && !into.startsWith(`${ASSETS}/`)) throw new FileError('media goes in assets/');
   const dir = into ? inside(root, into) : root;
   await mkdir(dir, { recursive: true });
@@ -570,24 +615,34 @@ export async function bringIn(root, into, paths, mode, { anywhere = false } = {}
     if (typeof path !== 'string' || !isAbsolute(path)) throw new FileError('a full path, please');
     const from = realpathSync.native(path);
     const info = await stat(from);
-    const name = cleanName(basename(from));
+    const cleaned = cleanName(basename(from));
+    const name = platform === 'win32' ? cleaned.replace(/[. ]+$/, '') : cleaned;
     if (!name || name.startsWith('.')) throw new FileError(`${basename(from)} can't be named here`);
     if (mode === 'link') {
       /* the person picked it: theirs to read, whichever link leads there */
       addLinkedPlaces([from]);
-      const same = (await readdir(dir)).find((n) => {
-        const at = join(dir, n);
-        return lstatSync(at).isSymbolicLink() && (() => { try { return realpathSync.native(at) === from; } catch { return false; } })();
-      });
-      if (same) { landed.push(posix(relative(root, join(dir, same)))); continue; }
-      const at = join(dir, freeIn(dir, name));
-      await symlink(from, at, info.isDirectory() ? 'dir' : 'file');
-      landed.push(posix(relative(root, at)));
+      landed.push(await queuedImport(dir, async () => {
+        const saved = mediaReferences(root).find((ref) => ref.to === from && dirname(join(root, ref.name)) === dir && referenceSource(root, join(root, ref.name)));
+        if (saved) return saved.name;
+        const same = (await readdir(dir)).find((n) => {
+          const at = join(dir, n);
+          try { return lstatSync(at).isSymbolicLink() && realpathSync.native(at) === from; } catch { return false; }
+        });
+        if (same) return posix(relative(root, join(dir, same)));
+        const at = join(dir, freeIn(root, dir, name));
+        const rel = posix(relative(root, at));
+        try { await makeLink(from, at, info.isDirectory() ? 'dir' : 'file'); }
+        catch (e) {
+          const code = /** @type {NodeJS.ErrnoException} */ (e).code;
+          if (platform !== 'win32' || !rel.startsWith('assets/') || !['UNKNOWN', 'EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP', 'EINVAL', 'ENOSYS', 'EXDEV'].includes(code ?? '')) throw e;
+          changeMediaReferences(root, (entries) => [...entries, { name: rel, to: from, directory: info.isDirectory(), added: Date.now() }]);
+        }
+        return rel;
+      }));
       continue;
     }
-    const at = join(dir, freeIn(dir, name));
     /* under a hidden name until it is all there: the pane never shows half a file */
-    const part = join(dir, `.${basename(at)}.${process.pid}.importing`);
+    const part = join(dir, `.${process.pid}.${Date.now()}${++imports}.importing`);
     try {
       if (info.isDirectory()) await cp(from, part, { recursive: true, mode: constants.COPYFILE_FICLONE, filter: (src) => !basename(src).startsWith('.') });
       else {
@@ -596,12 +651,15 @@ export async function bringIn(root, into, paths, mode, { anywhere = false } = {}
         const now = new Date();
         await utimes(part, now, now);
       }
-      await rename(part, at);
+      landed.push(await queuedImport(dir, async () => {
+        const at = join(dir, freeIn(root, dir, name));
+        await rename(part, at);
+        return posix(relative(root, at));
+      }));
     } catch (e) {
       await rm(part, { recursive: true, force: true });
       throw e;
     }
-    landed.push(posix(relative(root, at)));
   }
   return landed;
 }
@@ -611,12 +669,18 @@ export async function bringIn(root, into, paths, mode, { anywhere = false } = {}
  * @param {string} root @param {string} rel @param {string} to
  */
 export async function relink(root, rel, to) {
-  const abs = entryInside(root, rel);
-  if (!lstatSync(abs, { throwIfNoEntry: false })?.isSymbolicLink()) throw new FileError(`${rel} is not a link`);
+  const alias = referenceEntry(root, rel);
+  const abs = alias ? join(root, alias.name) : entryInside(root, rel);
+  if (!alias && !lstatSync(abs, { throwIfNoEntry: false })?.isSymbolicLink()) throw new FileError(`${rel} is not a link`);
   if (typeof to !== 'string' || !isAbsolute(to)) throw new FileError('a full path, please');
   const from = realpathSync.native(to);
   const info = await stat(from);
   addLinkedPlaces([from]);
+  if (alias) {
+    if (info.isDirectory() !== alias.directory) throw new FileError('Choose the same kind of source as the original link.');
+    changeMediaReferences(root, (entries) => entries.map((entry) => entry.name === alias.name ? { ...entry, to: from } : entry));
+    return rel;
+  }
   const part = `${abs}.${process.pid}.linking`;
   await symlink(from, part, info.isDirectory() ? 'dir' : 'file');
   await rename(part, abs);
@@ -629,8 +693,9 @@ export async function relink(root, rel, to) {
  * @param {string} root @param {string} rel
  */
 export async function collect(root, rel) {
-  const abs = entryInside(root, rel);
-  if (!lstatSync(abs, { throwIfNoEntry: false })?.isSymbolicLink()) return rel;
+  const alias = referenceEntry(root, rel);
+  const abs = alias ? join(root, alias.name) : entryInside(root, rel);
+  if (!alias && !lstatSync(abs, { throwIfNoEntry: false })?.isSymbolicLink()) return rel;
   /* cp preserves links: copy the permitted target, not the link we are replacing. */
   const from = realpathSync.native(readable(root, rel));
   const info = await stat(from);
@@ -638,8 +703,10 @@ export async function collect(root, rel) {
   try {
     if (info.isDirectory()) await cp(from, part, { recursive: true, mode: constants.COPYFILE_FICLONE, filter: (src) => src === from || !basename(src).startsWith('.') });
     else await copyFile(from, part, constants.COPYFILE_FICLONE);
-    await unlink(abs);
+    if (!alias) await unlink(abs);
+    else if (lstatSync(abs, { throwIfNoEntry: false })) throw new FileError(`${rel} is already there`, 409);
     await rename(part, abs);
+    if (alias) changeMediaReferences(root, (entries) => entries.filter((entry) => entry.name !== alias.name));
   } catch (e) {
     await rm(part, { recursive: true, force: true });
     throw e;

@@ -127,6 +127,43 @@ test('normal panels have no new library header and every preset stays in the cur
   });
 });
 
+test('export progress stays in the title bar as the workspace changes', { timeout: 60_000 }, async () => {
+  await withWorkspace(async page => {
+    await page.route('**/api/projects/*/exports', route => route.fulfill({ json: { exports: [{
+      id: 'active', label: 'Wide export', kind: 'video', status: 'running', phase: 'rendering',
+      progress: 0.42, framesDone: 42, framesTotal: 100, rate: 30, etaMs: 2000, encoder: 'h264', outputs: [],
+    }] } }));
+    await page.reload();
+    const badge = page.locator('[data-titlebar] [data-export-queue-trigger]');
+    const queue = page.locator('[data-export-queue]');
+    await badge.waitFor();
+    assert.match(await badge.innerText(), /42%/);
+    assert.equal(await queue.count(), 0, 'progress does not open an overlay by itself');
+
+    await beginEdit(page);
+    await dragPanel(page, 'chat', 'viewer', 'right');
+    await editor(page).getByRole('button', { name: 'Done', exact: true }).click();
+    for (const mode of ['edit', 'canvas']) {
+      await page.locator(`[data-work-mode="${mode}"]`).waitFor();
+      await badge.click();
+      await queue.getByText('Wide export').waitFor();
+      const card = await rect(queue), anchor = await rect(badge);
+      assert.ok(card.y >= anchor.y + anchor.height && card.y < 60);
+      assert.ok(card.x >= 12 && card.x + card.width <= page.viewportSize().width - 12);
+      assert.equal(await queue.getByRole('button', { name: 'Cancel' }).evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+      }), true, 'the chat pane cannot cover the export actions');
+      await page.keyboard.press('Escape');
+      await queue.waitFor({ state: 'detached' });
+      if (mode === 'edit') {
+        await page.setViewportSize({ width: 900, height: 640 });
+        await page.locator('[data-work-mode="edit"]').click();
+      }
+    }
+  });
+});
+
 test('edit mode moves real panels into nested splits, supports undo and cancel, and never persists a draft', { timeout:60_000 },async()=>{
   await withWorkspace(async page=>{
     const before=await profile(page),viewer=await rect(page.locator('[data-viewer-pane]'));

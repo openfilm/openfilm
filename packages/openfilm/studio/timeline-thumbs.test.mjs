@@ -92,3 +92,121 @@ test('a page clip edited, or written by an agent, keeps its thumbnails until the
     await rm(scratch, { recursive: true, force: true });
   }
 });
+
+test('a compound clip shows its mixed audio and opens from its menu or a double-click', { timeout: 90_000, skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  const scratch = await mkdtemp(join(tmpdir(), 'of-compound-timeline-'));
+  const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
+  const saved = new Map(names.map((name) => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
+  for (const name of names) process.env[`OPENFILM_${name}`] = join(scratch, name.toLowerCase());
+  let studio, browser;
+  try {
+    const root = join(process.env.OPENFILM_LIBRARY, 'Compound test');
+    const part = join(root, 'parts', 'travel');
+    await mkdir(join(root, 'assets'), { recursive: true });
+    await mkdir(part, { recursive: true });
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=330:duration=1.5', join(root, 'assets', 'music.wav')]);
+    await writeFile(join(root, 'card.html'), card('Travel diary'));
+    const stage = { w: 320, h: 180 };
+    const inner = {
+      stage,
+      tracks: [
+        { clips: [{ id: 'title', src: '../../card.html', time: [0, 4] }] },
+        { clips: [{ id: 'music', src: '../../assets/music.wav', at: 1, time: [0, 1.5] }] },
+      ],
+    };
+    await writeFile(join(part, 'film.html'), filmHtml(inner));
+    await writeFile(join(root, 'film.html'), filmHtml({
+      stage,
+      tracks: [{ clips: [
+        { id: 'travel', src: 'parts/travel/film.html', time: [0.5, 3.5] },
+        { id: 'card', src: 'card.html', at: 3, time: [0, 2] },
+      ] }],
+    }));
+    const project = await openProject(root);
+    studio = await startStudio({ port: 0, openBrowser: () => {} });
+    browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 850 }, locale: 'en-US', reducedMotion: 'reduce' });
+    await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
+
+    const compound = page.locator('[data-block-id]').filter({ has: page.locator('[data-clip-compound]') });
+    await compound.getByRole('img', { name: 'Compound clip' }).waitFor();
+    assert.match(await compound.getAttribute('title'), /Double-click to open/);
+    const band = compound.locator('[data-audio-band="on"]');
+    const wave = band.locator('canvas');
+    await wave.waitFor();
+    assert.equal(await page.locator('[data-block-id][data-block-title="card"] [data-audio-band]').count(), 0);
+    const response = await page.request.get(`${studio.origin}/api/projects/${project.id}/media?what=wave&path=parts%2Ftravel%2Ffilm.html`);
+    assert.equal(response.status(), 200);
+    const envelope = await response.json();
+    assert.equal(envelope.duration, 4);
+    assert.ok(envelope.peaks.slice(0, 39).every((peak) => peak === 0), 'the source mix keeps the lead-in');
+    assert.ok(envelope.peaks.slice(41, 98).some((peak) => peak > 0), 'the compound includes its background music');
+    assert.ok(envelope.peaks.slice(101).every((peak) => peak === 0), 'the source mix keeps the tail');
+
+    const back = page.locator('[data-compound-back]');
+    await compound.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Open compound clip' }).click();
+    await back.waitFor();
+    await page.locator('[data-block-title="music.wav"]').waitFor();
+    await back.click();
+    await compound.waitFor();
+    await compound.dblclick();
+    await back.waitFor();
+  } finally {
+    await browser?.close(); await studio?.close();
+    for (const [name, value] of saved) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+    await rm(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});
+
+test('a paused preview redraws a page when its pictures finish loading', { timeout: 45_000 }, async () => {
+  const scratch = await mkdtemp(join(tmpdir(), 'of-late-preview-image-'));
+  const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
+  const saved = new Map(names.map((name) => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
+  for (const name of names) process.env[`OPENFILM_${name}`] = join(scratch, name.toLowerCase());
+  let studio, browser, release;
+  const holdImage = new Promise(resolve => { release = resolve; });
+  try {
+    const root = join(process.env.OPENFILM_LIBRARY, 'Late picture');
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, 'cards.html'), `<!doctype html><body>
+      <canvas id="cards" width="320" height="180"></canvas>
+      <img id="photo" src="cards.svg" hidden>
+      <script>
+        const ctx = cards.getContext('2d');
+        window.film = { duration: 3, width: 320, height: 180, frame() {
+          ctx.clearRect(0, 0, 320, 180);
+          if (photo.complete && photo.naturalWidth) ctx.drawImage(photo, 0, 0);
+          cards.dataset.painted = String(ctx.getImageData(10, 10, 1, 1).data[0]);
+        } };
+      </script>`);
+    await writeFile(join(root, 'film.html'), filmHtml({
+      stage: { w: 320, h: 180 },
+      tracks: [{ clips: [{ id: 'cards', src: 'cards.html', time: [0, 3] }] }],
+    }));
+    const project = await openProject(root);
+    studio = await startStudio({ port: 0, openBrowser: () => {} });
+    browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    // Keep the first live frame in view even if Studio warms a replacement at a different scale.
+    await page.route(/\/film\.html\?load=(?!1(?:&|$))/, route => route.fulfill({ contentType: 'text/html', body: '' }));
+    await page.route('**/cards.svg', async route => {
+      await holdImage;
+      await route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="red"/></svg>' }).catch(() => {});
+    });
+    await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
+    const frame = page.frameLocator('[data-viewer-picture] iframe[title="film"][src*="load=1&"]').frameLocator('iframe');
+    await frame.locator('#cards[data-painted="0"]').waitFor();
+    release();
+    await frame.locator('#cards[data-painted="255"]').waitFor({ timeout: 6000 });
+  } finally {
+    release();
+    await browser?.close(); await studio?.close();
+    for (const [name, value] of saved) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+    await rm(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});

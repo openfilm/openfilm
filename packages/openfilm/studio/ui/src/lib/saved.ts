@@ -76,7 +76,7 @@ export function useSavedListing(on: boolean): MediaListing | null {
     for (const f of raw?.files ?? []) {
       const key = `${f.path}@${f.mtime}`;
       if (f.saved || !['video', 'audio', 'image'].includes(f.kind) || facts.has(key)) continue;
-      void mediaFetch(media('probe', f.path, f.mtime)).then((r) => (r.ok ? r.json() : null)).then((probe) => {
+      void mediaFetch(media('probe', f.path, f.mtime), undefined, 'background').then((r) => (r.ok ? r.json() : null)).then((probe) => {
         if (probe) setFacts((m) => new Map(m).set(key, factsOfProbe(probe)));
       }, () => {});
     }

@@ -21,8 +21,9 @@
  * It reads through a `View`, so the same rule reads the folder now (`folderView`) or a version kept in history.
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { posix } from 'node:path';
+import { join, posix } from 'node:path';
 import { FILM_FILE, readFilmFile } from '../../src/film-doc.mjs';
+import { mediaReferences, referenceSource } from '../../src/media-links.mjs';
 import { TOOL_DIR } from './projects.mjs';
 
 /**
@@ -360,7 +361,10 @@ export async function filmClosure(view) {
  * @param {string} root @returns {View}
  */
 export function folderView(root) {
-  const abs = (/** @type {string} */ path) => posix.join(root.split('\\').join('/'), path);
+  const abs = (/** @type {string} */ path) => {
+    const file = join(root, path);
+    return referenceSource(root, file) ?? file;
+  };
   return {
     async size(path) {
       const info = await stat(abs(path)).catch(() => null);
@@ -368,13 +372,15 @@ export function folderView(root) {
     },
     async list(dir) {
       const entries = await readdir(abs(dir || '.'), { withFileTypes: true }).catch(() => null);
-      if (!entries) return null;
       const out = [];
-      for (const e of entries) {
+      for (const e of entries ?? []) {
         if (e.isFile()) out.push(e.name);
         else if (e.isSymbolicLink() && (await stat(abs(dir ? `${dir}/${e.name}` : e.name)).catch(() => null))?.isFile()) out.push(e.name);
       }
-      return out;
+      for (const ref of mediaReferences(root)) {
+        if (!ref.directory && posix.dirname(ref.name) === (dir || '.') && referenceSource(root, join(root, ref.name))) out.push(posix.basename(ref.name));
+      }
+      return entries || out.length ? out : null;
     },
     async text(path) {
       return readFile(abs(path), 'utf8').catch(() => null);

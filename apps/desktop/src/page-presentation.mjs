@@ -73,8 +73,8 @@ export function createPagePresentation({ prepare, resume, present, discard, fall
   };
 }
 
-/** Load first, then allow two paint frames; neither a hung navigation nor a throttled frame waits forever. */
-export async function preparePage(contents, url, { loadTimeoutMs = 15_000, ...frameOptions } = {}) {
+/** Bound the document load and, where the native view needs it, wait for a paint before showing it. */
+export async function preparePage(contents, url, { loadTimeoutMs = 15_000, waitForPaint = true, ...frameOptions } = {}) {
   let timer;
   try {
     await Promise.race([
@@ -88,7 +88,7 @@ export async function preparePage(contents, url, { loadTimeoutMs = 15_000, ...fr
     ]);
   } finally { clearTimeout(timer); }
   if (contents.isDestroyed()) throw new Error('Page closed while loading');
-  await paintPage(contents, frameOptions);
+  if (waitForPaint) await paintPage(contents, frameOptions);
 }
 
 /** Wait for the editor's DOM and a refreshed compositor frame, for new documents and resumed native views alike. */
