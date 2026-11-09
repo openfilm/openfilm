@@ -1551,9 +1551,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         'Original-media editing project', '',
         ask.media === 'link' ? 'Original media is referenced at its existing paths. Keep those files available; relink them if moved.'
           : 'Complete original media is copied into the media folder, without cutting or re-encoding the source videos.',
-        'Unprocessed footage on the timeline retains original in/out points, speed and handles.',
+        'Original footage on the timeline retains its in/out points, speed and handles.',
         'The target editor must support the original video codecs.',
-        'Clips with effects use rendered media for the timeline range, with the complete original video kept separately.', '',
+        'Web pages and motion graphics are still rendered. Rebuild unsupported video effects in the target editor.', '',
       ].join('\n'), 'utf8');
       if (app) {
         /* the app on Windows reads draft_content.json, on a Mac draft_info.json: the same draft in both */

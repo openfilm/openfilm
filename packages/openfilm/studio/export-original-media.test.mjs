@@ -8,7 +8,7 @@ import { filmHtml } from '../src/film-doc.mjs';
 import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
 
-test('editing-project exports keep effects automatically and remember whether to link or copy media', { timeout: 60_000 }, async () => {
+test('editing-project exports offer automatic effects and retain the original-footage and media choices', { timeout: 60_000 }, async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'of-export-original-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS', 'TRASH_DIR'];
   const saved = new Map(names.map((name) => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
@@ -44,7 +44,7 @@ test('editing-project exports keep effects automatically and remember whether to
     for (const [app, format] of [['Premiere Pro', 'xml'], ['DaVinci Resolve', 'xml'], ['Final Cut Pro', 'fcpxml'], ['CapCut', 'capcut']]) {
       await open();
       await dialog.getByRole('button', { name: app, exact: true }).click();
-      assert.equal(await dialog.getByRole('button', { name: /Keep original media|Keep rendered effects/ }).count(), 0);
+      assert.equal(await dialog.getByRole('button', { name: 'Keep effects automatically', exact: true }).getAttribute('aria-pressed'), 'true');
       assert.equal(await dialog.getByText('Keeps the OpenFilm look.', { exact: false }).isVisible(), true);
       if (queued.length === 0) assert.equal(await dialog.getByRole('button', { name: 'Copy complete media', exact: true }).getAttribute('aria-pressed'), 'true');
       await dialog.getByRole('button', { name: 'Link original files', exact: true }).click();
@@ -56,14 +56,15 @@ test('editing-project exports keep effects automatically and remember whether to
       assert.equal(queued.at(-1).media, 'link');
     }
     await open();
+    await dialog.getByRole('button', { name: 'Keep original media', exact: true }).click();
     await dialog.getByRole('button', { name: 'Copy complete media', exact: true }).click();
     await dialog.getByRole('button', { name: 'Export', exact: true }).click();
     await dialog.waitFor({ state: 'detached' });
-    assert.equal(Object.hasOwn(queued.at(-1), 'footage'), false);
+    assert.equal(queued.at(-1).footage, 'source');
     assert.equal(queued.at(-1).media, 'copy');
     await open();
     assert.equal(await dialog.getByRole('button', { name: 'Copy complete media', exact: true }).getAttribute('aria-pressed'), 'true');
-    assert.equal(await page.evaluate(() => Object.hasOwn(JSON.parse(localStorage.getItem('openfilm.exportCenter.v1')).nle, 'footage')), false);
+    assert.equal(await dialog.getByRole('button', { name: 'Keep original media', exact: true }).getAttribute('aria-pressed'), 'true');
   } finally {
     await browser?.close();
     await studio?.close();

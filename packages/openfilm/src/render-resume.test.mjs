@@ -171,7 +171,9 @@ test('chunks no one resumed in two weeks, and the parts of a process that is gon
 
 /** `file` held with no sharing, as an encoder holds what it writes on Windows, for `ms`: says when it is held. */
 function heldFor(file, ms) {
-  const child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', `$f = [IO.File]::Open('${file}', 'Open', 'ReadWrite', 'None'); 'held'; Start-Sleep -Milliseconds ${ms}; $f.Close()`], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', `$f = [IO.File]::Open($env:OPENFILM_TEST_HELD_PATH, 'Open', 'ReadWrite', 'None'); 'held'; Start-Sleep -Milliseconds ${ms}; $f.Close()`], {
+    env: { ...process.env, OPENFILM_TEST_HELD_PATH: file }, stdio: ['ignore', 'pipe', 'inherit'],
+  });
   const letGo = new Promise((resolve) => child.on('close', resolve));
   return new Promise((resolve) => child.stdout.once('data', () => resolve({ letGo })));
 }
