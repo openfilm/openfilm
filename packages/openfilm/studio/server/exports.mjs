@@ -10,7 +10,7 @@
  *
  * What an export asks (POST exports, one ask or `{ jobs: [ask…], folder? }`):
  *
- *   { kind: 'video', codec?, frame?, fill?, shortEdge?, fps?, quality?, audio?, clip?, scale?, preset?, sidecar?, loudness? }
+ *   { kind: 'video', codec?, frame?, fill?, shortEdge?, fps?, quality?, audio?, clip?, scale?, preset?, sidecar?, loudness?, target? }
  *       codec    h264 (default) | hevc | vp9 | prores422hq | prores4444 | hevc_alpha | png (a zipped PNG sequence);
  *                vp9, prores4444, hevc_alpha and png keep transparency
  *       frame    native (default), or a ratio W:H from 1:4 to 4:1 (16:9, 9:16, 4:5, 2.39:1…): a delivery frame around
@@ -21,6 +21,8 @@
  *       sidecar  'srt' | 'vtt': the subtitles as a file beside the video too
  *       loudness the sound brought to this many LUFS (-70 to -5), true peaks under -1 dBTP (render --loudness);
  *                none: as mixed
+ *       target   { kind: 'bitrate', value: Mbps } or { kind: 'size', value: MB per output }; H.264, HEVC or VP9,
+ *                software single-pass average rate, approximate size including sound, not a hard cap
  *   { kind: 'gif', frame?, fill?, width? (long side, default 640), fps? (default 15) }
  *   { kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean (default true), stems?: boolean }
  *       mix: `<name> - mix`; stems: voice, music, sound effects and the footage's own sound, each its own file
@@ -76,6 +78,7 @@ import { FilmPage, launch } from '../../src/host.mjs';
 import { alphaCompositeFilter, broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, onTheChip, prores709, proresOptions } from '../../src/encoders.mjs';
 import { COMMAND_ROOM, filmSound, filterScriptOption, kill as killProcess, mix, open } from '../../src/shared.mjs';
 import { defaultWorkers, machine } from '../../src/render.mjs';
+import { targetCodec, targetAudioBps, validTarget } from '../../src/video-target.mjs';
 import { isLoudness, LOUDNESS_RANGE } from '../../src/loudness.mjs';
 import { selectionClips } from '../../src/render-ranges.mjs';
 import { filmVideos } from '../../src/seekable.mjs';
@@ -105,7 +108,7 @@ export { exportsRoot };
  * @typedef {'standard' | 'high' | 'master'} Quality
  * @typedef {{ frame?: FrameId, fill?: 'contain' | 'cover', burnSubtitles?: boolean }} Framing
  * @typedef {Framing & { kind: 'video', codec?: VideoCodec, shortEdge?: number, scale?: number,
- *   fps?: number, quality?: Quality, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean, loudness?: number,
+ *   fps?: number, quality?: Quality, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean, loudness?: number, target?: import('../../src/video-target.mjs').VideoTarget,
  *   samples?: number, shutter?: number }} VideoAsk
  * @typedef {Framing & { kind: 'gif', width?: number, fps?: number }} GifAsk
  * @typedef {{ kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean, stems?: boolean }} AudioAsk
@@ -154,6 +157,7 @@ export async function exportCapabilities() {
     /* ProRes through the Mac's media engine, else ffmpeg's prores_ks: the dialog's size range differs (export-spec.ts) */
     proresChip: Boolean(await hardwareEncoder('prores', have)),
     mp3: have.has('libmp3lame'),
+    hevcSoftware: have.has('libx265'),
   };
 }
 
@@ -345,6 +349,7 @@ function checked(/** @type {ExportAsk} */ ask) {
       if (!between(ask.scale, 0.25, 4)) throw new ExportError('scale: 0.25 to 4');
       if (ask.samples !== undefined && (!Number.isInteger(ask.samples) || !between(ask.samples, 1, 64))) throw new ExportError('samples: 1 to 64 whole samples');
       if (!between(ask.shutter, 0, 1)) throw new ExportError('shutter: 0 to 1');
+      if (ask.target !== undefined && (!targetCodec(ask.codec ?? 'h264') || !validTarget(ask.target))) throw new ExportError('target: H.264, HEVC or VP9, with a positive size in MB or a video bitrate from 0.05 to 120 Mbps');
       if (ask.quality !== undefined && !['standard', 'high', 'master'].includes(ask.quality)) throw new ExportError('quality: standard, high or master');
       if (ask.hardware !== undefined && typeof ask.hardware !== 'boolean') throw new ExportError('hardware: true or false');
       if (ask.clip !== undefined && (typeof ask.clip !== 'string' || !ask.clip || ask.clip.length > 200)) throw new ExportError(`clip: a clip id of ${FILM_FILE}`);
@@ -620,13 +625,21 @@ const chipCodec = (codec, quality) => ((codec === 'h264' || codec === 'hevc') &&
 /**
  * How render should encode a codec: its encoder (for the person's list), and the container format render takes,
  * through the graphics chip's encoder when it has one that works (`hw`: hardwareEncoder for chipCodec).
- * @param {VideoCodec} codec @param {Quality} quality @param {{ w: number, h: number }} size @param {number} fps @param {Set<string>} have @param {string | null} [hw]
+ * @param {VideoCodec} codec @param {Quality} quality @param {{ w: number, h: number }} size @param {number} fps @param {Set<string>} have @param {string | null} [hw] @param {import('../../src/video-target.mjs').VideoTarget} [target]
  */
-function encoding(codec, quality, size, fps, have, hw = null) {
+function encoding(codec, quality, size, fps, have, hw = null, target) {
   const bits = (/** @type {number} */ k) => Math.min(120e6, Math.max(2e6, size.w * size.h * fps * BPP[quality] * k));
   const bitrate = (/** @type {number} */ k) => `${Math.round(bits(k) / 1000)}k`;
   /* a key frame every two seconds */
   const gop = Math.round(fps * 2);
+  if (target) {
+    const encoder = codec === 'h264' ? 'libx264' : codec === 'hevc' ? 'libx265' : codec === 'vp9' ? 'libvpx-vp9' : null;
+    if (!encoder || !have.has(encoder)) throw new ExportError(`a delivery target for ${codec} needs ${encoder ?? 'a supported software encoder'} in ffmpeg`);
+    // The actual selected duration and sound are known by render, which supplies -b:v before drawing.
+    const video = ['-c:v', encoder, ...(codec === 'vp9' ? ['-row-mt', '1'] : ['-preset', 'medium']),
+      ...(codec === 'hevc' ? ['-x265-params', 'log-level=error', '-tag:v', 'hvc1'] : []), ...BT709];
+    return { encoder, format: { video, target, targetAudioBps: targetAudioBps(codec), ...(codec === 'hevc' ? { tag: ['-tag:v', 'hvc1', ...HEVC_709] } : {}) } };
+  }
   switch (codec) {
     case 'h264':
       /* with room for screen text: half again the dialog's scale */
@@ -909,13 +922,13 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       }
       /* no fps asked: render's own (30) */
       const fps = ask.fps;
-      const quality = ask.quality ?? 'high';
+      const quality = ask.target ? 'high' : ask.quality ?? 'high';
       const have = await encoders();
-      const chipFor = chipCodec(codec, quality);
+      const chipFor = ask.target ? null : chipCodec(codec, quality);
       const hw = ask.hardware !== false && chipFor ? await hardwareEncoder(chipFor, have) : null;
       /** @param {string | null} chip */
       const how = (chip) => {
-        const { encoder, format } = encoding(codec, quality, size, fps ?? 30, have, chip);
+        const { encoder, format } = encoding(codec, quality, size, fps ?? 30, have, chip, ask.target);
         const container = /** @type {{ pix?: string }} */ (format).pix ?? (codec === 'h264' || codec === 'hevc' ? YUV_709('yuv420p') : codec === 'vp9' ? YUV_709('yuva420p') : 'format=yuva444p10le');
         /* master: frames taken as PNG and footage read from copies near the file (`fine`), so nothing on the way bands */
         return { encoder, opts: { fps, samples: ask.samples, shutter: ask.shutter, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(quality === 'master' ? { fine: true } : {}), ...(clip || burn ? { root } : {}) } };
@@ -1703,7 +1716,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const first = new Map();
       const queued = asks.map((ask) => {
         const { preset, label, ...rest } = /** @type {ExportAsk & { preset?: string }} */ (ask);
-        const same = ask.kind === 'video' || ask.kind === 'gif' ? JSON.stringify(rest, Object.keys(rest).sort()) : null;
+        /* The replacer's keys apply at every depth: include the nested target's fields too. */
+        const same = ask.kind === 'video' || ask.kind === 'gif' ? JSON.stringify(rest, [...Object.keys(rest), 'value'].sort()) : null;
         const job = queue(project, ask, folder, same ? first.get(same) : undefined);
         if (same && !first.has(same)) first.set(same, job.id);
         return job;

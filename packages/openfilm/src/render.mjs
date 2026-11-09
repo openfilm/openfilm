@@ -14,6 +14,7 @@ import { ffmpeg, filmSound, fmt, kill, locate, mix, open, outDir, parseTarget, s
 import { burned } from './burn.mjs';
 import { renderSelection, selectionClips, selectionFrame } from './render-ranges.mjs';
 import { isLoudness, LOUDNESS_RANGE, LOUDNESS_SLACK, loudnessText, toLoudness, TRUE_PEAK } from './loudness.mjs';
+import { targetBitrate } from './video-target.mjs';
 import { chunkStore, chunksOf, settingsOf, signature } from './render-resume.mjs';
 
 const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
@@ -166,6 +167,19 @@ export async function render(args, opts = {}) {
   /* a host may encode the container its own way (Studio's export: another codec, a quality, a frame around the film),
      and gets exactly that; else the picture goes through the graphics chip when it can */
   const own = { ...container, ...opts.format };
+  let targetClips = null;
+  if (own.target) {
+    try {
+      const all = opts.silent ? [] : await filmSound(probe, 0);
+      targetClips = selectionClips(all.filter((c) => c.volume > 0), selection?.spans ?? [{ from: f0 / fps, to: f1 / fps }]);
+      const bps = targetBitrate(own.target, total / fps, targetClips.length ? own.targetAudioBps : 0);
+      own.video = [...own.video, '-b:v', String(bps)];
+    } catch (e) {
+      await probe.close();
+      await pool?.give(lent);
+      throw e;
+    }
+  }
   /* `clear` (with `alpha`): the format for a page that lets anything through. The page is drawn with `format` while
      every frame is opaque, each frame's alpha read as it is drawn; at the first pixel that shows through it is drawn
      again with `clear`, in the same tabs (an editing project's page: H.264 when it can, PNG with its alpha when not).
@@ -207,9 +221,9 @@ export async function render(args, opts = {}) {
      (render-resume.mjs). A pool's process draws several renders at once, each into a folder of its own */
   const store = chunkStore(outDir(dir, 'render'), opts.resumeAs ?? out, extname(out));
   const work = store.folder;
-  const chunks = chunksOf(f0, f1, fps);
+  const chunks = chunksOf(f0, f1, fps, !!own.target);
   const settingsFor = (/** @type {typeof format} */ f) => settingsOf({ entry, root, frames: [f0, f1], fps: ffmpegRate(rate), size, scale, samples, shutter, alpha,
-    duration: Number.isFinite(end) ? end : null, fine: !!opts.fine, spans: selection?.spans ?? null, format: f,
+    ...(own.target ? { settledChunks: true } : {}), duration: Number.isFinite(end) ? end : null, fine: !!opts.fine, spans: selection?.spans ?? null, format: f,
     ...(alpha && samples > 1 ? { alphaMix: 1 } : {}) });
   /* chunks a render that stopped drew with alpha, or without the chip after it gave up, are drawn on so */
   if (clearFormat && store.kept === settingsFor(clearFormat)) { clear = true; format = clearFormat; encoder = encoderOf(format.video); }
@@ -334,17 +348,17 @@ export async function render(args, opts = {}) {
     if (process.stderr.isTTY && !opts.onProgress) process.stderr.write('\n');
     for (const p of pages) problems.push(...p.problems);
 
-    const allClips = opts.silent ? [] : await filmSound(probe, selection ? 0 : from);
-    const clips = selection ? selectionClips(allClips, selection.spans) : allClips;
+    const allClips = targetClips ?? (opts.silent ? [] : await filmSound(probe, selection ? 0 : from));
+    const clips = targetClips ?? (selection ? selectionClips(allClips, selection.spans) : allClips);
     if (opts.signal?.aborted) throw new Error('cancelled');
     const sound = clips.length ? join(work, `sound${extname(out) === '.mp4' ? '.m4a' : extname(out) === '.webm' ? '.webm' : '.wav'}`) : null;
     /* --loudness: the mix as it is (32-bit float: sounds added together pass full scale), brought to the target as it
        is encoded; the picture is not touched */
     if (sound && opts.loudness != null) {
       const wav = join(work, 'mix.wav');
-      await mix(clips, to - from, wav, ['-c:a', 'pcm_f32le']);
+      await mix(clips, own.target ? total / fps : to - from, wav, ['-c:a', 'pcm_f32le']);
       loud = await toLoudness(wav, sound, format.audio, { lufs: opts.loudness, signal: opts.signal });
-    } else if (sound) await mix(clips, to - from, sound, format.audio);
+    } else if (sound) await mix(clips, own.target ? total / fps : to - from, sound, format.audio);
     const after = [...format.tag, ...(extname(out) === '.mp4' ? ['-movflags', '+faststart'] : [])];
     /* the parts straight into `out`, with the sound: a page's frames are on the disk twice at most while it is written,
        not three times (a long page drawn as PNG for an editing project is gigabytes). A part with nothing to add is

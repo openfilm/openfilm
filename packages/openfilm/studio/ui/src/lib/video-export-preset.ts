@@ -9,6 +9,8 @@ export interface VideoExportSettings {
   shortEdge: number;
   fps: number | 'source';
   quality: ExportQuality;
+  targetMode: 'quality' | 'bitrate' | 'size';
+  targetValue: string;
   frame: FilmFrameId | 'current';
   fill: FilmFrameFill;
   audio: boolean;
@@ -24,6 +26,8 @@ export const DEFAULT_VIDEO_EXPORT: VideoExportSettings = {
   shortEdge: 1080,
   fps: 'source',
   quality: 'high',
+  targetMode: 'quality',
+  targetValue: '8',
   frame: 'current',
   fill: 'contain',
   audio: true,
@@ -59,6 +63,8 @@ export function patchVideoExport(
 /** Keep older video settings. As before, opening Export starts with sound enabled. */
 export function readVideoExport(raw?: Partial<VideoExportSettings>): VideoExportSettings {
   const video = { ...DEFAULT_VIDEO_EXPORT, ...raw, audio: true };
+  if (!['quality', 'bitrate', 'size'].includes(video.targetMode)) video.targetMode = 'quality';
+  if (typeof video.targetValue !== 'string') video.targetValue = DEFAULT_VIDEO_EXPORT.targetValue;
   if (raw?.preset === 'default' || raw?.preset === 'custom' || exportPreset(raw?.preset)) return video;
   const standard = Object.entries(DEFAULT_VIDEO_EXPORT).every(
     ([key, value]) => key === 'preset' || video[key as keyof VideoExportSettings] === value

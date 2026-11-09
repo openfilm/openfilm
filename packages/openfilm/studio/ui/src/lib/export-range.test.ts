@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyRangeDelivery, parseExportTime, readExportRange, readExportRanges, requestDurationMs } from './export-range.ts';
+import { applyRangeDelivery, parseExportTime, readExportRange, readExportRanges, requestDurationMs, requestHasAudio } from './export-range.ts';
 import type { ExportRequest } from './export-jobs.ts';
 import { formatTimecode } from './timecode.ts';
 
@@ -51,4 +51,26 @@ test('separate exports queue each range while merged exports queue one ordered s
   assert.deepEqual(merged[0]?.ranges, ranges);
   assert.equal(merged[0]?.range, undefined);
   assert.equal(requestDurationMs(merged[0]!, 23_200), 4500);
+});
+
+
+test('a target reserves sound only inside the selected output, and leaves unknown sound to the renderer', () => {
+  const film = { sounds: [{ startMs: 60000, durMs: 10000 }] };
+  const request = { audio: true, ranges: [[0, 30], [30, 60]] as [number, number][] };
+  assert.equal(requestHasAudio(request, film), false);
+  assert.equal(requestHasAudio({ audio: true, range: [59, 61] }, film), true);
+  assert.equal(requestHasAudio({ audio: false }, film), false);
+  assert.equal(requestHasAudio({ audio: true }, null), null);
+  assert.equal(requestHasAudio(request, { ...film, unprobed: 1 }), null);
+  assert.equal(requestHasAudio({ audio: true }, { sounds: [{ startMs: 0, durMs: 1000, track: { muted: true } }] }), false);
+});
+
+
+test('target validation snaps duration and audio overlap to the requested output frame rate', () => {
+  const request: ExportRequest = { kind: 'video', codec: 'h264', quality: 'high', fps: 30, audio: true, range: [0, 60.001], target: { kind: 'size', value: 1 } };
+  const film = { sounds: [{ startMs: 60000, durMs: 10000 }] };
+  assert.equal(requestHasAudio(request, film), false);
+  assert.equal(requestDurationMs(request, 70000), 60000);
+  assert.equal(requestHasAudio({ ...request, fps: 120, range: [0, 60.01] }, film), true);
+  assert.equal(requestDurationMs({ ...request, range: [0, 0.02], fps: 15 }, 70000), 0);
 });

@@ -4,6 +4,7 @@
  *
  * No watermark and no end card: the product doesn't make them, so a spec has no place for them.
  */
+import { targetBytes, targetAudioBps, type VideoTarget } from '../../../../src/video-target.mjs';
 import { filmFrameBox, type FilmFrameFill, type FilmFrameId } from './film-frame.ts';
 
 /**
@@ -189,8 +190,15 @@ export function exportEstimateBytes(spec: {
   audio: boolean;
   /** ProRes encoded by ffmpeg's prores_ks, not by the Mac's media engine */
   proresKs?: boolean;
+  target?: VideoTarget;
 }): [number, number] {
   const sec = Math.max(0, spec.durationMs) / 1000;
+  if (spec.target) {
+    try {
+      const bytes = targetBytes(spec.target, sec, spec.audio ? targetAudioBps(spec.codec) : 0);
+      return [bytes, bytes];
+    } catch { return [0, 0]; } // The dialog reports an invalid target beside its input.
+  }
   const px = spec.size.w * spec.size.h;
   let videoBps: number;
   let spread = FIXED_SPREAD;

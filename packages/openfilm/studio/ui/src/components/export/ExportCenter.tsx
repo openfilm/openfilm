@@ -14,6 +14,7 @@ import {
   Sparkles, X,
 } from 'lucide-react';
 import React from 'react';
+import { targetCodec, targetBitrate, targetAudioBps, type VideoTarget } from '../../../../../src/video-target.mjs';
 import { createPortal } from 'react-dom';
 
 import { useLanguage, useT } from '@/i18n';
@@ -21,7 +22,7 @@ import { studioHost } from '@/lib/host';
 import { MenuSelect } from '@/components/MenuSelect';
 import { CustomFrame } from '@/components/FramePicker';
 import { FRAME_RATES } from '@/lib/timecode';
-import { applyRangeDelivery, readExportRanges, requestDurationMs, type ExportRangeDraft, type RangeDelivery } from '@/lib/export-range';
+import { applyRangeDelivery, readExportRanges, requestDurationMs, requestHasAudio, type ExportRangeDraft, type RangeDelivery } from '@/lib/export-range';
 import { api } from '@/api';
 import { DEFAULT_VIDEO_EXPORT, legacySocialVideo, patchVideoExport, readVideoExport, videoExportPreset, type VideoExportSettings } from '@/lib/video-export-preset';
 import {
@@ -228,7 +229,7 @@ export interface ExportCenterProps {
    */
   film?: {
     scenes: readonly { startMs: number; durMs: number; label: string; src?: string }[];
-    sounds: readonly { kind: Exclude<StemKind, 'footage'>; durMs: number; src?: string }[];
+    sounds: readonly { kind: Exclude<StemKind, 'footage'>; startMs?: number; durMs: number; src?: string; volume?: number; track?: { muted?: boolean; hidden?: boolean } }[];
     /** Video clips not probed yet: the film is not known to be silent while there are any. */
     unprobed?: number;
   } | null;
@@ -390,6 +391,9 @@ export function ExportCenter(props: ExportCenterProps) {
   const outMs = dest === 'alpha' && alphaBlock ? alphaBlock.durMs : rangeMs;
   const selectedVideoPreset = exportPreset(s.video.preset);
   const videoCodec: ExportVideoCodec = codecAvailable(s.video.codec, can) && VIDEO_CODECS.includes(s.video.codec) ? s.video.codec : 'h264';
+  const canTarget = targetCodec(videoCodec) && (!can || (videoCodec === 'hevc' ? can.hevcSoftware : videoCodec === 'vp9' ? can.vp9 : can.h264));
+  const videoTarget: VideoTarget | undefined = canTarget && s.video.targetMode !== 'quality'
+    ? { kind: s.video.targetMode, value: Number(s.video.targetValue) } : undefined;
   const alphaCodec: ExportVideoCodec = EXPORT_ALPHA_CODECS.includes(s.alpha.codec) && codecAvailable(s.alpha.codec, can) ? s.alpha.codec : 'prores4444';
   const audioFormat = s.audio.format === 'mp3' && can && !can.mp3 ? 'wav' : s.audio.format;
   /* the same draft is 剪映's or CapCut's: the one on this computer, else (both or neither) 剪映 in Chinese and CapCut in
@@ -424,7 +428,7 @@ export function ExportCenter(props: ExportCenterProps) {
         const v = s.video;
         return [{
           kind: 'video', codec: videoCodec, frame: resolveFrame(v.frame), fill: v.fill, shortEdge: v.shortEdge, fps: fpsFor(v.fps),
-          quality: v.quality, audio: v.audio, label: selectedVideoPreset?.name ?? codecName(videoCodec), ...burn(v.burn),
+          quality: v.quality, audio: v.audio, ...(videoTarget ? { target: videoTarget } : {}), label: selectedVideoPreset?.name ?? codecName(videoCodec), ...burn(v.burn),
           ...(selectedVideoPreset ? { preset: selectedVideoPreset.name } : {}),
           ...(captions > 0 && v.sidecar !== 'none' && videoCodec !== 'png' ? { sidecar: v.sidecar } : {}),
           ...(v.audio && v.loudness != null && videoCodec !== 'png' ? { loudness: v.loudness } : {}),
@@ -480,7 +484,7 @@ export function ExportCenter(props: ExportCenterProps) {
       const size = exportFramedDims(stage, frame, fill, r.shortEdge ?? Math.min(stage.w, stage.h));
       return add(exportEstimateBytes({
         codec: r.codec, size, filmPixels: exportFilmPixels(stage, frame, fill, size), fps: r.fps, quality: r.quality, durationMs: requestDurationMs(r, totalMs),
-        audio: r.audio && r.codec !== 'png' && !knownSilent, proresKs: !can?.proresChip,
+        target: r.target, audio: r.codec !== 'png' && (r.target ? requestHasAudio(r, film) !== false : r.audio && !knownSilent), proresKs: !can?.proresChip,
       }));
     }
     if (r.kind === 'gif') {
@@ -500,9 +504,10 @@ export function ExportCenter(props: ExportCenterProps) {
       return add([bytes, bytes]);
     }
     return [low, high];
-  }, [0, 0]), [requests, stage, totalMs, soundKinds, knownSilent, projectSizes, can]);
+  }, [0, 0]), [requests, stage, totalMs, soundKinds, knownSilent, film, projectSizes, can]);
   /* "about 0.8 MB–8 MB"; one size when both ends read the same */
-  const estText = estBytes[1] > 0 ? [...new Set(estBytes.map((b) => formatBytes(b)))].join('–') : '';
+  const estText = estBytes[1] > 0 ? [...new Set(estBytes.map((b) => dest === 'video' && videoTarget
+    ? `${new Intl.NumberFormat(language, { maximumSignificantDigits: 3 }).format(b / 1e6)} MB` : formatBytes(b)))].join('–') : '';
 
   const folder = s.folder || defaultFolder;
 
@@ -519,10 +524,19 @@ export function ExportCenter(props: ExportCenterProps) {
     ? t('exportCenter.missingMedia').replace('{n}', String(missing.length))
       .replace('{files}', missing.slice(0, 3).map((f) => f.split('/').pop()).join(', ') + (missing.length > 3 ? ', …' : ''))
     : null;
+  const targetError = (() => {
+    for (const r of requests) {
+      if (r.kind !== 'video' || !r.target) continue;
+      try { targetBitrate(r.target, requestDurationMs(r, totalMs) / 1000, requestHasAudio(r, film) === true ? targetAudioBps(r.codec) : 0); }
+      catch { return t('exportCenter.targetInvalid'); }
+    }
+    return null;
+  })();
   const emptyReason = ((): string | null => {
     if (missingReason) return missingReason;
     if (!totalMs && dest !== 'project') return t('exportCenter.emptyFilm');
     if (rangeInvalid) return rangeError;
+    if (targetError) return targetError;
     if (dest === 'images' && moments.length === 0) return t('exportCenter.pickMoments');
     if (dest === 'images' && imageDocument && moments.length > MOMENTS_MAX.slides) return t('exportCenter.imagePageLimit').replace('{n}', String(MOMENTS_MAX.slides));
     if (dest === 'subtitles' && captionCount != null && captions === 0) return t('exportCenter.noCaptions');
@@ -532,7 +546,7 @@ export function ExportCenter(props: ExportCenterProps) {
 
   /* ── doing it ── */
   const queue = async (jobs: ExportRequest[]) => {
-    if (working || rangeInvalid) return;
+    if (working || rangeInvalid || targetError) return;
     setResult(null);
     if (!folder) {
       setResult({ ok: false, text: t('exportCenter.noFolder') });
@@ -602,9 +616,9 @@ export function ExportCenter(props: ExportCenterProps) {
       >
         {/* left: destinations */}
         {/* the list scrolls when the window is short; the note under it stays whole */}
-        <nav className="flex min-h-0 w-[212px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-field)]">
-          <h2 className="shrink-0 px-5 pb-2 pt-4 text-[15px] font-semibold tracking-tight text-[var(--text)]">{t('exportCenter.title')}</h2>
-          <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-3 pb-2">
+        <nav className="flex min-h-0 w-12 shrink-0 flex-col sm:w-[212px] border-r border-[var(--border)] bg-[var(--bg-field)]">
+          <h2 className="sr-only sm:not-sr-only sm:shrink-0 sm:px-5 sm:pb-2 sm:pt-4 text-[15px] font-semibold tracking-tight text-[var(--text)]">{t('exportCenter.title')}</h2>
+          <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-1 pb-2 pt-3 sm:px-3 sm:pt-0">
           {DESTS.map((d) => {
             const on = dest === d.id;
             return (
@@ -612,13 +626,15 @@ export function ExportCenter(props: ExportCenterProps) {
                 key={d.id}
                 type="button"
                 aria-pressed={on}
+                aria-label={t(`exportCenter.dest.${d.id}`)}
+                title={t(`exportCenter.dest.${d.id}`)}
                 onClick={() => { patch('dest', d.id); setResult(null); }}
                 className={`flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition ${
                   on ? 'bg-[var(--bg-raised)] shadow-[var(--shadow-sm)]' : 'hover:bg-[var(--bg-hover)]'
                 }`}
               >
                 <span className={`mt-0.5 shrink-0 ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{d.icon}</span>
-                <span className="min-w-0">
+                <span className="hidden min-w-0 sm:block">
                   <span className={`block text-[13px] font-medium ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
                     {t(`exportCenter.dest.${d.id}`)}
                   </span>
@@ -628,8 +644,8 @@ export function ExportCenter(props: ExportCenterProps) {
             );
           })}
           </div>
-          <div className="shrink-0 border-t border-[var(--border)] px-5 py-3 text-[10.5px] leading-relaxed text-[var(--text-faint)]">
-            {t('exportCenter.engineDesktop')}
+          <div className="hidden shrink-0 border-t border-[var(--border)] px-5 py-3 text-[10.5px] leading-relaxed text-[var(--text-faint)] sm:block">
+            {t(dest === 'video' && videoTarget ? 'exportCenter.engineTarget' : 'exportCenter.engineDesktop')}
           </div>
         </nav>
 
@@ -726,12 +742,44 @@ export function ExportCenter(props: ExportCenterProps) {
                         onPick={(fps) => patch('video', { fps: fps === projectFps ? 'source' : fps })}
                       />
                     </Field>
-                    {!(videoCodec.startsWith('prores') || videoCodec === 'png') && (
+                    {!videoTarget && !(videoCodec.startsWith('prores') || videoCodec === 'png') && (
                       <Field label={t('exportCenter.quality')}>
                         <QualityPicker value={s.video.quality} onChange={(quality) => patch('video', { quality })} t={t} />
                       </Field>
                     )}
                   </div>
+                  {canTarget && (
+                    <Field label={t('exportCenter.delivery')}>
+                      <Segmented
+                        value={s.video.targetMode}
+                        options={[
+                          { value: 'quality', label: t('exportCenter.targetAuto') },
+                          { value: 'bitrate', label: t('exportCenter.targetBitrate') },
+                          { value: 'size', label: t('exportCenter.targetSize') },
+                        ]}
+                        onChange={(targetMode) => patch('video', { targetMode: targetMode as VideoExportSettings['targetMode'], targetValue: targetMode === 'size' ? '50' : '8' })}
+                      />
+                      {videoTarget && (
+                        <div className="mt-2 space-y-1.5">
+                          <label className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
+                            <span>{t(s.video.targetMode === 'size' ? 'exportCenter.targetSizeValue' : 'exportCenter.targetBitrateValue')}</span>
+                            <input
+                              aria-label={t(s.video.targetMode === 'size' ? 'exportCenter.targetSizeValue' : 'exportCenter.targetBitrateValue')}
+                              type="number" min={s.video.targetMode === 'size' ? '0.001' : '0.05'}
+                              max={s.video.targetMode === 'bitrate' ? '120' : undefined} step="any"
+                              value={s.video.targetValue}
+                              onChange={(e) => patch('video', { targetValue: e.target.value })}
+                              aria-invalid={Boolean(targetError)} aria-describedby="export-target-hint"
+                              className="h-8 w-24 rounded-lg border border-[var(--border)] bg-[var(--bg-field)] px-2 text-[var(--text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                            />
+                            <span>{s.video.targetMode === 'size' ? 'MB' : 'Mbps'}</span>
+                          </label>
+                          <p id="export-target-hint" className="max-w-lg text-[11px] leading-snug text-[var(--text-faint)]">{t('exportCenter.targetHint')}</p>
+                          {targetError && <p role="alert" className="text-[11px] text-[var(--warn)]">{targetError}</p>}
+                        </div>
+                      )}
+                    </Field>
+                  )}
                   {videoCodec !== 'png' && (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <Field label={t('exportCenter.audio')}>
@@ -1140,7 +1188,7 @@ export function ExportCenter(props: ExportCenterProps) {
           {/* bottom: where it goes (a button like the dialog's other pickers: a click picks another folder), what it is
               called, what comes out, and the primary button */}
           <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-3 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-field)_45%,transparent)] px-5 py-3.5">
-            <div className="flex min-w-[280px] max-w-[560px] flex-1 items-center gap-2">
+            <div className="flex min-w-0 max-w-[560px] flex-1 basis-full sm:min-w-[280px] sm:basis-auto items-center gap-2">
               {toDrafts ? (
                 <span className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-[13px] text-[var(--text-muted)]">
                   <Clapperboard size={15} className="shrink-0" />
