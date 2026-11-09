@@ -101,8 +101,8 @@ interface Settings {
   /** For an editing program: the sound as clips or as mixed stems. */
   /** the app it is for: `draft` 剪映 (in Chinese) or CapCut (elsewhere), the same draft; `auto`: the draft when that app
       is on this computer, else Premiere Pro */
-  nle: { app: 'auto' | 'draft' | keyof typeof NLE_APPS; fps: number | 'source'; audio: 'clips' | 'stems'; subtitles: boolean;
-    footage: 'source' | 'render'; media: 'link' | 'copy';
+  nle: { app: 'auto' | 'draft' | keyof typeof NLE_APPS; fps: number | 'source'; audio: 'clips' | 'stems';
+    media: 'link' | 'copy';
     /** How the pages are written: for a draft, and for Premiere Pro or DaVinci Resolve (Final Cut Pro takes ProRes). */
     alphaDraft: NleAlpha; alphaXml: NleAlpha };
   subtitles: { format: 'srt' | 'vtt' | 'txt' };
@@ -119,7 +119,7 @@ const DEFAULTS: Settings = {
   gif: { width: 640, fps: 15, frame: 'current', fill: 'contain', burn: true },
   alpha: { codec: 'prores4444', source: WHOLE_FILM, shortEdge: 1080, scale: 1, fps: 30, audio: true },
   audio: { format: 'wav', mix: true, stems: false },
-  nle: { app: 'auto', fps: 'source', audio: 'clips', subtitles: true, footage: 'source', media: 'copy', alphaDraft: 'auto', alphaXml: 'prores4444' },
+  nle: { app: 'auto', fps: 'source', audio: 'clips', media: 'copy', alphaDraft: 'auto', alphaXml: 'prores4444' },
   subtitles: { format: 'srt' },
   images: { as: 'files', format: 'png', shortEdge: 1080, frame: 'current', fill: 'contain', burn: false },
   project: { as: 'zip', history: false, chat: false, logs: false },
@@ -132,14 +132,15 @@ const STORE_KEY = 'openfilm.exportCenter.v1';
 function loadSettings(language: string, projectFps: number): Settings {
   const first = DEFAULTS;
   try {
-    const raw = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null') as (Omit<Partial<Settings>, 'dest'> & {
+    const raw = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null') as (Omit<Partial<Settings>, 'dest' | 'nle'> & {
+      nle?: Partial<Settings['nle']> & { footage?: unknown; subtitles?: unknown };
       dest?: Dest | 'social' | 'slides';
       presets?: string[]; socialQuality?: ExportQuality; socialSubs?: 'auto' | 'on' | 'off';
       slides?: Omit<Settings['images'], 'as' | 'format'> & { format?: 'pdf' | 'pptx' };
     }) | null;
     if (!raw || typeof raw !== 'object') return first;
-    const nle = { ...DEFAULTS.nle, ...raw.nle };
-    if (nle.footage !== 'source' && nle.footage !== 'render') nle.footage = DEFAULTS.nle.footage;
+    const { footage: _oldFootage, subtitles: _oldSubtitles, ...savedNle } = raw.nle ?? {};
+    const nle = { ...DEFAULTS.nle, ...savedNle };
     if (nle.media !== 'link' && nle.media !== 'copy') nle.media = DEFAULTS.nle.media;
     if (nle.app !== 'auto' && nle.app !== 'draft' && !Object.hasOwn(NLE_APPS, nle.app)) nle.app = 'auto';
     const images = { ...DEFAULTS.images, ...raw.images };
@@ -444,8 +445,8 @@ export function ExportCenter(props: ExportCenterProps) {
       }
       case 'nle':
         return [{
-          kind: 'nle', format: nleApp === 'draft' ? draftApp : NLE_APPS[nleApp].format, fps: s.nle.fps === 'source' ? (nleSourceFps ?? projectFps) : s.nle.fps, audio: s.nle.audio, media: s.nle.media, footage: s.nle.footage, alpha: nleAlpha,
-          subtitles: s.nle.subtitles, label: nleApp === 'draft' ? tApp('exportCenter.nleDraftTitle') : `${NLE_APPS[nleApp].name} XML`,
+          kind: 'nle', format: nleApp === 'draft' ? draftApp : NLE_APPS[nleApp].format, fps: s.nle.fps === 'source' ? (nleSourceFps ?? projectFps) : s.nle.fps, audio: s.nle.audio, media: s.nle.media, alpha: nleAlpha,
+          label: nleApp === 'draft' ? tApp('exportCenter.nleDraftTitle') : `${NLE_APPS[nleApp].name} XML`,
         }];
       case 'subtitles':
         return [{ kind: 'subtitles', format: s.subtitles.format, label: s.subtitles.format === 'txt' ? t('exportCenter.transcript') : s.subtitles.format.toUpperCase() }];
@@ -602,7 +603,7 @@ export function ExportCenter(props: ExportCenterProps) {
       >
         {/* left: destinations */}
         {/* the list scrolls when the window is short; the note under it stays whole */}
-        <nav className="flex min-h-0 w-[212px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-field)]">
+        <nav className="flex min-h-0 w-[212px] shrink-0 flex-col border-r border-[var(--border)]">
           <h2 className="shrink-0 px-5 pb-2 pt-4 text-[15px] font-semibold tracking-tight text-[var(--text)]">{t('exportCenter.title')}</h2>
           <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-3 pb-2">
           {DESTS.map((d) => {
@@ -614,7 +615,7 @@ export function ExportCenter(props: ExportCenterProps) {
                 aria-pressed={on}
                 onClick={() => { patch('dest', d.id); setResult(null); }}
                 className={`flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition ${
-                  on ? 'bg-[var(--bg-raised)] shadow-[var(--shadow-sm)]' : 'hover:bg-[var(--bg-hover)]'
+                  on ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'
                 }`}
               >
                 <span className={`mt-0.5 shrink-0 ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{d.icon}</span>
@@ -645,7 +646,7 @@ export function ExportCenter(props: ExportCenterProps) {
               onClick={onClose}
               disabled={Boolean(working)}
               aria-label={t('exportDialog.close')}
-              className="self-start rounded-lg p-1 text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+              className="self-start rounded-lg p-1 text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
             >
               <X size={16} />
             </button>
@@ -860,13 +861,6 @@ export function ExportCenter(props: ExportCenterProps) {
                       onChange={(app) => patch('nle', { app })}
                     />
                   </Field>
-                  <Field label={t('exportCenter.nleFootage')}>
-                    <Segmented value={s.nle.footage} options={[
-                      { value: 'source', label: t('exportCenter.nleFootageSource') },
-                      { value: 'render', label: t('exportCenter.nleFootageRender') },
-                    ]} onChange={(footage) => patch('nle', { footage })} />
-                    <Hint>{t(s.nle.footage === 'source' ? 'exportCenter.nleFootageSourceHint' : 'exportCenter.nleFootageRenderHint')}</Hint>
-                  </Field>
                   <Field label={t('exportCenter.nleMedia')}>
                     <Segmented value={s.nle.media} options={[
                       { value: 'link', label: t('exportCenter.nleMediaLink') },
@@ -912,9 +906,6 @@ export function ExportCenter(props: ExportCenterProps) {
                       onChange={(audio) => patch('nle', { audio })}
                     />
                   </Field>
-                  {captions > 0 && (
-                    <Toggle checked={s.nle.subtitles} onChange={(subtitles) => patch('nle', { subtitles })} label={t(nleApp === 'draft' || nleApp === 'finalcut' ? 'exportCenter.nleSubs' : 'exportCenter.nleSrt')} />
-                  )}
                   <Hint>{tApp(nleApp === 'draft'
                     ? draftHere ? 'exportCenter.nleHintDraft' : 'exportCenter.nleHintDraftNone'
                     : NLE_APPS[nleApp].hint)}</Hint>
@@ -1139,7 +1130,7 @@ export function ExportCenter(props: ExportCenterProps) {
 
           {/* bottom: where it goes (a button like the dialog's other pickers: a click picks another folder), what it is
               called, what comes out, and the primary button */}
-          <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-3 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-field)_45%,transparent)] px-5 py-3.5">
+          <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-3 border-t border-[var(--border)] px-5 py-3.5">
             <div className="flex min-w-[280px] max-w-[560px] flex-1 items-center gap-2">
               {toDrafts ? (
                 <span className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-[13px] text-[var(--text-muted)]">
@@ -1168,7 +1159,7 @@ export function ExportCenter(props: ExportCenterProps) {
                   disabled={picking}
                   title={folder}
                   aria-label={`${t('exportCenter.saveTo')}: ${folder || '—'}. ${t('exportCenter.change')}`}
-                  className="flex h-10 min-w-0 max-w-[45%] shrink-0 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-field)] pl-3 pr-2.5 text-[13px] text-[var(--text)] outline-none transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] focus-visible:border-[var(--accent)] disabled:opacity-60"
+                  className="flex h-10 min-w-0 max-w-[45%] shrink-0 items-center gap-2 rounded-lg border border-[var(--border)] pl-3 pr-2.5 text-[13px] text-[var(--text)] outline-none transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] focus-visible:border-[var(--accent)] disabled:opacity-60"
                 >
                   {picking ? <Loader2 size={15} className="shrink-0 animate-spin text-[var(--text-muted)]" /> : <FolderOpen size={15} className="shrink-0 text-[var(--text-muted)]" />}
                   <span className="min-w-0 truncate">{folderName(folder) || '—'}</span>
@@ -1247,14 +1238,14 @@ function folderName(path: string): string {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-[11.5px] font-medium uppercase tracking-wide text-[var(--text-faint)]">{label}</span>
+      <span className="text-[11.5px] font-medium uppercase tracking-wide text-[var(--text-muted)]">{label}</span>
       {children}
     </div>
   );
 }
 
 function Hint({ children }: { children: React.ReactNode }) {
-  return <p className="text-[11.5px] leading-relaxed text-[var(--text-faint)]">{children}</p>;
+  return <p className="text-[11.5px] leading-relaxed text-[var(--text-muted)]">{children}</p>;
 }
 
 function Callout({ children }: { children: React.ReactNode }) {
@@ -1276,11 +1267,11 @@ function OptionCard({ on, disabled, title, desc, onClick }: {
       disabled={disabled}
       onClick={onClick}
       className={`flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
-        on ? 'border-[var(--text)] bg-[var(--bg-hover)]' : 'border-[var(--border)] hover:border-[var(--text-faint)]'
+        on ? 'border-[var(--border-strong)] bg-[var(--bg-pressed)]' : 'border-[var(--border)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]'
       }`}
     >
       <span className="text-[12.5px] font-medium text-[var(--text)]">{title}</span>
-      <span className="text-[11px] leading-snug text-[var(--text-faint)]">{desc}</span>
+      <span className="text-[11px] leading-snug text-[var(--text-muted)]">{desc}</span>
     </button>
   );
 }
@@ -1347,7 +1338,7 @@ function Segmented<V extends string>({ value, options, onChange }: {
 }) {
   return (
     /* a capsule in a capsule: the same even gap all round, so their curves run side by side */
-    <div className="inline-flex max-w-full self-start overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--bg-panel)] p-[3px]">
+    <div className="inline-flex max-w-full self-start overflow-x-auto rounded-full bg-[var(--bg-field)] p-[3px]">
       {options.map((o) => (
         <button
           key={o.value}
@@ -1355,7 +1346,7 @@ function Segmented<V extends string>({ value, options, onChange }: {
           aria-pressed={o.value === value}
           onClick={() => onChange(o.value)}
           className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[12px] font-medium transition ${
-            o.value === value ? 'bg-[var(--bg-pressed,var(--bg-hover))] text-[var(--text)] shadow-[var(--shadow-sm)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            o.value === value ? 'bg-[var(--bg-panel)] text-[var(--text)] ring-1 ring-[var(--border)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
           }`}
         >
           {o.label}

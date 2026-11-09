@@ -1,3 +1,5 @@
+import type { Language } from '@/i18n';
+
 /** Public destinations used by the app menu. */
 export const PRODUCT_LINKS = {
   docs: 'https://openfilm.dev/docs/',
@@ -5,10 +7,13 @@ export const PRODUCT_LINKS = {
   feedback: 'https://github.com/openfilm/openfilm/issues/new/choose',
 } as const;
 
-export const COMMUNITY_CHANNELS = [
-  { id: 'discord', href: 'https://discord.gg/UthUhpbvK' },
-  { id: 'github', href: 'https://github.com/openfilm/openfilm/discussions' },
-] as const;
+export function communityChannels(language: Language) {
+  const discord = language === 'zh-CN' ? 'https://discord.gg/dgk4MtNWFZ' : 'https://discord.gg/a462Rs88hF';
+  return [
+    { id: 'discord', href: discord },
+    { id: 'github', href: 'https://github.com/openfilm/openfilm/discussions' },
+  ] as const;
+}
 
 export const CREATOR_HANDLE = 'riverisbuilding';
 

@@ -8,6 +8,11 @@ import { FileError, bringIn, cleanName, collect, extractAudio, freezeFrame, impo
 import { lstatSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { filmHtml, readFilmFile } from '../../src/film-doc.mjs';
+import { fileOf } from '../../src/shared.mjs';
+import { startPages } from './pages.mjs';
+import { projectFiles as exportedFiles } from './exports.mjs';
+import { copyVersion, saveVersion } from './history.mjs';
+import { changeMediaReferences } from '../../src/media-links.mjs';
 
 let root, trash;
 beforeEach(() => {
@@ -271,6 +276,71 @@ test('media linked from elsewhere (a NAS): read through the link, listed, never 
   assert.equal(readFileSync(join(nas, 'take 1.mp4'), 'utf8'), 'footage');
   assert.deepEqual(readdirSync(trash), [], 'nothing of the NAS in the trash');
   rmSync(nas, { recursive: true, force: true });
+});
+
+test('Windows shares that refuse links can reference both files and folders through preview, history and project export', async (t) => {
+  const nas = mkdtempSync(join(tmpdir(), 'of-reference-nas-'));
+  t.after(() => rmSync(nas, { recursive: true, force: true }));
+  const reel = join(nas, 'reel.mov');
+  const folder = join(nas, 'B roll');
+  const still = join(folder, 'still.png');
+  mkdirSync(folder);
+  writeFileSync(reel, 'footage');
+  writeFileSync(still, 'picture');
+  writeFileSync(join(folder, 'unused.png'), 'not in the film');
+  writeFileSync(join(nas, 'private.txt'), 'not shared');
+  const refused = { platform: 'win32', makeLink: async () => { throw Object.assign(new Error('SMB refused the reparse point'), { code: 'UNKNOWN' }); } };
+  const rel = 'assets/reel.mov', dir = 'assets/B roll', child = `${dir}/still.png`;
+  assert.deepEqual(await Promise.all([
+    bringIn(root, 'assets', [reel, folder], 'link', refused),
+    bringIn(root, 'assets', [reel], 'link', refused),
+  ]), [[rel, dir], [rel]]);
+  assert.deepEqual(readdirSync(join(root, 'assets')), [], 'no copies or reparse points are made on the share');
+  assert.deepEqual((await listFiles(root)).files.map((f) => f.path), [child, `${dir}/unused.png`, rel]);
+  assert.equal(readFileSync(readable(root, child), 'utf8'), 'picture');
+  assert.equal(readFileSync(fileOf(root, 'film.html', rel), 'utf8'), 'footage');
+  assert.throws(() => inside(root, `${dir}/new.png`), /read-only/);
+  await assert.rejects(trashFile(root, child), /read-only/);
+
+  put('film.html', filmHtml({ stage: { w: 1280, h: 720 }, tracks: [{ clips: [
+    { id: 'reel', src: rel, time: [0, 2] }, { id: 'still', src: child, time: [0, 1], at: 2 },
+  ] }] }));
+  const pages = await startPages({ port: 0, editorOrigin: () => 'http://localhost', secret: 'reference-test', projects: async () => [] });
+  t.after(() => pages.close());
+  const base = pages.folderUrl({ id: 'reference-test', path: root });
+  const ranged = await fetch(new URL(rel, base), { headers: { range: 'bytes=0-2' } });
+  assert.equal(ranged.status, 206);
+  assert.equal(await ranged.text(), 'foo');
+  assert.equal(await (await fetch(new URL(child, base))).text(), 'picture');
+  changeMediaReferences(root, (entries) => [...entries, { name: 'assets/private.txt', to: join(nas, 'private.txt'), directory: false, added: 1 }]);
+  assert.equal((await fetch(new URL('assets/private.txt', base))).status, 404, 'project metadata cannot approve another local file');
+  assert.equal((await fetch(new URL('.film/media-links.json', base))).status, 404);
+
+  const exported = await exportedFiles(root, []);
+  assert.deepEqual(exported.map((f) => f.name).sort(), [child, rel, 'film.html']);
+  assert.equal(readFileSync(exported.find((f) => f.name === child).file, 'utf8'), 'picture');
+  const commit = await saveVersion(root, { message: 'Linked sources' });
+  const copy = join(nas, 'copy');
+  mkdirSync(copy);
+  await copyVersion(root, commit, copy);
+  assert.equal(readFileSync(join(copy, child), 'utf8'), 'picture');
+  assert.equal(readFileSync(join(copy, rel), 'utf8'), 'footage');
+
+  const moved = 'assets/renamed.mov';
+  await moveFile(root, rel, moved);
+  assert.equal(readFilmFile(readFileSync(join(root, 'film.html'), 'utf8')).doc.tracks[0].clips[0].src, moved);
+  rmSync(reel);
+  assert.equal((await listFiles(root)).links[moved].missing, true);
+  const replacement = join(nas, 'replacement.mov');
+  writeFileSync(replacement, 'new footage');
+  await relink(root, moved, replacement);
+  assert.equal(readFileSync(readable(root, moved), 'utf8'), 'new footage');
+  await collect(root, dir);
+  assert.equal(readFileSync(join(root, child), 'utf8'), 'picture');
+  await trashFile(root, moved);
+  assert.equal(readFileSync(replacement, 'utf8'), 'new footage');
+  assert.equal(readFileSync(still, 'utf8'), 'picture');
+  assert.equal((await listFiles(root)).links[moved], undefined);
 });
 
 test('a link that leads nowhere (the NAS is off) is listed as missing, relinked, and collected into the project', links, async () => {

@@ -21,8 +21,8 @@
  *   · Fades (film.html `overrides`' `fade`): a picture that fades is rendered, its fades in its alpha; a sound that
  *     fades comes as a WAV of its own part, from its first frame, with Audio Levels keyframes for its ramps (counted
  *     from the file's start, which is the clip's, so editors that count keyframes from either agree).
- *   · Original-footage mode keeps complete source videos instead of baking their page-specific effects. Native
- *     cuts and speed stay editable; sources can be linked or copied. Web pages still need rendering.
+ *   · Automatic exports keep complete source videos and convert formats that need it. Effects that cannot be
+ *     carried over as settings are drawn for the used range; the complete footage is still available.
  */
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
@@ -34,9 +34,10 @@ import { exactRate } from '../../src/rate.mjs';
  * @typedef {import('../../src/film-doc.mjs').FilmBox} FilmBox
  * @typedef {{ w?: number, h?: number, duration?: number, fps?: number, hasVideo?: boolean, hasAudio?: boolean,
  *   channels?: number, sampleRate?: number, alpha?: boolean, timecode?: NleTimecode }} SourceFacts
+ * @typedef {{ opacity: number, rotation: number, rectangle?: { left: number, top: number, right: number, bottom: number } }} DraftClipLook
  * @typedef {{ id: string, kind: 'page' | 'video' | 'still', src: string, path: string, at: number, end: number,
  *   from: number, speed: number, box?: FilmBox, track: number, hidden: boolean, styled?: boolean, faded?: boolean,
- *   facts: SourceFacts | null, animationTiming?: { durations: number[], delays: number[] } }} NlePicture
+ *   facts: SourceFacts | null, draftLook?: DraftClipLook, animationTiming?: { durations: number[], delays: number[] } }} NlePicture
  *   A picture clip: its film seconds [at, end), its source from `from` at `speed`; `facts` its file's (w × h as the
  *   browser shows it), null for a page
  * @typedef {'voice' | 'music' | 'sfx' | 'footage'} SoundRole
@@ -47,7 +48,7 @@ import { exactRate } from '../../src/rate.mjs';
  *   the sound of; `fade`: its fades in and out, film seconds (fitted to its length)
  * @typedef {{ stage: { w: number, h: number }, duration: number, pictures: NlePicture[], sounds: NleSound[] }} NleFilm
  * @typedef {{ title: string, fps: number, audio: 'clips' | 'stems', media: 'copy' | 'link', mediaDir: string,
- *   stems?: SoundRole[], audioTracks?: 'roles' | 'source', alpha?: NleAlpha, editable?: boolean, footage?: 'source' | 'render' }} NlePlanOptions
+ *   stems?: SoundRole[], audioTracks?: 'roles' | 'source', alpha?: NleAlpha, editable?: boolean, footage?: 'auto' | 'source' | 'render' }} NlePlanOptions
  * @typedef {'png' | 'prores4444'} NleAlpha How a picture with alpha is written, in a MOV (default ProRes 4444)
  * @typedef {{ timebase: number, ntsc: boolean, fps: number }} NleRate
  * @typedef {{ value: string, rate: NleRate }} NleTimecode
@@ -63,7 +64,7 @@ import { exactRate } from '../../src/rate.mjs';
  *   video?: { w: number, h: number, alpha: boolean, still: boolean, fps?: number }, audio?: { channels: number, sampleRate: number }, timecode?: NleTimecode,
  *   nativeRate?: NleRate }} NleFile
  * @typedef {{ id: string, name: string, fileId: string, start: number, end: number, in: number, out: number, enabled: boolean,
- *   motion?: { scale: number, center: { h: number, v: number } }, gain?: number, speed?: number,
+ *   motion?: { scale: number, center: { h: number, v: number } }, draftLook?: DraftClipLook, gain?: number, speed?: number,
  *   levels?: { when: number, value: number }[], linkGroup?: string, sourceRow?: string }} NleClip
  *   Sequence frames [start, end), file frames [in, out); `gain` linear; `levels` its gain's keyframes (its fades),
  *   frames from the clip's first
@@ -168,7 +169,7 @@ const AUDIO_COPY = new Set(['wav', 'aif', 'aiff', 'mp3', 'm4a', 'aac', 'mp4', 'm
 const ROLE_ORDER = /** @type {SoundRole[]} */ (['footage', 'voice', 'sfx', 'music']);
 const ROLE_NAME = { footage: 'Footage', voice: 'Voice', sfx: 'SFX', music: 'Music' };
 const safeStem = (/** @type {string} */ name) => name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'clip';
-const stemOf = (/** @type {string} */ src) => (src.split('/').pop() ?? src).replace(/\.[^.]+$/, '');
+const stemOf = (/** @type {string} */ src) => (src.split(/[\\/]/).pop() ?? src).replace(/\.[^.]+$/, '');
 
 /** Stable source-row identity, independent of file names and export formats.
  * @param {readonly NleSound[]} sounds
@@ -191,7 +192,8 @@ function sourceAudioGroups(sounds) {
 export function planNleTimeline(film, opts) {
   const rate = nleRate(opts.fps);
   const originalFootage = opts.footage === 'source';
-  const editable = originalFootage || opts.editable;
+  const keepSources = originalFootage || opts.footage === 'auto';
+  const editable = keepSources || opts.editable;
   const sourceTracks = opts.audioTracks === 'source';
   const { stage } = film;
   /** @type {NleFile[]} */
@@ -253,7 +255,7 @@ export function planNleTimeline(film, opts) {
         durationFrames: facts.duration ? Math.max(1, toFrame(facts.duration, rate)) : Math.max(1, minFrames),
         ...(video ? { video: { w: facts.w ?? stage.w, h: facts.h ?? stage.h, alpha: Boolean(facts.alpha), still: false, fps: facts.fps } } : {}),
         ...(audio ? { audio: converted ? { channels: audio.channels, sampleRate: 48_000 } : audio } : {}),
-        ...(originalFootage && video && facts.fps ? { nativeRate: nleRate(facts.fps) } : {}),
+        ...(keepSources && video && facts.fps ? { nativeRate: nleRate(facts.fps) } : {}),
         ...(!converted && facts.timecode ? { timecode: facts.timecode } : {}),
       });
       if (facts.duration) measured.add(file.id);
@@ -275,11 +277,12 @@ export function planNleTimeline(film, opts) {
     const link = sourceTracks && p.kind === 'video' ? { linkGroup: `footage-${p.id}` } : {};
     const bake = () => {
       const native = p.facts?.duration ?? 0;
-      const full = editable && p.kind === 'video' && native > 0;
+      const full = editable && !keepSources && p.kind === 'video' && native > 0;
       const frames = full ? Math.max(1, toFrame(native, rate)) : len;
-      /* Keep the untouched source in the draft's library too. A processed picture retains its complete source
-         length, with the cut expressed as in/out points, so either edge can still be extended in the editor. */
-      if (full) sourceFile(p, 'video', frames);
+      if (p.kind === 'video' && (keepSources || full)) {
+        /* Keep the complete original even when the timeline uses a rendered picture. */
+        sourceFile(p, 'video', toFrame(p.from, rate) + Math.round(len * p.speed));
+      }
       const file = addFile({ ...mediaPath(p.id, 'mov'), job: { kind: 'render', clip: p.id, frames, ...(full ? { fullSource: true } : {}) }, durationFrames: frames, video: { w: stage.w, h: stage.h, alpha: true, still: false } });
       const inside = full ? toFrame(p.from, rate) : 0;
       visual.push({ track: p.track, ...span, clip: { id: clipId(), name: p.id, fileId: file.id, ...span, in: inside,
@@ -287,12 +290,9 @@ export function planNleTimeline(film, opts) {
         ...(full && p.speed !== 1 ? { speed: p.speed } : {}), ...link } });
     };
     /* a clip with a look of its own (the film's CSS: a crop, round corners) is drawn as the film draws it */
-    const original = originalFootage && p.kind === 'video';
-    if (!original && (p.kind === 'page' || p.styled || p.faded || !p.facts || (!editable && p.kind === 'video' && Math.abs(p.speed - 1) > 1e-6))) { bake(); continue; }
-    /* Original footage keeps the source even when page effects cannot be represented by the target editor.
-       Retain the basic placement; the export option explains that page-specific effects need rebuilding. */
-    const placement = containMotion(p.facts ?? {}, stage, original && p.box ? { ...p.box, r: 0 } : p.box);
-    if (placement.kind === 'bake' && !original) { bake(); continue; }
+    if (p.kind === 'page' || (p.styled && !p.draftLook) || p.faded || !p.facts || (!editable && p.kind === 'video' && Math.abs(p.speed - 1) > 1e-6)) { bake(); continue; }
+    const placement = containMotion(p.facts, stage, p.draftLook && p.box ? { ...p.box, r: 0 } : p.box);
+    if (placement.kind === 'bake') { bake(); continue; }
     const inFrame = p.kind === 'still' ? 0 : toFrame(p.from, rate);
     const speed = editable && p.kind === 'video' ? p.speed : 1;
     const sourceLength = Math.round(len * speed);
@@ -305,6 +305,7 @@ export function planNleTimeline(film, opts) {
       ...(speed !== 1 ? { speed } : {}),
       ...link,
       ...(placement.kind === 'motion' ? { motion: placement.motion } : {}),
+      ...(p.draftLook ? { draftLook: p.draftLook } : {}),
     };
     if (p.kind === 'video') footage.set(p.id, { clip, file, picture: p });
     visual.push({ track: p.track, start: clip.start, end: clip.end, clip });

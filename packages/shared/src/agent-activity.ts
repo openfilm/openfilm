@@ -77,7 +77,7 @@ export function publicActivity(name: string, args: unknown): AgentActivity | nul
  * is recognized; one not recognized is `working`.
  */
 function hostedToolName(name: string): string {
-  return name.replace(/^mcp__[a-z0-9-]+?(?:__|\.)/i, '');
+  return name.replace(/^mcp__[a-z0-9_-]+?(?:__|\.)/i, '');
 }
 
 /**

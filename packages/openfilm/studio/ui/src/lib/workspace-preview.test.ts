@@ -24,3 +24,14 @@ test('preview timeline height follows the content fit and short-window constrain
   const canvas=workspacePreviewFrames(DEFAULT_CANVAS_WORKSPACE,{width:1800,height:1100},options);
   assert.equal(canvas.timeline,undefined);assert.equal(canvas.inspector,undefined);assert.ok(canvas.canvas);
 });
+
+test('a narrow preview keeps every panel inside the window it stands for',()=>{
+  const viewport={width:320,height:200};
+  const frames=workspacePreviewFrames(DEFAULT_WORKSPACE,viewport,{hasChat:true,inspectorIdle:false});
+  for(const [panel,rect] of Object.entries(frames)){
+    const r=rect!;
+    assert.ok(r.left>=0&&r.top>=0,`${panel} starts outside the window`);
+    assert.ok(r.left+r.width<=viewport.width,`${panel} reaches past the right edge`);
+    assert.ok(r.top+r.height<=viewport.height,`${panel} reaches past the bottom edge`);
+  }
+});

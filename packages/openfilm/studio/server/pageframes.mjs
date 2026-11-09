@@ -346,6 +346,21 @@ export async function pageFacts(root, base, rel) {
   });
 }
 
+/**
+ * A compound's source timeline and the audio the preview reports for it. The version changes when files in the
+ * project change, since the source film may itself contain compound clips or use a file replaced in place.
+ * @param {string} root @param {string} base @param {string} rel @param {string} revision
+ */
+export async function compoundSound(root, base, rel, revision) {
+  const file = inProject(root, rel);
+  const info = file ? await stat(file).catch(() => null) : null;
+  if (!info?.isFile()) throw new PageFrameError(`${rel} is not there`);
+  return withPage(pageUrl(base, rel), POSTER_W, `sound:${info.mtimeMs}:${info.size}:${revision}`, null, async (page) => ({
+    duration: lengthOf(page),
+    sounds: page.meta.sounds,
+  }));
+}
+
 /** A page's own length in seconds; null when it has no end (no duration, or not a length). */
 const lengthOf = (/** @type {FilmPage} */ page) => {
   const d = page.meta.duration;

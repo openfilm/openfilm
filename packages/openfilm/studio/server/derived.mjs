@@ -10,8 +10,10 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { audioClips, mix } from '../../src/shared.mjs';
 import { hasAlpha } from '../../src/seekable.mjs';
 import { readable } from './files.mjs';
 import { TOOL_DIR } from './projects.mjs';
@@ -143,6 +145,40 @@ export async function waveform(root, rel) {
     return Buffer.from(JSON.stringify(peaksOf(pcm)));
   });
   return JSON.parse(bytes.toString());
+}
+
+/** @type {Map<string, Promise<Buffer>>} */
+const mixingWaves = new Map();
+
+/**
+ * A compound clip's waveform, mixed on the source timeline so every use can trim its own slice.
+ * @param {string} root @param {import('../../src/host.mjs').FilmSound[]} sounds @param {number} duration
+ */
+export async function mixedWaveform(root, sounds, duration) {
+  const clips = audioClips(root, 'film.html', sounds).filter((clip) => clip.at < duration && clip.volume > 0);
+  if (!clips.length) return { duration, peaks: [] };
+  const versions = await Promise.all([...new Set(clips.map((clip) => clip.file))].map(async (file) => {
+    const info = await stat(file);
+    return [file, info.size, info.mtimeMs];
+  }));
+  const key = createHash('sha256').update(JSON.stringify([duration, clips, versions])).digest('hex').slice(0, 24);
+  const name = `mix-${key}.json`;
+  const id = join(root, name);
+  let pending = mixingWaves.get(id);
+  if (!pending) {
+    pending = cached(root, 'waves', name, async () => {
+      const scratch = await mkdtemp(join(tmpdir(), 'openfilm-wave-'));
+      const pcm = join(scratch, 'mix.pcm');
+      try {
+        await mix(clips, duration, pcm, ['-ac', '1', '-ar', String(RATE), '-f', 's16le']);
+        return Buffer.from(JSON.stringify(peaksOf(await readFile(pcm))));
+      } finally {
+        await rm(scratch, { recursive: true, force: true });
+      }
+    }).finally(() => mixingWaves.delete(id));
+    mixingWaves.set(id, pending);
+  }
+  return JSON.parse((await pending).toString());
 }
 
 /** Mono 16-bit samples at RATE → `{ duration (s), peaks }`. */

@@ -276,7 +276,7 @@ export function ProjectsPopover({
   const showView = setView;
   const [pendingDelete, setPendingDelete] = React.useState<string[] | null>(null);
   const [pendingFolder, setPendingFolder] = React.useState<ProjectFolder | null>(null);
-  const [busy, setBusy] = React.useState<'creating' | 'opening' | null>(null);
+  const [busy, setBusy] = React.useState<'creating' | 'opening' | 'duplicating' | null>(null);
   /* Studio's folder browser (no app to pick folders), "Get from GitHub", and a folder without a film to start one in */
   const [browser, setBrowser] = React.useState<{ mode: 'open' } | { mode: 'locate'; project: LibraryProject } | null>(null);
   const [github, setGithub] = React.useState<{ url?: string; start?: boolean; title?: string } | null>(null);
@@ -354,6 +354,20 @@ export function ProjectsPopover({
     } catch {
       setBusy(null);
       lib.flash(t('projects.localProjectFailed'));
+    }
+  }
+
+  async function duplicateProject(project: LibraryProject) {
+    if (busy) return;
+    setBusy('duplicating');
+    try {
+      const name = t('projects.duplicateName').replace('{name}', () => project.name);
+      const copy = await api.duplicateProject(project.id, name);
+      go(copy.id, 'opening');
+    } catch (e) {
+      setBusy(null);
+      if (e instanceof ApiError && (e.status === 404 || e.status === 410)) lib.retryLoad();
+      lib.flash(t('projects.duplicateFailed').replace('{error}', () => message(e)));
     }
   }
 
@@ -497,6 +511,7 @@ export function ProjectsPopover({
               /* presence is checked again before opening the editor */
               onOpen={(project) => { void openListed(project); }}
               onRename={(projectId, name) => void lib.renameProject(projectId, name)}
+              onDuplicate={(project) => void duplicateProject(project)}
               /* an agent working in one: said at once, before asking (the server refuses it too) */
               onDelete={(ids) => void lib.workingIn(ids).then((working) => {
                 if (working) lib.flash(lib.agentRunning(working, ids.length));
@@ -537,7 +552,7 @@ export function ProjectsPopover({
         {busy ? (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--bg-panel)]/70">
             <div className="flex items-center gap-2 rounded-lg bg-[var(--bg-raised)] px-4 py-3 text-sm shadow-lg">
-              <Loader2 size={16} className="animate-spin" />{t(busy === 'creating' ? 'projects.creating' : 'projects.opening')}
+              <Loader2 size={16} className="animate-spin" />{t(busy === 'creating' ? 'projects.creating' : busy === 'duplicating' ? 'projects.duplicating' : 'projects.opening')}
             </div>
           </div>
         ) : null}

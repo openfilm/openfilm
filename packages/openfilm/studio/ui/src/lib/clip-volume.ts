@@ -36,7 +36,7 @@ export function hasSoundToDetach(block: { kind: string; clipId?: string; src?: s
 
 /** Whether a clip has a volume: sounds always, a video when it carries its own sound (a page has none). */
 export function hasVolume(clip: VolumeClip): boolean {
-  return clip.kind === 'voice' || clip.kind === 'sfx' || clip.kind === 'music' || Boolean(clip.ownAudio);
+  return clip.kind === 'voice' || clip.kind === 'sfx' || clip.kind === 'music' || (clip.kind === 'video' && Boolean(clip.ownAudio));
 }
 
 /** A clip's linear volume (1 as is): film.html's `volume`, or a code-shaped film's `gainDb`. */

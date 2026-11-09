@@ -17,13 +17,17 @@ let stopActive: (() => void) | null = null;
 
 export function createPreviewPlayer<T extends Playable>({
   makeAudio = (src: string) => new Audio(src),
-  onReady = (_id: string) => {},
+  onReady = (_item: T) => {},
+  analyse = false,
   slowMs = 5000,
   timeoutMs = 20_000,
 } = {}) {
   let state: PreviewState<T> = { item: null, status: 'idle', slow: false, error: null, ready: false, time: 0, duration: 0 };
   let audio: HTMLAudioElement | null = null;
   let source = '';
+  let context: AudioContext | null = null;
+  let meter: { input: MediaElementAudioSourceNode; node: AnalyserNode } | null = null;
+  const samples = analyse ? new Float32Array(1024) : null;
   let wanted = false;
   let round = 0;
   let slowTimer: ReturnType<typeof setTimeout> | undefined;
@@ -44,7 +48,11 @@ export function createPreviewPlayer<T extends Playable>({
     const was = audio;
     audio = null;
     if (stopActive === stop) stopActive = null;
-    if (was) { was.pause(); was.removeAttribute('src'); was.load(); }
+    if (was) was.pause();
+    meter?.input.disconnect();
+    meter?.node.disconnect();
+    meter = null;
+    if (was) { was.removeAttribute('src'); was.load(); }
   };
   const fail = (a: HTMLAudioElement, error: PreviewError) => {
     if (audio !== a || !wanted) return;
@@ -72,12 +80,33 @@ export function createPreviewPlayer<T extends Playable>({
     release();
     update({ status: 'paused', slow: false, time });
   }
+  const connectMeter = (a: HTMLAudioElement) => {
+    if (!samples || meter || typeof AudioContext !== 'function') return;
+    try {
+      // A cross-origin element without CORS would become silent when routed through Web Audio.
+      if (new URL(source, window.location.href).origin !== window.location.origin) return;
+      const ctx = context ??= new AudioContext();
+      const connect = () => {
+        if (audio !== a || !wanted || meter || ctx.state !== 'running') return;
+        const node = ctx.createAnalyser();
+        node.fftSize = samples.length;
+        const input = ctx.createMediaElementSource(a);
+        input.connect(node);
+        node.connect(ctx.destination);
+        meter = { input, node };
+      };
+      // Wait until Web Audio can actually play before taking over the element's output.
+      if (ctx.state === 'running') connect();
+      else void ctx.resume().then(connect).catch(() => {});
+    } catch { /* preview is still playable without a meter */ }
+  };
   const play = (a: HTMLAudioElement) => {
     if (stopActive !== stop) stopActive?.();
     stopActive = stop;
     wanted = true;
     const attempt = ++round;
     loading(a);
+    connectMeter(a);
     try {
       void a.play().catch(() => { if (attempt === round) fail(a, 'unavailable'); });
     } catch { fail(a, 'unavailable'); }
@@ -94,7 +123,7 @@ export function createPreviewPlayer<T extends Playable>({
     update({ item: next, status: 'loading', slow: false, error: null, ready: false, time: resume, duration: (next.durationMs ?? 0) / 1000 });
     a.onloadedmetadata = () => {
       if (audio !== a) return;
-      onReady(next.id);
+      onReady(next);
       update({ ready: true, ...(Number.isFinite(a.duration) ? { duration: a.duration } : {}) });
       if (resume > 0) a.currentTime = resume;
     };
@@ -128,6 +157,13 @@ export function createPreviewPlayer<T extends Playable>({
     subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     toggle: (item: T, src?: string) => toggle(item, src ?? source),
     pause,
+    readLevel: () => {
+      if (!samples || !meter || state.status !== 'playing') return 0;
+      meter.node.getFloatTimeDomainData(samples);
+      let sum = 0;
+      for (const value of samples) sum += value * value;
+      return Math.sqrt(sum / samples.length);
+    },
     tick: () => { if (audio && state.time !== audio.currentTime) update({ time: audio.currentTime }); },
     seek: (sec: number) => {
       if (!audio || state.status === 'loading' || state.status === 'error') return;
@@ -136,6 +172,8 @@ export function createPreviewPlayer<T extends Playable>({
     },
     close: () => {
       release();
+      if (context) void context.close().catch(() => {});
+      context = null;
       source = '';
       update({ item: null, status: 'idle', slow: false, error: null, ready: false, time: 0, duration: 0 });
     },

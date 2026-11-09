@@ -75,6 +75,25 @@ function ownerOf(folder) {
   return pid !== process.pid && running(pid) ? pid : null;
 }
 
+/** The errors of a file another process still holds. */
+const HELD = new Set(['EPERM', 'EBUSY', 'EACCES', 'ENOTEMPTY']);
+
+/**
+ * Remove `path` once it is let go: an encoder ended with its browser keeps its file for a moment on Windows.
+ * @param {string} path @param {import('node:fs').RmOptions} options
+ * @param {{ rm?: typeof rmSync, limit?: number, every?: number }} [wait] how long and how often, in ms
+ */
+export async function removeLetGo(path, options, { rm = rmSync, limit = 10_000, every = 100 } = {}) {
+  const until = Date.now() + limit;
+  for (;;) {
+    try { return rm(path, options); }
+    catch (e) {
+      if (!HELD.has(/** @type {{ code?: string }} */ (e).code ?? '') || Date.now() >= until) throw e;
+      await new Promise((resolve) => setTimeout(resolve, every));
+    }
+  }
+}
+
 /** Write `data` to `file` whole: beside it first, then renamed onto it. @param {string} file @param {string} data */
 function writeWhole(file, data) {
   writeFileSync(`${file}.new`, data);
@@ -134,8 +153,8 @@ export function chunkStore(renderDir, out, ext) {
   const name = (/** @type {{ a: number, b: number }} */ c) => `chunk-${c.a}-${c.b}${ext}`;
   const save = () => { if (!busy) writeWhole(join(folder, MANIFEST), JSON.stringify({ settings, files })); };
   /** Everything in the folder but who owns it. */
-  const empty = () => {
-    for (const entry of readdirSync(folder)) if (entry !== OWNER) rmSync(join(folder, entry), { recursive: true, force: true });
+  const empty = async () => {
+    for (const entry of readdirSync(folder)) if (entry !== OWNER) await removeLetGo(join(folder, entry), { recursive: true, force: true });
   };
 
   return {
@@ -143,10 +162,10 @@ export function chunkStore(renderDir, out, ext) {
     private: busy,
     kept: manifest?.settings ?? null,
     /** @param {string} next */
-    start(next) {
-      if (next !== manifest?.settings || busy) { empty(); files = {}; }
+    async start(next) {
+      if (next !== manifest?.settings || busy) { await empty(); files = {}; }
       /* a chunk cut off as it was drawn (the process ended): drawn again */
-      else for (const entry of readdirSync(folder)) if (entry.startsWith('drawing-')) rmSync(join(folder, entry), { force: true, maxRetries: 5 });
+      else for (const entry of readdirSync(folder)) if (entry.startsWith('drawing-')) await removeLetGo(join(folder, entry), { force: true });
       manifest = null;
       settings = next;
       save();

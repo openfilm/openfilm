@@ -32,3 +32,10 @@ test('this version has its notes: a release without them shows nothing after the
   const { version } = JSON.parse(readFileSync(new URL('../../../../package.json', import.meta.url), 'utf8'));
   assert.ok(releaseNotes(version), `write ${version}'s notes in lib/whats-new.ts, in every language, in place of the last release's`);
 });
+
+test('a pre-release with a two-digit number is later than a one-digit one', () => {
+  assert.equal(compareVersions('1.0.0-beta.10', '1.0.0-beta.2'), 1);
+  assert.equal(compareVersions('1.0.0-beta.2', '1.0.0-beta.10'), -1);
+  assert.equal(compareVersions('1.0.0-beta-1', '1.0.0-beta-2'), -1);
+  assert.equal(compareVersions('1.0.0-beta.2', '1.0.0-beta.1'), 1);
+});

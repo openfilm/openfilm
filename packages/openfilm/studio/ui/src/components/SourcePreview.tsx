@@ -268,6 +268,7 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
         ) : file.kind === 'video' ? (
           <video
             key={file.path}
+            data-asset-preview-control=""
             ref={mediaRef}
             src={src}
             /* a poster that fails to load covers the first frame in black: only when there is one */
@@ -282,17 +283,17 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
             onLoadedMetadata={(e) => { shapeOf(e.currentTarget.videoWidth, e.currentTarget.videoHeight); mediaEvents.onLoadedMetadata?.(e); }}
           />
         ) : file.kind === 'image' ? (
-          <img src={src} alt={file.name} className={FIT} style={fitted(shape)} onError={() => setFailed(true)}
+          <img data-asset-preview-control="" src={src} alt={file.name} className={FIT} style={fitted(shape)} onError={() => setFailed(true)}
             onLoad={(e) => shapeOf(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)} />
         ) : file.kind === 'audio' ? (
-          <div className="relative h-[42%] w-full max-w-[920px] overflow-hidden rounded-md">
+          <div data-asset-preview-control="" className="relative h-[42%] w-full max-w-[920px] overflow-hidden rounded-md">
             <MediaPreview file={file} sources={sources} />
             {duration > 0 ? <span className="pointer-events-none absolute inset-y-0 w-px bg-white/90" style={{ left: `${(time / duration) * 100}%` }} /> : null}
             <audio key={file.path} ref={mediaRef} src={src} preload="auto" autoPlay {...mediaEvents} />
           </div>
         ) : /\.vtt$/i.test(file.name) ? (
           /* a subtitle or transcript file: its lines, as they read */
-          <div className="h-full w-full max-w-[640px] overflow-y-auto py-2">
+          <div data-asset-preview-control="" className="h-full w-full max-w-[640px] overflow-y-auto py-2">
             <p className="mb-3 truncate text-[13px] font-medium text-[var(--text)]">{file.name}</p>
             <VttLines url={src} />
           </div>
@@ -488,7 +489,7 @@ function PagePreview({ file, sources, onClose, onPlace }: SourcePreviewProps) {
         {/* nothing to play it on (no surface for this page) is the same as a page that failed */}
         {failed || !surface ? <p className="text-[12.5px] text-[var(--text-muted)]">{t('media.cannotPreview')}</p> : (
           /* on a checkerboard: what the page leaves clear is seen to be clear (a page made to go over others) */
-          <div className="relative shrink-0 overflow-hidden" style={size ? { width: size.w * scale, height: size.h * scale, ...CLEAR } : { width: 1, height: 1, opacity: 0 }}>
+          <div data-asset-preview-control="" className="relative shrink-0 overflow-hidden" style={size ? { width: size.w * scale, height: size.h * scale, ...CLEAR } : { width: 1, height: 1, opacity: 0 }}>
             <iframe
               ref={frameRef}
               key={file.path}

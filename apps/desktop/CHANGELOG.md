@@ -1,5 +1,57 @@
 # @openfilm/desktop
 
+## 0.3.2
+
+### Patch Changes
+
+- Move Notifications to Advanced settings. Show “Not connected” for OpenFilm when signed out in the Agents list.
+- Keep the assets drawer and workspace aligned with the chat divider while resizing. Show in Assets briefly highlights the canvas file in the library.
+- 6ed82d0: Desktop: an agent installed as a beta or release candidate is compared by its version numbers
+- dc1be1c: Desktop: an attachment path containing a backtick is no longer cut short in the prompt
+- aff935f: Desktop: an attachment with an unknown extension is no longer sent with an empty media type
+- Attach text, images and video references to canvas writing nodes. Organize compatible timeline tracks with undo, and keep picture and sound solo selections independent.
+- 7c6bf43: Duplicate a project from the Projects menu to open an independent copy of its current edit in the same project group.
+- 7c6bf43: Mark transparent HEVC exports as straight alpha so editors that honor the alpha mode blend soft glows and edges at the intended opacity.
+- 7c6bf43: Keep editable subtitle font size, installed font, weight, color and outline when exporting a 剪映 or CapCut draft.
+  Keep copied and rendered media linked when a 剪映 draft is renamed.
+- 7c6bf43: Keep static rotation, opacity, and simple hard-edged rectangle masks editable in Jianying drafts. More complex clip effects keep their rendered appearance.
+- 7c6bf43: Keep masks, crops and other rendered clip effects when exporting an editing project in automatic effects mode. Render the part used on the timeline and keep full-length footage for further editing, converting containers such as WebM when needed.
+- c8a14b4: Desktop: a late chat record with a repeated id no longer duplicates a conversation or a turn
+- b5f0130: Desktop: long pasted attachment names keep their extension and stay within the name limit
+- 7c6bf43: Link Windows media files and folders even when a network share refuses system links. The project's references keep the originals in place and work for preview and export. Use Alt to toggle whole clips and their layers together in the Layers panel, or Shift to select a range by clicking or dragging. OpenFilm's agent asks for sign-in when its credential is rejected and keeps technical service errors in its connection details.
+- 7c6bf43: Open projects pick up changes to the timeline even if the system misses a file notification. The editor retries a failed refresh, keeps newer edits over older responses, and continues to refresh after a save and its recovery read both fail. Keep the editing timeline, film preview and canvas mounted at their own workspace sizes while switching between them.
+- 7c6bf43: Always keep effects and include visible timeline subtitles when exporting an editing project. Use the Settings palette in the export dialog.
+- 39027cf: Desktop: the first message of a resumed conversation only says history was cut when it really was
+- 8b231d4: Desktop: undoing a turn restores a text rewritten to the same length within the same timestamp
+- 7c6bf43: Load thumbnails for visible media cards before scanning the rest of the project. This keeps large projects from opening with an empty row of previews.
+- 7c6bf43: Switching projects on Windows lets the destination draw after it comes forward. Open tabs and projects picked from the plus button no longer wait for a frame from a covered window view.
+- Updated dependencies
+- Updated dependencies [7c6bf43]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [03168c3]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [7344f84]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [454426e]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [805c947]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [27be758]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [d23613a]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [8ef4514]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [c6bc8e9]
+- Updated dependencies [7c6bf43]
+- Updated dependencies [38b79d0]
+  - openfilm@0.3.2
+
 ## 0.3.1
 
 ### Patch Changes
@@ -25,6 +77,7 @@
 - [#378](https://github.com/openfilm/openfilm/pull/378) [`d881a37`](https://github.com/openfilm/openfilm/commit/d881a37f1358392dadd7e11b3133d2d8ea7cd21e) Thanks [@WEBGRS](https://github.com/WEBGRS)! - The Windows installer keeps the library's preview videos. They were left out, so a transition, effect, sticker or text card in the library showed only its still picture under the pointer.
 
 - Updated dependencies [[`46811b0`](https://github.com/openfilm/openfilm/commit/46811b0a2359666cfc03e3dd6f64e0f1e08db764), [`b108090`](https://github.com/openfilm/openfilm/commit/b1080902e6847f55323dbc092981c0cc685a4578), [`c4e178a`](https://github.com/openfilm/openfilm/commit/c4e178ae5aaf2a9a61342b32f530e1bff006214f), [`873eb0e`](https://github.com/openfilm/openfilm/commit/873eb0e7257e354d38b5aac1930a4b868dc60ca3), [`90fed06`](https://github.com/openfilm/openfilm/commit/90fed06b47e510c92ab31c1a8d5843e6901ab5c6), [`111b513`](https://github.com/openfilm/openfilm/commit/111b51362e9d76c2f304bbdf1fe0f5cb88a42a73), [`574e6fe`](https://github.com/openfilm/openfilm/commit/574e6fee757e6e77fb49f050702f98ad23cefcde), [`916e845`](https://github.com/openfilm/openfilm/commit/916e845614ff10c5360c9d4e057b1e3db138ec36), [`af52c5c`](https://github.com/openfilm/openfilm/commit/af52c5c096aab2584711e96fa505ba76477deb35), [`4df6f94`](https://github.com/openfilm/openfilm/commit/4df6f941cd6803f0b597994e30391be4531202ab), [`9bdcbb5`](https://github.com/openfilm/openfilm/commit/9bdcbb54cf5bbe4e1975590301b537284ae8dc0f), [`8cea0e9`](https://github.com/openfilm/openfilm/commit/8cea0e949648ddc860b7fd0c92c65a14161c4869), [`684d04d`](https://github.com/openfilm/openfilm/commit/684d04d2041d1442ec14d85d175e1413e7628d86)]:
+
   - openfilm@0.3.1
 
 - [#409](https://github.com/openfilm/openfilm/pull/409) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Desktop: a folder at the top of a Windows disk shows no place on its attachment card

@@ -54,14 +54,19 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
     }),
   });
 
-  const state = () => ({
-    status: account?.signingIn ? 'waiting' : !account ? error ? 'unavailable' : 'checking' : !account.key || needsSignIn ? 'sign-in' : !visibleModels().length ? 'unavailable' : 'ready',
-    ...(account?.email ? { account: { method: 'other', email: account.email } } : {}),
-    ...(error || account?.error ? { error: error || account.error } : {}),
-    signOut: true,
-    configurationRevision: revision,
-    openfilm: modelState(),
-  });
+  const state = () => {
+    const status = account?.signingIn ? 'waiting' : !account ? error ? 'unavailable' : 'checking'
+      : !account.key || needsSignIn ? 'sign-in' : !visibleModels().length ? 'unavailable' : 'ready';
+    const message = account?.error || (status === 'sign-in' || status === 'waiting' ? null : error);
+    return {
+      status,
+      ...(account?.key && !needsSignIn && account.email ? { account: { method: 'other', email: account.email } } : {}),
+      ...(message ? { error: message } : {}),
+      signOut: true,
+      configurationRevision: revision,
+      openfilm: modelState(),
+    };
+  };
   const changed = () => {
     const next = JSON.stringify(state());
     if (next !== published) { published = next; onChange(); }
@@ -96,6 +101,7 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
         if (!response.ok) {
           needsSignIn = response.status === 401;
           offer = null;
+          if (needsSignIn) { error = null; return; }
           throw new Error(body?.error?.message || body?.message || `OpenFilm answered ${response.status}.`);
         }
         const got = agentOffer(body, account.baseUrl);

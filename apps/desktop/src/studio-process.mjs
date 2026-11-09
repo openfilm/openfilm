@@ -55,9 +55,10 @@ parent.on('message', ({ data }) => {
 /**
  * One question answered by the person's agent's own model (the main process picks the agent and asks it, with no
  * chat): Studio's own work that needs a model, such as translating subtitles.
- * @param {string} text @param {AbortSignal} [signal] @returns {Promise<string>}
+ * @param {string} text @param {AbortSignal} [signal] @param {import('./studio.mjs').WritingModel} [model]
+ * @param {import('./studio.mjs').WritingImage[]} [images] @returns {Promise<string>}
  */
-function askAgent(text, signal) {
+function askAgent(text, signal, model, images) {
   const id = randomUUID();
   return new Promise((resolve, reject) => {
     const cancel = () => { asking.delete(id); send({ type: 'ask-cancel', id }); reject(signal?.reason ?? new Error('stopped')); };
@@ -68,7 +69,7 @@ function askAgent(text, signal) {
       else reject(Object.assign(new Error(String(answer.error ?? 'The agent did not answer.')), answer.code ? { code: answer.code } : {}));
     });
     signal?.addEventListener('abort', cancel, { once: true });
-    send({ type: 'ask', id, text });
+    send({ type: 'ask', id, text, model, images });
   });
 }
 

@@ -132,13 +132,14 @@ export function saveRefImage(project, turnId, n, bytes) {
 export function saveAttachment(project, name, bytes) {
   const data = bytes instanceof Uint8Array ? bytes : bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : null;
   if (!data || !data.length) throw new Error('the file is empty');
-  const clean = String(name ?? '').split(/[/\\]/).pop().replace(/[\u0000-\u001f<>:"|?*]+/g, '').replace(/^[.\s]+/, '').trim().slice(0, 200) || 'file';
-  const dot = clean.lastIndexOf('.');
-  const [stem, ending] = dot > 0 ? [clean.slice(0, dot), clean.slice(dot)] : [clean, ''];
+  const cleaned = String(name ?? '').split(/[/\\]/).pop().replace(/[\u0000-\u001f<>:"|?*]+/g, '').replace(/^[.\s]+/, '').trim() || 'file';
+  const ending = /(\.[^.]{1,10})$/.exec(cleaned)?.[1] ?? '';
+  const stem = (ending ? cleaned.slice(0, -ending.length) : cleaned).slice(0, 200 - ending.length) || 'file';
+  const clean = `${stem}${ending}`;
   const dir = attachmentsDir(project);
   mkdirSync(dir, { recursive: true });
   for (let n = 1; ; n++) {
-    const file = n === 1 ? clean : `${stem} ${n}${ending}`;
+    const file = n === 1 ? clean : `${stem.slice(0, 200 - ending.length - String(n).length - 1)} ${n}${ending}`;
     if (existsSync(join(dir, file))) continue;
     writeAtomic(join(dir, file), data);
     return { path: `.film/attachments/${file}` };

@@ -1,5 +1,38 @@
 # openfilm
 
+## 0.3.2
+
+### Patch Changes
+
+- Refresh canvas models as soon as a media service connects or its model changes in Settings, including sign-in completed in the browser.
+- Keep the assets drawer and workspace aligned with the chat divider while resizing. Show in Assets scrolls to and briefly highlights the canvas file without changing the editing selection.
+- Attach text, images and video references to canvas writing nodes. Organize compatible timeline tracks with undo, and keep picture and sound solo selections independent.
+- 7c6bf43: Show mixed audio waveforms on compound clips, including templates. Mark compound clips on the timeline and offer an Open compound clip action in the context menu.
+- 7c6bf43: Duplicate a project from the Projects menu to open an independent copy of its current edit in the same project group.
+- 03168c3: Studio: example films and download estimates over an hour show hours instead of a minute count past 60
+- 7c6bf43: Keep export progress in the project title bar, with a task list that opens above any workspace layout. Give voice previews a circular orb that carries over the voice avatar's light spots and pulses with the audio.
+- 7344f84: Studio: export sizes near 1 MB and 1 GB no longer read 1024 KB or 1024 MB
+- 7c6bf43: Mark transparent HEVC exports as straight alpha so editors that honor the alpha mode blend soft glows and edges at the intended opacity.
+- 7c6bf43: Keep editable subtitle font size, installed font, weight, color and outline when exporting a 剪映 or CapCut draft.
+  Keep copied and rendered media linked when a 剪映 draft is renamed.
+- 7c6bf43: Keep static rotation, opacity, and simple hard-edged rectangle masks editable in Jianying drafts. More complex clip effects keep their rendered appearance.
+- 7c6bf43: Keep masks, crops and other rendered clip effects when exporting an editing project in automatic effects mode. Render the part used on the timeline and keep full-length footage for further editing, converting containers such as WebM when needed.
+- 454426e: Studio: the library category list no longer shows a category twice when a saved order repeats it
+- 7c6bf43: Show a circular loading indicator while library assets load and offer retry when a download fails, load sticker animations only on click, and use the viewer's transport for asset previews. Clicking the timeline restores the project viewer. Keep the add button visible while cached media opens, and add assets with the button, keyboard or drag. Hover on a visual card to preview it in place. Template previews share one cached video between the card and viewer. Moving away stops playback but leaves downloads running. Audio previews start on click. Voices show their download status in the same position as the use button, and sticker cards are larger. Voice previews animate the colors of each voice’s avatar in the viewer. Sounds and music show their own artwork. Clicking empty space dismisses the selected preview.
+- 805c947: Studio: workspace preset thumbnails in a narrow window no longer draw the inspector outside the picture
+- 7c6bf43: Link Windows media files and folders even when a network share refuses system links. The project's references keep the originals in place and work for preview and export. Use Alt to toggle whole clips and their layers together in the Layers panel, or Shift to select a range by clicking or dragging. OpenFilm's agent asks for sign-in when its credential is rejected and keeps technical service errors in its connection details.
+- 27be758: Studio: editing-project exports keep the file name of footage written with Windows backslash paths
+- 7c6bf43: Add TBC mischief 1 and Grok Imagine Video 1.5 Lite to the OpenRouter video models in Studio and the CLI.
+- 7c6bf43: Open projects pick up changes to the timeline even if the system misses a file notification. The editor retries a failed refresh, keeps newer edits over older responses, and continues to refresh after a save and its recovery read both fail. Keep the editing timeline, film preview and canvas mounted at their own workspace sizes while switching between them.
+- 7c6bf43: Refresh a paused preview when a page's images finish loading so image-based cards can appear without moving the playhead.
+- d23613a: On Windows, an editing-software export whose browsers crash draws those pages again instead of failing with a permission error.
+- 7c6bf43: Always keep effects and include visible timeline subtitles when exporting an editing project. Use the Settings palette in the export dialog.
+- 8ef4514: Studio: the Spanish editing-export hint names the application in all three places, as the other four languages do
+- 7c6bf43: Show the first frame of canvas videos when idle, share their sound setting, and restart playback on each hover. Show media import progress in place and add frame capture and draggable video headers with inline renaming. Keep the model picker compact and make the side buttons easier to see and use.
+- c6bc8e9: Studio: a key from another character set is refused with a forbidden, not a server error
+- 7c6bf43: Load thumbnails for visible media cards before scanning the rest of the project. This keeps large projects from opening with an empty row of previews.
+- 38b79d0: Studio: What's New is shown again when a beta.2 build is followed by beta.10
+
 ## 0.3.1
 
 ### Patch Changes
