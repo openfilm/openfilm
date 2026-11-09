@@ -277,7 +277,7 @@ export async function render(args, opts = {}) {
      * @param {typeof format} f @param {boolean} opaque
      */
     const encodeAll = async (f, opaque) => {
-      store.start(settingsFor(f));
+      await store.start(settingsFor(f));
       const left = chunks.filter((c) => !store.done(c));
       reused = chunks.length - left.length;
       done = total - left.reduce((n, c) => n + c.b - c.a, 0);
