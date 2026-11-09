@@ -56,15 +56,14 @@ test('pages still render in original mode; the existing render mode retains its 
   assert.ok(sourcePlan({ footage: 'render' }, { ...picture, styled: true }).files.some((file) => file.job.kind === 'render'));
 });
 
-test('automatic mode keeps picture effects, retaining complete footage and its separate editable sound', () => {
+test('original mode keeps picture effects, retaining complete footage and its separate editable sound', () => {
   for (const change of [{ styled: true }, { faded: true }, { box: { r: 25 } }]) {
-    const plan = sourcePlan({ footage: 'auto' }, { ...picture, ...change });
+    const plan = sourcePlan({}, { ...picture, ...change });
     const shot = plan.video[0].clips[0];
     const rendered = plan.files.find((f) => f.id === shot.fileId);
     assert.deepEqual(rendered.job, { kind: 'render', clip: 'shot', frames: 90 });
     assert.deepEqual([shot.start, shot.end, shot.in, shot.out, shot.speed], [30, 120, 0, 90, undefined]);
-    const original = plan.files.find((f) => f.job.kind === 'transcode' && f.job.from === picture.path);
-    assert.deepEqual(original?.job, { kind: 'transcode', from: picture.path, to: 'prores422hq' }, 'automatic mode keeps the whole WebM in an editor-compatible container');
+    const original = plan.files.find((f) => f.path === picture.path);
     assert.equal(original.durationFrames, 360);
     const audio = plan.audio[0].clips[0];
     assert.equal(audio.fileId, original.id);
@@ -109,7 +108,7 @@ test('actual XML, FCPXML and drafts link originals or copy byte-identical comple
       '-f', 'lavfi', '-i', 'sine=frequency=440:duration=12', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', original]);
     await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [{ clips: [
       { id: 'shot', src: 'assets/Camera Original.mp4', at: 1, time: [2, 8], speed: 2,
-        style: 'filter: brightness(0.6); border-radius: 10px', box: { x: 10, y: 10, w: 140, h: 70 } },
+        box: { x: 10, y: 10, w: 140, h: 70 } },
     ] }] }));
     const digest = async (file) => createHash('sha256').update(await readFile(file)).digest('hex');
     const hash = await digest(original);
@@ -117,7 +116,7 @@ test('actual XML, FCPXML and drafts link originals or copy byte-identical comple
     assert.throws(() => exports.start({ id: 'p', name: 'Invalid', path: root }, { kind: 'nle', footage: 'invalid' }), /footage: source or render/);
     assert.equal(exports.list('p').length, 0);
     for (const format of ['xml', 'fcpxml', 'jianying', 'capcut']) for (const media of ['link', 'copy']) {
-      const job = exports.start({ id: 'p', name: `Original ${format} ${media}`, path: root }, { kind: 'nle', format, media, footage: 'source', audio: 'clips' });
+      const job = exports.start({ id: 'p', name: `Original ${format} ${media}`, path: root }, { kind: 'nle', format, media, audio: 'clips' });
       let done;
       for (let tries = 0; tries < 1000; tries++) {
         done = exports.list('p').find((one) => one.id === job.id);

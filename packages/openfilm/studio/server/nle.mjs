@@ -290,10 +290,9 @@ export function planNleTimeline(film, opts) {
         ...(full && p.speed !== 1 ? { speed: p.speed } : {}), ...link } });
     };
     /* a clip with a look of its own (the film's CSS: a crop, round corners) is drawn as the film draws it */
-    const original = originalFootage && p.kind === 'video';
-    if (!original && (p.kind === 'page' || (p.styled && !p.draftLook) || p.faded || !p.facts || (!editable && p.kind === 'video' && Math.abs(p.speed - 1) > 1e-6))) { bake(); continue; }
-    const placement = containMotion(p.facts ?? {}, stage, (original || p.draftLook) && p.box ? { ...p.box, r: 0 } : p.box);
-    if (placement.kind === 'bake' && !original) { bake(); continue; }
+    if (p.kind === 'page' || (p.styled && !p.draftLook) || p.faded || !p.facts || (!editable && p.kind === 'video' && Math.abs(p.speed - 1) > 1e-6)) { bake(); continue; }
+    const placement = containMotion(p.facts, stage, p.draftLook && p.box ? { ...p.box, r: 0 } : p.box);
+    if (placement.kind === 'bake') { bake(); continue; }
     const inFrame = p.kind === 'still' ? 0 : toFrame(p.from, rate);
     const speed = editable && p.kind === 'video' ? p.speed : 1;
     const sourceLength = Math.round(len * speed);

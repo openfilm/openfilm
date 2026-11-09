@@ -26,7 +26,7 @@
 - 7c6bf43: Open projects pick up changes to the timeline even if the system misses a file notification. The editor retries a failed refresh, keeps newer edits over older responses, and continues to refresh after a save and its recovery read both fail. Keep the editing timeline, film preview and canvas mounted at their own workspace sizes while switching between them.
 - 7c6bf43: Refresh a paused preview when a page's images finish loading so image-based cards can appear without moving the playhead.
 - d23613a: On Windows, an editing-software export whose browsers crash draws those pages again instead of failing with a permission error.
-- 7c6bf43: Editing project exports can keep effects automatically or place complete original video on the timeline for further editing. Include visible timeline subtitles automatically.
+- 7c6bf43: Always keep effects and include visible timeline subtitles when exporting an editing project. Use the Settings palette in the export dialog.
 - 8ef4514: Studio: the Spanish editing-export hint names the application in all three places, as the other four languages do
 - 7c6bf43: Show the first frame of canvas videos when idle, share their sound setting, and restart playback on each hover. Show media import progress in place and add frame capture and draggable video headers with inline renaming. Keep the model picker compact and make the side buttons easier to see and use.
 - c6bc8e9: Studio: a key from another character set is refused with a forbidden, not a server error

@@ -52,7 +52,7 @@ export const RELEASE: ReleaseNotes = {
       },
       {
         "kind": "improved",
-        "text": "Choose complete original footage or automatic effects when exporting an editing project. Originals can be linked or copied."
+        "text": "Editing-project exports keep the look automatically. Supported settings stay editable, and you can link or copy the source media."
       },
       {
         "kind": "improved",
@@ -110,7 +110,7 @@ export const RELEASE: ReleaseNotes = {
       },
       {
         "kind": "improved",
-        "text": "导出剪辑工程时可选「原片继续剪辑」或自动保留效果，原素材可以引用或完整复制。"
+        "text": "导出剪辑工程时自动保留画面效果。目标软件支持的参数仍可编辑，素材可引用或复制。"
       },
       {
         "kind": "improved",
@@ -168,7 +168,7 @@ export const RELEASE: ReleaseNotes = {
       },
       {
         "kind": "improved",
-        "text": "編集プロジェクトの書き出しでは元の動画を使うか、効果を自動で保持するかを選べます。元の素材は参照またはコピーできます。"
+        "text": "編集プロジェクトの書き出しでは効果が自動で保持されます。対応する設定は編集でき、素材は参照またはコピーできます。"
       },
       {
         "kind": "improved",
@@ -226,7 +226,7 @@ export const RELEASE: ReleaseNotes = {
       },
       {
         "kind": "improved",
-        "text": "편집 프로젝트를 내보낼 때 전체 원본 영상 또는 효과 자동 유지를 선택할 수 있습니다. 원본은 연결하거나 복사할 수 있습니다."
+        "text": "편집 프로젝트를 내보낼 때 효과를 자동으로 유지합니다. 지원되는 설정은 편집할 수 있고 원본 미디어는 연결하거나 복사할 수 있습니다."
       },
       {
         "kind": "improved",
@@ -284,7 +284,7 @@ export const RELEASE: ReleaseNotes = {
       },
       {
         "kind": "improved",
-        "text": "Elige medios originales completos o conservación automática de efectos al exportar un proyecto. Puedes vincular o copiar los originales."
+        "text": "Al exportar un proyecto de edición, los efectos se conservan automáticamente. Los ajustes compatibles siguen siendo editables y puedes vincular o copiar los medios originales."
       },
       {
         "kind": "improved",

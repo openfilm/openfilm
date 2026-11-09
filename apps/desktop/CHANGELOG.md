@@ -20,7 +20,7 @@
 - b5f0130: Desktop: long pasted attachment names keep their extension and stay within the name limit
 - 7c6bf43: Link Windows media files and folders even when a network share refuses system links. The project's references keep the originals in place and work for preview and export. Use Alt to toggle whole clips and their layers together in the Layers panel, or Shift to select a range by clicking or dragging. OpenFilm's agent asks for sign-in when its credential is rejected and keeps technical service errors in its connection details.
 - 7c6bf43: Open projects pick up changes to the timeline even if the system misses a file notification. The editor retries a failed refresh, keeps newer edits over older responses, and continues to refresh after a save and its recovery read both fail. Keep the editing timeline, film preview and canvas mounted at their own workspace sizes while switching between them.
-- 7c6bf43: Editing project exports can keep effects automatically or place complete original video on the timeline for further editing. Include visible timeline subtitles automatically.
+- 7c6bf43: Always keep effects and include visible timeline subtitles when exporting an editing project. Use the Settings palette in the export dialog.
 - 39027cf: Desktop: the first message of a resumed conversation only says history was cut when it really was
 - 8b231d4: Desktop: undoing a turn restores a text rewritten to the same length within the same timestamp
 - 7c6bf43: Load thumbnails for visible media cards before scanning the rest of the project. This keeps large projects from opening with an empty row of previews.
