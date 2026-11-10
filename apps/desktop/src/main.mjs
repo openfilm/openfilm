@@ -271,7 +271,8 @@ function reportPageFailure(error, id, retained) {
   const retry = id === HOME && !retained;
   const language = appLanguage(state.language, app.getPreferredSystemLanguages());
   const [message, detail, tryAgain, dismiss] = PAGE_FAILURE_WORDS[language] ?? PAGE_FAILURE_WORDS.en;
-  void dialog.showMessageBox({
+  // A window-owned sheet lets the main process continue preparing the fallback.
+  void dialog.showMessageBox(win, {
     type: 'warning', title: PRODUCT_NAME, message, detail, signal: controller.signal,
     buttons: retry ? [tryAgain, dismiss] : [dismiss], cancelId: retry ? 1 : 0,
   }).then(({ response }) => {
