@@ -1,0 +1,17 @@
+{
+  "version": "0.1.0",
+  "repository": "local/lemo-openfilm-styles/skills/blueprint",
+  "kind": "style",
+  "icon": "pen",
+  "cover": "cover.jpg",
+  "preview": "preview.mp4",
+  "title": { "en": "Blueprint", "zh-CN": "蓝图 / 工程制图" },
+  "summary": {
+    "en": "An engineering blueprint that draws and assembles itself.",
+    "zh-CN": "一张会自己画出来、自己组装的工程蓝图。"
+  },
+  "details": {
+    "en": "Best for: engineering, hardware launches, tech explainers.\nWhat it does: draws white linework on cyanotype paper in real drafting order, with notes that move and a single stamped verdict colour.",
+    "zh-CN": "适合：工程技术、硬件发布、科技讲解。\n它会：按真实制图顺序在蓝图纸上画出白色线条，配会动的批注和唯一一处盖章式的判定色。"
+  }
+}
