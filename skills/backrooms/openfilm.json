@@ -1,0 +1,17 @@
+{
+  "version": "0.1.0",
+  "repository": "local/lemo-openfilm-styles/skills/backrooms",
+  "kind": "style",
+  "icon": "monitor",
+  "cover": "cover.jpg",
+  "preview": "preview.mp4",
+  "title": { "en": "Liminal Found Footage", "zh-CN": "后室 / 新怪谈" },
+  "summary": {
+    "en": "A camcorder tape recovered from an empty, endless office.",
+    "zh-CN": "一盘从无尽空办公室里找回的摄像机录像带。"
+  },
+  "details": {
+    "en": "Best for: horror, mystery & ARG, game teasers.\nWhat it does: one continuous handheld camcorder take through a repeating, familiar-but-wrong space, with rules on the wall and the tape itself failing at the wrong moment.",
+    "zh-CN": "适合：恐怖、悬疑解谜、游戏预告。\n它会：手持摄像机一镜到底穿过一个重复的、似曾相识却不对劲的空间，墙上贴着规则，录像带本身会在关键时刻出故障。"
+  }
+}
