@@ -1,0 +1,17 @@
+{
+  "version": "0.1.0",
+  "repository": "local/lemo-openfilm-styles/skills/art-deco",
+  "kind": "style",
+  "icon": "shapes",
+  "cover": "cover.jpg",
+  "preview": "preview.mp4",
+  "title": { "en": "Art Deco", "zh-CN": "装饰艺术" },
+  "summary": {
+    "en": "A 1930s gold-and-black poster that moves.",
+    "zh-CN": "一张会动的1930年代金黑海报。"
+  },
+  "details": {
+    "en": "Best for: luxury & hospitality, galas, invitations.\nWhat it does: builds every shot from gold keylines on black lacquer, airbrushed volumes, and mechanical symmetry unfolding from one centre axis.",
+    "zh-CN": "适合：奢华与酒店业、庆典、请柬。\n它会：用黑漆底金线勾边、气刷体积感，以及围绕中轴线机械对称展开的运动来构建每个画面。"
+  }
+}
