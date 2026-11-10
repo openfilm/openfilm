@@ -22,6 +22,7 @@ import { CHAT_MIN, STUDIO_MIN, WINDOW_MIN, placeOnDisplays, readWindowState, wri
 import { createPagePresentation, paintPage, preparePage, revealPage, syncPagePointer } from './page-presentation.mjs';
 import { closeTabOrWindow, keepWindowOnClose, quitAfterStudio } from './window-lifecycle.mjs';
 import { appLanguage } from './i18n/language.mjs';
+import { PAGE_FAILURE_WORDS } from './i18n/page-failure.mjs';
 import { applicationMenuTemplate } from './menu.mjs';
 import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
@@ -91,6 +92,7 @@ let tabs = null;
 /** the page of each tab that has one (a tab left behind long enough has none until it is shown again) */
 /** @type {Map<string, WebContentsView>} */
 const views = new Map();
+const unresponsivePages = new WeakSet();
 let pagePresentation = null;
 /** the page in front */
 const activeView = () => views.get(pagePresentation?.currentId() ?? tabs?.activeId() ?? HOME) ?? null;
@@ -186,7 +188,8 @@ function makeView(tabId) {
   /* what went wrong with the page, for the log (logs/studio.log) */
   v.webContents.on('render-process-gone', (_event, details) => log(`page: renderer gone (${details.reason}, ${details.exitCode})\n`));
   v.webContents.on('did-fail-load', (_event, code, description, url, mainFrame) => { if (mainFrame && code !== -3 && pagePresentation?.wantedId() === tabId) log(`page: ${description} (${code}) loading ${url.replace(/key=[^&]+/, 'key=…')}\n`); });
-  v.webContents.on('unresponsive', () => log('page: not responding\n'));
+  v.webContents.on('unresponsive', () => { unresponsivePages.add(v); log('page: not responding\n'); });
+  v.webContents.on('responsive', () => unresponsivePages.delete(v));
   /* the page gone (a crash): it comes back where it was; the agents' turns go on in this process meanwhile */
   v.webContents.on('render-process-gone', (_event, details) => { if (details.reason !== 'clean-exit' && !quitting) setTimeout(() => { if (!v.webContents.isDestroyed()) v.webContents.reload(); }, 500); });
   return v;
@@ -235,15 +238,46 @@ function presentation() {
       return { view: v, ready };
     },
     resume: windows ? undefined : (id, v) => stage(id, v, () => paintPage(v.webContents, frameOptions(id))),
-    present(_id, v) {
+    canKeep: v => !unresponsivePages.has(v) && !v.webContents.isDestroyed() && !v.webContents.isCrashed(),
+    present(id, v) {
       if (!win) return;
       revealPage(win.contentView, v, views.values());
       if (!windows) v.webContents.setBackgroundThrottling(true);
+      tabs?.activate(id === HOME ? null : id);
+      tellTabs();
       /* the pages now behind it are told: one waiting to be covered (its projects window opening another tab) is done */
       for (const page of views.values()) if (page !== v && !page.webContents.isDestroyed()) page.webContents.send('desktop:tabs:covered');
     },
     discard: destroyView,
-    onError: (error) => { if (!quitting) log(`page: could not prepare replacement (${String(error.message).replace(/key=[^&\s)]+/g, 'key=…')})\n`); },
+    onError: reportPageFailure,
+  });
+}
+
+let pageFailureDialog = null;
+function reportPageFailure(error, id, retained) {
+  if (quitting || !win) return;
+  log(`page: could not prepare replacement (${String(error.message).replace(/key=[^&\s)]+/g, 'key=…')})\n`);
+  if (retained) {
+    tabs?.activate(retained === HOME ? null : retained);
+    tellTabs();
+  }
+  // A native message is visible even if the editor has stopped processing events.
+  // If Projects also fails, expose a way to retry even when there is no usable page.
+  if (id === HOME && !retained) {
+    if (pageFailureDialog) pageFailureDialog.abort();
+  } else if (pageFailureDialog) return;
+  const controller = new AbortController();
+  pageFailureDialog = controller;
+  const retry = id === HOME && !retained;
+  const language = appLanguage(state.language, app.getPreferredSystemLanguages());
+  const [message, detail, tryAgain, dismiss] = PAGE_FAILURE_WORDS[language] ?? PAGE_FAILURE_WORDS.en;
+  void dialog.showMessageBox({
+    type: 'warning', title: PRODUCT_NAME, message, detail, signal: controller.signal,
+    buttons: retry ? [tryAgain, dismiss] : [dismiss], cancelId: retry ? 1 : 0,
+  }).then(({ response }) => {
+    if (retry && response === 0 && !quitting && pagePresentation?.wantedId() === HOME && pagePresentation.currentId() !== HOME) void showPage(HOME);
+  }).catch(error => log(`page: could not show recovery dialog (${error.message})\n`)).finally(() => {
+    if (pageFailureDialog === controller) pageFailureDialog = null;
   });
 }
 

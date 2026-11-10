@@ -53,7 +53,7 @@ export function createTabs({ saved = null, now = Date.now, newId = randomUUID } 
       seen.add(projectId);
       tabs.push(make(projectId, typeof t?.title === 'string' ? t.title : ''));
     }
-    active = tabs[Math.min(Math.max(0, Number(saved.active) || 0), tabs.length - 1)]?.id ?? null;
+    active = saved.active === -1 ? null : tabs[Math.min(Math.max(0, Number(saved.active) || 0), tabs.length - 1)]?.id ?? null;
   }
 
   const api = {
@@ -77,8 +77,9 @@ export function createTabs({ saved = null, now = Date.now, newId = randomUUID } 
       api.activate(tab.id);
       return tab;
     },
-    /** @param {string} id */
+    /** @param {string | null} id */
     activate(id) {
+      if (id === null) { active = null; return true; }
       const tab = api.get(id);
       if (!tab) return false;
       active = id;
@@ -177,7 +178,7 @@ export function createTabs({ saved = null, now = Date.now, newId = randomUUID } 
       return tabs.filter((t) => t.id !== active && t0 - t.shown >= ms && !t.working && t.exporting == null).map((t) => t.id);
     },
     /** As kept for next time. @returns {SavedTabs} */
-    saved: () => ({ tabs: tabs.map((t) => ({ projectId: t.projectId, title: t.title })), active: Math.max(0, indexOf(active ?? '')) }),
+    saved: () => ({ tabs: tabs.map((t) => ({ projectId: t.projectId, title: t.title })), active: tabs.length ? indexOf(active ?? '') : 0 }),
   };
   return api;
 }

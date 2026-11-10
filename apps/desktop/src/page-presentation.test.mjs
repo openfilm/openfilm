@@ -4,11 +4,12 @@ import { createPagePresentation, paintPage, preparePage, revealPage, syncPagePoi
 import { createTabs } from './tabs.mjs';
 import { runInNewContext } from 'node:vm';
 
-function fixture({ resume } = {}) {
+function fixture({ resume, canKeep } = {}) {
   const events = [], loads = new Map();
   const pages = createPagePresentation({
     fallback: 'home',
     resume,
+    canKeep,
     prepare(id) {
       events.push(`prepare:${id}`);
       let resolve, reject;
@@ -119,6 +120,34 @@ test('rapid closes cannot reveal a retired or superseded replacement', async () 
   assert.equal(await c, true);
   assert.ok(!f.events.includes('present:b'));
   assert.deepEqual(f.events.slice(-2), ['present:c', 'discard:a']);
+});
+
+test('an editor that never becomes ready keeps the current tab and can be retried', async () => {
+  const f = fixture();
+  await f.show('a');
+  const failed = f.pages.show('b');
+  f.loads.get('b').reject(new Error('Editor did not become ready'));
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(f.pages.currentId(), 'a');
+  assert.equal(f.pages.wantedId(), 'a');
+  assert.equal(await failed, false);
+  assert.deepEqual(f.events.slice(-2), ['discard:b', 'error']);
+  await f.show('b');
+  assert.equal(f.pages.currentId(), 'b');
+});
+
+test('an unresponsive current page gives way to the fallback when a replacement fails', async () => {
+  const f = fixture({ canKeep: () => false });
+  await f.show('a');
+  const failed = f.pages.show('b');
+  f.loads.get('b').reject(new Error('Page loading timed out'));
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(f.pages.wantedId(), 'home');
+  f.loads.get('home').resolve();
+  assert.equal(await failed, false);
+  assert.equal(f.pages.currentId(), 'home');
 });
 
 test('a failed replacement falls back to HOME before discarding the closed page', async () => {
