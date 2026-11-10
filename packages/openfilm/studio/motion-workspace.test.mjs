@@ -64,6 +64,26 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
       assert.fail('the motion edit was not written');
     };
     await until(async () => Object.keys((await film()).keyframes ?? {}).length > 0);
+
+    const keys = page.locator('[data-motion-lane="translate"] [data-keyframe]');
+    const key = keys.first();
+    await key.waitFor();
+    const original = await key.getAttribute('data-keyframe');
+    const bounds = await key.boundingBox();
+    const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 32, y, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForFunction((before) => {
+      const key = document.querySelector('[data-motion-lane="translate"] [data-keyframe]');
+      return key && key.getAttribute('data-keyframe') !== before;
+    }, original, { timeout: 6000 });
+    await key.click();
+    await page.keyboard.press('ControlOrMeta+c');
+    await page.keyboard.press('ControlOrMeta+v');
+    await keys.nth(1).waitFor();
+
     await page.getByRole('button', { name: 'New layer', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Rectangle', exact: true }).click();
     await until(async () => (await film()).tracks.flatMap((track) => track.clips).length === 2);

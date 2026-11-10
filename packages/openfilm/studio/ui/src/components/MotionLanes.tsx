@@ -79,6 +79,9 @@ export function MotionLaneRows({ lanes, top, pxPerMs }: { lanes: MotionLanes; to
 
 function MotionLaneList({ lanes, top, pxPerMs }: { lanes: MotionLanes; top: number; pxPerMs: number }) {
   const [drag, setDrag] = React.useState<{ dx: number } | null>(null);
+  // Pointer-down can select a key or layer before pointer-up commits the move.
+  const moveKeys = React.useRef(lanes.onMove);
+  moveKeys.current = lanes.onMove;
   const left = lanes.startMs * pxPerMs;
   const width = Math.max(2, (lanes.endMs - lanes.startMs) * pxPerMs);
   /* a frame's worth of px: a drag moves keyframes a whole number of frames */
@@ -106,7 +109,7 @@ function MotionLaneList({ lanes, top, pxPerMs }: { lanes: MotionLanes; top: numb
       setDrag(null);
       if (!moved) return;
       const dt = (Math.round((ev.clientX - x0) / Math.max(0.0001, framePx)) * lanes.frameMs) / 1000;
-      if (dt) lanes.onMove(dt);
+      if (dt) moveKeys.current(dt);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
