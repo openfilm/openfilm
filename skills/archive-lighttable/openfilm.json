@@ -1,0 +1,17 @@
+{
+  "version": "0.1.0",
+  "repository": "local/lemo-openfilm-styles/skills/archive-lighttable",
+  "kind": "style",
+  "icon": "film",
+  "cover": "cover.jpg",
+  "preview": "preview.mp4",
+  "title": { "en": "Archive Light Table", "zh-CN": "档案灯台" },
+  "summary": {
+    "en": "Real archive objects on a glowing table, opened up under a loupe.",
+    "zh-CN": "真实档案物件摆在发光灯台上，放大镜下逐个展开。"
+  },
+  "details": {
+    "en": "Best for: brand history, archive stories, museums.\nWhat it does: lays real scans on a light table, pushes a loupe into each one, and pins its true catalogue facts and readings on screen.",
+    "zh-CN": "适合：品牌历史、档案故事、博物馆。\n它会：把真实扫描件铺在灯台上，用放大镜推入每一件，把真实的档案编号和读数标注在画面上。"
+  }
+}
