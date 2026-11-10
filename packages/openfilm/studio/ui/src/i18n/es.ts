@@ -2583,6 +2583,7 @@ export const es: Words = {
       autoHint: 'Confirma una versión por sí sola mientras trabajas: antes y después del turno de un agente, y cuando la película pasa un par de minutos sin cambios. Solo si la película cambió.',
     },
     workModes: {
+      motionBeta: 'Movimiento (beta)',
       group: 'Espacios de trabajo',
       footnote: 'Desactiva los que no uses. Con uno solo, la barra superior no muestra el selector.',
     },

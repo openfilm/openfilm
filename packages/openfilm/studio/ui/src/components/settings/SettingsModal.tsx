@@ -326,7 +326,7 @@ function PlaybackGroup() {
 function WorkModesGroup() {
   const t = useT();
   const on = useWorkModes();
-  const NAME: Record<WorkMode, [string, string]> = { edit: ['canvas.modeEdit', 'canvas.noteEdit'], canvas: ['canvas.modeCanvas', 'canvas.noteCanvas'], motion: ['canvas.modeMotion', 'canvas.noteMotion'] };
+  const NAME: Record<WorkMode, [string, string]> = { edit: ['canvas.modeEdit', 'canvas.noteEdit'], canvas: ['canvas.modeCanvas', 'canvas.noteCanvas'], motion: ['settings.workModes.motionBeta', 'canvas.noteMotion'] };
   return (
     <SettingsGroup title={t('settings.workModes.group')} footnote={t('settings.workModes.footnote')}>
       {WORK_MODES.map((m) => (

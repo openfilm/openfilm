@@ -2584,6 +2584,7 @@ export const en = {
       autoHint: 'Commit a version on its own while you work: before and after an agent’s turn, and when the film rests for a couple of minutes. Only when the film changed.',
     },
     workModes: {
+      motionBeta: 'Motion (Beta)',
       group: 'Ways of working',
       footnote: 'Turn off what you don’t use. With one left on, the top bar has no switch.',
     },
