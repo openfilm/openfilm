@@ -38,6 +38,8 @@ export type MotionBlur = { enabled: boolean; samples: number; shutter: number };
 export type ProjectSettings = { fps?: number; trackNames?: { name: string; index: number; clips: string[] }[]; trackHeights?: { height: number; index: number; clips: string[] }[]; motionBlur?: MotionBlur };
 export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: string; size: number; mtime: number }[]; links?: Record<string, { to: string; missing?: boolean }> };
 /** Media a project is missing (studio/server/media-reconnect.mjs): a link that leads nowhere (`linked`), or a file its clips name that is gone; `was`: where it was. */
+/** What the listed projects take on disk, the biggest first, in bytes: `clearable` is the cache that is made again when needed. */
+export type StorageUsage = { projects: { id: string; name: string; path: string; total: number; clearable: number }[]; total: number; clearable: number };
 export type MissingMedia = { path: string; name: string; folder: boolean; linked: boolean; was: string };
 export type Op =
   | { op: 'set'; clip: string; field: string; value?: unknown }
@@ -143,6 +145,9 @@ export const api = {
   prefs: () => call<StudioPrefs>('prefs'),
   /** where new projects and exports go, and the free space there */
   locations: () => call<StudioLocations>('locations'),
+  /** the room every project takes and what of it is cache that can be cleared (studio/server/storage.mjs); cleared, the bytes that came back */
+  storage: () => call<StorageUsage>('storage'),
+  clearStorage: () => call<StorageUsage & { freed: number }>('storage/clear', { method: 'POST', json: {} }),
   /** move the library to `path` (null: the default); with `move`, its projects go too (those that could not are in `failed`) */
   /** `failed`: projects that stay where they were; `left`: moved across disks, their old folder left there (the trash would not take it) */
   moveLibrary: (path: string | null, move: boolean) => call<{ moved: number; failed: { name: string; error: string }[]; left: { name: string; path: string; error: string }[]; locations: StudioLocations }>('locations/projects', { method: 'PUT', json: { path, move } }).then((done) => {

@@ -4715,11 +4715,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (!ok) return [];
     return folder ? (typeof answer.path === 'string' ? [answer.path] : []) : Array.isArray(answer.paths) ? answer.paths.map(String) : [];
   }, [postJson]);
-  const onBring = React.useCallback(async (paths: string[], into: string, mode: 'copy' | 'link'): Promise<string[]> => {
+  const onBring = React.useCallback(async (paths: string[], into: string, mode: 'auto' | 'link'): Promise<string[]> => {
     const { ok, answer } = await postJson(`${projectApi}/files/bring`, { paths, into, mode });
     if (!ok) throw new Error(String(answer.error ?? t('assets.uploadFailed')));
+    /* big media that could only come in as a second copy was left where it is kept, and linked: said, so it is no surprise */
+    if (mode === 'auto' && Array.isArray(answer.linked) && answer.linked.length) showToast(t('media.keptInPlace').replace('{n}', String(answer.linked.length)));
     return Array.isArray(answer.landed) ? answer.landed.map(String) : [];
-  }, [projectApi, postJson, t]);
+  }, [projectApi, postJson, t, showToast]);
   const onRelink = React.useCallback(async (path: string, folder: boolean): Promise<MediaResult> => {
     const to = (await onPick(t('media.pickRelink'), folder));
     if (to === 'no-dialog' || !to.length) return 'ok';
@@ -4784,7 +4786,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       for (const [i, path] of paths.entries()) {
         onProgress(i, -1);
         // eslint-disable-next-line no-await-in-loop
-        const [at] = await onBring([path], into, 'copy');
+        const [at] = await onBring([path], into, 'auto');
         if (at) landed.push(at);
         onProgress(i, 1, at);
       }
@@ -4814,7 +4816,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the person's own from this computer, into the project, for a template's places: where they landed */
   const importOwn = React.useCallback(async (): Promise<string[]> => {
     const picked = await onPick(t('template.import'), false);
-    if (picked !== 'no-dialog') return picked.length ? onBring(picked, 'assets', 'copy') : [];
+    if (picked !== 'no-dialog') return picked.length ? onBring(picked, 'assets', 'auto') : [];
     const files = await new Promise<File[]>((done) => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -4831,7 +4833,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const picked = await onPick(t('editorTools.replacePick'), false);
     if (picked !== 'no-dialog') {
       if (!picked.length) return null;
-      const [at] = await onBring([picked[0]!], 'assets', 'copy');
+      const [at] = await onBring([picked[0]!], 'assets', 'auto');
       return at ?? null;
     }
     const file = await new Promise<File | null>((done) => {

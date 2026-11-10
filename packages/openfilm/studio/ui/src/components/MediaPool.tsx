@@ -165,7 +165,8 @@ export interface MediaPoolProps {
    * (`onBring`, resolving where each landed). Without them, Upload sends files picked in the browser.
    */
   onPick?: (title: string, folder: boolean) => Promise<string[] | 'no-dialog'>;
-  onBring?: (paths: string[], folder: string, mode: 'copy' | 'link') => Promise<string[]>;
+  /* `auto`: as it takes least room (a clone or a second name for the file; big media on another disk stays there, linked) */
+  onBring?: (paths: string[], folder: string, mode: 'auto' | 'link') => Promise<string[]>;
   /** A link pointed at where its media is now (the person picks it), or copied into the project in its place. */
   onRelink?: (path: string, folder: boolean) => Promise<MediaResult>;
   onCollect?: (path: string) => Promise<MediaResult>;
@@ -387,11 +388,11 @@ export function MediaPool({
    * Media on this computer, picked in the system's dialog, copied in or linked where it is kept (a NAS): a card each
    * while it comes. Where there is no dialog, an import is the browser's pick.
    */
-  const bringFrom = async (mode: 'copy' | 'link', folder: boolean, intoRel = at) => {
+  const bringFrom = async (mode: 'auto' | 'link', folder: boolean, intoRel = at) => {
     if (!onPick || !onBring) { inputRef.current?.click(); return; }
     setNotice(null);
-    const paths = await onPick(t(mode === 'copy' ? 'media.pickImport' : folder ? 'media.pickLinkFolder' : 'media.pickLink'), folder);
-    if (paths === 'no-dialog') { if (mode === 'copy' && !folder) inputRef.current?.click(); else setNotice(t('media.noDialog')); return; }
+    const paths = await onPick(t(mode === 'auto' ? 'media.pickImport' : folder ? 'media.pickLinkFolder' : 'media.pickLink'), folder);
+    if (paths === 'no-dialog') { if (mode === 'auto' && !folder) inputRef.current?.click(); else setNotice(t('media.noDialog')); return; }
     const batch: Upload[] = paths.map((path) => {
       const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
       return { id: `upload-${++uploadSeq}`, name, into: intoRel, kind: folder ? 'other' : resourceKindOf(name), ratio: -1 };
@@ -634,13 +635,13 @@ export function MediaPool({
   /* what Upload offers: a copy in the project, or a link to where the media is kept (a NAS, another disk); where
      nothing is linked (Saved), Upload picks the files to copy in at once */
   const importMenu: ContextMenuEntry[] = [
-    { id: 'import', label: t('media.importFiles'), note: t('media.importFilesNote'), icon: <Upload size={14} />, onSelect: () => { void bringFrom('copy', false); } },
+    { id: 'import', label: t('media.importFiles'), note: t('media.importFilesNote'), icon: <Upload size={14} />, onSelect: () => { void bringFrom('auto', false); } },
     { id: 'link', label: t('media.linkFiles'), note: t('media.linkFilesNote'), icon: <Link2 size={14} />, onSelect: () => { void bringFrom('link', false); } },
     { id: 'link-folder', label: t('media.linkFolder'), icon: <FolderSymlink size={14} />, onSelect: () => { void bringFrom('link', true); } },
   ];
   const blankMenu: ContextMenuEntry[] = [
     { id: 'new-folder', label: t('assets.newFolder'), icon: <FolderPlus size={14} />, onSelect: () => setCreating(true) },
-    { id: 'import', label: t('media.import'), icon: <Plus size={14} />, onSelect: () => (onPick && onBring ? void bringFrom('copy', false) : inputRef.current?.click()) },
+    { id: 'import', label: t('media.import'), icon: <Plus size={14} />, onSelect: () => (onPick && onBring ? void bringFrom('auto', false) : inputRef.current?.click()) },
     ...(onPick && onBring && links ? [
       { id: 'link', label: t('media.linkFiles'), icon: <Link2 size={14} />, onSelect: () => { void bringFrom('link', false); } },
       { id: 'link-folder', label: t('media.linkFolder'), icon: <FolderSymlink size={14} />, onSelect: () => { void bringFrom('link', true); } },
@@ -895,7 +896,7 @@ export function MediaPool({
         {/* bringing media in is what this pane is for: the one labeled button, right after the search */}
         <Tooltip label={t('media.import')} side="bottom">
           <button type="button" aria-label={t('media.import')} aria-haspopup={onPick && onBring ? 'menu' : undefined}
-            onClick={(e) => (onPick && onBring ? (links ? barMenu(e, importMenu) : void bringFrom('copy', false)) : inputRef.current?.click())}
+            onClick={(e) => (onPick && onBring ? (links ? barMenu(e, importMenu) : void bringFrom('auto', false)) : inputRef.current?.click())}
             className={`flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[var(--bg-pressed)] text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-strong)] ${bar.uploadWord ? 'px-2.5' : 'w-7'}`}>
             <Upload size={13} strokeWidth={2.2} />
             {bar.uploadWord ? uploadWord : null}
@@ -991,7 +992,7 @@ export function MediaPool({
               <Clapperboard size={22} className="text-[var(--text-faint)]" />
               <div className="text-[13px] font-medium text-[var(--text)]">{t(at ? 'media.emptyFolder' : inSaved ? 'saved.emptyTitle' : 'media.emptyTitle')}</div>
               {at ? null : <p className="max-w-[30ch] text-[12px] leading-relaxed text-[var(--text-muted)]">{t(inSaved ? 'saved.emptyBody' : 'media.emptyBody')}</p>}
-              <button type="button" onClick={() => (onPick && onBring ? void bringFrom('copy', false) : inputRef.current?.click())}
+              <button type="button" onClick={() => (onPick && onBring ? void bringFrom('auto', false) : inputRef.current?.click())}
                 className="mt-1 inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)]">
                 <Plus size={13} />{t('media.import')}
               </button>

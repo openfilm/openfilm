@@ -57,6 +57,7 @@ import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCov
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
+import { clearProjectCache, storage } from './storage.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
@@ -483,6 +484,20 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* where new projects go (src/locations.mjs): the folder, its default, and its disk's free space; a POST opens it
        in the system's file manager */
     if (parts[0] === 'locations' && parts.length === 1 && req.method === 'GET') return json(res, 200, locations());
+    /* the room every project takes, and what of it can be cleared (storage.mjs); a POST clears one project's cache
+       (`id`) or every project's, and says how much came back. What a render reads back is left in a project where
+       an export or an agent is at work */
+    if (parts[0] === 'storage' && parts.length === 1 && req.method === 'GET') return json(res, 200, await storage());
+    if (parts[0] === 'storage' && parts[1] === 'clear' && parts.length === 2 && req.method === 'POST') {
+      const { id } = /** @type {{ id?: unknown }} */ (await readJson(req));
+      const listed = (await listProjects()).filter((p) => !p.missing && (id == null || p.id === id));
+      let freed = 0;
+      for (const p of listed) {
+        const busy = agentIn(p.path) || exports.list(p.id).some((job) => job.status === 'waiting' || job.status === 'running');
+        freed += await clearProjectCache(p.path, { busy });
+      }
+      return json(res, 200, { freed, ...await storage() });
+    }
     /* the person's media in numbers (media-index.mjs): places, files, the room they take and the room copies take */
     if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
     /* the library moved (projects.mjs moveLibrary): { path } (null: the default), and with `move` its projects go too */
@@ -946,11 +961,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        given (the desktop app knows a dropped file's), else the person's pick in the system's dialog. { landed } */
     if (rest === 'files/bring' && req.method === 'POST') {
       const { into, mode, paths, folder, title } = /** @type {{ into?: unknown, mode?: unknown, paths?: unknown, folder?: unknown, title?: unknown }} */ (await readJson(req));
-      const how = mode === 'link' ? 'link' : 'copy';
+      /* `auto`: as it takes least room (files.mjs bringIn); `linked`: what was left where it is kept for that */
+      const how = mode === 'link' ? 'link' : mode === 'auto' ? 'auto' : 'copy';
+      /** @type {string[]} */
+      const linked = [];
       const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
       const picked = Array.isArray(paths) ? paths.map(String)
         : await (folder === true ? pickFolder(ask).then((p) => (p ? [p] : [])) : pickFiles(ask)).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); });
-      return json(res, 200, { landed: await notifyReferences(() => bringIn(project.path, String(into ?? 'assets'), picked, how)) });
+      return json(res, 200, { landed: await notifyReferences(() => bringIn(project.path, String(into ?? 'assets'), picked, how, { onLinked: (rel) => linked.push(rel) })), linked });
     }
     /* a link pointed somewhere else (files.mjs relink): the path given, else the person's pick. { path } (null: cancelled) */
     if (rest === 'files/relink' && req.method === 'POST') {
