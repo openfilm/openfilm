@@ -21,16 +21,21 @@ function index(film: Film) {
  * kept. `moved` are the clips the edit touched (they do not say where their track went). Returns its index, or where a
  * new one should go when the edit left it empty and it went.
  */
-function trackNow(before: Film, after: Film, track: number, moved: Set<string>): { track: number } | { newTrack: number } {
-  /** a track known by a clip it kept (one the edit did not touch) */
+function trackNow(
+  before: Film, after: Film, track: number, moved: Set<string>, destinations: ReadonlyMap<number, number>,
+): { track: number } | { newTrack: number; newTrackAttrs?: Record<string, string> } {
+  /** A caption file, a known destination, or a clip the track kept identifies it. */
   const anchored = (t: number) => {
+    if (destinations.has(t)) return destinations.get(t)!;
+    const src = before.tracks[t]?.captions?.src;
     const anchors = (before.tracks[t]?.clips.map((c) => c.id) ?? []).filter((id) => !moved.has(id));
-    if (!anchors.length) return null;
-    const i = after.tracks.findIndex((tr) => tr.clips.some((c) => anchors.includes(c.id)));
+    if (!src && !anchors.length) return null;
+    const i = after.tracks.findIndex((tr) => src ? tr.captions?.src === src : tr.clips.some((c) => anchors.includes(c.id)));
     return i < 0 ? null : i;
   };
   const findBy = (t: number) => {
-    if ((before.tracks[t]?.clips ?? []).some((c) => !moved.has(c.id))) return anchored(t);
+    const fixed = anchored(t);
+    if (fixed != null) return fixed;
     /* every clip of it was touched: it is a track holding only its clips (no other track's joined them there), still
        between the same tracks; of several, the one holding most of them (else it went, and any of those is new) */
     const own = before.tracks[t]?.clips.map((c) => c.id) ?? [];
@@ -51,9 +56,11 @@ function trackNow(before: Film, after: Film, track: number, moved: Set<string>):
   };
   const same = findBy(track);
   if (same != null) return { track: same };
+  const attrs = before.tracks[track]?.attrs;
+  const reopen = (newTrack: number) => ({ newTrack, ...(attrs ? { newTrackAttrs: copy(attrs) } : {}) });
   /* it went: a new one just below the nearest track above it that is still there */
-  for (let t = track - 1; t >= 0; t--) { const i = findBy(t); if (i != null) return { newTrack: i + 1 }; }
-  return { newTrack: 0 };
+  for (let t = track - 1; t >= 0; t--) { const i = findBy(t); if (i != null) return reopen(i + 1); }
+  return reopen(0);
 }
 
 /**
@@ -80,7 +87,16 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
   const now = index(after);
   const ids = new Set<string>();
   const undo: Op[] = [];
+  /* In a batch that only moves clips between existing tracks and trims or removes them, a moved clip identifies
+     its destination even if the overwrite removed every clip originally on that track. */
+  const stableIndexes = ops.every((op) => op.op === 'split' || op.op === 'remove'
+    || (op.op === 'props' && op.edits.every((e) => e.prop !== 'trackOrder' && (e.prop !== 'track' || typeof e.value === 'number'))));
+  const movedTo = new Map<string, number>();
   for (const op of ops) {
+    if (op.op === 'track-layout') {
+      undo.push({ ...op, from: op.to, to: op.from });
+      continue;
+    }
     if (op.op === 'track') { undo.push({ op: 'track', track: op.track, field: op.field, value: Boolean(before.tracks[op.track]?.[op.field]) }); continue; }
     if (op.op === 'reorder') {
       undo.push({ op: 'reorder', from: op.to, to: op.from, ...trackBack(before, op.clip ? (was.get(op.clip)?.track ?? op.from) : op.from) });
@@ -101,6 +117,7 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
     if (op.op === 'insert') { for (const [id] of now) if (!was.has(id)) ids.add(id); continue; }
     if (op.op === 'props') {
       for (const e of op.edits) {
+        if (stableIndexes && e.prop === 'track' && typeof e.value === 'number') movedTo.set(e.clip, e.value);
         if (e.prop === 'trackOrder') {
           const { from, to } = e.value as { from: number; to: number };
           undo.push({ op: 'reorder', from: Math.max(0, Math.min(after.tracks.length - 1, to)), to: from, ...trackBack(before, from) });
@@ -114,6 +131,11 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
     }
     ids.add(op.clip);
     if (op.op === 'split') for (const [id] of now) if (!was.has(id)) ids.add(id);
+  }
+  const destinations = new Map<number, number>();
+  for (const [clip, to] of movedTo) {
+    const at = now.get(clip);
+    if (at) destinations.set(to, at.track);
   }
   /* a track the edit left empty went with its flags; made again, it gets them back (or a muted track would come back
      sounding). Pushed before the op that makes it: the list is reversed below, so they apply right after it */
@@ -131,7 +153,7 @@ export function inverse(before: Film, after: Film, ops: Op[]): Op[] {
     const cur = now.get(id);
     if (!old && cur) { undo.push({ op: 'remove', clip: id }); continue; }
     if (!old) continue;
-    const home = trackNow(before, after, old.track, ids);
+    const home = trackNow(before, after, old.track, ids, destinations);
     if (!cur) {
       flagsBack(home, old.track);
       const op: Op = { op: 'insert', clip: copy(old.row), ...home };
@@ -176,10 +198,10 @@ function reopenTracks(ops: Op[], gone: ReadonlyMap<Op, number>): Op[] {
     for (const op of byTrack.get(was)!) {
       if (op.op === 'track') { if (at != null) out.push({ ...op, track: at }); continue; }
       if (op.op !== 'insert' && op.op !== 'move') continue;
-      const { newTrack, ...rest } = op;
+      const { newTrack, newTrackAttrs, ...rest } = op;
       if (at != null) { out.push({ ...rest, track: at }); continue; }
       at = (newTrack ?? 0) + above;
-      out.push({ ...rest, newTrack: at });
+      out.push({ ...rest, newTrack: at, ...(newTrackAttrs ? { newTrackAttrs } : {}) });
     }
     if (at != null) above += 1;
   }

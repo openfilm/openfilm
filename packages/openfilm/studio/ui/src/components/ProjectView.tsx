@@ -10,7 +10,7 @@ import * as React from 'react';
 import { afterPaintIdle } from '@/lib/after-paint-idle';
 import { loadCanvas } from './canvas/load';
 import { CanvasLoading } from './canvas/CanvasLoading';
-import { BookmarkPlus, ClipboardCopy, ClipboardPaste, Layers, MessageSquarePlus, MonitorDown, Scissors, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { BookmarkPlus, ClipboardCopy, ClipboardPaste, FolderOpen, Layers, MessageSquarePlus, MonitorDown, Scissors, Settings2, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { withPreset } from '../../../../src/clip-motion.mjs';
 import { PARTS, compoundFolder, compoundOf, dissolvedOf, srcInto, srcOutOf } from '../../../server/compound.mjs';
@@ -31,6 +31,7 @@ import { cutMovesOn, headStyle, joinedStyle, presetsOn, restStyle, takesMotion, 
 import { ClipMotionSection, type ClipMotionHost } from '@/components/ClipMotionSection';
 import { TemplatePicker } from '@/components/TemplatePicker';
 import { isLibraryText, layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
+import { organizeTracks } from '@/lib/organize-tracks';
 import { useAgentWorking } from '@/lib/agent-working';
 import { filmClipKind, filmDocLoc, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
 import { exactRate, footageFps, setTimecodeFps, snapToFrame, stepFrames } from '@/lib/timecode';
@@ -2327,6 +2328,27 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     editModel, selectedClipIds: selectedKeys, listing, toast, pickFile: pickReplacement,
   });
   const shownTracks = React.useMemo(() => foldHeads(tools.tracks, foldedHeads), [tools.tracks, foldedHeads]);
+  const organizeTimelineTracks = React.useCallback(async () => {
+    const current = filmRef.current;
+    if (!current) return;
+    if (current !== film.film || pendingDrops.length) { toast.show(t('timeline.applying')); return; }
+    const durations = new Map<string, number>();
+    for (const span of spans) if (span.native != null) durations.set(span.src, span.native);
+    for (const [src, fact] of mediaFacts) if (fact.duration != null) durations.set(src, fact.duration);
+    const protectedTracks = new Set(tools.timeline.solo.tracks);
+    if (mainTrack != null) protectedTracks.add(mainTrack);
+    for (const row of shownTracks) {
+      if (row.docIndex != null && (row.main || row.height != null)) protectedTracks.add(row.docIndex);
+    }
+    const protectedClips = new Set(clipFades.keys());
+    for (const tr of filmTransitions) {
+      for (const id of [tr.a, tr.b, tr.rest, tr.white]) if (id) protectedClips.add(id);
+    }
+    const ops = organizeTracks(current, durations, protectedTracks, protectedClips);
+    if (!ops.length) { toast.show(t('timeline.organizeTracksNone')); return; }
+    const why = await edit(ops, 'history.stepTrackOrganize');
+    if (why) toast.showError(why);
+  }, [film.film, pendingDrops, spans, mediaFacts, shownTracks, tools.timeline.solo.tracks, mainTrack, clipFades, filmTransitions, edit, toast, t]);
   /* a template put in as one compound clip: its film read from its folder (TemplateFilmSection keeps each) */
   const loadTemplateFilm = React.useCallback(async (dir: string) => (await api.readPartFilm(projectId, dir)).film as unknown as FilmValue, [projectId]);
   /*
@@ -2761,6 +2783,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the media pane shows the project's media, or Saved (lib/saved): the same pane, the button beside Upload switches */
   const [mediaScope, setMediaScope] = React.useState<MediaScope>(() => MEDIA_SCOPE.current);
   const switchMedia = React.useCallback((next: MediaScope) => { MEDIA_SCOPE.current = next; setMediaScope(next); }, []);
+  const [revealMedia, setRevealMedia] = React.useState<{ path: string; seq: number } | null>(null);
   /* the drawer's media: only the project's own; what it took from the library (lib/library fromLibrary) is shown in
      the library's own category, tried there without being listed here */
   const libraryIndex = useLibraryIndex();
@@ -2769,9 +2792,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   templateItemsRef.current = (libraryIndex?.items ?? []).filter((i) => i.cat === 'template' && i.kind === 'group');
   const scopedListing = React.useMemo(() => {
     if (!listing || mediaScope === 'saved') return listing;
-    const keep = (f: { path: string }) => !fromLibrary(f.path, libraryIndex?.items ?? null);
+    const keep = (f: { path: string }) => f.path === revealMedia?.path || !fromLibrary(f.path, libraryIndex?.items ?? null);
     return { ...listing, files: listing.files.filter(keep), pages: listing.pages.filter(keep) };
-  }, [listing, mediaScope, libraryIndex]);
+  }, [listing, mediaScope, libraryIndex, revealMedia?.path]);
   const savedListing = useSavedListing(mediaScope === 'saved');
   const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => {
     /* in the app a dropped file's path is known: copied on this computer, not sent through the page */
@@ -2913,8 +2936,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [hostSelection, projectId, timeMs, selectedClips, stageElement, markedRange, captionPick]);
   /* a box the app shows on the picture (show-box), flashed there */
   const [flashBox, setFlashBox] = React.useState<{ box: StageBox; seq: number } | null>(null);
-  /* a file the app shows in the media pane (show-file): its folder opened, the tile in view */
-  const [revealMedia, setRevealMedia] = React.useState<{ path: string; seq: number } | null>(null);
   /* what the app's chat points at (lib/chat-marks): the pill hovered there, the references of the message being written */
   const [chatRef, setChatRef] = React.useState<StudioRef | null>(null);
   const [draftMarks, setDraftMarks] = React.useState<DraftMarks>(NO_DRAFT);
@@ -2923,7 +2944,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const file = listing ? [...listing.pages, ...listing.files].find((f) => f.path === path) : undefined;
     if (!file) return;
     openLibrary(true);
-    pickMedia(file);
+    switchMedia('project');
+    if (canvasOpen) {
+      setPickedMedia(file);
+      setPickedSaved(false);
+    } else pickMedia(file);
     setRevealMedia((cur) => ({ path: file.path, seq: (cur?.seq ?? 0) + 1 }));
   };
   const hostCommands = React.useRef<(command: StudioCommand) => void>(() => {});
@@ -3464,7 +3489,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     { id: 'copy-attrs', label: t('clipAttrs.copy'), icon: <ClipboardCopy size={14} />, shortcut: keyHint('copy-attrs'), disabled: blocks.length !== 1, onSelect: () => copyAttrs(blocks) },
     { id: 'paste-attrs', label: t('clipAttrs.pasteMenu'), icon: <ClipboardPaste size={14} />, shortcut: keyHint('paste-attrs'), disabled: !copiedAttrs, hint: t('clipAttrs.nothing'), onSelect: () => askPasteAttrs(blocks) },
   ];
-  const timelineMenuExtra = React.useCallback((blocks: readonly TimelineBlock[]) => (blocks.length ? menuGroups(referEntry(() => blocks.map(refOfBlock)), menuGroups(menuGroups(saveEntry(blocks), tools.menuExtra(blocks)), attrsEntries(blocks))) : []), [t, keyHint, tools.menuExtra, copiedAttrs, copyAttrs, askPasteAttrs, saveBlocks]); // eslint-disable-line react-hooks/exhaustive-deps
+  const timelineMenuExtra = React.useCallback((blocks: readonly TimelineBlock[], clicked?: TimelineBlock) => {
+    if (!blocks.length) return [];
+    const lead = referEntry(() => blocks.map(refOfBlock));
+    if (clicked && compoundFolder(clicked.src)) {
+      lead.push({ id: 'enter-compound', label: t('timeline.menuEnterCompound'), icon: <FolderOpen size={14} />, onSelect: () => enterCompound(clicked) });
+    }
+    return menuGroups(lead, menuGroups(menuGroups(saveEntry(blocks), tools.menuExtra(blocks)), attrsEntries(blocks)));
+  }, [t, keyHint, tools.menuExtra, copiedAttrs, copyAttrs, askPasteAttrs, saveBlocks, enterCompound]); // eslint-disable-line react-hooks/exhaustive-deps
   const trackMenuExtra = React.useCallback((track: TimelineTrack) => {
     const docIndex = track.docIndex;
     const refer = docIndex == null || !studioHost?.refer ? [] : referEntry(() => { const ref = trackRef(tracksRef.current, docIndex); return ref ? [ref] : []; }, false);
@@ -4159,7 +4191,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
     if (!cmd) return;
     /* a menu or a list open has the arrows; a slider (the ruler, a volume) steps itself with ← / → */
-    if (el?.closest?.('[role="menu"], [role="listbox"]') && /^(frame|second|prev|next|start|end|nudge)/.test(cmd)) return;
+    if (el?.closest?.('[role="menu"], [role="listbox"]') && (/^(frame|second|prev|next|start|end|nudge)/.test(cmd) || cmd === 'overwrite-track-down')) return;
     if (el?.closest?.('[role="slider"], input[type="range"]') && /^(frame|second|start|end)/.test(cmd)) return;
     const commands = timelineCommands.current;
     const now = player.current.time() * 1000;
@@ -4295,6 +4327,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         if (!selectedBlocks.length) return;
         take();
         commands.nudge(cmd === 'nudge-back' ? -1 : 1);
+        return;
+      case 'overwrite-track-down':
+        if (!selectedBlocks.length) return;
+        take();
+        if (once) commands.overwriteTrackDown();
         return;
       case 'zoom-fit': take(); commands.zoomFit(); return;
       case 'select-left': case 'select-right': take(); if (once) commands.selectSide(cmd === 'select-left' ? -1 : 1); return;
@@ -4882,6 +4919,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     flashRange={flashRange}
                     onRangeChange={setMarkedRange}
                     trackMenuExtra={trackMenuExtra}
+                    onOrganizeTracks={organizeTimelineTracks}
                     transcribed={transcribedSrcs}
                     captionPick={timelineCaptionPick}
                     {...(studioHost?.refer ? {
@@ -4956,7 +4994,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     <CanvasView shown={canvasOpen} projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
                       onImportFiles={(dropped, progress = () => {}) => onImport(dropped, 'assets', progress)} onOpenSettings={() => setSettingsOpen('models')}
                       focus={canvasFocus} insert={canvasInsert} addFiles={canvasAddFiles} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
-                      onSendToFilm={(list) => { void sendFromCanvas(list); }} onReveal={(path) => { setCanvasOpen(false); showFile(path); }}
+                      onSendToFilm={(list) => { void sendFromCanvas(list); }} onReveal={showFile}
                       {...(hostPanel ? { chat: { open: hostPanel.open, toggle: () => hostPanel.setOpen(!hostPanel.open) } } : {})}
                       onError={toast.showError} onNotice={(message) => toast.show(message)} />
                   </React.Suspense>
@@ -5001,7 +5039,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         rect={independentLibrary ? freeGeometry?.panels.library ?? dockGeometry.library : chatLibraryRect}
         free={Boolean(freeGeometry)}
         onResize={updateWorkspace}>
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} actions={canvasOpen ? { ...library.actions, add: item => { if (['page', 'sound', 'group'].includes(item.kind)) void requestCanvasFiles(`${BUILT_IN}/${item.id}`, true); else { setCanvasOpen(false); library.actions.add(item); } }, tryOut: () => {} } : library.actions}
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} mediaRequest={revealMedia?.seq} actions={canvasOpen ? { ...library.actions, add: item => { if (['page', 'sound', 'group'].includes(item.kind)) void requestCanvasFiles(`${BUILT_IN}/${item.id}`, true); else { setCanvasOpen(false); library.actions.add(item); } }, tryOut: () => {} } : library.actions}
             tried={libraryTrial?.id ?? null} templateStatus={templateStatus} previewBar={canvasOpen ? null : libraryPreviewBar} previewPicture={canvasOpen || fullscreen ? null : libraryPreviewPicture} dismissRef={dismissLibraryPreview}
             onPreviewStart={canvasOpen ? pause : beginLibraryPreview} onDownloadFailed={onLibraryDownloadFailed} shown={libraryOpen} under={!independentLibrary ? hostAssets?.bottom ?? 0 : 0}
             captions={{

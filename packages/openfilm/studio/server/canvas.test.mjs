@@ -132,8 +132,9 @@ test("a text node's words are written by the person's agent, from what they ask 
   const answer = () => { const res = { status: 0, body: '', writeHead(s) { res.status = s; }, end(b) { res.body = b; } }; return res; };
   let asked = '';
   const res = answer();
-  assert.equal(await canvasWriteRoute(/** @type {any} */ (post({ prompt: 'a three-shot script', inputs: ['a fox at dawn', 3] })), /** @type {any} */ (res), 'canvas-write',
-    async (text) => { asked = text; return '  1. The fox wakes.\n'; }), true);
+  const model = { agent: 'codex', options: { model: 'model-b', effort: 'low' } };
+  assert.equal(await canvasWriteRoute(/** @type {any} */ (post({ prompt: 'a three-shot script', inputs: ['a fox at dawn', 3], model })), /** @type {any} */ (res), 'canvas-write',
+    async (text, _signal, selected) => { asked = text; assert.deepEqual(selected, model); return '  1. The fox wakes.\n'; }), true);
   assert.deepEqual([res.status, JSON.parse(res.body)], [200, { text: '1. The fox wakes.' }]);
   assert.match(asked, /\[1\] a fox at dawn/);
   assert.match(asked, /a three-shot script$/);

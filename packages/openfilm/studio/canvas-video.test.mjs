@@ -62,11 +62,17 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
       return [...context.getImageData(10, 10, 1, 1).data];
     }, png.toString('base64'));
     const checkFirstFrame = async () => {
-      const [red, , blue] = await sample(await node.screenshot());
-      assert.ok(red > 180 && blue < 30, `the card displays the red opening frame, received red=${red}, blue=${blue}`);
+      const deadline = Date.now() + 1000;
+      let pixel;
+      do {
+        pixel = await sample(await node.screenshot());
+        if (pixel[0] > 180 && pixel[2] < 30) return;
+      } while (Date.now() < deadline);
+      assert.fail(`the card displays the red opening frame, received ${pixel}`);
     };
     const sideButtons = node.locator('[data-handleid="in"], [data-handleid="out"]');
     const sideColors = () => node.locator('[data-canvas-side-plus]').evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderColor));
+    const card = node.locator('[data-canvas-card]');
     await video.waitFor();
     await video.evaluate((el) => { el.dataset.originalPlayer = 'true'; });
     await page.waitForFunction((nodeId) => document.querySelector(`[data-id="${nodeId}"] video`)?.readyState >= 2, id);
@@ -76,8 +82,10 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     await page.mouse.move(20, 220);
     assert.deepEqual(await sideButtons.evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).opacity)), ['0', '0']);
     await checkFirstFrame();
+    const border = await card.evaluate((el) => getComputedStyle(el).borderColor);
     await node.hover();
     assert.deepEqual(await sideButtons.evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).opacity)), ['1', '1']);
+    assert.equal(await card.evaluate((el) => getComputedStyle(el).borderColor), border, 'hovering does not highlight the card');
     const unselectedBorders = await sideColors();
     await node.getByRole('button', { name: 'Pause', exact: true }).waitFor();
     await page.mouse.move(20, 220);
@@ -85,17 +93,26 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     await node.hover();
     await node.getByRole('button', { name: 'Pause', exact: true }).click();
     assert.equal(await video.evaluate((el) => el.paused), true, 'the pause button pauses hover playback');
+    const volume = node.getByRole('slider', { name: 'Volume', exact: true });
+    assert.equal(await volume.count(), 0);
+    await node.getByRole('button', { name: 'Mute', exact: true }).hover();
+    await volume.hover();
+    await volume.fill('50');
+    assert.equal(await video.evaluate((el) => el.volume), 0.5);
     await node.getByRole('button', { name: 'Mute', exact: true }).click();
     assert.equal(await video.evaluate((el) => el.muted), true);
     assert.equal(await video.evaluate((el) => el.paused), true, 'volume controls leave playback paused');
     const slider = node.getByRole('slider', { name: 'Playback position' });
+    await slider.hover();
+    assert.equal(await volume.count(), 0, 'leaving the speaker and slider closes the volume popup');
     await slider.fill('2.5');
     assert.ok(Math.abs(await video.evaluate((el) => el.currentTime) - 2.5) < 0.1);
     await page.mouse.move(20, 220);
     assert.equal(await video.getAttribute('data-original-player'), 'true');
-    const playback = await video.evaluate((el) => ({ seconds: el.currentTime, paused: el.paused }));
-    assert.deepEqual(playback, { seconds: 0, paused: true });
-    await video.evaluate((el) => el.seeking ? new Promise((done) => el.addEventListener('seeked', done, { once: true })) : undefined);
+    await page.waitForFunction((nodeId) => {
+      const video = document.querySelector(`[data-id="${nodeId}"] video`);
+      return video?.paused && video.currentTime === 0 && !video.seeking;
+    }, id);
     await checkFirstFrame();
     assert.deepEqual(await node.boundingBox(), beforeUpload);
 
@@ -106,7 +123,11 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     await node.getByText('Final shot', { exact: true }).waitFor();
     await page.mouse.move(20, 220);
     assert.deepEqual(await sideButtons.evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).opacity)), ['1', '1']);
-    assert.notDeepEqual(await sideColors(), unselectedBorders);
+    assert.deepEqual(await sideColors(), unselectedBorders, 'the side buttons keep the same color after selection');
+    await page.waitForFunction(({ id, border }) => {
+      const card = document.querySelector(`[data-id="${id}"] [data-canvas-card]`);
+      return card && getComputedStyle(card).borderColor !== border;
+    }, { id, border });
     const drag = async (handle, dx, dy, padding = false) => {
       const { x, y, width, height } = await handle.boundingBox();
       const startY = y + (padding ? 2 : height / 2);
@@ -123,7 +144,8 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     assert.ok(afterToolbar.x >= afterHeader.x - 40 && afterToolbar.x <= afterHeader.x - 30);
     assert.equal(afterToolbar.width, beforeUpload.width);
 
-    const near = (actual, expected) => assert.ok(Math.hypot(actual.x - expected.x, actual.y - expected.y) < 2);
+    const near = (actual, expected) => assert.ok(Math.hypot(actual.x - expected.x, actual.y - expected.y) < 2,
+      `expected ${JSON.stringify(actual)} to be near ${JSON.stringify(expected)}`);
     for (const [side, direction] of [['in', -1], ['out', 1]]) {
       const handle = node.locator(`[data-handleid="${side}"]`);
       const bounds = await handle.boundingBox();
@@ -135,7 +157,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     const handle = node.locator('[data-handleid="out"]');
     const plus = await handle.locator('[data-canvas-side-plus]').boundingBox();
     const start = { x: plus.x + plus.width / 2, y: plus.y + plus.height / 2 };
-    const drop = { x: start.x + 130, y: start.y + 70 };
+    const drop = { x: 1209, y: start.y + 71 };
     const dragWire = page.locator('[data-canvas-wire="drag"]');
     const menuWire = page.locator('[data-canvas-wire="menu"]');
     const endpoints = (wire) => wire.evaluate((path) => {
@@ -147,6 +169,12 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
       return [screen(0), screen(path.getTotalLength())];
     });
     const cardEdge = { x: afterToolbar.x + afterToolbar.width, y: afterToolbar.y + afterToolbar.height / 2 };
+    const stroke = (wire) => wire.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { color: style.stroke, width: style.strokeWidth, dashes: style.strokeDasharray };
+    });
+    const dragFlow = page.locator('.react-flow__connectionline .cv-wire-flow');
+    await page.getByRole('button', { name: 'Snap to grid' }).click();
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
@@ -157,18 +185,51 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
       near(origin, cardEdge);
       near(tip, pointer);
       assert.equal(await handle.evaluate((el) => getComputedStyle(el).opacity), '0');
-      assert.equal(await page.locator('.react-flow__connectionline .cv-wire-flow').evaluate((el) => getComputedStyle(el).animationName), 'cv-flow');
+      assert.equal(await dragFlow.locator('animateMotion').getAttribute('path'), await dragWire.getAttribute('d'));
       assert.equal(await menuWire.count(), 0);
     }
+    const activeStroke = await stroke(dragWire);
+    assert.equal(activeStroke.dashes, 'none');
     await page.mouse.up();
-    await page.emulateMedia({ reducedMotion: 'reduce' });
     await menuWire.waitFor({ state: 'attached' });
     const [origin, tip] = await endpoints(menuWire);
     near(origin, cardEdge);
-    const menu = await page.getByPlaceholder('Make from this node').boundingBox();
-    assert.ok(menu && Math.abs(tip.x - menu.x) < 24);
-    await page.keyboard.press('Escape');
+    near(tip, drop);
+    assert.deepEqual(await stroke(menuWire), activeStroke);
+    await page.getByRole('button', { name: 'Text', exact: true }).click();
     await menuWire.waitFor({ state: 'detached' });
+    const made = page.locator('.react-flow__node-note').first();
+    await made.waitFor();
+    const madeBox = await made.boundingBox();
+    near({ x: madeBox.x, y: madeBox.y + madeBox.height / 2 }, drop);
+    assert.deepEqual(await node.boundingBox(), afterToolbar, 'creating the node keeps the viewport in place');
+    const edge = page.locator('[data-canvas-wire="edge"]');
+    assert.deepEqual(await stroke(edge), activeStroke);
+    near((await endpoints(edge))[1], drop);
+    const pulse = page.locator('.react-flow__edge .cv-wire-flow circle');
+    const pulseX = await pulse.evaluate((circle) => circle.getCTM().e);
+    await page.waitForFunction((x) => Math.abs(document.querySelector('.react-flow__edge .cv-wire-flow circle').getCTM().e - x) > 10, pulseX);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(await pulse.isVisible(), false);
+    assert.deepEqual(await stroke(edge), activeStroke);
+
+    const incoming = node.locator('[data-handleid="in"]');
+    await node.hover();
+    const leftPlus = await incoming.locator('[data-canvas-side-plus]').boundingBox();
+    const leftDrop = { x: 227, y: leftPlus.y + 31 };
+    await page.mouse.move(leftPlus.x + leftPlus.width / 2, leftPlus.y + leftPlus.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(leftDrop.x, leftDrop.y, { steps: 8 });
+    await page.mouse.up();
+    await menuWire.waitFor({ state: 'attached' });
+    near((await endpoints(menuWire))[1], leftDrop);
+    await page.getByRole('button', { name: 'Text', exact: true }).click();
+    const reference = page.locator('.react-flow__node-note').nth(1);
+    await reference.waitFor();
+    const referenceBox = await reference.boundingBox();
+    near({ x: referenceBox.x + referenceBox.width, y: referenceBox.y + referenceBox.height / 2 }, leftDrop);
+    near((await endpoints(edge.nth(1)))[0], leftDrop);
+    await page.getByRole('button', { name: 'Snap to grid' }).click();
 
     await node.hover();
     await node.getByRole('button', { name: 'Pause', exact: true }).click();
@@ -181,7 +242,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
           && request.postDataJSON().nodes.some((item) => item.path === frame);
       });
       const camera = node.getByRole('button', { name: 'Take frame' });
-      await camera.click();
+      await camera.hover();
       const option = node.getByRole('button', { name: `Capture ${mode} frame` });
       const buttonBox = await camera.boundingBox();
       const menuBox = await node.locator(`[id="${await camera.getAttribute('aria-controls')}"]`).boundingBox();
@@ -193,6 +254,28 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
       assert.ok(pixels[channel] > 180 && pixels[2 - channel] < 30, `${mode} frame pixels: ${pixels}`);
     }
     const canvasFile = join(root, '.film', 'canvas.json');
+    const titleBox = await node.getByText('Final shot', { exact: true }).boundingBox();
+    const startDrag = { x: titleBox.x + titleBox.width / 2, y: titleBox.y + titleBox.height / 2 };
+    const madeId = await made.getAttribute('data-id');
+    const overlap = { x: madeBox.x + 20, y: madeBox.y + 60 };
+    const frontAt = (at) => page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('.react-flow__node')?.dataset.id, at);
+    const delta = madeBox.x + 80 - afterToolbar.x - afterToolbar.width;
+    const savedOverlap = page.waitForResponse((response) => {
+      const request = response.request();
+      if (!response.ok() || request.method() !== 'PUT' || new URL(request.url()).pathname !== `/api/projects/${project.id}/canvas`) return false;
+      const nodes = request.postDataJSON().nodes;
+      const clip = nodes.find((item) => item.id === id);
+      const text = nodes.find((item) => item.id === madeId);
+      return clip.x + clip.w > text.x && clip.z > text.z;
+    });
+    await page.mouse.move(startDrag.x, startDrag.y);
+    await page.mouse.down();
+    await page.mouse.move(startDrag.x + delta, startDrag.y, { steps: 8 });
+    assert.equal(await frontAt(overlap), id, 'dragging the older video puts it above the newer card');
+    await page.mouse.up();
+    await page.mouse.move(20, 220);
+    assert.equal(await frontAt(overlap), id, 'the moved video remains in front after release and pointer leave');
+    await savedOverlap;
     const doc = JSON.parse(await readFile(canvasFile, 'utf8'));
     const stored = doc.nodes.find((item) => item.id === id);
     assert.equal(stored.title, 'Final shot');
@@ -205,19 +288,43 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     await page.reload();
     await page.locator('[data-work-mode]').first().waitFor();
     if (await page.locator('[data-work-mode="edit"]').count()) await page.locator('[data-work-mode="edit"]').click();
+    await page.locator('[data-studio-canvas][data-canvas-ready="1"]').waitFor();
     await node.getByText('Final shot', { exact: true }).waitFor();
     const legacyBox = await node.boundingBox();
     assert.ok(legacyBox.width > 0 && legacyBox.height > 0);
+    const restored = await made.boundingBox();
+    assert.ok(legacyBox.x + legacyBox.width > restored.x, 'saved cards keep their overlap after loading');
+    assert.equal(await frontAt({
+      x: (restored.x + legacyBox.x + legacyBox.width) / 2,
+      y: Math.max(legacyBox.y, restored.y) + 20,
+    }), id, 'the saved stacking order survives reload');
     const other = page.getByTestId('rf__node-shared-audio');
     const otherVideo = other.locator('video');
     await otherVideo.waitFor();
     assert.equal(await otherVideo.evaluate((el) => el.muted), true, 'new and restored nodes use the saved sound preference');
+    assert.equal(await otherVideo.evaluate((el) => el.volume), 0.5, 'restored videos use the shared volume');
     await other.hover();
     await other.getByRole('button', { name: 'Unmute' }).click();
     assert.equal(await otherVideo.evaluate((el) => el.muted), false);
     assert.equal(await video.evaluate((el) => el.muted), false, 'the sound control updates other videos too');
+    await other.getByRole('slider', { name: 'Volume', exact: true }).fill('75');
+    assert.equal(await video.evaluate((el) => el.volume), 0.75, 'volume changes update the other videos too');
     await node.hover();
     assert.deepEqual(await node.boundingBox(), legacyBox);
+
+    await node.click({ position: { x: 60, y: 60 } });
+    const reveal = node.getByRole('button', { name: 'Show in Assets', exact: true });
+    const library = page.locator('[data-workspace-library]');
+    const asset = library.locator('[data-media-path="assets/clip.webm"]');
+    await reveal.click();
+    await asset.waitFor();
+    assert.equal(await page.locator('[data-work-mode="canvas"]').count(), 1);
+    await library.getByRole('button', { name: 'Favorites', exact: true }).click();
+    await library.getByRole('button', { name: 'Effects', exact: true }).click();
+    await reveal.click();
+    await asset.waitFor();
+    assert.equal(await library.getByRole('button', { name: 'Media', exact: true }).getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator('[data-work-mode="canvas"]').count(), 1);
     assert.deepEqual(errors, []);
   } finally {
     releaseUpload?.();

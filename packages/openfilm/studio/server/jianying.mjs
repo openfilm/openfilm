@@ -28,16 +28,17 @@
  */
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import { filmSubtitleLanguageOf } from './film-subtitle.mjs';
 import { declarations } from '../../src/film-doc.mjs';
+import { jianyingCaptionStyle } from './jianying-captions.mjs';
 
 /**
  * @typedef {import('./nle.mjs').NleTimeline} NleTimeline
  * @typedef {import('./nle.mjs').NleClip} NleClip
  * @typedef {import('./nle.mjs').NleFile} NleFile
  * @typedef {import('./nle.mjs').DraftClipLook} DraftClipLook
- * @typedef {{ text: string, startMs: number, durMs: number }} JianyingCue
+ * @typedef {{ text: string, startMs: number, durMs: number, draftLook?: import('./jianying-captions.mjs').CaptionLook }} JianyingCue
  */
 
 /** @typedef {'jianying' | 'capcut'} DraftApp */
@@ -87,6 +88,9 @@ const hex = () => randomUUID().replace(/-/g, '');
 
 /** A photo's length in 剪映: three hours, so any clip of it fits. */
 const PHOTO_US = 10_800_000_000;
+
+// 剪映 expands this marker against the opened draft's folder. Plain relative paths only work in the media library.
+export const JIANYING_DRAFT_PATH = '##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##';
 
 /** The material kinds an empty draft lists (剪映 reads the draft whether or not they are there). */
 const MATERIAL_KINDS = [
@@ -157,7 +161,8 @@ const round6 = (/** @type {number} */ n) => { const r = Math.round(n * 1e6) / 1e
  * The draft: `info` (draft_info.json) and `meta` (draft_meta_info.json), for the folder `folder` in the app's drafts
  * folder `root`.
  * @param {NleTimeline} timeline
- * @param {{ app?: DraftApp, name: string, folder: string, root: string, cues?: readonly JianyingCue[], language?: string | null, now?: number }} opts
+ * @param {{ app?: DraftApp, name: string, folder: string, root: string, cues?: readonly JianyingCue[], language?: string | null,
+ *   fonts?: ReadonlyMap<string, import('./jianying-captions.mjs').DraftFont>, now?: number }} opts
  */
 export function jianyingDraft(timeline, opts) {
   const platform = PLATFORM[opts.app ?? 'jianying'];
@@ -174,14 +179,22 @@ export function jianyingDraft(timeline, opts) {
   const library = [];
   /** @type {Map<string, string>} a file's entry in the library, by its path */
   const entryOf = new Map();
+  /** @param {NleFile} file */
+  const draftMediaPath = (file) => {
+    if (opts.app === 'capcut' || file.job.kind === 'link') return null;
+    const inside = relative(join(opts.folder, 'media'), file.path);
+    if (!inside || isAbsolute(inside) || inside === '..' || inside.startsWith(`..${sep}`)) return null;
+    return `media/${inside.split(sep).join('/')}`;
+  };
   const register = (/** @type {NleFile} */ file, /** @type {'video' | 'photo' | 'music'} */ wanted, /** @type {string} */ name) => {
     const known = entryOf.get(file.path);
     if (known) return known;
     const kind = file.video ? file.video.still ? 'photo' : 'video' : wanted;
     const id = randomUUID().toUpperCase();
+    const inside = draftMediaPath(file);
     library.push({
       ai_group_type: '', create_time: -1, duration: kind === 'photo' ? 5_000_000 : us(file.durationFrames), enter_from: 0,
-      extra_info: name, file_Path: file.path, height: file.video?.h ?? 0, id, import_time: -1, import_time_ms: -1, item_source: 1,
+      extra_info: name, file_Path: inside ? `./${inside}` : file.path, height: file.video?.h ?? 0, id, import_time: -1, import_time_ms: -1, item_source: 1,
       material_color_tag: '', md5: '', metetype: kind, roughcut_time_range: { duration: -1, start: -1 },
       sub_time_range: { duration: -1, start: -1 }, type: 0, width: file.video?.w ?? 0,
     });
@@ -195,6 +208,8 @@ export function jianyingDraft(timeline, opts) {
     if (known) return known;
     const id = hex();
     const name = file.path.split(/[\\/]/).pop() ?? file.name;
+    const inside = draftMediaPath(file);
+    const path = inside ? `${JIANYING_DRAFT_PATH}/${inside}` : file.path;
     if (media === 'video') {
       const still = Boolean(file.video?.still);
       materials.videos.push({
@@ -203,13 +218,13 @@ export function jianyingDraft(timeline, opts) {
         crop_ratio: 'free', crop_scale: 1, duration: still ? PHOTO_US : us(file.durationFrames),
         height: file.video?.h ?? timeline.height, width: file.video?.w ?? timeline.width,
         id, local_material_id: register(file, still ? 'photo' : 'video', name), material_id: id, material_name: name, media_path: '',
-        path: file.path, type: still ? 'photo' : 'video',
+        path, type: still ? 'photo' : 'video',
       });
     } else {
       materials.audios.push({
         app_id: 0, category_id: '', category_name: 'local', check_flag: 3, copyright_limit_type: 'none',
         duration: us(file.durationFrames), effect_id: '', formula_id: '', id, local_material_id: register(file, 'music', name), music_id: id,
-        name, path: file.path,
+        name, path,
         source_platform: 0, type: 'extract_music', wave_points: [],
       });
     }
@@ -334,17 +349,14 @@ export function jianyingDraft(timeline, opts) {
       segments: cues.map((cue) => {
         const id = hex();
         const text = cue.text.trim();
+        const { glyph, material: style } = jianyingCaptionStyle(cue.draftLook, timeline, opts.fonts);
         materials.texts.push({
           id, type: 'subtitle', add_type: 1, recognize_task_id: task, recognize_text: text, language, group_id: group,
           words: { start_time: [], end_time: [], text: [] }, current_words: { start_time: [], end_time: [], text: [] },
-          subtitle_keywords: { range: [] }, typesetting: 0, alignment: 1, letter_spacing: 0, line_spacing: 0.02, line_feed: 1,
-          line_max_width: 0.82, force_apply_line_max_width: false, check_flag: 15, global_alpha: 1,
+          subtitle_keywords: { range: [] }, typesetting: 0, line_spacing: 0.02, line_feed: 1,
+          line_max_width: 0.82, force_apply_line_max_width: false, global_alpha: 1, ...style,
           content: JSON.stringify({
-            styles: [{
-              fill: { alpha: 1, content: { render_type: 'solid', solid: { alpha: 1, color: [1, 1, 1] } } },
-              range: [0, [...text].length], size: 6, bold: false, italic: false, underline: false,
-              strokes: [{ content: { render_type: 'solid', solid: { alpha: 1, color: [0, 0, 0] } }, width: 0.08 }],
-            }],
+            styles: [{ range: [0, [...text].length], ...glyph }],
             text,
           }),
         });

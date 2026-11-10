@@ -34,15 +34,19 @@ test('what it offers is what the service says now: the kinds it knows, voices wi
   seen.length = 0;
   reply = (call) => (call.url.pathname === '/v1/media/models' ? [200, { models: {
     tts: [{ id: 'elevenlabs/eleven_v4', name: 'ElevenLabs Eleven v4' }],
-    video: [{ id: 'openrouter/bytedance/seedance-2.0-fast', name: 'Seedance 2.0 Fast' }, { id: 7 }],
+    video: [{ id: 'openrouter/bytedance/seedance-2.0-fast', name: 'Seedance 2.0 Fast' },
+      { id: 'openrouter/alibaba/wan-3.0', name: 'Wan 3.0', spec: { refs: 10, clip: 5, voice: 5, frames: true } }, { id: 7 }],
     translate: [{ id: 'x/y', name: 'not a kind of media it offers' }],
   } }] : [404, {}]);
   await openfilm.refresh();
   assert.equal(seen[0].headers.authorization, undefined, 'no key: what it offers is no secret');
   assert.deepEqual(openfilm.verbs, ['tts', 'voice', 'video']);
   /* what a model makes is what the provider it is run at says */
-  assert.deepEqual(openfilm.models.video, [{ id: 'openrouter/bytedance/seedance-2.0-fast', name: 'Seedance 2.0 Fast',
-    spec: { ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], seconds: [4, 15], refs: 9, frames: true, voice: true, clip: true, sizes: ['480p', '720p'] } }]);
+  assert.deepEqual(openfilm.models.video, [
+    { id: 'openrouter/bytedance/seedance-2.0-fast', name: 'Seedance 2.0 Fast',
+      spec: { ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16', '9:21'], seconds: [4, 15], refs: 9, frames: true, voice: true, voiceNeedsVisual: true, clip: true, sizes: ['480p', '720p'] } },
+    { id: 'openrouter/alibaba/wan-3.0', name: 'Wan 3.0', spec: { refs: 10, clip: 5, voice: 5, frames: true } },
+  ]);
   assert.equal(openfilm.models.tts[0].spec, undefined, 'a voice has none');
   await openfilm.refresh();
   assert.equal(seen.length, 1, 'asked again only after a while');
@@ -84,6 +88,39 @@ test('a run: posted with the key, the files it names, async; asked after until d
   assert.equal(seen[1].url.searchParams.get('key'), posted.headers['idempotency-key']);
   assert.equal(Buffer.from(result.files[0].bytes).toString(), 'mp4');
   assert.equal(result.index[0].dur, 5);
+});
+
+test('a Seedance run sends the clip and pictures named by its reference flags, including spaces in paths', async () => {
+  seen.length = 0;
+  const video = 'assets/Weixin Videos 01.mp4';
+  const picture = 'assets/参考图片/角色 01.png';
+  const prompt = 'assets/unused.png';
+  const files = {
+    [video]: Uint8Array.of(1, 2, 3),
+    [picture]: Uint8Array.of(4, 5, 6),
+    [prompt]: Uint8Array.of(7, 8, 9),
+  };
+  reply = (call) => {
+    const { args, inputs } = JSON.parse(call.body);
+    const sent = new Map(inputs.map(({ path, base64 }) => [path, base64]));
+    for (const path of [args.video, ...args['input-reference']]) {
+      if (!sent.has(path)) return [422, { message: `${path} was not sent with the run.` }];
+    }
+    assert.equal(inputs.length, 2, 'only the named reference files, once per path');
+    assert.equal(sent.get(video), Buffer.from(files[video]).toString('base64'));
+    assert.equal(sent.get(picture), Buffer.from(files[picture]).toString('base64'));
+    return [200, { receipt: { dur: 5 } }];
+  };
+  const result = await openfilm.run('video', { prompt, video, 'input-reference': [picture, picture], out: 'scene' },
+    ctx(files, 'openrouter/bytedance/seedance-2.0-mini'));
+  assert.equal(result.receipt.dur, 5);
+});
+
+test('an unreadable reference is reported locally instead of submitting an incomplete run', async () => {
+  seen.length = 0;
+  const video = 'assets/Weixin Videos 01.mp4';
+  await assert.rejects(openfilm.run('video', { prompt: 'Make a clip', video, out: 'scene' }, ctx()), /no assets\/Weixin Videos 01\.mp4/);
+  assert.equal(seen.length, 0);
 });
 
 test('voices are listed with the voice-over model; with no model chosen, the service uses its default', async () => {

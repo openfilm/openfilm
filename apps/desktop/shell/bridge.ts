@@ -286,7 +286,7 @@ const windows = native.platform === 'win32';
 const INSET = 74;
 const INSET_RIGHT = 138;
 
-const host: StudioHost = {
+export const host: StudioHost = {
   version: 1,
   name: 'OpenFilm',
   projectChanged,

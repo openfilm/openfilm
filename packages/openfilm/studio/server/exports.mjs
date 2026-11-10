@@ -85,6 +85,7 @@ import { fcpxmlDocument } from './fcpxml.mjs';
 import { markHevcStraightAlpha } from './hevc-alpha.mjs';
 import { frameSpan, NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
 import { draftsRoot, jianyingClipLook, jianyingDraft } from './jianying.mjs';
+import { jianyingCaptionFonts } from './jianying-captions.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
 import { subtitlesForExport } from './captions.mjs';
 import { burned, even, frameBox, frameRatio, stageOf } from '../../src/burn.mjs';
@@ -120,7 +121,7 @@ export { exportsRoot };
  * @typedef {typeof PROJECT_PARTS[number]} ProjectPart
  * @typedef {VideoAsk | GifAsk | AudioAsk | StillsAsk | PosterAsk | SubtitlesAsk | SlidesAsk | NleAsk | ProjectAsk} ExportSpec
  * @typedef {ExportSpec & { range?: [number, number], ranges?: [number, number][], label?: string, name?: string }} ExportAsk
- * @typedef {import('./film-subtitle.mjs').FilmSubtitleCue} Cue
+ * @typedef {import('./film-subtitle.mjs').FilmSubtitleCue & { draftLook?: import('./jianying-captions.mjs').CaptionLook }} Cue
  * @typedef {import('./film-subtitle.mjs').FilmSubtitleStyle} SubtitleStyle
  * @typedef {'preparing' | 'audio' | 'rendering' | 'encoding' | 'copying' | 'finishing'} ExportPhase
  * @typedef {{ id: string, project: string, name: string, label: string, kind: ExportSpec['kind'], ask: ExportAsk,
@@ -1557,7 +1558,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       if (app) {
         /* the app on Windows reads draft_content.json, on a Mac draft_info.json: the same draft in both */
         /* the subtitles' language: a translation shown alone is in its own; else told from the words (jianying.mjs) */
-        const draft = jianyingDraft(timeline, { app, name: basename(final), folder: final, root: dir, cues, language: shown?.bilingual ? null : shown?.language });
+        const fonts = await jianyingCaptionFonts(cues);
+        const draft = jianyingDraft(timeline, { app, name: basename(final), folder: final, root: dir, cues, fonts, language: shown?.bilingual ? null : shown?.language });
         const info = JSON.stringify(draft.info);
         await writeFile(join(staging, 'draft_info.json'), info, 'utf8');
         await writeFile(join(staging, 'draft_content.json'), info, 'utf8');

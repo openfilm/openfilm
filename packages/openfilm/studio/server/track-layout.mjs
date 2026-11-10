@@ -1,6 +1,13 @@
 // @ts-check
 import { kindOf } from '../../src/film-doc.mjs';
 
+/** Tracks with settings, section attributes or captions are boundaries for automatic organization.
+ * @param {{ locked?: boolean, hidden?: boolean, muted?: boolean, attrs?: Record<string, string>, captions?: unknown }} track
+ */
+export function plainTrack(track) {
+  return !track.locked && !track.hidden && !track.muted && !track.captions && !Object.keys(track.attrs ?? {}).length;
+}
+
 /** Studio's row kind, including audio-only uses of video files.
  * @param {{ clips: readonly { src: string, sound?: boolean }[] }} track
  * @returns {'mg' | 'video' | 'audio'}

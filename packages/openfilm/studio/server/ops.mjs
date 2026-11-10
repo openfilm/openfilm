@@ -6,16 +6,17 @@
  */
 import { FILM_FILE, clipFade, clipIdFor, clipKind, clipSpeed, kindOf } from '../../src/film-doc.mjs';
 import { MOTION_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAnimations, writeMotion } from '../../src/clip-motion.mjs';
+import { plainTrack } from './track-layout.mjs';
 
 /** @typedef {{ src: string, id: string, [field: string]: unknown }} Clip */
 /** @typedef {{ src: string, kind?: 'captions' | 'subtitles', srclang?: string, label?: string }} TrackCaptions */
-/** @typedef {{ clips: Clip[], locked?: boolean, hidden?: boolean, muted?: boolean, captions?: TrackCaptions }} Track */
+/** @typedef {{ clips: Clip[], locked?: boolean, hidden?: boolean, muted?: boolean, attrs?: Record<string, string>, captions?: TrackCaptions }} Track */
 /** @typedef {{ stage?: { w: number, h: number }, tracks: Track[], keyframes?: Record<string, string> }} FilmValue */
 /**
  * @typedef {(
  *   | { op: 'set', clip: string, field: string, value?: unknown }
- *   | { op: 'move', clip: string, at: number, track?: number, newTrack?: number }
- *   | { op: 'insert', clip?: Partial<Clip> & { src: string }, from?: string, at?: number, after?: string, track?: number | { insert: number }, newTrack?: number, link?: string | null }
+ *   | { op: 'move', clip: string, at: number, track?: number, newTrack?: number, newTrackAttrs?: Track['attrs'] }
+ *   | { op: 'insert', clip?: Partial<Clip> & { src: string }, from?: string, at?: number, after?: string, track?: number | { insert: number }, newTrack?: number, newTrackAttrs?: Track['attrs'], link?: string | null }
  *   | { op: 'remove', clip: string }
  *   | { op: 'split', clip: string, at: number, time: [number, number], restTime: [number, number], restId?: string }
  *   | { op: 'split', clip: string, left: Record<string, PropValue>, right: Record<string, PropValue>, rightId?: string }
@@ -23,6 +24,7 @@ import { MOTION_PROPS, animationsOf, motionName, readMotion, shiftMotion, withAn
  *   | { op: 'stage', w: number, h: number }
  *   | { op: 'fields', clip: string, fields: Record<string, unknown> }
  *   | { op: 'track', track: number, field: 'locked' | 'hidden' | 'muted', value: boolean }
+ *   | { op: 'track-layout', at: number, from: string[][], to: string[][] }
  *   | { op: 'reorder', from: number, to: number, clip?: string, below?: string, above?: string }
  *   | { op: 'captions', at: number, captions: TrackCaptions }
  *   | { op: 'uncaptions', src: string }
@@ -59,10 +61,10 @@ function find(/** @type {FilmValue} */ value, /** @type {string} */ id) {
 const usedIds = (/** @type {FilmValue} */ value) => value.tracks.flatMap((track) => track.clips.map((clip) => clip.id));
 
 /** A track index the edit may write to: an existing one, or `newTrack` (a new empty track inserted at that place). */
-function targetTrack(/** @type {FilmValue} */ value, /** @type {number | undefined} */ track, /** @type {number | undefined} */ newTrack) {
+function targetTrack(/** @type {FilmValue} */ value, /** @type {number | undefined} */ track, /** @type {number | undefined} */ newTrack, /** @type {Track['attrs']} */ attrs) {
   if (newTrack != null) {
     if (!Number.isInteger(newTrack) || newTrack < 0 || newTrack > value.tracks.length) throw new EditError(`no place ${newTrack} for a new track`, 'invalid');
-    value.tracks.splice(newTrack, 0, { clips: [] });
+    value.tracks.splice(newTrack, 0, { clips: [], ...(attrs ? { attrs: { ...attrs } } : {}) });
     return newTrack;
   }
   if (track == null) return value.tracks.length ? 0 : (value.tracks.push({ clips: [] }), 0);
@@ -73,6 +75,25 @@ function targetTrack(/** @type {FilmValue} */ value, /** @type {number | undefin
 /** Tracks left with no clips go: a track is its clips (the agent never sees an empty one appear out of an edit). A
  * caption track has none and stays (SPEC §1 Captions). */
 const dropEmptyTracks = (/** @type {FilmValue} */ value) => { value.tracks = value.tracks.filter((track) => track.clips.length || track.captions); };
+
+/** Rearrange one run of ordinary tracks, keeping every clip and all of its fields.
+ * @param {FilmValue} value @param {Extract<Op, { op: 'track-layout' }>} op
+ */
+function applyTrackLayout(value, { at, from, to }) {
+  if (!Number.isInteger(at) || at < 0 || !Array.isArray(from) || !from.length || !Array.isArray(to) || !to.length
+      || to.some((ids) => !Array.isArray(ids) || !ids.length)) throw new EditError('invalid track layout', 'invalid');
+  const tracks = value.tracks.slice(at, at + from.length);
+  const idsOf = (/** @type {Track} */ track) => track.clips.map((clip) => clip.id);
+  if (!tracks.every(plainTrack) || JSON.stringify(tracks.map(idsOf)) !== JSON.stringify(from)) {
+    throw new EditError('the tracks have changed', 'conflict');
+  }
+  const clips = new Map(tracks.flatMap((track) => track.clips.map((clip) => [clip.id, clip])));
+  const ids = to.flat();
+  if (ids.length !== clips.size || new Set(ids).size !== clips.size || ids.some((id) => !clips.has(id))) {
+    throw new EditError('a track layout must keep all its clips', 'invalid');
+  }
+  value.tracks.splice(at, from.length, ...to.map((row) => ({ clips: row.map((id) => /** @type {Clip} */ (clips.get(id))) })));
+}
 
 /** Fields a person sets from Studio, by kind of clip (the rest of a clip is the agent's to write). */
 const SETTABLE = new Set(['at', 'time', 'box', 'size', 'volume', 'speed', 'overrides', 'src']);
@@ -95,7 +116,7 @@ export function applyOps(value, ops) {
         const from = find(value, op.clip);
         if (!(typeof op.at === 'number' && op.at >= 0)) throw new EditError('a move needs at: seconds from 0', 'invalid');
         value.tracks[from.t].clips.splice(from.c, 1);
-        const t = op.track == null && op.newTrack == null ? from.t : targetTrack(value, op.track, op.newTrack);
+        const t = op.track == null && op.newTrack == null ? from.t : targetTrack(value, op.track, op.newTrack, op.newTrackAttrs);
         /** @type {Clip} */
         const moved = { ...from.clip };
         const at = round(op.at);
@@ -137,7 +158,7 @@ export function applyOps(value, ops) {
           if (track) track.clips.push(clip);
           else value.tracks.push({ clips: [clip] });
         } else {
-          const t = targetTrack(value, /** @type {number | undefined} */ (op.track), op.newTrack);
+          const t = targetTrack(value, /** @type {number | undefined} */ (op.track), op.newTrack, op.newTrackAttrs);
           value.tracks[t].clips.push(clip);
           sortTrack(value.tracks[t]);
         }
@@ -186,6 +207,9 @@ export function applyOps(value, ops) {
         else delete track[op.field];
         break;
       }
+      case 'track-layout':
+        applyTrackLayout(value, op);
+        break;
       case 'captions': {
         /* a caption track put in at `at` (SPEC §1 Captions), known by its file */
         const c = op.captions;
@@ -247,7 +271,9 @@ export function applyOps(value, ops) {
         throw new EditError(`unknown operation ${/** @type {{ op?: string }} */ (op).op}`, 'invalid');
     }
   }
-  /* after the whole edit, so every operation in it names tracks as the ones before it left them */
+  /* Organizing tracks keeps every clip's fields and any tracks outside the rearranged runs. */
+  if (ops.every((op) => op.op === 'track-layout')) return value;
+  /* After the whole edit, so every operation in it names tracks as the ones before it left them. */
   dropEmptyTracks(value);
   fitFades(value);
   fitClipLengths(value);

@@ -1,11 +1,12 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { filmHtml } from '../../src/film-doc.mjs';
 import { createExports, framing } from './exports.mjs';
+import { JIANYING_DRAFT_PATH } from './jianying.mjs';
 
 const haveFfmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 const ffmpeg = { skip: !haveFfmpeg, timeout: 180_000 };
@@ -62,7 +63,8 @@ test('a Jianying draft retains untouched sources, full processed video handles, 
   assert.equal(processed.speed, 2);
   const material = info.materials.videos.find((m) => m.id === processed.material_id);
   assert.equal(material.duration, 6_000_000);
-  const before = pixel(material.path, 1), fade = pixel(material.path, 2.1), middle = pixel(material.path, 2.8), after = pixel(material.path, 4.2);
+  const footage = material.path.replace(JIANYING_DRAFT_PATH, folder);
+  const before = pixel(footage, 1), fade = pixel(footage, 2.1), middle = pixel(footage, 2.8), after = pixel(footage, 4.2);
   assert.ok(before[3] > 250 && middle[3] > 250 && after[3] > 250, `both source handles remain: ${before}; ${middle}; ${after}`);
   assert.ok(fade[3] > 20 && fade[3] < 120, `the original cut's fade remains at its source in point: ${fade}`);
   assert.equal(slow.speed, 0.5);
@@ -71,28 +73,45 @@ test('a Jianying draft retains untouched sources, full processed video handles, 
   assert.equal(disabled.volume, 0);
   assert.equal(disabled.last_nonzero_volume, 0.3);
   const moving = info.materials.videos.find((m) => m.id === animated.material_id);
-  const movingAlpha = pixel(moving.path, 2.8)[3];
+  const movingAlpha = pixel(moving.path.replace(JIANYING_DRAFT_PATH, folder), 2.8)[3];
   assert.ok(movingAlpha > 125 && movingAlpha < 145, `CSS motion stays on film time after native speed is restored: ${movingAlpha}`);
   const original = info.materials.videos.find((m) => m.path.endsWith('source.mp4'));
-  assert.deepEqual(readFileSync(original.path), readFileSync(join(root, 'source.mp4')));
+  assert.deepEqual(readFileSync(original.path.replace(JIANYING_DRAFT_PATH, folder)), readFileSync(join(root, 'source.mp4')));
   const voice = info.materials.audios.find((m) => m.path.endsWith('voice.wav'));
-  assert.deepEqual(readFileSync(voice.path), readFileSync(join(root, 'voice.wav')));
+  assert.deepEqual(readFileSync(voice.path.replace(JIANYING_DRAFT_PATH, folder)), readFileSync(join(root, 'voice.wav')));
   assert.equal(voice.duration, 6_000_000);
 });
 
-test('Jianying keeps a mask, the edit timing and the complete original by default', ffmpeg, async () => {
+test('Jianying keeps a mask, the complete original and editable caption styles by default', ffmpeg, async () => {
   const root = join(scratch, 'masked-original'); mkdirSync(root);
   const original = join(root, 'source.mp4');
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=160x90:rate=30:duration=6',
     '-f', 'lavfi', '-i', 'sine=frequency=220:duration=6', '-shortest', '-pix_fmt', 'yuv420p', original]);
+  writeFileSync(join(root, 'caption.vtt'), `WEBVTT
+
+STYLE
+::cue { --size: 5cqmin; --weight: 700; --color: #ff8000; --stroke: 0.055em; --stroke-color: rgba(0,0,0,0.84); }
+::cue(#c2) { --size: 8cqmin; --italic: italic; }
+
+c1
+00:00:01.000 --> 00:00:02.000
+First
+
+c2
+00:00:02.000 --> 00:00:03.000 align:end
+Second
+`);
   writeFileSync(join(root, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+    { clips: [], captions: { src: 'caption.vtt' } },
     { clips: [
       { id: 'mask', src: 'source.mp4', at: 1, time: [2, 4], speed: 2,
         style: 'mask-image: radial-gradient(circle 28px at center, black 100%, transparent 100%)' },
       { id: 'plain', src: 'source.mp4', at: 2, time: [4, 6], speed: 2 },
     ] },
   ] }));
-  const folder = dirname(await exported(root, { kind: 'nle', format: 'jianying', fps: 30, subtitles: false }));
+  const beforeRename = dirname(await exported(root, { kind: 'nle', format: 'jianying', fps: 30, subtitles: false }));
+  const folder = `${beforeRename} renamed`;
+  renameSync(beforeRename, folder);
   const info = JSON.parse(readFileSync(join(folder, 'draft_info.json'), 'utf8'));
   const [mask, plain] = info.tracks.find((t) => t.type === 'video').segments;
   const rendered = info.materials.videos.find((m) => m.id === mask.material_id);
@@ -100,17 +119,28 @@ test('Jianying keeps a mask, the edit timing and the complete original by defaul
   assert.deepEqual(mask.target_timerange, { start: 1_000_000, duration: 1_000_000 });
   assert.deepEqual(mask.source_timerange, { start: 0, duration: 1_000_000 });
   assert.equal(rendered.duration, 1_000_000, 'only the used masked range is drawn');
-  const rgba = execFileSync('ffmpeg', ['-v', 'error', '-i', rendered.path, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
+  assert.equal(rendered.path, `${JIANYING_DRAFT_PATH}/media/mask.mov`);
+  assert.equal(untouched.path, `${JIANYING_DRAFT_PATH}/media/source.mp4`);
+  const meta = JSON.parse(readFileSync(join(folder, 'draft_meta_info.json'), 'utf8'));
+  assert.ok(meta.draft_materials[0].value.some((m) => m.file_Path === './media/mask.mov'));
+  const rgba = execFileSync('ffmpeg', ['-v', 'error', '-i', rendered.path.replace(JIANYING_DRAFT_PATH, folder), '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
   assert.equal(rgba[3], 0, 'the corner outside the mask is transparent even on the bottom track');
   assert.equal(rgba[(45 * 160 + 80) * 4 + 3], 255, 'the middle of the mask remains visible');
   assert.equal(plain.speed, 2);
   assert.deepEqual(plain.source_timerange, { start: 4_000_000, duration: 2_000_000 });
-  assert.deepEqual(readFileSync(untouched.path), readFileSync(original));
+  assert.deepEqual(readFileSync(untouched.path.replace(JIANYING_DRAFT_PATH, folder)), readFileSync(original));
   assert.equal(untouched.duration, 6_000_000);
   const sound = info.tracks.find((t) => t.type === 'audio').segments[0];
   assert.deepEqual(sound.target_timerange, mask.target_timerange);
   assert.deepEqual(sound.source_timerange, { start: 2_000_000, duration: 2_000_000 });
   assert.equal(sound.speed, 2);
+  const [first, second] = info.materials.texts;
+  const glyphs = [first, second].map((line) => JSON.parse(line.content).styles[0]);
+  assert.deepEqual(glyphs.map((s) => [s.size, s.bold, s.italic]), [[7.2, true, false], [11.52, true, true]]);
+  assert.deepEqual(glyphs[0].fill.content.solid.color, [1, 128 / 255, 0]);
+  assert.equal(glyphs[0].strokes[0].content.solid.alpha, 0.84);
+  assert.equal(second.alignment, 2);
+  assert.deepEqual(info.tracks.find((t) => t.type === 'text').segments.map((s) => s.target_timerange.start), [1_000_000, 2_000_000]);
 });
 
 test('Jianying exports native controls for opacity, rotation and a hard rectangle mask', ffmpeg, async () => {

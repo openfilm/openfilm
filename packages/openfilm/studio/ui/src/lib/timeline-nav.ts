@@ -112,6 +112,18 @@ export function planNudge(model: EditModel, ids: readonly string[], frames: numb
   return plan?.ops.length ? plan : null;
 }
 
+/** Overwrite on the next visible track at the same time, including when the main-track magnet is on. */
+export function planOverwriteDown(model: EditModel, tracks: readonly TimelineTrack[], id: string): EditPlan | null {
+  const from = model.find((track) => track.clips.some((clip) => clip.id === id));
+  if (!from || from.locked || from.captions) return null;
+  const target = tracks.find((row) => row.docIndex != null && row.docIndex > from.index && !row.folded);
+  if (!target || target.docIndex == null || target.locked || target.captions || target.incomplete
+      || (target.role === 'audio') !== (from.role === 'audio')) return null;
+  if (tracks.some((row) => row.docIndex === target.docIndex && row.blocks.some((block) => block.noLength))) return null;
+  const clip = from.clips.find((clip) => clip.id === id)!;
+  return planMove(model, { ids: [id], to: new Map([[id, target.docIndex]]), mode: 'overwrite', deltaMs: 0, pointerMs: clip.startMs });
+}
+
 export type ClipsOf = readonly { clips: readonly { id: string }[] }[];
 
 /**

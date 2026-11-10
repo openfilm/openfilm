@@ -21,7 +21,7 @@
  */
 import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { clipKind, clipSpan, kindOf, soundRole } from '../../src/film-doc.mjs';
+import { clipKind, clipSpan, declarations, kindOf, soundRole } from '../../src/film-doc.mjs';
 import { probe } from './derived.mjs';
 import { readProjectFilm } from './film.mjs';
 import { HttpError, json, readJson } from './http.mjs';
@@ -31,7 +31,7 @@ import { writeAtomic } from './atomic.mjs';
 import { inProject } from './files.mjs';
 import { alignTranslation, segmentLine, subtitleEnd, umIsWord } from './subtitle-segments.mjs';
 import { readTranscript, setLine, transcriptIsCurrent, translationsOf, writeTranscript } from './transcripts.mjs';
-import { cuePlain, readVtt } from '../../src/captions.mjs';
+import { cssRules, cuePlain, cueSettings, readVtt } from '../../src/captions.mjs';
 
 export { spokenLines, stripAudioTags } from './transcripts.mjs';
 export { SUBTITLE_SEGMENT_RULES } from './subtitle-segments.mjs';
@@ -499,16 +499,32 @@ async function captionTrackCues(root, timelineOnly) {
   const tracks = /** @type {import('../../src/film-doc.d.mts').FilmDoc | null} */ (film.doc)?.tracks ?? [];
   const visible = tracks.flatMap((t) => (t.captions && !t.hidden ? [t.captions.src] : []));
   if (timelineOnly) {
-    return (await Promise.all(visible.map((src) => captionFileCues(root, src)))).flatMap((cues) => cues ?? [])
+    return (await Promise.all(visible.map((src) => captionFileCues(root, src, true)))).flatMap((cues) => cues ?? [])
       .sort((a, b) => a.startMs - b.startMs);
   }
   return visible[0] ? captionFileCues(root, visible[0]) : null;
 }
 
-/** @param {string} root @param {string} src */
-async function captionFileCues(root, src) {
+/** @param {string} root @param {string} src @param {boolean} [withLook] */
+async function captionFileCues(root, src, withLook = false) {
   const file = inProject(root, src);
   const text = file ? await readFile(file, 'utf8').catch(() => null) : null;
   if (text == null) return null;
-  return readVtt(text).cues.map((c) => ({ startMs: Math.round(c.start * 1000), durMs: Math.round((c.end - c.start) * 1000), text: cuePlain(c.text).trim() }));
+  const vtt = readVtt(text);
+  const base = new Map();
+  /** @type {Map<string, Map<string, string>>} */
+  const overrides = new Map();
+  if (withLook) for (const { prelude, block } of cssRules(vtt.styles.join('\n'))) {
+    const selector = prelude.trim();
+    const id = /^::cue\(\s*#((?:\\.|[^\s)])+)\s*\)$/.exec(selector)?.[1]?.replace(/\\(.)/g, '$1');
+    if (selector !== '::cue' && !id) continue;
+    const rule = id ? overrides.get(id) ?? new Map() : base;
+    for (const [key, value] of declarations(block)) rule.set(key, value);
+    if (id) overrides.set(id, rule);
+  }
+  return vtt.cues.map((c) => {
+    const own = overrides.get(c.id);
+    return { startMs: Math.round(c.start * 1000), durMs: Math.round((c.end - c.start) * 1000), text: cuePlain(c.text).trim(),
+      ...(withLook ? { draftLook: { css: Object.fromEntries([...base, ...(own ?? [])]), align: cueSettings(c.settings).align } } : {}) };
+  });
 }

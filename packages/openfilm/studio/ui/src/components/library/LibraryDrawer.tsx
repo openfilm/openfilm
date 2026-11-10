@@ -93,11 +93,12 @@ export interface LibraryActions {
 /** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
 export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, showSkills, under = 0, shown: isShown = true }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, showSkills, under = 0, shown: isShown = true }: {
   media: React.ReactNode;
   /** the project's own media, or Saved */
   mediaScope: 'project' | 'saved';
   onMediaScope: (next: 'project' | 'saved') => void;
+  mediaRequest?: number;
   actions: LibraryActions;
   tried?: string | null;
   templateStatus: Partial<Record<string, 'failed'>>;
@@ -221,6 +222,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, actions, tried,
     setSkillOpen(showSkills.name ?? null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSkills?.n]);
+  React.useEffect(() => {
+    if (mediaRequest != null && cat !== 'media') show('media');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaRequest]);
   const fold = () => { SHOWN.folded = !folded; setFolded(!folded); };
   const bar = useSideways();
   const [rail, setRail] = React.useState(railWidth);

@@ -44,7 +44,6 @@ import {
   VolumeX,
   Waves,
   Layers,
-  FolderOpen,
   ChevronLeft,
   Link2,
   Link2Off,
@@ -119,7 +118,7 @@ import { STUDIO_REF_TYPE, type StudioRef } from '@/lib/host';
 import { orderedRange, rangeLabel, type FilmRange } from '@/lib/studio-refs';
 import { draftNumbersOf, sameClip, type ChatPoint, type DraftMarks } from '@/lib/chat-marks';
 import { formatRulerLabel, formatTimecode, frameAt, frameMs, secondFrames, snapToFrame, stepFrames, useTimecodeFps } from '@/lib/timecode';
-import { planNudge, sideTargets, splitAllTargets, splitTargets } from '@/lib/timeline-nav';
+import { planNudge, planOverwriteDown, sideTargets, splitAllTargets, splitTargets } from '@/lib/timeline-nav';
 import {
   VIEW_SPAN_EMPTY_MS,
   VIEW_SPAN_MIN_MS,
@@ -578,9 +577,10 @@ export interface TimelineProps {
   /** The rows, top to bottom. Empty before the film has anything — the timeline is still there. */
   tracks: readonly TimelineTrack[];
   /** Entries put first on the menu of the clips right-clicked (an app Studio is embedded in adds its own). */
-  blockMenuExtra?: (blocks: readonly TimelineBlock[]) => ContextMenuEntry[];
+  blockMenuExtra?: (blocks: readonly TimelineBlock[], clicked?: TimelineBlock) => ContextMenuEntry[];
   /** The menu of a track's head (right-clicked); without entries the head has no menu. */
   trackMenuExtra?: (track: TimelineTrack) => ContextMenuEntry[];
+  onOrganizeTracks?: () => void;
   /** The media files whose words the film's captions come from (a voice with its transcript): their clips say so by their name. */
   transcribed?: ReadonlySet<string>;
   /**
@@ -778,6 +778,7 @@ export interface TimelineCommands {
   cut: () => void;
   /** ⌥← / ⌥→: move the selected clips `frames` frames, stopping against a clip in the way. */
   nudge: (frames: number) => void;
+  overwriteTrackDown: () => void;
   /** ⇧Z: the whole film in view. */
   zoomFit: () => void;
   /** The targeted track (film.html index): the one last pressed; null when none is. */
@@ -963,6 +964,7 @@ export const Timeline = React.memo(function Timeline({
   tracks,
   blockMenuExtra,
   trackMenuExtra,
+  onOrganizeTracks,
   transcribed,
   captionPick,
   onReferBlocks,
@@ -2534,8 +2536,9 @@ export const Timeline = React.memo(function Timeline({
     setMenu({ x: e.clientX, y: e.clientY, blocks: picked, lane: null, atMs: msAtClientX(e.clientX), clicked: block });
   }, [selected, tracks, setSelected, withLinked, msAtClientX]);
 
-  const openLaneMenu = React.useCallback((e: React.MouseEvent, lane: string) => {
+  const openLaneMenu = React.useCallback((e: React.MouseEvent, lane: string | null) => {
     e.preventDefault();
+    e.stopPropagation();
     const row = tracks.find((tr) => tr.lane === lane);
     const el = scrollRef.current;
     const exactMs = el && pxPerMs > 0 ? Math.max(0, (e.clientX - el.getBoundingClientRect().left + el.scrollLeft) / pxPerMs) : 0;
@@ -2546,8 +2549,18 @@ export const Timeline = React.memo(function Timeline({
     });
   }, [msAtClientX, tracks, pxPerMs]);
 
-  /* a track's head: the app's entries (a reference in its chat) */
-  const headEntries = React.useCallback((track: TimelineTrack): ContextMenuEntry[] => trackMenuExtra?.(track) ?? [], [trackMenuExtra]);
+  const withTrackOrganizer = React.useCallback((entries: ContextMenuEntry[]): ContextMenuEntry[] => {
+    if (!onOrganizeTracks) return entries;
+    return [
+      ...entries,
+      ...(entries.length ? [{ id: 'organize-sep', separator: true } as const] : []),
+      { id: 'organize-tracks', label: t('timeline.organizeTracks'), icon: <Layers size={14} />, onSelect: onOrganizeTracks },
+    ];
+  }, [onOrganizeTracks, t]);
+  const headEntries = React.useCallback((track: TimelineTrack): ContextMenuEntry[] => {
+    const entries = trackMenuExtra?.(track) ?? [];
+    return track.docIndex == null ? entries : withTrackOrganizer(entries);
+  }, [trackMenuExtra, withTrackOrganizer]);
   /* the menu of the whole track, when there is anything on it (else the browser's own) */
   const openHeadMenu = React.useCallback((e: React.MouseEvent, track: TimelineTrack) => {
     if (!headEntries(track).length) return;
@@ -3727,11 +3740,20 @@ export const Timeline = React.memo(function Timeline({
         const plan = planNudge(modelRef.current, ids, frames, switchesOf(prefsRef.current));
         if (plan) void runPlan(plan, 'history.stepMove');
       },
+      overwriteTrackDown: () => {
+        if (inHandRef.current) return;
+        const clips = picked();
+        if (clips.length !== 1) { setNotice(t('timeline.overwriteDownPickOne')); return; }
+        const clip = clips[0]!;
+        const plan = clip.loc && clip.clipId && !clip.noLength ? planOverwriteDown(modelRef.current, tracks, clip.clipId) : null;
+        if (plan) void runPlan(plan, 'settings.shortcuts.actions.overwrite-track-down');
+        else setNotice(t('timeline.overwriteDownUnavailable'));
+      },
       zoomFit: () => zoomToStable(ZOOM_DEFAULT, { scroll: 0 }),
       target: () => tracks.find((tr) => tr.lane === targetLaneRef.current)?.docIndex ?? null,
     };
     return () => { commandsRef.current = null; };
-  }, [commandsRef, tracks, rippleTrimToPlayhead, closeGap, linkBlocks, unlinkBlocks, togglePref, withLinked, runSplit, onCopy, magnetRemove, runPlan, zoomToStable]);
+  }, [commandsRef, tracks, rippleTrimToPlayhead, closeGap, linkBlocks, unlinkBlocks, togglePref, withLinked, runSplit, onCopy, magnetRemove, runPlan, zoomToStable, t]);
 
   /** A fade's entry for a clip's edge: put there at its default length, in one step. */
   const transitionEntries = React.useCallback((cut: CutRef, kinds: readonly TransitionKind[]): ContextMenuEntry[] => kinds.map((kind) => ({
@@ -3771,9 +3793,9 @@ export const Timeline = React.memo(function Timeline({
       if (captionRow && onAddCaption) {
         const at = menu.atMs;
         entries.push({ id: 'add-caption', label: t('captionTrack.addHere'), icon: <Plus size={14} />, disabled: laneLocked, onSelect: () => { void onAddCaption(captionRow.src, at).then((err) => { if (err) setDropError(err); }); } });
-        return entries;
+        return withTrackOrganizer(entries);
       }
-      if (onPaste) {
+      if (onPaste && menu.lane) {
         entries.push({
           id: 'paste',
           label: t('timeline.menuPaste'),
@@ -3805,7 +3827,7 @@ export const Timeline = React.memo(function Timeline({
           onSelect: () => { void runPlan(planCloseTrackGaps(modelRef.current, doc, switchesOf(prefsRef.current)), 'history.stepGapsClosed'); },
         });
       }
-      return entries;
+      return withTrackOrganizer(entries);
     }
 
     const pickedLocked = picked.some((b) => (
@@ -3815,14 +3837,7 @@ export const Timeline = React.memo(function Timeline({
     const spans = (b: TimelineBlock) => nowMs > b.startMs + MIN_BLOCK_MS && nowMs < b.endMs - MIN_BLOCK_MS;
     const canSplit = Boolean(onSplit && !pickedLocked && picked.some((b) => (b.loc || b.cue) && spans(b)));
     const out: ContextMenuEntry[] = [];
-    const clicked = menu.clicked;
-    if (clicked && onEnterCompound && compoundFolder(clicked.src)) {
-      out.push({
-        id: 'enter-compound', label: t('timeline.menuEnterCompound'), icon: <FolderOpen size={14} />,
-        onSelect: () => onEnterCompound(clicked),
-      });
-    }
-    const extra = blockMenuExtra?.(picked) ?? [];
+    const extra = blockMenuExtra?.(picked, menu.clicked) ?? [];
     if (extra.length) out.push(...extra, { id: 'extra-sep', separator: true });
 
     if (one && onSplit) {
@@ -4035,7 +4050,7 @@ export const Timeline = React.memo(function Timeline({
     menu, t, keyHint, onSplit, onDetachAudio, onRemove, onRemoveMany, onCopy, onPaste, onExportBlock, mediaTrouble, relinkCandidates,
     onRelink, hasClipboard, runSplit, removeMany, rippleRemove, magnetRemove, onEditOps, onAddCaption, tracks, blockMenuExtra, headEntries, withLinked,
     runPlan, closeGapOn, rippleTrimToPlayhead, linkBlocks, unlinkBlocks, transitions, onTransition, onPickTransition, transitionEntries,
-    speedOn, selectedKey, onEditBlocks, onDuplicate, onCompound, onUncompound, onEnterCompound,
+    speedOn, selectedKey, onEditBlocks, onDuplicate, onCompound, onUncompound, withTrackOrganizer,
   ]);
 
   inHandRef.current = Boolean(drag.preview || assetHint || marquee || rangeDraft || referDraft || scrubbing || laneOrder || fadeDrag || volumeDrag || transitionDrag);
@@ -4110,7 +4125,6 @@ export const Timeline = React.memo(function Timeline({
             <Scissors size={16} />
           </ToolButton>
         ) : null}
-
         {/* the middle is for status: "Editing source…" and errors (not among the tools, where it would look like one) */}
         <div className="flex min-w-0 flex-1 items-center justify-center">
           {crumb && !(dropBusy || drag.saving || dropError || drag.error || notice) ? (
@@ -4319,6 +4333,7 @@ export const Timeline = React.memo(function Timeline({
           <div
             ref={scrollRef}
             onScroll={onScroll}
+            onContextMenu={onOrganizeTracks && hasLanes ? (e) => openLaneMenu(e, null) : undefined}
             /* capture phase: a press on the playhead line goes to the scrub before clips and marquee (grabPlayhead);
                move / leave only manage the cursor */
             onPointerDownCapture={grabPlayhead}

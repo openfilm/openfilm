@@ -4,6 +4,35 @@ import {
   canvasId, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modesFor, nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
 } from './canvas.ts';
 
+test('a first-frame model with mixed references can send a lone reference video from canvas', () => {
+  const spec = { frames: 'first' as const, refs: 9, clip: true, voice: true, seconds: [5, 30] as [number, number], referenceMaxSeconds: 15 };
+  const node = { id: 'v', make: 'video' as const, x: 0, y: 0, prompt: 'Keep the camera move', opts: { sec: 22 } };
+  const clip = { from: 'v1', media: 'video' as const, path: 'assets/source video.mp4' };
+  assert.deepEqual(modesFor(spec), ['text', 'omni', 'first', 'refs']);
+  assert.deepEqual(makeRequest(node, [clip], 'edit', spec), {
+    verb: 'video', unused: 0,
+    args: { out: 'edit', prompt: 'Keep the camera move', duration: '15', video: 'assets/source video.mp4' },
+  });
+  assert.equal(makeRequest(node, [], 'edit', spec).args.duration, '22');
+});
+
+test('a saved mixed-reference node submits every supported wired reference in its own media order', () => {
+  const spec = { refs: 10, clip: 5, voice: 5, frames: true };
+  const node = { id: 'make', make: 'video' as const, x: 0, y: 0, prompt: 'Use the references', opts: { mode: 'omni' as const } };
+  const inputs = [
+    { from: 'photo', media: 'image', path: 'assets/character.jpg' },
+    { from: 'a', media: 'video', path: 'assets/a.mp4' },
+    { from: 'voice', media: 'audio', path: 'assets/voice.wav' },
+    { from: 'b', media: 'video', path: 'assets/b.mp4' },
+  ] as const;
+  const result = makeRequest(node, inputs, 'scene', spec);
+  assert.equal(result.unused, 0);
+  assert.equal(result.args['first-frame'], undefined);
+  assert.deepEqual(result.args.video, ['assets/a.mp4', 'assets/b.mp4']);
+  assert.deepEqual(result.args['input-reference'], ['assets/character.jpg']);
+  assert.equal(result.args.voice, 'assets/voice.wav');
+});
+
 test('a board as sent is read node by node: notes and files, and edges between nodes it has', () => {
   assert.deepEqual(readCanvasDoc({
     nodes: [

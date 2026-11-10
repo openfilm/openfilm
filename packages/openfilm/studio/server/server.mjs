@@ -714,7 +714,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (await markersRoute(req, res, project.path, rest)) return;
     /* its canvas (canvas.mjs): Studio's own board beside the edit */
     if (await canvasRoute(req, res, project.path, rest)) return;
-    if (await canvasWriteRoute(req, res, rest, askAgent)) return;
+    if (await canvasWriteRoute(req, res, rest, askAgent, project.path)) return;
     if (await canvasMadeRoute(req, res, project.path, rest, url)) return;
     if (await projectCharactersRoute(req, res, project.path, rest)) return;
     if (await projectTemplatesRoute(req, res, project.path, rest)) return;

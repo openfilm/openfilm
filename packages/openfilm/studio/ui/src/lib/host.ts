@@ -14,6 +14,7 @@ export interface HostDeveloper { logs: boolean; changes: boolean }
 
 /** The project identity and current folder shared with an embedded chat. */
 export interface HostProject { id: string; name: string; path: string }
+export type HostWritingModel = { agent: HostAgentId; options: Record<string, string | number | boolean> };
 
 export interface StudioHost {
   /** the version of this interface the app speaks */
@@ -42,6 +43,8 @@ export interface StudioHost {
    * (the examples' "Explain how it's made"). Sent only when the person sends it.
    */
   ask?: (request: { text: string; refs: StudioRef[] }) => void;
+  /** The desktop composer's model picker and the options to use for the next canvas writing request. */
+  canvasWriting?: { Picker: React.ComponentType<{ triggerClassName?: string }>; selection: () => HostWritingModel | null };
   /**
    * What is selected in the project shown and where the playhead is, each time either changes (the time a few times
    * a second while playing): what a chat's "@current selection" and "@current time" point at.

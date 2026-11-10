@@ -4,7 +4,7 @@
  */
 import type { ExportJob } from '@/lib/export-jobs';
 import type { SubtitleStyle } from '@/lib/subtitles';
-import { studioHost } from '@/lib/host';
+import { studioHost, type HostWritingModel } from '@/lib/host';
 import { watchStudioVersion } from '@/lib/studio-version';
 
 /** `working`: an agent of the app's chat is working in it right now (it cannot be deleted meanwhile). */
@@ -39,12 +39,13 @@ export type ProjectSettings = { fps?: number; trackNames?: { name: string; index
 export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: string; size: number; mtime: number }[] };
 export type Op =
   | { op: 'set'; clip: string; field: string; value?: unknown }
-  | { op: 'move'; clip: string; at: number; track?: number; newTrack?: number }
-  | { op: 'insert'; clip?: Partial<Clip> & { src: string }; from?: string; at?: number; after?: string; track?: number | { insert: number }; newTrack?: number; link?: string | null }
+  | { op: 'move'; clip: string; at: number; track?: number; newTrack?: number; newTrackAttrs?: Track['attrs'] }
+  | { op: 'insert'; clip?: Partial<Clip> & { src: string }; from?: string; at?: number; after?: string; track?: number | { insert: number }; newTrack?: number; newTrackAttrs?: Track['attrs']; link?: string | null }
   | { op: 'remove'; clip: string }
   | { op: 'split'; clip: string; at: number; time: [number, number]; restTime: [number, number] }
   | { op: 'split'; clip: string; left: Record<string, PropValue>; right: Record<string, PropValue>; rightId?: string }
   | { op: 'track'; track: number; field: 'locked' | 'hidden' | 'muted'; value: boolean }
+  | { op: 'track-layout'; at: number; from: string[][]; to: string[][] }
   | { op: 'reorder'; from: number; to: number; clip?: string; below?: string; above?: string }
   /** a caption track put in at track `at`, known by its WebVTT file (SPEC §1 Captions); `uncaptions` takes one out */
   | { op: 'captions'; at: number; captions: { src: string; kind?: 'captions' | 'subtitles'; srclang?: string; label?: string } }
@@ -212,7 +213,8 @@ export const api = {
   useCanvasCharacter: (project: string, id: string) => call<{ name: string; about?: string; pictures: Array<{ role: string; path: string }> }>(`${p(project)}/canvas-characters/${encodeURIComponent(id)}`, { method: 'POST' }),
   removeCanvasBoard: (id: string, board: string) => call<{ boards: CanvasBoard[] }>(`${p(id)}/canvases/${encodeURIComponent(board)}`, { method: 'DELETE' }).then((r) => r.boards),
   /** a text node's words written by the person's own agent (studio/server/canvas.mjs canvasWriteRoute); 409 without one */
-  canvasWrite: (id: string, prompt: string, inputs: string[]) => call<{ text: string }>(`${p(id)}/canvas-write`, { method: 'POST', json: { prompt, inputs } }),
+  canvasWrite: (id: string, prompt: string, inputs: string[], model?: HostWritingModel, attachments: string[] = []) =>
+    call<{ text: string }>(`${p(id)}/canvas-write`, { method: 'POST', json: { prompt, inputs, model, attachments } }),
   /** the person's canvas templates (studio/server/canvas-templates.mjs): listed, kept from a project's board, laid down on one, removed */
   canvasTemplates: () => call<{ templates: Array<{ id: string; name: string; nodes: number; created: number }> }>('canvas-templates').then((r) => r.templates),
   saveCanvasTemplate: (id: string, name: string, board: { nodes: unknown[]; edges: unknown[] }) =>

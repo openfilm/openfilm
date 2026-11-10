@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyOps } from '../../../server/ops.mjs';
-import type { Op } from '../api.ts';
-import { cutPoints, nextCut, planNudge, sideTargets, splitAllTargets, splitTargets } from './timeline-nav.ts';
+import type { Film, Op } from '../api.ts';
+import { inverse } from '../editor/undo.ts';
+import { cutPoints, nextCut, planNudge, planOverwriteDown, sideTargets, splitAllTargets, splitTargets } from './timeline-nav.ts';
 import type { EditTrack } from './timeline-edit.ts';
 import type { TimelineBlock, TimelineTrack } from './timeline-layout';
 
@@ -66,6 +67,32 @@ const clip = (id: string, s: number, e: number) => ({ id, startMs: s * 1000, end
 const filmOf = (m: EditTrack[]) => ({ tracks: m.map((t) => ({ ...(t.locked ? { locked: true } : {}), clips: t.clips.map((c) => ({ id: c.id, src: `${c.id}.mp4`, ...(c.startMs ? { at: c.startMs / 1000 } : {}), time: [c.inMs / 1000, (c.inMs + c.endMs - c.startMs) / 1000] })) })) });
 const starts = (m: EditTrack[], ops: Op[]) => (applyOps(filmOf(m) as never, ops as never) as { tracks: { clips: { id: string; at?: number }[] }[] }).tracks
   .map((t) => t.clips.map((c) => [c.id, Math.round((c.at ?? 0) * 1000)]));
+
+test('⌥↓ moves a clip onto the main track without shifting its time and keeps both sides of the covered clip', () => {
+  const model = [{ index: 0, clips: [clip('top', 1, 2)] }, { index: 1, clips: [clip('base', 0, 4)] }];
+  const rows = [row(0, [['top', 1, 2]]), row(1, [['base', 0, 4]], { main: true })];
+  assert.deepEqual(starts(model, planOverwriteDown(model, rows, 'top')!.ops), [[['base', 0], ['top', 1000], ['base-b', 2000]]]);
+  assert.equal(planOverwriteDown(model, rows, 'base'), null, 'no track below');
+  assert.equal(planOverwriteDown(model, [rows[0]!, { ...rows[1]!, locked: true }], 'top'), null);
+  assert.equal(planOverwriteDown(model, [rows[0]!, { ...rows[1]!, role: 'audio' }], 'top'), null);
+});
+
+test('undoing a complete overwrite restores the source section and keeps the destination track settings', () => {
+  const model = [
+    { index: 0, clips: [], captions: true },
+    { index: 1, clips: [clip('top', 1, 2)] },
+    { index: 2, clips: [clip('base', 1, 2)] },
+  ];
+  const rows = [row(0, [], { captions: { src: 'words.vtt' } }), row(1, [['top', 1, 2]]), row(2, [['base', 1, 2]], { muted: true })];
+  const before = filmOf(model) as Film;
+  before.tracks[0]!.captions = { src: 'words.vtt', kind: 'captions' };
+  before.tracks[1]!.attrs = { title: 'Overlay' };
+  before.tracks[2]!.muted = true;
+  const ops = planOverwriteDown(model, rows, 'top')!.ops;
+  const after = applyOps(structuredClone(before) as never, ops as never) as Film;
+  assert.deepEqual(after.tracks.map((track) => track.clips.map((c) => c.id)), [[], ['top']]);
+  assert.deepEqual(applyOps(structuredClone(after) as never, inverse(before, after, ops) as never), before);
+});
 
 test('⌥ → moves the selection a frame, on the frame grid, stopping against a clip in the way', () => {
   const m: EditTrack[] = [{ index: 0, clips: [clip('a', 0, 2), clip('b', 3, 4)] }, { index: 1, clips: [clip('c', 2, 3)] }];

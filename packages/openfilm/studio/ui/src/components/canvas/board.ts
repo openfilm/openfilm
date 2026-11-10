@@ -6,11 +6,15 @@
 import React from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import { api } from '@/api';
-import { CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, makeRequest } from '@/lib/canvas';
+import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, makeRequest } from '@/lib/canvas';
 import type { ProvidersState } from '@/lib/providers';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 
 export type UploadStatus = { name: string; kind: WorkspaceResource['kind']; progress: number };
+export function fileCardWidth(file?: WorkspaceResource | null) {
+  return file?.kind === 'audio' ? AUDIO_W : cardWidth(file?.w && file.h ? `${file.w}:${file.h}` : undefined);
+}
+
 export type FileData = { path: string; title?: string; by?: CanvasNode['by']; upload?: UploadStatus };
 export type NoteData = { text: string; by?: CanvasNode['by'] };
 export type FrameData = { label: string; color: GroupColor };
@@ -29,11 +33,11 @@ export function toFlow(doc: CanvasDoc): { nodes: BoardNode[]; edges: Edge[] } {
   const ordered = [...doc.nodes.filter((n) => n.group != null), ...doc.nodes.filter((n) => n.group == null)];
   return {
     nodes: ordered.map((n): BoardNode => {
-      const base = { id: n.id, position: { x: n.x, y: n.y }, ...(n.parent ? { parentId: n.parent } : {}) };
+      const base = { id: n.id, position: { x: n.x, y: n.y }, ...(n.parent ? { parentId: n.parent } : {}), ...(n.z ? { zIndex: n.z } : {}) };
       const by = n.by ? { by: n.by } : {};
       if (n.group != null) return { ...base, type: 'frame', width: n.w ?? 480, height: n.h ?? 320, zIndex: -1, ...GROUP_HELD, data: { label: n.group, color: n.color ?? 'gray' } };
       if (n.make) {
-        const { id: _id, x: _x, y: _y, w: _w, h: _h, parent: _parent, text: _text, group: _group, color: _color, cut: _cut, ...data } = n;
+        const { id: _id, x: _x, y: _y, w: _w, h: _h, z: _z, parent: _parent, text: _text, group: _group, color: _color, cut: _cut, ...data } = n;
         /* sized as resized; else (and on a board from before cards had a height) as its shape draws it */
         const size = n.w != null && n.h != null ? { w: n.w, h: n.h } : makeSize(n.make, n.opts?.ratio);
         return { ...base, type: 'make', width: size.w, height: size.h, data: { ...data, make: n.make } };
@@ -50,7 +54,8 @@ export function toFlow(doc: CanvasDoc): { nodes: BoardNode[]; edges: Edge[] } {
 export function fromFlow(nodes: readonly BoardNode[], edges: readonly Edge[]): CanvasDoc {
   return {
     nodes: nodes.map((n) => {
-      const box = { id: n.id, x: Math.round(n.position.x), y: Math.round(n.position.y), ...(n.parentId ? { parent: n.parentId } : {}) };
+      const box = { id: n.id, x: Math.round(n.position.x), y: Math.round(n.position.y),
+        ...(n.parentId ? { parent: n.parentId } : {}), ...(n.zIndex && n.zIndex > 0 ? { z: n.zIndex } : {}) };
       const w = Math.round(n.width ?? n.measured?.width ?? (n.type === 'note' ? NOTE_W : n.type === 'cut' ? CUT_W : FILE_W));
       const h = () => Math.round(n.height ?? n.measured?.height ?? (n.type === 'note' ? NOTE_H : CARD_H));
       const by = 'by' in n.data && n.data.by ? { by: n.data.by } : {};
@@ -64,6 +69,21 @@ export function fromFlow(nodes: readonly BoardNode[], edges: readonly Edge[]): C
   };
 }
 
+/** Cards without a saved layer are newer than the saved stack and follow document order. */
+export function nextCardLayer(nodes: readonly BoardNode[]) {
+  return Math.max(0, ...nodes.map((node) => node.zIndex ?? 0)) + 1;
+}
+
+export function raiseCards(nodes: BoardNode[], moved: readonly BoardNode[]) {
+  const ids = new Set(moved.filter((node) => node.type !== 'frame').map((node) => node.id));
+  if (!ids.size) return nodes;
+  const defaultLayer = nextCardLayer(nodes);
+  const ordered = nodes.filter((node) => node.type !== 'frame').sort((a, b) =>
+    Number(ids.has(a.id)) - Number(ids.has(b.id)) || (a.zIndex ?? defaultLayer) - (b.zIndex ?? defaultLayer));
+  const layers = new Map(ordered.map((node, index) => [node.id, index + 1]));
+  return nodes.map((node) => node.type === 'frame' ? node : { ...node, zIndex: layers.get(node.id) });
+}
+
 /** A node's box on the board, whatever group it is in, as it is drawn. */
 export function boxOf(node: BoardNode, byId: ReadonlyMap<string, BoardNode>): { x: number; y: number; w: number; h: number } {
   const parent = node.parentId ? byId.get(node.parentId) : undefined;
@@ -72,8 +92,7 @@ export function boxOf(node: BoardNode, byId: ReadonlyMap<string, BoardNode>): { 
 }
 
 /**
- * A group is moved by its title bar and picked by a click on it, never by a selection box: a box drawn inside a group
- * picks what is in it, as anywhere on the board.
+ * A group is held by its title bar. The board handles marquee selection of whole groups separately from their cards.
  */
 export const GROUP_HELD = { selectable: false, dragHandle: '.cv-group-head' } as const;
 
@@ -319,6 +338,7 @@ export interface Board {
   bring: (id: string, files: File[]) => void;
   uploading?: (id: string) => UploadStatus | undefined;
   shown?: boolean;
+  showComposer?: (id: string) => void;
   reportError?: (error: string) => void;
   /** a picture's background taken out by the person's service: a new picture beside it */
   cutout: (id: string, path: string) => void;
@@ -375,7 +395,8 @@ export interface Board {
   /** a picture changed in part (brushed or drawn on, then said what to): the editor opened on it */
   redraw: (id: string, path: string) => void;
   /** a text node's words written by the person's agent from what they ask and what is wired in (in the app with a chat); why not, if not */
-  write?: (id: string, ask: string) => Promise<string | null>;
+  write?: (id: string, ask: string, attachments: string[]) => Promise<string | null>;
+  uploadWritingFiles?: (files: File[], onProgress?: (index: number, progress: number, path?: string) => void) => Promise<string[]>;
   /** a board only looked at (an example's): nothing on it is changed, made or wired */
   readOnly?: boolean;
 }

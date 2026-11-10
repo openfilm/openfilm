@@ -54,7 +54,7 @@ import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.m
 /**
  * An option: `value` names what it takes in the help (none: a switch). `path`: a project file it names, which must be
  * a recording (`speech`) or a picture.
- * @typedef {{ value?: string, required?: boolean, repeat?: boolean, choices?: string[], min?: number, max?: number,
+ * @typedef {{ value?: string, required?: boolean, repeat?: boolean | 'many', choices?: string[], min?: number, max?: number,
  *   integer?: boolean, default?: string | number, alias?: string, path?: 'speech' | 'picture' | 'clip' }} Option
  * @typedef {{ help: string, dir?: string, timeoutSec: number, options: Record<string, Option> }} VerbSpec
  */
@@ -117,14 +117,14 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
       frames: { value: 'n', min: 2, max: 16, integer: true, default: 9 }, 'frame-ms': { value: 'ms', min: 20, max: 2000, integer: true, default: 200 } },
   },
   video: {
-    help: 'Make one video clip. --resolution 480p to 4K, as the model makes them (720p, or its nearest, when not asked): a bigger one costs more. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one. A person who speaks on screen speaks in the clip, the voice and the lips made together, never a voice laid over a clip made without it: write the words in the prompt, in quotes, and keep the clip\'s own sound (--voice gives a recording of whose voice it is, the same across clips); or give a recording with --audio and the lips follow it word for word (at fal: omnihuman-v2 or kling-avatar-v2 from a picture of the person, --first-frame; sync-3 for a clip, --video). --video makes it from a clip in the project, trimmed to the part to make again (references/ is the place for another\'s footage); what it keeps is the model\'s way, chosen with --model: at fal, kling-o3-edit changes what the prompt names and keeps the rest; kling-o3-reference makes a new clip with its camera and motion; seedance-2.0 takes it as a reference (@Video1 in the prompt); luma-ray-3.2 redraws it, its performance kept; minimax-h3-max-recast puts the people of --input-reference in place of its own, one picture each; at OpenRouter, a Seedance model takes it as a reference too, given a web address (OpenFilm\'s service gives one; your own key cannot); at Google and OpenRouter, gemini-omni-1.2-flash edits it as the prompt says, or continues it when the prompt asks (a clip of 15 s at most to edit, 30 s in all once continued; --duration: the 3 to 10 s a continuation adds, else the clip\'s own length).',
+    help: 'Make one video clip. --resolution 480p to 4K, as the model makes them (720p, or its nearest, when not asked): a bigger one costs more. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one. A person who speaks on screen speaks in the clip, the voice and the lips made together, never a voice laid over a clip made without it: write the words in the prompt, in quotes, and keep the clip\'s own sound (--voice gives a recording of whose voice it is, the same across clips); or give a recording with --audio and the lips follow it word for word (at fal: omnihuman-v2 or kling-avatar-v2 from a picture of the person, --first-frame; sync-3 for a clip, --video). --video makes it from a clip in the project, trimmed to the part to make again (references/ is the place for another\'s footage); what it keeps is the model\'s way, chosen with --model: at fal, kling-o3-edit changes what the prompt names and keeps the rest; kling-o3-reference makes a new clip with its camera and motion; seedance-2.0 takes it as a reference (@Video1 in the prompt); luma-ray-3.2 redraws it, its performance kept; minimax-h3-max-recast puts the people of --input-reference in place of its own, one picture each; at OpenRouter, Seedance and HeyGen Video take it as a reference too, given a web address (OpenFilm\'s service gives one; your own key cannot); at Google and OpenRouter, gemini-omni-1.2-flash edits it as the prompt says, or continues it when the prompt asks (a clip of 15 s at most to edit, 30 s in all once continued; --duration: the 3 to 10 s a continuation adds, else the clip\'s own length).',
     dir: 'assets/video', timeoutSec: 1200,
-    options: { out, prompt, force: {}, duration: { value: 'seconds', min: 2, max: 30, integer: true, default: 5 },
-      resolution: { value: 'size', choices: ['480p', '720p', '768p', '1080p', '2K', '4K'] },
+    options: { out, prompt, force: {}, duration: { value: 'seconds', min: 1, max: 30, integer: true, default: 5 },
+      resolution: { value: 'size', choices: ['360p', '480p', '720p', '768p', '1080p', '2K', '4K'] },
       'aspect-ratio': { value: 'ratio', choices: ['16:9', '9:16', '4:3', '3:4', '1:1', '21:9', '9:21', '3:2', '2:3', 'adaptive'] },
       'first-frame': { value: 'path', path: 'picture' }, 'last-frame': { value: 'path', path: 'picture' },
-      'input-reference': { value: 'path', path: 'picture', repeat: true }, video: { value: 'path', path: 'clip' },
-      audio: { value: 'path', path: 'speech' }, voice: { value: 'path', path: 'speech' } },
+      'input-reference': { value: 'path', path: 'picture', repeat: true }, video: { value: 'path', path: 'clip', repeat: 'many' },
+      audio: { value: 'path', path: 'speech' }, voice: { value: 'path', path: 'speech', repeat: 'many' } },
   },
   'web-search': {
     help: 'Search the web (up to 3 --query at once). Returns the pages that match: title, URL and an excerpt of each. web-fetch reads a whole page.',
@@ -249,7 +249,7 @@ export async function checkArgs(root, verb, given) {
       }
       return n;
     });
-    args[name] = option.repeat ? typed : typed[0];
+    args[name] = option.repeat === true || typed.length > 1 ? typed : typed[0];
   }
   for (const [name, option] of Object.entries(spec.options)) {
     if (args[name] === undefined && option.default !== undefined) args[name] = option.default;
@@ -329,6 +329,14 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     throw usage(offered.length ? `--model is one of ${offered.map((m) => m.id).join(', ')} with ${provider.name}` : `${provider.name} names no models for ${verb}`);
   }
   const runModel = model ?? modelFor(settings, provider, verb);
+  if (verb === 'video') {
+    const videoSpec = (offered.find((m) => m.id === runModel) ?? offered[0])?.spec;
+    for (const [flag, count] of /** @type {const} */ ([['video', videoSpec?.clip], ['voice', videoSpec?.voice]])) {
+      const files = args[flag];
+      const max = typeof count === 'number' ? count : 1;
+      if (Array.isArray(files) && files.length > max) throw usage(`--${flag} accepts up to ${max} inputs with this model.`);
+    }
+  }
 
   const spec = VERBS[verb];
   const said = /** @type {string[]} */ ([]);
@@ -590,7 +598,9 @@ export async function catalog(only, { web = false } = {}) {
 /**
  * One question answered by the person's agent's own model, with no chat (an app with a chat, studio-process.mjs):
  * its words, whole. Throws `code: 'no-agent'` when no agent is ready.
- * @typedef {(text: string, signal?: AbortSignal) => Promise<string>} AskAgent
+ * @typedef {{ agent: string, options: Record<string, string | number | boolean> }} WritingModel
+ * @typedef {{ mimeType: string, data: string }} WritingImage
+ * @typedef {(text: string, signal?: AbortSignal, model?: WritingModel, images?: WritingImage[]) => Promise<string>} AskAgent
  */
 
 /** The JSON in an agent's answer: all of it, or from its first `{` to its last `}` when the agent wrapped it in words. */

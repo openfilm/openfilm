@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import openrouter, { polling } from './openrouter.mjs';
+import openrouter, { polling, videoModelSpec } from './openrouter.mjs';
 
 const KEY = 'sk-or-v1-test0123456789';
 /** A fake OpenRouter on 127.0.0.1: `reply` answers each request; `seen` keeps them. */
@@ -185,6 +185,97 @@ test('mischief requires a single first frame, while Grok can also start from tex
   assert.equal(withSound.index[0].hasAudio, true);
 });
 
+test('HeyGen sends video, picture and audio references together and keeps the text and first-frame modes', async () => {
+  const model = 'heygen/heygen-video-1';
+  const video = 'assets/source video.mp4';
+  const picture = 'assets/replacement.png';
+  const voice = 'assets/voice.wav';
+  const files = Object.fromEntries([video, picture, voice].map((p) => [p, Uint8Array.of(1, 2, 3)]));
+  const movie = Buffer.alloc(36);
+  movie.writeUInt32BE(36, 0);
+  movie.write('moov', 4);
+  movie.writeUInt32BE(28, 8);
+  movie.write('mvhd', 12);
+  movie.writeUInt32BE(1000, 28);
+  movie.writeUInt32BE(15267, 32);
+  files[video] = movie;
+  const runCtx = { ...ctx(files, model), root: '', link: async (/** @type {string} */ path) => `https://relay.example/${encodeURIComponent(path)}` };
+  const args = { prompt: 'Keep the camera move and use the person in the reference image', out: 'scene' };
+  seen.length = 0;
+  reply = clip(1);
+  const made = await openrouter.run('video', { ...args, video, 'input-reference': [picture], voice, duration: 22 }, runCtx);
+  const mixed = JSON.parse(seen[0].body);
+  assert.equal(made.receipt.referenceSeconds, 15);
+  assert.equal(mixed.duration, 15);
+  assert.equal(mixed.frame_images, undefined);
+  assert.equal(mixed.generate_audio, undefined);
+  assert.deepEqual(mixed.input_references, [
+    { type: 'video_url', video_url: { url: await runCtx.link(video) } },
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,AQID' } },
+    { type: 'audio_url', audio_url: { url: await runCtx.link(voice) } },
+  ]);
+  seen.length = 0;
+  await openrouter.run('video', { ...args, video }, runCtx);
+  assert.deepEqual(JSON.parse(seen[0].body).input_references.map((r) => r.type), ['video_url']);
+  seen.length = 0;
+  await openrouter.run('video', { ...args, 'first-frame': picture, duration: 22 }, runCtx);
+  assert.equal(JSON.parse(seen[0].body).duration, 22);
+  assert.deepEqual(JSON.parse(seen[0].body).frame_images.map((r) => r.frame_type), ['first_frame']);
+  seen.length = 0;
+  await assert.rejects(openrouter.run('video', { ...args, voice }, runCtx), /needs a reference image or video/);
+  await assert.rejects(openrouter.run('video', { ...args, 'first-frame': picture, 'last-frame': picture }, runCtx), /takes only a first frame/);
+  assert.equal(seen.length, 0);
+});
+
+test('Wan 3.0, Wan 3.0 Prime and H3 submit each connected video, image and audio reference', async () => {
+  const videos = ['assets/a.mp4', 'assets/b.mp4'];
+  const picture = 'assets/character.jpg';
+  const audio = 'assets/voice.wav';
+  const files = Object.fromEntries([...videos, picture, audio].map((path) => [path, Uint8Array.of(1, 2, 3)]));
+  const args = { out: 'scene', prompt: 'Use the character and match the two clips', video: videos, 'input-reference': [picture], voice: audio };
+  reply = clip(1);
+  for (const model of ['alibaba/wan-3.0', 'alibaba/wan-3.0-prime', 'minimax/hailuo-3']) {
+    seen.length = 0;
+    const runCtx = { ...ctx(files, model), root: '', link: async (path) => `https://relay.example/${path}` };
+    assert.ok(videoModelSpec(model, true).clip >= videos.length);
+    assert.equal(videoModelSpec(model).clip, undefined);
+    await openrouter.run('video', args, runCtx);
+    const body = JSON.parse(seen[0].body);
+    assert.equal(body.frame_images, undefined);
+    assert.deepEqual(body.input_references, [
+      ...videos.map((path) => ({ type: 'video_url', video_url: { url: `https://relay.example/${path}` } })),
+      { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AQID' } },
+      { type: 'audio_url', audio_url: { url: `https://relay.example/${audio}` } },
+    ]);
+  }
+});
+
+test('HeyGen relays oversized JPEGs in mixed references and in the first-frame mode', async () => {
+  const video = 'assets/source video.mp4';
+  const photo = 'assets/large reference.jpg';
+  const bytes = Uint8Array.of(1, 2, 3);
+  const model = ctx({ [video]: bytes, [photo]: new Uint8Array(9_568_256) }, 'heygen/heygen-video-1');
+  const linked = [];
+  const runCtx = { ...model, root: '', link: async (/** @type {string} */ path) => {
+    linked.push(path);
+    return `https://relay.example/${encodeURIComponent(path)}`;
+  } };
+  const args = { prompt: 'Use the reference picture', out: 'scene' };
+  reply = clip(1);
+  seen.length = 0;
+  await openrouter.run('video', { ...args, video, 'input-reference': [photo] }, runCtx);
+  assert.deepEqual(linked, [video, photo]);
+  assert.deepEqual(JSON.parse(seen[0].body).input_references[1], {
+    type: 'image_url', image_url: { url: 'https://relay.example/assets%2Flarge%20reference.jpg' },
+  });
+  seen.length = 0;
+  await openrouter.run('video', { ...args, 'first-frame': photo }, runCtx);
+  assert.equal(JSON.parse(seen[0].body).frame_images[0].image_url.url, 'https://relay.example/assets%2Flarge%20reference.jpg');
+  seen.length = 0;
+  await assert.rejects(openrouter.run('video', { ...args, 'input-reference': [photo] }, model), /limits inline images to 5 MB/);
+  assert.equal(seen.length, 0);
+});
+
 test('a person speaks the words of the prompt with the clip\'s own sound: --voice is whose voice, a reference beside the picture; --audio is fal\'s', async () => {
   seen.length = 0;
   reply = clip();
@@ -203,7 +294,8 @@ test('a person speaks the words of the prompt with the clip\'s own sound: --voic
   assert.equal(result.index[0].from.voice, 'assets/audio/vo/voice.wav');
   /* with your own key there is no such address: said, and nothing is sent */
   seen.length = 0;
-  await assert.rejects(openrouter.run('video', { prompt: 'p', voice: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files)), /--voice: Seedance at OpenRouter takes a recording only from a web address.*can't be done here.*pull request/);
+  await assert.rejects(openrouter.run('video', { prompt: 'p', voice: 'assets/audio/vo/voice.wav', out: 'x' }, withLink), /needs a reference image or video/);
+  await assert.rejects(openrouter.run('video', { prompt: 'p', 'first-frame': 'assets/image/host.png', voice: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files)), /--voice: Seedance at OpenRouter takes a recording only from a web address.*can't be done here.*pull request/);
   assert.equal(seen.length, 0);
   await assert.rejects(openrouter.run('video', { prompt: 'p', voice: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files, 'kwaivgi/kling-v3.0-pro')), /Seedance takes one/);
   await assert.rejects(openrouter.run('video', { prompt: 'p', audio: 'assets/audio/vo/voice.wav', out: 'x' }, ctx(files)), /fal's \(OmniHuman, Kling Avatar\)/);

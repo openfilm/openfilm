@@ -15,6 +15,7 @@ import { zipFiles } from './zip.mjs';
 import { launch } from '../../src/host.mjs';
 import { layoutTracks } from '../ui/src/lib/timeline-layout.ts';
 import { filmHtml } from '../../src/film-doc.mjs';
+import { JIANYING_DRAFT_PATH } from './jianying.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 const ffmpeg = { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 };
@@ -1101,7 +1102,7 @@ test('剪映: the same timeline as a draft in 剪映\'s drafts folder, its media
   const materials = new Map([...info.materials.videos, ...info.materials.audios].map((m) => [m.id, m]));
   for (const seg of info.tracks.filter((t) => t.type !== 'text').flatMap((t) => t.segments)) {
     const m = materials.get(seg.material_id);
-    assert.ok(m && existsSync(m.path) && m.path.startsWith(join(folder, 'media')), `${m?.path}`);
+    assert.ok(m?.path.startsWith(`${JIANYING_DRAFT_PATH}/media/`) && existsSync(m.path.replace(JIANYING_DRAFT_PATH, folder)), `${m?.path}`);
   }
   /* the footage plays its own sound at its level, so there is no second clip of it */
   const shot = info.tracks.flatMap((t) => t.segments).find((s) => materials.get(s.material_id)?.path.endsWith('shot one.mp4') && s.clip);

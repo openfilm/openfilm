@@ -12,6 +12,8 @@ export interface CanvasNode {
   /** its card's size on the board, once sized (a file's follows its picture until resized) */
   w?: number;
   h?: number;
+  /** the card's saved stacking layer */
+  z?: number;
   /** a note: what it says */
   text?: string;
   /** a file of the project, project-relative */
@@ -84,7 +86,9 @@ export type VideoMode = typeof VIDEO_MODES[number];
 export interface ModelSpec {
   ratios?: string[]; seconds?: [number, number]; only?: number[]; refs?: number; frames?: boolean | 'first' | 'first-required'; qualities?: string[]; needs?: 'clip' | 'audio';
   /** a clip that takes a recording of whose voice speaks in it, a clip of its own to continue or change */
-  voice?: boolean; clip?: boolean;
+  voice?: boolean | number; voiceNeedsVisual?: boolean; clip?: boolean | number;
+  framedMaxSeconds?: number;
+  referenceMaxSeconds?: number;
   /** a picture's sizes (1k, 2k, 4k) or a clip's resolutions (480p…), as it makes them; a picture with no background */
   sizes?: string[]; transparent?: boolean;
   /** a picture's formats beyond PNG (gif, svg); one redrawn where a mask leaves it clear, or where changes are drawn on it */
@@ -140,7 +144,8 @@ export function readCanvasDoc(raw: unknown): CanvasDoc {
   const ids = new Set<string>();
   for (const n of Array.isArray(doc?.nodes) ? doc.nodes as Array<Record<string, unknown>> : []) {
     if (!n || typeof n.id !== 'string' || ids.has(n.id) || !num(n.x) || !num(n.y)) continue;
-    const box = { id: n.id, x: n.x, y: n.y, ...(num(n.w) ? { w: n.w } : {}), ...(num(n.h) ? { h: n.h } : {}) };
+    const box = { id: n.id, x: n.x, y: n.y, ...(num(n.w) ? { w: n.w } : {}), ...(num(n.h) ? { h: n.h } : {}),
+      ...(num(n.z) && Number.isSafeInteger(n.z) && n.z > 0 ? { z: n.z } : {}) };
     const by = n.by as { agent?: unknown; session?: unknown } | undefined;
     const parent = {
       ...(typeof n.parent === 'string' ? { parent: n.parent } : {}),
@@ -321,17 +326,20 @@ export function inputsChanged(node: CanvasNode, inputs: readonly MakeInput[]): b
 }
 
 /** The lengths a model makes, in seconds, as a range: its own, else the kind's. */
-export function lengthRange(kind: MakeKind, spec?: ModelSpec): [number, number] | null {
+export function lengthRange(kind: MakeKind, spec?: ModelSpec, mode?: VideoMode): [number, number] | null {
   const usual = MAKE_SECONDS[kind];
   if (!usual) return null;
   if (spec?.only?.length) return [Math.min(...spec.only), Math.max(...spec.only)];
-  return spec?.seconds ?? [usual.min, usual.max];
+  const range = spec?.seconds ?? [usual.min, usual.max];
+  const max = mode === 'firstLast' ? spec?.framedMaxSeconds
+    : mode === 'refs' || mode === 'omni' ? spec?.referenceMaxSeconds : undefined;
+  return max ? [range[0], Math.min(range[1], max)] : range;
 }
 
 /** How long a node's media is asked to be: what it asks, else the usual, within what its model makes. */
-export function lengthOf(kind: MakeKind, asked: number | undefined, spec?: ModelSpec): number | null {
+export function lengthOf(kind: MakeKind, asked: number | undefined, spec?: ModelSpec, mode?: VideoMode): number | null {
   const usual = MAKE_SECONDS[kind];
-  const range = lengthRange(kind, spec);
+  const range = lengthRange(kind, spec, mode);
   if (!usual || !range) return null;
   const want = asked ?? usual.default;
   if (spec?.only?.length) return spec.only.reduce((best, n) => (Math.abs(n - want) < Math.abs(best - want) ? n : best));
@@ -362,20 +370,22 @@ export function ratioOf(asked: string | undefined, spec?: ModelSpec): string {
 export function modesFor(spec?: ModelSpec): VideoMode[] {
   if (spec?.needs) return [];
   if (spec?.frames === 'first-required') return ['first'];
-  if (spec?.frames === 'first') return ['text', 'first'];
   const frames = spec?.frames !== false;
   const refs = spec?.refs !== 0;
-  return VIDEO_MODES.filter((m) => m === 'text' || (m === 'first' || m === 'firstLast' ? frames : m === 'refs' ? refs : refs && Boolean(spec?.voice || spec?.clip)));
+  return VIDEO_MODES.filter((m) => m === 'text'
+    || (m === 'first' && frames) || (m === 'firstLast' && frames && spec?.frames !== 'first')
+    || (m === 'refs' && refs) || (m === 'omni' && Boolean(spec?.voice || spec?.clip)));
 }
 
 /**
  * How a node's clip is made: the way it names, when its model makes clips so; else (a board from before, `frames`)
  * between frames; else from the pictures wired in as its model takes them (references, or a first frame), else words.
  */
-export function modeOf(opts: MakeOptions | undefined, spec: ModelSpec | undefined, pictures: number): VideoMode {
+export function modeOf(opts: MakeOptions | undefined, spec: ModelSpec | undefined, pictures: number, hasClip = false, hasSound = false): VideoMode {
   const can = modesFor(spec);
   if (spec?.frames === 'first-required') return 'first';
   if (opts?.mode && can.includes(opts.mode)) return opts.mode;
+  if ((spec?.clip && hasClip) || (spec?.voice && hasSound && (!spec.voiceNeedsVisual || pictures > 0))) return 'omni';
   if (opts?.frames && can.includes('firstLast')) return pictures > 1 ? 'firstLast' : 'first';
   if (!pictures) return 'text';
   return can.includes('refs') ? 'refs' : can.includes('first') ? 'first' : 'text';
@@ -399,7 +409,8 @@ export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: reado
   /* a voice-over: its words spoken in its voice; nothing wired in but words is used */
   if (node.make === 'tts') return { verb: 'tts', args: { out: name, text: words, voice: opts.voice ?? '' }, unused: pictures.length + clips.length + sounds.length };
   const args: Record<string, string | string[]> = { out: name, prompt: words };
-  const seconds = lengthOf(node.make, opts.sec, spec);
+  const videoMode = node.make === 'video' ? modeOf(opts, spec, pictures.length, clips.length > 0, sounds.length > 0) : undefined;
+  const seconds = lengthOf(node.make, opts.sec, spec, videoMode);
   let used = 0;
   if (node.make === 'image') {
     args.ratio = ratioOf(opts.ratio, spec);
@@ -430,17 +441,17 @@ export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: reado
       if (spec.needs === 'audio' && pictures[0]) { args['first-frame'] = pictures[0]; used += 1; }
       else if (spec.refs && pictures.length) { const refs = pictures.slice(0, spec.refs); args['input-reference'] = refs; used += refs.length; }
     } else {
-      const mode = modeOf(opts, spec, pictures.length);
+      const mode = videoMode;
+      const videos = mode === 'omni' ? clips.slice(0, Number(spec?.clip ?? 0)) : [];
+      const audio = mode === 'omni' ? sounds.slice(0, Number(spec?.voice ?? 0)) : [];
       const refs = pictures.slice(0, spec?.refs ?? pictures.length);
       if ((mode === 'first' || mode === 'firstLast') && pictures[0]) {
         args['first-frame'] = pictures[0];
         used += 1;
         if (mode === 'firstLast' && pictures[1]) { args['last-frame'] = pictures[1]; used += 1; }
       } else if ((mode === 'refs' || mode === 'omni') && refs.length) { args['input-reference'] = refs; used += refs.length; }
-      if (mode === 'omni') {
-        if (spec?.voice && sounds[0]) { args.voice = sounds[0]; used += 1; }
-        if (spec?.clip && clips[0]) { args.video = clips[0]; used += 1; }
-      }
+      if (videos.length) { args.video = videos.length === 1 ? videos[0]! : videos; used += videos.length; }
+      if (audio.length) { args.voice = audio.length === 1 ? audio[0]! : audio; used += audio.length; }
     }
   } else if (seconds !== null) args.sec = String(seconds);
   return { verb: node.make, args, unused: pictures.length + clips.length + sounds.length - used };

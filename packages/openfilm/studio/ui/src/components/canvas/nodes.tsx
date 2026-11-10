@@ -8,16 +8,16 @@
  * with it, in a bar over it.
  */
 import React from 'react';
-import { Handle, NodeResizer, NodeToolbar, Position, useStore, type NodeProps } from '@xyflow/react';
+import { Handle, NodeResizeControl, NodeResizer, NodeToolbar, Position, useStore, type NodeProps } from '@xyflow/react';
 import {
   AlignLeft, AudioLines, BookmarkPlus, Bot, Clapperboard, FileQuestion, Film, Image as ImageIcon, Layers, LayoutGrid, Loader2, Mic, Music, PenLine, Play, Plus, Scissors,
   Square, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { CARD_H, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, type CanvasNode, type GroupColor } from '@/lib/canvas';
+import { CARD_H, MAKE_MEDIA, NOTE_H, NOTE_W, type CanvasNode, type GroupColor } from '@/lib/canvas';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Tooltip } from '../Tooltip';
-import { useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode, type UploadStatus } from './board';
+import { fileCardWidth, useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode, type UploadStatus } from './board';
 import { ActionBar, CutPanel, MakePanel, NotePanel } from './panels';
 import { Words, WritingBar, useDraft } from './words';
 import { SoundCard } from './sound';
@@ -30,16 +30,17 @@ export const farSelector = (s: { transform: [number, number, number] }) => s.tra
 export const KIND_ICON = { video: Video, image: ImageIcon, audio: Music, mg: Clapperboard, other: FileQuestion } as const;
 export const MAKE_ICON = { image: ImageIcon, video: Video, sfx: AudioLines, music: Music, tts: Mic } as const;
 const RESIZE_HANDLE = '!h-2 !w-2 !rounded-[2px] !border-0 !bg-[var(--cv-ring)]';
+const CARD_TITLE = 'absolute bottom-full left-0 right-0 z-10 flex h-6 items-center gap-1 text-[13px] leading-5 text-[var(--cv-label)]';
 
 /** A group's tint: its frame's fill and line, its name's chip, by its color (muted, so what is in it leads). */
 export const FRAME_COLOR: Record<GroupColor, { line: string; fill: string; dot: string }> = {
   gray: { line: 'rgba(160,160,170,0.18)', fill: 'var(--cv-group)', dot: '#8a8a90' },
-  red: { line: 'rgba(214,92,84,0.28)', fill: 'rgba(214,92,84,0.07)', dot: '#d65c54' },
-  orange: { line: 'rgba(214,140,80,0.28)', fill: 'rgba(214,140,80,0.07)', dot: '#d68c50' },
-  yellow: { line: 'rgba(200,170,80,0.28)', fill: 'rgba(200,170,80,0.07)', dot: '#c8aa50' },
-  green: { line: 'rgba(96,180,130,0.28)', fill: 'rgba(96,180,130,0.07)', dot: '#60b482' },
-  blue: { line: 'rgba(96,140,230,0.3)', fill: 'rgba(96,140,230,0.07)', dot: '#608ce6' },
-  purple: { line: 'rgba(160,120,230,0.3)', fill: 'rgba(160,120,230,0.07)', dot: '#a078e6' },
+  red: { line: 'rgba(214,92,84,0.28)', fill: 'rgba(214,92,84,0.14)', dot: '#d65c54' },
+  orange: { line: 'rgba(214,140,80,0.28)', fill: 'rgba(214,140,80,0.14)', dot: '#d68c50' },
+  yellow: { line: 'rgba(200,170,80,0.28)', fill: 'rgba(200,170,80,0.14)', dot: '#c8aa50' },
+  green: { line: 'rgba(96,180,130,0.28)', fill: 'rgba(96,180,130,0.14)', dot: '#60b482' },
+  blue: { line: 'rgba(96,140,230,0.3)', fill: 'rgba(96,140,230,0.14)', dot: '#608ce6' },
+  purple: { line: 'rgba(160,120,230,0.3)', fill: 'rgba(160,120,230,0.14)', dot: '#a078e6' },
 };
 
 /** A file's size as its node's name row says it: its pixels, or how long it is. */
@@ -92,7 +93,7 @@ function SideHandle({ id, side, selected }: { id: string; side: 'source' | 'targ
   };
   return (
     <Handle id={out ? 'out' : 'in'} type={side} position={out ? Position.Right : Position.Left}
-      className={`${PLUS} ${out ? '!-right-[34px] before:-left-5 before:-right-9' : '!-left-[34px] before:-left-9 before:-right-5'} ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 hover:opacity-100'}`}
+      className={`${PLUS} ${out ? '!-right-7 before:-left-3.5 before:-right-9' : '!-left-7 before:-left-9 before:-right-3.5'} ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 hover:opacity-100'}`}
       onPointerMove={follow}
       onPointerLeave={(event) => {
         event.currentTarget.style.removeProperty('--cv-side-x');
@@ -103,11 +104,9 @@ function SideHandle({ id, side, selected }: { id: string; side: 'source' | 'targ
         board.sideMenu(id, side, { x: event.clientX, y: event.clientY });
       }}
       title={t(out ? 'canvas.side.out' : 'canvas.side.in')}>
-      <span data-canvas-side-plus="" className={`pointer-events-none absolute inset-0 grid place-items-center rounded-full border transition-[scale,background-color,border-color,color] duration-150 group-hover/side:scale-110 ${selected
-        ? '!border-[var(--cv-edge-lit)] bg-[color-mix(in_srgb,var(--cv-bg)_84%,var(--cv-edge-lit))] text-[var(--cv-ink)] group-hover/side:bg-[color-mix(in_srgb,var(--cv-bg)_72%,var(--cv-edge-lit))]'
-        : '!border-[var(--cv-line-hover)] bg-[var(--cv-bg)] text-[var(--cv-ink-2)] group-hover/side:!border-[var(--cv-ring)] group-hover/side:text-[var(--cv-ink)]'}`}
+      <span data-canvas-side-plus="" className="pointer-events-none absolute inset-0 m-auto grid size-6 place-items-center rounded-full border !border-[var(--cv-line-hover)] bg-[var(--cv-bg)] text-[var(--cv-ink)] transition-[scale] duration-150 group-hover/side:scale-110"
         style={{ translate: 'var(--cv-side-x, 0px) var(--cv-side-y, 0px)' }}>
-        <Plus size={16} strokeWidth={2} />
+        <Plus size={14} strokeWidth={2} className="opacity-85 transition-opacity duration-150 group-hover/side:opacity-100" />
       </span>
     </Handle>
   );
@@ -144,17 +143,20 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
   by?: CanvasNode['by']; note?: React.ReactNode; stack?: number; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
   onRename?: (title: string) => void; pending?: boolean;
 }) {
+  const board = useBoard();
   const far = useStore(farSelector);
+  const resizing = useStore((state) => Boolean(state.nodeLookup.get(id)?.resizing));
   const t = useT();
   const [draft, setDraft] = React.useState<string | null>(null);
   const cancel = React.useRef(false);
   const rename = () => { cancel.current = false; setDraft(title); };
-  const card = `relative h-full w-full overflow-hidden rounded-[12px] border transition-[border-color] duration-150 ${tone === 'quiet' ? 'bg-[var(--cv-card-2)]' : 'bg-[var(--cv-card)]'} ${selected ? '!border-[var(--cv-ring)]' : '!border-[var(--cv-line)] group-hover:!border-[var(--cv-line-hover)]'}`;
+  const card = `relative h-full w-full overflow-hidden rounded-[var(--cv-card-radius)] border transition-[border-color] duration-150 ${tone === 'quiet' ? 'bg-[var(--cv-card-2)]' : 'bg-[var(--cv-card)]'} ${selected ? '!border-[var(--cv-ring)]' : '!border-[var(--cv-card-line)]'}`;
+  const stackBorder = selected ? '!border-[var(--cv-line)]' : '!border-[var(--cv-card-line)]';
   return (
     <div className="group relative h-full w-full">
       {far && draft === null ? null : (
         <div data-canvas-node-header={onRename ? '' : undefined}
-          className={`absolute bottom-full left-0 right-0 z-10 flex h-6 items-center gap-1 text-[13px] leading-5 text-[var(--cv-label)] ${onRename ? 'nopan cursor-grab active:cursor-grabbing' : 'pointer-events-none'} ${stack > 1 ? 'mb-3' : 'mb-0.5'}`}>
+          className={`${CARD_TITLE} ${onRename ? 'nopan cursor-grab active:cursor-grabbing' : 'pointer-events-none'} ${stack > 1 ? 'mb-3' : 'mb-0.5'}`}>
           <Icon size={14} className="shrink-0" />
           {onRename && draft !== null ? (
             <input data-canvas-title="" aria-label={t('canvas.video.rename')} autoFocus maxLength={120}
@@ -188,12 +190,20 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
       {/* more than one version: the others fanned behind it */}
       {stack > 1 ? (
         <>
-          {stack > 2 ? <div className="absolute inset-0 translate-x-[12px] -translate-y-[10px] rotate-[3.5deg] rounded-[12px] border !border-[var(--cv-line)] bg-[var(--cv-card-2)] opacity-60" /> : null}
-          <div className="absolute inset-0 translate-x-[6px] -translate-y-[5px] rotate-[1.75deg] rounded-[12px] border !border-[var(--cv-line)] bg-[var(--cv-card-2)]" />
+          {stack > 2 ? <div className={`absolute inset-0 translate-x-[12px] -translate-y-[10px] rotate-[3.5deg] rounded-[var(--cv-card-radius)] border bg-[var(--cv-card-2)] opacity-60 ${stackBorder}`} /> : null}
+          <div className={`absolute inset-0 translate-x-[6px] -translate-y-[5px] rotate-[1.75deg] rounded-[var(--cv-card-radius)] border bg-[var(--cv-card-2)] ${stackBorder}`} />
         </>
       ) : null}
-      <div className={card}>{children}</div>
+      <div data-canvas-card="" className={card}>{children}</div>
       {!pending ? <Sides id={id} selected={selected} ins={ins} outs={outs} /> : null}
+      {!pending && !board.readOnly && (board.single === id || board.editing === id) ? (
+        <NodeResizeControl position="bottom-right" minWidth={160} minHeight={100} maxWidth={1600} maxHeight={1200}
+          onResizeStart={board.willChange} className={`cv-card-resize nopan z-20 !size-5 touch-none !border-0 !bg-transparent ${resizing ? 'is-resizing' : ''}`}>
+          <span title={t('canvas.resizeCard')} className="grid size-full place-items-center">
+            <span aria-hidden="true" className="size-2.5 rounded-br-[2px] border-b-2 border-r-2 !border-[var(--cv-ring)]" />
+          </span>
+        </NodeResizeControl>
+      ) : null}
     </div>
   );
 }
@@ -219,8 +229,7 @@ function Shown({ id, file, selected, words }: { id: string; file: WorkspaceResou
  */
 function boxStyle(sized: boolean, file: WorkspaceResource | null): React.CSSProperties {
   if (sized) return { width: '100%', height: '100%' };
-  if (file?.kind === 'audio') return { width: 320, height: CARD_H };
-  return { width: cardWidth(file?.w && file.h ? `${file.w}:${file.h}` : undefined), height: CARD_H };
+  return { width: fileCardWidth(file), height: CARD_H };
 }
 
 function UploadPanel({ upload }: { upload: UploadStatus }) {
@@ -300,7 +309,7 @@ export function FileNodeView({ id, data, selected }: NodeProps<FileNode>) {
  * Words on the board ("Text"). New, it is square and offers what to start with: writing in it, or a picture, a clip,
  * music made from it. Written in, it is a box of words; a double click writes in it, clicking away is done.
  */
-export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>) {
+export function NoteNodeView({ id, data, selected, width, height }: NodeProps<NoteNode>) {
   const t = useT();
   const board = useBoard();
   const n = useNumber(id);
@@ -318,7 +327,7 @@ export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>
   /* to write in: a box of words (a new, square one shrinks to it) */
   const write = () => {
     if (board.readOnly) return;
-    if (height === CARD_H) board.resize(id, { w: NOTE_W, h: NOTE_H });
+    if (width === NOTE_W && height === CARD_H) board.resize(id, { w: NOTE_W, h: NOTE_H });
     board.edit(id);
   };
   const fresh = !data.text && !editing && !feeds;
@@ -336,9 +345,7 @@ export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>
           </div>
         </NodeToolbar>
       ) : null}
-      <NodeResizer isVisible={editing && !board.readOnly} minWidth={160} minHeight={80} lineClassName="!border-transparent"
-        handleClassName={RESIZE_HANDLE} onResizeStart={board.willChange} />
-      <Frame id={id} selected={selected || editing} icon={TypeIcon} title={t('canvas.titles.note').replace('{n}', String(n))} by={data.by}
+      <Frame id={id} selected={selected} icon={TypeIcon} title={t('canvas.titles.note').replace('{n}', String(n))} by={data.by}
         tone={editing || data.text ? 'quiet' : 'card'}>
         {editing ? (
           <textarea
@@ -383,14 +390,20 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
   const editing = board.editing === id;
   const paint = FRAME_COLOR[data.color];
   const [colors, setColors] = React.useState(false);
+  const cancelRename = React.useRef(false);
+  const rename = () => {
+    if (board.readOnly) return;
+    cancelRename.current = false;
+    board.edit(id);
+  };
   const bar = 'flex h-8 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] disabled:opacity-40';
   return (
-    <div className="relative h-full w-full rounded-[12px] border transition-[border-color] duration-150"
+    <div className="relative h-full w-full rounded-[var(--cv-card-radius)] border transition-[border-color] duration-150"
       style={{ borderColor: selected ? 'var(--cv-ring)' : paint.line, background: paint.fill }}>
       <NodeResizer isVisible={selected && !board.readOnly} minWidth={160} minHeight={120} lineClassName="!border-transparent"
         handleClassName={RESIZE_HANDLE} onResizeStart={board.willChange} />
       {selected && !board.readOnly && board.single === id ? (
-        <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={36}>
+        <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={36} style={{ zIndex: 4 }}>
           <div className="nodrag nopan flex items-center gap-0.5 rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
             <span className="relative">
               <button type="button" aria-label={t('canvas.color')} onClick={() => setColors((v) => !v)} className={`${bar} !px-1.5`}>
@@ -421,20 +434,34 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
       ) : null}
       {/* its title bar, what holds it: a drag moves it with what is in it, a click picks it (⇧ adds it), a double click
           names it. Inside it the board is the board (globals.css): a drag there draws a selection box. */}
-      <div className="cv-group-head absolute inset-x-0 top-0 flex h-7 cursor-grab items-center rounded-t-[12px] px-3 transition-colors hover:bg-[color-mix(in_srgb,var(--cv-ink)_5%,transparent)] active:cursor-grabbing"
+      <div className={`cv-group-head nopan mb-0.5 cursor-grab active:cursor-grabbing ${CARD_TITLE}`}
         onPointerDown={(event) => { if (event.button === 0 && !editing && !(selected && !event.shiftKey && !event.metaKey && !event.ctrlKey)) board.select(id, event.shiftKey || event.metaKey || event.ctrlKey); }}
-        onDoubleClick={(event) => { event.stopPropagation(); if (!board.readOnly) board.edit(id); }}>
+        onDoubleClick={(event) => { event.stopPropagation(); rename(); }}>
         {editing ? (
-          <input
+          <input data-canvas-title="" aria-label={t('canvas.group')} maxLength={80}
             autoFocus
             defaultValue={data.label}
             onFocus={(event) => event.currentTarget.select()}
-            onBlur={(event) => { board.setData(id, { label: event.currentTarget.value.trim() || t('canvas.group') }); board.edit(null); }}
-            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur(); }}
-            className="nodrag h-6 w-[200px] rounded-[6px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] px-1.5 text-[13px] text-[var(--cv-ink)] outline-none"
+            onBlur={(event) => {
+              const label = event.currentTarget.value.trim() || t('canvas.group');
+              if (!cancelRename.current && label !== data.label) board.setData(id, { label });
+              board.edit(null);
+            }}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.nativeEvent.isComposing) return;
+              if (event.key === 'Escape') cancelRename.current = true;
+              if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur();
+            }}
+            className="nodrag h-6 w-[min(200px,100%)] rounded bg-[var(--cv-float)] px-1 text-[var(--cv-ink)] outline outline-[var(--cv-ring)]"
           />
+        ) : board.readOnly ? (
+          <span className="truncate">{data.label || t('canvas.group')}</span>
         ) : (
-          <span className="truncate text-[12.5px] font-medium text-[var(--cv-label)]">{data.label || t('canvas.group')}</span>
+          <span data-canvas-title="" role="button" tabIndex={0} title={t('canvas.video.renameHint')} className="truncate rounded-sm focus-visible:outline"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); event.stopPropagation(); rename(); }
+            }}>{data.label || t('canvas.group')}</span>
         )}
       </div>
     </div>

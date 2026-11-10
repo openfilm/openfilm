@@ -35,14 +35,14 @@ export interface MenuAt {
 
 const MENU_WIDTH = 220;
 
-export function addMenuPlacement(menu: MenuAt) {
+function addMenuPlacement(menu: MenuAt) {
   const screen = menu.screen;
   const roomOnRight = window.innerWidth - screen.x >= MENU_WIDTH + 8;
   const roomOnLeft = screen.x >= MENU_WIDTH + 8;
   const leftOfPointer = menu.wire && (menu.from?.side === 'target' ? roomOnLeft || !roomOnRight : !roomOnRight && roomOnLeft);
   const left = Math.max(8, Math.min(screen.x - (leftOfPointer ? MENU_WIDTH : 0), window.innerWidth - MENU_WIDTH - 8));
   const top = Math.max(8, Math.min(screen.y, window.innerHeight - (menu.wire ? 210 : 440)));
-  return { left, top, leftOfPointer, anchor: { x: leftOfPointer ? left + MENU_WIDTH : left, y: top + 12 } };
+  return { left, top };
 }
 
 type Row = { key: string; label: string; icon: React.ReactNode; run: () => void; more?: boolean; remove?: () => void; badge?: string };

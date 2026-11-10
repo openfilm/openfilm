@@ -17,7 +17,9 @@ const time = (value: number) => {
 const button = 'grid size-7 shrink-0 place-items-center rounded-md text-white hover:bg-white/12 focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50';
 const frameModes = ['current', 'first', 'last'] as const;
 const MUTE_KEY = 'openfilm.canvas.videoMuted';
+const VOLUME_KEY = 'openfilm.canvas.videoVolume';
 let mutedInMemory = false;
+let volumeInMemory = 1;
 
 function readMute() {
   try { return localStorage.getItem(MUTE_KEY) === '1'; }
@@ -30,8 +32,22 @@ function writeMute(value: boolean) {
   window.dispatchEvent(new Event(MUTE_KEY));
 }
 
-function watchMute(notify: () => void) {
-  const onStorage = (event: StorageEvent) => { if (event.key === MUTE_KEY || event.key === null) notify(); };
+function readVolume() {
+  try {
+    const saved = localStorage.getItem(VOLUME_KEY);
+    const volume = Number(saved);
+    return saved !== null && Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : volumeInMemory;
+  } catch { return volumeInMemory; }
+}
+
+function writeVolume(value: number) {
+  volumeInMemory = value;
+  try { localStorage.setItem(VOLUME_KEY, String(value)); } catch { /* kept in memory */ }
+  window.dispatchEvent(new Event(MUTE_KEY));
+}
+
+function watchSound(notify: () => void) {
+  const onStorage = (event: StorageEvent) => { if (event.key === MUTE_KEY || event.key === VOLUME_KEY || event.key === null) notify(); };
   window.addEventListener(MUTE_KEY, notify);
   window.addEventListener('storage', onStorage);
   return () => {
@@ -47,18 +63,33 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
   const src = board.sources.file(file);
   const player = React.useRef<HTMLVideoElement>(null);
   const captureButton = React.useRef<HTMLButtonElement>(null);
+  const volumeButton = React.useRef<HTMLButtonElement>(null);
+  const volumeSlider = React.useRef<HTMLInputElement>(null);
   const pointerInside = React.useRef(false);
+  const rewindFrame = React.useRef(0);
   const [ready, setReady] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
   const [playing, setPlaying] = React.useState(false);
-  const sharedMuted = React.useSyncExternalStore(watchMute, readMute, () => false);
+  const sharedMuted = React.useSyncExternalStore(watchSound, readMute, () => false);
+  const volume = React.useSyncExternalStore(watchSound, readVolume, () => 1);
   const [autoplayMuted, setAutoplayMuted] = React.useState(false);
   const muted = sharedMuted || autoplayMuted;
   const [seconds, setSeconds] = React.useState(0);
   const [length, setLength] = React.useState((file.durationMs ?? 0) / 1000);
-  const [menu, setMenu] = React.useState(false);
+  const [popup, setPopup] = React.useState<'volume' | 'frames' | null>(null);
   const [capturing, setCapturing] = React.useState(false);
   const menuId = React.useId();
+  const volumeId = React.useId();
+  React.useEffect(() => { if (player.current) player.current.volume = volume; }, [volume]);
+  const popupEvents = (kind: 'volume' | 'frames', enabled = true): React.HTMLAttributes<HTMLDivElement> => ({
+    onPointerEnter: (event) => { if (enabled && event.pointerType === 'mouse' && !event.buttons) setPopup(kind); },
+    onPointerLeave: (event) => {
+      if (event.pointerType === 'mouse') setPopup((open) => open === kind ? null : open);
+    },
+    onBlur: (event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setPopup((open) => open === kind ? null : open);
+    },
+  });
   const updateLength = (video: HTMLVideoElement) => { if (Number.isFinite(video.duration)) setLength(video.duration); };
   const toggle = () => {
     const video = player.current;
@@ -71,17 +102,26 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
     const video = player.current;
     if (video) {
       video.pause();
-      if (video.currentTime !== 0) video.currentTime = 0;
+      cancelAnimationFrame(rewindFrame.current);
+      if (video.currentTime !== 0) {
+        // A second seek in the same rendered frame can leave Chromium showing the previous frame.
+        rewindFrame.current = requestAnimationFrame(() => {
+          rewindFrame.current = 0;
+          if (player.current === video) video.currentTime = 0;
+        });
+      }
     }
     setSeconds(0);
     setAutoplayMuted(false);
   }, []);
+  React.useEffect(() => () => cancelAnimationFrame(rewindFrame.current), []);
   const capture = async (mode: typeof frameModes[number]) => {
     const video = player.current;
     if (!video || capturing) return;
+    video.pause();
     const at = mode === 'first' ? 0 : mode === 'last' ? video.duration : video.currentTime;
     const base = file.name.replace(/\.[^.]+$/, '');
-    setMenu(false);
+    setPopup(null);
     captureButton.current?.focus();
     setCapturing(true);
     try { board.bring(id, [await frameOf(src, at, `${base}-${mode}-frame.png`)]); }
@@ -91,7 +131,7 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
   React.useEffect(() => {
     if (board.shown === false) {
       reset();
-      setMenu(false);
+      setPopup(null);
     }
   }, [board.shown, reset]);
   return (
@@ -100,7 +140,12 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
         const video = player.current;
         if (event.pointerType !== 'mouse' || event.buttons || pointerInside.current || board.shown === false) return;
         pointerInside.current = true;
-        if (menu || !video?.paused) return;
+        if (!video?.paused) return;
+        if (rewindFrame.current) {
+          cancelAnimationFrame(rewindFrame.current);
+          rewindFrame.current = 0;
+          video.currentTime = 0;
+        }
         void video.play().catch((error: unknown) => {
           // Browser Studio may require a click before it can autoplay with sound.
           if (!(error instanceof DOMException) || error.name !== 'NotAllowedError' || !pointerInside.current || player.current !== video || video.muted) return;
@@ -113,6 +158,7 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
         // Changing a control's icon can send a leave event while the pointer is still over the card.
         const bounds = event.currentTarget.getBoundingClientRect();
         if (event.clientX >= bounds.left && event.clientX < bounds.right && event.clientY >= bounds.top && event.clientY < bounds.bottom) return;
+        setPopup(null);
         reset();
       }}>
       <video ref={player} src={src} muted={muted} playsInline preload={board.shown === false ? 'metadata' : 'auto'} draggable={false}
@@ -131,12 +177,14 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
         </div>
       ) : null}
       {!failed ? (
-        <div data-canvas-video-controls="" className={`nodrag nopan absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/45 to-transparent px-1.5 pb-1.5 pt-4 text-white transition-opacity @[260px]:px-3 @[260px]:pb-2 ${selected || menu ? 'opacity-100' : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100'}`}
+        <div data-canvas-video-controls="" className={`nodrag nopan absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/45 to-transparent px-1.5 pb-1.5 pt-4 text-white transition-opacity @[260px]:px-3 @[260px]:pb-2 ${selected || popup ? 'opacity-100' : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100'}`}
           onClick={(event) => event.stopPropagation()}
-          onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMenu(false); }}
           onKeyDown={(event) => {
             event.stopPropagation();
-            if (event.key === 'Escape' && menu) { setMenu(false); captureButton.current?.focus(); }
+            if (event.key === 'Escape' && popup) {
+              setPopup(null);
+              (popup === 'frames' ? captureButton : volumeButton).current?.focus();
+            }
           }}>
           <div className="flex items-center gap-1 @[260px]:gap-2">
             <button type="button" className={button} onClick={toggle} aria-label={t(playing ? 'versions.pause' : 'versions.play')}>
@@ -151,31 +199,59 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
                 if (video) { video.currentTime = event.currentTarget.valueAsNumber; setSeconds(video.currentTime); }
               }} />
             <span className="hidden shrink-0 text-xs tabular-nums @[260px]:inline">{time(length)}</span>
-            <button type="button" className={button} aria-label={t(muted ? 'versions.unmute' : 'versions.mute')} onClick={() => {
-              if (player.current) player.current.muted = !muted;
-              setAutoplayMuted(false);
-              writeMute(!muted);
-            }}>
-              {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-            </button>
+            <div className="relative shrink-0" {...popupEvents('volume')}>
+              <button ref={volumeButton} type="button" className={button} aria-label={t(muted || !volume ? 'versions.unmute' : 'versions.mute')}
+                aria-expanded={popup === 'volume'} aria-controls={popup === 'volume' ? volumeId : undefined}
+                onKeyDown={(event) => {
+                  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                  event.preventDefault();
+                  setPopup('volume');
+                  requestAnimationFrame(() => volumeSlider.current?.focus());
+                }}
+                onClick={() => {
+                  setPopup('volume');
+                  if (!volume) writeVolume(1);
+                  setAutoplayMuted(false);
+                  writeMute(!(muted || !volume));
+                }}>
+                {muted || !volume ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+              {popup === 'volume' ? (
+                <div id={volumeId} className="absolute bottom-full left-1/2 z-10 -translate-x-1/2 pb-1">
+                  <div className="flex w-9 flex-col items-center gap-1 rounded-lg border border-white/12 bg-[#1b1b1b]/95 py-1.5 text-xs tabular-nums shadow-lg">
+                    <span aria-hidden="true">{muted ? 0 : Math.round(volume * 100)}</span>
+                    <input ref={volumeSlider} type="range" min={0} max={100} value={muted ? 0 : Math.round(volume * 100)}
+                      aria-label={t('canvas.video.volume')} aria-orientation="vertical" className={`${styles.volume} m-0 h-16 w-5 cursor-pointer p-0`}
+                      style={{ '--played': `${muted ? 0 : volume * 100}%` } as React.CSSProperties}
+                      onChange={(event) => {
+                        const next = event.currentTarget.valueAsNumber / 100;
+                        writeVolume(next);
+                        if (next > 0) { setAutoplayMuted(false); writeMute(false); }
+                      }} />
+                  </div>
+                </div>
+              ) : null}
+            </div>
             {!board.readOnly ? (
-              <div className="relative shrink-0">
+              <div className="relative shrink-0" {...popupEvents('frames', Boolean(length) && !capturing)}>
                 <button ref={captureButton} type="button" className={button} disabled={!length || capturing}
-                  aria-expanded={menu} aria-controls={menu ? menuId : undefined} aria-label={t('canvas.actions.frame')}
+                  aria-expanded={popup === 'frames'} aria-controls={popup === 'frames' ? menuId : undefined} aria-label={t('canvas.actions.frame')}
                   onClick={() => {
-                    if (!menu) player.current?.pause();
-                    setMenu(!menu);
+                    player.current?.pause();
+                    setPopup('frames');
                   }}>
                   {capturing ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
                 </button>
-                {menu ? (
-                  <div id={menuId} className="absolute bottom-full right-0 mb-1 flex min-w-max flex-col rounded-lg border border-white/12 bg-[#1b1b1b] p-1 shadow-lg">
-                    {frameModes.map((mode) => (
-                      <button key={mode} type="button" onClick={() => { void capture(mode); }}
-                        className="rounded-md px-2.5 py-1.5 text-left text-xs text-white hover:bg-white/12 focus-visible:outline-2 focus-visible:outline-white">
-                        {t(`canvas.video.${mode}`)}
-                      </button>
-                    ))}
+                {popup === 'frames' ? (
+                  <div id={menuId} className="absolute bottom-full right-0 z-10 min-w-max pb-1">
+                    <div className="flex flex-col rounded-lg border border-white/12 bg-[#1b1b1b] p-1 shadow-lg">
+                      {frameModes.map((mode) => (
+                        <button key={mode} type="button" onClick={() => { void capture(mode); }}
+                          className="rounded-md px-2.5 py-1.5 text-left text-xs text-white hover:bg-white/12 focus-visible:outline-2 focus-visible:outline-white">
+                          {t(`canvas.video.${mode}`)}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
               </div>

@@ -121,7 +121,9 @@ function fork({ port, env, onOpen, onBrowser, onAsk, log }) {
 /**
  * A question Studio asks the person's agent (`{ type: 'ask', id, text }`, or `{ type: 'ask-cancel', id }` to stop
  * it), and how its answer goes back: `{ type: 'answer', id, text }` or `{ type: 'answer', id, error, code? }`.
- * @typedef {(message: { type: 'ask' | 'ask-cancel', id: string, text?: string }, reply: (answer: Record<string, unknown>) => void) => void} AskHandler
+ * @typedef {{ agent: string, options: Record<string, string | number | boolean> }} WritingModel
+ * @typedef {{ mimeType: string, data: string }} WritingImage
+ * @typedef {(message: { type: 'ask' | 'ask-cancel', id: string, text?: string, model?: WritingModel, images?: WritingImage[] }, reply: (answer: Record<string, unknown>) => void) => void} AskHandler
  */
 
 /**

@@ -9,11 +9,11 @@
  * asynchronously (a clip takes minutes): a 202, then `GET /v1/media/run?key=` until it is done.
  */
 import { randomUUID } from 'node:crypto';
-import { billedBy, call, serviceUrl, sleep } from './common.mjs';
+import { billedBy, call, list, serviceUrl, sleep } from './common.mjs';
 import openai from './openai.mjs';
 import google from './google.mjs';
 import fal from './fal.mjs';
-import openrouter from './openrouter.mjs';
+import openrouter, { videoModelSpec } from './openrouter.mjs';
 
 /**
  * @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext
@@ -41,6 +41,16 @@ const RUNS = [openai, google, fal, openrouter];
 function specOf(/** @type {Verb} */ kind, /** @type {string} */ id) {
   const at = id.indexOf('/');
   const provider = RUNS.find((p) => p.id === id.slice(0, at));
+  if (kind === 'video' && provider === openrouter) {
+    const model = id.slice(at + 1);
+    const spec = videoModelSpec(model, true);
+    if (!spec) return undefined;
+    // Older servers publish no specs. Keep the input contract those servers shipped.
+    if (model.startsWith('alibaba/wan-3.0') || model === 'minimax/hailuo-3') {
+      return { ...spec, refs: 0, clip: false, voice: false, ...(model.startsWith('alibaba/') ? { seconds: /** @type {[number, number]} */ ([5, 30]) } : {}) };
+    }
+    return { ...spec, refs: Math.min(spec.refs ?? 0, 9), clip: Boolean(spec.clip), voice: Boolean(spec.voice) };
+  }
   return provider?.models?.[kind]?.find((m) => m.id === id.slice(at + 1))?.spec;
 }
 /** The verbs of those kinds (changed in place). */
@@ -59,28 +69,37 @@ function take(/** @type {unknown} */ offer) {
   for (const kind of KINDS) {
     const list = (Array.isArray(models[kind]) ? models[kind] : [])
       .filter((m) => m && typeof m.id === 'string' && typeof m.name === 'string')
-      .map((m) => { const spec = specOf(kind, m.id); return { id: m.id, name: m.name, ...(spec ? { spec } : {}) }; });
+      .map((m) => {
+        const spec = m.spec === undefined ? specOf(kind, m.id)
+          : m.spec && typeof m.spec === 'object' && !Array.isArray(m.spec) ? m.spec : undefined;
+        return { id: m.id, name: m.name, ...(spec ? { spec } : {}) };
+      });
     if (!list.length) continue;
     MODELS[kind] = list;
     VERBS.push(kind, ...(kind === 'tts' ? /** @type {Verb[]} */ (['voice']) : []));
   }
 }
 
-/** A flag's value that may name a project file: a short relative path with an extension, nothing else. */
-const PATHLIKE = /^(?![/\\])(?!.*\.\.)[^\s:*?"<>|]{1,240}\.[A-Za-z0-9]{1,5}$/;
+/** File options from get's media commands. Other values (including prompts and voice IDs) are plain text. */
+const FILE_FLAGS = /** @type {Partial<Record<Verb, string[]>>} */ ({
+  asr: ['src'],
+  cutout: ['src'],
+  image: ['ref', 'mask', 'markup'],
+  video: ['first-frame', 'last-frame', 'input-reference', 'video', 'audio', 'voice'],
+});
 
 /**
- * The project files the flags name (a first frame, a recording to transcribe, the voice a translation comes from), as
- * the run sends them: every flag value that reads as one. A value that is not a file is left as it is.
- * @param {Record<string, unknown>} args @param {RunContext} ctx
+ * Send every named file under the path the receiving provider will use. The caller checks that these paths are
+ * inside the project. If a file can't be read, stop before submitting an incomplete run.
+ * @param {Verb} verb @param {Record<string, unknown>} args @param {RunContext} ctx
  */
-async function inputsOf(args, ctx) {
-  const paths = new Set(Object.values(args).flatMap((v) => (Array.isArray(v) ? v : [v])).filter((v) => typeof v === 'string' && PATHLIKE.test(v)));
+async function inputsOf(verb, args, ctx) {
+  const paths = new Set((FILE_FLAGS[verb] ?? []).flatMap((flag) => list(args[flag])));
   /** @type {{ path: string, base64: string }[]} */
   const inputs = [];
-  for (const path of /** @type {Set<string>} */ (paths)) {
-    let bytes;
-    try { bytes = await ctx.read(path); } catch (e) { if (ctx.signal.aborted) throw e; continue; }
+  for (const path of paths) {
+    ctx.signal.throwIfAborted();
+    const bytes = await ctx.read(path);
     inputs.push({ path, base64: Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64') });
   }
   return inputs;
@@ -130,7 +149,7 @@ export default {
     const headers = { authorization: `Bearer ${ctx.key}` };
     const runKey = randomUUID();
     /* no model chosen: the service's default for that kind */
-    const body = { verb, ...(ctx.model ? { model: ctx.model } : {}), args, inputs: await inputsOf(args, ctx) };
+    const body = { verb, ...(ctx.model ? { model: ctx.model } : {}), args, inputs: await inputsOf(verb, args, ctx) };
     let res = await call(NAME, `${base}/v1/media/run`, {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': runKey, prefer: 'respond-async' },
