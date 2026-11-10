@@ -9,9 +9,9 @@
  *   where it was      still there, though this Studio was never told it may read it (a project brought to another
  *                     computer of the person's, a Studio set up again)
  *   in the project    the same file under another name in assets/: the clips are pointed at it
- *   on record         the same file in another project or in a folder the person added
  *   another disk      the path it had, on each other disk that is there (a disk renamed, a drive letter that changed)
  *   near where it was the folders around its old place, a few levels and so many files at most
+ *   on record         the same file in a folder the person added, or in another project
  *   where told        a folder the person points at, all of it
  *
  * A file is taken for the missing one only when its fingerprint is the recorded one. So a project from elsewhere
@@ -228,19 +228,13 @@ export async function reconnect(root, { folders = [], platform, others } = {}) {
   const open = () => wanted.filter((w) => !located.has(w));
 
   /* where it was: there, and the recorded file, though not a place this Studio was told of */
-  for (const w of wanted) if (await isIt(w.was, w)) located.set(w, w.was);
+  for (const w of wanted) if (!w.was.startsWith(`${project}${sep}`) && await isIt(w.was, w)) located.set(w, w.was);
   /* in the project: the same file under another name (renamed in the folder, or where a link leads) */
   for (const m of missing) {
     if (m.linked) continue;
     const w = /** @type {Wanted} */ (m.files[0]);
     const twin = w.fp ? Object.entries(record).find(([path, e]) => path !== w.path && !e.gone && e.fp === w.fp && !missing.some((other) => under(path, other.path))) : null;
     if (twin && await repoint(project, w.path, twin[0])) { located.set(w, twin[0]); found.push({ path: w.path, to: twin[0] }); }
-  }
-  /* on record: in another project, or in a folder the person added */
-  for (const w of open()) {
-    if (!w.fp) continue;
-    const at = (await whereIs(w.fp))[0];
-    if (at) located.set(w, at.abs);
   }
   /* the path it had, on another disk */
   for (const w of open()) {
@@ -260,6 +254,13 @@ export async function reconnect(root, { folders = [], platform, others } = {}) {
     near.set(folder.at, group);
   }
   for (const [at, group] of near) await search(at, group.wanted, (w, abs) => located.set(w, abs), { files: NEAR_FILES, depth: group.up + NEAR_BELOW });
+  /* on record: in a folder the person added, or in another project (a copy of that project's own, last). Never
+     one in this project's own folder: a link is not pointed back into the project it is in */
+  for (const w of open()) {
+    if (!w.fp) continue;
+    const at = (await whereIs(w.fp)).find((c) => !c.abs.startsWith(`${project}${sep}`));
+    if (at) located.set(w, at.abs);
+  }
   /* where the person pointed */
   for (const folder of folders) await search(resolve(folder), open(), (w, abs) => located.set(w, abs), { files: TOLD_FILES, depth: TOLD_DEPTH, byName: true });
 

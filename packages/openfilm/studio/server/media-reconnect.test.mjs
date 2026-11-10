@@ -56,6 +56,24 @@ test('a linked file renamed where it is kept is connected again, unasked', async
   assert.equal(readFileSync(readable(root, 'assets/clip.mp4')).length, 300_000);
 });
 
+test('the file itself, where it went, comes before a copy of it on record: never a copy in the project\'s own folder', async () => {
+  const { path: root } = await createProject('Itself');
+  const { path: other } = await createProject('Has a copy');
+  const nas = elsewhere();
+  const clip = media(join(nas, 'clip.mp4'), 1);
+  media(join(root, 'assets', 'same bytes here.mp4'), 1);
+  media(join(other, 'assets', 'same bytes there.mp4'), 1);
+  await bringIn(root, 'assets', [clip], 'link');
+  await scanProject(root);
+  await scanProject(other);
+  renameSync(clip, join(nas, 'clip renamed.mp4'));
+  assert.deepEqual((await reconnect(root)).found, [{ path: 'assets/clip.mp4', to: join(nas, 'clip renamed.mp4') }]);
+
+  /* gone for good: the copy another project holds stands in for it, not the one in this project */
+  rmSync(join(nas, 'clip renamed.mp4'));
+  assert.deepEqual((await reconnect(root)).found, [{ path: 'assets/clip.mp4', to: join(other, 'assets', 'same bytes there.mp4') }]);
+});
+
 test('a linked file moved to the folder beside its own is found one level up and one down', async () => {
   const { path: root } = await createProject('Beside');
   const nas = elsewhere();
