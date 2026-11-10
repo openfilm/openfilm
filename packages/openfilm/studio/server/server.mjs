@@ -56,6 +56,7 @@ import { FILM_PAGE, PageFrameError, closePageFrames, compoundSound, filmPoster, 
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaSummary } from './media-index.mjs';
+import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
@@ -134,7 +135,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   } });
   /* what is known of the person's media (media-index.mjs): a project's, a moment after its files changed or it was
      opened; `indexMedia` (the Studio the person runs, not one a test starts): every project's, once Studio is up */
-  const mediaIndex = createMediaIndexer({ onError: (root, e) => console.warn(`media index: ${root}: ${e instanceof Error ? e.message : String(e)}`) });
+  const mediaIndex = createMediaIndexer({
+    onError: (root, e) => console.warn(`media index: ${root}: ${e instanceof Error ? e.message : String(e)}`),
+    /* media that went missing is looked for unasked (media-reconnect.mjs): the pages hear how many came back */
+    onProject: createReconnector({ onFound: (root, found) => watchers.emit(root, { type: 'files', reconnected: found.length }) }),
+  });
   const sweepMedia = indexMedia ? setTimeout(() => { void mediaIndex.sweep().catch(() => {}); }, 20_000) : null;
   sweepMedia?.unref();
   /** questions about spending for the person, in the pages showing a project (see get.mjs) */
@@ -978,6 +983,24 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (!(rate > 0 && rate <= 240)) throw new HttpError(400, 'fps: a frame rate');
       const { proxies } = readPrefs();
       return json(res, 200, { late: list, ranges: list.length ? ensurePreviews(project.path, /** @type {[number, number][]} */ (list), rate, proxies.height) : [] });
+    }
+    /* what the project is missing (media-reconnect.mjs): links that lead nowhere, files its clips name that are gone */
+    if (rest === 'files/missing' && req.method === 'GET') {
+      /* asked because something looks missing: it is looked for (the pages hear when it is back) */
+      mediaIndex.soon(project.path);
+      return json(res, 200, { missing: (await missingMedia(project.path)).map(({ path, name, folder, linked, was }) => ({ path, name, folder, linked, was })) });
+    }
+    /* what is missing looked for and connected again, in a folder the person points at too: the one given, else
+       their pick (`folder: true`). { found, missing } (`cancelled`: no folder was picked) */
+    if (rest === 'files/reconnect' && req.method === 'POST') {
+      const { folder, title } = /** @type {{ folder?: unknown, title?: unknown }} */ (await readJson(req));
+      const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
+      const where = typeof folder === 'string' ? folder
+        : folder === true ? await pickFolder(ask).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); }) : undefined;
+      if (folder === true && !where) return json(res, 200, { cancelled: true });
+      const { found, missing } = await reconnect(project.path, { folders: where ? [where] : [] });
+      if (found.length) watchers.emit(project.path, { type: 'files' });
+      return json(res, 200, { found: found.length, missing: missing.map(({ path, name, folder: isFolder, linked, was }) => ({ path, name, folder: isFolder, linked, was })) });
     }
     /* what a link leads to copied into the project in its place (files.mjs collect) */
     if (rest === 'files/collect' && req.method === 'POST') {

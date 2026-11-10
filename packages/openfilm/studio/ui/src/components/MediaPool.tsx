@@ -169,6 +169,9 @@ export interface MediaPoolProps {
   /** A link pointed at where its media is now (the person picks it), or copied into the project in its place. */
   onRelink?: (path: string, folder: boolean) => Promise<MediaResult>;
   onCollect?: (path: string) => Promise<MediaResult>;
+  /** How many of the project's media cannot be found, and the way to say where they are now (a folder is picked). */
+  missing?: number;
+  onFindMissing?: () => void;
   /** Files kept to use again in any project (lib/saved): the file menu's "Add to Saved". */
   onSave?: (files: WorkspaceResource[]) => void;
   /**
@@ -219,6 +222,8 @@ export function MediaPool({
   onBring,
   onRelink,
   onCollect,
+  missing = 0,
+  onFindMissing,
   onSave,
   scope = 'project',
   onScope,
@@ -945,6 +950,14 @@ export function MediaPool({
           </>
         )}
       </div>
+
+      {missing > 0 && onFindMissing ? (
+        <div data-media-missing="" className="mx-2.5 mb-2 flex shrink-0 items-center gap-2 rounded-md bg-[var(--bg-hover)] px-2 py-1.5 text-[12px] text-[var(--text-muted)]">
+          <Unlink size={12} className="shrink-0 text-[var(--err)]" />
+          <span className="min-w-0 flex-1">{t('media.missingCount').replace('{n}', String(missing))}</span>
+          <button type="button" onClick={onFindMissing} className="shrink-0 rounded px-1 font-medium text-[var(--text)] hover:bg-[var(--border-strong)]">{t('media.findMissing')}</button>
+        </div>
+      ) : null}
 
       {notice ? (
         <div className="mx-2.5 mb-2 flex shrink-0 items-start gap-2 rounded-md bg-[var(--bg-hover)] px-2 py-1.5 text-[12px] text-[var(--text-muted)]">

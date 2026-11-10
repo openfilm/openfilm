@@ -91,7 +91,7 @@ test('a linked file is recorded where it really is, and found again after it was
   /* the folder it is in is one of the person's media folders: there it is */
   folders([nas]);
   await scanFolder(nas);
-  assert.deepEqual(await whereIs(entry.fp), [{ abs: join(nas, 'day1', 'take-3.mp4'), size: entry.size }]);
+  assert.deepEqual(await whereIs(entry.fp), [{ abs: join(nas, 'day1', 'take-3.mp4'), size: entry.size, own: false }]);
 });
 
 test('a folder that is no project is recorded in Studio\'s own files: nested media, nothing hidden, nothing written in it', async () => {
@@ -117,7 +117,7 @@ test('a file is only where it was checked to be: one changed in place since the 
   const file = media(join(root, 'assets', 'a.mp4'), 1);
   await scanProject(root);
   const fp = readRecord(projectRecordFile(root)).files['assets/a.mp4'].fp;
-  assert.deepEqual(await whereIs(fp), [{ abs: file, size: 300_000 }]);
+  assert.deepEqual(await whereIs(fp), [{ abs: file, size: 300_000, own: true }]);
   media(file, 2);
   assert.deepEqual(await whereIs(fp), []);
 });

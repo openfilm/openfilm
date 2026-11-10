@@ -159,7 +159,7 @@ export async function scanProject(root, { now = Date.now() } = {}) {
   const file = projectRecordFile(project);
   const { record, hashed, changed } = await refresh(readRecord(file), found, { stays: (path) => missing.some((rel) => under(path, rel)), keepGone: true, now });
   if (changed) await writeRecord(file, record);
-  return { root: project, files: found.length, hashed, changed };
+  return { root: project, files: found.length, hashed, changed, missing: missing.length };
 }
 
 /**
@@ -226,23 +226,24 @@ export async function knownMedia() {
 
 /**
  * Where the file with this fingerprint is now: every place on record that still holds it, checked on disk (it is
- * there, and its fingerprint is this one), each once.
+ * there, and its fingerprint is this one), each once. `own`: it is in a project's own folder (a copy of that
+ * project's), not kept somewhere of its own; those are listed last.
  * @param {string} fp
  */
 export async function whereIs(fp) {
   /** @type {Set<string>} */
   const seen = new Set();
-  /** @type {{ abs: string, size: number }[]} */
+  /** @type {{ abs: string, size: number, own: boolean }[]} */
   const held = [];
   for (const m of await knownMedia()) {
     if (m.fp !== fp || seen.has(m.abs)) continue;
     seen.add(m.abs);
     try {
       const info = await stat(m.abs);
-      if (info.isFile() && info.size === m.size && await fingerprint(m.abs, info) === fp) held.push({ abs: m.abs, size: m.size });
+      if (info.isFile() && info.size === m.size && await fingerprint(m.abs, info) === fp) held.push({ abs: m.abs, size: m.size, own: m.project && m.abs.startsWith(`${m.place}${sep}`) });
     } catch { /* not there any more */ }
   }
-  return held;
+  return held.sort((a, b) => Number(a.own) - Number(b.own));
 }
 
 /**
@@ -266,9 +267,10 @@ export async function mediaSummary() {
 /**
  * The scans, one at a time and out of the way: a project is scanned a moment after its files last changed
  * (`soon`), and every place once after Studio starts (`sweep`). `onError`: a scan that failed (the next one tries again).
- * @param {{ wait?: number, onError?: (root: string, error: unknown) => void }} [o]
+ * `onProject`: what follows a project's scan, before the next scan starts (media-reconnect.mjs looks for what is missing).
+ * @param {{ wait?: number, onError?: (root: string, error: unknown) => void, onProject?: (root: string, scan: Awaited<ReturnType<typeof scanProject>>) => Promise<void> }} [o]
  */
-export function createMediaIndexer({ wait = 1500, onError = () => {} } = {}) {
+export function createMediaIndexer({ wait = 1500, onError = () => {}, onProject } = {}) {
   /** @type {Map<string, NodeJS.Timeout>} */
   const timers = new Map();
   let turn = Promise.resolve();
@@ -283,19 +285,23 @@ export function createMediaIndexer({ wait = 1500, onError = () => {} } = {}) {
     turn = run;
     return run;
   };
+  const project = async (/** @type {string} */ root) => {
+    const scan = await scanProject(root);
+    if (onProject && !closed) await onProject(root, scan);
+  };
   return {
     /** Scan this project once its files have been still for a moment. @param {string} root */
     soon(root) {
       if (closed) return;
       clearTimeout(timers.get(root));
-      const timer = setTimeout(() => { timers.delete(root); void queue(root, scanProject); }, wait);
+      const timer = setTimeout(() => { timers.delete(root); void queue(root, project); }, wait);
       timer.unref();
       timers.set(root, timer);
     },
     /** Scan every place, one after another. */
     async sweep() {
       const { projects, folders } = await mediaPlaces();
-      await Promise.all([...projects.map((root) => queue(root, scanProject)), ...folders.map((root) => queue(root, scanFolder))]);
+      await Promise.all([...projects.map((root) => queue(root, project)), ...folders.map((root) => queue(root, scanFolder))]);
     },
     /** Whether a scan is under way or waiting. */
     busy: () => scanning > 0 || timers.size > 0,

@@ -36,7 +36,9 @@ export type MediaFile = { path: string; kind: 'video' | 'image' | 'audio' | 'pag
 /** A project's editor settings (studio/server/project-settings.mjs). */
 export type MotionBlur = { enabled: boolean; samples: number; shutter: number };
 export type ProjectSettings = { fps?: number; trackNames?: { name: string; index: number; clips: string[] }[]; trackHeights?: { height: number; index: number; clips: string[] }[]; motionBlur?: MotionBlur };
-export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: string; size: number; mtime: number }[] };
+export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: string; size: number; mtime: number }[]; links?: Record<string, { to: string; missing?: boolean }> };
+/** Media a project is missing (studio/server/media-reconnect.mjs): a link that leads nowhere (`linked`), or a file its clips name that is gone; `was`: where it was. */
+export type MissingMedia = { path: string; name: string; folder: boolean; linked: boolean; was: string };
 export type Op =
   | { op: 'set'; clip: string; field: string; value?: unknown }
   | { op: 'move'; clip: string; at: number; track?: number; newTrack?: number; newTrackAttrs?: Track['attrs'] }
@@ -183,6 +185,9 @@ export const api = {
   readPartFilm: (id: string, folder: string) => call<{ film: Film }>(`${p(id)}/films?folder=${encodeURIComponent(folder)}`),
   edit: (id: string, base: string | null, ops: Op[], undo = false) => call<{ text: string; rev: string; value: Film; doc: Film; rebased: boolean }>(`${p(id)}/edit`, { method: 'POST', json: { base, ops, ...(undo ? { undo: true } : {}) } }),
   files: (id: string) => call<Listing>(`${p(id)}/files`),
+  /** what the project's media is missing, and the same looked for again in a folder the person points at */
+  missingMedia: (id: string) => call<{ missing: MissingMedia[] }>(`${p(id)}/files/missing`).then((r) => r.missing),
+  reconnectMedia: (id: string, folder: string) => call<{ found: number; missing: MissingMedia[] }>(`${p(id)}/files/reconnect`, { method: 'POST', json: { folder } }),
   /** the editor's settings of the project (`.film/settings.json`): its frame rate, its tracks' names */
   settings: (id: string) => call<{ settings: ProjectSettings }>(`${p(id)}/settings`).then((r) => r.settings),
   /** change some of them (null takes one away); answers them all as kept */
@@ -287,7 +292,7 @@ export type SpendAsk = {
 /** What the person is told without a question (studio/server/get.mjs): a provider with no balance left for a run. */
 export type StudioNotice = { id: string; kind: 'balance'; provider: string; providerId: string };
 
-export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths?: string[] } | { type: 'history' } | { type: 'export'; job: ExportJob } | { type: 'open'; to: string }
+export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths?: string[]; reconnected?: number } | { type: 'history' } | { type: 'export'; job: ExportJob } | { type: 'open'; to: string }
   | { type: 'history-progress'; op: string; phase: string; done: number; total: number }
   | { type: 'ask'; ask: SpendAsk } | { type: 'asked'; id: string } | { type: 'notice'; notice: StudioNotice } | { type: 'project'; project: Project }
   /* an agent changed the canvas (`openfilm canvas apply`) */

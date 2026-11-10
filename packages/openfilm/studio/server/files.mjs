@@ -506,7 +506,7 @@ function sameEntry(/** @type {string} */ a, /** @type {string} */ b) {
 }
 
 /** Point every clip whose src is `from` (or inside the folder `from`) at `to`. Returns how many moved. */
-async function repoint(/** @type {string} */ root, /** @type {string} */ from, /** @type {string} */ to) {
+export async function repoint(/** @type {string} */ root, /** @type {string} */ from, /** @type {string} */ to) {
   /* as any edit of Studio's: after a write of the agent's is merged, and kept over the next one */
   const done = await changeProjectFilm(root, (value, film) => {
     if (!film.value) return null;
@@ -685,6 +685,35 @@ export async function relink(root, rel, to) {
   await symlink(from, part, info.isDirectory() ? 'dir' : 'file');
   await rename(part, abs);
   return rel;
+}
+
+/**
+ * A link at `rel`, a path under assets/ where nothing is, to a file kept elsewhere: a file the film names that left
+ * the project and was found again (media-reconnect.mjs) is back under its own name without being copied. The place is
+ * remembered as one the person linked. Where the disk takes no links, the link is kept in the project's own list.
+ * @param {string} root @param {string} rel @param {string} to
+ * @param {{ platform?: string, makeLink?: typeof symlink }} [o]
+ */
+export async function linkAt(root, rel, to, { platform = process.platform, makeLink = symlink } = {}) {
+  if (typeof rel !== 'string' || !rel.startsWith(`${ASSETS}/`)) throw new FileError('media goes in assets/');
+  if (typeof to !== 'string' || !isAbsolute(to)) throw new FileError('a full path, please');
+  const dir = inside(root, posix(dirname(rel)));
+  const abs = join(dir, basename(rel));
+  if (basename(rel).startsWith('.')) throw new FileError(`${basename(rel)} can't be named here`);
+  const from = realpathSync.native(to);
+  if (!(await stat(from)).isFile()) throw new FileError(`${to} is not a file`);
+  await mkdir(dir, { recursive: true });
+  return queuedImport(dir, async () => {
+    if (lstatSync(abs, { throwIfNoEntry: false }) || mediaReference(root, abs)) throw new FileError(`${rel} is already there`, 409);
+    addLinkedPlaces([from]);
+    try { await makeLink(from, abs, 'file'); }
+    catch (e) {
+      const code = /** @type {NodeJS.ErrnoException} */ (e).code;
+      if (platform !== 'win32' || !['UNKNOWN', 'EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP', 'EINVAL', 'ENOSYS', 'EXDEV'].includes(code ?? '')) throw e;
+      changeMediaReferences(root, (entries) => [...entries, { name: rel, to: from, directory: false, added: Date.now() }]);
+    }
+    return rel;
+  });
 }
 
 /**

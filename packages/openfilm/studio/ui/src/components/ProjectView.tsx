@@ -27,7 +27,7 @@ import { declared, withDeclarations } from '@/lib/clip-look';
 import { declarations } from '../../../../src/film-doc.mjs';
 import { PARTS, compoundFolder, compoundOf, dissolvedOf, srcInto, srcOutOf } from '../../../server/compound.mjs';
 import type { FilmValue } from '../../../server/ops.mjs';
-import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
+import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type MissingMedia, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
 import { Player } from '@/editor/player';
@@ -3274,6 +3274,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onBring={onBring}
       onRelink={onRelink}
       onCollect={onCollect}
+      missing={missingMedia.length}
+      onFindMissing={() => void findMissing()}
       onSave={saveFiles}
       scope="project"
       onScope={inDrawer ? undefined : switchMedia}
@@ -4654,7 +4656,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     let awaiting = false;
     for (const b of blocksRef.current) {
       if (!b.src || !(b.src.startsWith('assets/') || /\.html?$/i.test(b.src))) continue;
-      if (paths.has(b.src)) { firstMissedIn.current.delete(b.src); continue; }
+      /* a link is listed though it leads nowhere: its file is as gone as one that is not listed */
+      if (paths.has(b.src) && !rawListing.links?.[b.src]?.missing) { firstMissedIn.current.delete(b.src); continue; }
       const since = firstMissedIn.current.get(b.src);
       if (!since) firstMissedIn.current.set(b.src, rawListing);
       if (!since || since === rawListing) { awaiting = true; continue; }
@@ -4725,6 +4728,48 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const onCollect = React.useCallback(async (path: string): Promise<MediaResult> => (
     (await postJson(`${projectApi}/files/collect`, { path })).ok ? 'ok' : 'failed'
   ), [projectApi, postJson]);
+  /* media that cannot be found (studio/server/media-reconnect.mjs): asked for when a link leads nowhere or a clip
+     names a file that is gone. What Studio finds on its own is connected again unasked, and said once; for the
+     rest the person points at the folder it is in now */
+  const [missingMedia, setMissingMedia] = React.useState<MissingMedia[]>([]);
+  const linkMissing = React.useMemo(() => Object.values(rawListing?.links ?? {}).some((l) => l.missing), [rawListing]);
+  const clipMissing = React.useMemo(() => [...mediaTrouble.values()].includes('missing'), [mediaTrouble]);
+  React.useEffect(() => {
+    if (!linkMissing && !clipMissing) { setMissingMedia([]); return undefined; }
+    let live = true;
+    void api.missingMedia(projectId).then((missing) => { if (live) setMissingMedia(missing); }, () => {});
+    return () => { live = false; };
+  }, [projectId, rawListing, linkMissing, clipMissing]);
+  /* media kept elsewhere is renamed or moved without the project's folder changing: its links are looked at again
+     when the person comes back to the window, and the listing is taken when one of them changed */
+  const hasLinks = React.useMemo(() => Object.keys(rawListing?.links ?? {}).length > 0, [rawListing]);
+  React.useEffect(() => {
+    if (!hasLinks) return undefined;
+    const back = () => {
+      void api.files(projectId).then((next) => setRawListing((now) => (JSON.stringify(now?.links ?? {}) === JSON.stringify(next.links ?? {}) ? now : next)), () => {});
+    };
+    window.addEventListener('focus', back);
+    return () => window.removeEventListener('focus', back);
+  }, [hasLinks, projectId]);
+  React.useEffect(() => projectEvents(projectId, (e) => {
+    if (e.type !== 'files' || !e.reconnected) return;
+    showToast(t('media.reconnected').replace('{n}', String(e.reconnected)));
+    /* the picture had nothing to draw for it: drawn again now that it is back */
+    preview.current?.reload?.();
+  }), [projectId, showToast, t]);
+  const findMissing = React.useCallback(async () => {
+    const picked = await onPick(t('media.pickMissingFolder'), true);
+    if (picked === 'no-dialog') { toast.show(t('media.noDialog')); return; }
+    if (!picked[0]) return;
+    try {
+      const { found, missing } = await api.reconnectMedia(projectId, picked[0]);
+      setMissingMedia(missing);
+      if (found) preview.current?.reload?.();
+      toast.show(!found ? t('media.reconnectNone')
+        : missing.length ? t('media.reconnectedSome').replace('{n}', String(found)).replace('{left}', String(missing.length))
+          : t('media.reconnected').replace('{n}', String(found)));
+    } catch (e) { toast.showError(e instanceof Error ? e.message : String(e)); }
+  }, [projectId, onPick, toast, t]);
   /*
    * resolves with where each file landed (a taken name gets a number); one that is no readable media is said at once.
    * Each file's progress is its bytes sent (XMLHttpRequest: fetch cannot tell how much of a body has gone), then 1 and
@@ -5650,8 +5695,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                             </div>
                           ) : null}
                           {missingHere && !fullscreen && !agentWorking ? (
-                            <div data-preview-missing="" className="pointer-events-none absolute left-2 top-2 z-10 max-w-[80%] truncate rounded-[4px] bg-black/75 px-2 py-1 text-[11px] text-white">
-                              {t('project.previewMissing').replace('{file}', missingHere)}
+                            <div data-preview-missing="" className="absolute left-2 top-2 z-10 flex max-w-[80%] items-center gap-2 rounded-[4px] bg-black/75 px-2 py-1 text-[11px] text-white">
+                              <span className="min-w-0 truncate">{t('project.previewMissing').replace('{file}', missingHere)}</span>
+                              <button type="button" onClick={() => void findMissing()} className="shrink-0 underline underline-offset-2 hover:text-white/80">{t('media.findMissing')}</button>
                             </div>
                           ) : null}
   {preparingHere ? (
