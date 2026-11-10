@@ -43,8 +43,7 @@ const MAX_OUTPUT = 32_000;
 
 /**
  * The pictures one request carries at most (their base64, bytes): 32 MB, the request size Anthropic's API documents
- * as its limit. Pi makes each picture at most 2000 px and 4.5 MB as it reads it (its defaults), so
- * a frame keeps its full quality; but every picture goes again with each request after it, and the context's token
+ * as its limit. Every picture goes again with each request after it, and the context's token
  * count hardly sees a picture's bytes, so nothing else keeps a conversation that looks at many frames under a service's
  * size limit. Past this, the oldest are left out of the request (never out of the conversation).
  */
@@ -62,9 +61,9 @@ export const KEEP_PICTURE_RESULTS = 5;
  * The conversation as one request sends it: pictures only in the latest KEEP_PICTURE_RESULTS tool results that hold
  * one, and all of them within `budget` (bytes of base64), the newest kept. Each picture left out is a line saying so
  * and which file it was, so the agent can read it again. `messages` the same when nothing is left out; `kept`, the
- * bytes of the pictures that go.
+ * bytes of the pictures that go; `removed`, the count of pictures replaced with a note.
  * @param {any[]} messages @param {number} budget
- * @returns {{ messages: any[], kept: number }}
+ * @returns {{ messages: any[], kept: number, removed: number }}
  */
 export function fitImages(messages, budget) {
   /* which file each tool call read, to name a picture left out */
@@ -74,7 +73,7 @@ export function fitImages(messages, budget) {
     for (const c of m.content) if (c?.type === 'toolCall' && typeof c.arguments?.path === 'string') paths.set(c.id, c.arguments.path);
   }
   let used = 0;
-  let cut = false;
+  let removed = 0;
   let results = 0;
   const out = [...messages];
   for (let i = out.length - 1; i >= 0; i--) {
@@ -85,13 +84,13 @@ export function fitImages(messages, budget) {
       if (c?.type !== 'image') return c;
       const size = String(c.data ?? '').length;
       if (!old && used + size <= budget) { used += size; return c; }
-      cut = true;
+      removed += 1;
       const path = m.role === 'toolResult' ? paths.get(m.toolCallId) : undefined;
       return { type: 'text', text: `[A picture${path ? ` (${path})` : ''} was left out of this request to keep it small. Read it again to see it.]` };
     });
     out[i] = { ...m, content };
   }
-  return { messages: cut ? out : messages, kept: used };
+  return { messages: removed ? out : messages, kept: used, removed };
 }
 
 /**
