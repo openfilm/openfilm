@@ -19,7 +19,7 @@ import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter,
   AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, ArrowRightToLine,
   Check, CircleAlert, Copy, Diamond, Gauge, Link2, Maximize2, MessageSquarePlus, MousePointerClick,
-  MoveHorizontal, Replace, RotateCcw, Scissors, Unlink2, X,
+  MoveHorizontal, Replace, RotateCcw, Scissors, Unlink2, Waypoints, X,
 } from 'lucide-react';
 
 import {
@@ -53,6 +53,9 @@ import {
 } from './inspector-fields';
 import { SPEED_STOPS, exactSpeed, lengthAtSpeed, roundSpeed, sliderKeyPosition, speedAtPosition, speedPosition } from '@/lib/clip-speed';
 import { speedText } from '@/lib/playback-speed';
+import type { Motion } from '../../../../src/clip-motion.mjs';
+import { KeyframesSection } from './KeyframesSection';
+import { staticTransform, transformEdits } from '@/lib/clip-transform';
 import {
   AdjustSection, AdvancedSection, AppearanceSection, CropSection, EffectsSection, FillSection, FilterSection, MaskSection, NEUTRAL, StrokeSection,
   TypographySection, camelOf,
@@ -146,6 +149,8 @@ function useCommitBeforeLeaving(): void {
   }, []);
 }
 
+/** A clip's keyframes by its id, the playhead (film ms), and going to a film moment. */
+export interface ClipMotionHost { of: (clipId: string) => Motion; playheadMs: number; onSeek: (ms: number) => void }
 type MotionBlurControls = { value?: MotionBlur; onChange: (value: MotionBlur) => Promise<void> };
 
 export const FilmInspector = React.memo(function FilmInspector({
@@ -168,6 +173,7 @@ export const FilmInspector = React.memo(function FilmInspector({
   onSelectParent,
   onSelectClip,
   onPreviewClip,
+  onAnimate,
   pageChangesOf,
   replaceEntries,
   templateSection,
@@ -191,6 +197,7 @@ export const FilmInspector = React.memo(function FilmInspector({
   rate,
   exportMotionBlur,
   fades,
+  motion,
   transition,
   propsHostOf,
   pictures,
@@ -239,6 +246,8 @@ export const FilmInspector = React.memo(function FilmInspector({
   onSelectClip?: (clipLoc: string) => void;
   /** Moves the clip on the picture while its transform numbers are dragged (nothing written); null puts it back. */
   onPreviewClip?: (clipLoc: string, patch: Partial<MgTransform> | null) => void;
+  /** The clip's moves made with keyframes: the timeline shown animating, the clip twirled open (its id). */
+  onAnimate?: (clipId: string) => void;
   /** A page clip's in-page changes (film.html `overrides`) and which of them its page no longer has. */
   pageChangesOf?: (clipLoc: string) => PageChanges | null;
   /** What can take a clip's place (the project's files, one from this computer): the clip's Replace button. */
@@ -281,6 +290,8 @@ export const FilmInspector = React.memo(function FilmInspector({
   rate?: { fps: number; fromFootage: boolean; onChange: (fps: number) => void } | null;
   /** Each clip's fades, ms (clip id → [in, out]): the Fades section's values. */
   fades?: ReadonlyMap<string, FadeMs>;
+  /** A clip's keyframes (src/clip-motion.mjs) by its id, where the playhead is, and going to a moment: the Keyframes section's. */
+  motion?: ClipMotionHost | null;
   /** The transition picked on the timeline (no clip selected): its kind and length, made longer or taken away here. */
   transition?: TransitionPick | null;
   /** A page clip's properties (PropertiesSection): read from its page, written as its overrides and its data-props. */
@@ -335,6 +346,7 @@ export const FilmInspector = React.memo(function FilmInspector({
             geometry={geometry && geometry.kind === 'clip' && geometry.loc === clip.loc ? geometry : null}
             onEdit={onEditClips}
             onPreviewClip={onPreviewClip}
+            {...(onAnimate ? { onAnimate } : {})}
             {...(pageChangesOf ? { pageChangesOf } : {})}
             {...(replaceEntries ? { replaceEntries } : {})}
             {...(templateSection ? { templateSection } : {})}
@@ -349,6 +361,8 @@ export const FilmInspector = React.memo(function FilmInspector({
             stage={stageSize}
             {...(fades ? { fades } : {})}
             {...(propsHostOf ? { propsHostOf } : {})}
+            {...(motion ? { motion } : {})}
+            {...(rate ? { fps: rate.fps } : {})}
           />
         ) : many ? (
           <MultiClipPanel
@@ -1384,10 +1398,12 @@ function clipsLook(
  * can only be looked at.
  */
 function ClipPanel({
-  block, onMain, speedFloor, geometry, stage, onEdit, onPreviewClip, pageChangesOf, replaceEntries, templateSection, motionSection, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
-  onMaskAsked, fades, propsHostOf,
+  block, onMain, speedFloor, geometry, stage, onEdit, onPreviewClip, onAnimate, pageChangesOf, replaceEntries, templateSection, motionSection, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
+  onMaskAsked, fades, propsHostOf, motion, fps = 30,
 }: {
   fades?: ReadonlyMap<string, FadeMs>;
+  motion?: ClipMotionHost;
+  fps?: number;
   propsHostOf?: (block: TimelineBlock) => PropsHost | null;
   replaceEntries?: (block: TimelineBlock) => ContextMenuEntry[];
   /** The template of the library the picked clips all belong to, shown first (TemplateSection); null when they are not one template's. */
@@ -1405,6 +1421,7 @@ function ClipPanel({
   badges?: readonly string[] | undefined;
   onEdit?: (edits: ClipEdit[]) => Promise<string | null>;
   onPreviewClip?: (clipLoc: string, patch: Partial<MgTransform> | null) => void;
+  onAnimate?: (clipId: string) => void;
   pageChangesOf?: (clipLoc: string) => PageChanges | null;
   clipLookOf?: (clipLoc: string) => { css: string; look: ClipLook | null; cls?: string } | null;
   onPreviewLook?: (clipLoc: string, css: string | null) => void;
@@ -1483,8 +1500,27 @@ function ClipPanel({
               value={clipTransform(block, own, stage)}
               onCommit={commit}
               {...(onPreviewClip ? { onPreview: (patch: Partial<MgTransform> | null) => onPreviewClip(loc!, patch) } : {})}
+              {...(onAnimate && block.clipId ? { onAnimate: () => onAnimate(block.clipId!) } : {})}
             />
           ) : null}
+          {/* its keyframes right under its place: they move it on top of its box */}
+          {picture && motion && block.clipId && docLoc && own && geo ? (() => {
+            /* its own transform under its keyframes: the box's top left, its scale of its own size, its turn, its opacity */
+            const placed = { kind: block.kind, own, box: block.box, stage, css: lookOf?.css ?? '' };
+            const { base } = staticTransform(placed, geo.box);
+            return (
+              <KeyframesSection
+                t={t}
+                motion={motion.of(block.clipId)}
+                base={base}
+                local={motion.playheadMs >= block.startMs - 1 && motion.playheadMs <= block.endMs + 1 ? (motion.playheadMs - block.startMs) / 1000 : null}
+                length={(block.endMs - block.startMs) / 1000}
+                frame={1 / fps}
+                onCommit={(m, own2) => { void commit(transformEdits(loc!, placed, m, own2, geo.box)); }}
+                onSeek={(s) => motion.onSeek(block.startMs + s * 1000)}
+              />
+            );
+          })() : null}
           {/* the fades right under the place: used on most clips */}
           {docLoc && block.clipId ? <FadeSection t={t} blocks={[block]} fades={fades} commit={commit} /> : null}
           {/* how it comes in, goes out and moves while shown */}
@@ -2325,8 +2361,10 @@ function TransitionPanel({ t, pick }: { t: T; pick: TransitionPick }) {
  * whole, so its box keeps its proportions.
  */
 function ClipPositionSection({
-  t, loc, page, own, placed, value, geometry, onCommit, onPreview,
+  t, loc, page, own, placed, value, geometry, onCommit, onPreview, onAnimate,
 }: {
+  /** Its place moved with keyframes: the timeline animating, the clip twirled open. */
+  onAnimate?: () => void;
   t: T;
   loc: string;
   page: boolean;
@@ -2378,10 +2416,19 @@ function ClipPositionSection({
     <Section
       id="position"
       title={t('inspector.position')}
-      aside={placed ? (
-        <SectionAction label={t('inspector.resetTransform')} onClick={() => onCommit([{ loc, prop: 'box', value: home }])}>
-          <RotateCcw size={11} />
-        </SectionAction>
+      aside={placed || onAnimate ? (
+        <span className="flex items-center">
+          {onAnimate ? (
+            <SectionAction label={t('inspector.animate')} onClick={onAnimate}>
+              <Waypoints size={11} />
+            </SectionAction>
+          ) : null}
+          {placed ? (
+            <SectionAction label={t('inspector.resetTransform')} onClick={() => onCommit([{ loc, prop: 'box', value: home }])}>
+              <RotateCcw size={11} />
+            </SectionAction>
+          ) : null}
+        </span>
       ) : null}
     >
       <AlignBar t={t} onAlign={alignTo} />

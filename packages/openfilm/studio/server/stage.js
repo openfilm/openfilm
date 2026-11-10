@@ -127,6 +127,8 @@
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const INLINE = new Set(['BR', 'WBR', 'EM', 'STRONG', 'B', 'I', 'U', 'S', 'SPAN', 'SMALL', 'SUP', 'SUB', 'A', 'MARK', 'CODE', 'ABBR', 'Q', 'TIME']);
   const EDITOR_ATTR = 'data-openfilm-text-editor';
+  /** A part of an element's words the film animates on its own (an override's split, src/overrides.mjs). */
+  const PART_ATTR = 'data-film-part';
   const LIMIT = 1500;
   /** At most this many custom properties, and as many words, as a page's template controls. */
   const CONTROLS = 40;
@@ -167,6 +169,8 @@
       if (node.nodeType === 3) { out += node.nodeValue ?? ''; return; }
       if (node.nodeType !== 1) return;
       if (node.localName === 'br') { out += '\n'; return; }
+      /* a part the film split its words into (src/overrides.mjs): still those words */
+      if (node.hasAttribute(PART_ATTR)) { out += node.textContent ?? ''; return; }
       const display = css(node).display;
       if (!display.startsWith('inline') && display !== 'contents' && out && !out.endsWith('\n')) out += '\n';
       out += stageText(node);
@@ -174,12 +178,13 @@
     return collapse(out);
   };
   /** An element's own words: all of them, or, when it holds inline parts (`<em>`, `<br>`…), those written in it. */
-  const ownWords = (el) => [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.data).join('').replace(/\s+/g, ' ').trim();
+  const ownWords = (el) => [...el.childNodes].filter((n) => n.nodeType === 3 || (n.nodeType === 1 && n.hasAttribute(PART_ATTR)))
+    .map((n) => n.textContent).join('').replace(/\s+/g, ' ').trim();
   /* an icon beside the words (a badge's ✓, a button's arrow) does not stop them being the element's text: its own
      words are typed in place, and the icon stays (a text override changes the element's own words only) */
   const ICON = new Set(['svg', 'img']);
   /** Words alone, or lines between <br>s: a `text` override changes all of them, a <br> at each line break. */
-  const onlyBreaks = (el) => [...el.children].every((ch) => ch.localName === 'br');
+  const onlyBreaks = (el) => [...el.children].every((ch) => ch.localName === 'br' || ch.hasAttribute(PART_ATTR));
   /* words of its own beside blocks of their own (a title with its subtitle written inside it) are its text too: the
      blocks are layers of their own, and a text override changes its own words only */
   const textOf = (el) => (onlyBreaks(el) ? stageText(el) : ownWords(el));
@@ -2165,6 +2170,27 @@
      */
     tree() {
       return shown().map((c) => ({ clip: c.id, kind: c.kind, layers: c.kind === 'page' && c.win?.document?.body ? rowsOf(c) : [] }));
+    },
+    /**
+     * How long a shape layer's stroke is (its longest path, in its own units): what drawing it on runs along
+     * (the motion timeline's Trim). Null: no path in it.
+     */
+    strokeLength({ handle }) {
+      const el = nodeOf(handle);
+      if (!el) return null;
+      const shapes = [el, ...el.querySelectorAll('*')].filter((n) => typeof n.getTotalLength === 'function');
+      const lengths = shapes.map((n) => { try { return n.getTotalLength(); } catch { return 0; } }).filter((n) => n > 0);
+      return lengths.length ? Math.ceil(Math.max(...lengths)) : null;
+    },
+    /** The elements' own sizes (px, before any transform): what a mask of one is drawn in (the motion timeline). */
+    sizes({ handles }) {
+      return (handles ?? []).map((handle) => {
+        const el = nodeOf(handle);
+        if (!el) return null;
+        if (el.offsetWidth || el.offsetHeight) return { w: el.offsetWidth, h: el.offsetHeight };
+        try { const b = el.getBBox?.(); if (b?.width || b?.height) return { w: b.width, h: b.height }; } catch { /* not drawn */ }
+        return null;
+      });
     },
     /**
      * Restack siblings in the order a person put them in (the Layers panel): `order` the handles of the elements

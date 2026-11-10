@@ -1,0 +1,113 @@
+/* The motion panel: its categories as the inspector's (InspectorWorkspace), its sections, and the presets' tiles, each
+   playing what it does while the pointer is on it. */
+.panel { display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; color:var(--text); background:var(--dock-pane); }
+.tabs { display:flex; flex-shrink:0; align-items:stretch; gap:4px; height:40px; padding:0 8px; border-bottom:1px solid var(--dock-line); }
+.tabs button { position:relative; flex:none; padding:0 10px; color:var(--text-muted); font-size:11.5px; font-weight:500; white-space:nowrap; outline:none; transition:color .12s; }
+.tabs button:hover { color:var(--text); }
+.tabs button:focus-visible { box-shadow:inset 0 0 0 1.5px var(--accent); border-radius:4px; }
+.tabs .on { color:var(--tl-accent); font-weight:600; }
+.tabs .on::after { content:''; position:absolute; left:8px; right:8px; bottom:0; height:2px; border-radius:2px; background:var(--tl-accent); }
+.scroll { min-height:0; flex:1; overflow-y:auto; overscroll-behavior:contain; padding:0 0 20px; scrollbar-width:none; }
+.scroll::-webkit-scrollbar { display:none; }
+.section { margin:0 10px; padding:12px 4px; border-bottom:1px solid var(--border); }
+.sectionHead { display:flex; align-items:center; gap:6px; min-height:22px; margin-bottom:6px; font-size:12px; font-weight:600; }
+.sectionHead > span:first-child { flex:1; min-width:0; }
+.row { display:flex; align-items:center; gap:6px; min-height:26px; font-size:11.5px; }
+.label { width:78px; flex-shrink:0; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.slider { flex:1; min-width:0; height:16px; accent-color:var(--tl-accent); }
+.value { width:62px; flex-shrink:0; text-align:right; }
+.iconBtn { display:grid; place-items:center; width:20px; height:20px; flex-shrink:0; border-radius:4px; color:var(--text-faint); }
+.iconBtn:hover { color:var(--text); background:var(--bg-hover); }
+.layer { display:flex; align-items:center; gap:8px; margin:12px 14px 4px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--fill-tsp); font-size:12px; }
+.layer .chip { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+.layer .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
+.layer .kind { color:var(--text-faint); font-size:11px; }
+.empty { padding:28px 20px; color:var(--text-faint); font-size:12px; line-height:1.6; text-align:center; }
+.search { display:flex; align-items:center; gap:6px; height:30px; margin:10px 12px 2px; padding:0 8px; border:1px solid transparent; border-radius:6px; background:var(--bg-hover); color:var(--text-faint); }
+.search:focus-within { border-color:var(--border-strong); }
+.search input { flex:1; min-width:0; outline:none; background:transparent; font-size:12px; color:var(--text); }
+.groupTitle { padding:12px 14px 6px; color:var(--text-faint); font-size:10.5px; font-weight:500; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:6px; padding:0 12px; }
+.tile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px 4px 7px; border:1px solid var(--border); border-radius:8px; background:var(--fill-tsp); color:var(--text-muted); font-size:11px; line-height:14px; text-align:center; cursor:pointer; outline:none; transition:border-color .12s, background .12s, color .12s; }
+.tile:hover { border-color:var(--border-strong); background:var(--bg-hover); color:var(--text); }
+.tile:focus-visible { box-shadow:inset 0 0 0 1px var(--accent); }
+.tile[aria-disabled='true'] { opacity:.45; cursor:default; }
+.tile[aria-disabled='true']:hover { border-color:var(--border); background:var(--fill-tsp); color:var(--text-muted); }
+.hint { margin:14px 14px 0; color:var(--text-faint); font-size:11px; line-height:1.5; }
+
+/* a tile's picture: a stage with a card on it, which the preset moves */
+.stage { position:relative; display:grid; place-items:center; width:56px; height:34px; overflow:hidden; border-radius:5px; background:color-mix(in srgb, var(--text) 7%, transparent); }
+.card { width:22px; height:14px; border-radius:3px; background:linear-gradient(135deg, #f0894b, #8b7cf6 60%, #2fb5a8); }
+.words { display:flex; gap:1px; font-size:13px; font-weight:700; color:var(--text); }
+.words span { display:inline-block; }
+.tile:not([aria-disabled='true']):hover .card,
+.tile:not([aria-disabled='true']):hover .words span { animation-duration:1.6s; animation-iteration-count:infinite; animation-fill-mode:both; }
+.tile:not([aria-disabled='true']):hover .words span:nth-child(2) { animation-delay:.12s; }
+.tile:not([aria-disabled='true']):hover .words span:nth-child(3) { animation-delay:.24s; }
+.tile:not([aria-disabled='true']):hover .words span:nth-child(4) { animation-delay:.36s; }
+
+.fadeIn:hover .card { animation-name:fadeIn; animation-timing-function:ease-out; }
+.riseIn:hover .card { animation-name:riseIn; animation-timing-function:cubic-bezier(.2,.8,.2,1); }
+.popIn:hover .card { animation-name:popIn; animation-timing-function:ease-out; }
+.slideIn:hover .card { animation-name:slideIn; animation-timing-function:cubic-bezier(.2,.8,.2,1); }
+.spinIn:hover .card { animation-name:spinIn; animation-timing-function:cubic-bezier(.2,.8,.2,1); }
+.fadeOut:hover .card { animation-name:fadeOut; animation-timing-function:ease-in; }
+.sinkOut:hover .card { animation-name:sinkOut; animation-timing-function:ease-in; }
+.shrinkOut:hover .card { animation-name:shrinkOut; animation-timing-function:ease-in; }
+.pushIn:hover .card { animation-name:pushIn; animation-timing-function:ease-in-out; }
+.pulse:hover .card { animation-name:pulse; animation-timing-function:ease-in-out; }
+.wiggle:hover .card { animation-name:wiggle; animation-timing-function:ease-in-out; }
+.float:hover .card { animation-name:float; animation-timing-function:ease-in-out; }
+@keyframes fadeIn { 0% { opacity:0 } 45%,100% { opacity:1 } }
+@keyframes riseIn { 0% { opacity:0; translate:0 10px } 45%,100% { opacity:1; translate:0 0 } }
+@keyframes popIn { 0% { opacity:0; scale:.5 } 30% { opacity:1; scale:1.1 } 45%,100% { scale:1 } }
+@keyframes slideIn { 0% { opacity:0; translate:-24px 0 } 45%,100% { opacity:1; translate:0 0 } }
+@keyframes spinIn { 0% { opacity:0; rotate:-90deg; scale:.4 } 45%,100% { opacity:1; rotate:0deg; scale:1 } }
+@keyframes fadeOut { 0%,40% { opacity:1 } 85%,100% { opacity:0 } }
+@keyframes sinkOut { 0%,40% { opacity:1; translate:0 0 } 85%,100% { opacity:0; translate:0 10px } }
+@keyframes shrinkOut { 0%,40% { opacity:1; scale:1 } 85%,100% { opacity:0; scale:.5 } }
+@keyframes pushIn { 0% { scale:1 } 100% { scale:1.35 } }
+@keyframes pulse { 0%,50%,100% { scale:1 } 25%,75% { scale:1.15 } }
+@keyframes wiggle { 0%,50%,100% { rotate:0deg } 12.5%,62.5% { rotate:8deg } 37.5%,87.5% { rotate:-8deg } }
+@keyframes float { 0%,100% { translate:0 0 } 50% { translate:0 -5px } }
+
+.text-fade:hover .words span { animation-name:tFade; animation-timing-function:ease-out; }
+.text-rise:hover .words span { animation-name:tRise; animation-timing-function:ease-out; }
+.text-pop:hover .words span { animation-name:tPop; animation-timing-function:ease-out; }
+.text-blur:hover .words span { animation-name:tBlur; animation-timing-function:ease-out; }
+.text-typewriter:hover .words span { animation-name:tType; animation-timing-function:steps(1, end); }
+.text-drop:hover .words span { animation-name:tDrop; animation-timing-function:ease-out; }
+@keyframes tFade { 0% { opacity:0 } 30%,100% { opacity:1 } }
+@keyframes tRise { 0% { opacity:0; translate:0 8px } 30%,100% { opacity:1; translate:0 0 } }
+@keyframes tPop { 0% { opacity:0; scale:.4 } 20% { opacity:1; scale:1.2 } 30%,100% { scale:1 } }
+@keyframes tBlur { 0% { opacity:0; filter:blur(4px) } 30%,100% { opacity:1; filter:blur(0) } }
+@keyframes tType { 0% { opacity:0 } 10%,100% { opacity:1 } }
+@keyframes tDrop { 0% { opacity:0; translate:0 -8px } 30%,100% { opacity:1; translate:0 0 } }
+
+/* an effect's picture: the card as it makes it look */
+.fx-blur .card { filter:blur(2.5px); }
+.fx-brightness .card { filter:brightness(1.6); }
+.fx-contrast .card { filter:contrast(1.9); }
+.fx-saturate .card { filter:saturate(2.4); }
+.fx-hue .card { filter:hue-rotate(120deg); }
+.fx-grayscale .card { filter:grayscale(1); }
+.fx-invert .card { filter:invert(1); }
+.fx-glow .card { filter:drop-shadow(0 0 5px rgb(255 255 255 / .95)); }
+/* a mask's: the card cut so */
+.mask .card { width:40px; height:26px; }
+.mask-linear .card { mask-image:linear-gradient(90deg, #000 45%, transparent 75%); }
+.mask-mirror .card { mask-image:linear-gradient(90deg, transparent, #000 35%, #000 65%, transparent); }
+.mask-ellipse .card { clip-path:ellipse(42% 46% at 50% 50%); }
+.mask-rect .card { clip-path:inset(18% 20% round 3px); }
+.mask-star .card { clip-path:polygon(50% 2%, 61% 36%, 97% 36%, 68% 57%, 79% 92%, 50% 71%, 21% 92%, 32% 57%, 3% 36%, 39% 36%); }
+.mask-heart .card { clip-path:path('M20 24 C 6 15 4 8 9 4 C 13 1 18 3 20 7 C 22 3 27 1 31 4 C 36 8 34 15 20 24 Z'); }
+.three .card { transform:perspective(60px) rotateY(38deg) rotateX(12deg); }
+.stroke svg { color:var(--tl-accent); }
+.stroke:hover path { animation:draw 1.6s ease-in-out infinite; }
+@keyframes draw { 0% { stroke-dashoffset:60 } 60%,100% { stroke-dashoffset:0 } }
+.howTo { padding:22px 18px; color:var(--text-muted); font-size:12px; line-height:1.55; }
+.howTitle { margin:0 0 12px; color:var(--text); font-weight:500; }
+.howSteps { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:10px; }
+.howSteps li { display:flex; gap:10px; align-items:flex-start; }
+.howN { flex:none; display:grid; place-items:center; width:18px; height:18px; border-radius:50%; background:var(--bg-hover); color:var(--text); font-size:11px; font-variant-numeric:tabular-nums; }
+.howMore { margin:14px 0 0; color:var(--text-faint); font-size:11px; }

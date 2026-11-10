@@ -23,6 +23,7 @@ import { ShortcutsSection } from './ShortcutsSection';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
 import { useThemeMode, type ThemeMode } from './theme';
 import { StorageGroup } from './StorageGroup';
+import { WORK_MODES, setWorkMode, useWorkModes, type WorkMode } from '../../lib/work-modes';
 import { LARGE_DIALOG_SIZE } from '../dialog-chrome';
 import { LibraryCategoriesGroup } from './LibraryCategoriesGroup';
 
@@ -59,7 +60,7 @@ const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
   models: ['settings.models', 'settings.providers'],
   developer: ['settings.developer', 'settings.report'],
   shortcuts: 'settings.shortcuts',
-  advanced: ['settings.advanced', ...(studioHost?.notifications ? ['settings.notifications'] : []), 'settings.versions', 'settings.playback', 'settings.libraryCategories'],
+  advanced: ['settings.advanced', 'settings.workModes', ...(studioHost?.notifications ? ['settings.notifications'] : []), 'settings.versions', 'settings.playback', 'settings.libraryCategories'],
 };
 
 export interface SettingsModalProps {
@@ -321,6 +322,21 @@ function PlaybackGroup() {
   );
 }
 
+/** The ways of working a project offers (lib/work-modes): with one on, the top bar has no switch. The last stays on. */
+function WorkModesGroup() {
+  const t = useT();
+  const on = useWorkModes();
+  const NAME: Record<WorkMode, [string, string]> = { edit: ['canvas.modeEdit', 'canvas.noteEdit'], canvas: ['canvas.modeCanvas', 'canvas.noteCanvas'], motion: ['canvas.modeMotion', 'canvas.noteMotion'] };
+  return (
+    <SettingsGroup title={t('settings.workModes.group')} footnote={t('settings.workModes.footnote')}>
+      {WORK_MODES.map((m) => (
+        <SettingsItem key={m} title={t(NAME[m][0])} description={t(NAME[m][1])}
+          control={<SettingsSwitch checked={on.includes(m)} disabled={on.length === 1 && on.includes(m)} onChange={(v) => setWorkMode(m, v)} label={t(NAME[m][0])} />} />
+      ))}
+    </SettingsGroup>
+  );
+}
+
 /**
  * Versions saved on their own (studio/server/auto-versions.mjs): whether open projects save them while they are worked
  * on. Showing these versions is controlled by the type filter in Version history.
@@ -351,6 +367,7 @@ function AdvancedSection() {
   const t = useT();
   return (
     <SettingsPage note={t('settings.advanced.intro')}>
+      <WorkModesGroup />
       {studioHost?.notifications ? <NotificationsGroup /> : null}
       <VersionsGroup />
       <PlaybackGroup />

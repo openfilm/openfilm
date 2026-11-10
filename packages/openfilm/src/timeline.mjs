@@ -2,7 +2,7 @@
 // in host.mjs); the file's own elements are the clips: an <iframe> a web page, a <video>, an <img> a still, an
 // <audio> a sound for the mix. Where each plays and sits is what film-doc.mjs reads in the file, the same reading
 // Studio plays and exports by; how each looks is the file's own CSS. Track 0, the first <section>, is on top.
-import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
+import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
 import { CAPTION_BASE_CSS, cueCss, cueLayout, cueNodes, readVtt, regionBox } from './captions.mjs';
 
@@ -23,6 +23,11 @@ const styleOf = (text) => {
 const head = styleOf(filmHead(ownText));
 if (!read.doc) throw new Error(read.problems.length === 1 ? read.problems[0] : `film.html has ${read.problems.length} problems:\n  ${read.problems.join('\n  ')}`);
 let doc = read.doc;
+/* the film's keyframes as they are now: played inside pages too, by their elements' tweaks (overrides.mjs), and
+   telling which pictures are in 3D (place) */
+let filmKeyframes = doc.keyframes ?? {};
+/* the effects' custom properties ease (film-doc EFFECTS); pages register them as their tweaks need (overrides.mjs) */
+registerEffects(window);
 /* the stage, the same object while the film is shown: an edit of its size changes it in place (see reshape) */
 const stage = { ...doc.stage };
 Object.assign(document.body.style, { width: stage.w + 'px', height: stage.h + 'px', margin: '0', overflow: 'hidden', position: 'relative' });
@@ -130,10 +135,33 @@ function place(c, box) {
   const cx = at.x + at.w / 2, cy = at.y + at.h / 2;
   Object.assign(c.el.style, {
     position: 'absolute', left: '0', top: '0', right: 'auto', bottom: 'auto', margin: '0', translate: 'none', rotate: 'none', scale: 'none',
-    width: c.w + 'px', height: c.h + 'px', transformOrigin: `${cx}px ${cy}px`,
-    /* T(−origin) · placing · T(origin), the first two of which cancel: about the origin it is the placing alone */
-    transform: `rotate(${at.r}deg) translate(${-at.w / 2}px, ${-at.h / 2}px)${k} translate(${cx}px, ${cy}px)`,
+    /* about its anchor point (SPEC §1: --fx-ax, --fx-ay from its box's middle) */
+    width: c.w + 'px', height: c.h + 'px', transformOrigin: `calc(${cx}px + ${AX}) calc(${cy}px + ${AY})`,
+    /* T(−origin) · placing · T(origin), the first two of which cancel: about the origin it is the placing alone (the
+       anchor's offset taken off before it and put back after), its box's turn about the anchor as its animation's
+       is; in 3D (SPEC §1: --fx-z, --fx-rx, --fx-ry) moved toward the viewer and turned about its X and Y axes there
+       too */
+    transform: `${inThreeD(c) ? `${THREE_D} ` : ''}rotate(${at.r}deg) translate(calc(-1 * ${AX}), calc(-1 * ${AY})) translate(${-at.w / 2}px, ${-at.h / 2}px)${k} translate(${cx}px, ${cy}px) translate(${AX}, ${AY})`,
   });
+}
+const THREE_D = 'translateZ(var(--fx-z, 0px)) rotateX(var(--fx-rx, 0deg)) rotateY(var(--fx-ry, 0deg))';
+const AX = 'var(--fx-ax, 0px)', AY = 'var(--fx-ay, 0px)';
+const THREE_D_PROPS = /--fx-(z|rx|ry)\b/;
+/** Whether a clip is in 3D: its style, or keyframes it plays, say so (a flat one is placed flat, as it always was). */
+function inThreeD(c) {
+  const style = c.row?.style ?? '';
+  if (THREE_D_PROPS.test(style)) return true;
+  const names = /animation\s*:\s*([^;]+)/.exec(style)?.[1]?.split(',').map((e) => e.trim().split(/\s+/)[0]) ?? [];
+  return names.some((n) => THREE_D_PROPS.test(filmKeyframes[n] ?? ''));
+}
+
+/**
+ * The film's camera, once a picture of it is in 3D: a perspective as an animation editor's default (a 50 mm lens on
+ * this stage), looking at its middle. A film all flat has none.
+ */
+function camera() {
+  const on = clips.some(inThreeD);
+  document.body.style.perspective = on ? `${Math.round(stage.w * 1.38889 * 100) / 100}px` : '';
 }
 
 /* ── animated pictures ─────────────────────────────────────────────────── */
@@ -1132,6 +1160,7 @@ const loading = (async () => {
   clips.push(...await loadAll(doc.tracks.flatMap((track, ti) => track.clips.map((row, ci) => ({ row, track, ti, el: elements[ti][ci] })))));
   await captionsRead;
   hear();
+  camera();
 })();
 /* a film that cannot load (a clip with no length, a missing file) is the host's to report, once, when it awaits
    `ready`: until it does, that is not an error nobody handled */
@@ -1243,7 +1272,7 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   c.win.filmHost?.settle?.(local);
   if (!live) await mediaShown(c.win.document);
   c.drawn = true;
-  override(c, c.preview ?? c.overrides);
+  override(c, c.preview ?? c.overrides, filmKeyframes);
   held(c, local);
   /* drawn again once they are in: the page laid its frame out without them */
   if (!live && await overrideFonts(c)) {
@@ -1486,6 +1515,7 @@ function element(row) {
 let keyframesStyle = null;
 function keyframesNow(keyframes) {
   if (!keyframes) return;
+  filmKeyframes = keyframes;
   keyframesStyle ??= document.head.appendChild(document.createElement('style'));
   const text = Object.entries(keyframes).map(([name, body]) => `@keyframes ${name} { ${body} }`).join('\n');
   if (keyframesStyle.textContent !== text) keyframesStyle.textContent = text;
@@ -1560,6 +1590,7 @@ async function change(value, look) {
   }
   clips.splice(0, clips.length, ...records);
   hear();
+  camera();
   window.__filmEditor.stage.updated?.();
   return true;
 }
@@ -1602,7 +1633,7 @@ async function cue(c, row, track, t, fresh) {
     await c.child.frame(local);
     c.win.filmHost?.settle?.(local);
     c.drawn = true;
-    override(c, c.overrides);
+    override(c, c.overrides, filmKeyframes);
     held(c, local);
   } finally { cueing.delete(c); }
 }
@@ -1741,7 +1772,7 @@ window.__filmEditor = {
     restore(c);
     c.preview = overrides ?? undefined;
     if (!c.drawn) return;
-    override(c, c.preview ?? c.overrides);
+    override(c, c.preview ?? c.overrides, filmKeyframes);
     if (c.local != null) held(c, c.local);
   },
   /** What is on top under the stage point (x, y) now: an element of a page, or a clip. */
