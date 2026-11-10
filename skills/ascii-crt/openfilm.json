@@ -1,0 +1,20 @@
+{
+  "version": "0.1.0",
+  "repository": "local/lemo-openfilm-styles/skills/ascii-crt",
+  "kind": "style",
+  "icon": "monitor",
+  "cover": "cover.jpg",
+  "title": {
+    "en": "ASCII / CRT Terminal",
+    "zh-CN": "ASCII / CRT 终端"
+  },
+  "summary": {
+    "en": "Your film as glowing text on an old monochrome terminal.",
+    "zh-CN": "你的片子变成一台老式单色终端上发光的文字画面。"
+  },
+  "details": {
+    "en": "Best for: developer tools, sci-fi, tech brands, anything that wants a cold, patient, machine feel.\nWhat it does: builds every image from real characters on a grid, lit like a 1980s CRT, with terminal-style typed subtitles.",
+    "zh-CN": "适合：开发者工具、科幻、科技品牌，想要冷静克制的机器感。\n它会：用真实字符在网格上拼出每个画面，配上80年代CRT的发光效果和逐字打出的终端字幕。"
+  },
+  "preview": "preview.mp4"
+}
