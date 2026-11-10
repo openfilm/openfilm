@@ -57,7 +57,7 @@ export function isVideoAttachment(file: { name: string; type?: string; mediaType
 
 /** The mediaType sent on: from the table, else the one the browser reports. */
 export function documentMediaType(file: { name: string; type: string }): string {
-  return DOCUMENT_MEDIA_TYPES[extensionOf(file.name)] ?? file.type ?? 'application/octet-stream';
+  return DOCUMENT_MEDIA_TYPES[extensionOf(file.name)] ?? (file.type || 'application/octet-stream');
 }
 
 /**

@@ -31,3 +31,8 @@ test('a long reply is cut, and a long conversation keeps its latest turns', () =
   assert.ok(sent.includes('Person: message 39'));
   assert.ok(!sent.includes('Person: message 0\n'));
 });
+
+test('an empty turn does not make the new session claim history was cut', () => {
+  const sent = withConversationSoFar([saved('hello', 'hi'), saved('')], 'Now the music');
+  assert.doesNotMatch(sent, /latest of it/);
+});

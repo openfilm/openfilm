@@ -25,7 +25,7 @@ test('editing-project exports keep effects automatically and remember whether to
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'en-US', reducedMotion: 'reduce' });
     page.setDefaultTimeout(8000);
     await page.addInitScript(() => {
-      localStorage.setItem('openfilm.exportCenter.v1', JSON.stringify({ dest: 'nle', nle: { app: 'premiere', footage: 'render', media: 'invalid' } }));
+      localStorage.setItem('openfilm.exportCenter.v1', JSON.stringify({ dest: 'nle', nle: { app: 'premiere', footage: 'source', media: 'invalid' } }));
     });
     const queued = [];
     await page.route(`**/api/projects/${project.id}/exports`, async (route) => {
@@ -44,8 +44,7 @@ test('editing-project exports keep effects automatically and remember whether to
     for (const [app, format] of [['Premiere Pro', 'xml'], ['DaVinci Resolve', 'xml'], ['Final Cut Pro', 'fcpxml'], ['CapCut', 'capcut']]) {
       await open();
       await dialog.getByRole('button', { name: app, exact: true }).click();
-      assert.equal(await dialog.getByRole('button', { name: /Keep original media|Keep rendered effects/ }).count(), 0);
-      assert.equal(await dialog.getByText('Keeps the OpenFilm look.', { exact: false }).isVisible(), true);
+      assert.equal(await dialog.getByRole('button', { name: /Keep original media|Keep effects automatically|Keep rendered effects/ }).count(), 0);
       if (queued.length === 0) assert.equal(await dialog.getByRole('button', { name: 'Copy complete media', exact: true }).getAttribute('aria-pressed'), 'true');
       await dialog.getByRole('button', { name: 'Link original files', exact: true }).click();
       assert.equal(await dialog.getByRole('button', { name: 'Link original files', exact: true }).getAttribute('aria-pressed'), 'true');

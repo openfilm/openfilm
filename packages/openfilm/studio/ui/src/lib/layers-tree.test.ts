@@ -82,6 +82,8 @@ test('a Shift-click range is the rows shown between the two, either way round; a
   assert.deepEqual(locs('#title', '#bg', shut), ['#title', '#logo', '#bg']);
   assert.ok(!locs('#title', '#bg', shut).includes('#mark'));
   assert.deepEqual(rowsBetween(open, line('#title'), line('#title')).map((l) => l.row!.loc), ['#title'], 'one row: itself');
+  const refreshed = open.map((entry) => ({ ...entry }));
+  assert.deepEqual(rowsBetween(refreshed, line('#card'), line('#footer')).map((l) => l.row!.loc), ['#card', '#footer'], 'a refresh during a drag keeps the range');
 });
 
 test('the rows selected are \'on\', what a selected one holds is \'in\', the rest neither', () => {

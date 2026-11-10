@@ -546,7 +546,6 @@ export const en = {
     nleHintResolve: 'Creates a folder with the XML and a media folder. In DaVinci Resolve: File › Import › Timeline. Keep the folder where it is, or relink after moving it.',
     nleHintDraft: "Makes a draft in {app}'s drafts folder, so it is on {app}'s home screen (if {app} is open, restart it). Pages come as clips with alpha.",
     nleHintDraftNone: "{app} isn't on this computer: the draft is made in the export folder. Move it into {app}'s drafts folder (Settings › Drafts location).",
-    nleEffectsHint: "Keeps the OpenFilm look. Supported settings stay editable; other effects are rendered into clips.",
     nleMedia: "Media files",
     nleMediaLink: "Link original files",
     nleMediaCopy: "Copy complete media",

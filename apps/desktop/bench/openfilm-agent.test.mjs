@@ -73,7 +73,7 @@ test('OpenFilm follows Claude under Your agents, shares account actions and neve
       assert.equal(await row.getByRole('button', { name: /Connection help|连接帮助/ }).count(), 0);
       assert.doesNotMatch(await row.innerText(), /与服务商共享账号和余额|Same account and balance as Services/);
       const info = row.getByRole('button', { name: zh ? 'OpenFilm 信息与模型' : 'OpenFilm info and models', exact: true });
-      await row.getByText(zh ? '未登录' : 'Not signed in', { exact: true }).waitFor();
+      await row.getByText(zh ? '未连接' : 'Not connected', { exact: true }).waitFor();
       assert.equal(await info.isVisible(), true);
       await page.evaluate(() => window.openfilmAgentFixture.publish({ error: 'API answered 401' }));
       assert.equal(await row.getByRole('alert').count(), 0, 'the agent list presents sign-in status without technical details');

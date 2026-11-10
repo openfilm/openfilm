@@ -316,8 +316,9 @@ export function antigravityVersion(file, { ask = askVersion } = {}) {
 /** Whether version `a` is later than `b` (dotted numbers); false when either is unknown. */
 export function laterVersion(a, b) {
   if (!a || !b) return false;
-  const x = a.split('.').map(Number);
-  const y = b.split('.').map(Number);
+  const parts = (s) => String(s).replace(/-.*$/, '').split('.').map((p) => Number(p) || 0);
+  const x = parts(a);
+  const y = parts(b);
   for (let i = 0; i < Math.max(x.length, y.length); i += 1) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
   return false;
 }

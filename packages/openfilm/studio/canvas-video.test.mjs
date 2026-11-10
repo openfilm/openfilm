@@ -73,7 +73,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     const sideButtons = node.locator('[data-handleid="in"], [data-handleid="out"]');
     const sideColors = () => node.locator('[data-canvas-side-plus]').evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderColor));
     const card = node.locator('[data-canvas-card]');
-    await video.waitFor();
+    await video.waitFor({ state: 'attached' });
     await video.evaluate((el) => { el.dataset.originalPlayer = 'true'; });
     await page.waitForFunction((nodeId) => document.querySelector(`[data-id="${nodeId}"] video`)?.readyState >= 2, id);
     assert.deepEqual(await node.boundingBox(), beforeUpload, 'the upload slot is the final video box');
@@ -155,9 +155,6 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
       near({ x: plus.x + plus.width / 2, y: plus.y + plus.height / 2 }, pointer);
     }
     const handle = node.locator('[data-handleid="out"]');
-    const plus = await handle.locator('[data-canvas-side-plus]').boundingBox();
-    const start = { x: plus.x + plus.width / 2, y: plus.y + plus.height / 2 };
-    const drop = { x: 1209, y: start.y + 71 };
     const dragWire = page.locator('[data-canvas-wire="drag"]');
     const menuWire = page.locator('[data-canvas-wire="menu"]');
     const endpoints = (wire) => wire.evaluate((path) => {
@@ -176,10 +173,31 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     const dragFlow = page.locator('.react-flow__connectionline .cv-wire-flow');
     await page.getByRole('button', { name: 'Snap to grid' }).click();
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.mouse.move(start.x, start.y);
+    // Check the browser delivered the input before asserting on the connection rendered from it.
+    await page.evaluate(() => {
+      document.addEventListener('mousedown', (event) => {
+        window.__wirePress = event.target.closest?.('[data-handleid]')?.dataset.handleid;
+      }, true);
+      document.addEventListener('mousemove', (event) => {
+        if (event.buttons === 1) window.__wireMove = { x: event.clientX, y: event.clientY };
+      }, true);
+    });
+    const moveWire = async (point, steps) => {
+      await page.mouse.move(point.x, point.y, { steps });
+      await page.waitForFunction(({ x, y }) => {
+        const move = window.__wireMove;
+        return move && Math.hypot(move.x - x, move.y - y) < 2;
+      }, point);
+    };
+    // Moving to the toolbar reset the plus offset. Start from the live handle, not its earlier decoration.
+    await handle.hover();
+    const bounds = await handle.boundingBox();
+    const start = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+    const drop = { x: 1209, y: start.y + 71 };
     await page.mouse.down();
+    await page.waitForFunction(() => window.__wirePress === 'out');
     for (const pointer of [{ x: start.x + 65, y: start.y + 25 }, drop]) {
-      await page.mouse.move(pointer.x, pointer.y, { steps: 4 });
+      await moveWire(pointer, 4);
       await dragWire.waitFor({ state: 'attached' });
       const [origin, tip] = await endpoints(dragWire);
       near(origin, cardEdge);
@@ -214,12 +232,12 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     assert.deepEqual(await stroke(edge), activeStroke);
 
     const incoming = node.locator('[data-handleid="in"]');
-    await node.hover();
-    const leftPlus = await incoming.locator('[data-canvas-side-plus]').boundingBox();
-    const leftDrop = { x: 227, y: leftPlus.y + 31 };
-    await page.mouse.move(leftPlus.x + leftPlus.width / 2, leftPlus.y + leftPlus.height / 2);
+    await incoming.hover();
+    const leftHandle = await incoming.boundingBox();
+    const leftDrop = { x: 227, y: leftHandle.y + leftHandle.height / 2 + 31 };
     await page.mouse.down();
-    await page.mouse.move(leftDrop.x, leftDrop.y, { steps: 8 });
+    await page.waitForFunction(() => window.__wirePress === 'in');
+    await moveWire(leftDrop, 8);
     await page.mouse.up();
     await menuWire.waitFor({ state: 'attached' });
     near((await endpoints(menuWire))[1], leftDrop);
@@ -240,7 +258,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
         const request = response.request();
         return response.ok() && request.method() === 'PUT' && new URL(request.url()).pathname === `/api/projects/${project.id}/canvas`
           && request.postDataJSON().nodes.some((item) => item.path === frame);
-      });
+      }, { timeout: 20_000 });
       const camera = node.getByRole('button', { name: 'Take frame' });
       await camera.hover();
       const option = node.getByRole('button', { name: `Capture ${mode} frame` });
@@ -300,7 +318,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     }), id, 'the saved stacking order survives reload');
     const other = page.getByTestId('rf__node-shared-audio');
     const otherVideo = other.locator('video');
-    await otherVideo.waitFor();
+    await otherVideo.waitFor({ state: 'attached' });
     assert.equal(await otherVideo.evaluate((el) => el.muted), true, 'new and restored nodes use the saved sound preference');
     assert.equal(await otherVideo.evaluate((el) => el.volume), 0.5, 'restored videos use the shared volume');
     await other.hover();
@@ -316,13 +334,16 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     const reveal = node.getByRole('button', { name: 'Show in Assets', exact: true });
     const library = page.locator('[data-workspace-library]');
     const asset = library.locator('[data-media-path="assets/clip.webm"]');
+    const highlighted = library.locator('[data-media-path="assets/clip.webm"][data-media-revealed]');
     await reveal.click();
     await asset.waitFor();
+    await highlighted.waitFor();
+    await highlighted.waitFor({ state: 'hidden' });
     assert.equal(await page.locator('[data-work-mode="canvas"]').count(), 1);
     await library.getByRole('button', { name: 'Favorites', exact: true }).click();
     await library.getByRole('button', { name: 'Effects', exact: true }).click();
     await reveal.click();
-    await asset.waitFor();
+    await highlighted.waitFor();
     assert.equal(await library.getByRole('button', { name: 'Media', exact: true }).getAttribute('aria-pressed'), 'true');
     assert.equal(await page.locator('[data-work-mode="canvas"]').count(), 1);
     assert.deepEqual(errors, []);

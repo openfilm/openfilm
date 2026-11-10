@@ -12,3 +12,9 @@ test('the library\'s categories in the person\'s order: the media first and show
     { id: 'media', on: true }, { id: 'sticker', on: true }, { id: 'skill', on: false }, { id: 'template', on: true }, { id: 'text', on: true },
   ]);
 });
+
+test('a saved order naming a category twice still shows it once', () => {
+  const ids = arrangedCategories(ALL, { order: ['sticker', 'sticker', 'text'], off: [] }).map((c) => c.id);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.equal(ids.filter((id) => id === 'sticker').length, 1);
+});

@@ -193,3 +193,8 @@ test('the examples\' fold is kept, and a storage that throws is no fold', () => 
   assert.equal(examplesCollapsed({ getItem: () => { throw new Error('blocked'); } }), false);
   assert.equal(examplesCollapsed(null), false);
 });
+
+test('a length past an hour keeps its hours, as the timeline names it', () => {
+  assert.equal(formatSeconds(3723), '1:02:03');
+  assert.equal(formatSeconds(89), '1:29');
+});

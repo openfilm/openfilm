@@ -86,3 +86,10 @@ test('the sent bubble keeps file pills without their passing picture, and gets t
   assert.equal(attachmentPillPictures({ text: 'x', references: [studio] }, [{ kind: 'image', name: 'old.png' }]), null, 'a message from before');
   assert.equal(attachmentPillPictures(undefined, [{ kind: 'image', name: 'long.png' }]), null, 'a message too long to keep its pills');
 });
+
+test('a path with a backtick in it is still one quotation', () => {
+  assert.equal(attachmentWords({ path: '/Users/me/my `notes`/clip.mp4' }), '`` /Users/me/my `notes`/clip.mp4 ``');
+  assert.equal(attachmentWords({ path: 'C:\\My notes\\``clip.mp4' }), '``` C:\\My notes\\``clip.mp4 ```');
+  assert.equal(attachmentWords({ path: 'clip`' }), '`` clip` ``');
+  assert.equal(attachmentWords({ path: '/Users/me/plain/clip.mp4' }), '/Users/me/plain/clip.mp4');
+});

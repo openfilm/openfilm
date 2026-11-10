@@ -223,6 +223,7 @@ export function LayersPanel(p: LayersPanelProps) {
   const matches = (a: LayerSelection, b: LayerSelection) => a.clipId === b.clipId && a.loc === b.loc;
   const selectRange = (start: LayerLine, end: LayerLine, add: boolean) => {
     const range = rowsBetween(lines, start, end).map(rowSelection);
+    if (!range.length) return;
     const kept = add ? selectedRows.filter((s) => !range.some((r) => matches(r, s))) : [];
     p.onSelectRows([...kept, ...range]);
   };
@@ -270,8 +271,10 @@ export function LayersPanel(p: LayersPanelProps) {
           if (pr.range) {
             const over = lineAt(e.clientY);
             if (!over) return;
+            const a = lines.findIndex((line) => line.key === pr.line.key);
+            if (a < 0) { endDrag(false); return; }
             rangeEnd.current = over;
-            const a = lines.indexOf(pr.line), b = lines.indexOf(over);
+            const b = lines.indexOf(over);
             setRangeBox({ top: Math.min(a, b) * ROW_H, height: (Math.abs(a - b) + 1) * ROW_H });
             return;
           }

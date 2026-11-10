@@ -21,7 +21,7 @@ export function workspacePreviewFrames(layout: WorkspaceLayout, viewport: {width
   const timeline=layout.timeline?(layout.timelineHeight===null?Math.min(fit,tallest,Math.max(104,Math.round(height*.45))):Math.min(layout.timelineHeight,tallest)):0;
   const rowHeight=Math.max(0,height-(layout.timeline?timeline+1:0));
   const rowTop=top+(layout.timeline&&layout.timelineEdge==='top'?timeline+1:0);
-  const inspector=layout.inspector&&!(width<880&&(options.inspectorIdle??true))?Math.max(200,Math.min(layout.inspectorWidth,width-288)):0;
+  const inspector=layout.inspector&&!(width<880&&(options.inspectorIdle??true))?Math.max(0,Math.min(layout.inspectorWidth,width-288)):0;
   const room=width-inspector-296;
   const layers=layout.layers&&room>=180?Math.min(layout.layersWidth,room):0;
   const viewer=Math.max(0,width-inspector-layers-(inspector?1:0)-(layers?1:0));

@@ -8,7 +8,7 @@
  * with it, in a bar over it.
  */
 import React from 'react';
-import { Handle, NodeResizeControl, NodeResizer, NodeToolbar, Position, useStore, type NodeProps } from '@xyflow/react';
+import { Handle, NodeResizeControl, NodeResizer, NodeToolbar, Position, useStore, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
   AlignLeft, AudioLines, BookmarkPlus, Bot, Clapperboard, FileQuestion, Film, Image as ImageIcon, Layers, LayoutGrid, Loader2, Mic, Music, PenLine, Play, Plus, Scissors,
   Square, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
@@ -146,6 +146,15 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
   const board = useBoard();
   const far = useStore(farSelector);
   const resizing = useStore((state) => Boolean(state.nodeLookup.get(id)?.resizing));
+  const updateNodeInternals = useUpdateNodeInternals();
+  const handleLayout = pending ? 'pending' : board.readOnly ? 'anchors' : `${ins !== false}/${outs !== false}`;
+  const previousHandleLayout = React.useRef(handleLayout);
+  React.useLayoutEffect(() => {
+    // Finishing an upload can add handles without resizing the card, so its size observer will not discover them.
+    if (previousHandleLayout.current === handleLayout) return;
+    previousHandleLayout.current = handleLayout;
+    updateNodeInternals(id);
+  }, [handleLayout, id, updateNodeInternals]);
   const t = useT();
   const [draft, setDraft] = React.useState<string | null>(null);
   const cancel = React.useRef(false);

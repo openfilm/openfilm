@@ -546,7 +546,6 @@ export const zhCN: Words = {
     nleHintResolve: '会生成一个文件夹，内含 XML 和一个媒体文件夹。在 DaVinci Resolve 中：文件 › 导入 › 时间线。请保持文件夹位置不变，移动后需要重新链接。',
     nleHintDraft: '直接生成到{app}的草稿文件夹，打开{app}首页就能看到（{app}开着的话，重启一下）。页面是带 Alpha 通道的片段。',
     nleHintDraftNone: '这台电脑上没有找到{app}：草稿会生成在导出文件夹里，把它移到{app}的草稿文件夹（设置 › 草稿位置）即可。',
-    nleEffectsHint: "保留 OpenFilm 的画面效果。目标软件支持的参数仍可编辑，其余效果会渲染成片段。",
     nleMedia: "素材文件",
     nleMediaLink: "引用原始文件",
     nleMediaCopy: "复制完整素材",

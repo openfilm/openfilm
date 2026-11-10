@@ -92,3 +92,10 @@ test('made media: image references after the receipt are taken off, however much
   // a long run of spaces is read once, not again from each of them
   assert.equal(publicActivityResult('image_gen', `${receipt}${' '.repeat(200_000)}x`), null);
 });
+
+test('an MCP server named with underscores still names the tool', () => {
+  assert.deepEqual(publicActivity('mcp__my_server__audio_sfx', { prompt: 'soft electric hum' }),
+    { act: 'audio.sfx', query: 'soft electric hum' });
+  assert.deepEqual(publicActivityResult('mcp__my_server__image_gen', JSON.stringify({ src: 'assets/image/wall.png' })),
+    { kind: 'image', src: 'assets/image/wall.png' });
+});

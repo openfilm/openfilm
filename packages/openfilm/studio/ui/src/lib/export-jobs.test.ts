@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { endedHeadline, formatFilmTime, type ExportJob, type ExportJobStatus } from './export-jobs.ts';
+import { endedHeadline, formatBytes, formatFilmTime, type ExportJob, type ExportJobStatus } from './export-jobs.ts';
 
 test('the dialog\'s times: tenths only where the time is not a whole second', () => {
   assert.equal(formatFilmTime(7500), '0:07.5');
@@ -25,4 +25,10 @@ test('the tray says how the exports ended: cancelled is not finished, and a mix 
   assert.deepEqual(headline('done', 'cancelled', 'cancelled'), { tone: 'ok', text: 'countDone, countCancelled' });
   assert.deepEqual(headline('cancelled', 'failed'), { tone: 'err', text: 'countCancelled, countFailed' });
   assert.deepEqual(headline('done', 'cancelled', 'failed'), { tone: 'err', text: 'countDone, countCancelled, countFailed' });
+});
+
+test('a size just under a megabyte or a gigabyte is named in the unit it rounds to', () => {
+  assert.equal(formatBytes(1024 * 1024 - 1), '1.0 MB');
+  assert.equal(formatBytes(1024 ** 3 - 1), '1.00 GB');
+  assert.equal(formatBytes(50 * 1024), '50 KB');
 });

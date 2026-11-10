@@ -54,12 +54,12 @@ const SECTION_ICON: Record<SettingsSection, React.ReactNode> = {
 /** what a search through each section reads: its name and every phrase it shows (Notifications only where it shows:
     inside an app that offers them, lib/host.ts `notifications`) */
 const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
-  general: ['settings.appearance', ...(studioHost?.notifications ? ['settings.notifications'] : []), 'settings.storage'],
+  general: ['settings.appearance', 'settings.storage'],
   agents: 'settings.agents',
   models: ['settings.models', 'settings.providers'],
   developer: ['settings.developer', 'settings.report'],
   shortcuts: 'settings.shortcuts',
-  advanced: ['settings.advanced', 'settings.versions', 'settings.playback', 'settings.libraryCategories'],
+  advanced: ['settings.advanced', ...(studioHost?.notifications ? ['settings.notifications'] : []), 'settings.versions', 'settings.playback', 'settings.libraryCategories'],
 };
 
 export interface SettingsModalProps {
@@ -243,7 +243,6 @@ function GeneralSection() {
           )}
         />
       </SettingsGroup>
-      {studioHost?.notifications ? <NotificationsGroup /> : null}
       <StorageGroup />
       {studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}
     </SettingsPage>
@@ -352,6 +351,7 @@ function AdvancedSection() {
   const t = useT();
   return (
     <SettingsPage note={t('settings.advanced.intro')}>
+      {studioHost?.notifications ? <NotificationsGroup /> : null}
       <VersionsGroup />
       <PlaybackGroup />
       <LibraryCategoriesGroup />

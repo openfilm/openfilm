@@ -17,7 +17,7 @@ export const FIRST_CATEGORY = 'media';
  */
 export function arrangedCategories<C extends string>(all: readonly C[], arranged: LibraryArrangement | null | undefined): { id: C; on: boolean }[] {
   const rest = all.filter((c) => c !== FIRST_CATEGORY);
-  const named = (arranged?.order ?? []).filter((c): c is C => rest.includes(c as C));
+  const named = [...new Set((arranged?.order ?? []).filter((c): c is C => rest.includes(c as C)))];
   const order = [...named];
   for (const c of rest) {
     if (order.includes(c)) continue;

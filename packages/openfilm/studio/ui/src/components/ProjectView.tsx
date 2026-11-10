@@ -2720,30 +2720,34 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const hostAssets = hostPanel?.assets ?? null;
   const workspaceLayout: WorkspaceLayout = { ...workspacePrefs, chat: hostPanel?.open ?? workspacePrefs.chat,
     chatWidth: hostPanel?.preferredWidth ?? workspacePrefs.chatWidth };
-  const nativeTarget = React.useRef<WorkspaceLayout | null>(null);
+  const restoringHost = React.useRef(false);
   const applyHostWorkspace = (next: WorkspaceLayout) => {
-    nativeTarget.current = next;
+    const native = studioHost?.panel;
     hostPanel?.setPlacement({ side: next.chatSide, libraryDock: next.libraryDock });
     hostPanel?.setOpen(next.chat);
-    hostPanel?.setWidth(next.chatWidth, true);
-    hostAssets?.setOpen(next.assets);
+    if (native?.preferredWidth !== next.chatWidth) hostPanel?.setWidth(next.chatWidth, true);
+    if (native?.assets?.open !== next.assets) hostAssets?.setOpen(next.assets);
   };
   const hostApplyRef = React.useRef(applyHostWorkspace); hostApplyRef.current = applyHostWorkspace;
   // Changing mode restores its own profile before accepting new changes from the native chat.
   React.useLayoutEffect(() => {
-    const next = workspacePrefs; nativeTarget.current = next;
+    const next = workspacePrefs;
+    restoringHost.current = true;
     let live = true;
-    queueMicrotask(() => { if (live) hostApplyRef.current(next); });
-    return () => { live = false; };
+    queueMicrotask(() => {
+      if (!live) return;
+      try { hostApplyRef.current(next); }
+      finally { restoringHost.current = false; }
+    });
+    return () => { live = false; restoringHost.current = false; };
   }, [workspaceMode, workspacePrefs.chat, workspacePrefs.assets, workspacePrefs.chatWidth, workspacePrefs.libraryDock, workspacePrefs.chatSide]);
   React.useEffect(() => {
-    if (!hostPanel) return;
-    const target = nativeTarget.current;
-    if (target) {
-      if (hostPanel.open !== target.chat || hostPanel.preferredWidth !== target.chatWidth || hostAssets?.open !== target.assets) return;
-      nativeTarget.current = null;
-    }
-    updateWorkspace({ chat: hostPanel.open, chatWidth: hostPanel.preferredWidth, ...(hostAssets ? { assets: hostAssets.open } : {}) });
+    const native = studioHost?.panel;
+    if (!hostPanel || !native || restoringHost.current) return;
+    // A profile can already match the host and produce no change event. Read the current host, not an older render's
+    // snapshot, so a later drag is never mistaken for an acknowledgement of that profile.
+    updateWorkspace({ chat: native.open, chatWidth: native.preferredWidth ?? hostPanel.preferredWidth,
+      ...(hostAssets && native.assets ? { assets: native.assets.open } : {}) });
   }, [hostPanel?.open, hostPanel?.preferredWidth, hostAssets?.open, workspaceMode, updateWorkspace]);
   const applyWorkspace = (next: WorkspaceLayout) => {
     if (next.mode !== workspaceMode) return;
@@ -2762,10 +2766,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return () => { live = false; };
   }, [boundsKey]);
   React.useEffect(() => () => studioHost?.panel?.setBounds?.(null), []);
-  const dockOf = (layout: WorkspaceLayout) => workspaceGeometry(
-    !hostAssets && layout.libraryDock === 'chat' ? { ...layout, libraryDock: 'left' } : layout,
-    workspaceViewport, hostPanel && layout.chat ? workspaceChatWidth(workspaceViewport.width, layout.chatWidth) : 0,
-  );
+  const dockOf = (layout: WorkspaceLayout) => {
+    const active = layout.mode === workspaceMode && !layout.tree ? hostPanel : null;
+    return workspaceGeometry({ ...layout, chat: active?.open ?? layout.chat,
+      libraryDock: !hostAssets && layout.libraryDock === 'chat' ? 'left' : layout.libraryDock },
+      workspaceViewport, active?.width ?? (hostPanel && layout.chat ? workspaceChatWidth(workspaceViewport.width, layout.chatWidth) : 0));
+  };
   const editDock = dockOf(editPrefs);
   const canvasDock = dockOf(canvasPrefs);
   const dockGeometry = canvasOpen ? canvasDock : editDock;
@@ -2783,7 +2789,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the media pane shows the project's media, or Saved (lib/saved): the same pane, the button beside Upload switches */
   const [mediaScope, setMediaScope] = React.useState<MediaScope>(() => MEDIA_SCOPE.current);
   const switchMedia = React.useCallback((next: MediaScope) => { MEDIA_SCOPE.current = next; setMediaScope(next); }, []);
-  const [revealMedia, setRevealMedia] = React.useState<{ path: string; seq: number } | null>(null);
+  const [revealMedia, setRevealMedia] = React.useState<{ path: string; seq: number; highlight: boolean; done?: boolean } | null>(null);
+  const mediaRevealed = React.useCallback((seq: number) => {
+    setRevealMedia((request) => request?.seq === seq && !request.done ? { ...request, done: true } : request);
+  }, []);
   /* the drawer's media: only the project's own; what it took from the library (lib/library fromLibrary) is shown in
      the library's own category, tried there without being listed here */
   const libraryIndex = useLibraryIndex();
@@ -2860,6 +2869,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onScope={inDrawer ? undefined : switchMedia}
       {...(studioHost?.refer ? { fileRef: refOfFile, onRefer: studioHost.refer } : {})}
       reveal={revealMedia}
+      onRevealed={mediaRevealed}
+      shown={libraryOpen}
       litPath={chatPoint?.file ?? null}
       onAdd={(file) => { if (canvasOpen) void requestCanvasFiles(file.path); else void addMedia(file, { atPlayhead: true }); }}
     />
@@ -2939,17 +2950,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* what the app's chat points at (lib/chat-marks): the pill hovered there, the references of the message being written */
   const [chatRef, setChatRef] = React.useState<StudioRef | null>(null);
   const [draftMarks, setDraftMarks] = React.useState<DraftMarks>(NO_DRAFT);
-  /** a file of the project shown in the Assets: opened there, picked and scrolled to */
-  const showFile = (path: string) => {
+  /** Find a file in Assets; the canvas points it out without replacing the editing selection. */
+  const showFile = (path: string, highlight = false) => {
     const file = listing ? [...listing.pages, ...listing.files].find((f) => f.path === path) : undefined;
     if (!file) return;
     openLibrary(true);
     switchMedia('project');
-    if (canvasOpen) {
-      setPickedMedia(file);
-      setPickedSaved(false);
-    } else pickMedia(file);
-    setRevealMedia((cur) => ({ path: file.path, seq: (cur?.seq ?? 0) + 1 }));
+    if (!highlight) {
+      if (canvasOpen) {
+        setPickedMedia(file);
+        setPickedSaved(false);
+      } else pickMedia(file);
+    }
+    setRevealMedia((cur) => ({ path: file.path, seq: (cur?.seq ?? 0) + 1, highlight }));
   };
   const hostCommands = React.useRef<(command: StudioCommand) => void>(() => {});
   hostCommands.current = (command) => {
@@ -4994,7 +5007,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     <CanvasView shown={canvasOpen} projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
                       onImportFiles={(dropped, progress = () => {}) => onImport(dropped, 'assets', progress)} onOpenSettings={() => setSettingsOpen('models')}
                       focus={canvasFocus} insert={canvasInsert} addFiles={canvasAddFiles} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
-                      onSendToFilm={(list) => { void sendFromCanvas(list); }} onReveal={showFile}
+                      onSendToFilm={(list) => { void sendFromCanvas(list); }} onReveal={(path) => showFile(path, true)}
                       {...(hostPanel ? { chat: { open: hostPanel.open, toggle: () => hostPanel.setOpen(!hostPanel.open) } } : {})}
                       onError={toast.showError} onNotice={(message) => toast.show(message)} />
                   </React.Suspense>
@@ -5121,22 +5134,23 @@ function PanelSeam({ panel, bottom, side = 'left' }: { panel: HostPanel; bottom:
   const drag = React.useRef<{ x: number; width: number } | null>(null);
   return (
     <div role="separator" aria-orientation="vertical" aria-label={panel.label} tabIndex={0}
-      className="workspace-resize-handle fixed z-[38] w-[9px] cursor-col-resize outline-none"
+      className="workspace-resize-handle fixed z-[38] w-[9px] cursor-col-resize touch-none outline-none"
       style={{ top: HOST_PANEL_TOP, bottom, left: side === 'right' ? `calc(100vw - ${HOST_PANEL_WIDTH} - 4px)` : `calc(${HOST_PANEL_WIDTH} - 5px)` }}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
+        e.preventDefault();
         e.currentTarget.setPointerCapture(e.pointerId);
-        drag.current = { x: e.screenX, width: panel.width };
+        drag.current = { x: e.clientX, width: panel.width };
         document.body.style.cursor = 'col-resize';
       }}
-      onPointerMove={(e) => { if (drag.current) panel.setWidth(drag.current.width + (e.screenX - drag.current.x) * (side === 'right' ? -1 : 1)); }}
+      onPointerMove={(e) => { if (drag.current) panel.setWidth(drag.current.width + (e.clientX - drag.current.x) * (side === 'right' ? -1 : 1)); }}
       onPointerUp={(e) => {
         if (!drag.current) return;
-        panel.setWidth(drag.current.width + (e.screenX - drag.current.x) * (side === 'right' ? -1 : 1), true);
+        panel.setWidth(drag.current.width + (e.clientX - drag.current.x) * (side === 'right' ? -1 : 1), true);
         drag.current = null;
         document.body.style.cursor = '';
       }}
-      onPointerCancel={() => { drag.current = null; document.body.style.cursor = ''; }}
+      onLostPointerCapture={() => { drag.current = null; document.body.style.cursor = ''; }}
       onKeyDown={(e) => {
         if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
         e.preventDefault();

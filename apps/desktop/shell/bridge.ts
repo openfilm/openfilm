@@ -246,7 +246,7 @@ const developer = {
   onChange: (listener: Listener<{ logs: boolean; changes: boolean }>) => native.prefs.onChange((prefs) => listener(developerOf(prefs))),
 };
 
-/* ── Settings → General (kept by the app): the system's notifications of a turn done, stopped or waiting ── */
+/* ── Settings → Advanced (kept by the app): the system's notifications of a turn done, stopped or waiting ── */
 const notifications = {
   get: async () => (await native.prefs.get()).notify !== false,
   set: (on: boolean) => native.prefs.set({ notify: on }),

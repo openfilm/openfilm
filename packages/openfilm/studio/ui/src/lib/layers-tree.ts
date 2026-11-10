@@ -150,8 +150,8 @@ export function selectionTones(lines: readonly LayerLine[], isSelected: (line: L
  * another of them is left out: the one around it holds it already (and is not moved twice).
  */
 export function rowsBetween(lines: readonly LayerLine[], a: LayerLine, b: LayerLine): LayerLine[] {
-  const i = lines.indexOf(a);
-  const j = lines.indexOf(b);
+  const i = lines.findIndex((line) => line.key === a.key);
+  const j = lines.findIndex((line) => line.key === b.key);
   if (i < 0 || j < 0) return [];
   const span = lines.slice(Math.min(i, j), Math.max(i, j) + 1);
   const keys = new Set(span.map((l) => l.key));
