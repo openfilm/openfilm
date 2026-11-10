@@ -66,7 +66,7 @@ const stop = async () => {
    ranges for Hyper-V and WSL, and refuses them with EACCES): any free one does, the CLI finds it through run.json */
 const taken = (/** @type {unknown} */ e) => ['EADDRINUSE', 'EACCES'].includes(/** @type {NodeJS.ErrnoException} */ (e).code ?? '');
 try {
-  studio = await startStudio({ port, advertise: true, onQuit: stop }).catch((e) => {
+  studio = await startStudio({ port, advertise: true, onQuit: stop, indexMedia: true }).catch((e) => {
     if (!port || !taken(e)) throw e;
     /* started again after an end: another Studio took the port meanwhile, and it is the one to use */
     if (process.env.OPENFILM_STUDIO_RESTARTED === '1') {
@@ -74,7 +74,7 @@ try {
       process.exit(0);
     }
     console.error(`port ${port} is not free; Studio takes another`);
-    return startStudio({ port: 0, advertise: true, onQuit: stop });
+    return startStudio({ port: 0, advertise: true, onQuit: stop, indexMedia: true });
   });
 } catch (e) {
   console.error(e);

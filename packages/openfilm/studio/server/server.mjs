@@ -55,6 +55,7 @@ import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-font
 import { FILM_PAGE, PageFrameError, closePageFrames, compoundSound, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
+import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
@@ -117,9 +118,9 @@ export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
  * is working in right now (an app with a chat), which cannot be renamed or deleted meanwhile. `askAgent`: in an app with
  * a chat, one question answered by the person's agent's own model, for Studio's own work that needs a model
  * (translating subtitles); without it, that goes to a service connected for it. Resolves once both servers listen.
- * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent }} [options]
+ * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent, indexMedia?: boolean }} [options]
  */
-export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent } = {}) {
+export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent, indexMedia = false } = {}) {
   void refreshCommunity();
   let COOKIE = cookieName(port);
   let FRAMED = framedCookieName(port);
@@ -127,7 +128,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   const cookieKey = (/** @type {Req} */ req) => (sameKey(cookie(req, COOKIE)) ? cookie(req, COOKIE) : cookie(req, FRAMED));
   key ??= advertise ? studioKey() : randomBytes(24).toString('hex');
   /* every change of an open project's folder: a version once it rests, when the person asked for that */
-  const watchers = createWatchers({ onChange: (root, e) => { if (e.type === 'film' || e.type === 'files') autoVersions.changed(root); } });
+  const watchers = createWatchers({ onChange: (root, e) => {
+    if (e.type === 'film' || e.type === 'files') autoVersions.changed(root);
+    if (e.type === 'files') mediaIndex.soon(root);
+  } });
+  /* what is known of the person's media (media-index.mjs): a project's, a moment after its files changed or it was
+     opened; `indexMedia` (the Studio the person runs, not one a test starts): every project's, once Studio is up */
+  const mediaIndex = createMediaIndexer({ onError: (root, e) => console.warn(`media index: ${root}: ${e instanceof Error ? e.message : String(e)}`) });
+  const sweepMedia = indexMedia ? setTimeout(() => { void mediaIndex.sweep().catch(() => {}); }, 20_000) : null;
+  sweepMedia?.unref();
   /** questions about spending for the person, in the pages showing a project (see get.mjs) */
   const asks = createAsks({ emit: (root, event) => watchers.emit(root, event), roots: watchers.roots });
   /** the editor pages open right now, and whether each is in sight: `/open` switches them to a project */
@@ -469,6 +478,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* where new projects go (src/locations.mjs): the folder, its default, and its disk's free space; a POST opens it
        in the system's file manager */
     if (parts[0] === 'locations' && parts.length === 1 && req.method === 'GET') return json(res, 200, locations());
+    /* the person's media in numbers (media-index.mjs): places, files, the room they take and the room copies take */
+    if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
     /* the library moved (projects.mjs moveLibrary): { path } (null: the default), and with `move` its projects go too */
     if (parts[0] === 'locations' && parts[1] === 'projects' && parts.length === 2 && req.method === 'PUT') {
       const { path: asked, move } = /** @type {{ path?: unknown, move?: unknown }} */ (await readJson(req) ?? {});
@@ -775,7 +786,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       }
     }
     /* an editor page shows it: the person opened it, so it is the one `openfilm open` alone comes back to */
-    if (rest === 'opened' && req.method === 'POST') return json(res, 200, { project: await markOpened(project.id) });
+    if (rest === 'opened' && req.method === 'POST') {
+      mediaIndex.soon(project.path);
+      return json(res, 200, { project: await markOpened(project.id) });
+    }
     /* the fonts its pages declare with @font-face, and with `page` (a project path) the families that page can draw with
        and names (project-fonts.mjs): the font menu's "In this project" */
     if (rest === 'fonts' && req.method === 'GET') {
@@ -1305,6 +1319,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     const exporting = exports.stopAll();
     fetches.stopAll();
     autoVersions.stop();
+    if (sweepMedia) clearTimeout(sweepMedia);
+    mediaIndex.close();
     await closePageFrames();
     watchers.closeAll();
     await pages.close();
