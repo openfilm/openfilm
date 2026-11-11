@@ -31,10 +31,13 @@ import { readPrefs } from './prefs.mjs';
 import { readyProxy, undecodable } from './proxies.mjs';
 import { madeCopy } from '../../src/seekable.mjs';
 import { isPreviewKey, previewDir } from './preview-cache.mjs';
-import { soundOf } from './derived.mjs';
+import { probe, soundOf } from './derived.mjs';
 import { compoundOuter } from './parts.mjs';
 
 const BRIDGE = readFileSync(new URL('./bridge.js', import.meta.url), 'utf8');
+
+/** The header a file's sound (`?film-sound`) tells its length in (s): the editor's mixer decodes only short ones. */
+export const SOUND_LENGTH = 'x-film-sound-length';
 
 /* sounds a browser cannot play (AIFF, which macOS's `say` writes): the preview gets a WAV of each, made once */
 const UNPLAYABLE = /\.(aif|aiff|aifc)$/i;
@@ -195,7 +198,11 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
       const file = await soundOf(entry.root, plain.replace(/^\/+/, '')).catch((/** @type {any} */ e) => (e?.status === 404 ? undefined : null));
       if (file === undefined) { res.writeHead(404, headers).end('not found'); return; }
       if (!file) { res.writeHead(204, headers).end(); return; }
-      if (!folderFiles(dirname(file), { headers: policy() })(req, res, `/${basename(file)}`, url.searchParams)) res.writeHead(403, headers).end();
+      /* its length (s), known from the file's probe: a long one is played as it streams, never decoded whole */
+      const length = (await probe(entry.root, plain.replace(/^\/+/, '')).catch(() => null))?.duration;
+      /** @type {Record<string, string>} */
+      const told = Number.isFinite(length) ? { [SOUND_LENGTH]: String(length), 'access-control-expose-headers': SOUND_LENGTH } : {};
+      if (!folderFiles(dirname(file), { headers: { ...policy(), ...told } })(req, res, `/${basename(file)}`, url.searchParams)) res.writeHead(403, headers).end();
       return;
     }
     /* a stretch of the film rendered for the preview to play in its place (preview-cache.mjs): its cache, not the

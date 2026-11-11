@@ -971,6 +971,8 @@ test('the preview\'s mixer gets a file\'s sound alone (?film-sound), never the w
   const res = await fetch(`${folder}assets/talk.mp4?film-sound=1&v=1`);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('content-type'), 'audio/mp4');
+  assert.ok(Math.abs(Number(res.headers.get('x-film-sound-length')) - 20) < 0.1, 'its length told, for the mixer to stream a long one');
+  assert.match(String(res.headers.get('access-control-expose-headers')), /x-film-sound-length/, 'and readable by the editor');
   const bytes = Buffer.from(await res.arrayBuffer());
   assert.equal(bytes.subarray(4, 8).toString(), 'ftyp', 'an MP4 (.m4a) of the sound');
   assert.ok(bytes.length < statSync(join(project.path, 'assets', 'talk.mp4')).size / 10, `${bytes.length} bytes: the sound alone`);
@@ -980,6 +982,23 @@ test('the preview\'s mixer gets a file\'s sound alone (?film-sound), never the w
   assert.equal((await fetch(`${folder}assets/mute.mp4?film-sound=1`)).status, 204);
   assert.equal((await fetch(`${folder}assets/gone.mp4?film-sound=1`)).status, 404);
   assert.equal((await fetch(`${folder}.film/cache/audio/x.m4a?film-sound=1`)).status, 404, 'still nothing hidden');
+});
+
+test('a sound asked for and given up while its copy is made (a media element that seeked on) leaves Studio running', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Given up') } })).json();
+  mkdirSync(join(project.path, 'assets'), { recursive: true });
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=30', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=30', '-shortest', '-pix_fmt', 'yuv420p', join(project.path, 'assets', 'talk.mp4')]);
+  const { folder } = await (await api(`/api/projects/${project.id}`)).json();
+  const asked = request(`${folder}assets/talk.mp4?film-sound=1`, { headers: { range: 'bytes=0-' } });
+  asked.on('error', () => {});
+  asked.end();
+  await new Promise((r) => setTimeout(r, 20));
+  asked.destroy();
+  const audio = join(project.path, '.film', 'cache', 'audio');
+  for (let i = 0; i < 200 && !(existsSync(audio) && readdirSync(audio).some((f) => f.endsWith('.m4a'))); i++) await new Promise((r) => setTimeout(r, 50));
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal((await fetch(`${folder}assets/talk.mp4?film-sound=1`)).status, 200, 'the pages still answer');
+  assert.equal((await api('/api/health', { key: null })).status, 200);
 });
 
 /** A GET (or an upgrade, with `headers`) sent with the Host `host`: fetch never lets a page choose it, a rebound name does. */

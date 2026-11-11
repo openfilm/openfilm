@@ -151,6 +151,9 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     if (!inRoot) { missed?.(asked); return false; }
     /* what a file is (its length and size: `film-facts`) is the file's own, never its copy's */
     const file = (query?.has('film-facts') ? null : swap?.(asked)) ?? linked ?? asked;
+    /* given up while its file was being made (a media element that seeked on, a page closed): nothing to send, and a
+       pipe to the closed response would throw */
+    if (res.destroyed) return true;
     let stat;
     try { stat = statSync(file); } catch { res.writeHead(404, extraHeaders).end('not found'); return true; }
     if (stat.isDirectory()) { res.writeHead(302, { ...extraHeaders, location: `${path}/` }).end(); return true; }

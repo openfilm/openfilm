@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { anchorTime, EASE_STEP, easedLead, fadeSteps, fileTime, joinAt, JUMP, soundsDue, stretchRate } from './player.ts';
+import { anchorTime, decodes, EASE_STEP, LONG_SOUND, easedLead, fadeSteps, fileTime, joinAt, JUMP, soundsDue, stretchRate } from './player.ts';
 import { mediaPlays } from '../../../../src/film-doc.mjs';
 
 test('a sound\'s fades as ramps: where it is now, then each corner after it', () => {
@@ -87,4 +87,13 @@ test('a sound whose file is ready only late joins where the film is then, not wh
   assert.equal(joinAt(s, heard, 12, 2, 2), 5);
   /* ready after it ended (film second 6) */
   assert.equal(joinAt(s, heard, 15.5, 1, 2), null);
+});
+
+test('a sound longer than LONG_SOUND is streamed by a media element, not decoded whole; one of unknown length is decoded', () => {
+  assert.equal(decodes(3), true);
+  assert.equal(decodes(LONG_SOUND), true);
+  assert.equal(decodes(LONG_SOUND + 1), false);
+  assert.equal(decodes(13436), false, 'a 3 h 43 min recording: some 5 GB decoded');
+  assert.equal(decodes(null), true, 'not told: decoded, as before');
+  assert.equal(decodes(Number.NaN), true);
 });
