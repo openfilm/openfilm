@@ -293,6 +293,11 @@ export function AgentsSection() {
     /* where it is not found: why, on asking (Claude Code waiting for its app's Code tab is not lost) */
     const showHelper = OWN.includes(agent.id) || agent.id === 'byok';
     const description = agent.connectionIssue ? statusLine(agent) : agent.status === 'ready' ? chosen ? accountLine(agent) : t('settings.agents.available') : statusLine(agent);
+    const helpLabel = agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', ownKey ? t('settings.agents.byokName') : agent.name);
+    const helpButton = showHelper || agent.id === 'openfilm' ? <button type="button" aria-label={helpLabel} title={helpLabel}
+      onClick={() => agent.id === 'openfilm' ? setOpenfilmOpen(true) : setHelp(agent.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><CircleHelp size={15} aria-hidden /></button> : null;
+    const connectedStatus = agent.status === 'ready' && chosen && !problem && !agent.connectionIssue
+      ? <SettingsStatus>{ownKey ? agent.byok!.models.map((m) => m.name).join(', ') : t('settings.agents.ready')}</SettingsStatus> : null;
     /* what is left of its plan: while being asked, and once told (an agent that can't say shows nothing) */
     const plan = usage[agent.id];
     const meter = chosen && agent.status === 'ready' && PLAN_AGENTS.includes(agent.id) && Boolean(host.usage) && (plan === undefined || Boolean(plan?.windows.length));
@@ -315,13 +320,13 @@ export function AgentsSection() {
                 {t('settings.agents.recommended')}
               </span>
             ) : null}
-            {agent.status === 'ready' && chosen && !problem && !agent.connectionIssue ? <SettingsStatus>{ownKey ? agent.byok!.models.map((m) => m.name).join(', ') : t('settings.agents.ready')}</SettingsStatus> : null}
+            {connectedStatus || !description && helpButton ? <span className="inline-flex items-center gap-1">
+              {connectedStatus}{!description ? helpButton : null}
+            </span> : null}
           </>
         )}
-        description={description || showHelper || agent.id === 'openfilm' ? <div className="flex items-center gap-1">
-          {description ? <span className="min-w-0">{description}</span> : null}
-          {showHelper || agent.id === 'openfilm' ? <button type="button" aria-label={agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', ownKey ? t('settings.agents.byokName') : agent.name)} title={agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', ownKey ? t('settings.agents.byokName') : agent.name)}
-            onClick={() => agent.id === 'openfilm' ? setOpenfilmOpen(true) : setHelp(agent.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><CircleHelp size={15} aria-hidden /></button> : null}
+        description={description ? <div className="flex items-center gap-1">
+          <span className="min-w-0">{description}</span>{helpButton}
         </div> : null}
         control={(
           <>
