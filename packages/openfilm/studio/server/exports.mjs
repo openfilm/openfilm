@@ -83,7 +83,7 @@ import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFil
 import { layerBlocks, rowBadges, trackKind } from './track-layout.mjs';
 import { fcpxmlDocument } from './fcpxml.mjs';
 import { markHevcStraightAlpha } from './hevc-alpha.mjs';
-import { frameSpan, NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
+import { frameSpan, NLE_FPS, nleFps, ownLook, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
 import { draftsRoot, jianyingClipLook, jianyingDraft } from './jianying.mjs';
 import { jianyingCaptionFonts } from './jianying-captions.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
@@ -1277,7 +1277,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       await filmElsewhere(root, scratch, { stage: doc.stage, tracks: doc.tracks.map((t) => ({ clips: t.clips })) });
       const probe = await open(scratch, { root });
       /** @type {{ id: string, at: number, end: number, from: number, to: number, speed: number, native: number | null, w: number | null, h: number | null,
-       * hasEffect: boolean, draftStyle: import('./jianying.mjs').DraftStyle | null, animationTiming?: { durations: number[], delays: number[] } }[]} */
+       * hasEffect: boolean, draftStyle: import('./jianying.mjs').DraftStyle | null, fit: string | null, position: string | null,
+       * animationTiming?: { durations: number[], delays: number[] } }[]} */
       let loaded;
       try {
         loaded = await probe.film.page.evaluate(() => /** @type {any} */ (window).__filmEditor.stage.clips().map((/** @type {any} */ c) => {
@@ -1294,6 +1295,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           const hasEffect = Boolean(css && (css.maskImage !== 'none' || css.clipPath !== 'none' || css.filter !== 'none' || css.opacity !== '1' || timing));
           const draftStyle = css ? { opacity: Number(css.opacity), maskImage: css.maskImage, maskComposite: css.maskComposite, simple } : null;
           return { id: c.id, at: c.at, end: c.end, from: c.span.from, to: c.span.to, speed: c.span.speed, hasEffect, draftStyle,
+            fit: css ? css.objectFit : null, position: css ? css.objectPosition : null,
             native: Number.isFinite(c.native) ? c.native : null, w: c.nw ?? null, h: c.nh ?? null,
             ...(timing && [...timing.durations, ...timing.delays].every(Number.isFinite) ? { animationTiming: timing } : {}) };
         }));
@@ -1352,7 +1354,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             }
             pictures.push({ id: row.id, kind, src: row.src, path, at: c.at, end: c.end, from: c.from, speed: c.speed, box: row.box,
               ...(draftLook ? { draftLook } : {}),
-              track: ti, hidden: Boolean(track.hidden || row.disabled), styled: Boolean(row.class || row.style || c.hasEffect), ...(fade ? { faded: true } : {}), facts: f,
+              track: ti, hidden: Boolean(track.hidden || row.disabled), styled: Boolean(row.class || ownLook(row.style ?? '').length || c.hasEffect),
+              ...(c.fit ? { fit: c.fit } : {}), ...(c.position ? { position: c.position } : {}), ...(fade ? { faded: true } : {}), facts: f,
               ...(c.animationTiming ? { animationTiming: c.animationTiming } : {}) });
           }
           if (kind === 'sound' || kind === 'video') {
