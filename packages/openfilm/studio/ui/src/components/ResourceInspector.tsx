@@ -4,9 +4,12 @@ import { formatClipDuration, formatFileSize, proxyText, type WorkspaceResource, 
 import { InspectorPanel } from './InspectorPanel';
 import { KIND_ICON } from './MediaPreview';
 
-/** A media file's properties, in the inspector's place. `url` is the file itself on the film origin (Download). */
-export function ResourceInspector({ file, url, width, onClose }: {
-  file: WorkspaceResource; url: string; width: number; onClose: () => void;
+/**
+ * A media file's properties, in the inspector's place. `url` is the file itself on the film origin (Download). A file
+ * of All media (lib/all-media) says where it is from and how many projects use it (`from`), in place of its path.
+ */
+export function ResourceInspector({ file, url, width, onClose, from }: {
+  file: WorkspaceResource; url: string; width: number; onClose: () => void; from?: { name: string; uses: number } | undefined;
 }) {
   const t = useT();
   const Icon = KIND_ICON[file.kind] ?? FileIcon;
@@ -14,9 +17,9 @@ export function ResourceInspector({ file, url, width, onClose }: {
     <InspectorPanel title={t('assets.props')} width={width} onClose={onClose}>
       <div className="flex items-start gap-2.5 border-b border-[var(--border)] py-4">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--bg-field)] text-[var(--text-muted)]"><Icon size={18} /></span>
-        <div className="min-w-0"><p className="whitespace-pre-wrap break-words text-[12px] font-medium">{file.name}</p><p className="mt-1 break-all text-[10px] leading-relaxed text-[var(--text-muted)]">{file.path}</p></div>
+        <div className="min-w-0"><p className="whitespace-pre-wrap break-words text-[12px] font-medium">{file.name}</p><p className="mt-1 break-all text-[10px] leading-relaxed text-[var(--text-muted)]">{from ? from.name : file.path}</p></div>
       </div>
-      <AssetFields file={file} />
+      <AssetFields file={file} from={from} />
       <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--border)] pt-4 text-[11px]">
         <a href={url} download={file.name} className="flex items-center gap-1.5 rounded-md bg-[var(--bg-field)] px-2.5 py-2 hover:bg-[var(--bg-hover)]"><Download size={13} />{t('assets.download')}</a>
       </div>
@@ -53,9 +56,14 @@ function formatFps(fps: number): string {
  * A file's facts, read-only: one per row and not drawn as inputs — anything that looks like an input gets clicked,
  * and none of these can be changed. Everything comes from props, so the panel opens without a request.
  */
-function AssetFields({ file }: { file: WorkspaceResource }) {
+function AssetFields({ file, from }: { file: WorkspaceResource; from?: { name: string; uses: number } | undefined }) {
   const t = useT();
   const rows: { label: string; value: string }[] = [
+    ...(from ? [
+      { label: t('assets.propFrom'), value: from.name },
+      /* one project: the one it is from */
+      ...(from.uses > 1 ? [{ label: t('assets.propUses'), value: t('assets.propUsesValue').replace('{n}', String(from.uses)) }] : []),
+    ] : []),
     { label: t('assets.propType'), value: assetTypeText(file, t) },
     { label: t('assets.propSize'), value: formatFileSize(file.size) },
   ];

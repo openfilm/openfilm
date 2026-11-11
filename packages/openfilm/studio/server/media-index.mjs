@@ -298,6 +298,8 @@ export function createMediaIndexer({ wait = 1500, onError = () => {}, onProject 
       timer.unref();
       timers.set(root, timer);
     },
+    /** Scan this added folder (it was just added). @param {string} root */
+    folder: (root) => queue(root, scanFolder),
     /** Scan every place, one after another. */
     async sweep() {
       const { projects, folders } = await mediaPlaces();

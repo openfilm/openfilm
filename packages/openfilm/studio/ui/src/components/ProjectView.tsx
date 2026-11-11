@@ -168,6 +168,7 @@ import { pasteTargets, targetById } from '@/lib/layer-paste-target';
 import { PropertiesSection, type PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
+import { ALL, allActions, allSources, isAllPath, useAllMedia } from '@/lib/all-media';
 import { batchMap } from '@/lib/batch-map';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
@@ -186,10 +187,11 @@ const PANE = 'relative flex min-h-0 min-w-0 flex-col overflow-hidden';
 const PICTURE_FILE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
 /* ⌘ is the modifier on a Mac, Ctrl elsewhere (the editor's keys, lib/timeline-keys) */
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-/** Which the media pane shows, the project's media or Saved: kept while Studio is open, across projects. */
-/** The media shown: the project's own, or Saved. */
-type MediaScope = 'project' | 'saved';
+/** Which the media pane shows, the project's media, All media or Saved: kept while Studio is open, across projects. */
+type MediaScope = 'project' | 'saved' | 'all';
 const MEDIA_SCOPE: { current: MediaScope } = { current: 'project' };
+/** Where a file picked outside the project is read: All media's, or Saved's. */
+const outsideSources = (file: { path: string }) => (isAllPath(file.path) ? allSources : savedSources);
 /** where the app's panel starts: under Studio's top bar (its h-8) */
 const HOST_PANEL_TOP = 32;
 
@@ -3215,6 +3217,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return { ...listing, files: listing.files.filter(keep), pages: listing.pages.filter(keep) };
   }, [listing, mediaScope, libraryIndex, revealMedia?.path]);
   const savedListing = useSavedListing(mediaScope === 'saved');
+  const allMedia = useAllMedia(mediaScope === 'all');
   const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => {
     /* in the app a dropped file's path is known: copied on this computer, not sent through the page */
     const paths = files.map((file) => studioHost?.folders?.pathOf(file) ?? '');
@@ -3232,7 +3235,32 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       setCanvasAddFiles({ paths: [...new Set(paths)], n: performance.now() });
     } catch (error) { toast.showError(error instanceof Error ? error.message : String(error)); }
   };
-  const mediaPool = (inDrawer = false) => (mediaScope === 'saved' ? (
+  const mediaPool = (inDrawer = false) => (mediaScope === 'all' ? (
+    /* All media (lib/all-media): looked at here, brought into the project as it is used, as a thing of Saved is */
+    <MediaPool
+      key="all"
+      projectId={ALL}
+      listing={allMedia.listing}
+      sources={allSources}
+      selectedPath={pickedSaved ? pickedMedia?.path ?? null : null}
+      onSelectFile={(file) => { pickMedia(file); setPickedSaved(Boolean(file)); }}
+      onImport={async () => []}
+      onMove={async () => 'failed'}
+      onDelete={async () => 'failed'}
+      onNewFolder={async () => 'failed'}
+      onReveal={allActions.reveal}
+      links={false}
+      scope="all"
+      onScope={inDrawer ? undefined : switchMedia}
+      fromOf={allMedia.fromOf}
+      folders={allMedia.folders}
+      scanning={allMedia.scanning}
+      onAddFolder={() => allActions.addFolder(t('media.pickMediaFolder'))}
+      onRemoveFolder={(path) => void allActions.removeFolder(path)}
+      onRevealFolder={allActions.revealFolder}
+      onAdd={(file) => { if (canvasOpen) void requestCanvasFiles(file.path, true); else void placeSaved(file, { atPlayhead: true }); }}
+    />
+  ) : mediaScope === 'saved' ? (
     <MediaPool
       key="saved"
       projectId={SAVED}
@@ -5651,7 +5679,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 {pickedMedia ? (
                   <div className="absolute inset-x-0 bottom-0 top-8 z-20">
                     {/* a bundle of Saved plays its page as its clip had it; any other bundle shows its picture */}
-                    <SourcePreview file={pickedSaved && pickedMedia.bundle && !pickedMedia.bundle.page && !pickedMedia.bundle.file ? { ...pickedMedia, kind: 'image' } : pickedMedia} sources={pickedSaved ? savedSources : mediaSources} onClose={() => pickMedia(null)} onPlace={placeFromSource} />
+                    <SourcePreview file={pickedSaved && pickedMedia.bundle && !pickedMedia.bundle.page && !pickedMedia.bundle.file ? { ...pickedMedia, kind: 'image' } : pickedMedia} sources={pickedSaved ? outsideSources(pickedMedia) : mediaSources} onClose={() => pickMedia(null)} onPlace={placeFromSource} />
                   </div>
                 ) : null}
                 {dropped?.length || undone.length ? (
@@ -5838,7 +5866,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   {!editFree ? <PaneDivider width={inspectorShownWidth} onResize={commitInspectorWidth} containerRef={viewerRowRef} label={t('inspector.resize')} min={MIN_INSPECTOR} minRest={MIN_VIEWER} relative side={editPrefs.inspectorSide === 'left' ? 'start' : 'end'} style={{ order: editPrefs.inspectorSide === 'left' ? 21 : 79 }} /> : null}
                   <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-inspector style={{ width: inspectorShownWidth, order: editPrefs.inspectorSide === 'left' ? 20 : 80, ...freeStyle('inspector') }}>
                   {typeof inspectorContent === 'object' ? (
-                    <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? savedSources : mediaSources).file(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
+                    <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? outsideSources(inspectorContent) : mediaSources).file(inspectorContent)} from={pickedSaved && inspectorContent === pickedMedia ? allMedia.aboutOf(inspectorContent) : undefined} width={inspectorShownWidth} onClose={closeInspector} />
                   ) : inspectorContent === 'captions' ? (
                     <CaptionInspector projectId={projectId} width={inspectorShownWidth} onClose={closeInspector} timeMs={timeMs} onSeek={seek} onTranslated={addTranslation}
                       infoOf={captionInfoOf} onCut={cutRanges} onAdd={addCaption} />
