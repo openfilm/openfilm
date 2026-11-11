@@ -58,7 +58,7 @@ import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex
 import { createMediaIndexer, mediaFolders, mediaSummary } from './media-index.mjs';
 import { allMedia, fileOf, isAllPath, setMediaFolder, takeMedia, whereAll } from './all-media.mjs';
 import { carryMade, madeAnywhere, madeView } from './media-made.mjs';
-import { aboutFile, fileIn, inPlace, libraryPlaces, listFolder, placeOf, searchLibrary } from './media-library.mjs';
+import { LibraryError, aboutFile, duplicates, fileIn, inPlace, libraryPlaces, listFolder, markFile, placeOf, renameFile, searchLibrary, trashFile as trashLibraryFile } from './media-library.mjs';
 import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
@@ -532,8 +532,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         return json(res, 200, { ...await searchLibrary({
           q: (url.searchParams.get('q') ?? '').slice(0, 200), kind: ['video', 'image', 'audio'].find((k) => k === url.searchParams.get('kind')) ?? null,
           made: url.searchParams.get('made') === '1', sort: sort === 'name' || sort === 'size' ? sort : 'date', limit: Number(url.searchParams.get('limit')) || 300,
+          mark: url.searchParams.get('mark') === 'like' ? 'like' : url.searchParams.get('mark') === 'no' ? 'no' : null, unused: url.searchParams.get('unused') === '1',
         }), scanning: mediaIndex.busy() });
       }
+      /* files of the added folders that are the same bytes as another, group by group, and the room they take */
+      if (sub === 'duplicates' && req.method === 'GET') return json(res, 200, { ...await duplicates(), scanning: mediaIndex.busy() });
       const body = req.method === 'POST' ? /** @type {{ place?: unknown, path?: unknown }} */ (await readJson(req) ?? {}) : null;
       const at = await placeOf(body ? body.place : url.searchParams.get('place'));
       if (!at) throw new HttpError(404, 'That place is not in the library.');
@@ -549,10 +552,35 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (abs === at.root) openFile(abs); else reveal(abs);
         return json(res, 200, {});
       }
+      /* what the person says of a file (POST mark { mark: 'like' | 'no' | null }); a file of an added folder renamed
+         (POST rename { name } → { path }) or moved to the trash (POST trash). The folder is read again behind, and a
+         project that links to the file looks for it where it went */
+      if (body && (sub === 'mark' || sub === 'rename' || sub === 'trash')) {
+        try {
+          if (sub === 'mark') {
+            const mark = /** @type {{ mark?: unknown }} */ (body).mark;
+            const said = await markFile(at, path, mark === 'like' || mark === 'no' ? mark : null);
+            if (!said) throw new HttpError(404, 'That file is not there.');
+            return json(res, 200, said);
+          }
+          const linked = (await aboutFile(at, path))?.linkedBy ?? [];
+          const done = sub === 'rename' ? await renameFile(at, path, /** @type {{ name?: unknown }} */ (body).name) : await trashLibraryFile(at, path);
+          void mediaIndex.folder(at.root);
+          for (const p of linked) mediaIndex.soon(p.path);
+          return json(res, 200, done ?? {});
+        } catch (e) {
+          if (e instanceof LibraryError) throw new HttpError(e.status, e.message);
+          throw e;
+        }
+      }
       const file = fileIn(at, path);
       if (!file) throw new HttpError(404, 'That file is not there.');
       if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, file.abs);
-      if (sub === 'about' && req.method === 'GET') return json(res, 200, await aboutFile(at, path));
+      if (sub === 'about' && req.method === 'GET') {
+        const about = await aboutFile(at, path);
+        /* where a project is on this computer is not the page's to know */
+        return json(res, 200, about ? { ...about, linkedBy: about.linkedBy.map(({ id, name }) => ({ id, name })) } : null);
+      }
       if (sub === 'media' && req.method === 'GET') {
         const what = url.searchParams.get('what');
         const o = { cache: file.cache };

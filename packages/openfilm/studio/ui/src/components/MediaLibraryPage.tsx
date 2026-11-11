@@ -11,10 +11,11 @@
  * Nothing here changes a file. A folder taken out of the library stays on the disk as it is.
  */
 import React from 'react';
-import { ArrowDownUp, ChevronDown, ChevronRight, Clapperboard, Clock, Folder, FolderOpen, FolderPlus, HardDrive, Search, Sparkles, Unplug, X } from 'lucide-react';
+import { ArrowDownUp, ChevronDown, ChevronRight, Clapperboard, Clock, Copy, EyeOff, Folder, FolderOpen, FolderPlus, HardDrive, Heart, Pencil, Search, Sparkles, Trash2, Unplug, VideoOff, X } from 'lucide-react';
 import { useT } from '@/i18n';
-import { factsOf, knownFacts, libraryApi, resourceOf, sourcesOf, type LibraryAbout, type LibraryFile, type LibraryFound, type LibraryListing, type LibraryPlaces } from '@/lib/media-library';
+import { factsOf, knownFacts, libraryApi, resourceOf, sourcesOf, type LibraryAbout, type LibraryFile, type LibraryFound, type LibraryListing, type LibraryMark, type LibraryPlaces } from '@/lib/media-library';
 import { formatClipDuration, formatFileSize, type MediaFacts, type MediaSources } from '@/lib/workspace-resources';
+import { ConfirmDialog } from './ConfirmDialog';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { MediaPreview } from './MediaPreview';
 
@@ -28,13 +29,16 @@ const TILE_TEXT = 44;
 
 type Kind = 'all' | 'video' | 'image' | 'audio';
 const KINDS: readonly Kind[] = ['all', 'video', 'image', 'audio'];
-/** A view of the whole library: the newest files, or what a service made. */
-type Smart = 'recent' | 'made';
+/**
+ * A view of the whole library: the newest files, what the person liked, what no project has, what a service made,
+ * files that are the same bytes as another, and what the person said they do not want (hidden everywhere else).
+ */
+type Smart = 'recent' | 'liked' | 'unused' | 'made' | 'duplicates' | 'rejected';
 /** How many found files are asked for at once. */
 const FOUND_MAX = 600;
 
 /** A file shown: in its place; `where`, when it was found rather than opened to (its place and folders, to read). */
-type Shown = { file: LibraryFile; place: string; where?: string };
+type Shown = { file: LibraryFile; place: string; where?: string; copies?: number };
 type Picked = Shown;
 type Item = { type: 'dir'; name: string; path: string; items: number } | ({ type: 'file' } & Shown);
 const sameFile = (a: Shown | null, b: Shown) => Boolean(a && a.place === b.place && a.file.path === b.file.path);
@@ -47,16 +51,24 @@ const sourcesFor = (place: string): MediaSources => SOURCES.get(place) ?? (SOURC
  * What the whole library holds that fits: asked a moment after the last key, and again while the library is still
  * being read (more may be found).
  */
-function useSearch(on: boolean, q: string, kind: Kind, made: boolean, sort: Sort, again: number): LibraryFound | null {
+function useSearch(on: boolean, view: Smart | null, q: string, kind: Kind, sort: Sort, again: number): LibraryFound | null {
   const [state, setState] = React.useState<{ key: string; found: LibraryFound } | null>(null);
-  const key = `${q.trim()}\n${kind}\n${made}\n${sort}`;
+  /* words look in all of the library, whatever view was shown */
+  const smart = q.trim() ? null : view;
+  const key = `${q.trim()}\n${smart}\n${kind}\n${sort}`;
   const [more, setMore] = React.useState(0);
   React.useEffect(() => {
     if (!on) return undefined;
     let live = true;
     let later = 0;
     const timer = window.setTimeout(() => {
-      void libraryApi.search({ q: q.trim(), kind: kind === 'all' ? null : kind, made, sort, limit: FOUND_MAX }).then((found) => {
+      const asked = smart === 'duplicates'
+        ? libraryApi.duplicates().then((found) => (found && kind !== 'all' ? { ...found, files: found.files.filter((f) => f.kind === kind) } : found))
+        : libraryApi.search({
+          q: q.trim(), kind: kind === 'all' ? null : kind, made: smart === 'made', unused: smart === 'unused',
+          mark: smart === 'liked' ? 'like' : smart === 'rejected' ? 'no' : null, sort: smart === 'recent' ? 'date' : sort, limit: FOUND_MAX,
+        });
+      void asked.then((found) => {
         if (!live || !found) return;
         setState({ key, found });
         if (found.scanning) later = window.setTimeout(() => setMore((n) => n + 1), 2500);
@@ -67,10 +79,13 @@ function useSearch(on: boolean, q: string, kind: Kind, made: boolean, sort: Sort
   return on && state?.key === key ? state.found : null;
 }
 
-/** A folder's listing, read once per visit and again when asked (`again`). */
+/**
+ * A folder's listing, read once per visit and again when asked (`again`): what was read of it stays shown while it
+ * is read again, so nothing jumps when a file in it is marked or renamed.
+ */
 function useListing(place: string | null, dir: string, again: number) {
   const [state, setState] = React.useState<{ key: string; listing: LibraryListing | null; gone: boolean } | null>(null);
-  const key = `${place}\n${dir}\n${again}`;
+  const key = `${place}\n${dir}`;
   React.useEffect(() => {
     if (!place) { setState(null); return undefined; }
     let live = true;
@@ -120,7 +135,9 @@ export function MediaLibraryPage({ heading, onClose }: { heading: React.ReactNod
   const show = (view: Smart) => { setSmart(view); setQuery(''); setPicked(null); };
   const searching = Boolean(query.trim()) || smart !== null;
   const listing = useListing(searching ? null : at?.place ?? null, at?.dir ?? '', again);
-  const found = useSearch(searching, query, kind, smart === 'made', smart === 'recent' && !query.trim() ? 'date' : sort, again);
+  const found = useSearch(searching, smart, query, kind, sort, again);
+  /* the views that are in their own order: no other to choose */
+  const ordered = !query.trim() && (smart === 'recent' || smart === 'duplicates');
 
   const folder = places?.folders.find((f) => f.place === at?.place);
   const project = places?.projects.find((p) => p.place === at?.place);
@@ -128,9 +145,10 @@ export function MediaLibraryPage({ heading, onClose }: { heading: React.ReactNod
   const offline = Boolean(folder?.missing);
 
   const items = React.useMemo((): Item[] => {
-    if (searching) return (found?.files ?? []).map((file) => ({ type: 'file' as const, file, place: file.place, where: file.where }));
+    if (searching) return (found?.files ?? []).map((file) => ({ type: 'file' as const, file, place: file.place, where: file.where, ...(file.copies ? { copies: file.copies } : {}) }));
     if (!listing?.listing || !at) return [];
-    const files = listing.listing.files.filter((f) => kind === 'all' || f.kind === kind);
+    /* what the person does not want is not shown in its folder (the view of it has it) */
+    const files = listing.listing.files.filter((f) => f.mark !== 'no' && (kind === 'all' || f.kind === kind));
     if (sort === 'date') files.sort((a, b) => b.mtime - a.mtime);
     else if (sort === 'size') files.sort((a, b) => b.size - a.size);
     return [...listing.listing.dirs.map((d) => ({ type: 'dir' as const, ...d })), ...files.map((file) => ({ type: 'file' as const, file, place: at.place }))];
@@ -145,7 +163,7 @@ export function MediaLibraryPage({ heading, onClose }: { heading: React.ReactNod
       const next = await readPlaces();
       const place = added ? next?.folders.find((f) => f.path === added)?.place : undefined;
       if (place) go(place, '');
-    } catch (e) { setNotice(e instanceof Error && e.message !== 'failed' ? e.message : t('mediaLibrary.addFailed')); }
+    } catch (e) { setNotice(t((e as { reason?: string }).reason === 'wide' ? 'mediaLibrary.tooWide' : 'mediaLibrary.addFailed')); }
     finally { setAdding(false); }
   };
   const removeFolder = async (path: string, place: string) => {
@@ -216,7 +234,11 @@ export function MediaLibraryPage({ heading, onClose }: { heading: React.ReactNod
             ))}
             <div className="mt-3 px-1.5 pb-0.5 pt-1 text-[11.5px] text-[var(--text-faint)]">{t('mediaLibrary.smart')}</div>
             {smartRow('recent', <Clock size={14} className="shrink-0" />)}
+            {smartRow('liked', <Heart size={14} className="shrink-0" />)}
+            {smartRow('unused', <VideoOff size={14} className="shrink-0" />)}
             {smartRow('made', <Sparkles size={14} className="shrink-0" />)}
+            {smartRow('duplicates', <Copy size={14} className="shrink-0" />)}
+            {smartRow('rejected', <EyeOff size={14} className="shrink-0" />)}
             {places?.projects.length ? (
               <>
                 <button type="button" onClick={() => setProjectsOpen((v) => !v)} aria-expanded={projectsOpen}
@@ -249,7 +271,9 @@ export function MediaLibraryPage({ heading, onClose }: { heading: React.ReactNod
                   </>
                 ) : null}
                 <span className="shrink-0 pl-2 text-[12px] tabular-nums text-[var(--text-faint)]" data-library-count="">
-                  {shownCount == null ? '' : searching && found && found.total > found.files.length
+                  {shownCount == null ? '' : smart === 'duplicates' && !query.trim() && found?.groups != null
+                    ? (found.groups ? t('mediaLibrary.dupCount').replace('{n}', String(found.groups)).replace('{size}', formatFileSize(found.spare ?? 0)) : '')
+                    : searching && found && found.total > found.files.length
                     ? t('mediaLibrary.countFirst').replace('{n}', String(found.files.length)).replace('{total}', String(found.total))
                     : t('mediaLibrary.count').replace('{n}', String(shownCount))}
                 </span>
@@ -263,7 +287,7 @@ export function MediaLibraryPage({ heading, onClose }: { heading: React.ReactNod
                   </button>
                 ))}
               </div>
-              {smart === 'recent' && !query.trim() ? null : (
+              {ordered ? null : (
                 <button type="button" aria-label={t('media.sort')} title={`${t('media.sort')}: ${t(`mediaLibrary.sort_${sort}`)}`}
                   onClick={() => setSort(SORTS[(SORTS.indexOf(sort) + 1) % SORTS.length]!)}
                   className="flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
@@ -281,7 +305,7 @@ export function MediaLibraryPage({ heading, onClose }: { heading: React.ReactNod
             </div>
             {searching ? (
               !found ? <div className="flex-1" />
-                : !items.length ? <Blank icon={<Search size={24} strokeWidth={1.5} />} title={t('mediaLibrary.noneFound')} {...(found.scanning ? { body: t('mediaLibrary.stillReading') } : {})} />
+                : !items.length ? <Blank icon={<Search size={24} strokeWidth={1.5} />} title={t(query.trim() || !smart ? 'mediaLibrary.noneFound' : `mediaLibrary.none_${smart}`)} {...(found.scanning ? { body: t('mediaLibrary.stillReading') } : {})} />
                   : <Grid key={`found\n${smart}\n${query}\n${kind}`} items={items} picked={picked} onOpen={() => {}} onPick={setPicked} />
             ) : offline && !listing?.listing ? (
               <Blank icon={<Unplug size={24} strokeWidth={1.5} />} title={t('mediaLibrary.offlineTitle')} body={t('mediaLibrary.offlineBody')} />
@@ -298,6 +322,8 @@ export function MediaLibraryPage({ heading, onClose }: { heading: React.ReactNod
           <aside className="flex w-[320px] shrink-0 flex-col overflow-y-auto border-l border-[var(--border)] px-4 py-4">
             {picked ? (
               <Details key={`${picked.place}\n${picked.file.path}\n${picked.file.mtime}`} place={picked.place} file={picked.file}
+                onChanged={() => setAgain((n) => n + 1)} onGone={() => { setPicked(null); setAgain((n) => n + 1); }}
+                onRenamed={(path) => { setPicked({ ...picked, file: { ...picked.file, path, name: path.slice(path.lastIndexOf('/') + 1) } }); setAgain((n) => n + 1); }}
                 where={picked.where ?? [placeName, ...(picked.file.path.includes('/') ? picked.file.path.slice(0, picked.file.path.lastIndexOf('/')).split('/') : [])].join(' / ')}
                 {...(searching ? { onShowFolder: () => go(picked.place, picked.file.path.includes('/') ? picked.file.path.slice(0, picked.file.path.lastIndexOf('/')) : '') } : {})} />
             ) : (
@@ -402,7 +428,7 @@ function Grid({ items, picked, onOpen, onPick }: {
               <FolderWords name={item.name} items={item.items} />
             </button>
           ) : (
-            <FileTile key={`f:${item.place}\n${item.file.path}`} place={item.place} file={item.file} where={item.where} sources={sourcesFor(item.place)} height={rowH}
+            <FileTile key={`f:${item.place}\n${item.file.path}`} place={item.place} file={item.file} where={item.where} copies={item.copies} sources={sourcesFor(item.place)} height={rowH}
               selected={sameFile(picked, item)} onPick={() => onPick({ file: item.file, place: item.place, ...(item.where ? { where: item.where } : {}) })} />
           )))}
         </div>
@@ -437,9 +463,10 @@ function useFacts(place: string, file: LibraryFile): MediaFacts | undefined {
  * A media file's tile. A video is looked through by moving the pointer across it: the frame under the pointer shows,
  * left to right its start to its end.
  */
-function FileTile({ place, file, where, sources, height, selected, onPick }: {
-  place: string; file: LibraryFile; where?: string | undefined; sources: MediaSources; height: number; selected: boolean; onPick: () => void;
+function FileTile({ place, file, where, copies, sources, height, selected, onPick }: {
+  place: string; file: LibraryFile; where?: string | undefined; copies?: number | undefined; sources: MediaSources; height: number; selected: boolean; onPick: () => void;
 }) {
+  const t = useT();
   const resource = React.useMemo(() => resourceOf(file), [file]);
   const facts = useFacts(place, file);
   const [over, setOver] = React.useState(false);
@@ -475,6 +502,8 @@ function FileTile({ place, file, where, sources, height, selected, onPick }: {
           </>
         ) : null}
         {facts?.durationMs && !over ? <span className="absolute bottom-1 right-1 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white">{formatClipDuration(facts.durationMs)}</span> : null}
+        {file.mark === 'like' && !over ? <span data-library-liked="" className="absolute left-1 top-1 flex h-[18px] w-[18px] items-center justify-center rounded bg-black/65 text-white"><Heart size={11} fill="currentColor" /></span> : null}
+        {copies && !over ? <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white">{t('mediaLibrary.copies').replace('{n}', String(copies))}</span> : null}
       </div>
       <div className="mt-1.5 min-w-0 px-0.5">
         <div className={`truncate text-[12.5px] ${selected ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} style={{ whiteSpace: 'pre' }}>{file.name}</div>
@@ -487,21 +516,52 @@ function FileTile({ place, file, where, sources, height, selected, onPick }: {
   );
 }
 
-/** The file picked: played, and what is known of it. */
-function Details({ place, file, where, onShowFolder }: { place: string; file: LibraryFile; where: string; onShowFolder?: () => void }) {
+/**
+ * The file picked: played, and what is known of it. What the person says of it (liked, not wanted) is kept with the
+ * file itself; a file of a folder they added can be renamed where it is, or moved to the trash.
+ */
+function Details({ place, file, where, onShowFolder, onChanged, onRenamed, onGone }: {
+  place: string; file: LibraryFile; where: string; onShowFolder?: () => void;
+  /** something said of it changed; it has another name (its new path); it is in the trash */
+  onChanged: () => void; onRenamed: (path: string) => void; onGone: () => void;
+}) {
   const t = useT();
   const sources = sourcesFor(place);
   const resource = React.useMemo(() => resourceOf(file), [file]);
   const facts = useFacts(place, file);
   const [about, setAbout] = React.useState<LibraryAbout | null>(null);
+  const [mark, setMark] = React.useState<LibraryMark | null>(file.mark ?? null);
+  const [renaming, setRenaming] = React.useState<string | null>(null);
+  const [asking, setAsking] = React.useState(false);
+  const [said, setSaid] = React.useState<string | null>(null);
   React.useEffect(() => {
     let live = true;
-    void libraryApi.about(place, file.path).then((found) => { if (live) setAbout(found); });
+    void libraryApi.about(place, file.path).then((found) => { if (live) { setAbout(found); if (found) setMark(found.mark ?? null); } });
     return () => { live = false; };
   }, [place, file]);
   const url = sources.file(resource);
+  /* a project's files are tended in the project, where its clips follow */
+  const own = place.startsWith('folder:');
+  const say = (next: LibraryMark) => {
+    const to = mark === next ? null : next;
+    setMark(to);
+    void libraryApi.mark(place, file.path, to).then((ok) => { if (ok) onChanged(); else setMark(mark); });
+  };
+  const rename = async () => {
+    const name = (renaming ?? '').trim();
+    setRenaming(null);
+    if (!name || name === file.name) return;
+    setSaid(null);
+    try { onRenamed(await libraryApi.rename(place, file.path, name)); }
+    catch (e) {
+      const reason = (e as { reason?: string }).reason;
+      setSaid(t(reason === 'taken' ? 'assets.renameTaken' : reason === 'kind' ? 'mediaLibrary.renameKind' : 'mediaLibrary.renameFailed'));
+    }
+  };
   const label = 'text-[11px] leading-none text-[var(--text-faint)]';
   const made = about?.made;
+  const act = 'flex items-center gap-1.5 rounded-md bg-[var(--bg-field)] px-2.5 py-2 text-[var(--text)] hover:bg-[var(--bg-hover)]';
+  const toggle = (on: boolean) => `flex h-8 w-9 items-center justify-center rounded-md transition ${on ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'bg-[var(--bg-field)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`;
   return (
     <div className="flex flex-col gap-3" data-library-details="">
       <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-black">
@@ -510,11 +570,27 @@ function Details({ place, file, where, onShowFolder }: { place: string; file: Li
             : <audio key={url} src={url} controls preload="metadata" className="w-[92%]" />}
       </div>
       <div>
-        <p className="whitespace-pre-wrap break-words text-[13px] font-medium text-[var(--text)]">{file.name}</p>
+        {renaming != null ? (
+          <input autoFocus value={renaming} onChange={(e) => setRenaming(e.target.value)} aria-label={t('assets.rename')}
+            onFocus={(e) => { const dot = e.currentTarget.value.lastIndexOf('.'); e.currentTarget.setSelectionRange(0, dot > 0 ? dot : e.currentTarget.value.length); }}
+            onBlur={() => void rename()} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void rename(); } else if (e.key === 'Escape') { e.stopPropagation(); setRenaming(null); } }}
+            className="w-full rounded-md bg-[var(--bg-field)] px-2 py-1 text-[13px] text-[var(--text)] outline-none ring-1 ring-[var(--accent)]" />
+        ) : <p className="whitespace-pre-wrap break-words text-[13px] font-medium text-[var(--text)]">{file.name}</p>}
+        {said ? <p role="alert" className="mt-1 text-[12px] leading-snug text-[var(--err)]">{said}</p> : null}
         <p className="mt-1 text-[12px] leading-relaxed text-[var(--text-muted)]">
           {[facts?.w && facts.h ? `${facts.w} × ${facts.h}` : null, facts?.durationMs ? formatClipDuration(facts.durationMs) : null, formatFileSize(file.size)].filter(Boolean).join(' · ')}
           <br />{new Date(file.mtime).toLocaleString()}
         </p>
+      </div>
+      {/* what you say of it: kept with the file, wherever it goes */}
+      <div className="flex items-center gap-2">
+        <button type="button" aria-pressed={mark === 'like'} aria-label={t('mediaLibrary.like')} title={t('mediaLibrary.like')} onClick={() => say('like')} className={toggle(mark === 'like')}>
+          <Heart size={15} {...(mark === 'like' ? { fill: 'currentColor' } : {})} />
+        </button>
+        <button type="button" aria-pressed={mark === 'no'} aria-label={t('mediaLibrary.reject')} title={t('mediaLibrary.rejectNote')} onClick={() => say('no')} className={toggle(mark === 'no')}>
+          <EyeOff size={15} />
+        </button>
+        {mark === 'no' ? <span className="text-[11.5px] leading-snug text-[var(--text-faint)]">{t('mediaLibrary.rejected')}</span> : null}
       </div>
       <div>
         <p className={label}>{t('mediaLibrary.where')}</p>
@@ -534,16 +610,27 @@ function Details({ place, file, where, onShowFolder }: { place: string; file: Li
         </div>
       ) : null}
       <div className="mt-1 flex flex-wrap gap-2 border-t border-[var(--border)] pt-3 text-[12px]">
-        <button type="button" onClick={() => libraryApi.reveal(place, file.path)}
-          className="flex items-center gap-1.5 rounded-md bg-[var(--bg-field)] px-2.5 py-2 text-[var(--text)] hover:bg-[var(--bg-hover)]">
-          <FolderOpen size={13} />{t('projects.revealFolder')}
-        </button>
-        {onShowFolder ? (
-          <button type="button" onClick={onShowFolder} className="flex items-center gap-1.5 rounded-md bg-[var(--bg-field)] px-2.5 py-2 text-[var(--text)] hover:bg-[var(--bg-hover)]">
-            <Folder size={13} />{t('mediaLibrary.showFolder')}
-          </button>
+        <button type="button" onClick={() => libraryApi.reveal(place, file.path)} className={act}><FolderOpen size={13} />{t('projects.revealFolder')}</button>
+        {onShowFolder ? <button type="button" onClick={onShowFolder} className={act}><Folder size={13} />{t('mediaLibrary.showFolder')}</button> : null}
+        {own ? (
+          <>
+            <button type="button" onClick={() => setRenaming(file.name)} className={act}><Pencil size={13} />{t('assets.rename')}</button>
+            <button type="button" onClick={() => setAsking(true)} className={`${act} hover:text-[var(--err)]`}><Trash2 size={13} />{t('mediaLibrary.discard')}</button>
+          </>
         ) : null}
       </div>
+      <ConfirmDialog
+        open={asking}
+        title={t('mediaLibrary.discardTitle').replace('{name}', file.name)}
+        description={about?.linkedBy.length
+          ? t('mediaLibrary.discardLinked').replace('{projects}', about.linkedBy.map((p) => p.name).join(t('settings.plugins.sep')))
+          : t('mediaLibrary.discardBody')}
+        confirmLabel={t('mediaLibrary.discard')}
+        cancelLabel={t('confirm.cancel')}
+        danger
+        onCancel={() => setAsking(false)}
+        onConfirm={() => { setAsking(false); void libraryApi.trash(place, file.path).then((ok) => { if (ok) onGone(); else setSaid(t('mediaLibrary.discardFailed')); }); }}
+      />
     </div>
   );
 }

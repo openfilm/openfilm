@@ -1,11 +1,11 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setMediaFolder } from './all-media.mjs';
 import { scanFolder, scanProject } from './media-index.mjs';
-import { aboutFile, fileIn, inPlace, libraryPlaces, listFolder, placeOf, searchLibrary } from './media-library.mjs';
+import { aboutFile, duplicates, fileIn, inPlace, libraryPlaces, listFolder, markFile, placeOf, readMarks, renameFile, searchLibrary } from './media-library.mjs';
 import { noteMade } from './media-made.mjs';
 import { createProject } from './projects.mjs';
 
@@ -112,7 +112,7 @@ test('a file says which projects use it, under whatever name they have it', asyn
   await scanProject(two.path);
   const at = await placeOf(`folder:${folder}`);
   assert.deepEqual((await aboutFile(at, 'sunrise.mp4')).usedIn.map((p) => p.name).sort(), ['One', 'Two']);
-  assert.deepEqual(await aboutFile(at, 'unused.mp4'), { usedIn: [], made: null });
+  assert.deepEqual(await aboutFile(at, 'unused.mp4'), { usedIn: [], linkedBy: [], made: null });
   assert.equal(await aboutFile(at, 'nope.mp4'), null);
 });
 
@@ -155,4 +155,80 @@ test('a file is found anywhere in the library by its name, its folders or the wo
   assert.deepEqual(await names({ sort: 'name' }), ['A cam.mp4', 'cover.png', 'fox.png', 'Sunrise 01.mp4', 'waves.mov']);
   const some = await searchLibrary({ limit: 2 });
   assert.deepEqual([some.files.length, some.total], [2, 5]);
+});
+
+test('what the person says of a file stays with it when it is renamed or moved, and what they do not want is hidden', async () => {
+  const folder = elsewhere();
+  media(join(folder, 'good.mp4'), 1);
+  media(join(folder, 'bad.mp4'), 2);
+  media(join(folder, 'plain.mp4'), 3);
+  await setMediaFolder(folder, true);
+  const at = await placeOf(`folder:${folder}`);
+  /* said before the index has read the folder: known at once all the same */
+  assert.deepEqual(await markFile(at, 'good.mp4', 'like'), { mark: 'like' });
+  assert.deepEqual(await markFile(at, 'bad.mp4', 'no'), { mark: 'no' });
+  assert.equal(await markFile(at, 'nope.mp4', 'like'), null);
+  assert.deepEqual((await listFolder(at)).files.map((f) => [f.name, f.mark]), [['bad.mp4', 'no'], ['good.mp4', 'like'], ['plain.mp4', undefined]]);
+  assert.equal((await aboutFile(at, 'good.mp4')).mark, 'like');
+
+  mkdirSync(join(folder, 'picks'));
+  renameSync(join(folder, 'good.mp4'), join(folder, 'picks', 'the one.mp4'));
+  await scanFolder(folder);
+  assert.deepEqual((await listFolder(at, 'picks')).files.map((f) => [f.name, f.mark]), [['the one.mp4', 'like']]);
+  const names = async (asked) => (await searchLibrary({ sort: 'name', ...asked })).files.map((f) => f.name);
+  assert.deepEqual(await names({}), ['plain.mp4', 'the one.mp4'], 'what is not wanted is not found');
+  assert.deepEqual(await names({ mark: 'like' }), ['the one.mp4']);
+  assert.deepEqual(await names({ mark: 'no' }), ['bad.mp4']);
+  /* said no more */
+  await markFile(at, 'bad.mp4', null);
+  assert.deepEqual(Object.values(readMarks()), ['like']);
+  assert.deepEqual(await names({}), ['bad.mp4', 'plain.mp4', 'the one.mp4']);
+});
+
+test('files no project has are found alone; files of the same bytes are grouped, with the room they take', async () => {
+  const folder = elsewhere();
+  media(join(folder, 'used.mp4'), 1, 100_000);
+  media(join(folder, 'unused.mp4'), 2, 100_000);
+  media(join(folder, 'big.mov'), 3, 300_000);
+  mkdirSync(join(folder, 'backup'));
+  copyFileSync(join(folder, 'big.mov'), join(folder, 'backup', 'big copy.mov'));
+  copyFileSync(join(folder, 'unused.mp4'), join(folder, 'backup', 'unused.mp4'));
+  copyFileSync(join(folder, 'unused.mp4'), join(folder, 'backup', 'unused again.mp4'));
+  /* a second name for one file takes no more room: no copy */
+  linkSync(join(folder, 'used.mp4'), join(folder, 'backup', 'used link.mp4'));
+  await setMediaFolder(folder, true);
+  const film = await createProject('Film');
+  mkdirSync(join(film.path, 'assets'), { recursive: true });
+  copyFileSync(join(folder, 'used.mp4'), join(film.path, 'assets', 'used.mp4'));
+  await scanFolder(folder);
+  await scanProject(film.path);
+
+  assert.deepEqual((await searchLibrary({ unused: true, sort: 'name' })).files.map((f) => f.name), ['big.mov', 'unused.mp4']);
+  const dup = await duplicates();
+  assert.deepEqual([dup.groups, dup.spare], [2, 300_000 + 2 * 100_000]);
+  assert.deepEqual(dup.files.map((f) => [f.path, f.copies]), [
+    ['big.mov', 2], ['backup/big copy.mov', 2],
+    ['unused.mp4', 3], ['backup/unused again.mp4', 3], ['backup/unused.mp4', 3],
+  ]);
+});
+
+test('a file of an added folder is renamed where it is, keeping its kind; a project\'s is not touched here', async () => {
+  const folder = elsewhere();
+  media(join(folder, 'shots', 'a.mp4'), 1);
+  media(join(folder, 'shots', 'b.mp4'), 2);
+  await setMediaFolder(folder, true);
+  const at = await placeOf(`folder:${folder}`);
+  await markFile(at, 'shots/a.mp4', 'like');
+  assert.deepEqual(await renameFile(at, 'shots/a.mp4', ' Sunrise: take 1.mp4 '), { path: 'shots/Sunrise take 1.mp4' });
+  assert.ok(existsSync(join(folder, 'shots', 'Sunrise take 1.mp4')));
+  assert.equal((await aboutFile(at, 'shots/Sunrise take 1.mp4')).mark, 'like');
+  await assert.rejects(renameFile(at, 'shots/b.mp4', 'Sunrise take 1.mp4'), /taken/);
+  await assert.rejects(renameFile(at, 'shots/b.mp4', 'b.mov'), /Keep the ending/);
+  await assert.rejects(renameFile(at, 'shots/b.mp4', 'b'), /Keep the ending/);
+  await assert.rejects(renameFile(at, 'shots/b.mp4', '  '), /A name/);
+  await assert.rejects(renameFile(at, 'shots/nope.mp4', 'c.mp4'), /not there/);
+  assert.deepEqual(await renameFile(at, 'shots/b.mp4', 'b.mp4'), { path: 'shots/b.mp4' });
+  const film = await createProject('Film');
+  media(join(film.path, 'assets', 'c.mp4'), 3);
+  await assert.rejects(renameFile(await placeOf(`project:${film.id}`), 'c.mp4', 'd.mp4'), /in the project/);
 });
