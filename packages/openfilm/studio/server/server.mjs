@@ -58,7 +58,7 @@ import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex
 import { createMediaIndexer, mediaFolders, mediaSummary } from './media-index.mjs';
 import { allMedia, fileOf, isAllPath, setMediaFolder, takeMedia, whereAll } from './all-media.mjs';
 import { carryMade, madeAnywhere, madeView } from './media-made.mjs';
-import { aboutFile, fileIn, inPlace, libraryPlaces, listFolder, placeOf } from './media-library.mjs';
+import { aboutFile, fileIn, inPlace, libraryPlaces, listFolder, placeOf, searchLibrary } from './media-library.mjs';
 import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
@@ -140,6 +140,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   } });
   /* what is known of the person's media (media-index.mjs): a project's, a moment after its files changed or it was
      opened; `indexMedia` (the Studio the person runs, not one a test starts): every project's, once Studio is up */
+  /** when the media library's places were last read again for it (ms) */
+  let libraryRead = 0;
   const mediaIndex = createMediaIndexer({
     onError: (root, e) => console.warn(`media index: ${root}: ${e instanceof Error ? e.message : String(e)}`),
     /* media that went missing is looked for unasked (media-reconnect.mjs): the pages hear how many came back */
@@ -518,7 +520,20 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        was made); a folder or file shown in the file manager. Folders are added and taken away under all-media below */
     if (parts[0] === 'media-library') {
       const sub = parts.slice(1).join('/');
-      if (sub === 'places' && req.method === 'GET') return json(res, 200, { ...await libraryPlaces(), scanning: mediaIndex.busy() });
+      if (sub === 'places' && req.method === 'GET') {
+        /* the library is being looked at: its places are read again behind, so a search knows what is there now */
+        if (Date.now() - libraryRead > 60_000) { libraryRead = Date.now(); void mediaIndex.sweep().catch(() => {}); }
+        return json(res, 200, { ...await libraryPlaces(), scanning: mediaIndex.busy() });
+      }
+      /* files of the whole library, by name, folder or prompt (`q`), of one `kind`, only what a service `made`:
+         { files, total, scanning } (still being read: more may be found in a moment) */
+      if (sub === 'search' && req.method === 'GET') {
+        const sort = url.searchParams.get('sort');
+        return json(res, 200, { ...await searchLibrary({
+          q: (url.searchParams.get('q') ?? '').slice(0, 200), kind: ['video', 'image', 'audio'].find((k) => k === url.searchParams.get('kind')) ?? null,
+          made: url.searchParams.get('made') === '1', sort: sort === 'name' || sort === 'size' ? sort : 'date', limit: Number(url.searchParams.get('limit')) || 300,
+        }), scanning: mediaIndex.busy() });
+      }
       const body = req.method === 'POST' ? /** @type {{ place?: unknown, path?: unknown }} */ (await readJson(req) ?? {}) : null;
       const at = await placeOf(body ? body.place : url.searchParams.get('place'));
       if (!at) throw new HttpError(404, 'That place is not in the library.');

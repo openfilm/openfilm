@@ -8,6 +8,10 @@
  * takes reading every file (fingerprints, which projects use a file) is worked out for the file asked about, or
  * behind, by the index (media-index.mjs).
  *
+ * Looking for a file anywhere in the library (`searchLibrary`) reads the index instead: every file of every place
+ * by name, without walking the disk, so it answers at once; it knows a place as it was last read (the places are read
+ * again as the library is opened).
+ *
  * A place is named `folder:<full path>` (one the person added, all-media.mjs `setMediaFolder`) or `project:<id>` (a
  * listed project: its assets/). Nothing outside a place is ever listed or read, and nothing here writes into one:
  * what Studio works out from a file of an added folder is kept in Studio's own folder (`folderCache`).
@@ -18,8 +22,8 @@ import { basename, join, resolve, sep } from 'node:path';
 import { fingerprint } from '../../src/media-fingerprint.mjs';
 import { folderCache } from './all-media.mjs';
 import { inProject, kindOf } from './files.mjs';
-import { madeAnywhere } from './media-made.mjs';
-import { mediaFolders, projectRecordFile, readRecord } from './media-index.mjs';
+import { madeAnywhere, readMade, wordsByFingerprint } from './media-made.mjs';
+import { folderRecordFile, mediaFolders, projectRecordFile, readRecord } from './media-index.mjs';
 import { TOOL_DIR, listProjects } from './projects.mjs';
 
 const KINDS = new Set(['video', 'image', 'audio']);
@@ -144,4 +148,50 @@ export async function aboutFile(at, path) {
     if (Object.values(readRecord(projectRecordFile(p.path)).files).some((e) => e.fp === fp && !e.gone)) usedIn.push({ id: p.id, name: p.name || basename(p.path) });
   }
   return { usedIn, made: await madeAnywhere(fp) };
+}
+
+/**
+ * @typedef {LibraryFile & { place: string, where: string }} Found   `where`: its place and the folders it is in,
+ *   to read (`Footage / 2026-10 beach`)
+ */
+
+/**
+ * Files of the whole library, from the index: those whose name, folders or place hold every word asked for (as do
+ * the words a service was asked for it with, for media a service made), of one kind when asked, only what a service
+ * made when asked. The same file in several places is found once, in a folder the person added before a project.
+ * `sort`: the newest first, by name, or the largest first. At most `limit` are returned; `total` is how many matched.
+ * @param {{ q?: string, kind?: string | null, made?: boolean, sort?: 'date' | 'name' | 'size', limit?: number }} [asked]
+ * @returns {Promise<{ files: Found[], total: number }>}
+ */
+export async function searchLibrary({ q = '', kind = null, made = false, sort = 'date', limit = 300 } = {}) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
+  const projects = (await listProjects()).filter((p) => !p.missing);
+  const asked = await wordsByFingerprint();
+  /** what a service made, by fingerprint: with the words it was asked with, or with none */
+  const byService = new Set(asked.keys());
+  for (const p of projects) for (const fp of Object.keys(readMade(p.path))) byService.add(fp);
+  /** @type {Map<string, Found>} */
+  const found = new Map();
+  const take = (/** @type {string} */ place, /** @type {string} */ placeName, /** @type {string} */ path, /** @type {import('./media-index.mjs').MediaEntry} */ e) => {
+    if (e.gone || found.has(e.fp) || (kind && e.kind !== kind) || (made && !byService.has(e.fp))) return;
+    const cut = path.lastIndexOf('/');
+    const where = cut < 0 ? placeName : `${placeName} / ${path.slice(0, cut).split('/').join(' / ')}`;
+    if (words.length) {
+      const hay = `${where} / ${path.slice(cut + 1)}\n${asked.get(e.fp) ?? ''}`.toLowerCase();
+      if (!words.every((w) => hay.includes(w))) return;
+    }
+    found.set(e.fp, { place, where, name: path.slice(cut + 1), path, kind: e.kind, size: e.size, mtime: e.mtime });
+  };
+  for (const root of mediaFolders()) {
+    for (const [path, e] of Object.entries(readRecord(folderRecordFile(root)).files)) take(`folder:${root}`, basename(root) || root, path, e);
+  }
+  for (const p of projects) {
+    for (const [path, e] of Object.entries(readRecord(projectRecordFile(p.path)).files)) {
+      if (path.startsWith('assets/')) take(`project:${p.id}`, p.name || basename(p.path), path.slice(7), e);
+    }
+  }
+  const files = [...found.values()].sort(sort === 'name'
+    ? (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    : sort === 'size' ? (a, b) => b.size - a.size : (a, b) => b.mtime - a.mtime || a.name.localeCompare(b.name));
+  return { files: files.slice(0, Math.max(1, Math.min(2000, limit))), total: files.length };
 }

@@ -15,6 +15,9 @@ export interface LibraryProject { place: string; id: string; name: string }
 export interface LibraryPlaces { folders: LibraryFolder[]; projects: LibraryProject[]; scanning: boolean }
 export interface LibraryFile { name: string; path: string; kind: 'video' | 'image' | 'audio'; size: number; mtime: number }
 export interface LibraryListing { dirs: { name: string; path: string; items: number }[]; files: LibraryFile[] }
+/** A file found anywhere in the library: its place, and where it is to read (`Footage / 2026-10 beach`). */
+export interface FoundFile extends LibraryFile { place: string; where: string }
+export interface LibraryFound { files: FoundFile[]; total: number; scanning: boolean }
 export interface LibraryAbout { usedIn: { id: string; name: string }[]; made: MediaMade | null }
 
 const q = (place: string, path: string) => `place=${encodeURIComponent(place)}&path=${encodeURIComponent(path)}`;
@@ -53,6 +56,9 @@ export async function factsOf(place: string, file: LibraryFile): Promise<MediaFa
 export const libraryApi = {
   places: () => get<LibraryPlaces>('/api/media-library/places'),
   list: (place: string, dir: string) => get<LibraryListing>(`/api/media-library/list?place=${encodeURIComponent(place)}&dir=${encodeURIComponent(dir)}`),
+  /** Files of the whole library by name, folder or prompt (`q`), of one kind, only what a service made. */
+  search: (asked: { q?: string; kind?: string | null; made?: boolean; sort?: 'date' | 'name' | 'size'; limit?: number }) => get<LibraryFound>(
+    `/api/media-library/search?q=${encodeURIComponent(asked.q ?? '')}${asked.kind ? `&kind=${asked.kind}` : ''}${asked.made ? '&made=1' : ''}&sort=${asked.sort ?? 'date'}&limit=${asked.limit ?? 300}`),
   about: (place: string, path: string) => get<LibraryAbout>(`/api/media-library/about?${q(place, path)}`),
   /** A folder or a file shown in the file manager ('' : the place itself). */
   reveal: (place: string, path: string) => { void post('/api/media-library/reveal', { place, path }); },

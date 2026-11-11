@@ -4,8 +4,9 @@ import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeF
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setMediaFolder } from './all-media.mjs';
-import { scanProject } from './media-index.mjs';
-import { aboutFile, fileIn, inPlace, libraryPlaces, listFolder, placeOf } from './media-library.mjs';
+import { scanFolder, scanProject } from './media-index.mjs';
+import { aboutFile, fileIn, inPlace, libraryPlaces, listFolder, placeOf, searchLibrary } from './media-library.mjs';
+import { noteMade } from './media-made.mjs';
 import { createProject } from './projects.mjs';
 
 const KEYS = ['OPENFILM_HOME', 'OPENFILM_SHARED_HOME', 'OPENFILM_LIBRARY'];
@@ -113,4 +114,45 @@ test('a file says which projects use it, under whatever name they have it', asyn
   assert.deepEqual((await aboutFile(at, 'sunrise.mp4')).usedIn.map((p) => p.name).sort(), ['One', 'Two']);
   assert.deepEqual(await aboutFile(at, 'unused.mp4'), { usedIn: [], made: null });
   assert.equal(await aboutFile(at, 'nope.mp4'), null);
+});
+
+test('a file is found anywhere in the library by its name, its folders or the words it was made with', async () => {
+  const folder = elsewhere();
+  media(join(folder, 'beach', 'Sunrise 01.mp4'), 1, 90_000);
+  media(join(folder, 'beach', 'waves.mov'), 2, 70_000);
+  media(join(folder, 'interview', 'A cam.mp4'), 3, 60_000);
+  media(join(folder, 'cover.png'), 4, 50_000);
+  await setMediaFolder(folder, true);
+  await scanFolder(folder);
+  const film = await createProject('Seaside');
+  mkdirSync(join(film.path, 'assets', 'image'), { recursive: true });
+  /* the project has its own copy of one, and a picture a service made */
+  copyFileSync(join(folder, 'beach', 'waves.mov'), join(film.path, 'assets', 'waves copy.mov'));
+  media(join(film.path, 'assets', 'image', 'fox.png'), 5, 40_000);
+  await noteMade(film.path, { verb: 'image', args: { out: 'fox', prompt: 'a red fox at dawn' }, paths: [], via: 'fal', by: 'fal.ai', files: ['assets/image/fox.png'] });
+  await scanProject(film.path);
+  const place = `folder:${folder}`;
+  const name = folder.split('/').pop();
+  const names = async (asked) => (await searchLibrary(asked)).files.map((f) => f.name);
+
+  assert.deepEqual(await names({ q: 'sunrise' }), ['Sunrise 01.mp4']);
+  assert.deepEqual((await names({ q: 'beach' })).sort(), ['Sunrise 01.mp4', 'waves.mov']);
+  assert.deepEqual(await names({ q: 'beach  WAVES' }), ['waves.mov']);
+  assert.deepEqual(await names({ q: 'dawn fox' }), ['fox.png']);
+  /* a project's name finds what the project has, its own copy of a folder's file too */
+  assert.deepEqual((await names({ q: 'seaside' })).sort(), ['fox.png', 'waves copy.mov']);
+  /* found by a word both have, the same file is found once, where the person keeps it */
+  assert.deepEqual((await searchLibrary({ q: 'waves' })).files.map((f) => f.path), ['beach/waves.mov']);
+  assert.deepEqual(await names({ q: 'nothing like it' }), []);
+  /* each says where it is */
+  const [sunrise] = (await searchLibrary({ q: 'sunrise' })).files;
+  assert.deepEqual({ place: sunrise.place, path: sunrise.path, where: sunrise.where, kind: sunrise.kind }, { place, path: 'beach/Sunrise 01.mp4', where: `${name} / beach`, kind: 'video' });
+  assert.deepEqual((await searchLibrary({ q: 'fox' })).files.map((f) => [f.place, f.path, f.where]), [[`project:${film.id}`, 'image/fox.png', 'Seaside / image']]);
+  /* of one kind, what a service made, in the order asked, and no more than asked */
+  assert.deepEqual((await names({ kind: 'image' })).sort(), ['cover.png', 'fox.png']);
+  assert.deepEqual(await names({ made: true }), ['fox.png']);
+  assert.deepEqual(await names({ sort: 'size' }), ['Sunrise 01.mp4', 'waves.mov', 'A cam.mp4', 'cover.png', 'fox.png']);
+  assert.deepEqual(await names({ sort: 'name' }), ['A cam.mp4', 'cover.png', 'fox.png', 'Sunrise 01.mp4', 'waves.mov']);
+  const some = await searchLibrary({ limit: 2 });
+  assert.deepEqual([some.files.length, some.total], [2, 5]);
 });
