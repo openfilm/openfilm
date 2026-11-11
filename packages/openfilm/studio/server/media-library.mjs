@@ -17,21 +17,28 @@
  * hides it without touching it. Only a file of a folder the person added is renamed or moved to the trash here; a
  * project's files are tended in the project, where its clips follow.
  *
- * A place is named `folder:<full path>` (one the person added, all-media.mjs `setMediaFolder`) or `project:<id>` (a
- * listed project: its assets/). Nothing outside a place is ever listed or read, and nothing here writes into one:
- * what Studio works out from a file of an added folder is kept in Studio's own folder (`folderCache`).
+ * A place is named `folder:<full path>` (one the person added, `setMediaFolder`), `project:<id>` (a listed project:
+ * its assets/) or `saved` (the files the person kept in Saved, saved.mjs; the clips and pages kept there are not
+ * files to look through, and stay in the project drawer's Saved). Nothing outside a place is ever listed or read, and
+ * nothing here writes into an added folder: what Studio works out from its files is kept in Studio's own folder
+ * (`folderCache`).
+ *
+ * A file comes into a project only when it is used there (`takeFile`): as media the person brings in does, taking no
+ * room where the disk allows, and one the project has already, under any name, is that one.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { mkdir, readdir, rename, stat } from 'node:fs/promises';
-import { basename, dirname, extname, join, resolve, sep } from 'node:path';
+import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { basename, dirname, extname, isAbsolute, join, parse, resolve, sep } from 'node:path';
 import { fingerprint, isFingerprint } from '../../src/media-fingerprint.mjs';
-import { sharedHome } from '../../src/locations.mjs';
-import { folderCache } from './all-media.mjs';
+import { setSharedPref, sharedHome } from '../../src/locations.mjs';
 import { writeAtomic } from './atomic.mjs';
-import { cleanName, inProject, kindOf } from './files.mjs';
+import { bringIn, cleanName, inProject, kindOf, readable } from './files.mjs';
+import { libraryRoot as savedRoot } from './saved.mjs';
 import { moveToTrash } from './trash.mjs';
-import { madeAnywhere, readMade, wordsByFingerprint } from './media-made.mjs';
-import { folderRecordFile, mediaFolders, projectRecordFile, readRecord } from './media-index.mjs';
+import { carryMade, madeAnywhere, readMade, wordsByFingerprint } from './media-made.mjs';
+import { folderRecordFile, mediaFolders, projectRecordFile, readRecord, scanProject } from './media-index.mjs';
 import { TOOL_DIR, listProjects } from './projects.mjs';
 
 const KINDS = new Set(['video', 'image', 'audio']);
@@ -42,12 +49,39 @@ const shown = (/** @type {string} */ name) => !name.startsWith('.') && !SKIP.has
 const AT_ONCE = 16;
 
 /**
- * @typedef {{ place: string, root: string, name: string, project?: { id: string, path: string }, cache: string }} Place
+ * @typedef {{ place: string, root: string, name: string, project?: { id: string, path: string }, saved?: boolean, cache: string }} Place
  *   `root`: the folder listed; `cache`: where what Studio works out from its files is kept
  * @typedef {'like' | 'no'} Mark
  * @typedef {{ name: string, path: string, kind: 'video' | 'image' | 'audio', size: number, mtime: number, mark?: Mark }} LibraryFile
  *   `path`: inside the place, `/` between folders; `mark`: what the person said of it, when its fingerprint is known
  */
+
+/** Where Studio keeps what it works out from the files of an added folder. */
+export const folderCache = (/** @type {string} */ root) => join(sharedHome(), 'media-index', 'cache', createHash('sha1').update(resolve(root)).digest('hex').slice(0, 16));
+
+/** Folders that hold too much to be media folders: a disk's top, the home folder itself. */
+const tooWide = (/** @type {string} */ path) => path === parse(path).root || path === homedir();
+
+/**
+ * A folder added to the library, or taken out of it (its record and cache with it; the folder itself is never
+ * touched). Resolves with the folders now.
+ * @param {string} path @param {boolean} on
+ */
+export async function setMediaFolder(path, on) {
+  if (typeof path !== 'string' || !isAbsolute(path)) throw Object.assign(new Error('a folder, please'), { status: 400 });
+  const folder = resolve(path);
+  const now = mediaFolders();
+  if (on) {
+    if (tooWide(folder)) throw Object.assign(new Error('That holds far more than media: pick the folder your media is in.'), { status: 400 });
+    if (!(await stat(folder).catch(() => null))?.isDirectory()) throw Object.assign(new Error('That folder is not there.'), { status: 404 });
+    if (!now.includes(folder)) setSharedPref('mediaFolders', [...now, folder]);
+  } else {
+    setSharedPref('mediaFolders', now.filter((f) => f !== folder));
+    await rm(folderRecordFile(folder), { force: true }).catch(() => {});
+    await rm(folderCache(folder), { recursive: true, force: true }).catch(() => {});
+  }
+  return mediaFolders();
+}
 
 const marksFile = () => join(sharedHome(), 'media-index', 'marks.json');
 /** @type {{ stamp: string, marks: Record<string, Mark> } | null} */
@@ -128,6 +162,7 @@ export async function placeOf(place) {
     const project = (await listProjects()).find((p) => p.id === place.slice(8) && !p.missing);
     return project ? { place, root: join(project.path, 'assets'), name: project.name || basename(project.path), project: { id: project.id, path: project.path }, cache: project.path } : null;
   }
+  if (place === 'saved') { const root = await savedRoot(); return { place, root, name: 'Saved', saved: true, cache: root }; }
   return null;
 }
 
@@ -171,6 +206,8 @@ export async function listFolder(at, dir = '') {
     const info = await stat(join(abs, e.name)).catch(() => null);
     if (!info) return null;
     if (info.isDirectory()) {
+      /* in Saved, a clip, a group or a page kept there is a folder of its own making: no folder of files */
+      if (at.saved && existsSync(join(abs, e.name, 'saved.json'))) return null;
       const held = await readdir(join(abs, e.name), { withFileTypes: true }).catch(() => []);
       const items = held.filter((h) => shown(h.name) && (h.isDirectory() || KINDS.has(kindOf(h.name)))).length;
       return { dir: { name: e.name, path: inside(e.name), items } };
@@ -225,6 +262,12 @@ export async function aboutFile(at, path) {
   }
   const mark = readMarks()[fp];
   return { usedIn, linkedBy, made: await madeAnywhere(fp), ...(mark ? { mark } : {}) };
+}
+
+/** Where a file of a place is, to read: its place and the folders it is in (`Footage / 2026-10 beach`). @param {Place} at @param {string} path */
+export function whereOf(at, path) {
+  const cut = path.lastIndexOf('/');
+  return cut < 0 ? at.name : `${at.name} / ${path.slice(0, cut).split('/').join(' / ')}`;
 }
 
 /**
@@ -332,9 +375,10 @@ export class LibraryError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
 }
 
-/** A file of a folder the person added (not a project's), or the reason it is not one to change here. */
+/** A file of a folder the person added (not a project's, not of Saved), or the reason it is not one to change here. */
 function ownFile(/** @type {Place} */ at, /** @type {unknown} */ path) {
   if (at.project) throw new LibraryError('A project\'s files are renamed and removed in the project, where its clips follow.');
+  if (at.saved) throw new LibraryError('What is in Saved is renamed and removed in Saved.');
   const file = fileIn(at, path);
   if (!file || !existsSync(file.abs)) throw new LibraryError('That file is not there.', 404);
   return file;
@@ -364,4 +408,65 @@ export async function renameFile(at, path, name) {
 export async function trashFile(at, path) {
   const file = ownFile(at, path);
   await moveToTrash(file.abs);
+}
+
+/**
+ * A file of this computer brought into the project at `root`, as media the person brings in does (files.mjs `bringIn`
+ * `auto`). One the project has already, under any name, is that one. How it was made comes with it
+ * (media-made.mjs). Resolves with its path in the project, or null when it could not be read.
+ * @param {string} root @param {string} abs
+ */
+async function takeInto(root, abs) {
+  const fp = await fingerprint(abs).catch(() => null);
+  if (!fp) return null;
+  for (const [rel, e] of Object.entries(readRecord(projectRecordFile(root)).files)) {
+    if (e.fp !== fp || e.gone) continue;
+    try { if ((await stat(readable(root, rel))).size === e.size) return rel; } catch { /* not there now */ }
+  }
+  const [landed] = await bringIn(root, 'assets', [abs], 'auto');
+  if (!landed) return null;
+  /* on record at once: a second use of it is this file, not another copy */
+  await scanProject(root).catch(() => {});
+  await carryMade(root, landed);
+  return landed;
+}
+
+/** A file of a place used in the project at `root`: its path there, or null when it is no file of the place. @param {Place} at @param {unknown} path @param {string} root */
+export async function takeFile(at, path, root) {
+  const file = fileIn(at, path);
+  return file && existsSync(file.abs) ? takeInto(root, file.abs) : null;
+}
+
+/**
+ * The file with this fingerprint, wherever the library has it (a folder the person added before a project), used in
+ * the project at `root`: its path there, or null when no place has it any more.
+ * @param {string} fp @param {string} root
+ */
+export async function takeByFingerprint(fp, root) {
+  const places = [
+    ...mediaFolders().map((folder) => ({ base: folder, files: readRecord(folderRecordFile(folder)).files })),
+    ...(await listProjects()).filter((p) => !p.missing && p.path !== root).map((p) => ({ base: p.path, files: readRecord(projectRecordFile(p.path)).files })),
+  ];
+  for (const { base, files } of places) {
+    for (const [path, e] of Object.entries(files)) {
+      if (e.fp !== fp || e.gone) continue;
+      const abs = e.at ?? join(base, ...path.split('/'));
+      if (await fingerprint(abs).catch(() => null) === fp) return takeInto(root, abs);
+    }
+  }
+  /* the project's own already */
+  return Object.entries(readRecord(projectRecordFile(root)).files).find(([, e]) => e.fp === fp && !e.gone)?.[0] ?? null;
+}
+
+/**
+ * A file of the library as a thing dragged, picked or pointed at names it (`lib:["<place>","<path>"]`): its place
+ * and path, or null for anything else.
+ * @param {unknown} ref @returns {{ place: string, path: string } | null}
+ */
+export function libraryRef(ref) {
+  if (typeof ref !== 'string' || !ref.startsWith('lib:')) return null;
+  try {
+    const [place, path] = JSON.parse(ref.slice(4));
+    return typeof place === 'string' && typeof path === 'string' ? { place, path } : null;
+  } catch { return null; }
 }

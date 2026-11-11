@@ -439,13 +439,17 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
   const run = (cwd, ...args) => new Promise((done) => execFile(process.execPath, [bin, 'get', ...args], { cwd, env, encoding: 'utf8' }, (error, stdout) => done({ status: error?.code ?? 0, stdout })));
   const root = project();
   /* the listing as the CLI prints it: the verbs' names padded to the longest shown */
-  /* OpenFilm's own library first (src/library-search.mjs), but for one verb's help */
+  /* the person's own media first (media-library-get.mjs), then OpenFilm's own library (src/library-search.mjs), but
+     for one verb's help */
+  const { myMediaVerb } = await import('./media-library-get.mjs');
+  const own = [myMediaVerb()];
   const free = libraryVerbs();
   const lines = (list, width) => list.flatMap((v) => [`  ${v.verb.padEnd(width)}  ${v.help}${v.dir ? ` Saved under ${v.dir}/.` : ''}`,
     `${' '.repeat(width + 4)}${Object.entries(v.options).map(([n, o]) => flagHelp(n, o)).join(' ')}`]);
-  const library = (width) => ['Free, offline, from OpenFilm\'s own library (CC0): search it first, and make only what it does not have.', ...lines(free, width), ''];
+  const library = (width) => ['Free, offline, the person\'s own media: look here first.', ...lines(own, width), '',
+    'Free, offline, from OpenFilm\'s own library (CC0): search it next, and make only what neither has.', ...lines(free, width), ''];
   const listing = (verbs, { one = false } = {}) => {
-    const width = Math.max(...[...(one ? [] : free.map((v) => v.verb)), ...verbs].map((v) => v.length));
+    const width = Math.max(...[...(one ? [] : [...own, ...free].map((v) => v.verb)), ...verbs].map((v) => v.length));
     return [
       'openfilm get <what> [--option value …]   media for this project, saved under assets/',
       '  --yes              the person already agreed to what it spends',

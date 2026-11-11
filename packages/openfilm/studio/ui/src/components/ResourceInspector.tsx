@@ -21,7 +21,7 @@ export interface MadeProps {
 
 /**
  * A media file's properties, in the inspector's place. `url` is the file itself on the film origin (Download). A file
- * of All media (lib/all-media) says where it is from and how many projects use it (`from`), in place of its path.
+ * of the media library (lib/media-library) says where it is and how many projects use it (`from`), in place of its path.
  */
 export function ResourceInspector({ file, url, width, onClose, from, made }: {
   file: WorkspaceResource; url: string; width: number; onClose: () => void; from?: { name: string; uses: number } | undefined;

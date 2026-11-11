@@ -116,7 +116,8 @@ test('a file changed since, a verb that makes no media and a record that cannot 
   assert.equal(await noteMade(root, { verb: 'asr', args: { src: 'assets/a.wav' }, paths: ['src'], via: 'x', by: 'X', files: [] }), 0);
   assert.deepEqual(await madeView(root), {});
   await picture(root, 'hero', 1, { prompt: 'a fox' });
-  media(root, 'assets/image/hero.png', 9);
+  /* of another size, so it is known to have changed whatever the clock says */
+  media(root, 'assets/image/hero.png', 9, 110_000);
   await scanProject(root);
   assert.deepEqual(await madeView(root), {});
   writeFileSync(madeFile(root), '{ not json');

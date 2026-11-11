@@ -457,9 +457,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
             {cat === 'media' ? (
               <>
                 {/* what the person brought into this project (what it took from the library stays in its category),
-                    every project's and folder's (All media), then Saved */}
+                    their media library (the folders they keep media in, every project's), then Saved */}
                 <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaImport')}</SideBox>
-                <SideBox on={mediaScope === 'all'} onClick={() => onMediaScope('all')}>{t('assetDrawer.mediaAll')}</SideBox>
+                <SideBox on={mediaScope === 'all'} onClick={() => onMediaScope('all')}>{t('assetDrawer.mediaLibrary')}</SideBox>
                 <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.favorites')}</SideBox>
               </>
             ) : cat === 'skill' ? (

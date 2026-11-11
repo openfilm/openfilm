@@ -56,9 +56,8 @@ import { FILM_PAGE, PageFrameError, closePageFrames, compoundSound, filmPoster, 
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaFolders, mediaSummary } from './media-index.mjs';
-import { allMedia, fileOf, isAllPath, setMediaFolder, takeMedia, whereAll } from './all-media.mjs';
-import { carryMade, madeAnywhere, madeView } from './media-made.mjs';
-import { LibraryError, aboutFile, duplicates, fileIn, inPlace, libraryPlaces, listFolder, markFile, placeOf, renameFile, searchLibrary, trashFile as trashLibraryFile } from './media-library.mjs';
+import { carryMade, madeView } from './media-made.mjs';
+import { LibraryError, aboutFile, duplicates, fileIn, inPlace, libraryPlaces, libraryRef, listFolder, markFile, placeOf, renameFile, searchLibrary, setMediaFolder, takeFile, trashFile as trashLibraryFile, whereOf } from './media-library.mjs';
 import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
@@ -517,7 +516,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
     /* the media library (media-library.mjs): its places; a folder of one as the disk has it (`dir` inside the place);
        a file's bytes and what Studio works out from it; what is known of one file (the projects that use it, how it
-       was made); a folder or file shown in the file manager. Folders are added and taken away under all-media below */
+       was made); a folder or file shown in the file manager; a folder added to the library (POST folders: the one
+       given, else the person's pick in the system's dialog) or taken out of it (DELETE folders { path }) */
     if (parts[0] === 'media-library') {
       const sub = parts.slice(1).join('/');
       if (sub === 'places' && req.method === 'GET') {
@@ -534,6 +534,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           made: url.searchParams.get('made') === '1', sort: sort === 'name' || sort === 'size' ? sort : 'date', limit: Number(url.searchParams.get('limit')) || 300,
           mark: url.searchParams.get('mark') === 'like' ? 'like' : url.searchParams.get('mark') === 'no' ? 'no' : null, unused: url.searchParams.get('unused') === '1',
         }), scanning: mediaIndex.busy() });
+      }
+      if (sub === 'folders' && (req.method === 'POST' || req.method === 'DELETE')) {
+        const { path: asked, title } = /** @type {{ path?: unknown, title?: unknown }} */ (await readJson(req).catch(() => ({})) ?? {});
+        const on = req.method === 'POST';
+        const picked = asked ?? (on ? await pickFolder({ title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose a folder', at: null })
+          .catch((e) => { throw new HttpError(501, String(e?.message ?? e)); }) : null);
+        if (picked == null) return json(res, 200, { folders: mediaFolders(), added: null });
+        let folders;
+        try { folders = await setMediaFolder(/** @type {string} */ (picked), on); }
+        catch (e) { throw new HttpError(/** @type {{ status?: number }} */ (e).status ?? 400, /** @type {Error} */ (e).message); }
+        if (on) void mediaIndex.folder(resolve(/** @type {string} */ (picked)));
+        return json(res, 200, { folders, added: on ? resolve(/** @type {string} */ (picked)) : null });
       }
       /* files of the added folders that are the same bytes as another, group by group, and the room they take */
       if (sub === 'duplicates' && req.method === 'GET') return json(res, 200, { ...await duplicates(), scanning: mediaIndex.busy() });
@@ -579,7 +591,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (sub === 'about' && req.method === 'GET') {
         const about = await aboutFile(at, path);
         /* where a project is on this computer is not the page's to know */
-        return json(res, 200, about ? { ...about, linkedBy: about.linkedBy.map(({ id, name }) => ({ id, name })) } : null);
+        return json(res, 200, about ? { ...about, linkedBy: about.linkedBy.map(({ id, name }) => ({ id, name })), where: whereOf(at, String(path)) } : null);
       }
       if (sub === 'media' && req.method === 'GET') {
         const what = url.searchParams.get('what');
@@ -588,49 +600,6 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (what === 'wave') return json(res, 200, await waveform(file.root, file.rel, o));
         const jpeg = what === 'poster' ? await poster(file.root, file.rel, o)
           : what === 'frame' ? await frame(file.root, file.rel, Number(url.searchParams.get('ms')), Number(url.searchParams.get('w')), o) : null;
-        if (!jpeg) throw new HttpError(400, 'what: probe, poster, frame or wave');
-        res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
-        return res.end(jpeg);
-      }
-    }
-    /* All media (all-media.mjs): every project's media and the added folders', one line a file, the newest first
-       (`scanning`: more may come in); a file's bytes and what Studio works out from it; where it is, shown in the file
-       manager; a folder added (the one given, else the person's pick) or taken away */
-    if (parts[0] === 'all-media') {
-      const sub = parts.slice(1).join('/');
-      if (!sub && req.method === 'GET') return json(res, 200, { ...await allMedia(), scanning: mediaIndex.busy() });
-      if (sub === 'folders/reveal' && req.method === 'POST') {
-        const { path: shown } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
-        if (typeof shown !== 'string' || !mediaFolders().includes(resolve(shown))) throw new HttpError(404, 'not a folder of All media');
-        openFile(resolve(shown));
-        return json(res, 200, {});
-      }
-      if (sub === 'folders' && (req.method === 'POST' || req.method === 'DELETE')) {
-        const { path: asked, title } = /** @type {{ path?: unknown, title?: unknown }} */ (await readJson(req).catch(() => ({})) ?? {});
-        const on = req.method === 'POST';
-        const path = asked ?? (on ? await pickFolder({ title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose a folder', at: null })
-          .catch((e) => { throw new HttpError(501, String(e?.message ?? e)); }) : null);
-        if (path == null) return json(res, 200, { folders: mediaFolders(), added: null });
-        let folders;
-        try { folders = await setMediaFolder(/** @type {string} */ (path), on); }
-        catch (e) { throw new HttpError(/** @type {{ status?: number }} */ (e).status ?? 400, /** @type {Error} */ (e).message); }
-        if (on) void mediaIndex.folder(resolve(/** @type {string} */ (path)));
-        return json(res, 200, { folders, added: on ? resolve(/** @type {string} */ (path)) : null });
-      }
-      const at = await whereAll(sub === 'reveal' ? (/** @type {{ path?: unknown }} */ (await readJson(req) ?? {})).path : url.searchParams.get('path'));
-      if (!at) throw new HttpError(404, 'That file is not there any more.');
-      if (sub === 'reveal' && req.method === 'POST') { reveal(fileOf(at)); return json(res, 200, {}); }
-      /* how it was made, as any project knows it (media-made.mjs): { made } (null: nothing on record) */
-      if (sub === 'made' && req.method === 'GET') return json(res, 200, { made: await madeAnywhere(at.fp) });
-      if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, fileOf(at));
-      if (sub === 'media' && req.method === 'GET') {
-        const what = url.searchParams.get('what');
-        const { root, rel } = at;
-        const o = { cache: at.cache };
-        if (what === 'probe') return json(res, 200, await probe(root, rel, o));
-        if (what === 'wave') return json(res, 200, await waveform(root, rel, o));
-        const jpeg = what === 'poster' ? await poster(root, rel, o)
-          : what === 'frame' ? await frame(root, rel, Number(url.searchParams.get('ms')), Number(url.searchParams.get('w')), o) : null;
         if (!jpeg) throw new HttpError(400, 'what: probe, poster, frame or wave');
         res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
         return res.end(jpeg);
@@ -1238,12 +1207,13 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     if (rest === 'saved/take' && req.method === 'POST') {
       const { path: from } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
-      /* a file of All media (all-media.mjs) comes in as media the person brings in does; one already here is that one */
-      if (isAllPath(from)) {
-        const path = await takeMedia(project.path, /** @type {string} */ (from));
+      /* a file of the media library (media-library.mjs) comes in as media the person brings in does; one already
+         here is that one, and how it was made comes with it */
+      const lib = libraryRef(from);
+      if (lib) {
+        const at = await placeOf(lib.place);
+        const path = at ? await takeFile(at, lib.path, project.path) : null;
         if (!path) throw new HttpError(404, 'That file is not there any more.');
-        /* how it was made comes with it (media-made.mjs) */
-        await carryMade(project.path, path);
         return json(res, 200, { path });
       }
       const taken = await savedCall(() => takeSaved(project.path, from));

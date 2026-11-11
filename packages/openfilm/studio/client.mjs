@@ -383,6 +383,9 @@ export async function getMedia(argv, say) {
     if (Array.isArray(answer?.lines) && typeof answer.code === 'number') return { code: answer.code, lines: answer.lines };
     return library.libraryGet(verb, args);
   }
+  /* the person's own media library: searched here too, offline and free (studio/server/media-library-get.mjs) */
+  const { MY_MEDIA, myMediaGet, myMediaVerb } = await import('./server/media-library-get.mjs');
+  if (verb === MY_MEDIA && help === undefined) return myMediaGet(args, projectAround('.'));
   const listing = !verb || verb === 'help' || help !== undefined;
   const folder = projectAround('.');
   if (!folder && !listing) return { code: 2, lines: [`openfilm get: ${resolve('.')} is not in a project; \`openfilm open\` makes one`] };
@@ -395,7 +398,8 @@ export async function getMedia(argv, say) {
   }
   const one = verb && verb !== 'help' ? verb : null;
   /* the library's verbs, listed first: what is there for free comes before what is made */
-  const free = library.libraryVerbs(one ?? undefined);
+  const own = !one || one === MY_MEDIA ? [myMediaVerb()] : [];
+  const free = [...own, ...library.libraryVerbs(one ?? undefined)];
   /** @param {{ verb: string, help: string, dir?: string, options: Record<string, { value?: string, required?: boolean, choices?: string[] }> }[]} list @param {number} width */
   const lines = (list, width) => list.flatMap((v) => {
     const options = Object.entries(v.options).map(([name, o]) => {
@@ -422,8 +426,10 @@ export async function getMedia(argv, say) {
   const where = one || !services ? [] : ['', services];
   const width = Math.max(...[...free, ...verbs].map((v) => v.verb.length));
   const first = one ? [] : [
-    'Free, offline, from OpenFilm\'s own library (CC0): search it first, and make only what it does not have.',
-    ...lines(free, width), '',
+    'Free, offline, the person\'s own media: look here first.',
+    ...lines(own, width), '',
+    'Free, offline, from OpenFilm\'s own library (CC0): search it next, and make only what neither has.',
+    ...lines(free.slice(own.length), width), '',
   ];
   /* nothing connected: what to do instead, and which services there are */
   if (!verbs.length) return { code: 0, lines: [...first, ...(note ? [note] : []), ...where] };

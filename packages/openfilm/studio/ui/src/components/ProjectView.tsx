@@ -168,7 +168,8 @@ import { pasteTargets, targetById } from '@/lib/layer-paste-target';
 import { PropertiesSection, type PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
-import { ALL, allActions, allSources, isAllPath, useAllMedia } from '@/lib/all-media';
+import { libraryApi, librarySources, parseLibraryRef, type LibraryAbout } from '@/lib/media-library';
+import { MediaLibraryPane } from './MediaLibraryPage';
 import { batchMap } from '@/lib/batch-map';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
@@ -187,11 +188,11 @@ const PANE = 'relative flex min-h-0 min-w-0 flex-col overflow-hidden';
 const PICTURE_FILE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
 /* ⌘ is the modifier on a Mac, Ctrl elsewhere (the editor's keys, lib/timeline-keys) */
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-/** Which the media pane shows, the project's media, All media or Saved: kept while Studio is open, across projects. */
+/** Which the media pane shows, the project's media, the media library or Saved: kept while Studio is open, across projects. */
 type MediaScope = 'project' | 'saved' | 'all';
 const MEDIA_SCOPE: { current: MediaScope } = { current: 'project' };
-/** Where a file picked outside the project is read: All media's, or Saved's. */
-const outsideSources = (file: { path: string }) => (isAllPath(file.path) ? allSources : savedSources);
+/** Where a file picked outside the project is read: the media library's, or Saved's. */
+const outsideSources = (file: { path: string }) => (parseLibraryRef(file.path) ? librarySources : savedSources);
 /** where the app's panel starts: under Studio's top bar (its h-8) */
 const HOST_PANEL_TOP = 32;
 
@@ -591,7 +592,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [projectId, filesTick]);
   const refOfFile = React.useCallback((file: WorkspaceResource, made: MediaMade | undefined = mediaMade[file.path]) => fileRef(file, file.kind === 'mg' ? mediaSources.pagePoster?.(file)
     : file.kind === 'image' ? stillUrl(projectId, file.path, Math.round(file.mtimeMs)) : file.kind === 'video' ? mediaSources.poster?.(file) : undefined, made), [mediaSources, projectId, mediaMade]);
-  /* a file of All media or of Saved pointed at for the agent: brought into the project first (how it was made comes
+  /* a file of the media library or of Saved pointed at for the agent: brought into the project first (how it was made comes
      with it), so what the agent is given is a file of the project it can use as it is */
   const referOutside = React.useCallback(async (file: WorkspaceResource) => {
     if (!studioHost?.refer) return;
@@ -3238,7 +3239,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return { ...listing, files: listing.files.filter(keep), pages: listing.pages.filter(keep) };
   }, [listing, mediaScope, libraryIndex, revealMedia?.path]);
   const savedListing = useSavedListing(mediaScope === 'saved');
-  const allMedia = useAllMedia(mediaScope === 'all');
   const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => {
     /* in the app a dropped file's path is known: copied on this computer, not sent through the page */
     const paths = files.map((file) => studioHost?.folders?.pathOf(file) ?? '');
@@ -3257,31 +3257,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     } catch (error) { toast.showError(error instanceof Error ? error.message : String(error)); }
   };
   const mediaPool = (inDrawer = false) => (mediaScope === 'all' ? (
-    /* All media (lib/all-media): looked at here, brought into the project as it is used, as a thing of Saved is */
-    <MediaPool
+    /* the media library at the project's side (MediaLibraryPage `MediaLibraryPane`): a file is watched here and
+       brought into the project as it is used, as a thing of Saved is */
+    <MediaLibraryPane
       key="all"
-      projectId={ALL}
-      listing={allMedia.listing}
-      sources={allSources}
-      selectedPath={pickedSaved ? pickedMedia?.path ?? null : null}
-      onSelectFile={(file) => { pickMedia(file); setPickedSaved(Boolean(file)); }}
-      onImport={async () => []}
-      onMove={async () => 'failed'}
-      onDelete={async () => 'failed'}
-      onNewFolder={async () => 'failed'}
-      onReveal={allActions.reveal}
-      {...(studioHost?.refer ? { onReferFile: (file: WorkspaceResource) => void referOutside(file) } : {})}
-      links={false}
-      scope="all"
-      onScope={inDrawer ? undefined : switchMedia}
-      fromOf={allMedia.fromOf}
-      wordsOf={allMedia.wordsOf}
-      folders={allMedia.folders}
-      scanning={allMedia.scanning}
-      onAddFolder={() => allActions.addFolder(t('media.pickMediaFolder'))}
-      onRemoveFolder={(path) => void allActions.removeFolder(path)}
-      onRevealFolder={allActions.revealFolder}
+      selected={pickedSaved && pickedMedia && parseLibraryRef(pickedMedia.path) ? pickedMedia.path : null}
+      onPick={(file) => { pickMedia(file); setPickedSaved(Boolean(file)); }}
       onAdd={(file) => { if (canvasOpen) void requestCanvasFiles(file.path, true); else void placeSaved(file, { atPlayhead: true }); }}
+      {...(studioHost?.refer ? { onRefer: (file: WorkspaceResource) => void referOutside(file) } : {})}
+      onManage={() => setProjectsOpen({ library: true })}
     />
   ) : mediaScope === 'saved' ? (
     <MediaPool
@@ -4821,18 +4805,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       toast.show(t('made.made').replace('{name}', path.slice(path.lastIndexOf('/') + 1)));
     } catch (e) { toast.showError(e instanceof Error ? e.message : String(e)); }
   }, [loaded?.project.path, t, toast]);
-  /* a file of All media says how it was made as any project knows it: asked for as it is picked */
-  const [outsideMade, setOutsideMade] = React.useState<{ path: string; made: MediaMade } | null>(null);
-  const outsidePath = pickedSaved && pickedMedia && isAllPath(pickedMedia.path) ? pickedMedia.path : null;
+  /* a file of the media library says where it is, which projects use it and how it was made: asked for as it is picked */
+  const [outsideAbout, setOutsideAbout] = React.useState<{ path: string; about: LibraryAbout } | null>(null);
+  const outsidePath = pickedSaved && pickedMedia && parseLibraryRef(pickedMedia.path) ? pickedMedia.path : null;
   React.useEffect(() => {
-    if (!outsidePath) { setOutsideMade(null); return undefined; }
+    const at = outsidePath ? parseLibraryRef(outsidePath) : null;
+    if (!outsidePath || !at) { setOutsideAbout(null); return undefined; }
     let live = true;
-    void allActions.made(outsidePath).then((made) => { if (live) setOutsideMade(made ? { path: outsidePath, made } : null); });
+    void libraryApi.about(at.place, at.path).then((about) => { if (live) setOutsideAbout(about ? { path: outsidePath, about } : null); });
     return () => { live = false; };
   }, [outsidePath]);
-  /** What the inspector says of how a file was made: one of the project's, or one of All media. */
+  /** What the inspector says of how a file was made: one of the project's, or one of the media library. */
   const madeFor = (file: WorkspaceResource): MadeProps | undefined => {
-    if (pickedSaved && file === pickedMedia) return outsideMade?.path === file.path ? { made: outsideMade.made } : undefined;
+    if (pickedSaved && file === pickedMedia) return outsideAbout?.path === file.path && outsideAbout.about.made ? { made: outsideAbout.about.made } : undefined;
     const made = mediaMade[file.path];
     return made ? {
       made, sources: mediaSources,
@@ -5500,7 +5485,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
   };
   /* the projects window: closed, open on the projects (true), or on the examples (and one example's page) */
-  const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string }>(false);
+  const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string } | { library: true }>(false);
   /* the library's skills as the app's chat asked to show them (LibraryDrawer `showSkills`) */
   const [skillsShown, setSkillsShown] = React.useState<SkillsRequest | null>(null);
   const [settingsOpen, setSettingsOpen] = useSettings();
@@ -5937,7 +5922,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   {!editFree ? <PaneDivider width={inspectorShownWidth} onResize={commitInspectorWidth} containerRef={viewerRowRef} label={t('inspector.resize')} min={MIN_INSPECTOR} minRest={MIN_VIEWER} relative side={editPrefs.inspectorSide === 'left' ? 'start' : 'end'} style={{ order: editPrefs.inspectorSide === 'left' ? 21 : 79 }} /> : null}
                   <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-inspector style={{ width: inspectorShownWidth, order: editPrefs.inspectorSide === 'left' ? 20 : 80, ...freeStyle('inspector') }}>
                   {typeof inspectorContent === 'object' ? (
-                    <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? outsideSources(inspectorContent) : mediaSources).file(inspectorContent)} from={pickedSaved && inspectorContent === pickedMedia ? allMedia.aboutOf(inspectorContent) : undefined} made={madeFor(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
+                    <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? outsideSources(inspectorContent) : mediaSources).file(inspectorContent)} from={pickedSaved && inspectorContent === pickedMedia && outsideAbout?.path === inspectorContent.path ? { name: outsideAbout.about.where ?? '', uses: outsideAbout.about.usedIn.length } : undefined} made={madeFor(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
                   ) : inspectorContent === 'captions' ? (
                     <CaptionInspector projectId={projectId} width={inspectorShownWidth} onClose={closeInspector} timeMs={timeMs} onSeek={seek} onTranslated={addTranslation}
                       infoOf={captionInfoOf} onCut={cutRanges} onAdd={addCaption} />
@@ -6162,7 +6147,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         onClose={() => setHistoryOpen(false)}
         onOpenProject={(id) => { setHistoryOpen(false); if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }} />
       <ProjectsPopover open={projectsOpen !== false} currentProjectId={projectId}
-        {...(typeof projectsOpen === 'object' ? { examples: projectsOpen } : {})}
+        {...(typeof projectsOpen === 'object' ? ('library' in projectsOpen ? { library: true } : { examples: projectsOpen }) : {})}
         onOpen={(id) => { if (!studioHost?.tabs) setProjectsOpen(false); onProject(id); }} onCurrentRemoved={onLeave} onClose={() => setProjectsOpen(false)}
         onUseCanvas={(example) => {
           setProjectsOpen(false);

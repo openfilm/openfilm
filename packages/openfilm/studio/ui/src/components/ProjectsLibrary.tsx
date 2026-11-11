@@ -247,6 +247,7 @@ export function ProjectsPopover({
   onCurrentRemoved,
   onClose,
   examples,
+  library,
   onUseCanvas,
 }: {
   open: boolean;
@@ -263,6 +264,8 @@ export function ProjectsPopover({
   onClose?: () => void;
   /** open on the examples (the app's chat asked for them), and on this one's page */
   examples?: { example?: string };
+  /** open on the media library (asked from the project's own, to tend it with room) */
+  library?: boolean;
   /** over a film: an example's canvas laid down on its own */
   onUseCanvas?: (example: Example) => void;
 }) {
@@ -272,7 +275,7 @@ export function ProjectsPopover({
   const cover = useProjectCover(lib.coverChanged, React.useCallback(() => flash(t('projects.coverFailed')), [flash, t]));
   /* each time it opens: the projects (the examples are a switch away), or the examples when asked for */
   const [view, setView] = React.useState<LauncherView>('projects');
-  const opensOn: LauncherView = examples ? 'examples' : 'projects';
+  const opensOn: LauncherView = library ? 'library' : examples ? 'examples' : 'projects';
   React.useEffect(() => { if (open) setView(opensOn); }, [open, opensOn]);
   const showView = setView;
   const [pendingDelete, setPendingDelete] = React.useState<string[] | null>(null);

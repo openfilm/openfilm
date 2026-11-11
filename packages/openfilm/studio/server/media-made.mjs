@@ -114,7 +114,7 @@ async function keep(/** @type {string} */ root, /** @type {Record<string, Made>}
 }
 
 /**
- * A file brought into the project from another one (All media, Saved) keeps how it was made: what the first listed
+ * A file brought into the project from another one (the media library, Saved) keeps how it was made: what the first listed
  * project that knows the file says of it is put on this project's record too, under where it landed here. Nothing
  * known, or known here already: nothing done. Never fails the bringing in.
  * @param {string} root @param {string} path where it landed, in the project
@@ -294,8 +294,8 @@ export async function madeView(root) {
 }
 
 /**
- * How the file with this fingerprint was made, as any listed project knows it (the first that does): what All media
- * says of a file of another project. Nothing to make again there: it is no file of this project.
+ * How the file with this fingerprint was made, as any listed project knows it (the first that does): what the media
+ * library says of a file of another project. Nothing to make again there: it is no file of this project.
  * @param {string} fp @returns {Promise<Pick<MadeView, 'verb' | 'found' | 'words' | 'by' | 'model' | 'at' | 'args' | 'credit' | 'page'> | null>}
  */
 export async function madeAnywhere(fp) {
@@ -309,7 +309,7 @@ export async function madeAnywhere(fp) {
   return null;
 }
 
-/** The words every file on record in the listed projects was asked with, by fingerprint: what All media searches. */
+/** The words every file on record in the listed projects was asked with, by fingerprint: what the media library searches. */
 export async function wordsByFingerprint() {
   /** @type {Map<string, string>} */
   const words = new Map();

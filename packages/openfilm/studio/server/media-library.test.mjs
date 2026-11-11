@@ -1,12 +1,12 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { setMediaFolder } from './all-media.mjs';
-import { scanFolder, scanProject } from './media-index.mjs';
-import { aboutFile, duplicates, fileIn, inPlace, libraryPlaces, listFolder, markFile, placeOf, readMarks, renameFile, searchLibrary } from './media-library.mjs';
-import { noteMade } from './media-made.mjs';
+import { fingerprint } from '../../src/media-fingerprint.mjs';
+import { folderRecordFile, mediaFolders, scanFolder, scanProject } from './media-index.mjs';
+import { aboutFile, duplicates, fileIn, folderCache, inPlace, libraryPlaces, libraryRef, listFolder, markFile, placeOf, readMarks, renameFile, searchLibrary, setMediaFolder, takeByFingerprint, takeFile } from './media-library.mjs';
+import { madeView, noteMade } from './media-made.mjs';
 import { createProject } from './projects.mjs';
 
 const KEYS = ['OPENFILM_HOME', 'OPENFILM_SHARED_HOME', 'OPENFILM_LIBRARY'];
@@ -206,10 +206,10 @@ test('files no project has are found alone; files of the same bytes are grouped,
   assert.deepEqual((await searchLibrary({ unused: true, sort: 'name' })).files.map((f) => f.name), ['big.mov', 'unused.mp4']);
   const dup = await duplicates();
   assert.deepEqual([dup.groups, dup.spare], [2, 300_000 + 2 * 100_000]);
-  assert.deepEqual(dup.files.map((f) => [f.path, f.copies]), [
-    ['big.mov', 2], ['backup/big copy.mov', 2],
-    ['unused.mp4', 3], ['backup/unused again.mp4', 3], ['backup/unused.mp4', 3],
-  ]);
+  /* each group together, the one kept nearest the top first (two copies as deep are in the order they were made) */
+  const listed = dup.files.map((f) => [f.path, f.copies]);
+  assert.deepEqual(listed.slice(0, 3), [['big.mov', 2], ['backup/big copy.mov', 2], ['unused.mp4', 3]]);
+  assert.deepEqual(listed.slice(3).sort(), [['backup/unused again.mp4', 3], ['backup/unused.mp4', 3]]);
 });
 
 test('a file of an added folder is renamed where it is, keeping its kind; a project\'s is not touched here', async () => {
@@ -231,4 +231,69 @@ test('a file of an added folder is renamed where it is, keeping its kind; a proj
   const film = await createProject('Film');
   media(join(film.path, 'assets', 'c.mp4'), 3);
   await assert.rejects(renameFile(await placeOf(`project:${film.id}`), 'c.mp4', 'd.mp4'), /in the project/);
+});
+
+test('a folder taken out of the library leaves nothing behind, and is itself left as it is', async () => {
+  const folder = elsewhere();
+  media(join(folder, 'a.mp4'), 1);
+  await setMediaFolder(folder, true);
+  await scanFolder(folder);
+  mkdirSync(folderCache(folder), { recursive: true });
+  assert.ok(existsSync(folderRecordFile(folder)));
+  await setMediaFolder(folder, false);
+  assert.deepEqual(mediaFolders(), []);
+  assert.ok(!existsSync(folderRecordFile(folder)) && !existsSync(folderCache(folder)));
+  assert.ok(existsSync(join(folder, 'a.mp4')));
+});
+
+test('a disk\'s top, the home folder and a folder that is not there are not added', async () => {
+  await assert.rejects(setMediaFolder('/', true), /far more than media/);
+  await assert.rejects(setMediaFolder(homedir(), true), /far more than media/);
+  await assert.rejects(setMediaFolder(join(elsewhere(), 'nope'), true), /not there/);
+  await assert.rejects(setMediaFolder('relative/path', true), /a folder/);
+  assert.deepEqual(mediaFolders(), []);
+});
+
+test('a file used in a project comes in once, with how it was made; used again, it is the file already there', async () => {
+  const folder = elsewhere();
+  media(join(folder, 'beach', 'waves.mp4'), 1);
+  await setMediaFolder(folder, true);
+  await scanFolder(folder);
+  const from = await createProject('From');
+  media(join(from.path, 'assets', 'image', 'fox.png'), 2);
+  await noteMade(from.path, { verb: 'image', args: { out: 'fox', prompt: 'a red fox' }, paths: [], via: 'fal', by: 'fal.ai', files: ['assets/image/fox.png'] });
+  await scanProject(from.path);
+  const into = await createProject('Into');
+
+  const at = await placeOf(`folder:${folder}`);
+  assert.equal(await takeFile(at, 'beach/waves.mp4', into.path), 'assets/waves.mp4');
+  assert.equal(await takeFile(at, 'beach/waves.mp4', into.path), 'assets/waves.mp4');
+  assert.deepEqual(readdirSync(join(into.path, 'assets')).filter((n) => !n.startsWith('.')), ['waves.mp4']);
+  assert.equal(await takeFile(at, 'beach/nope.mp4', into.path), null);
+  /* from another project: how it was made comes with it */
+  assert.equal(await takeFile(await placeOf(`project:${from.id}`), 'image/fox.png', into.path), 'assets/fox.png');
+  assert.equal((await madeView(into.path))['assets/fox.png'].words, 'a red fox');
+  /* by its fingerprint, as an agent names it: found wherever it is, and the project's own is itself */
+  const fp = await fingerprint(join(folder, 'beach', 'waves.mp4'));
+  const third = await createProject('Third');
+  assert.equal(await takeByFingerprint(fp, third.path), 'assets/waves.mp4');
+  assert.equal(await takeByFingerprint(fp, into.path), 'assets/waves.mp4');
+  assert.equal(await takeByFingerprint('f1-00000000000000000000000000000000', third.path), null);
+});
+
+test('Saved is a place: the files kept there, not the clips and pages kept as folders of their own', async () => {
+  const at = await placeOf('saved');
+  media(join(at.root, 'logo.png'), 1);
+  media(join(at.root, 'stings', 'whoosh.wav'), 2);
+  mkdirSync(join(at.root, 'a clip', 'files'), { recursive: true });
+  writeFileSync(join(at.root, 'a clip', 'saved.json'), JSON.stringify({ kind: 'clip', clip: { src: 'a.mp4' } }));
+  media(join(at.root, 'a clip', 'files', 'a.mp4'), 3);
+  assert.deepEqual((await listFolder(at)).dirs.map((d) => d.name), ['stings']);
+  assert.deepEqual((await listFolder(at)).files.map((f) => f.name), ['logo.png']);
+  await assert.rejects(renameFile(at, 'logo.png', 'mark.png'), /in Saved/);
+});
+
+test('a thing dragged or pointed at names a file of the library by its place and path', () => {
+  assert.deepEqual(libraryRef('lib:["folder:/Volumes/Footage","beach/a b.mp4"]'), { place: 'folder:/Volumes/Footage', path: 'beach/a b.mp4' });
+  for (const not of ['saved/a.png', 'lib:', 'lib:{}', 'lib:["x"]', 'lib:[1,2]', 7, null]) assert.equal(libraryRef(not), null);
 });
