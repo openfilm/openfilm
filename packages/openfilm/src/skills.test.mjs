@@ -375,7 +375,7 @@ test("a cover's format is what its bytes are, and a cover chosen before goes whe
 test("OpenFilm's own skills: in order, each named by the manual, printed with the command as run here, never in the library", async () => {
   const manual = readFileSync(new URL('../MANUAL.md', import.meta.url), 'utf8');
   const core = coreSkills();
-  assert.deepEqual(core.map((s) => s.uid), ['openfilm/edit', 'openfilm/media', 'openfilm/canvas'], 'in the order agents are given them');
+  assert.deepEqual(core.map((s) => s.uid), ['openfilm/edit', 'openfilm/media', 'openfilm/canvas', 'openfilm/motion'], 'in the order agents are given them');
   for (const s of core) {
     assert.ok(s.shown?.title['zh-CN'] && s.shown.summary.en, `${s.name} has a title and a summary for people`);
     assert.ok(manual.includes(`\`${s.name}\``), `the manual names ${s.name}`);
@@ -386,6 +386,7 @@ test("OpenFilm's own skills: in order, each named by the manual, printed with th
   assert.match(text('edit'), /The one rule: the picture depends only on t/);
   assert.match(text('media'), /--take <id>/);
   assert.match(text('canvas'), /canvas apply/);
+  assert.match(text('motion'), /<clip id>--<property>/);
   /* read from their files, they say the command on the PATH (the app's own, or the one installed) */
   for (const s of core) assert.ok(!readFileSync(s.file, 'utf8').includes('npx openfilm'), `${s.name} says \`openfilm\``);
   assert.equal(asRun('`openfilm-edit`: `openfilm look`, and `openfilm skill <name>`', 'npx -y openfilm@latest'),

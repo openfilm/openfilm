@@ -31,7 +31,7 @@ import { setSharedPref, sharedPref } from './locations.mjs';
 export const PLUGINS = /** @type {readonly Plugin[]} */ (Object.freeze([
   { id: 'edit', workbench: 'edit', skills: [], on: true, about: 'the timeline: cutting the film by hand' },
   { id: 'canvas', workbench: 'canvas', skills: ['canvas'], on: true, about: 'the board beside the edit, where material is made and laid out' },
-  { id: 'motion', workbench: 'motion', skills: [], on: false, beta: true, about: 'a clip\'s layers and keyframes, adjusted by hand' },
+  { id: 'motion', workbench: 'motion', skills: ['motion'], on: false, beta: true, about: 'a clip\'s layers and keyframes, adjusted by hand' },
 ]));
 
 const known = (/** @type {string} */ id) => PLUGINS.find((p) => p.id === id);

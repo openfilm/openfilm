@@ -6,6 +6,7 @@ OpenFilm's own skills say how. Read the one a task needs, whole, before you star
 - `edit`: the project, film.html and pages, and `openfilm look` to see what you made. Before you make or change a film.
 - `media`: OpenFilm's library of music, sounds, transitions, effects, stickers, texts and templates, and the services that make voice-over, music, pictures, video and transcripts, and search the web.
 - `canvas`: the canvas, the board beside the edit, and a canvas node the person points at.
+- `motion`: keyframes as the Motion workbench writes them, and a layer or keyframes the person points at there.
 
 `openfilm skills` lists the others, each a way of making a kind of film: when the person names one, or one fits what they ask, read it and follow it. A skill's folder is only read: copy what the film uses into the project.
 

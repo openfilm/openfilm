@@ -380,7 +380,7 @@ export function usableSkills({ home, ...where } = {}) {
 }
 
 /** OpenFilm's own skills by name, in the order agents are given them: how a film is made, its media, its canvas. */
-export const CORE_SKILLS = Object.freeze(['edit', 'media', 'canvas']);
+export const CORE_SKILLS = Object.freeze(['edit', 'media', 'canvas', 'motion']);
 
 /** OpenFilm's own skills (coreSkillsDir), which every agent has unless turned off, in CORE_SKILLS's order. @returns {Skill[]} */
 export function coreSkills() {

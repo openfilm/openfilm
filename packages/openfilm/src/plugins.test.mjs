@@ -46,7 +46,7 @@ test('a plugin off takes its skills from every agent, and the manual does not na
   assert.match(manualFor(MANUAL, h), /^- `canvas`:/m);
 
   setPluginOn('canvas', false, h);
-  assert.deepEqual([...skillsOfPluginsOff(h)], [['canvas', 'canvas']]);
+  assert.deepEqual([...skillsOfPluginsOff(h)], [['canvas', 'canvas'], ['motion', 'motion']]);
   assert.deepEqual(names(), ['edit', 'media']);
   const manual = manualFor(MANUAL, h);
   assert.doesNotMatch(manual, /^- `canvas`:/m);
@@ -56,7 +56,7 @@ test('a plugin off takes its skills from every agent, and the manual does not na
   /* on again, its skill is back; every plugin on, the manual is as it is written */
   setPluginOn('canvas', true, h);
   setPluginOn('motion', true, h);
-  assert.deepEqual(names(), ['edit', 'media', 'canvas']);
+  assert.deepEqual(names(), ['edit', 'media', 'canvas', 'motion']);
   assert.equal(pluginsOffLine(h), null);
   assert.equal(manualFor(MANUAL, h), MANUAL);
 });
