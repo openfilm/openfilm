@@ -174,7 +174,7 @@ export interface StudioHost {
   };
   /**
    * The app's notifications, for Settings → Advanced: the system's notification of a chat's turn done, stopped by an
-   * error, or waiting for an answer, while the window is not in front (on, until switched off).
+   * error, or waiting for an answer, while the window is not in front (off until enabled).
    */
   notifications?: {
     get: () => Promise<boolean>;

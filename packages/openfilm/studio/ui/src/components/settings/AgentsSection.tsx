@@ -297,7 +297,7 @@ export function AgentsSection() {
     const helpButton = showHelper || agent.id === 'openfilm' ? <button type="button" aria-label={helpLabel} title={helpLabel}
       onClick={() => agent.id === 'openfilm' ? setOpenfilmOpen(true) : setHelp(agent.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><CircleHelp size={15} aria-hidden /></button> : null;
     const connectedStatus = agent.status === 'ready' && chosen && !problem && !agent.connectionIssue
-      ? <SettingsStatus>{ownKey ? agent.byok!.models.map((m) => m.name).join(', ') : t('settings.agents.ready')}</SettingsStatus> : null;
+      ? <SettingsStatus>{t('settings.agents.ready')}</SettingsStatus> : null;
     /* what is left of its plan: while being asked, and once told (an agent that can't say shows nothing) */
     const plan = usage[agent.id];
     const meter = chosen && agent.status === 'ready' && PLAN_AGENTS.includes(agent.id) && Boolean(host.usage) && (plan === undefined || Boolean(plan?.windows.length));

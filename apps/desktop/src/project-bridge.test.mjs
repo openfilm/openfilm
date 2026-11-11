@@ -55,7 +55,7 @@ function harness() {
   const changed = [];
   bridge.onProject((project) => changed.push({ ...project }));
   return {
-    api, bridge, native, requests, changed, sockets, column,
+    api, bridge, native, requests, changed, sockets, column, notifications: context.window.openfilmHost.notifications,
     subscribe: (id = 'a', listener = () => {}) => projectEvents(id, listener),
     reconnect: () => { sockets.at(-1).onclose(); timers.at(-1)(); sockets.at(-1).onopen(); },
     navigate: (path) => context.history.pushState(null, '', path),
@@ -68,6 +68,25 @@ async function opened(h) {
   h.requests[0].respond({ projects: [project()] });
   await h.bridge.hello();
 }
+
+test('the notification bridge defaults missing preferences to off and keeps explicit choices', async () => {
+  const h = harness();
+  let prefs = {}, changed;
+  h.native.prefs = {
+    get: async () => prefs,
+    set: async (next) => { prefs = { ...prefs, ...next }; },
+    onChange: (listener) => { changed = listener; return () => {}; },
+  };
+  assert.equal(await h.notifications.get(), false);
+  const seen = [];
+  h.notifications.onChange((on) => seen.push(on));
+  changed({}); changed({ notify: true }); changed({ notify: false });
+  assert.deepEqual(seen, [false, true, false]);
+  await h.notifications.set(true);
+  assert.equal(await h.notifications.get(), true);
+  await h.notifications.set(false);
+  assert.equal(await h.notifications.get(), false);
+});
 
 test('a confirmed rename updates the existing chat immediately, ahead of its pending project lookup', async () => {
   const h = harness();
