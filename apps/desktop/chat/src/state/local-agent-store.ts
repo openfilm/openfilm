@@ -39,6 +39,8 @@ interface LocalAgentStore extends Persisted {
    * (`text`) and why, when known (`code`: 'outdated', a Codex older than the chat needs).
    */
   optionsError: Partial<Record<LocalAgentId, { text: string; code?: string }>>;
+  /** A live session's current values apply to the catalog revision it reported against. */
+  reportedRevision: Partial<Record<LocalAgentId, number>>;
   hydrate(): void;
   refresh(): Promise<void>;
   pick(agent: LocalAgentId): void;
@@ -55,8 +57,8 @@ const OPTIONS_MAX_AGE = 5 * 60 * 1000;
 const askedThisLaunch = new Map<LocalAgentId, { key: string; at: number }>();
 
 /** A selected model can have different effort/speed options from the agent's default model. */
-function probeModel(state: Persisted, agent: LocalAgentId): string | undefined {
-  const option = state.options[agent]?.find((o) => o.category === 'model');
+function probeModel(state: Persisted & { roster?: RosterAgent[] | null }, agent: LocalAgentId): string | undefined {
+  const option = (state.roster?.find((a) => a.id === agent)?.catalog?.options ?? state.options[agent])?.find((o) => o.category === 'model');
   const model = option && state.prefs[agent]?.[option.id];
   if (agent === 'cursor' && typeof model === 'string') {
     const legacy = /^([^\[]+)\[([^\]]*)\]$/.exec(model);
@@ -115,7 +117,26 @@ const EFFORT_NAMES: Record<string, string> = { auto: 'Auto', off: 'Off', minimal
  * more than one, from Settings: no session has to start to know them (the app's own agent reports the same `model` and
  * `effort` options, apps/desktop/src/pi-config.mjs). The person's own agents' is the one a session last reported.
  */
-export function agentOptions(state: Pick<LocalAgentStore, 'options' | 'roster'> & Partial<Pick<LocalAgentStore, 'prefs'>>, agent: LocalAgentId): ConfigOptions | undefined {
+export function agentOptions(state: Pick<LocalAgentStore, 'options' | 'roster'> & Partial<Pick<LocalAgentStore, 'prefs' | 'reportedRevision'>>, agent: LocalAgentId): ConfigOptions | undefined {
+  const catalog = state.roster?.find((a) => a.id === agent)?.catalog;
+  const catalogModel = catalog?.options.find((o) => o.category === 'model');
+  if (catalog && catalogModel) {
+    if (!catalog.models.length) return [];
+    const cached = state.options[agent];
+    const reported = state.reportedRevision?.[agent] === (catalog.revision ?? 0);
+    const picked = state.prefs?.[agent]?.[catalogModel.id];
+    const has = (value: unknown) => catalog.models.some((m) => m.id === value);
+    const current = reported ? cached?.find((o) => o.category === 'model')?.currentValue : catalogModel.currentValue;
+    const model = has(picked) ? String(picked) : has(current) ? String(current) : catalog.models.find((m) => m.shown)?.id ?? catalog.models[0]!.id;
+    const choices = catalog.models.map((m) => ({ value: m.id, name: m.name, hidden: !m.shown }));
+    const matching = cached?.find((o) => o.category === 'model')?.currentValue === model ? cached.filter((o) => o.category !== 'model') : [];
+    return [{ ...catalogModel, name: catalogModel.name ?? 'Model', currentValue: model, options: choices },
+      ...(catalog.byModel[model] ?? matching).map((o) => {
+        const value = reported ? matching.find((held) => held.id === o.id)?.currentValue : undefined;
+        const valid = value !== undefined && (!o.options?.length || o.options.some((choice) => choice.value === value));
+        return { ...o, name: o.name ?? o.id, ...(valid ? { currentValue: value } : {}) };
+      })];
+  }
   if (agent === 'openfilm') {
     const settings = state.roster?.find((a) => a.id === 'openfilm')?.openfilm;
     if (settings) {
@@ -164,20 +185,14 @@ export function offeredOption(agent: LocalAgentId, _roster: RosterAgent[] | null
   return !(/^(fast|fast-mode|speed)$/i.test(option.id) || option.category === 'speed');
 }
 
-/* Claude Code's own model picker shows four above its line, the newest of each family; the ones it lists after them
-   are older models */
-const CLAUDE_MODELS_OFFERED = 4;
-
 /**
- * The choices a menu row offers, in the agent's order. Native Default choices reset the model's effort. Of
- * Claude Code's models, the first four it lists, as its own picker shows them, and the one in use if it is further down.
+ * The choices a menu row offers, after the person's model visibility settings. Native Default choices reset effort.
  */
-export function offeredChoices<T extends { value: unknown }>(agent: LocalAgentId, option: { id: string; category?: string; options?: T[] }, chosen: unknown): T[] {
-  const all = option.options ?? [];
+export function offeredChoices<T extends { value: unknown; hidden?: boolean }>(agent: LocalAgentId, option: { id: string; category?: string; options?: T[] }, _chosen: unknown): T[] {
+  const all = (option.options ?? []).filter((choice) => !choice.hidden);
   if (agent !== 'claude') return all;
   const choices = all.filter((choice) => choice.value !== 'default');
-  if (option.category !== 'model' && option.id !== 'model') return choices;
-  return choices.filter((choice, i) => i < CLAUDE_MODELS_OFFERED || choice.value === chosen);
+  return choices;
 }
 
 /** The agents the menu lists: the ones switched on in Settings, in the roster's order. */
@@ -203,6 +218,7 @@ export const useLocalAgents = create<LocalAgentStore>((set, get) => ({
   hydrated: false,
   roster: null,
   optionsError: {},
+  reportedRevision: {},
   hydrate() {
     if (get().hydrated) return;
     set({ ...load(), hydrated: true });
@@ -216,6 +232,7 @@ export const useLocalAgents = create<LocalAgentStore>((set, get) => ({
           const now = roster.find((a) => a.id === before.id);
           if (before.configurationRevision !== now?.configurationRevision || before.status !== 'ready' && now?.status === 'ready') askedThisLaunch.delete(before.id);
           if (before.configurationRevision !== now?.configurationRevision) forgetLocalAgentSessions(before.id);
+          if (before.catalog?.revision !== now?.catalog?.revision) forgetLocalAgentSessions(before.id);
           if (before.status === 'ready' && now?.status !== 'ready') forgetLocalAgentSessions(before.id);
           /* other models (the own key's): its sessions were closed for the next ones to use them */
           else if (JSON.stringify(byokModels([before])) !== JSON.stringify(byokModels(now ? [now] : []))) forgetLocalAgentSessions(before.id);
@@ -242,7 +259,7 @@ export const useLocalAgents = create<LocalAgentStore>((set, get) => ({
     const prefs = { ...get().prefs, [agent]: { ...(changingModel ? {} : before), [configId]: value } };
     set({ prefs });
     save(get());
-    if (get().options[agent]?.some((o) => o.id === configId && o.category === 'model')) void get().ensureOptions(agent);
+    if (model?.id === configId) void get().ensureOptions(agent);
   },
   noteOptions(agent, options) {
     if (!options) return;
@@ -259,10 +276,18 @@ export const useLocalAgents = create<LocalAgentStore>((set, get) => ({
       }
       prefs = { ...prefs, cursor: picked };
     }
-    set({ prefs, options: { ...get().options, [agent]: options } });
+    set({ prefs, options: { ...get().options, [agent]: options },
+      reportedRevision: { ...get().reportedRevision, [agent]: get().roster?.find((a) => a.id === agent)?.catalog?.revision ?? 0 } });
     save(get());
   },
   async ensureOptions(agent, { retry = false } = {}) {
+    const catalog = get().roster?.find((a) => a.id === agent)?.catalog;
+    if (catalog) {
+      const model = probeModel(get(), agent);
+      // The main process refreshes all models together; selecting one only changes its background priority.
+      void desktopBridge()?.agents?.refreshModels?.(agent, { model, fresh: retry && Boolean(catalog.error) }).catch(() => {});
+      return;
+    }
     /* the own key's are known from Settings (agentOptions); a failed probe is not tried again on every render, each
        try being a whole session of the agent's */
     if (agent === 'byok' || agent === 'openfilm' && get().roster?.some((a) => a.id === agent && a.openfilm) || probing.has(agent)) return;

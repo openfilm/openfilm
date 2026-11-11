@@ -149,6 +149,8 @@ export const ko: Words = {
     model: '모델',
     /* the one value of a model or an effort the agent offers no choice of */
     optionDefault: '기본값',
+    optionUpdating: "업데이트 중…",
+    optionUnavailable: "사용 불가",
     openAttachment: '{name} 보기',
     revealFolder: '폴더에서 {name} 보기',
     openSettings: '설정 열기',

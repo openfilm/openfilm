@@ -29,6 +29,7 @@ import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
 import { registerSkillsIpc } from './skills-ipc.mjs';
 import { createRoster } from './agent-roster.mjs';
 import { createOpenFilmAgent } from './openfilm-agent.mjs';
+import { createAgentCatalogs } from './agent-catalogs.mjs';
 import { AGENTS, checkAgentProgram, closeEverySession, diagnoseAgent, forgetAgentStatus, listAgents, localAgent, openAgentInstaller, openAgentSignIn, setChosenPaths, signOutAgent } from './agents.mjs';
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
 import { installOpenfilmCommand } from './openfilm-command.mjs';
@@ -121,6 +122,7 @@ let cancelWindowClose = () => {};
 let localAgents = null;
 /** @type {ReturnType<typeof createRoster> | null} */
 let roster = null;
+let agentCatalogs = null;
 
 /** the board Studio's panes sit on (its --bg-app), so the window never flashes another color */
 const BACKGROUND = { light: '#e4e4e8', dark: '#141414' };
@@ -576,6 +578,7 @@ async function start() {
     /* what before-quit would do, done first (`quitting`), so the quit Squirrel starts is not held up or cancelled */
     beforeInstall: async () => {
       quitting = true;
+      agentCatalogs?.close();
       localAgents?.closeAll();
       closeEverySession();
       for (const v of views.values()) v.webContents.on('will-prevent-unload', (event) => event.preventDefault());
@@ -785,9 +788,17 @@ async function start() {
   });
   // Services and Agents may both change the account. Read the shared state even when its settings page is closed.
   setInterval(() => { void openfilmAgent.refresh(); }, 2000).unref();
+  agentCatalogs = createAgentCatalogs({
+    dataDir: DATA,
+    openSession: (id, onOptions) => localAgents.openProbeSession(id, onOptions),
+    onUpdated: (id) => localAgents.refreshSkills(id),
+    onChange: () => { if (roster) broadcast('desktop:agents', roster.list()); },
+  });
+  setInterval(() => agentCatalogs.refreshDue(), 30_000).unref();
   roster = createRoster({
     openfilm: openfilmAgent,
     dataDir: DATA,
+    catalog: (id) => agentCatalogs.state(id),
     localAgents: listAgents,
     localAgent,
     openSignIn: (id) => openAgentSignIn(id, { track: true }),
@@ -801,7 +812,7 @@ async function start() {
     resetAgent: (id) => { forgetAgentStatus(id); forgetAgentUsage(id); localAgents?.refreshSkills(id); },
     seal,
     unseal,
-    onChange: (list) => broadcast('desktop:agents', list),
+    onChange: (list) => { agentCatalogs.sync(list); broadcast('desktop:agents', roster?.list() ?? list); },
     /* the program the person points at, for an agent not found where it is looked for */
     usePaths: setChosenPaths,
     pickProgram: async (_id, words) => {
@@ -852,6 +863,12 @@ async function start() {
   });
   agentHandle('desktop:agents:shown', ({ id, shown }) => { roster.setShown(String(id), shown === true); return { ok: true }; });
   agentHandle('desktop:agents:openfilm-models', ({ config }) => openfilmAgent.saveModels(config));
+  agentHandle('desktop:agents:model-menu', ({ id, config }) => agentCatalogs.saveModels(String(id), config));
+  agentHandle('desktop:agents:model-refresh', ({ id, model, fresh }) => {
+    if (id === 'openfilm') { void openfilmAgent.refresh({ fresh: fresh === true }); return { ok: true }; }
+    agentCatalogs.refresh(String(id), { fresh: fresh === true, model });
+    return { ok: true };
+  });
   agentHandle('desktop:agents:own-model', ({ config }) => roster.saveOwnModel(config));
   agentHandle('desktop:agents:own-model-remove', ({ id }) => { roster.removeOwnModel(String(id)); return { ok: true }; });
   ipcMain.handle('desktop:reveal', (event, path) => { if (fromPage(event) && typeof path === 'string' && path) shell.showItemInFolder(path); });
@@ -934,6 +951,6 @@ app.on('before-quit', (event) => {
   quitAfterStudio(event, {
     quitting, markQuitting: () => { quitting = true; }, studio,
     /* and the ones opened only to ask (signed in? its options?), which belong to no chat */
-    closeAgents: () => { localAgents?.closeAll(); closeEverySession(); }, quit: () => app.quit(),
+    closeAgents: () => { agentCatalogs?.close(); localAgents?.closeAll(); closeEverySession(); }, quit: () => app.quit(),
   });
 });

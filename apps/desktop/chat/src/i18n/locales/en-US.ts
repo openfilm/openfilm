@@ -153,6 +153,8 @@ export const enUS = {
     model: 'Model',
     /* the one value of a model or an effort the agent offers no choice of */
     optionDefault: 'Default',
+    optionUpdating: "Updating…",
+    optionUnavailable: "Unavailable",
     openAttachment: 'View {name}',
     revealFolder: 'Show {name} in its folder',
     openSettings: 'Open Settings',

@@ -7,6 +7,7 @@ import { agentMark } from '@/lib/provider-marks';
 import { ProviderMark } from './ProviderMark';
 import { DialogClose, DialogIdentity } from './DialogIdentity';
 import { SettingsButton, SettingsLinkButton } from './ui';
+import { AgentModelMenu } from './AgentModelMenu';
 
 /** Connection instructions and opt-in diagnostics, above Settings without closing the parent dialog on Escape. */
 export function AgentConnectionHelp({ agent, status, report, checking, hint, error, notice, copied, onClose, onCheck, onLocate, onCopy, actions, connectionStatus }: {
@@ -26,6 +27,7 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
   connectionStatus?: React.ReactNode;
 }) {
   const t = useT();
+  const agentName = agent.id === 'byok' ? t('settings.agents.byokName') : agent.name;
   const dialog = React.useRef<HTMLDialogElement>(null);
   React.useLayoutEffect(() => {
     const node = dialog.current;
@@ -38,7 +40,7 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
 
   const setup = agent.setupRequired === 'code-tab' ? 'claudeSetup' : agent.path ? 'helpFound'
     : agent.app ? 'helpDesktopOnly' : ['codex', 'copilot', 'opencode', 'deepseek'].includes(agent.id) ? 'helpBundled' : 'helpInstall';
-  const words = (key: string) => t(`settings.agents.${key}`).replaceAll('{name}', agent.name);
+  const words = (key: string) => t(`settings.agents.${key}`).replaceAll('{name}', agentName);
   const raw = [error, agent.connectionIssue?.message, report?.text].filter(Boolean).join('\n\n');
   const website = (() => {
     if (!agent.install) return undefined;
@@ -59,9 +61,11 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
       }}>
       <DialogClose label={words('close')} onClose={onClose} />
       <div className="shrink-0 px-7 pt-7">
-        <DialogIdentity name={agent.name} mark={<ProviderMark id={agentMark(agent.id)} size={24} />} website={website} actions={actions} status={connectionStatus} />
+        <DialogIdentity name={agentName} mark={<ProviderMark id={agentMark(agent.id)} size={24} />} website={website} actions={actions} status={connectionStatus} />
       </div>
       <div className="min-h-0 overflow-y-auto overscroll-contain px-7 py-5 text-[14px] leading-relaxed text-[var(--text-muted)]">
+        <AgentModelMenu agent={agent} />
+        {agent.id !== 'byok' ? <>
         <section>
           <h4 className="mb-2 font-medium text-[var(--text)]">{words('helpConnect')}</h4>
           <ol className="ml-5 list-decimal space-y-2">
@@ -93,6 +97,7 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
             <SettingsButton variant="quiet" onClick={onCopy}>{copied ? <Check size={14} /> : <Copy size={14} />}{words(copied ? 'copied' : 'copyReport')}</SettingsButton>
           </div> : null}
         </section>
+        </> : null}
       </div>
       <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-[var(--border)] px-7 py-4">
         {agent.install ? <SettingsLinkButton href={agent.install}>{words('helpOfficial')}</SettingsLinkButton> : <span />}

@@ -2,7 +2,7 @@
 import { join } from 'node:path';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { contextLength, effortLevels } from './pi-config.mjs';
-import { OPENFILM_MODELS, modelPreferences, orderedModels } from './openfilm-models.mjs';
+import { modelPreferences, orderedModels } from './openfilm-models.mjs';
 
 const FRESH_MS = 5 * 60_000;
 const RETRY_MS = 30_000;
@@ -43,14 +43,12 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
   const visibleModels = () => orderedModels(offer?.models ?? [], preferences);
   const firstModel = () => visibleModels().some((m) => m.id === offer?.model) ? offer.model : visibleModels()[0]?.id;
   const modelState = () => ({
-    ...preferences,
-    defaultOrder: OPENFILM_MODELS.map((m) => m.id),
+    order: orderedModels(offer?.models ?? [], { ...preferences, hidden: [] }).map((m) => m.id),
+    hidden: preferences.hidden,
+    defaultOrder: orderedModels(offer?.models ?? []).map((m) => m.id),
     model: firstModel(),
-    models: preferences.order.map((id) => {
-      const metadata = OPENFILM_MODELS.find((m) => m.id === id);
-      const available = offer?.models.find((m) => m.id === id);
-      return { ...metadata, shown: !preferences.hidden.includes(id), available: Boolean(available),
-        ...(available ? { levels: available.levels, effort: available.effort } : {}) };
+    models: orderedModels(offer?.models ?? [], { ...preferences, hidden: [] }).map((m) => {
+      return { id: m.id, name: m.name, shown: !preferences.hidden.includes(m.id), available: true, levels: m.levels, effort: m.effort };
     }),
   });
 
@@ -100,19 +98,18 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
           needsSignIn = response.status === 401;
-          offer = null;
-          if (needsSignIn) { error = null; return; }
+          if (needsSignIn) { offer = null; error = null; return; }
           throw new Error(body?.error?.message || body?.message || `OpenFilm answered ${response.status}.`);
         }
+        if (!Array.isArray(body?.data)) throw new Error('OpenFilm did not return its model catalog.');
         const got = agentOffer(body, account.baseUrl);
-        if (!got.models.length) throw new Error('OpenFilm has no agent models available right now.');
         if (JSON.stringify(got) !== JSON.stringify(offer)) {
           if (offer) refreshSessions();
           revision++;
         }
         offer = got;
         needsSignIn = false;
-        error = null;
+        error = got.models.length ? null : 'OpenFilm has no agent models available right now.';
         askAfter = Date.now() + FRESH_MS;
       } catch (e) {
         error = e instanceof Error ? e.message : String(e);
@@ -130,7 +127,7 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
     state, refresh,
     saveModels(config) {
       const hidden = new Set(Array.isArray(config?.hidden) ? config.hidden : []);
-      if (OPENFILM_MODELS.every((m) => hidden.has(m.id))) return { ok: false, error: 'Keep at least one model visible.' };
+      if (!offer?.models.some((m) => !hidden.has(m.id))) return { ok: false, error: 'Keep at least one model visible.' };
       const next = modelPreferences(config);
       try {
         mkdirSync(dataDir, { recursive: true });

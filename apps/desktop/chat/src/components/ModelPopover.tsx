@@ -138,7 +138,12 @@ export function ModelPopover({ placement = 'bottom', align = 'start', agent: con
   const picked = conversationPrefs ?? la.prefs;
   const options = agentOptions({ ...la, prefs: picked }, agent);
   const prefs = effectivePrefs(picked, agent, la.roster, options);
-  const rows = options ? menuOptions(options, t('composer.optionDefault')).filter((o) => offeredOption(agent, la.roster, o)) : [];
+  const catalog = la.roster?.find((a) => a.id === agent)?.catalog;
+  const selectedModel = options?.find((o) => o.category === 'model')?.currentValue;
+  const unknownParameters = catalog && typeof selectedModel === 'string' && !catalog.byModel[selectedModel];
+  const defaultOption = unknownParameters ? t(catalog.refreshing ? 'composer.optionUpdating' : 'composer.optionUnavailable') : t('composer.optionDefault');
+  const optionsError: { text: string; code?: string } | undefined = la.optionsError[agent] ?? (catalog?.error ? { text: catalog.error } : undefined);
+  const rows = options?.length ? menuOptions(options, defaultOption).filter((o) => offeredOption(agent, la.roster, o)) : [];
   const summary = agentModelSummary(options, prefs);
   const triggerModel = summary.model;
   const triggerEffort = rows.some((o) => o.category === 'thought_level' && !o.fixed) ? summary.effort : null;
@@ -312,12 +317,12 @@ export function ModelPopover({ placement = 'bottom', align = 'start', agent: con
               </div>
             ) : rows.length === 0 ? (
               <p className="px-2.5 py-1.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
-                {la.optionsError[agent]
+                {optionsError
                   ? <>
-                    {la.optionsError[agent]?.code === 'outdated' ? t('composer.agentOutdated') : t('composer.agentOptionsFailed')} <button type="button" onMouseDown={keepFocus} onClick={() => void la.ensureOptions(agent, { retry: true })} className="text-[var(--text)] underline underline-offset-2">{t('project.retry')}</button>
+                    {optionsError.code === 'outdated' ? t('composer.agentOutdated') : t('composer.agentOptionsFailed')} <button type="button" onMouseDown={keepFocus} onClick={() => void la.ensureOptions(agent, { retry: true })} className="text-[var(--text)] underline underline-offset-2">{t('project.retry')}</button>
                     {/* what the agent said, so the person can fix it (a setting it cannot read) or tell us */}
-                    {failureReason(la.optionsError[agent]) ? (
-                      <span className="mt-1 line-clamp-4 block select-text break-words text-[11.5px] text-[var(--text-faint)]" title={la.optionsError[agent]?.text}>{failureReason(la.optionsError[agent])}</span>
+                    {failureReason(optionsError) ? (
+                      <span className="mt-1 line-clamp-4 block select-text break-words text-[11.5px] text-[var(--text-faint)]" title={optionsError.text}>{failureReason(optionsError)}</span>
                     ) : null}
                   </>
                   : t('composer.agentLoading')}

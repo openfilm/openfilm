@@ -104,6 +104,9 @@ export interface StudioHost {
     list: () => Promise<HostAgent[]>;
     /** Explicitly reload local configuration and idle sessions; no model prompt is sent. */
     refresh?: () => Promise<HostAgent[]>;
+    /** Refresh model metadata in the background; a selected model is prepared first. */
+    refreshModels?: (id: HostAgentId, options?: { model?: string; fresh?: boolean }) => Promise<{ ok: boolean }>;
+    saveAgentModels?: (id: HostAgentId, config: { order: string[]; hidden: string[] }) => Promise<{ ok: boolean; error?: string }>;
     connect: (id: HostAgentId) => Promise<{ ok: boolean; error?: string }>;
     /** Stop waiting for terminal sign-in without disconnecting the agent or changing its own sign-in. */
     cancelSignIn?: (id: HostAgentId) => Promise<unknown>;
@@ -289,6 +292,22 @@ export interface HostAgent {
   /** The own key's models, each set up on its own; the first is the one a conversation starts on. */
   byok?: { models: HostOwnModel[] };
   openfilm?: { order: string[]; hidden: string[]; defaultOrder: string[]; model?: string; models: HostOpenFilmModel[] };
+  catalog?: HostAgentCatalog;
+}
+
+export interface HostAgentOption {
+  id: string; name?: string; category?: string; type?: string; currentValue?: unknown;
+  options?: Array<{ value: unknown; name: string; description?: string; disabled?: boolean }>;
+}
+export interface HostAgentCatalog {
+  models: Array<{ id: string; name: string; shown: boolean }>;
+  defaultOrder: string[];
+  options: HostAgentOption[];
+  byModel: Record<string, HostAgentOption[]>;
+  updatedAt: number;
+  revision?: number;
+  refreshing: boolean;
+  error?: string;
 }
 
 export interface HostOpenFilmModel { id: string; name: string; shown: boolean; available: boolean; levels?: string[]; effort?: string }

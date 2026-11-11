@@ -9,22 +9,19 @@ export const OPENFILM_MODELS = Object.freeze([
   { id: 'deepseek/deepseek-v4.1-flash-1017', name: 'DeepSeek V4.1 Flash' },
 ]);
 
-/** Known ids, once each, followed by new defaults; unknown entries from older clients are discarded. */
+/** Keep menu preferences independently of the current cloud catalog, including models added after this app shipped. */
 export function modelPreferences(raw) {
-  const ids = OPENFILM_MODELS.map((m) => m.id);
-  const known = (list) => Array.isArray(list) ? list.filter((id) => ids.includes(id)) : [];
-  const order = [...new Set([...known(raw?.order), ...ids])];
-  const hidden = [...new Set(known(raw?.hidden))];
-  return { order, hidden: hidden.length === ids.length ? [] : hidden };
+  const valid = (list) => [...new Set(Array.isArray(list) ? list.filter((id) => typeof id === 'string' && id && id.length <= 1000) : [])];
+  return { order: valid(raw?.order), hidden: valid(raw?.hidden) };
 }
 
-/** Filter and sort a catalog or cached ACP menu, so legacy model lists cannot reappear. */
+/** The current catalog is authoritative; defaults only order models the cloud still offers. */
 export function orderedModels(models, preferences = {}, idOf = (m) => m.id) {
   const { order, hidden } = modelPreferences(preferences);
-  return order.filter((id) => !hidden.includes(id)).flatMap((id) => {
+  const ids = [...new Set([...order, ...OPENFILM_MODELS.map((m) => m.id), ...models.map(idOf)])];
+  return ids.filter((id) => !hidden.includes(id)).flatMap((id) => {
     const model = models.find((m) => idOf(m) === id);
     if (!model) return [];
-    const name = OPENFILM_MODELS.find((m) => m.id === id).name;
-    return [{ ...model, name }];
+    return [model];
   });
 }

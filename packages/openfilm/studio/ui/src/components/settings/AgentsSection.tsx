@@ -291,7 +291,7 @@ export function AgentsSection() {
     const said = error?.id === agent.id ? error.text : agent.id === 'openfilm' ? undefined : agent.error ?? (problem ? `${t('settings.agents.unreadable')} ${problem}` : undefined);
     const open = agent.id === 'byok' && keyOpen;
     /* where it is not found: why, on asking (Claude Code waiting for its app's Code tab is not lost) */
-    const showHelper = OWN.includes(agent.id) && (['missing', 'off', 'sign-in', 'waiting'].includes(agent.status) || Boolean(said) || Boolean(agent.connectionIssue));
+    const showHelper = OWN.includes(agent.id) || agent.id === 'byok';
     const description = agent.connectionIssue ? statusLine(agent) : agent.status === 'ready' ? chosen ? accountLine(agent) : t('settings.agents.available') : statusLine(agent);
     /* what is left of its plan: while being asked, and once told (an agent that can't say shows nothing) */
     const plan = usage[agent.id];
@@ -320,7 +320,7 @@ export function AgentsSection() {
         )}
         description={description || showHelper || agent.id === 'openfilm' ? <div className="flex items-center gap-1">
           {description ? <span className="min-w-0">{description}</span> : null}
-          {showHelper || agent.id === 'openfilm' ? <button type="button" aria-label={agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', agent.name)} title={agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', agent.name)}
+          {showHelper || agent.id === 'openfilm' ? <button type="button" aria-label={agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', ownKey ? t('settings.agents.byokName') : agent.name)} title={agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', ownKey ? t('settings.agents.byokName') : agent.name)}
             onClick={() => agent.id === 'openfilm' ? setOpenfilmOpen(true) : setHelp(agent.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><CircleHelp size={15} aria-hidden /></button> : null}
         </div> : null}
         control={(

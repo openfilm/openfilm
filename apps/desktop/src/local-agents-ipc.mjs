@@ -262,7 +262,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     if (typeof cwd !== 'string' || !cwd) return { ok: false, error: 'Missing project folder.' };
     lastAgent = agent;
     /* the conversation still open here (the page was reloaded): taken up as it is, no second process */
-    const open = resume ? [...sessions].find(([, e]) => e.agent === agent && e.cwd === cwd && e.info?.sessionId === resume && e.sender === event.sender) : null;
+    const open = resume ? [...sessions].find(([, e]) => !e.stale && e.agent === agent && e.cwd === cwd && e.info?.sessionId === resume && e.sender === event.sender) : null;
     if (open) {
       open[1].lastUsed = Date.now();
       return { ok: true, key: open[0], info: { ...open[1].info, resumed: true, authMethods: [], mcp: false } };
@@ -488,6 +488,11 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   idle.unref?.();
 
   return {
+    /** Quiet sessions for the shared background catalog; never reused by a conversation. */
+    openProbeSession: async (agent, onOptions) => new AgentSession({
+      agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent),
+      onUpdate: (update) => { if (update?.sessionUpdate === 'config_option_update') onOptions(update.configOptions); },
+    }),
     isBusy: () => activePrompts > 0,
     working,
     /** the agent the chat last started a conversation with, or null */

@@ -8,6 +8,7 @@
  * The shape matches apps/desktop/shell/bridge.ts; change one, change the other.
  */
 import type { Balance } from './balance';
+import type { HostAgentCatalog } from 'openfilm/studio-ui/lib/host.ts';
 
 /** The coding agents the shell can connect to its MCP endpoint. */
 export type DesktopAgentId = 'claude' | 'codex' | 'cursor' | 'copilot' | 'opencode' | 'codebuddy' | 'devin';
@@ -26,6 +27,7 @@ export interface RosterAgent {
   configurationRevision?: number;
   /** The detected native executable; bundled app updates may change it without a settings change. */
   path?: string | null;
+  catalog?: HostAgentCatalog;
   openfilm?: { order: string[]; hidden: string[]; defaultOrder: string[]; model?: string; models: Array<{ id: string; name: string; shown: boolean; available: boolean; levels?: string[]; effort?: string }> };
   error?: string;
   /** Whose sign-in it uses, when the agent tells (no key or token). */
@@ -184,6 +186,7 @@ export interface DesktopBridge {
     list(): Promise<RosterAgent[]>;
     connect(id: LocalAgentId): Promise<{ ok: boolean; error?: string }>;
     onChange(listener: (agents: RosterAgent[]) => void): () => void;
+    refreshModels?(id: LocalAgentId, options?: { model?: string; fresh?: boolean }): Promise<{ ok: boolean }>;
     /** The diagnostic report (the computer, the last week's problems, the agents) on the clipboard. Older shells lack it. */
     copyReport?(): Promise<{ ok: boolean }>;
   };
