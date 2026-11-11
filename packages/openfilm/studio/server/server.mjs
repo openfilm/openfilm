@@ -58,6 +58,7 @@ import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex
 import { createMediaIndexer, mediaFolders, mediaSummary } from './media-index.mjs';
 import { allMedia, fileOf, isAllPath, setMediaFolder, takeMedia, whereAll } from './all-media.mjs';
 import { carryMade, madeAnywhere, madeView } from './media-made.mjs';
+import { aboutFile, fileIn, inPlace, libraryPlaces, listFolder, placeOf } from './media-library.mjs';
 import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
@@ -512,6 +513,43 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* the person's media in numbers (media-index.mjs): places, files, the room they take and the room copies take */
     if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
+    /* the media library (media-library.mjs): its places; a folder of one as the disk has it (`dir` inside the place);
+       a file's bytes and what Studio works out from it; what is known of one file (the projects that use it, how it
+       was made); a folder or file shown in the file manager. Folders are added and taken away under all-media below */
+    if (parts[0] === 'media-library') {
+      const sub = parts.slice(1).join('/');
+      if (sub === 'places' && req.method === 'GET') return json(res, 200, { ...await libraryPlaces(), scanning: mediaIndex.busy() });
+      const body = req.method === 'POST' ? /** @type {{ place?: unknown, path?: unknown }} */ (await readJson(req) ?? {}) : null;
+      const at = await placeOf(body ? body.place : url.searchParams.get('place'));
+      if (!at) throw new HttpError(404, 'That place is not in the library.');
+      const path = body ? body.path ?? '' : url.searchParams.get('path') ?? '';
+      if (sub === 'list' && req.method === 'GET') {
+        const listing = await listFolder(at, url.searchParams.get('dir') ?? '');
+        if (!listing) throw new HttpError(404, 'That folder is not there.');
+        return json(res, 200, listing);
+      }
+      if (sub === 'reveal' && req.method === 'POST') {
+        const abs = inPlace(at, path);
+        if (!abs || !existsSync(abs)) throw new HttpError(404, 'That is not there.');
+        if (abs === at.root) openFile(abs); else reveal(abs);
+        return json(res, 200, {});
+      }
+      const file = fileIn(at, path);
+      if (!file) throw new HttpError(404, 'That file is not there.');
+      if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, file.abs);
+      if (sub === 'about' && req.method === 'GET') return json(res, 200, await aboutFile(at, path));
+      if (sub === 'media' && req.method === 'GET') {
+        const what = url.searchParams.get('what');
+        const o = { cache: file.cache };
+        if (what === 'probe') return json(res, 200, await probe(file.root, file.rel, o));
+        if (what === 'wave') return json(res, 200, await waveform(file.root, file.rel, o));
+        const jpeg = what === 'poster' ? await poster(file.root, file.rel, o)
+          : what === 'frame' ? await frame(file.root, file.rel, Number(url.searchParams.get('ms')), Number(url.searchParams.get('w')), o) : null;
+        if (!jpeg) throw new HttpError(400, 'what: probe, poster, frame or wave');
+        res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
+        return res.end(jpeg);
+      }
+    }
     /* All media (all-media.mjs): every project's media and the added folders', one line a file, the newest first
        (`scanning`: more may come in); a file's bytes and what Studio works out from it; where it is, shown in the file
        manager; a folder added (the one given, else the person's pick) or taken away */
