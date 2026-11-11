@@ -8,7 +8,7 @@
  * with it, in a bar over it.
  */
 import React from 'react';
-import { Handle, NodeResizer, NodeToolbar, Position, useStore, type NodeProps } from '@xyflow/react';
+import { Handle, NodeResizeControl, NodeResizer, NodeToolbar, Position, useStore, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
   AlignLeft, AudioLines, BookmarkPlus, Bot, Clapperboard, FileQuestion, Film, Image as ImageIcon, Layers, LayoutGrid, Loader2, Mic, Music, PenLine, Play, Plus, Scissors,
   Square, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
@@ -17,10 +17,11 @@ import { useT } from '@/i18n';
 import { CARD_H, MAKE_MEDIA, NOTE_H, NOTE_W, type CanvasNode, type GroupColor } from '@/lib/canvas';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Tooltip } from '../Tooltip';
-import { useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode } from './board';
+import { fileCardWidth, useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode, type UploadStatus } from './board';
 import { ActionBar, CutPanel, MakePanel, NotePanel } from './panels';
 import { Words, WritingBar, useDraft } from './words';
 import { SoundCard } from './sound';
+import { CanvasVideo } from './video';
 
 /** below this zoom a node is only its outline (its picture, its words are not drawn) */
 export const FAR = 0.35;
@@ -29,16 +30,17 @@ export const farSelector = (s: { transform: [number, number, number] }) => s.tra
 export const KIND_ICON = { video: Video, image: ImageIcon, audio: Music, mg: Clapperboard, other: FileQuestion } as const;
 export const MAKE_ICON = { image: ImageIcon, video: Video, sfx: AudioLines, music: Music, tts: Mic } as const;
 const RESIZE_HANDLE = '!h-2 !w-2 !rounded-[2px] !border-0 !bg-[var(--cv-ring)]';
+const CARD_TITLE = 'absolute bottom-full left-0 right-0 z-10 flex h-6 items-center gap-1 text-[13px] leading-5 text-[var(--cv-label)]';
 
 /** A group's tint: its frame's fill and line, its name's chip, by its color (muted, so what is in it leads). */
 export const FRAME_COLOR: Record<GroupColor, { line: string; fill: string; dot: string }> = {
   gray: { line: 'rgba(160,160,170,0.18)', fill: 'var(--cv-group)', dot: '#8a8a90' },
-  red: { line: 'rgba(214,92,84,0.28)', fill: 'rgba(214,92,84,0.07)', dot: '#d65c54' },
-  orange: { line: 'rgba(214,140,80,0.28)', fill: 'rgba(214,140,80,0.07)', dot: '#d68c50' },
-  yellow: { line: 'rgba(200,170,80,0.28)', fill: 'rgba(200,170,80,0.07)', dot: '#c8aa50' },
-  green: { line: 'rgba(96,180,130,0.28)', fill: 'rgba(96,180,130,0.07)', dot: '#60b482' },
-  blue: { line: 'rgba(96,140,230,0.3)', fill: 'rgba(96,140,230,0.07)', dot: '#608ce6' },
-  purple: { line: 'rgba(160,120,230,0.3)', fill: 'rgba(160,120,230,0.07)', dot: '#a078e6' },
+  red: { line: 'rgba(214,92,84,0.28)', fill: 'rgba(214,92,84,0.14)', dot: '#d65c54' },
+  orange: { line: 'rgba(214,140,80,0.28)', fill: 'rgba(214,140,80,0.14)', dot: '#d68c50' },
+  yellow: { line: 'rgba(200,170,80,0.28)', fill: 'rgba(200,170,80,0.14)', dot: '#c8aa50' },
+  green: { line: 'rgba(96,180,130,0.28)', fill: 'rgba(96,180,130,0.14)', dot: '#60b482' },
+  blue: { line: 'rgba(96,140,230,0.3)', fill: 'rgba(96,140,230,0.14)', dot: '#608ce6' },
+  purple: { line: 'rgba(160,120,230,0.3)', fill: 'rgba(160,120,230,0.14)', dot: '#a078e6' },
 };
 
 /** A file's size as its node's name row says it: its pixels, or how long it is. */
@@ -69,9 +71,46 @@ function ByAgent({ by }: { by: NonNullable<CanvasNode['by']> }) {
 
 /* where wires meet a card: the middle of its sides, unseen */
 const ANCHOR = '!h-px !w-px !min-h-0 !min-w-0 !border-0 !bg-transparent';
-/* the ⊕ off each side, under the pointer or while selected */
-/* a ⊕ beside a card: 24 across as drawn; round it, what takes the pointer too, 24 further out and 16 above and below */
-const PLUS = "!flex !h-6 !w-6 items-center justify-center !rounded-full before:absolute before:-inset-y-4 before:rounded-full before:content-[''] !border !border-[var(--cv-ring)] !bg-[var(--cv-bg)] !text-[var(--cv-ink)] transition-[opacity,transform] duration-150 hover:!scale-110";
+const SIDE_BUTTON_SIZE = 28;
+const PLUS = "group/side z-10 !size-7 !border-0 !bg-transparent before:absolute before:-inset-y-10 before:content-[''] transition-opacity duration-150 [&.connectingfrom]:!opacity-0 [&.connectingfrom]:!transition-none";
+
+function SideHandle({ id, side, selected }: { id: string; side: 'source' | 'target'; selected: boolean }) {
+  const board = useBoard();
+  const t = useT();
+  const out = side === 'source';
+  const direction = out ? 1 : -1;
+  const follow = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'mouse' || event.buttons) return;
+    const handle = event.currentTarget;
+    const rect = handle.getBoundingClientRect();
+    if (!rect.width) return;
+    // Keep the connection's hit area in place and move just the visible plus, in canvas pixels.
+    const zoom = rect.width / SIDE_BUTTON_SIZE;
+    const x = (event.clientX - rect.left - rect.width / 2) / zoom;
+    const y = (event.clientY - rect.top - rect.height / 2) / zoom;
+    handle.style.setProperty('--cv-side-x', `${direction * Math.max(-14, Math.min(26, direction * x))}px`);
+    handle.style.setProperty('--cv-side-y', `${Math.max(-36, Math.min(36, y))}px`);
+  };
+  return (
+    <Handle id={out ? 'out' : 'in'} type={side} position={out ? Position.Right : Position.Left}
+      className={`${PLUS} ${out ? '!-right-7 before:-left-3.5 before:-right-9' : '!-left-7 before:-left-9 before:-right-3.5'} ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 hover:opacity-100'}`}
+      onPointerMove={follow}
+      onPointerLeave={(event) => {
+        event.currentTarget.style.removeProperty('--cv-side-x');
+        event.currentTarget.style.removeProperty('--cv-side-y');
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+        board.sideMenu(id, side, { x: event.clientX, y: event.clientY });
+      }}
+      title={t(out ? 'canvas.side.out' : 'canvas.side.in')}>
+      <span data-canvas-side-plus="" className="pointer-events-none absolute inset-0 m-auto grid size-6 place-items-center rounded-full border !border-[var(--cv-line-hover)] bg-[var(--cv-bg)] text-[var(--cv-ink)] transition-[scale] duration-150 group-hover/side:scale-110"
+        style={{ translate: 'var(--cv-side-x, 0px) var(--cv-side-y, 0px)' }}>
+        <Plus size={14} strokeWidth={2} className="opacity-85 transition-opacity duration-150 group-hover/side:opacity-100" />
+      </span>
+    </Handle>
+  );
+}
 
 /**
  * A node's sides: the wires' anchors at the middle of each (first, so a wire without a handle named meets them), and
@@ -79,26 +118,12 @@ const PLUS = "!flex !h-6 !w-6 items-center justify-center !rounded-full before:a
  */
 function Sides({ id, selected, ins = true, outs = true }: { id: string; selected: boolean; ins?: boolean; outs?: boolean }) {
   const board = useBoard();
-  const t = useT();
-  const shown = board.readOnly ? '!pointer-events-none !opacity-0' : selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100';
-  const side = (which: 'source' | 'target') => (event: React.MouseEvent) => {
-    event.stopPropagation();
-    board.sideMenu(id, which, { x: event.clientX, y: event.clientY });
-  };
   return (
     <>
       <Handle type="target" position={Position.Left} className={ANCHOR} isConnectable={!board.readOnly} />
       <Handle type="source" position={Position.Right} className={ANCHOR} isConnectable={!board.readOnly} />
-      {ins ? (
-        <Handle id="in" type="target" position={Position.Left} className={`${PLUS} !-left-[31px] before:-left-6 before:-right-1 ${shown}`} onClick={side('target')} title={t('canvas.side.in')}>
-          <Plus size={14} strokeWidth={2} className="pointer-events-none" />
-        </Handle>
-      ) : null}
-      {outs ? (
-        <Handle id="out" type="source" position={Position.Right} className={`${PLUS} !-right-[31px] before:-right-6 before:-left-1 ${shown}`} onClick={side('source')} title={t('canvas.side.out')}>
-          <Plus size={14} strokeWidth={2} className="pointer-events-none" />
-        </Handle>
-      ) : null}
+      {!board.readOnly && ins ? <SideHandle id={id} side="target" selected={selected} /> : null}
+      {!board.readOnly && outs ? <SideHandle id={id} side="source" selected={selected} /> : null}
     </>
   );
 }
@@ -113,19 +138,59 @@ function useNumber(id: string): number {
 }
 
 /** What every node is drawn in: its name row above, its card, its sides. */
-function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card' }: {
+function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card', onRename, pending }: {
   id: string; selected: boolean; icon: React.ComponentType<{ size?: number; className?: string }>; title: string; meta?: string | null;
   by?: CanvasNode['by']; note?: React.ReactNode; stack?: number; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
+  onRename?: (title: string) => void; pending?: boolean;
 }) {
+  const board = useBoard();
   const far = useStore(farSelector);
-  const card = `relative h-full w-full overflow-hidden rounded-[12px] border transition-[border-color] duration-150 ${tone === 'quiet' ? 'bg-[var(--cv-card-2)]' : 'bg-[var(--cv-card)]'} ${selected ? '!border-[var(--cv-ring)]' : '!border-[var(--cv-line)] group-hover:!border-[var(--cv-line-hover)]'}`;
+  const resizing = useStore((state) => Boolean(state.nodeLookup.get(id)?.resizing));
+  const updateNodeInternals = useUpdateNodeInternals();
+  const handleLayout = pending ? 'pending' : board.readOnly ? 'anchors' : `${ins !== false}/${outs !== false}`;
+  const previousHandleLayout = React.useRef(handleLayout);
+  React.useLayoutEffect(() => {
+    // Finishing an upload can add handles without resizing the card, so its size observer will not discover them.
+    if (previousHandleLayout.current === handleLayout) return;
+    previousHandleLayout.current = handleLayout;
+    updateNodeInternals(id);
+  }, [handleLayout, id, updateNodeInternals]);
+  const t = useT();
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const cancel = React.useRef(false);
+  const rename = () => { cancel.current = false; setDraft(title); };
+  const card = `relative h-full w-full overflow-hidden rounded-[var(--cv-card-radius)] border transition-[border-color] duration-150 ${tone === 'quiet' ? 'bg-[var(--cv-card-2)]' : 'bg-[var(--cv-card)]'} ${selected ? '!border-[var(--cv-ring)]' : '!border-[var(--cv-card-line)]'}`;
+  const stackBorder = selected ? '!border-[var(--cv-line)]' : '!border-[var(--cv-card-line)]';
   return (
     <div className="group relative h-full w-full">
-      {far ? null : (
-        <div className={`pointer-events-none absolute bottom-full left-0 right-0 z-10 flex h-6 items-center gap-1 text-[13px] leading-5 text-[var(--cv-label)] ${stack > 1 ? 'mb-3' : 'mb-0.5'}`}>
+      {far && draft === null ? null : (
+        <div data-canvas-node-header={onRename ? '' : undefined}
+          className={`${CARD_TITLE} ${onRename ? 'nopan cursor-grab active:cursor-grabbing' : 'pointer-events-none'} ${stack > 1 ? 'mb-3' : 'mb-0.5'}`}>
           <Icon size={14} className="shrink-0" />
-          <span className="truncate">{title}</span>
-          <span className="flex-1" />
+          {onRename && draft !== null ? (
+            <input data-canvas-title="" aria-label={t('canvas.video.rename')} autoFocus maxLength={120}
+              value={draft} onChange={(event) => setDraft(event.currentTarget.value)}
+              onFocus={(event) => event.currentTarget.select()}
+              onClick={(event) => event.stopPropagation()}
+              onBlur={() => {
+                if (!cancel.current && draft.trim() !== title) onRename(draft.trim());
+                setDraft(null);
+              }}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.nativeEvent.isComposing) return;
+                if (event.key === 'Escape') cancel.current = true;
+                if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur();
+              }}
+              className="nodrag min-w-0 flex-1 rounded bg-[var(--cv-float)] px-1 text-[var(--cv-ink)] outline outline-[var(--cv-ring)]" />
+          ) : onRename ? (
+            <span data-canvas-title="" role="button" tabIndex={0} title={t('canvas.video.renameHint')} className="truncate rounded-sm focus-visible:outline"
+              onDoubleClick={(event) => { event.stopPropagation(); rename(); }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); event.stopPropagation(); rename(); }
+              }}>{title}</span>
+          ) : <span className="truncate">{title}</span>}
+          {draft === null ? <span className="flex-1" /> : null}
           {note}
           {by ? <ByAgent by={by} /> : null}
           {meta ? <span className="shrink-0 tabular-nums">{meta}</span> : null}
@@ -134,26 +199,31 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
       {/* more than one version: the others fanned behind it */}
       {stack > 1 ? (
         <>
-          {stack > 2 ? <div className="absolute inset-0 translate-x-[12px] -translate-y-[10px] rotate-[3.5deg] rounded-[12px] border !border-[var(--cv-line)] bg-[var(--cv-card-2)] opacity-60" /> : null}
-          <div className="absolute inset-0 translate-x-[6px] -translate-y-[5px] rotate-[1.75deg] rounded-[12px] border !border-[var(--cv-line)] bg-[var(--cv-card-2)]" />
+          {stack > 2 ? <div className={`absolute inset-0 translate-x-[12px] -translate-y-[10px] rotate-[3.5deg] rounded-[var(--cv-card-radius)] border bg-[var(--cv-card-2)] opacity-60 ${stackBorder}`} /> : null}
+          <div className={`absolute inset-0 translate-x-[6px] -translate-y-[5px] rotate-[1.75deg] rounded-[var(--cv-card-radius)] border bg-[var(--cv-card-2)] ${stackBorder}`} />
         </>
       ) : null}
-      <div className={card}>{children}</div>
-      <Sides id={id} selected={selected} ins={ins} outs={outs} />
+      <div data-canvas-card="" className={card}>{children}</div>
+      {!pending ? <Sides id={id} selected={selected} ins={ins} outs={outs} /> : null}
+      {!pending && !board.readOnly && (board.single === id || board.editing === id) ? (
+        <NodeResizeControl position="bottom-right" minWidth={160} minHeight={100} maxWidth={1600} maxHeight={1200}
+          onResizeStart={board.willChange} className={`cv-card-resize nopan z-20 !size-5 touch-none !border-0 !bg-transparent ${resizing ? 'is-resizing' : ''}`}>
+          <span title={t('canvas.resizeCard')} className="grid size-full place-items-center">
+            <span aria-hidden="true" className="size-2.5 rounded-br-[2px] border-b-2 border-r-2 !border-[var(--cv-ring)]" />
+          </span>
+        </NodeResizeControl>
+      ) : null}
     </div>
   );
 }
 
-/** A file shown in a card: a picture as it is, a clip's poster (playing under the pointer or while selected), a sound's player. */
-function Shown({ file, play, words }: { file: WorkspaceResource; play: boolean; words?: string }) {
+/** A file shown in a card: a picture as it is, or a clip or sound with a player. */
+function Shown({ id, file, selected, words }: { id: string; file: WorkspaceResource; selected: boolean; words?: string }) {
   const board = useBoard();
   const src = board.sources.file(file);
-  const poster = board.sources.poster?.(file);
   if (file.kind === 'image') return <img src={src} alt="" draggable={false} loading="lazy" className="block h-full w-full object-cover" />;
   if (file.kind === 'video') {
-    return play || !poster
-      ? <video src={src} poster={poster} muted loop playsInline autoPlay={play} preload="metadata" className="block h-full w-full bg-black object-cover" />
-      : <img src={poster} alt="" draggable={false} className="block h-full w-full object-cover" />;
+    return <CanvasVideo key={src} id={id} file={file} selected={selected} />;
   }
   if (file.kind === 'audio') return <SoundCard file={file} words={words} />;
   const page = file.kind === 'mg' ? board.sources.pagePoster?.(file) : undefined;
@@ -166,12 +236,23 @@ function Shown({ file, play, words }: { file: WorkspaceResource; play: boolean; 
  * The box a file or what is made is drawn in: the card itself once it is sized (made, laid down, resized), else its
  * own shape at the cards' height (a picture, a clip), a sound's box.
  */
-function boxStyle(sized: boolean, file: WorkspaceResource | null, ratio?: string): React.CSSProperties {
+function boxStyle(sized: boolean, file: WorkspaceResource | null): React.CSSProperties {
   if (sized) return { width: '100%', height: '100%' };
-  if (file?.kind === 'audio') return { width: 320, height: CARD_H };
-  if (file?.w && file.h) return { height: CARD_H, aspectRatio: `${file.w} / ${file.h}` };
-  const [w, h] = (ratio ?? '16:9').split(':').map(Number) as [number, number];
-  return { height: CARD_H, aspectRatio: `${w} / ${h}` };
+  return { width: fileCardWidth(file), height: CARD_H };
+}
+
+function UploadPanel({ upload }: { upload: UploadStatus }) {
+  const t = useT();
+  const known = upload.progress >= 0 && upload.progress < 1;
+  const label = t(upload.progress === 1 ? 'canvas.importPreparing' : 'canvas.importUploading');
+  return (
+    <div role="status" className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--cv-card)] px-4 text-center text-[var(--cv-ink)]">
+      <Loader2 size={22} className="animate-spin text-[var(--cv-label)]" />
+      <div className="w-full truncate text-[13px]">{upload.name}</div>
+      <div className="text-xs text-[var(--cv-label)]">{label}{known ? ` ${Math.floor(upload.progress * 100)}%` : ''}</div>
+      {known ? <progress aria-label={label} max={1} value={upload.progress} className="h-1 w-full max-w-[140px] accent-[var(--cv-edge-lit)]" /> : null}
+    </div>
+  );
 }
 
 /** A quick start in an empty node ("Try:"), as a line with its icon. */
@@ -206,18 +287,26 @@ function Empty({ icon: Icon, tries }: { icon: React.ComponentType<{ size?: numbe
 
 
 /** A file of the project on the board: as its picture draws it, 350 high, until resized. */
-export function FileNodeView({ id, data, selected, width, height }: NodeProps<FileNode>) {
+export function FileNodeView({ id, data, selected }: NodeProps<FileNode>) {
   const t = useT();
   const board = useBoard();
-  const [over, setOver] = React.useState(false);
+  const sized = useStore((state) => {
+    const node = state.nodeLookup.get(id);
+    return node?.width != null && node.height != null;
+  });
   const file = board.fileOf(data.path);
-  const Icon = KIND_ICON[file?.kind ?? 'other'];
+  const Icon = KIND_ICON[data.upload?.kind ?? file?.kind ?? 'other'];
+  const title = data.upload?.name ?? data.title ?? file?.name ?? data.path.split('/').pop() ?? data.path;
+  const rename = file?.kind === 'video' && !board.readOnly ? (name: string) => {
+    board.willChange();
+    board.setData(id, { title: name || undefined });
+  } : undefined;
   return (
-    <div className="h-full w-full" onMouseEnter={() => setOver(true)} onMouseLeave={() => setOver(false)}>
+    <div className="h-full w-full">
       <ActionBar id={id} file={file} />
-      <Frame id={id} selected={selected} icon={Icon} title={file?.name ?? data.path.split('/').pop() ?? data.path} meta={sizeOf(file)} by={data.by}>
-        <div className="relative" style={boxStyle(width != null && height != null, file)}>
-          {file ? <Shown file={file} play={over || selected} />
+      <Frame id={id} selected={selected} icon={Icon} title={title} meta={sizeOf(file)} by={data.by} onRename={rename} pending={Boolean(data.upload)}>
+        <div className="relative" style={boxStyle(sized, file)}>
+          {data.upload ? <UploadPanel upload={data.upload} /> : file ? <Shown id={id} file={file} selected={selected} />
               : <div className="flex h-full w-full items-center justify-center gap-2 px-3 text-center text-[12px] text-[var(--cv-label)]"><FileQuestion size={14} />{t('canvas.missing')}</div>}
         </div>
       </Frame>
@@ -229,7 +318,7 @@ export function FileNodeView({ id, data, selected, width, height }: NodeProps<Fi
  * Words on the board ("Text"). New, it is square and offers what to start with: writing in it, or a picture, a clip,
  * music made from it. Written in, it is a box of words; a double click writes in it, clicking away is done.
  */
-export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>) {
+export function NoteNodeView({ id, data, selected, width, height }: NodeProps<NoteNode>) {
   const t = useT();
   const board = useBoard();
   const n = useNumber(id);
@@ -247,7 +336,7 @@ export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>
   /* to write in: a box of words (a new, square one shrinks to it) */
   const write = () => {
     if (board.readOnly) return;
-    if (height === CARD_H) board.resize(id, { w: NOTE_W, h: NOTE_H });
+    if (width === NOTE_W && height === CARD_H) board.resize(id, { w: NOTE_W, h: NOTE_H });
     board.edit(id);
   };
   const fresh = !data.text && !editing && !feeds;
@@ -265,9 +354,7 @@ export function NoteNodeView({ id, data, selected, height }: NodeProps<NoteNode>
           </div>
         </NodeToolbar>
       ) : null}
-      <NodeResizer isVisible={editing && !board.readOnly} minWidth={160} minHeight={80} lineClassName="!border-transparent"
-        handleClassName={RESIZE_HANDLE} onResizeStart={board.willChange} />
-      <Frame id={id} selected={selected || editing} icon={TypeIcon} title={t('canvas.titles.note').replace('{n}', String(n))} by={data.by}
+      <Frame id={id} selected={selected} icon={TypeIcon} title={t('canvas.titles.note').replace('{n}', String(n))} by={data.by}
         tone={editing || data.text ? 'quiet' : 'card'}>
         {editing ? (
           <textarea
@@ -312,14 +399,20 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
   const editing = board.editing === id;
   const paint = FRAME_COLOR[data.color];
   const [colors, setColors] = React.useState(false);
+  const cancelRename = React.useRef(false);
+  const rename = () => {
+    if (board.readOnly) return;
+    cancelRename.current = false;
+    board.edit(id);
+  };
   const bar = 'flex h-8 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] disabled:opacity-40';
   return (
-    <div className="relative h-full w-full rounded-[12px] border transition-[border-color] duration-150"
+    <div className="relative h-full w-full rounded-[var(--cv-card-radius)] border transition-[border-color] duration-150"
       style={{ borderColor: selected ? 'var(--cv-ring)' : paint.line, background: paint.fill }}>
       <NodeResizer isVisible={selected && !board.readOnly} minWidth={160} minHeight={120} lineClassName="!border-transparent"
         handleClassName={RESIZE_HANDLE} onResizeStart={board.willChange} />
       {selected && !board.readOnly && board.single === id ? (
-        <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={36}>
+        <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={36} style={{ zIndex: 4 }}>
           <div className="nodrag nopan flex items-center gap-0.5 rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
             <span className="relative">
               <button type="button" aria-label={t('canvas.color')} onClick={() => setColors((v) => !v)} className={`${bar} !px-1.5`}>
@@ -350,20 +443,34 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
       ) : null}
       {/* its title bar, what holds it: a drag moves it with what is in it, a click picks it (⇧ adds it), a double click
           names it. Inside it the board is the board (globals.css): a drag there draws a selection box. */}
-      <div className="cv-group-head absolute inset-x-0 top-0 flex h-7 cursor-grab items-center rounded-t-[12px] px-3 transition-colors hover:bg-[color-mix(in_srgb,var(--cv-ink)_5%,transparent)] active:cursor-grabbing"
+      <div className={`cv-group-head nopan mb-0.5 cursor-grab active:cursor-grabbing ${CARD_TITLE}`}
         onPointerDown={(event) => { if (event.button === 0 && !editing && !(selected && !event.shiftKey && !event.metaKey && !event.ctrlKey)) board.select(id, event.shiftKey || event.metaKey || event.ctrlKey); }}
-        onDoubleClick={(event) => { event.stopPropagation(); if (!board.readOnly) board.edit(id); }}>
+        onDoubleClick={(event) => { event.stopPropagation(); rename(); }}>
         {editing ? (
-          <input
+          <input data-canvas-title="" aria-label={t('canvas.group')} maxLength={80}
             autoFocus
             defaultValue={data.label}
             onFocus={(event) => event.currentTarget.select()}
-            onBlur={(event) => { board.setData(id, { label: event.currentTarget.value.trim() || t('canvas.group') }); board.edit(null); }}
-            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur(); }}
-            className="nodrag h-6 w-[200px] rounded-[6px] border border-[var(--cv-float-line)] bg-[var(--cv-float)] px-1.5 text-[13px] text-[var(--cv-ink)] outline-none"
+            onBlur={(event) => {
+              const label = event.currentTarget.value.trim() || t('canvas.group');
+              if (!cancelRename.current && label !== data.label) board.setData(id, { label });
+              board.edit(null);
+            }}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.nativeEvent.isComposing) return;
+              if (event.key === 'Escape') cancelRename.current = true;
+              if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur();
+            }}
+            className="nodrag h-6 w-[min(200px,100%)] rounded bg-[var(--cv-float)] px-1 text-[var(--cv-ink)] outline outline-[var(--cv-ring)]"
           />
+        ) : board.readOnly ? (
+          <span className="truncate">{data.label || t('canvas.group')}</span>
         ) : (
-          <span className="truncate text-[12.5px] font-medium text-[var(--cv-label)]">{data.label || t('canvas.group')}</span>
+          <span data-canvas-title="" role="button" tabIndex={0} title={t('canvas.video.renameHint')} className="truncate rounded-sm focus-visible:outline"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); event.stopPropagation(); rename(); }
+            }}>{data.label || t('canvas.group')}</span>
         )}
       </div>
     </div>
@@ -381,25 +488,29 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
   const n = useNumber(id);
   /* something wired in: it is made from that, so nothing to start with is offered */
   const fed = useStore((s) => s.edges.some((e) => e.target === id));
-  const [over, setOver] = React.useState(false);
   const [versionsOpen, setVersionsOpen] = React.useState(false);
   const run = board.run(id);
   const Icon = MAKE_ICON[data.make];
   const media = MAKE_MEDIA[data.make];
   const versions = data.versions ?? [];
   const file = data.path ? board.fileOf(data.path) : null;
+  const uploading = board.uploading?.(id);
+  const rename = media === 'video' && !board.readOnly ? (name: string) => {
+    board.willChange();
+    board.setData(id, { title: name || undefined });
+  } : undefined;
   const ratio = data.opts?.ratio ?? '16:9';
   React.useEffect(() => { if (!selected) setVersionsOpen(false); }, [selected]);
   const meta = sizeOf(file) ?? (media === 'audio' ? null : ratio);
   return (
-    <div className="h-full w-full" onMouseEnter={() => setOver(true)} onMouseLeave={() => setOver(false)}>
+    <div className="h-full w-full">
       <ActionBar id={id} file={file} />
       <MakePanel id={id} data={data} />
-      <Frame id={id} selected={selected} icon={Icon} title={data.preset ? t(`canvas.presets.names.${data.preset}`) : t(`canvas.titles.${data.make}`).replace('{n}', String(n))} meta={meta} by={data.by} stack={versions.length}
+      <Frame id={id} selected={selected} icon={Icon} title={data.title ?? (data.preset ? t(`canvas.presets.names.${data.preset}`) : t(`canvas.titles.${data.make}`).replace('{n}', String(n)))} meta={meta} by={data.by} stack={versions.length} onRename={rename}
         ins={media !== 'audio'}
         note={board.stale.has(id) ? <span className="pointer-events-auto shrink-0 text-amber-500/90" title={t('canvas.make.staleTip')}>{t('canvas.make.stale')}</span> : null}>
         <div className="relative h-full w-full">
-          {file ? <Shown file={file} play={over || selected} words={data.make === 'tts' ? data.prompt : undefined} />
+          {file ? <Shown id={id} file={file} selected={selected} words={data.make === 'tts' ? data.prompt : undefined} />
               : (
                 <Empty icon={Icon} tries={fed || run ? undefined : media === 'image' ? (
                   <>
@@ -438,7 +549,7 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
               })}
             </div>
           ) : null}
-          {run ? (
+          {uploading ? <UploadPanel upload={uploading} /> : run ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 bg-black/55 text-[12.5px] text-white/90 backdrop-blur-[2px]">
               <Loader2 size={20} className="animate-spin" />
               <span>{t('canvas.make.making')} <Elapsed since={run.started} /></span>

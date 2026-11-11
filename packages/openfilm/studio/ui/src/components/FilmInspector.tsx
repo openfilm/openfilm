@@ -303,7 +303,7 @@ export const FilmInspector = React.memo(function FilmInspector({
     <InspectorReadOnly.Provider value={locked && Boolean(layer || clip || many)}>
       <div
         data-film-inspector
-        className={`${PANE} shrink-0 bg-[var(--bg-panel)]`}
+        className={`${PANE} flex-1 bg-[var(--bg-panel)]`}
         style={{ width }}
       >
         {layer ? (

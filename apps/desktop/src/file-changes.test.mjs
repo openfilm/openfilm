@@ -121,3 +121,21 @@ test('undo leaves a board alone when its document or a parent became a link afte
     } finally { rmSync(dir, { recursive: true, force: true }); rmSync(elsewhere, { recursive: true, force: true }); }
   }
 });
+
+test('a rewrite of the same length at the same time is still a change to undo', async () => {
+  const dir = project();
+  try {
+    const file = join(dir, 'title.html');
+    writeFileSync(file, '<h1>A</h1>');
+    const when = new Date('2026-01-01T00:00:00Z');
+    utimesSync(file, when, when);
+    const before = await snapshot(dir);
+    writeFileSync(file, '<h1>B</h1>');
+    utimesSync(file, when, when);
+    const found = await changes(dir, before);
+    assert.ok(found.files.some((f) => f.path === 'title.html' && f.change === 'changed'));
+    const undone = await undoTurn(dir, before, null, { trash: async () => {} });
+    assert.equal(readFileSync(file, 'utf8'), '<h1>A</h1>');
+    assert.equal(undone.restored, 1);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

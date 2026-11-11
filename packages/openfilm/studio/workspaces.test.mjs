@@ -10,7 +10,7 @@ import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
 
 const output = process.env.OPENFILM_WORKSPACE_SCREENSHOTS;
-async function withWorkspace(run, {hasChat=true}={}) {
+async function withWorkspace(run, {hasChat=true, clips=[]}={}) {
   const scratch = await mkdtemp(join(tmpdir(), 'of-workspaces-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS', 'TRASH_DIR'];
   const saved = new Map(names.map(name => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
@@ -20,7 +20,7 @@ async function withWorkspace(run, {hasChat=true}={}) {
     const root = join(process.env.OPENFILM_LIBRARY, 'Workspace');
     await mkdir(join(root, '.film'), { recursive: true });
     await mkdir(join(root, 'assets'), { recursive: true });
-    await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1280, h: 720 }, tracks: [] }));
+    await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1280, h: 720 }, tracks: clips.length ? [{ clips }] : [] }));
     await writeFile(join(root, 'assets', 'sample.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#13b9b2"/></svg>');
     await writeFile(join(root, '.film', 'canvas.json'), JSON.stringify({ nodes: [{ id: 'note', x: 0, y: 0, w: 350, h: 200, text: 'Keep this canvas' }], edges: [] }));
     await mkdir(process.env.OPENFILM_SAVED, { recursive: true });
@@ -85,6 +85,63 @@ async function profile(page, mode = 'edit', { hasTree, libraryDock, changedFrom 
 async function shot(page, name) { if (output) await page.screenshot({ path: join(output,name) }); }
 
 const editor = page => page.locator('[data-workspace-editor]');
+test('the clip inspector scrolls within its pane while its tabs stay in place', { timeout: 45_000 }, async () => {
+  await withWorkspace(async page => {
+    await page.setViewportSize({ width: 1440, height: 620 });
+    await page.locator('[data-block-id]').first().click({ position: { x: 20, y: 10 } });
+    const inspector = page.locator('[data-workspace-inspector]');
+    const tabs = inspector.getByRole('tablist');
+    const properties = inspector.getByRole('tabpanel');
+    await properties.locator('[data-section="crop"]').waitFor();
+    const height = await inspector.evaluate(pane => {
+      const body = pane.querySelector('[role="tabpanel"]');
+      return { pane: pane.clientHeight, body: body.clientHeight, content: body.scrollHeight };
+    });
+    assert.ok(height.body < height.pane, `the tabs and scrollable body fit inside the pane: ${JSON.stringify(height)}`);
+    assert.ok(height.content > height.body, 'the clip has properties below the visible area');
+    const tabBounds = await rect(tabs);
+    const bodyBounds = await rect(properties);
+    await page.mouse.move(bodyBounds.x + bodyBounds.width / 2, bodyBounds.y + 30);
+    await page.mouse.wheel(0, 440);
+    await page.waitForFunction(() => document.querySelector('[data-workspace-inspector] [role="tabpanel"]').scrollTop > 50);
+    assert.deepEqual(await rect(tabs), tabBounds);
+    await page.mouse.wheel(0, -440);
+    await page.waitForFunction(() => document.querySelector('[data-workspace-inspector] [role="tabpanel"]').scrollTop === 0);
+  }, { hasChat: false, clips: [{ id: 'shot', src: 'assets/sample.svg', time: [0, 4] }] });
+});
+
+test('dragging the chat edge with its library open keeps the library and active workspace aligned', { timeout: 45_000 }, async () => {
+  await withWorkspace(async page => {
+    for (const [mode, panel, delta] of [['edit', '[data-viewer-pane]', 120], ['canvas', '[data-studio-canvas]', 160]]) {
+      if (mode === 'canvas') await page.locator('[data-work-mode="edit"]').click();
+      await page.evaluate(() => window.openfilmHost.panel.setAssetsOpen(true));
+      await library(page).waitFor();
+      await page.waitForFunction(mode => JSON.parse(localStorage.getItem('openfilm.workspace.current.v2'))?.[mode]?.assets, mode);
+      const chat = page.locator('#test-chat');
+      const start = await rect(chat);
+      const seam = await rect(page.getByRole('separator', { name: 'Chat', exact: true }));
+      const y = seam.y + 20;
+      const x = seam.x + seam.width - 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + delta, y, { steps: 6 });
+      const aligned = () => page.waitForFunction(({ width, panel }) => {
+        const edge = document.querySelector('#test-chat').getBoundingClientRect().right;
+        return Math.abs(edge - width) <= 1
+          && Math.abs(document.querySelector('[data-workspace-library]').getBoundingClientRect().right - edge) <= 1
+          && Math.abs(document.querySelector(panel).getBoundingClientRect().left - edge) <= 1;
+      }, { width: start.width + delta, panel }, { timeout: 3500 });
+      await aligned();
+      await page.mouse.up();
+      await aligned();
+      await page.waitForFunction(({ mode, width }) => JSON.parse(localStorage.getItem('openfilm.workspace.current.v2'))?.[mode]?.chatWidth === width, { mode, width: start.width + delta });
+    }
+    await page.locator('[data-work-mode="canvas"]').click();
+    await page.waitForFunction(() => document.querySelector('#test-chat').getBoundingClientRect().width === 540
+      && document.querySelector('[data-workspace-library]').getBoundingClientRect().width === 540);
+  });
+});
+
 async function beginEdit(page) { await openLayout(page); await menu(page).getByRole('button',{name:'Edit layout',exact:true}).click(); await editor(page).waitFor(); }
 async function dragPanel(page, source, target, edge) {
   const grip=editor(page).locator(`[data-layout-panel=${source}]`);
@@ -124,6 +181,43 @@ test('normal panels have no new library header and every preset stays in the cur
       assert.equal(await page.locator('[data-work-mode="canvas"]').count(),1);
     }
     await closeLayout(page);
+  });
+});
+
+test('export progress stays in the title bar as the workspace changes', { timeout: 60_000 }, async () => {
+  await withWorkspace(async page => {
+    await page.route('**/api/projects/*/exports', route => route.fulfill({ json: { exports: [{
+      id: 'active', label: 'Wide export', kind: 'video', status: 'running', phase: 'rendering',
+      progress: 0.42, framesDone: 42, framesTotal: 100, rate: 30, etaMs: 2000, encoder: 'h264', outputs: [],
+    }] } }));
+    await page.reload();
+    const badge = page.locator('[data-titlebar] [data-export-queue-trigger]');
+    const queue = page.locator('[data-export-queue]');
+    await badge.waitFor();
+    assert.match(await badge.innerText(), /42%/);
+    assert.equal(await queue.count(), 0, 'progress does not open an overlay by itself');
+
+    await beginEdit(page);
+    await dragPanel(page, 'chat', 'viewer', 'right');
+    await editor(page).getByRole('button', { name: 'Done', exact: true }).click();
+    for (const mode of ['edit', 'canvas']) {
+      await page.locator(`[data-work-mode="${mode}"]`).waitFor();
+      await badge.click();
+      await queue.getByText('Wide export').waitFor();
+      const card = await rect(queue), anchor = await rect(badge);
+      assert.ok(card.y >= anchor.y + anchor.height && card.y < 60);
+      assert.ok(card.x >= 12 && card.x + card.width <= page.viewportSize().width - 12);
+      assert.equal(await queue.getByRole('button', { name: 'Cancel' }).evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+      }), true, 'the chat pane cannot cover the export actions');
+      await page.keyboard.press('Escape');
+      await queue.waitFor({ state: 'detached' });
+      if (mode === 'edit') {
+        await page.setViewportSize({ width: 900, height: 640 });
+        await page.locator('[data-work-mode="edit"]').click();
+      }
+    }
   });
 });
 

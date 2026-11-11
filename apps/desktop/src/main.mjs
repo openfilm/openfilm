@@ -227,14 +227,18 @@ function presentation() {
     fallback: HOME,
     prepare(id) {
       const v = makeView(id);
-      const ready = stage(id, v, () => preparePage(v.webContents, pageAddress(id === HOME ? null : tabs?.get(id)), frameOptions(id)));
+      const url = pageAddress(id === HOME ? null : tabs?.get(id));
+      // A covered Windows view can stop drawing. Load its document and let it paint after it is raised.
+      const ready = windows
+        ? preparePage(v.webContents, url, { waitForPaint: false })
+        : stage(id, v, () => preparePage(v.webContents, url, frameOptions(id)));
       return { view: v, ready };
     },
-    resume(id, v) { return stage(id, v, () => paintPage(v.webContents, frameOptions(id))); },
+    resume: windows ? undefined : (id, v) => stage(id, v, () => paintPage(v.webContents, frameOptions(id))),
     present(_id, v) {
       if (!win) return;
       revealPage(win.contentView, v, views.values());
-      v.webContents.setBackgroundThrottling(true);
+      if (!windows) v.webContents.setBackgroundThrottling(true);
       /* the pages now behind it are told: one waiting to be covered (its projects window opening another tab) is done */
       for (const page of views.values()) if (page !== v && !page.webContents.isDestroyed()) page.webContents.send('desktop:tabs:covered');
     },
@@ -457,8 +461,8 @@ function tellWorking(/** @type {string[]} */ folders) {
 const asked = new Map();
 
 /**
- * Studio asks the person's agent a question of its own (studio-process.mjs askAgent): the agent the chat last started a
- * conversation with, else the first one ready in Settings → Agents, answers with its own model and no chat. None ready:
+ * Studio asks an agent a question of its own. Canvas writing names its model; other requests use the chat's last
+ * agent or the first one ready in Settings → Agents. None ready:
  * `code: 'no-agent'`, so Studio says to connect one.
  * @type {import('./studio.mjs').AskHandler}
  */
@@ -466,11 +470,11 @@ function answerStudio(message, reply) {
   if (message.type === 'ask-cancel') { asked.get(message.id)?.abort(); return; }
   const ready = (roster?.list() ?? []).filter((a) => a.status === 'ready').map((a) => a.id);
   const last = localAgents?.lastAgent();
-  const agent = last && ready.includes(last) ? last : ready[0];
-  if (!agent || !localAgents) { reply({ type: 'answer', id: message.id, error: 'No agent is connected.', code: 'no-agent' }); return; }
+  const agent = message.model?.agent ?? (last && ready.includes(last) ? last : ready[0]);
+  if (!agent || !ready.includes(agent) || !localAgents) { reply({ type: 'answer', id: message.id, error: 'No agent is connected.', code: 'no-agent' }); return; }
   const stop = new AbortController();
   asked.set(message.id, stop);
-  localAgents.ask(agent, String(message.text ?? ''), stop.signal)
+  localAgents.ask(agent, String(message.text ?? ''), stop.signal, message.model?.options, message.images)
     .then((text) => reply({ type: 'answer', id: message.id, text }))
     .catch((error) => { if (!stop.signal.aborted) reply({ type: 'answer', id: message.id, error: error?.message ?? String(error), ...(error?.code ? { code: String(error.code) } : {}) }); })
     .finally(() => asked.delete(message.id));

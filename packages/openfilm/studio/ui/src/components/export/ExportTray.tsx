@@ -1,13 +1,7 @@
-/**
- * The export tray: the small stack of cards at the bottom right of the project.
- *
- * Once exports are queued the dialog closes and the person keeps editing; this says how far each one has got (which
- * frame, frames per second, how long is left, which encoder), opens or shows what it made, and shows a failure in
- * its own words. It is there while there are exports to show, until the person closes it; the project's event stream
- * tells it every change.
- */
-import { Ban, Check, ChevronDown, ChevronUp, CircleAlert, FolderOpen, Loader2, Play, X } from 'lucide-react';
+import { Ban, Check, CircleAlert, FolderOpen, Loader2, Play, X } from 'lucide-react';
 import React from 'react';
+
+import { Popover } from '../Popover';
 
 import { projectEvents, studioConnection } from '@/api';
 import { useT } from '@/i18n';
@@ -43,7 +37,7 @@ function keepClosed(projectId: string, ids: Set<string>) {
 }
 
 export interface ExportTrayHandle {
-  /** Exports were just queued: show them now. */
+  /** Track jobs as soon as they are queued, even before the event stream catches up. */
   push: (jobs: ExportJob[]) => void;
 }
 
@@ -55,7 +49,10 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
   const t = useT();
   const fileAction = (run: Promise<void>) => { void run.catch(() => onError?.(t('exportTray.fileGone'))); };
   const [jobs, setJobs] = React.useState<ExportJob[]>([]);
-  const [collapsed, setCollapsed] = React.useState(false);
+  const [open, setOpen] = React.useState(false);
+  const id = React.useId();
+  const trigger = React.useRef<HTMLButtonElement>(null);
+  const panel = React.useCallback((node: HTMLElement | null) => { node?.focus({ preventScroll: true }); }, []);
   const [dismissed, setDismissed] = React.useState<Set<string>>(() => closedOf(projectId));
   /* Cancel was pressed: said at once, before the server's word that it is stopping arrives */
   const [cancelAsked, setCancelAsked] = React.useState<Set<string>>(() => new Set());
@@ -82,15 +79,13 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
   }, []);
 
   React.useImperativeHandle(ref, () => ({
-    push: (queued) => {
-      setCollapsed(false);
-      merge(queued);
-    },
+    push: merge,
   }), [merge]);
 
   /* when the project opens: exports still running from before are still shown; then every change as it happens */
   React.useEffect(() => {
     setJobs([]);
+    setOpen(false);
     setDismissed(closedOf(projectId));
     setCancelAsked(new Set());
     let live = true;
@@ -137,41 +132,44 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
   const stopping = active.filter(cancelling).length;
   const ended = active.length ? null : endedHeadline(visible, t);
 
+  const headline = ended ? ended.text
+    : stopping === active.length ? t('exportTray.cancelling')
+      : t('exportTray.running').replace('{n}', String(active.length - stopping));
+  const pct = share == null ? null : Math.round(share * 100);
+  const icon = !ended ? <Loader2 size={14} className="shrink-0 animate-spin text-[var(--accent)]" />
+    : ended.tone === 'err' ? <CircleAlert size={14} className="shrink-0 text-[var(--err)]" />
+      : ended.tone === 'muted' ? <Ban size={14} className="shrink-0 text-[var(--text-faint)]" />
+        : <Check size={14} className="shrink-0 text-[var(--ok)]" />;
+
   return (
-    <div
-      className="pointer-events-auto fixed bottom-4 right-4 z-[120] w-[340px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]"
-    >
-      <div className="flex items-center gap-2 border-b border-[var(--border)] px-3.5 py-2.5">
-        {!ended ? <Loader2 size={14} className="shrink-0 animate-spin text-[var(--text-muted)]" />
-          : ended.tone === 'err' ? <CircleAlert size={14} className="shrink-0 text-[var(--err)]" />
-            : ended.tone === 'muted' ? <Ban size={14} className="shrink-0 text-[var(--text-faint)]" />
-              : <Check size={14} className="shrink-0 text-[var(--ok)]" />}
-        <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-[var(--text)]">
-          {ended ? ended.text
-            : stopping === active.length ? t('exportTray.cancelling')
-              : t('exportTray.running').replace('{n}', String(active.length - stopping))}
-        </span>
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          aria-label={collapsed ? t('exportTray.expand') : t('exportTray.collapse')}
-          className="rounded-md p-1 text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
-        >
-          {collapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
-        {!active.length && (
-          <button
-            type="button"
-            onClick={() => { const closed = new Set(jobs.map((j) => j.id)); keepClosed(projectId, closed); setDismissed(closed); }}
-            aria-label={t('exportTray.close')}
-            className="rounded-md p-1 text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
-          >
-            <X size={14} />
-          </button>
-        )}
-      </div>
-      {!collapsed && (
-        <ul className="max-h-[320px] overflow-y-auto">
+    <Popover open={open} onOpenChange={setOpen} align="end" clampToViewport layer={10060}
+      onEscapeKeyDown={() => { setOpen(false); trigger.current?.focus({ preventScroll: true }); }}
+      trigger={
+      <button ref={trigger} type="button" data-export-queue-trigger="" aria-expanded={open} aria-controls={open ? id : undefined}
+        aria-label={`${headline}${pct == null ? '' : ` · ${pct}%`}`}
+        title={headline}
+        className="flex h-[26px] min-w-[48px] shrink-0 items-center justify-center gap-1 rounded-md bg-[var(--bg-hover)] px-1.5 text-[11px] font-medium tabular-nums text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
+        {icon}
+        {pct == null ? visible.length : `${pct}%`}
+      </button>
+    }>
+      <section ref={panel} id={id} tabIndex={-1} data-export-queue="" aria-label={headline}
+        className="pointer-events-auto flex max-h-[var(--popover-max-h)] w-[min(340px,calc(100vw-24px))] flex-col overflow-hidden rounded-xl border outline-none border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-3.5 py-2.5">
+          {icon}
+          <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-[var(--text)]">{headline}</span>
+          {!active.length && (
+            <button
+              type="button"
+              onClick={() => { const closed = new Set(jobs.map((j) => j.id)); keepClosed(projectId, closed); setDismissed(closed); setOpen(false); }}
+              aria-label={t('exportTray.close')}
+              className="rounded-md p-1 text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <ul className="min-h-0 max-h-[320px] overflow-y-auto">
           {visible.map((job) => (
             <li key={job.id} className="border-b border-[var(--border)] px-3.5 py-2.5 last:border-b-0">
               <div className="flex items-center gap-2">
@@ -212,8 +210,8 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
             </li>
           ))}
         </ul>
-      )}
-    </div>
+      </section>
+    </Popover>
   );
 });
 

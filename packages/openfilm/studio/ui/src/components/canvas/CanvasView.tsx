@@ -12,15 +12,14 @@
  * made from it (right) or what goes into it (left), and its panel is under it while it is the one selected. Two
  * fingers pan, a pinch zooms, a drag on the board selects (H, the hand, or Space: it moves the board); a double click,
  * `/`, or a wire let go on the board opens the menu of what to add there. ⌘Z ⇧⌘Z, ⌘C ⌘V ⌘D, ⌘A, ⌘G ⇧⌘G, ⌘L and
- * Delete do as they say; a right click has the same in its menus. Far out a node is only its outline, and a clip plays
- * only under the pointer: a board of hundreds stays light. The board is React Flow (@xyflow/react): its nodes are ours.
+ * Delete do as they say; a right click has the same in its menus. The board is React Flow (@xyflow/react): its nodes are ours.
  *
  * Its keys are its own: Studio's shortcuts leave them alone (`data-studio-canvas`, typing-target.ts).
  */
 import React from 'react';
 import { flushSync } from 'react-dom';
 import {
-  MiniMap, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow,
+  MiniMap, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, useStoreApi,
   type Connection, type Edge, type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -38,21 +37,24 @@ import { useLibraryVoices } from '@/lib/library-voices';
 import { defaultVoice, serviceOf, voicesOf } from './voices';
 import { builtInTemplates, type CanvasTemplate } from '@/lib/canvas-templates';
 import { RESOURCE_DRAG_TYPE, isComputerFileDrag, readResourceDragData } from '@/lib/resource-drag';
-import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
+import { resourceKindOf, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import { studioHost, type StudioRef } from '@/lib/host';
 import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
-  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
-  type Board, type BoardNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type Side, type SpawnKind,
+  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
+  type Board, type BoardNode, type FileNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type Side, type SpawnKind, type UploadStatus,
 } from './board';
 import { BetaTag, BottomToolbar, CornerBar, Dots, Outline, Viewer } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
+import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from './connections';
 import { CHARACTER_PARTS, CharacterLibrary, HistoryModal, MaterialLibrary } from './libraries';
 import { RedrawEditor, type RedrawWay } from './redraw';
 import { presetOf } from '@/lib/canvas-presets';
 import { FRAME_COLOR, NODE_TYPES } from './nodes';
+import { SelectionToolbar } from './panels';
 import { CanvasLoading } from './CanvasLoading';
+import type { ImportProgress } from '../MediaPool';
 
 /** how long after the last change the board is written */
 const SAVE_AFTER_MS = 600;
@@ -83,9 +85,32 @@ const unselectEdges = (list: Edge[]) => (list.some((e) => e.selected) ? list.map
 /** what was copied last, on any board of this page: pasted with new ids, a step further each time */
 let clipboard: { doc: CanvasDoc; pasted: number } | null = null;
 
+type NodePlacement = Pick<MenuAt, 'at' | 'from' | 'corner' | 'wire'>;
+
+function topLeft({ at, corner, wire, from }: NodePlacement, w: number, h: number) {
+  if (corner) return at;
+  const x = wire && from ? at.x - (from.side === 'target' ? w : 0) : at.x - w / 2;
+  return { x, y: at.y - h / 2 };
+}
+
+type UploadTarget = NodePlacement & {
+  version?: string;
+  wireFirstOnly?: boolean;
+};
+
+type PendingUpload = UploadStatus & Pick<UploadTarget, 'from' | 'version'> & {
+  id: string;
+  board: string;
+  position: MenuAt['at'];
+  wireDrop?: NodePlacement;
+  path?: string;
+};
+
 function BoardView({ shown = true, projectId, folder, files, sources, onAddToFilm, onSendToFilm, onImportFiles, onOpenSettings, onReveal, chat, onError, onNotice, focus, insert, addFiles, onRefer }: CanvasViewProps) {
   const t = useT();
   const flow = useReactFlow<BoardNode, Edge>();
+  const flowStore = useStoreApi();
+  const selectionStart = React.useRef<{ x: number; y: number } | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [ready, setReady] = React.useState(false);
@@ -118,6 +143,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   const openLibrary = (which: 'characters' | 'styles' | 'effects', node?: string) => { setModalFor(node ?? null); setModal(which); };
   const boardRef = React.useRef(boardId);
   boardRef.current = boardId;
+  const switchingBoards = React.useRef(false);
   const saved = React.useRef('');
   const rootRef = React.useRef<HTMLDivElement>(null);
   const lastViewSize = React.useRef<{ board: string; width: number; height: number } | null>(null);
@@ -172,13 +198,15 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   React.useEffect(() => { void loadBoards(); }, [loadBoards]);
   /* another board shown: this one written first if it has a change not yet kept */
   const showBoard = async (id: string) => {
-    if (id === boardRef.current) return;
+    if (id === boardRef.current || switchingBoards.current) return;
+    switchingBoards.current = true;
     const doc = docNow();
     if (ready && canvasKey(doc) !== saved.current) await api.putCanvas(projectId, doc, boardRef.current).catch(() => {});
     setReady(false);
     setEditing(null);
     setBoardId(id);
     keepLastBoard(projectId, id);
+    switchingBoards.current = false;
   };
   const addBoard = async (from?: string) => {
     try {
@@ -240,7 +268,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       requestAnimationFrame(() => requestAnimationFrame(() => {
         if (!live) return;
         setNodes((list) => {
-          const fitted = fitGroups(unstack(list));
+          const fitted = fitGroups(list);
           /* Fitting the display is not a document edit. Keep it as the comparison baseline until the person changes something. */
           if (editVersion.current === version) saved.current = canvasKey(fromFlow(fitted,now.current.edges));
           return fitted;
@@ -284,7 +312,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
 
   /* written a moment after the last change that says something new (a selection says nothing) */
   React.useEffect(() => {
-    if (!ready || !opened.current) return undefined;
+    if (!ready || !opened.current || nodes.some((node) => node.resizing)) return undefined;
     const doc = fromFlow(nodes, edges);
     const key = canvasKey(doc);
     if (key === saved.current) return undefined;
@@ -313,7 +341,12 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const current = docNow();
     /* a copy out of a group that is gone since lands on the board itself */
     const groups = new Set([...current.nodes, ...doc.nodes].filter((n) => n.group != null).map((n) => n.id));
-    const added = doc.nodes.map((n) => (n.parent && !groups.has(n.parent) ? (({ parent: _parent, ...rest }) => rest)(n) : n));
+    const layer = nextCardLayer(now.current.nodes);
+    const added = doc.nodes.map(({ parent, ...node }) => ({
+      ...node,
+      ...(parent && groups.has(parent) ? { parent } : {}),
+      ...(node.z ? { z: node.z + layer } : {}),
+    }));
     show({ nodes: [...current.nodes, ...added], edges: [...current.edges, ...doc.edges] }, select ? new Set(added.map((n) => n.id)) : undefined);
   };
   const copy = () => {
@@ -395,10 +428,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     for (let i = 0; i < 60 && hits(y); i++) y += 48;
     return { x, y };
   };
-  const place = (node: BoardNode, from?: MenuAt['from']) => {
+  const place = (node: BoardNode, from?: MenuAt['from'], wireDrop?: boolean) => {
     willChange();
     /* off the screen: the board moves to it, as far zoomed as it is */
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (!wireDrop) requestAnimationFrame(() => requestAnimationFrame(() => {
       const box = rootRef.current?.getBoundingClientRect();
       const at = flow.flowToScreenPosition(node.position);
       const zoom = flow.getZoom();
@@ -414,27 +447,29 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       setEdges((list) => [...list, { id: canvasId('e'), source, target, data: { order: nextOrder(docNow(), target) } }]);
     }
   };
-  const topLeft = (at: MenuAt['at'], corner: boolean | undefined, w: number, h: number) => (corner ? at : { x: at.x - w / 2, y: at.y - h / 2 });
-  const addKind = (kind: SpawnKind, at: MenuAt['at'], from?: MenuAt['from'], corner?: boolean) => {
+  const addKind = (kind: SpawnKind, placement: NodePlacement) => {
     const id = canvasId('n');
     const w = WIDE[kind];
     if (kind === 'note') {
       /* new, it is square and says what it can start as; written in, it is a box of words */
-      place({ id, type: 'note', position: topLeft(at, corner, w, CARD_H), width: w, height: CARD_H, data: { text: '' } }, from);
+      place({ id, type: 'note', position: topLeft(placement, w, CARD_H), width: w, height: CARD_H, data: { text: '' } }, placement.from, placement.wire);
     } else if (kind === 'cut') {
-      place({ id, type: 'cut', position: topLeft(at, corner, w, CARD_H), width: w, height: CARD_H, data: {} }, from);
+      place({ id, type: 'cut', position: topLeft(placement, w, CARD_H), width: w, height: CARD_H, data: {} }, placement.from, placement.wire);
     } else {
       const size = makeSize(kind);
-      place({ id, type: 'make', position: topLeft(at, corner, size.w, size.h), width: size.w, height: size.h, data: { make: kind, prompt: '' } }, from);
+      place({ id, type: 'make', position: topLeft(placement, size.w, size.h), width: size.w, height: size.h, data: { make: kind, prompt: '' } }, placement.from, placement.wire);
     }
     return id;
   };
-  const addFile = (path: string, at: MenuAt['at'], from?: MenuAt['from'], corner?: boolean, size?: { w: number; h: number }) => {
-    place({ id: canvasId('n'), type: 'file', position: topLeft(at, corner, size?.w ?? FILE_W, size?.h ?? CARD_H), data: { path }, ...(size ? { width: size.w, height: size.h } : {}) }, from);
+  const addFile = (path: string, placement: NodePlacement, size?: { w: number; h: number }) => {
+    const width = size?.w ?? (placement.wire ? fileCardWidth(byPath.get(path)) : FILE_W);
+    place({ id: canvasId('n'), type: 'file', position: topLeft(placement, width, size?.h ?? CARD_H), data: { path }, ...(size ? { width: size.w, height: size.h } : {}) }, placement.from, placement.wire);
   };
   const openMenu = (clientX: number, clientY: number, from?: MenuAt['from']) => {
     setContext(null);
-    setMenu({ screen: { x: clientX, y: clientY }, at: flow.screenToFlowPosition({ x: clientX, y: clientY }), ...(from ? { from } : {}) });
+    const screen = { x: clientX, y: clientY };
+    const at = flow.screenToFlowPosition(screen, from ? { snapToGrid: false } : undefined);
+    setMenu({ screen, at, ...(from ? { from, wire: true } : {}) });
   };
   /** the board's middle, as a point on it */
   const middle = () => {
@@ -447,19 +482,120 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (!shown || !ready || !addFiles || addedRequest.current === addFiles.n) return;
     addedRequest.current = addFiles.n;
     const at = middle();
-    for (const [i,path] of addFiles.paths.entries()) addFile(path, { x: at.x + i * (FILE_W + 24), y: at.y });
+    for (const [i,path] of addFiles.paths.entries()) addFile(path, { at: { x: at.x + i * (FILE_W + 24), y: at.y } });
   }, [shown, ready, addFiles?.n]);
 
-  /** files of this computer, picked: brought into the project first (as the Assets bring them) */
-  const picked = React.useRef<((files: File[]) => void) | null>(null);
-  const pickFiles = (accept: string) => new Promise<string[]>((done) => {
+  /** The picker hands off local files immediately so each caller can show what is being imported. */
+  const pickLocalFiles = (accept: string) => new Promise<File[]>((done) => {
     const input = pickerRef.current;
     if (!input) { done([]); return; }
     input.accept = accept;
     input.value = '';
-    picked.current = (list) => { void onImportFiles(list).then(done, (e: unknown) => { onError(e instanceof Error ? e.message : String(e)); done([]); }); };
+    input.onchange = () => done([...(input.files ?? [])]);
+    input.oncancel = () => done([]);
     input.click();
   });
+  const pickFiles = async (accept: string) => {
+    const list = await pickLocalFiles(accept);
+    if (!list.length) return [];
+    try { return await onImportFiles(list); }
+    catch (error) { onError(error instanceof Error ? error.message : String(error)); return []; }
+  };
+
+  /* Uploads stay outside the document until their paths are available in the media listing. */
+  const [uploads, setUploads] = React.useState<PendingUpload[]>([]);
+  const activeUploads = React.useMemo(() => uploads.filter((upload) => upload.board === boardId), [uploads, boardId]);
+  const uploadFiles = (list: File[], { at, from, corner, wire, version, wireFirstOnly }: UploadTarget) => {
+    if (!list.length || boardRef.current !== boardId) return;
+    const batch = list.map((file, i): PendingUpload => {
+      const placement = { at: { x: at.x + i * (FILE_W + 24) * (from?.side === 'target' ? -1 : 1), y: at.y }, from, corner, wire };
+      return {
+        id: canvasId('n'), board: boardId, name: file.name, kind: resourceKindOf(file.name), progress: -1,
+        position: topLeft(placement, FILE_W, CARD_H),
+        ...(wire ? { wireDrop: placement } : {}),
+        ...(from && (!i || !wireFirstOnly) ? { from } : {}),
+        ...(version ? { version } : {}),
+      };
+    });
+    const ids = new Set(batch.map((upload) => upload.id));
+    setUploads((previous) => [...previous, ...batch]);
+    const progress: ImportProgress = (i, ratio, path) => {
+      const upload = batch[i];
+      if (upload) setUploads((previous) => previous.map((item) => item.id === upload.id ? { ...item, progress: ratio, path } : item));
+    };
+    void onImportFiles(list, progress).catch((error: unknown) => {
+      onError(error instanceof Error ? error.message : String(error));
+    }).finally(() => {
+      setUploads((previous) => previous.filter((item) => item.path || !ids.has(item.id)));
+    });
+  };
+  const pickUpload = async (placement: NodePlacement) => {
+    uploadFiles(await pickLocalFiles(ACCEPT.media), placement);
+  };
+
+  const drawnNodes = React.useMemo(() => {
+    const defaultLayer = nextCardLayer(nodes);
+    return [
+      ...nodes.map((node) => node.type === 'frame' ? node : {
+        ...node, zIndex: (node.zIndex ?? defaultLayer) + (node.dragging ? defaultLayer : 0),
+      }),
+      ...activeUploads.filter((upload) => !upload.version).map((upload): FileNode => ({
+        id: upload.id, type: 'file', position: upload.position, width: FILE_W, height: CARD_H, zIndex: defaultLayer,
+        selectable: false, draggable: false, connectable: false, focusable: false,
+        style: { pointerEvents: 'none' },
+        data: { path: '', upload },
+      })),
+    ];
+  }, [nodes, activeUploads]);
+
+  React.useEffect(() => {
+    if (!ready || switchingBoards.current) return;
+    const landed = activeUploads.flatMap((upload) => {
+      const file = upload.path ? byPath.get(upload.path) : undefined;
+      return file ? [{ upload, file }] : [];
+    });
+    if (!landed.length) return;
+    const finished = new Set(landed.map(({ upload }) => upload.id));
+    const existing = new Set(now.current.nodes.map((n) => n.id));
+    const added: FileNode[] = [];
+    const wires: Edge[] = [];
+    const versions = new Map<string, string[]>();
+    for (const { upload, file } of landed) {
+      if (upload.version) {
+        if (existing.has(upload.version)) versions.set(upload.version, [...(versions.get(upload.version) ?? []), file.path]);
+        continue;
+      }
+      added.push({
+        id: upload.id, type: 'file', data: { path: file.path },
+        position: upload.wireDrop && file.kind !== 'video' ? topLeft(upload.wireDrop, fileCardWidth(file), CARD_H) : upload.position,
+        ...(file.kind === 'video' ? { width: FILE_W, height: CARD_H } : {}),
+      });
+      const from = upload.from;
+      if (from && existing.has(from.node)) {
+        const [source, target] = from.side === 'source' ? [from.node, upload.id] : [upload.id, from.node];
+        wires.push({ id: canvasId('e'), source, target });
+      }
+    }
+    setUploads((previous) => previous.filter((upload) => !finished.has(upload.id)));
+    if (!added.length && !versions.size) return;
+    willChange();
+    setNodes((previous) => [
+      ...previous.map((node) => {
+        const paths = versions.get(node.id);
+        return node.type === 'make' && paths ? { ...node, data: paths.reduce((data, path) => withVersion(data, { path, made: '' }), node.data) } : node;
+      }),
+      ...added,
+    ]);
+    if (wires.length) setEdges((previous) => {
+      const doc = fromFlow(now.current.nodes, previous);
+      const next = wires.map((wire) => {
+        const order = nextOrder(doc, wire.target);
+        doc.edges.push({ id: wire.id, from: wire.source, to: wire.target, order });
+        return { ...wire, data: { order } };
+      });
+      return [...previous, ...next];
+    });
+  }, [ready, activeUploads, byPath, setNodes, setEdges, willChange]);
 
   /* ── making ── */
   const providers = useProviders().state;
@@ -589,13 +725,15 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
   /** a group kept as a template, by its name, with what is in it and the wires between them */
   /* a text node written by the person's agent: the words wired in (and its own, to rework) go with what they ask */
-  const write = async (id: string, ask: string): Promise<string | null> => {
+  const write = async (id: string, ask: string, attachments: string[]): Promise<string | null> => {
     const inputs = edges.filter((e) => e.target === id).map((e) => nodes.find((n) => n.id === e.source))
       .flatMap((n) => (n?.type === 'note' && n.data.text.trim() ? [n.data.text] : []));
     const own = nodes.find((n) => n.id === id);
     const mine = own?.type === 'note' ? own.data.text.trim() : '';
     try {
-      const { text } = await api.canvasWrite(projectId, ask, mine ? [...inputs, `(the node's words now, to rework) ${mine}`] : inputs);
+      const model = studioHost?.canvasWriting?.selection();
+      if (model === null) return t('canvas.write.noAgent');
+      const { text } = await api.canvasWrite(projectId, ask, mine ? [...inputs, `(the node's words now, to rework) ${mine}`] : inputs, model, attachments);
       if (!text) return null;
       willChange();
       setNodes((all) => all.map((n) => (n.id === id && n.type === 'note' ? { ...n, data: { ...n.data, text } } : n)));
@@ -632,7 +770,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         const main = used.pictures.find((p) => p.role === 'face') ?? used.pictures.find((p) => p.role === 'body') ?? used.pictures[0];
         const shape: Record<string, string> = { face: '1:1', body: '9:16', expressions: '1:1', turnaround: '16:9' };
         const size = main ? { w: cardWidth(shape[main.role] ?? '1:1'), h: CARD_H } : null;
-        if (main && size) addFile(main.path, spotBeside(target, 'target', size.w), { node: target, side: 'target' }, true, size);
+        if (main && size) addFile(main.path, { at: spotBeside(target, 'target', size.w), from: { node: target, side: 'target' }, corner: true }, size);
         return;
       }
       /* in a row, each its own shape (a portrait square, the full body tall, the turnaround wide) */
@@ -769,7 +907,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
    * A node clicked (not dragged), with its panel under it, kept on the screen: the board glides as much as it takes.
    * Never on a press that starts a drag: the board stays where it is under the pointer, whatever is picked.
    */
-  const keepShown = (id: string) => {
+  const keepShown = (id: string, composerOnly = false) => {
     requestAnimationFrame(() => {
       const box = rootRef.current?.getBoundingClientRect();
       const el = rootRef.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`);
@@ -777,17 +915,21 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       const node = el.getBoundingClientRect();
       const type = now.current.nodes.find((n) => n.id === id)?.type;
       /* its panel as drawn (a frame later), else as it is about to be */
-      const drawn = rootRef.current?.querySelector('.react-flow__node-toolbar .nodrag')?.getBoundingClientRect();
+      const toolbar = `.react-flow__node-toolbar[data-id="${CSS.escape(id)}"]`;
+      const drawn = rootRef.current?.querySelector(`${toolbar} ${composerOnly ? '[data-canvas-composer]' : '.nodrag'}`)?.getBoundingClientRect();
+      if (composerOnly && !drawn) return;
       const panel = drawn && drawn.height > 40 ? { w: drawn.width, h: drawn.height }
         : type === 'make' ? { w: Math.min(660, box.width * 0.86), h: 260 } : type === 'cut' ? { w: 420, h: 80 } : { w: 0, h: 0 };
       const mid = node.left + node.width / 2;
-      const left = Math.min(node.left, mid - panel.w / 2);
-      const right = Math.max(node.right, mid + panel.w / 2);
+      const left = composerOnly && drawn ? drawn.left : Math.min(node.left, mid - panel.w / 2);
+      const right = composerOnly && drawn ? drawn.right : Math.max(node.right, mid + panel.w / 2);
       const bottom = node.bottom + (panel.h ? panel.h + 14 : 0);
       const pad = 24;
       const dx = left < box.left + pad ? box.left + pad - left : right > box.right - pad ? box.right - pad - right : 0;
       /* clear of the toolbar at the foot */
-      const dy = bottom > box.bottom - 76 ? Math.max(box.bottom - 76 - bottom, box.top + 60 - node.top) : node.top < box.top + 50 ? box.top + 50 - node.top : 0;
+      const dy = composerOnly && drawn
+        ? Math.min(0, Math.max(box.bottom - 76 - drawn.bottom, box.top + pad - drawn.top))
+        : bottom > box.bottom - 76 ? Math.max(box.bottom - 76 - bottom, box.top + 60 - node.top) : node.top < box.top + 50 ? box.top + 50 - node.top : 0;
       if (!dx && !dy) return;
       const view = flow.getViewport();
       void flow.setViewport({ ...view, x: view.x + dx, y: view.y + dy }, { duration: 220 });
@@ -797,6 +939,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     files,
     fileOf: (path) => byPath.get(path) ?? null,
     sources,
+    shown,
+    showComposer: (id) => keepShown(id, true),
+    reportError: onError,
+    uploading: (id) => activeUploads.find((upload) => upload.version === id),
     addToFilm: onAddToFilm,
     setData: (id, data) => setNodes((list) => {
       let grew = false;
@@ -813,21 +959,18 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     }),
     resize: (id, size) => setNodes((list) => unstack(list.map((n) => (n.id === id ? { ...n, width: size.w, height: size.h } : n)), [id])),
     spawn: (id, kind, data) => {
-      const made = addKind(kind, spotBeside(id, 'source', WIDE[kind]), { node: id, side: 'source' }, true);
+      const made = addKind(kind, { at: spotBeside(id, 'source', WIDE[kind]), from: { node: id, side: 'source' }, corner: true });
       if (data) setNodes((list) => list.map((n) => (n.id === made ? { ...n, data: { ...n.data, ...data } } as BoardNode : n)));
     },
     bring: (id, list) => {
-      void onImportFiles(list).then((paths) => {
-        const at = spotBeside(id, 'source', FILE_W);
-        paths.forEach((path, i) => addFile(path, { x: at.x + (i % 3) * (FILE_W / 2 + 24), y: at.y + Math.floor(i / 3) * (CARD_H / 2 + 48) }, i ? undefined : { node: id, side: 'source' }, true));
-      }, (e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+      uploadFiles(list, { at: spotBeside(id, 'source', FILE_W), from: { node: id, side: 'source' }, corner: true, wireFirstOnly: true });
     },
     cutout: (id, path) => {
       if (!folder) return;
       onNotice(t('canvas.actions.cutting'));
       void api.make(folder, 'cutout', { src: path, out: `${path.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'picture'}-cutout` }, {}).then((text) => {
         const receipt = JSON.parse(text) as { src?: string };
-        if (receipt.src) addFile(receipt.src, spotBeside(id, 'source', FILE_W), { node: id, side: 'source' }, true);
+        if (receipt.src) addFile(receipt.src, { at: spotBeside(id, 'source', FILE_W), from: { node: id, side: 'source' }, corner: true });
       }, (e: unknown) => onError(e instanceof Error ? e.message : String(e)));
     },
     remove,
@@ -855,18 +998,13 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       const node = now.current.nodes.find((n) => n.id === id);
       const kind = node?.type === 'make' ? node.data.make : null;
       const accept = how === 'input' ? (kind === 'video' ? `${ACCEPT.image},${ACCEPT.video}` : ACCEPT.image) : kind === 'image' ? ACCEPT.image : kind === 'video' ? ACCEPT.video : ACCEPT.audio;
-      void pickFiles(accept).then((paths) => {
-        if (!paths.length) return;
-        if (how === 'version') {
-          willChange();
-          setNodes((list) => list.map((n) => (n.id === id && n.type === 'make' ? { ...n, data: paths.reduce((d, path) => withVersion(d, { path, made: '' }), n.data) } : n)));
-          return;
-        }
-        for (const path of paths) addFile(path, spotBeside(id, 'target', FILE_W), { node: id, side: 'target' }, true);
+      void pickLocalFiles(accept).then((list) => {
+        if (how === 'version') uploadFiles(list, { at: node?.position ?? { x: 0, y: 0 }, version: id });
+        else uploadFiles(list, { at: spotBeside(id, 'target', FILE_W), from: { node: id, side: 'target' }, corner: true });
       });
     },
     wireIn: (id, from) => {
-      if ('path' in from) { addFile(from.path, spotBeside(id, 'target', FILE_W), { node: id, side: 'target' }, true); return; }
+      if ('path' in from) { addFile(from.path, { at: spotBeside(id, 'target', FILE_W), from: { node: id, side: 'target' }, corner: true }); return; }
       if (now.current.edges.some((e) => e.source === from.node && e.target === id)) return;
       willChange();
       setEdges((list) => [...list, { id: canvasId('e'), source: from.node, target: id, data: { order: nextOrder(docNow(), id) } }]);
@@ -888,8 +1026,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     redraw: (id, path) => setRedraw({ id, path }),
     tidy: (group) => { willChange(); setNodes((list) => tidyGroup(list, group)); },
     openSettings: onOpenSettings,
-    ...(chat ? { write } : {}),
-  }), [chat, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal]); // eslint-disable-line react-hooks/exhaustive-deps
+    ...(chat ? { write, uploadWritingFiles: onImportFiles } : {}),
+  }), [chat, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal, onError, onImportFiles, activeUploads, shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onDrop = (event: React.DragEvent) => {
     const at = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -897,25 +1035,20 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (item) {
       event.preventDefault(); event.stopPropagation();
       if (item.apply) { onNotice(t('layout.canvasEffectInEdit')); return; }
-      if (!item.saved) { addFile(item.path, at); return; }
+      if (!item.saved) { addFile(item.path, { at }); return; }
       const board = boardRef.current;
       void api.takeSaved(projectId, item.saved).then(taken => {
         if (boardRef.current !== board) return;
         const paths = 'path' in taken ? [taken.path] : 'clip' in taken ? [taken.clip.src] : taken.clips.map(row => row.clip.src);
-        for (const [i,path] of [...new Set(paths)].entries()) addFile(path, { x: at.x + i*(FILE_W+24), y: at.y });
+        for (const [i,path] of [...new Set(paths)].entries()) addFile(path, { at: { x: at.x + i*(FILE_W+24), y: at.y } });
       }, error => onError(error instanceof Error ? error.message : String(error)));
       return;
     }
-    /* files of this computer: brought into the project first (as the Assets bring them), then laid down side by side */
+    /* Files from this computer get their spots as soon as they are dropped. */
     if (isComputerFileDrag(event.dataTransfer) && event.dataTransfer.files.length) {
       event.preventDefault();
       event.stopPropagation();
-      void onImportFiles([...event.dataTransfer.files]).then((paths) => {
-        if (!paths.length) return;
-        willChange();
-        const added: BoardNode[] = paths.map((path, i) => ({ id: canvasId('n'), type: 'file', position: { x: at.x - FILE_W / 2 + i * (FILE_W + 24), y: at.y - CARD_H / 2 }, data: { path } }));
-        setNodes((list) => [...list.map((n) => ({ ...n, selected: false })), ...added.map((n) => ({ ...n, selected: true }))]);
-      });
+      uploadFiles([...event.dataTransfer.files], { at });
     }
   };
 
@@ -931,10 +1064,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (n.type === 'frame') return { kind: 'node', id: n.id, nodeKind: 'group', label: n.data.label || t('canvas.group') };
     if (n.type === 'cut') return { kind: 'node', id: n.id, nodeKind: 'cut', label: t('canvas.kinds.cut') };
     if (n.type === 'file') {
-      return { kind: 'node', id: n.id, nodeKind: 'file', label: byPath.get(n.data.path)?.name ?? n.data.path.split('/').pop() ?? n.data.path, path: n.data.path, ...picture(n.data.path) };
+      return { kind: 'node', id: n.id, nodeKind: 'file', label: n.data.title ?? byPath.get(n.data.path)?.name ?? n.data.path.split('/').pop() ?? n.data.path, path: n.data.path, ...picture(n.data.path) };
     }
     return {
-      kind: 'node', id: n.id, nodeKind: n.data.make, label: words(n.data.prompt ?? '', t(`canvas.make.${n.data.make}`)), prompt: n.data.prompt ?? '',
+      kind: 'node', id: n.id, nodeKind: n.data.make, label: n.data.title ?? words(n.data.prompt ?? '', t(`canvas.make.${n.data.make}`)), prompt: n.data.prompt ?? '',
       ...(n.data.path ? { path: n.data.path } : {}), ...(n.data.versions?.length ? { versions: n.data.versions.length } : {}), ...picture(n.data.path),
     };
   };
@@ -981,7 +1114,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (modal || redraw || target.closest('[role="dialog"]')) { if (target === document.body) event.stopPropagation(); return; }
     if (viewing) { if (event.key === 'Escape') { event.preventDefault(); setViewing(null); } return; }
     if (picking && event.key === 'Escape') { event.preventDefault(); setPicking(null); return; }
-    if (target.closest('input, textarea, [contenteditable="true"]')) return;
+    if (target.closest('input, textarea, [contenteditable="true"], [data-canvas-video-controls], [data-canvas-title]')) return;
     const mod = event.metaKey || event.ctrlKey;
     const key = event.key.toLowerCase();
     const done = () => { event.preventDefault(); event.stopPropagation(); };
@@ -1009,7 +1142,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       if (key === 'enter') done();
       willChange();
       flushSync(() => {
-        if (note.height === CARD_H) setNodes((list) => list.map((n) => (n.id === single ? { ...n, width: NOTE_W, height: NOTE_H } : n)));
+        if (note.width === NOTE_W && note.height === CARD_H) setNodes((list) => list.map((n) => (n.id === single ? { ...n, width: NOTE_W, height: NOTE_H } : n)));
         setEditing(single);
       });
       rootRef.current?.querySelector<HTMLTextAreaElement>(`.react-flow__node[data-id="${CSS.escape(single)}"] textarea`)?.focus();
@@ -1019,7 +1152,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     else if (!mod && (key === 'backspace' || key === 'delete')) { done(); removeSelected(); }
     else if (mod && key === '0') { done(); void flow.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }); }
     else if (mod && key === 'f') { done(); setOutline(true); }
-    else if (!mod && (key === '/' || key === 'tab')) {
+    else if (!mod && (key === '/' || (key === 'tab' && selected.length < 2))) {
       done();
       const box = rootRef.current!.getBoundingClientRect();
       openMenu(box.left + box.width / 2 - 130, box.top + box.height / 3);
@@ -1037,6 +1170,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   /* the wires: those into and out of the node selected lit; those into a node with more than one, numbered in their order */
   const drawn = React.useMemo(() => {
     const takes = new Set(nodes.flatMap((n) => (n.type === 'make' || n.type === 'cut' ? [n.id] : [])));
+    const picked = new Set(nodes.filter((node) => node.selected).map((node) => node.id));
     const into = new Map<string, Edge[]>();
     for (const e of edges) if (takes.has(e.target)) into.set(e.target, [...(into.get(e.target) ?? []), e]);
     const place = new Map<string, number>();
@@ -1046,18 +1180,17 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       list.map((e, i) => ({ e, i })).sort((a, b) => rank(a.e) - rank(b.e) || a.i - b.i).forEach(({ e }, i) => place.set(e.id, i + 1));
     }
     return edges.map((e) => {
-      const lit = single != null && (e.source === single || e.target === single);
+      const lit = Boolean(e.selected) || picked.has(e.source) || picked.has(e.target);
       return {
         ...e,
-        /* lit: blue, glowing and flowing towards what it feeds (globals.css .lit) */
-        ...(lit ? { className: 'lit', zIndex: 1 } : {}),
+        data: { ...e.data, lit },
         ...(place.has(e.id) ? {
           label: String(place.get(e.id)), labelBgPadding: [5, 2] as [number, number], labelBgBorderRadius: 4,
           labelStyle: { fontSize: 11, fontWeight: 500, fill: lit ? '#fff' : 'var(--cv-label)' }, labelBgStyle: { fill: lit ? LIT : 'var(--cv-float)', stroke: 'var(--cv-float-line)' },
         } : {}),
       };
     });
-  }, [nodes, edges, single]);
+  }, [nodes, edges]);
 
   /* ── right clicks ── */
   const nodeMenu = (event: React.MouseEvent, node: BoardNode) => {
@@ -1116,7 +1249,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const { clientX, clientY } = event;
     const at = flow.screenToFlowPosition({ x: clientX, y: clientY });
     setContext({ x: clientX, y: clientY, items: [
-      { id: 'upload', label: t('canvas.menu.upload'), icon: <Upload size={15} />, onSelect: () => { void pickFiles(ACCEPT.media).then((paths) => paths.forEach((path, i) => addFile(path, { x: at.x + i * 40, y: at.y + i * 40 }))); } },
+      { id: 'upload', label: t('canvas.menu.upload'), icon: <Upload size={15} />, onSelect: () => { void pickUpload({ at }); } },
       { id: 'add', label: t('canvas.addHere'), icon: <Plus size={15} />, shortcut: '/', onSelect: () => openMenu(clientX, clientY) },
       { id: 's0', separator: true },
       { id: 'undo', label: t('canvas.keys.undo'), shortcut: `${MOD}Z`, disabled: !history.current.past.length, onSelect: () => step(true) },
@@ -1151,7 +1284,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         aria-busy={!fitted}
         tabIndex={-1}
         className="relative h-full w-full outline-none"
-        onPointerDown={(event) => { if (!(event.target as HTMLElement).closest('input, textarea')) rootRef.current?.focus({ preventScroll: true }); }}
+        onPointerDown={(event) => { if (!(event.target as HTMLElement).closest('input, textarea, [data-canvas-video-controls]')) rootRef.current?.focus({ preventScroll: true }); }}
         onDragOver={(event) => {
           if (!event.dataTransfer.types.includes(RESOURCE_DRAG_TYPE) && !isComputerFileDrag(event.dataTransfer)) return;
           event.preventDefault();
@@ -1164,13 +1297,18 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         }}
       >
         <ReactFlow<BoardNode, Edge>
-          nodes={nodes}
+          nodes={drawnNodes}
           edges={wires ? drawn : NO_EDGES}
           nodeTypes={NODE_TYPES}
-          onNodesChange={onNodesChange}
+          edgeTypes={CANVAS_EDGE_TYPES}
+          defaultEdgeOptions={CANVAS_EDGE_OPTIONS}
+          onNodesChange={(changes) => {
+            onNodesChange(changes);
+            if (changes.some((change) => change.type === 'dimensions' && change.resizing === false)) setNodes(fitGroups);
+          }}
           onEdgesChange={onEdgesChange}
           onNodeDragStart={willChange}
-          onNodeDragStop={() => setNodes((list) => fitGroups(list))}
+          onNodeDragStop={(_event, _node, moved) => setNodes((list) => fitGroups(raiseCards(list, moved)))}
           onSelectionDragStart={willChange}
           onConnect={(connection: Connection) => {
             willChange();
@@ -1182,9 +1320,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
             if (state.isValid || !state.fromNode || !state.to) return;
             const point = 'changedTouches' in event ? event.changedTouches[0]! : event;
             const from = state.fromHandle?.position === 'left' || state.fromHandle?.type === 'target' ? 'target' : 'source';
-            /* a press on the ⊕ without a drag is its click (its menu), not a wire */
-            const start = flow.flowToScreenPosition(state.from);
-            if (Math.hypot(point.clientX - start.x, point.clientY - start.y) < 8) return;
+            const bounds = rootRef.current?.getBoundingClientRect();
+            if (!bounds || point.clientX < bounds.left || point.clientX > bounds.right || point.clientY < bounds.top || point.clientY > bounds.bottom) return;
             /* let go anywhere on a node: wired to it */
             const onto = document.elementsFromPoint(point.clientX, point.clientY)
               .map((el) => el.closest<HTMLElement>('.react-flow__node')).find((el) => el && el.dataset.id !== state.fromNode!.id);
@@ -1199,6 +1336,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
             openMenu(point.clientX, point.clientY, { node: state.fromNode.id, side: from });
           }}
           isValidConnection={(c) => c.source !== c.target}
+          connectionDragThreshold={5}
+          connectionLineComponent={DraggedWire}
           connectOnClick={false}
           onNodeContextMenu={nodeMenu}
           onPaneContextMenu={paneMenu}
@@ -1207,7 +1346,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           onPaneClick={() => { setContext(null); setEditing(null); }}
           onNodeClick={(event, node) => {
             if (editing && editing !== node.id) setEditing(null);
-            if (!picking) { if (!event.shiftKey && !event.metaKey && !event.ctrlKey && node.type !== 'frame') keepShown(node.id); return; }
+            if (!picking) {
+              if (!event.shiftKey && !event.metaKey && !event.ctrlKey && node.type !== 'frame' && !(event.target as Element).closest('[data-canvas-node-header]')) keepShown(node.id);
+              return;
+            }
             /* picking: the node clicked goes into the one picking, and picking is done */
             event.stopPropagation();
             if (node.id !== picking && node.type !== 'frame') board.wireIn(picking, { node: node.id });
@@ -1222,6 +1364,31 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           panOnDrag={tool === 'hand' ? true : [1, 2]}
           selectionOnDrag={tool === 'select'}
           selectionMode={SelectionMode.Partial}
+          onSelectionStart={() => {
+            const rect = flowStore.getState().userSelectionRect;
+            selectionStart.current = rect ? { x: rect.startX, y: rect.startY } : null;
+          }}
+          onSelectionEnd={(event) => {
+            const start = selectionStart.current;
+            selectionStart.current = null;
+            if (!start) return;
+            const end = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: false });
+            const left = Math.min(start.x, end.x), right = Math.max(start.x, end.x);
+            const top = Math.min(start.y, end.y), bottom = Math.max(start.y, end.y);
+            setNodes((list) => {
+              const groups = new Set(list.filter((node) => {
+                if (node.type !== 'frame') return false;
+                const { x, y } = node.position;
+                return x >= left && y >= top && x + (node.width ?? 0) <= right && y + (node.height ?? 0) <= bottom;
+              }).map((node) => node.id));
+              if (!groups.size) return list;
+              return list.map((node) => {
+                if (groups.has(node.id)) return { ...node, selected: true };
+                if (node.selected && node.parentId && groups.has(node.parentId)) return { ...node, selected: false };
+                return node;
+              });
+            });
+          }}
           zoomOnDoubleClick={false}
           deleteKeyCode={null}
           selectionKeyCode={null}
@@ -1231,7 +1398,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           snapGrid={[20, 20]}
           paneClickDistance={8}
           nodeClickDistance={8}
-          elevateNodesOnSelect
+          zIndexMode="manual"
           onlyRenderVisibleElements
           minZoom={0.1}
           maxZoom={4}
@@ -1239,6 +1406,13 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           className={`openfilm-canvas ${fitted ? 'opacity-100' : 'opacity-0'} ${tool === 'hand' ? 'cursor-grab' : ''}`}
         >
           <Dots />
+          {menu?.wire ? <MenuWire menu={menu} /> : null}
+          {shown && !picking && selected.length > 1 ? (
+            <SelectionToolbar ids={selected.map((node) => node.id)}
+              onGroup={selected.every((node) => node.type !== 'frame' && !node.parentId) ? group : undefined}
+              onUngroup={selected.some((node) => node.type === 'frame') ? () => ungroup() : undefined}
+              onDuplicate={duplicate} onRemove={removeSelected} />
+          ) : null}
           {map ? (
             /* beside the list of nodes when that is open, both on the right */
             <MiniMap position="bottom-right" pannable zoomable style={{ marginBottom: 60, marginRight: outline ? 336 : 8 }}
@@ -1277,7 +1451,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
             assets={files.filter((f) => f.kind === 'image').map((f) => ({ path: f.path, name: f.name, url: sources.file(f) }))} />
         ) : null}
         {modal === 'history' ? (
-          <HistoryModal projectId={projectId} onClose={() => setModal(null)} onAdd={(path) => addFile(path, middle())}
+          <HistoryModal projectId={projectId} onClose={() => setModal(null)} onAdd={(path) => addFile(path, { at: middle() })}
             uploads={[...new Set(nodes.flatMap((n) => (n.type === 'file' ? [n.data.path] : [])))].flatMap((path) => {
               const file = byPath.get(path);
               if (!file || (file.kind !== 'image' && file.kind !== 'video' && file.kind !== 'audio')) return [];
@@ -1306,8 +1480,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
               ] as const).map(([kind, Icon, label]) => (
                 <button key={kind} type="button"
                   onClick={() => {
-                    if (kind === 'script') { if (studioHost?.ask) studioHost.ask({ text: t('canvas.start.scriptAsk'), refs: [] }); else addKind('note', middle()); return; }
-                    addKind(kind, middle());
+                    if (kind === 'script') { if (studioHost?.ask) studioHost.ask({ text: t('canvas.start.scriptAsk'), refs: [] }); else addKind('note', { at: middle() }); return; }
+                    addKind(kind, { at: middle() });
                   }}
                   className="flex h-14 w-[184px] items-center gap-3 rounded-2xl border !border-[var(--cv-float-line)] bg-[var(--cv-float)] px-3 text-left text-[14px] font-medium text-[var(--cv-ink)] transition hover:bg-[color-mix(in_srgb,var(--cv-float)_93%,var(--cv-ink))]">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--cv-chip)]"><Icon size={16} /></span>
@@ -1323,14 +1497,12 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
             files={files}
             templates={templates}
             onClose={() => setMenu(null)}
-            onKind={(kind) => { setMenu(null); addKind(kind, menu.at, menu.from, menu.corner); }}
+            onKind={(kind) => { setMenu(null); addKind(kind, menu); }}
             onUpload={() => {
               setMenu(null);
-              void pickFiles(ACCEPT.media).then((paths) => {
-                paths.forEach((path, i) => addFile(path, { x: menu.at.x, y: menu.at.y + i * 40 }, menu.from, menu.corner));
-              });
+              void pickUpload(menu);
             }}
-            onFile={(file) => { setMenu(null); addFile(file.path, menu.at, menu.from, menu.corner); }}
+            onFile={(file) => { setMenu(null); addFile(file.path, menu); }}
             onTemplate={(template) => { setMenu(null); void layTemplate(template, menu.at); }}
             onRemoveTemplate={(template) => { void removeTemplate(template); }}
           />
@@ -1338,7 +1510,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         {context ? <ContextMenu x={context.x} y={context.y} items={context.items} onClose={() => setContext(null)} /> : null}
         {viewed ? <Viewer file={viewed} sources={sources} onClose={() => setViewing(null)} /> : null}
         {!fitted ? <CanvasLoading /> : null}
-        <input ref={pickerRef} type="file" multiple hidden onChange={(event) => { const list = [...(event.target.files ?? [])]; if (list.length) picked.current?.(list); }} />
+        <input ref={pickerRef} type="file" multiple hidden />
       </div>
     </BoardContext.Provider>
   );
@@ -1357,7 +1529,7 @@ export interface CanvasViewProps {
   /** a cut's files onto the timeline, one after the other, in its order */
   onSendToFilm: (files: WorkspaceResource[]) => void;
   /** files of this computer brought into the project, as the Assets bring them: their paths in it */
-  onImportFiles: (files: File[]) => Promise<string[]>;
+  onImportFiles: (files: File[], onProgress?: ImportProgress) => Promise<string[]>;
   /** where the person connects a service to make with */
   onOpenSettings: () => void;
   /** a file shown in the Assets */
@@ -1423,6 +1595,8 @@ function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => 
         nodes={drawn.nodes}
         edges={drawn.edges}
         nodeTypes={NODE_TYPES}
+        edgeTypes={CANVAS_EDGE_TYPES}
+        defaultEdgeOptions={CANVAS_EDGE_OPTIONS}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}

@@ -42,6 +42,7 @@ export function ProjectsView({
   onOpenExample,
   onOpen,
   onRename,
+  onDuplicate,
   onDelete,
   folders,
   onCreateFolder,
@@ -71,6 +72,7 @@ export function ProjectsView({
   onOpen: (project: LibraryProject) => void;
   /** A new name for the project (its folder is renamed). Never empty. */
   onRename: (projectId: string, name: string) => void;
+  onDuplicate: (project: LibraryProject) => void;
   /** Ask to delete these projects (the popover confirms first). */
   onDelete: (projectIds: string[]) => void;
   /** The list's folders. */
@@ -221,6 +223,7 @@ export function ProjectsView({
       renaming: renamingId === project.id,
       onToggleSelect: () => toggleSelected(project.id),
       onOpen: opening(() => onOpen(project)),
+      onDuplicate: () => onDuplicate(project),
       onStartRename: () => { if (!selecting) setRenamingId(project.id); },
       onCommitRename: (name: string) => {
         setRenamingId((current) => (current === project.id ? null : current));
@@ -400,6 +403,7 @@ interface ItemProps {
   renaming: boolean;
   onToggleSelect: () => void;
   onOpen: (event?: { detail: number }) => void;
+  onDuplicate: () => void;
   onStartRename: () => void;
   onCommitRename: (name: string) => void;
   onCancelRename: () => void;
@@ -657,6 +661,7 @@ function ProjectCard({
   renaming,
   onToggleSelect,
   onOpen,
+  onDuplicate,
   onStartRename,
   onCommitRename,
   onCancelRename,
@@ -717,7 +722,7 @@ function ProjectCard({
             {project.working ? <span className="truncate text-[var(--accent)]">· {t('projects.agentRunning')}</span> : null}
           </button>
         </div>
-        {!selecting ? <ItemMenu project={project} onOpen={onOpen} onStartRename={onStartRename} onStartSelect={onStartSelect} onMoveToFolder={onMoveToFolder} onLocate={onLocate} onDelete={onDelete} size={14} /> : null}
+        {!selecting ? <ItemMenu project={project} onOpen={onOpen} onDuplicate={onDuplicate} onStartRename={onStartRename} onStartSelect={onStartSelect} onMoveToFolder={onMoveToFolder} onLocate={onLocate} onDelete={onDelete} size={14} /> : null}
       </div>
     </article>
   );
@@ -757,19 +762,21 @@ function MissingActions({ reason, onLocate, onRemove, compact = false }: { reaso
 function ItemMenu({
   project,
   onOpen,
+  onDuplicate,
   onStartRename,
   onStartSelect,
   onMoveToFolder,
   onLocate,
   onDelete,
   size,
-}: Pick<ItemProps, 'project' | 'onOpen' | 'onStartRename' | 'onStartSelect' | 'onMoveToFolder' | 'onLocate' | 'onDelete'> & { size: number }) {
+}: Pick<ItemProps, 'project' | 'onOpen' | 'onDuplicate' | 'onStartRename' | 'onStartSelect' | 'onMoveToFolder' | 'onLocate' | 'onDelete'> & { size: number }) {
   const cover = React.useContext(ProjectCoverContext);
   if (project.missing) return <ProjectMenu onLocate={onLocate} onRemove={onDelete} size={size} />;
   return (
     <ProjectMenu
       onOpen={onOpen}
       onRename={onStartRename}
+      onDuplicate={onDuplicate}
       onSelect={onStartSelect}
       onMoveToFolder={onMoveToFolder}
       onChangeCover={cover ? () => cover.change(project) : undefined}
@@ -790,6 +797,7 @@ function ProjectListRow({
   renaming,
   onToggleSelect,
   onOpen,
+  onDuplicate,
   onStartRename,
   onCommitRename,
   onCancelRename,
@@ -837,7 +845,7 @@ function ProjectListRow({
         </button>
       </div>
       {project.missing && !selecting ? <MissingActions compact reason={project.missingReason} onLocate={onLocate} onRemove={onDelete} /> : null}
-      {!selecting ? <ItemMenu project={project} onOpen={onOpen} onStartRename={onStartRename} onStartSelect={onStartSelect} onMoveToFolder={onMoveToFolder} onLocate={onLocate} onDelete={onDelete} size={15} /> : null}
+      {!selecting ? <ItemMenu project={project} onOpen={onOpen} onDuplicate={onDuplicate} onStartRename={onStartRename} onStartSelect={onStartSelect} onMoveToFolder={onMoveToFolder} onLocate={onLocate} onDelete={onDelete} size={15} /> : null}
     </article>
   );
 }

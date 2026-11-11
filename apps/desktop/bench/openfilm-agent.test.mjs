@@ -23,7 +23,7 @@ test('OpenFilm follows Claude under Your agents, shares account actions and neve
     browser = await chromium.launch({ headless: true });
     for (const locale of ['en', 'zh-CN']) {
       const zh = locale === 'zh-CN';
-      const page = await browser.newPage({ viewport: { width: 1100, height: 780 } });
+      const page = await browser.newPage({ viewport: { width: 1100, height: 780 }, reducedMotion: 'reduce' });
       const errors = [];
       page.on('pageerror', (e) => errors.push(e.message));
       await page.addInitScript(({ locale, models }) => {
@@ -72,6 +72,12 @@ test('OpenFilm follows Claude under Your agents, shares account actions and neve
       assert.deepEqual(await page.locator('div.py-4').evaluateAll((rows) => rows.slice(0, 3).map((r) => r.querySelector('span[class~="text-[15px]"]')?.textContent)), ['Codex', 'Claude Code', 'OpenFilm']);
       assert.equal(await row.getByRole('button', { name: /Connection help|连接帮助/ }).count(), 0);
       assert.doesNotMatch(await row.innerText(), /与服务商共享账号和余额|Same account and balance as Services/);
+      const info = row.getByRole('button', { name: zh ? 'OpenFilm 信息与模型' : 'OpenFilm info and models', exact: true });
+      await row.getByText(zh ? '未连接' : 'Not connected', { exact: true }).waitFor();
+      assert.equal(await info.isVisible(), true);
+      await page.evaluate(() => window.openfilmAgentFixture.publish({ error: 'API answered 401' }));
+      assert.equal(await row.getByRole('alert').count(), 0, 'the agent list presents sign-in status without technical details');
+      await page.evaluate(() => window.openfilmAgentFixture.publish({ error: undefined }));
       const login = row.getByRole('button', { name: zh ? '连接' : 'Connect', exact: true });
       const cancel = row.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true });
       await login.click();
@@ -79,7 +85,6 @@ test('OpenFilm follows Claude under Your agents, shares account actions and neve
       await login.waitFor();
       await page.evaluate(() => window.openfilmAgentFixture.publish({ status: 'ready', account: { method: 'other', email: 'shared@example.com' } }));
       await row.getByText(/shared@example.com/).waitFor();
-      const info = row.getByRole('button', { name: zh ? 'OpenFilm 信息与模型' : 'OpenFilm info and models', exact: true });
       await info.click();
       const dialog = page.getByRole('dialog', { name: 'OpenFilm', exact: true });
       const rows = dialog.locator('li[data-model-id]');
@@ -103,7 +108,12 @@ test('OpenFilm follows Claude under Your agents, shares account actions and neve
         await page.mouse.move(end.x + 81, end.y + end.height * (from < index ? 0.8 : 0.2));
         await page.waitForFunction(({ id, index }) => document.querySelectorAll('dialog li[data-model-id]')[index]?.getAttribute('data-model-id') === id, { id, index }, { timeout: 3000 });
         assert.equal((await rows.evaluateAll((items) => items.map((item) => item.dataset.modelId)))[index], id, 'rows move while the mouse is still held down');
+        // The live reorder can replace the native drag target under the mouse. Enter the new row before dropping.
+        const drop = await rows.nth(index).boundingBox();
+        await page.mouse.move(drop.x + 100, drop.y + drop.height / 2);
+        await page.mouse.move(drop.x + 101, drop.y + drop.height / 2);
         await page.mouse.up();
+        assert.equal(await rows.nth(index).getAttribute('data-model-id'), id, 'drop keeps the previewed order');
       };
       await dragLive('Claude Opus 5.5', 1);
       await dialog.getByRole('switch', { name: zh ? '在对话中显示 GPT-6 Luna' : 'Show GPT-6 Luna in chat', exact: true }).click();

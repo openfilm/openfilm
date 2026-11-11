@@ -74,6 +74,7 @@ test('OpenFilm\'s keys are the keys Studio had', () => {
   assert.equal(mac('ArrowRight', { shiftKey: true }), 'jump-forward');
   assert.equal(mac('ArrowLeft', { altKey: true }), 'nudge-back');
   assert.equal(mac('ArrowRight', { altKey: true }), 'nudge-forward');
+  assert.equal(mac('ArrowDown', { altKey: true }), 'overwrite-track-down');
   assert.equal(mac('Z', { shiftKey: true }), 'zoom-fit');
   assert.equal(mac('n'), 'toggle-snap');
   assert.equal(mac('N', { shiftKey: true }), 'toggle-magnet');

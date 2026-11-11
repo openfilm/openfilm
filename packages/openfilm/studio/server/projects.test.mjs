@@ -1,9 +1,9 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createFolder, createProject, deleteProject, forgetProject, listFolders, listProjects, locateProject, moveFolder, moveLibrary, openProject, projectById, renameProject, ProjectError } from './projects.mjs';
+import { createFolder, createProject, deleteProject, duplicateProject, forgetProject, listFolders, listProjects, locateProject, moveFolder, moveLibrary, moveProjectToFolder, openProject, projectById, renameProject, ProjectError } from './projects.mjs';
 import { chooseFolder } from '../../src/locations.mjs';
 import { readFilmFile } from '../../src/film-doc.mjs';
 
@@ -41,6 +41,75 @@ test('a copied folder brings its original id and gets its own', async () => {
   const b = await openProject(join(scratch, 'copy'));
   assert.notEqual(b.id, a.id);
   assert.equal((await projectById(a.id)).path, a.path);
+});
+
+test('duplicate creates an independent edit in the same project group with a unique name', async () => {
+  const source = await openProject(join(scratch, 'Launch'));
+  const group = await createFolder('Client');
+  await moveProjectToFolder(source.id, group.id);
+  const taken = await createProject('Launch 副本');
+  const contents = {
+    'assets/take.wav': 'original media',
+    'parts/shot/film.html': 'compound edit',
+    '.film/settings.json': '{"fps":25}',
+    '.film/subtitles.json': '{}',
+    '.film/markers.json': '[]',
+    '.film/canvases/alt.json': '{}',
+    '.film/cover.png': 'cover',
+  };
+  const excluded = ['.git/config', '.film/cache/frame.png', '.film/history/index', '.film/chat/session.json', '.film/logs/log', 'parts/shot/.film/id'];
+  for (const [name, value] of [...Object.entries(contents), ...excluded.map((name) => [name, 'original only'])]) {
+    const path = join(source.path, name);
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(path, value);
+  }
+
+  const [a, b] = await Promise.all([duplicateProject(source.id, 'Launch 副本'), duplicateProject(source.id, 'Launch 副本')]);
+  assert.deepEqual([a.name, b.name].sort(), ['Launch 副本 2', 'Launch 副本 3']);
+  assert.equal(new Set([source.id, a.id, b.id, taken.id]).size, 4);
+  const film = readFileSync(join(source.path, 'film.html'), 'utf8');
+  for (const copy of [a, b]) {
+    assert.equal(copy.folderId, group.id);
+    assert.equal(copy.path, join(realpathSync(process.env.OPENFILM_LIBRARY), copy.name));
+    assert.equal(readFileSync(join(copy.path, '.film/id'), 'utf8').trim(), copy.id);
+    assert.equal(readFileSync(join(copy.path, 'film.html'), 'utf8'), film);
+    for (const [name, value] of Object.entries(contents)) assert.equal(readFileSync(join(copy.path, name), 'utf8'), value);
+    for (const name of excluded) assert.equal(existsSync(join(copy.path, name)), false, name);
+  }
+  writeFileSync(join(a.path, 'film.html'), 'edited copy');
+  writeFileSync(join(a.path, 'assets/take.wav'), 'edited media');
+  assert.equal(readFileSync(join(source.path, 'film.html'), 'utf8'), film);
+  assert.equal(readFileSync(join(source.path, 'assets/take.wav'), 'utf8'), contents['assets/take.wav']);
+  assert.equal((await listProjects()).length, 4);
+});
+
+test('a copy rebases internal links and keeps external linked media', { skip: process.platform === 'win32' }, async () => {
+  const source = await openProject(join(scratch, 'linked'));
+  const shared = join(scratch, 'shared');
+  mkdirSync(shared);
+  writeFileSync(join(shared, 'sound.wav'), 'external');
+  mkdirSync(join(source.path, 'assets'));
+  writeFileSync(join(source.path, 'assets/take.wav'), 'internal');
+  symlinkSync(join(source.path, 'assets/take.wav'), join(source.path, 'assets/alias.wav'));
+  symlinkSync('../../shared', join(source.path, 'assets/library'));
+
+  const copy = await duplicateProject(source.id);
+  assert.equal(realpathSync(join(copy.path, 'assets/alias.wav')), join(copy.path, 'assets/take.wav'));
+  assert.equal(realpathSync(join(copy.path, 'assets/library/sound.wav')), realpathSync(join(shared, 'sound.wav')));
+});
+
+test('a failed duplicate leaves the library and source untouched', { skip: process.platform === 'win32' }, async () => {
+  const source = await openProject(join(scratch, 'linked-edit'));
+  const other = join(scratch, 'external.html');
+  writeFileSync(other, 'original');
+  rmSync(join(source.path, 'film.html'));
+  symlinkSync(other, join(source.path, 'film.html'));
+  await assert.rejects(duplicateProject(source.id), /editable files must be inside/);
+  assert.deepEqual(readdirSync(process.env.OPENFILM_LIBRARY), []);
+  assert.equal(readFileSync(other, 'utf8'), 'original');
+  assert.deepEqual((await listProjects()).map((p) => p.id), [source.id]);
+  rmSync(join(source.path, 'film.html'));
+  await assert.rejects(duplicateProject(source.id), (e) => e.status === 410);
 });
 
 test('new projects go to the library as Untitled, Untitled 2', async () => {

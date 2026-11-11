@@ -496,9 +496,11 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
      * One question answered by `agent`'s own model, with no chat: Studio's own work that needs a model (translating
      * subtitles). A session of its own in an empty folder, where the agent may do nothing but answer (`answerOnly`: every
      * permission refused; every question skipped); its words, whole. `signal` stops it.
-     * @param {string} agent @param {string} text @param {AbortSignal} [signal] @returns {Promise<string>}
+     * @param {string} agent @param {string} text @param {AbortSignal} [signal]
+     * @param {Record<string, string | number | boolean>} [options]
+     * @param {import('./studio.mjs').WritingImage[]} [images] @returns {Promise<string>}
      */
-    ask: async (agent, text, signal) => {
+    ask: async (agent, text, signal, options = {}, images = []) => {
       if (!isChatAgent(agent)) throw new Error(`Unknown agent: ${String(agent)}`);
       let said = '';
       const session = new AgentSession({
@@ -509,9 +511,28 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       const stop = () => { void session.cancel().catch(() => {}); session.close(); };
       signal?.addEventListener('abort', stop, { once: true });
       try {
-        await session.start();
+        const info = await session.start();
+        if (images.length && !info.promptCapabilities?.image) {
+          throw new Error('This agent does not accept image or video references. Choose one that supports images.');
+        }
+        const pictures = imageBlocks(images);
+        if (pictures.length !== images.length) throw new Error('Could not attach all reference images.');
+        let config = info.configOptions ?? [];
+        const modelId = config.find((option) => option.category === 'model')?.id;
+        const picked = Object.entries(options).sort(([a], [b]) => Number(b === modelId) - Number(a === modelId));
+        for (const [id, value] of picked) {
+          signal?.throwIfAborted();
+          const option = config.find((entry) => entry.id === id);
+          if (!option || !(['model', 'thought_level', 'speed'].includes(option.category)
+            || /^(fast|fast-mode|speed)$/i.test(option.id) || /\b(fast|speed)\b/i.test(option.name))) {
+            throw new Error(`The agent no longer offers ${id}.`);
+          }
+          if (option.currentValue === value) continue;
+          const result = await session.setConfigOption(id, value);
+          config = result?.configOptions ?? config;
+        }
         signal?.throwIfAborted();
-        await session.prompt([{ type: 'text', text }]);
+        await session.prompt([{ type: 'text', text }, ...pictures]);
         return said;
       } finally {
         signal?.removeEventListener('abort', stop);

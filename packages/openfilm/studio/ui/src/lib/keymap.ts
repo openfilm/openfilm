@@ -29,6 +29,7 @@ export const ACTIONS = [
   { id: 'select-right', tab: 'timeline', keys: [']'] },
   { id: 'nudge-back', tab: 'timeline', keys: ['alt+ArrowLeft'] },
   { id: 'nudge-forward', tab: 'timeline', keys: ['alt+ArrowRight'] },
+  { id: 'overwrite-track-down', tab: 'timeline', keys: ['alt+ArrowDown'] },
   { id: 'toggle-magnet', tab: 'timeline', keys: ['p', 'shift+n'] },
   { id: 'toggle-snap', tab: 'timeline', keys: ['n'] },
   { id: 'toggle-linkage', tab: 'timeline', keys: ['`', 'shift+`'] },
