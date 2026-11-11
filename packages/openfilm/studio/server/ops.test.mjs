@@ -27,14 +27,6 @@ test('props: fields as film.html writes them (defaults not written, times to the
   assert.deepEqual(f.tracks[0].clips[0].box, { x: 10, y: 0 });
 });
 
-test('props: a sound gives way to speech by so many dB, or (null) no more', () => {
-  const on = applyOps(film(), [{ op: 'props', edits: [{ clip: 's', prop: 'duck', value: 12 }] }]);
-  assert.equal(on.tracks[2].clips[0].duck, 12);
-  const off = applyOps(on, [{ op: 'props', edits: [{ clip: 's', prop: 'duck', value: null }] }]);
-  assert.equal('duck' in off.tracks[2].clips[0], false);
-  assert.equal(applyOps(film(), [{ op: 'set', clip: 's', field: 'duck', value: 6 }]).tracks[2].clips[0].duck, 6);
-});
-
 test('props: track flags, moves planned against the clips (a batch of moves lands where each was sent), track order', () => {
   const f = applyOps(film(), [{ op: 'props', edits: [
     { clip: 'a', prop: 'locked', value: true },

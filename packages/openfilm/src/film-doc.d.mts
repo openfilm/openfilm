@@ -59,8 +59,6 @@ export type FilmClip = {
   size?: { w: number; h: number };
   /** videos and sounds */
   volume?: number;
-  /** videos and sounds: gives way to speech by this many dB (ducking.mjs) */
-  duck?: number;
   /** videos and sounds */
   speed?: number;
   /** pictures: class names, for the film's styles */
@@ -108,9 +106,6 @@ export declare function isPage(src: string): boolean;
 /** A clip's src as an address: its path with `%`, `#` and `?` escaped; a src with a scheme as written. */
 export declare function srcHref(src: string): string;
 export declare function soundRole(src: string): 'voice' | 'music' | 'sfx';
-/** How far `duck` alone lowers a sound under speech, in dB, and what a `duck` may say. */
-export declare const DUCK_DB: number;
-export declare const DUCK_RANGE: readonly [number, number];
 export declare function clipKind(src: unknown): FilmClipKind | null;
 export declare function hasPicture(src: unknown): boolean;
 /** What a clip is: its file's kind, but a video's sound alone (`sound: true`) is a sound. */

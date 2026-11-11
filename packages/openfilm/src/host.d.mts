@@ -27,11 +27,7 @@ export declare function videoNotShown(): Promise<boolean>;
 /** `sized`: the page sets its own width and height (without, it is laid out at its clip's size or the stage's). */
 export interface FilmMeta { duration: number | null; width: number; height: number; sized: boolean; sounds: FilmSound[] }
 /** One sound of the film as the built-in timeline plays it: `src` a path on the film's origin, placed at film second `at`, its source seconds [from, to). */
-export interface FilmSound { clip: string; src: string; at: number; from: number; to?: number; volume: number; speed: number;
-  /** its fades, film seconds in and out */
-  fade?: [number, number];
-  /** it gives way to speech by this many dB (ducking.mjs) */
-  duck?: number }
+export interface FilmSound { clip: string; src: string; at: number; from: number; to?: number; volume: number; speed: number }
 export declare class FilmPage {
   static open(browser: Browser, origin: string, entry: string, opts?: { scale?: number; size?: { w: number; h: number } | null; transparent?: boolean; black?: boolean; readyMs?: number; offline?: boolean; network?: PageNetwork; waitMs?: number; onVideoNotShown?: () => Promise<boolean> }): Promise<FilmPage>;
   page: Page;

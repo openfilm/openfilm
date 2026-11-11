@@ -138,9 +138,6 @@ test('the clip written for a dropped file: a box for a still or video of another
   assert.deepEqual(assetClipElement({ path: 'assets/a.png', kind: 'image', w: 1000, h: 1000 }, stage), { src: 'assets/a.png', time: [0, 4], box: { x: 420, y: 0, w: 1080, h: 1080 } });
   assert.deepEqual(assetClipElement({ path: 'assets/a.mp4', kind: 'video', w: 1920, h: 1080 }, stage), { src: 'assets/a.mp4' });
   assert.deepEqual(assetClipElement({ path: 'assets/a.mp3', kind: 'audio', w: 500, h: 500 }, stage), { src: 'assets/a.mp3' });
-  /* music gives way to speech from the start (src/ducking.mjs); a voice or an effect does not */
-  assert.deepEqual(assetClipElement({ path: 'assets/audio/music/bed.mp3', kind: 'audio' }, stage), { src: 'assets/audio/music/bed.mp3', duck: 12 });
-  assert.deepEqual(assetClipElement({ path: 'assets/audio/sfx/hit.wav', kind: 'audio' }, stage), { src: 'assets/audio/sfx/hit.wav' });
   assert.deepEqual(assetClipElement({ path: 'scenes/a.html', kind: 'mg', w: 500, h: 500 }, stage), { src: 'scenes/a.html' });
   /* the drop and a run of files from the computer carry it through */
   const plan = assetDropInsert({ path: 'assets/a.png', kind: 'image', w: 1000, h: 1000 }, tracks, { lane: null, insertTrackAt: 0 }, 0, stage);

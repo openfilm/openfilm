@@ -59,11 +59,6 @@ where, and CSS that says how each looks. A page draws a shot.
   - `speed` on videos and sounds: the playback rate, 0.1 to 100, sound keeping its pitch. The clip lasts
     `(out − in) / speed` on the film.
   - `volume` on videos and sounds: linear gain, 1 the file's own level; `muted` is 0.
-  - `duck` on videos and sounds: the clip gives way to speech, lowered by that many dB (1 to 40; `duck` alone is
-    12) while someone speaks and back after, on top of its volume. Someone speaks where a sound or a video that does
-    not give way has words (the WebVTT beside its file, by the same name: at its cues), and all along a sound that is
-    a voice by where it is (`vo/`, `voice/`, `narration/`…) and has no words. It goes down over the 0.25 s before the
-    speech and back up over the 0.6 s after it; pauses shorter than 1 s stay down. The reference is `src/ducking.mjs`.
   - `disabled` on any clip: neither drawn nor heard. Its timing, source trim and volume stay in place, and its
     length still counts toward the film's end. Removing the attribute enables that clip again. Studio toggles the
     selected clips with Shift+E or their context menu; it does not change the track's flags.

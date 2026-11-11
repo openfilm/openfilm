@@ -30,7 +30,7 @@ import type { FilmValue } from '../../../server/ops.mjs';
 import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type MediaMade, type MissingMedia, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
-import { Player, type Ducking } from '@/editor/player';
+import { Player } from '@/editor/player';
 import { Preview, type FilmInfo, type PlayedReport, type PreviewHandle } from '@/editor/Preview';
 import { usePreviewRenders } from '@/editor/use-preview-renders';
 import { filmShape, type MediaFacts } from '@/lib/film-shape';
@@ -4574,9 +4574,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const mtimeOf = React.useMemo(() => new Map([...(rawListing?.files ?? []), ...(rawListing?.pages ?? [])].map((f) => [f.path, f.mtime])), [rawListing]);
   /* a sound made again in place is heard as it is now, not as it was decoded */
   React.useEffect(() => { player.current.setVersions((src) => mtimeOf.get(src)); }, [mtimeOf]);
-  /* where the sounds that give way to speech are lowered, as the player works it out: drawn on their clips */
-  const [ducking, setDucking] = React.useState<Ducking>(() => new Map());
-  React.useEffect(() => { player.current.onDucking = setDucking; return () => { player.current.onDucking = null; }; }, []);
   /* the preview heard at the loudness the film is delivered at (lib/delivery-loudness): the mix measured as it is
      (again once its sounds, or a file of theirs, change; a moment after the last change), turned by the difference */
   const [deliveryLufs, setDeliveryLufs] = React.useState(deliveryLoudness);
@@ -6079,7 +6076,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                     onOrganizeTracks={organizeTimelineTracks}
                     transcribed={transcribedSrcs}
                     captionPick={timelineCaptionPick}
-                    ducking={ducking}
                     {...(studioHost?.refer ? {
                       onReferBlocks: referBlocks, rangeRef: markedRangeRef, onReferRuler: referRuler,
                     } : {})}

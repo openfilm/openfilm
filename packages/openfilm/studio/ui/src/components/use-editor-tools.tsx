@@ -11,7 +11,7 @@ import { api, projectEvents, type Clip, type Film, type Op, type ProjectSettings
 import { useT } from '@/i18n';
 import { canReplace, familyOfClip, replaceClip, type ReplaceFamily, type ReplaceFile } from '@/lib/clip-replace';
 import { freezeSourceMs, planFreeze } from '@/lib/freeze-frame';
-import { LOUDNESS_TARGETS, measuredSpan, normalizeVolume, VOICE_LEVEL } from '@/lib/loudness';
+import { LOUDNESS_TARGETS, measuredSpan, normalizeVolume } from '@/lib/loudness';
 import {
   addMarker, changeMarker, markerClip, nextMarker, parseMarkers, placeMarkers, removeMarker, type Marker, type PlacedMarker,
 } from '@/lib/markers';
@@ -264,9 +264,6 @@ export function useEditorTools({
     }
   }, [projectId, edit, toast, t]);
 
-  /** The film's voices: its sound clips that are a voice (by where they are, src/film-doc soundRole) and heard. */
-  const voiceBlocks = React.useCallback(() => tracksRef.current.flatMap((tr) => (tr.locked ? [] : tr.blocks.filter((b) => b.kind === 'voice' && sounding(b)))), [tracksRef]);
-
   /* ── freeze frame ── */
   const freeze = React.useCallback(async (block: TimelineBlock) => {
     const at = timeRef.current;
@@ -357,22 +354,13 @@ export function useEditorTools({
       id: 'normalize',
       label: t('editorTools.normalize'),
       icon: <AudioLines size={14} />,
-      disabled: (!anySound && !voiceBlocks().length) || measuring,
+      disabled: !anySound || measuring,
       hint: t('editorTools.normalizeNone'),
-      submenu: [
-        /* every voice of the film as loud as the others (whichever clips are picked): each measured and its volume
-           written, to be changed by hand after like any volume; the whole film's loudness is the export's */
-        { id: 'normalize:voices', label: t('editorTools.levelVoices'), note: t('editorTools.levelVoicesNote'),
-          disabled: !voiceBlocks().length || measuring,
-          onSelect: () => { void normalize(voiceBlocks(), VOICE_LEVEL); } },
-        { id: 'normalize-sep', separator: true as const },
-        ...LOUDNESS_TARGETS.map((target) => ({
-          id: `normalize:${target.id}`,
-          label: t(`editorTools.target.${target.id}`).replace('{lufs}', String(target.lufs)),
-          disabled: !anySound,
-          onSelect: () => { void normalize(blocks, target.lufs); },
-        })),
-      ],
+      submenu: LOUDNESS_TARGETS.map((target) => ({
+        id: `normalize:${target.id}`,
+        label: t(`editorTools.target.${target.id}`).replace('{lufs}', String(target.lufs)),
+        onSelect: () => { void normalize(blocks, target.lufs); },
+      })),
     });
     if (one?.kind === 'video' && one.clipId && one.src && !/\.(png|jpe?g|gif|webp|avif|svg)$/i.test(one.src)) {
       const inside = freezeSourceMs(one, atMs) != null;
@@ -392,7 +380,7 @@ export function useEditorTools({
       out.push({ id: 'clip-marker', label: t('editorTools.markerAddClip'), icon: <MarkerGlyph size={14} />, shortcut: keyHint('add-marker'), disabled: !on, hint: t('editorTools.freezeOutside'), onSelect: () => addMarkerHere(one) });
     }
     return out;
-  }, [measuring, media, normalize, voiceBlocks, freeze, replaceEntries, addMarkerHere, timeRef, t, keyHint]);
+  }, [measuring, media, normalize, freeze, replaceEntries, addMarkerHere, timeRef, t, keyHint]);
 
   /* ── what the timeline draws ── */
   const clipMarkersByTrack = React.useMemo(() => {
