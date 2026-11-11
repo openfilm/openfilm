@@ -2960,6 +2960,8 @@ export const zhCN: Words = {
       none: '未安装',
       on: '已启用',
       off: '已停用',
+      failed: '下载失败',
+      retry: '重试',
       installing: '正在下载 {n}%',
       install: '安装',
       installSize: '安装 · {size}',

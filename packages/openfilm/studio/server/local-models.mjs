@@ -14,7 +14,7 @@
  * or turned on or off moves what Settings → Services chose for its kind (providers/index.mjs localModelsChanged).
  */
 import { HttpError, json, readJson } from './http.mjs';
-import { modelBuiltIn, modelBytesHere, modelEntries, modelEntry, modelFailed, modelFetching, modelOn, modelReady, removeModel, setModelOn } from '../../src/local-models.mjs';
+import { modelBuiltIn, modelBytesHere, modelEntries, modelEntry, modelError, modelFailed, modelFetching, modelOn, modelReady, removeModel, setModelOn } from '../../src/local-models.mjs';
 import { localModelsChanged } from './providers/index.mjs';
 
 /**
@@ -44,7 +44,7 @@ export function localModels() {
       builtIn: ready && modelBuiltIn(m),
       ...(coming ? { installing: { bytes: modelBytesHere(m) } } : {}),
       /* its last download failed (offline, or a file that did not check) */
-      ...(!ready && !coming && modelFailed(m) ? { failed: true } : {}),
+      ...(!ready && !coming && modelFailed(m) ? { failed: true, error: modelError(m) } : {}),
     };
   });
 }

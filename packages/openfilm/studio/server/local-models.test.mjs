@@ -109,3 +109,69 @@ test('a transcription model installed makes transcripts when nothing else was ch
   await call('/whisper-small', 'DELETE');
   assert.equal((await readSettings()).use.asr, undefined);
 });
+
+test('a download process that cannot start reports failure without crashing Studio', async () => {
+  const executable = process.execPath;
+  try {
+    process.execPath = join(host, 'missing-node');
+    const { models } = await call('/whisper-small/install', 'POST');
+    const small = models?.find((m) => m.id === 'whisper-small');
+    assert.equal(small.failed, true);
+    assert.equal(small.installing, undefined);
+    assert.match(small.error, /Could not start|ENOENT/);
+    await new Promise((done) => setTimeout(done, 50));
+    assert.equal((await call('')).status, 200, 'the spawn error is handled');
+  } finally {
+    process.execPath = executable;
+    await call('/whisper-small', 'DELETE');
+  }
+});
+
+test('a download process exiting before fetching reports failure instead of leaving a stale progress mark', async () => {
+  const options = process.env.NODE_OPTIONS;
+  try {
+    process.env.NODE_OPTIONS = '--openfilm-invalid-download-option';
+    let { models } = await call('/whisper-small/install', 'POST');
+    for (let i = 0; i < 100 && !models?.find((m) => m.id === 'whisper-small').failed; i++) {
+      await new Promise((done) => setTimeout(done, 50));
+      ({ models } = await call(''));
+    }
+    const small = models?.find((m) => m.id === 'whisper-small');
+    assert.equal(small.failed, true);
+    assert.equal(small.installing, undefined);
+    assert.match(small.error, /Model download process stopped \(exit \d+\)/);
+  } finally {
+    if (options === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = options;
+    await call('/whisper-small', 'DELETE');
+  }
+});
+
+test('a corrupt file is rejected with a reason, and Install retries successfully', async () => {
+  const file = join(host, 'models/whisper-small/config.json');
+  const original = readFileSync(file);
+  let models;
+  try {
+    writeFileSync(file, 'damaged file');
+    ({ models } = await call('/whisper-small/install', 'POST'));
+    for (let i = 0; i < 100 && !models?.find((m) => m.id === 'whisper-small').failed; i++) {
+      await new Promise((done) => setTimeout(done, 50));
+      ({ models } = await call(''));
+    }
+    const small = models?.find((m) => m.id === 'whisper-small');
+    assert.equal(small.failed, true);
+    assert.equal(small.installed, false);
+    assert.equal(small.installing, undefined);
+    assert.match(small.error, /models\/whisper-small\/config.json: SHA-256 checksum mismatch/);
+    assert.equal(existsSync(join(process.env.OPENFILM_LIBRARY_CACHE, 'models/whisper-small/config.json')), false);
+  } finally { writeFileSync(file, original); }
+  ({ models } = await call('/whisper-small/install', 'POST'));
+  for (let i = 0; i < 100 && !models?.find((m) => m.id === 'whisper-small').installed; i++) {
+    await new Promise((done) => setTimeout(done, 50));
+    ({ models } = await call(''));
+  }
+  const small = models?.find((m) => m.id === 'whisper-small');
+  assert.equal(small.installed, true);
+  assert.equal(small.failed, undefined);
+  assert.equal(small.error, undefined);
+});

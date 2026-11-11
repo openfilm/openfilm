@@ -139,6 +139,7 @@ function ModelPage({ model, hook, onBack }: { model: LocalModel; hook: LocalMode
           <p className="mt-1.5 text-[12.5px] text-[var(--text-faint)]">{t('settings.local.downloaded').replace('{done}', sizeText(model.installing.bytes)).replace('{size}', sizeText(model.bytes))}</p>
         </div>
       ) : null}
+      {model.failed && model.error ? <p role="alert" className={`${settingsError} break-words`}>{model.error}</p> : null}
       <p className="mt-5 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t(`settings.local.about.${model.id}`)}</p>
       <div className="mt-6 flex flex-col divide-y divide-[var(--border)] border-y border-[var(--border)]">
         {facts.map(([label, value]) => (
