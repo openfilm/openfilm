@@ -123,6 +123,7 @@ export function filmShape(
         track: ref,
         clipId: clip.id,
         ...(volume != null ? { volume } : {}),
+        ...(typeof raw.duck === 'number' ? { duck: raw.duck } : {}),
         ...(silent ? { silent: true } : {}),
       };
 

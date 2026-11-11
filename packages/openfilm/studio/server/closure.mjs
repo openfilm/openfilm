@@ -137,7 +137,7 @@ function cssRefs(/** @type {string} */ text) {
 }
 
 /* attributes whose values are never a file */
-const NOT_A_FILE = new Set(['id', 'class', 'style', 'alt', 'title', 'lang', 'dir', 'type', 'rel', 'name', 'content', 'charset', 'width', 'height', 'at', 'volume', 'speed']);
+const NOT_A_FILE = new Set(['id', 'class', 'style', 'alt', 'title', 'lang', 'dir', 'type', 'rel', 'name', 'content', 'charset', 'width', 'height', 'at', 'volume', 'duck', 'speed']);
 
 /**
  * An HTML text, read for what it names: every attribute's value that may be a file (`srcset` split up), each style

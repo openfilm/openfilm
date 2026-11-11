@@ -96,7 +96,7 @@ function applyTrackLayout(value, { at, from, to }) {
 }
 
 /** Fields a person sets from Studio, by kind of clip (the rest of a clip is the agent's to write). */
-const SETTABLE = new Set(['at', 'time', 'box', 'size', 'volume', 'speed', 'overrides', 'src']);
+const SETTABLE = new Set(['at', 'time', 'box', 'size', 'volume', 'duck', 'speed', 'overrides', 'src']);
 
 /** @param {FilmValue} value @param {Op[]} ops */
 export function applyOps(value, ops) {
@@ -447,6 +447,12 @@ function setField(/** @type {Clip} */ clip, /** @type {string} */ prop, /** @typ
   if (prop === 'volume' || prop === 'speed') {
     if (v === null || v === 1) delete raw[prop];
     else raw[prop] = v;
+    return;
+  }
+  /* how many dB it gives way to speech (src/ducking.mjs); null: it does not */
+  if (prop === 'duck') {
+    if (v === null) delete raw.duck;
+    else raw.duck = v;
     return;
   }
   if (prop === 'gainDb') {

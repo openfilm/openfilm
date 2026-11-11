@@ -593,6 +593,8 @@ export interface TimelineProps {
    * and those with no transcript to tick in or out of them (`choosable`, a tick at their top right; `picked` ticked).
    */
   captionPick?: { lit: ReadonlySet<string>; choosable: ReadonlySet<string>; picked: ReadonlySet<string>; toggle: (clipId: string) => void } | null;
+  /** The clips that give way to speech, by id: their gain's corners, [film second, gain] (editor/player Ducking), drawn as their volume dipping. */
+  ducking?: ReadonlyMap<string, readonly (readonly [number, number])[]>;
   /** Clips dragged out of the timeline onto the panel of the app around Studio (its chat): handed to it, not moved. */
   onReferBlocks?: (blocks: TimelineBlock[]) => void;
   /** The range marked on the ruler (the editor keeps it): drawn as a band across the tracks. */
@@ -994,6 +996,7 @@ export const Timeline = React.memo(function Timeline({
   onOrganizeTracks,
   transcribed,
   captionPick,
+  ducking,
   onReferBlocks,
   range,
   flashRange,
@@ -3497,6 +3500,17 @@ export const Timeline = React.memo(function Timeline({
                     />
                   </>
                 ) : null}
+                {/* giving way to speech (src/ducking.mjs): its volume as heard, dipping under the speech, always shown, in the
+                    accent; the volume line above it is still the clip's own */}
+                {block.clipId && ducking?.has(block.clipId) && hasVolume(block) && (!visual || bandAudio) && width > 6 ? (() => {
+                  const area = h - soundTop;
+                  const pts = ducking.get(block.clipId)!.map(([s, g]) => `${((s * 1000 - block.startMs) * pxPerMs).toFixed(1)},${(soundTop + volumeLineY(volume * g, area)).toFixed(1)}`).join(' ');
+                  return (
+                    <svg aria-hidden data-duck-line className="pointer-events-none absolute inset-0 z-[3] overflow-visible" width={width} height={h}>
+                      <polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth={1.25} strokeOpacity={0.85} strokeLinejoin="round" />
+                    </svg>
+                  );
+                })() : null}
                 {/* the volume line across its sound: a hairline (one device pixel), barely there until hovered; dragged up or
                     down (lib/clip-volume). Its grab, wider than it, leaves the trim handles their edges */}
                 {volumeLine ? (

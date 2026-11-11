@@ -1064,7 +1064,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       if (ask.mix !== false) plan.push({ suffix: ' - mix', clips, mix: true });
       if (ask.stems) {
         for (const role of STEMS) {
-          const part = clips.filter((c) => soundStem(relative(root, c.file).split(sep).join('/')) === role);
+          /* a stem as it is, for mixing elsewhere: without giving way to speech */
+          const part = clips.filter((c) => soundStem(relative(root, c.file).split(sep).join('/')) === role).map(({ duck: _duck, ...c }) => c);
           if (part.length) plan.push({ suffix: ` - ${role}`, clips: part });
         }
       }

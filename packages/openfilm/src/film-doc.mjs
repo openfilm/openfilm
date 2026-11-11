@@ -63,6 +63,12 @@ export function soundRole(src) {
   return 'voice';
 }
 
+/** How far a sound that gives way to speech (`duck` with no value) is lowered, in dB: where a music bed sits under a
+    voice (ducking.mjs). */
+export const DUCK_DB = 12;
+/** What a `duck` may say, in dB. */
+export const DUCK_RANGE = /** @type {const} */ ([1, 40]);
+
 /* a src with a scheme (https:, data:) is an address, kept as written; any other is the path of a file */
 const ADDRESS = /^[a-z][a-z0-9+.-]*:/i;
 
@@ -124,9 +130,9 @@ const pair = (v, ok) => Array.isArray(v) && v.length === 2 && ok(v[0]) && ok(v[1
 /** The fields each kind of clip takes, in the order they are written back. */
 const CLIP_FIELDS = {
   page: ['src', 'id', 'at', 'time', 'disabled', 'box', 'size', 'class', 'style', 'overrides', 'attrs'],
-  video: ['src', 'id', 'at', 'time', 'disabled', 'box', 'volume', 'speed', 'class', 'style', 'overrides', 'attrs'],
+  video: ['src', 'id', 'at', 'time', 'disabled', 'box', 'volume', 'duck', 'speed', 'class', 'style', 'overrides', 'attrs'],
   still: ['src', 'id', 'at', 'time', 'disabled', 'box', 'class', 'style', 'overrides', 'attrs'],
-  sound: ['src', 'id', 'sound', 'at', 'time', 'disabled', 'volume', 'speed', 'overrides', 'attrs'],
+  sound: ['src', 'id', 'sound', 'at', 'time', 'disabled', 'volume', 'duck', 'speed', 'overrides', 'attrs'],
 };
 /** Attributes a clip keeps that say nothing to the film: a description, a person's own data. */
 const KEPT_ATTRIBUTE = /^(alt|title|lang|dir|data-[a-z0-9-]+|aria-[a-z]+)$/;
@@ -245,6 +251,9 @@ function readClip(raw, where, problems) {
   if (raw.time !== undefined) checkTime(raw.time, at, problems);
   if (raw.disabled !== undefined && raw.disabled !== true) problems.push(`${at}disabled is true, or not written.`);
   if (raw.volume !== undefined && CLIP_FIELDS[kind].includes('volume') && !(isFinite(raw.volume) && raw.volume >= 0)) problems.push(`${at}volume has to be 0 or more (1 is the original level).`);
+  if (raw.duck !== undefined && CLIP_FIELDS[kind].includes('duck') && !(isFinite(raw.duck) && raw.duck >= DUCK_RANGE[0] && raw.duck <= DUCK_RANGE[1])) {
+    problems.push(`${at}duck is how many dB it gives way to speech, ${DUCK_RANGE[0]} to ${DUCK_RANGE[1]} (written alone: ${DUCK_DB}).`);
+  }
   if (raw.speed !== undefined && CLIP_FIELDS[kind].includes('speed') && !(isFinite(raw.speed) && raw.speed >= SPEED_MIN && raw.speed <= SPEED_MAX)) {
     problems.push(`${at}speed has to be a number from ${SPEED_MIN} to ${SPEED_MAX}.`);
   }
@@ -643,15 +652,15 @@ const keyframesText = (/** @type {string} */ name, /** @type {string} */ body) =
 /** A keyframes name: one CSS identifier. */
 const KEYFRAMES_NAME = /^-?[A-Za-z_][\w-]*$/;
 /** A clip's attributes, each with what it says. */
-const CLIP_ATTRIBUTES = new Set(['id', 'src', 'at', 'disabled', 'speed', 'volume', 'muted', 'size', 'class', 'style', 'overrides']);
+const CLIP_ATTRIBUTES = new Set(['id', 'src', 'at', 'disabled', 'speed', 'volume', 'muted', 'duck', 'size', 'class', 'style', 'overrides']);
 
 /** What one kind of clip does not take, and why. */
 const NO_SOUND = 'has no sound: a sound is a clip of its own, an <audio> (or a <video>\'s own sound)';
 const PAGE_ONLY = 'size is the px a web page is laid out at: a file has its own size.';
 const NOT_OF_KIND = {
-  page: { volume: `a page ${NO_SOUND}.`, muted: `a page ${NO_SOUND}.`, speed: 'a page has no speed: its own frame(t) decides how fast it moves.' },
+  page: { volume: `a page ${NO_SOUND}.`, muted: `a page ${NO_SOUND}.`, duck: `a page ${NO_SOUND}.`, speed: 'a page has no speed: its own frame(t) decides how fast it moves.' },
   video: { size: PAGE_ONLY },
-  still: { volume: `a still ${NO_SOUND}.`, muted: `a still ${NO_SOUND}.`, speed: 'a still has no speed: it holds for as long as its #t=0,length.', size: PAGE_ONLY },
+  still: { volume: `a still ${NO_SOUND}.`, muted: `a still ${NO_SOUND}.`, duck: `a still ${NO_SOUND}.`, speed: 'a still has no speed: it holds for as long as its #t=0,length.', size: PAGE_ONLY },
   sound: { style: 'a sound has no look: it is heard, not seen.', size: PAGE_ONLY },
 };
 
@@ -835,7 +844,7 @@ function clipOfTag(tag, where, problems) {
     if (!CLIP_ATTRIBUTES.has(name)) {
       const hint = ATTRIBUTE_HINTS[name];
       if (!hint && KEPT_ATTRIBUTE.test(name)) { attrs[name] = value; continue; }
-      problems.push(`${where}: ${name} is not an attribute of a clip${hint ? ` → ${hint}` : ' (a clip takes id, src, at, speed, volume, muted, class and style)'}.`);
+      problems.push(`${where}: ${name} is not an attribute of a clip${hint ? ` → ${hint}` : ' (a clip takes id, src, at, speed, volume, muted, duck, class and style)'}.`);
       continue;
     }
     if (name === 'id') { if (value) raw.id = value; }
@@ -858,6 +867,12 @@ function clipOfTag(tag, where, problems) {
       else raw.size = { w: Number(m[1]), h: Number(m[2]) };
     }
     else if (name === 'muted') muted = true;
+    /* gives way to speech: alone, by DUCK_DB; with a value, by that many dB */
+    else if (name === 'duck') {
+      const n = value.trim() === '' ? DUCK_DB : Number(value);
+      if (!Number.isFinite(n)) problems.push(`${where}: duck is how many dB it gives way to speech, like duck="12", or duck alone — "${value}" is not.`);
+      else raw.duck = n;
+    }
     else if (name === 'disabled') raw.disabled = true;
     else if (name === 'overrides') {
       try { raw.overrides = JSON.parse(value); }
@@ -1073,6 +1088,7 @@ export function clipTag(clip) {
   if (clip.speed != null && clip.speed !== 1) parts.push(`speed="${clip.speed}"`);
   if (clip.volume === 0) parts.push('muted');
   else if (clip.volume != null && clip.volume !== 1) parts.push(`volume="${clip.volume}"`);
+  if (clip.duck != null) parts.push(clip.duck === DUCK_DB ? 'duck' : `duck="${clip.duck}"`);
   if (clip.size) parts.push(`size="${clip.size.w}x${clip.size.h}"`);
   if (clip.class) parts.push(`class="${escapeAttr(clip.class)}"`);
   const b = clip.box;

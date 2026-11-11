@@ -403,8 +403,8 @@ export interface TimelineBlock {
   gainDb?: number;
   /** Linear volume from film.html; 1 = as is. */
   volume?: number;
-  /** Music: ducks under voices. */
-  duck?: boolean;
+  /** It gives way to speech by this many dB (film.html `duck`, src/ducking.mjs). */
+  duck?: number;
   /** Video: without its own sound. */
   silent?: boolean;
   /** A video or compound clip with sound: its audio band shows the waveform. */
@@ -515,7 +515,7 @@ export interface TimelineFilm {
     speed?: number;
     rate?: number;
     gainDb?: number;
-    duck?: boolean;
+    duck?: number;
     off?: boolean;
     track?: DocTrackRef;
     meta?: TimelineClipMeta;
@@ -570,7 +570,7 @@ interface Block {
   speed?: number;
   gainDb?: number;
   volume?: number;
-  duck?: boolean;
+  duck?: number;
   silent?: boolean;
   ownAudio?: boolean;
   off?: boolean;
@@ -778,7 +778,7 @@ function soundBlockOf(s: TimelineFilm['sounds'][number]): Block {
 function audioExtras(s: {
   gainDb?: number;
   volume?: number;
-  duck?: boolean;
+  duck?: number;
   silent?: boolean;
 }): Pick<Block, 'gainDb' | 'volume' | 'duck' | 'silent'> {
   return {

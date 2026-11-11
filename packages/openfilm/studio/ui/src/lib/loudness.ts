@@ -11,6 +11,10 @@ export const LOUDNESS_TARGETS = [
   { id: 'broadcast', lufs: -23 },
 ] as const;
 
+/** Where every voice of a film is brought to by "Level all voices" (LUFS): each the same, the film's own loudness
+    set at export (lib/delivery-loudness). */
+export const VOICE_LEVEL = -16;
+
 /** The loudest a clip's volume goes (500%), as the inspector's slider. */
 export const VOLUME_MAX = 5;
 

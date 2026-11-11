@@ -447,12 +447,12 @@ async function takeOne(verb, asked) {
     return { code: 1, lines: [`openfilm get ${verb}: ${item.name.en}'s file could not be fetched (the library's sounds and music come over the network the first time they are used). Try again online, or make one with \`openfilm get ${make}\`.`] };
   }
   const { takeSaved } = await import('../studio/server/saved.mjs');
-  const { clipTag } = await import('./film-doc.mjs');
+  const { clipTag, DUCK_DB } = await import('./film-doc.mjs');
   const taken = await takeSaved(root, `${BUILT_IN}/${item.id}`);
   const secs = (item.durationMs ?? 0) / 1000;
   if ('path' in taken) {
     return { code: 0, lines: [`${taken.path}  ${clock(item.durationMs ?? 0)}`,
-      `In film.html, on a sound track: ${clipTag(/** @type {any} */ ({ src: taken.path }))}${item.cat === 'music' ? '   (a bed under a voice: volume="0.3")' : ''}`] };
+      `In film.html, on a sound track: ${clipTag(/** @type {any} */ ({ src: taken.path, ...(item.cat === 'music' ? { duck: DUCK_DB } : {}) }))}${item.cat === 'music' ? '   (duck: it gives way to a voice by itself; its volume is for the moments without one)' : ''}`] };
   }
   if ('clips' in taken) {
     const lines = [`In film.html, on ${new Set(taken.clips.map((c) => c.track)).size} tracks of their own, top first, from the second it starts (add it to each \`at\`):`];

@@ -6,6 +6,7 @@ import { FilmPage, FrameError, launch, serve } from './host.mjs';
 import { FILM_FILE, readFilmFile } from './film-doc.mjs';
 import { readableLink, referenceSource } from './media-links.mjs';
 import { limiterFilter } from './loudness.mjs';
+import { cueSpans, duckExpression, speechSpans, wordsFile } from './ducking.mjs';
 
 /**
  * A film argument (a project folder with film.html, a folder inside one, a folder with index.html, or an .html file)
@@ -200,6 +201,14 @@ export function checkSound(c) {
  * start by `from`.
  */
 export function audioClips(root, entry, clips, from = 0) {
+  /* who speaks, from the words beside each sound (ducking.mjs): what the sounds that give way give way to */
+  const ducking = (clips ?? []).some((c) => c.duck);
+  const speech = ducking ? speechSpans(/** @type {any[]} */ ((clips ?? []).map((c) => ({ ...c, at: c.at ?? 0, from: c.from ?? 0, to: c.to ?? Infinity, volume: c.volume ?? 1, speed: c.speed ?? 1 }))), (src) => {
+    try {
+      const words = fileOf(root, entry, wordsFile(src));
+      return existsSync(words) ? cueSpans(readFileSync(words, 'utf8')) : null;
+    } catch { return null; }
+  }) : [];
   return (clips ?? []).map((c) => {
     checkSound(c);
     const speed = c.speed ?? 1;
@@ -209,7 +218,10 @@ export function audioClips(root, entry, clips, from = 0) {
     if (at < 0) { start -= at * speed; at = 0; }
     const fade = Array.isArray(c.fade) && c.to != null && (c.fade[0] > 0 || c.fade[1] > 0)
       ? { in: c.fade[0], out: c.fade[1], length: (c.to - (c.from ?? 0)) / speed, skip } : undefined;
-    return { file: fileOf(root, entry, c.src), at, from: start, to: c.to, volume: c.volume ?? 1, speed, ...(fade ? { fade } : {}) };
+    /* its stream's t is film second `(c.at - from) + skip + t`, then moved by `from`: the expression's own seconds */
+    const film = Math.max(c.at ?? 0, from);
+    const duck = c.duck ? duckExpression(speech, c.duck, film, film, c.to != null ? (c.at ?? 0) + (c.to - (c.from ?? 0)) / speed : Infinity) : '';
+    return { file: fileOf(root, entry, c.src), at, from: start, to: c.to, volume: c.volume ?? 1, speed, ...(fade ? { fade } : {}), ...(duck ? { duck } : {}) };
   }).filter((c) => existsSync(c.file) && hasAudio(c.file) && (c.to == null || c.to > c.from));
 }
 
@@ -329,7 +341,9 @@ export function mixGraph(clips, duration, { limit = false } = {}) {
   }
   const chains = clips.map((c, i) => {
     const fade = fadeFilter(c.fade);
-    const trim = `asetpts=PTS-STARTPTS${c.speed && c.speed !== 1 ? `,${tempo(c.speed)}` : ''}${fade ? `,${fade}` : ''}`;
+    /* giving way to speech: its gain sample by sample, as fades are */
+    const duck = c.duck ? `,aeval='val(ch)*(${c.duck})':c=same` : '';
+    const trim = `asetpts=PTS-STARTPTS${c.speed && c.speed !== 1 ? `,${tempo(c.speed)}` : ''}${fade ? `,${fade}` : ''}${duck}`;
     const delay = Math.round(c.at * 1000);
     /* a mono sound on both sides at its own level, as a browser plays it (ffmpeg's own upmix puts it 3 dB lower) */
     const mono = c.channels === 1 ? ',pan=stereo|c0=c0|c1=c0' : '';

@@ -11,6 +11,7 @@
  * space above or below the tracks opens a new one. Without one, a taken spot opens a new track, shown by a line.
  */
 import { filmAudioRoleOf, filmSrcIsPage, filmSrcIsStill, type FilmBox } from './film.ts';
+import { DUCK_DB } from '../../../../src/film-doc.mjs';
 
 import type { ResourceDragItem } from './resource-drag';
 import { exactRate, frameMs, timecodeFps } from './timecode.ts';
@@ -105,8 +106,11 @@ export function assetClipElement(
   const src = file.path;
   const box = kind === 'video' ? assetFitBox(file, stage) : null;
   const page = kind === 'mg' ? assetPageFit(file, stage) : null;
+  /* music put in gives way to speech from the start (src/ducking.mjs): the person turns it off on the clip */
+  const music = kind === 'audio' && filmAudioRoleOf(src) === 'music';
   return {
     src,
+    ...(music ? { duck: DUCK_DB } : {}),
     ...(isEndless(file) ? { time: [0, STILL_DROP_MS / 1000] } : {}),
     ...(box ? { box } : {}),
     ...(page ? { box: page.box, size: page.size } : {}),

@@ -1047,13 +1047,14 @@ function hear() {
         if (c.fade && lo === from) fade[0] = Math.max(fade[0], c.fade[0]);
         if (c.fade && hi === to) fade[1] = Math.max(fade[1], c.fade[1]);
         sounds.push({ clip: `${c.id}/${s.clip}`, src: s.src, at: c.at + (lo - from), from: s.from + (lo - s.at) * s.speed,
-          to: s.from + (hi - s.at) * s.speed, volume: s.volume * c.volume, speed: s.speed, ...(fade[0] || fade[1] ? { fade } : {}) });
+          to: s.from + (hi - s.at) * s.speed, volume: s.volume * c.volume, speed: s.speed, ...(fade[0] || fade[1] ? { fade } : {}),
+          ...(s.duck ? { duck: s.duck } : {}) });
       }
       continue;
     }
     if (c.volume <= 0 || (c.kind !== 'sound' && c.kind !== 'video')) continue;
     sounds.push({ clip: c.id, src: url(c.row.src).pathname, at: c.at, from: c.span.from, to: c.span.to, volume: c.volume, speed: c.span.speed,
-      ...(c.fade ? { fade: c.fade } : {}) });
+      ...(c.fade ? { fade: c.fade } : {}), ...(c.row.duck ? { duck: c.row.duck } : {}) });
   }
 }
 

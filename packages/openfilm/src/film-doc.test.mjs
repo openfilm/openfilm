@@ -9,6 +9,21 @@ const page = (tracks, head = '<meta name="viewport" content="width=1080, height=
   `<!doctype html>\n<html>\n<head>\n${head}\n</head>\n<body>\n${tracks.map((t) => `<section>\n${t.map((c) => `  ${c}\n`).join('')}</section>\n`).join('')}</body>\n</html>\n`;
 const said = (text) => readFilmFile(text).problems.join('\n');
 
+test('duck: alone 12 dB, or so many dB, on sounds and videos; written back the same; out of range or on a picture said', () => {
+  const { doc, problems } = readFilmFile(page([
+    ['<audio id="bed" src="assets/audio/music/bed.mp3" duck></audio>', '<audio id="b2" src="assets/audio/music/b2.mp3" at="30" duck="6"></audio>'],
+    ['<video id="shot" src="assets/shot.mp4" duck="20"></video>'],
+  ]));
+  assert.deepEqual(problems, []);
+  assert.deepEqual(doc.tracks.flatMap((t) => t.clips.map((c) => [c.id, c.duck])), [['bed', 12], ['b2', 6], ['shot', 20]]);
+  const text = filmHtml(doc);
+  assert.match(text, /<audio id="bed" src="assets\/audio\/music\/bed.mp3" duck><\/audio>/);
+  assert.match(text, /duck="6"/);
+  assert.match(said(page([['<audio src="a.mp3" duck="60"></audio>']])), /duck is how many dB it gives way to speech, 1 to 40/);
+  assert.match(said(page([['<audio src="a.mp3" duck="loud"></audio>']])), /duck is how many dB/);
+  assert.match(said(page([['<img src="a.png#t=0,2" duck>']])), /a still has no sound/);
+});
+
 test('a film.html reads as its value: the viewport its stage, each section a track, each element a clip', () => {
   const { doc, problems: found } = readFilmFile(page([
     ['<iframe id="hook" src="01-hook.html#t=0,3.5"></iframe>'],

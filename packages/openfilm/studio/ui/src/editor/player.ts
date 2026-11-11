@@ -26,6 +26,7 @@
 
 import { SPEED_MAX, SPEED_MIN } from '../lib/playback-speed.ts';
 import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, mediaPlays } from '../../../../src/film-doc.mjs';
+import { cueSpans, duckAt, duckPoints, speechSpans, wordsFile } from '../../../../src/ducking.mjs';
 
 /** Sounds fetched at once; the others wait, the ones nearest to where the film is first. */
 const FETCHES = 3;
@@ -40,8 +41,13 @@ const DRIFT = 0.12;
 /** After a sound is put back in its place, how long it is left to settle before it is checked again (ms). */
 const SETTLE_MS = 1000;
 
-/** `fade`: its fades in and out, film seconds, already fitted to its length (src/timeline.mjs). */
-export type Sound = { src: string; at: number; from: number; to: number; volume: number; speed: number; clip?: string; fade?: [number, number] };
+/**
+ * `fade`: its fades in and out, film seconds, already fitted to its length (src/timeline.mjs). `duck`: it gives way to
+ * speech by that many dB (src/ducking.mjs).
+ */
+export type Sound = { src: string; at: number; from: number; to: number; volume: number; speed: number; clip?: string; fade?: [number, number]; duck?: number };
+/** Where a sound that gives way is lowered, as its gain's corners: [film second, gain]. */
+export type Ducking = ReadonlyMap<string, readonly (readonly [number, number])[]>;
 
 /**
  * Where the film is while it plays: film second `t` at `at` (ms on the page's clock, performance.now()), moving on
@@ -216,7 +222,68 @@ export class Player {
     this.sounds = sounds;
     this.duration = duration;
     this.fetchSounds();
+    void this.findSpeech();
     if (this.playing) this.restart();
+  }
+
+  /** Each sound that gives way, what it gives way to: when someone speaks, and by how much. */
+  private ducks = new Map<Sound, { speech: [number, number][]; db: number }>();
+  /** the words beside each sound (src/ducking.mjs wordsFile), by its address and version: null, it has none */
+  private words = new Map<string, Promise<[number, number][] | null>>();
+  private speechTurn = 0;
+  private ducked = '';
+  /** Told where the sounds that give way are lowered, by clip, each time that changes (a timeline draws it). */
+  onDucking: ((ducking: Ducking) => void) | null = null;
+
+  /**
+   * When someone speaks (the words beside each sound that may speak, fetched once a version), and so where each sound
+   * that gives way is lowered: heard at once when it changed while playing.
+   */
+  private async findSpeech() {
+    const turn = ++this.speechTurn;
+    const sounds = this.sounds;
+    if (!sounds.some((s) => s.duck)) {
+      this.ducks.clear();
+      if (this.ducked) { this.ducked = ''; this.onDucking?.(new Map()); }
+      return;
+    }
+    const heard = sounds.filter((s) => !s.duck && s.volume > 0);
+    const found = new Map<string, [number, number][] | null>();
+    await Promise.all([...new Set(heard.map((s) => s.src))].map(async (src) => { found.set(src, await this.wordsOf(src)); }));
+    if (turn !== this.speechTurn) return;
+    const speech = speechSpans(sounds, (src: string) => found.get(src) ?? null);
+    this.ducks = new Map(sounds.filter((s) => s.duck).map((s) => [s, { speech, db: s.duck! }]));
+    const shown = new Map(sounds.filter((s) => s.duck && s.clip).map((s) => [s.clip!, duckPoints(speech, s.duck!, s.at, s.at + lengthOf(s)) as [number, number][]]));
+    const key = JSON.stringify([...shown]);
+    if (key === this.ducked) return;
+    this.ducked = key;
+    this.onDucking?.(shown);
+    if (this.playing) this.restart();
+  }
+
+  private wordsOf(src: string): Promise<[number, number][] | null> {
+    const url = new URL(wordsFile(src), this.origin);
+    const version = this.versionOf(src);
+    const key = `${url.href}\n${version ?? ''}`;
+    let had = this.words.get(key);
+    if (!had) {
+      had = fetch(url, { cache: 'no-store' }).then((r) => (r.ok ? r.text() : null), () => null).then((text) => (text == null ? null : cueSpans(text) as [number, number][]));
+      this.words.set(key, had);
+    }
+    return had;
+  }
+
+  /**
+   * After a sound's fades, how it gives way to speech (none: `from` as it is), its gain ramps on the audio clock from
+   * `when` (film second `startFilm`) on, as the export's (src/ducking.mjs).
+   */
+  private duckedAfter(from: AudioNode, s: Sound, startFilm: number, when: number, ctxAt: (filmT: number) => number): AudioNode {
+    const duck = this.ducks.get(s);
+    if (!duck) return from;
+    const gain = this.context().createGain();
+    gain.gain.setValueAtTime(duckAt(duck.speech, duck.db, startFilm), when);
+    for (const [t, g] of duckPoints(duck.speech, duck.db, startFilm, s.at + lengthOf(s)).slice(1)) gain.gain.linearRampToValueAtTime(g, Math.max(when, ctxAt(t)));
+    return from.connect(gain);
   }
 
   /**
@@ -506,7 +573,7 @@ export class Player {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     const gain = this.fades(s, startFilm, when, ctxAt);
-    source.connect(gain).connect(this.mix ?? ctx.destination);
+    this.duckedAfter(source.connect(gain), s, startFilm, when, ctxAt).connect(this.mix ?? ctx.destination);
     source.start(when, fileTime(s, startFilm), end - startFilm);
     source.onended = () => {
       const i = this.playingNodes.indexOf(source);
@@ -550,7 +617,7 @@ export class Player {
     el.currentTime = fileTime(s, startFilm);
     const source = ctx.createMediaElementSource(el);
     const gain = this.fades(s, startFilm, when, ctxAt);
-    source.connect(gain).connect(this.mix ?? ctx.destination);
+    this.duckedAfter(source.connect(gain), s, startFilm, when, ctxAt).connect(this.mix ?? ctx.destination);
     const voice: Voice = { el, source, gain, sound: s, settled: 0, timer: 0 };
     /* started once its file is ready, where the film is then (a file not ready in time joins late, in step). Ready
        now, or on whichever of its events comes first; never twice; let go of with the voice (dropVoice) */

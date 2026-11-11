@@ -38,6 +38,7 @@ import { clipFieldPart, clipFields, compactBox, transformOf } from '@/lib/stage-
 import type { TimelineBlock } from '@/lib/timeline-layout';
 import { editsForMoves } from '@/lib/timeline-drag';
 import { dbToVolume, VOLUME_DB_MAX, VOLUME_DB_MIN, volumeToDb } from '@/lib/loudness';
+import { DUCK_DB, DUCK_RANGE } from '../../../../src/film-doc.mjs';
 import { useTimelinePrefs } from '@/lib/timeline-prefs';
 import { formatTimecode, FRAME_RATES, timecodeFps, useTimecodeFps } from '@/lib/timecode';
 import { MenuSelect } from './MenuSelect';
@@ -1557,6 +1558,7 @@ function ClipPanel({
           {blockHasVolume(block) ? (
             <Section id="sound" title={t('inspector.sound')}>
               <VolumeField value={linearVolumeOf(block)} t={t} onCommit={(apply) => commit(volumeEdits([block], apply))} />
+              <DuckField blocks={[block]} t={t} commit={commit} />
             </Section>
           ) : null}
           {block.kind === 'mg' && docLoc && pageChangesOf ? (
@@ -2066,6 +2068,46 @@ function VolumeField({ value, onCommit, t }: { value: number | Mixed; onCommit: 
   );
 }
 
+/**
+ * Gives way to speech (film.html `duck`, src/ducking.mjs): a switch, and how far it goes down while someone speaks.
+ * On, the timeline draws its volume dipping under the speech. Only clips written in film.html; mixed clips show the
+ * switch off until all are on.
+ */
+function DuckField({ blocks, t, commit }: { blocks: readonly TimelineBlock[]; t: T; commit: (edits: ClipEdit[]) => void }) {
+  const can = blocks.filter((b) => b.loc && parseFilmDocLoc(b.loc) != null && blockHasVolume(b));
+  if (!can.length) return null;
+  const on = can.every((b) => b.duck != null);
+  const depths = new Set(can.map((b) => b.duck));
+  const depth = on ? (depths.size === 1 ? can[0].duck! : MIXED) : DUCK_DB;
+  const set = (value: number | null) => commit(can.filter((b) => b.duck !== value).map((b) => ({ loc: b.loc!, prop: 'duck', value })));
+  return (
+    <>
+      <button type="button" role="switch" aria-checked={on} title={t('inspector.duckNote')}
+        className="flex items-center justify-between gap-2 text-[11px] text-[var(--text)]"
+        onClick={() => set(on ? null : DUCK_DB)}>
+        {t('inspector.duck')}
+        <span aria-hidden className={`relative h-4 w-7 rounded-full ${on ? 'bg-[var(--switch-on)]' : 'bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)]'}`}>
+          <span className={`absolute top-[3px] h-2.5 w-2.5 rounded-full transition-all ${on ? 'left-[15px] bg-white' : 'left-[3px] bg-[var(--text-faint)]'}`} />
+        </span>
+      </button>
+      {on ? (
+        <SliderField
+          label={t('inspector.duckDepth')}
+          value={depth}
+          min={DUCK_RANGE[0]}
+          max={24}
+          fieldMax={DUCK_RANGE[1]}
+          neutral={DUCK_DB}
+          step={1}
+          unit="dB"
+          fieldWidth={72}
+          onCommit={(n) => set(Math.max(DUCK_RANGE[0], Math.min(DUCK_RANGE[1], Math.round(n))))}
+        />
+      ) : null}
+    </>
+  );
+}
+
 /** A clip's box as the stage's numbers, from its picture's own size `own` (see stage-clip). */
 function clipTransform(block: TimelineBlock, own: MgBox, stage: { w: number; h: number }): MgTransform {
   return transformOf(block.kind === 'mg' ? 'page' : 'video', own, stage, block.box);
@@ -2280,6 +2322,7 @@ function MultiClipPanel({
       {volumeAll ? (
         <Section id="sound" title={t('inspector.sound')}>
           <VolumeField value={volume} t={t} onCommit={(apply) => commit(volumeEdits(blocks, apply))} />
+          <DuckField blocks={blocks} t={t} commit={commit} />
         </Section>
       ) : null}
     </InspectorWorkspace>

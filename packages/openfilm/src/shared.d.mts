@@ -1,7 +1,8 @@
 /** A sound's fades in the mix: `in` / `out` film seconds of ramp, `length` its film seconds, `skip` seconds cut off its start. */
 export interface MixFade { in: number; out: number; length: number; skip: number }
-export interface MixClip { file: string; at: number; from: number; to?: number; volume: number; speed?: number; fade?: MixFade; channels?: number }
-export declare function audioClips(root: string, entry: string, clips: Array<{ src: string; at?: number; from?: number; to?: number; volume?: number; speed?: number; fade?: readonly [number, number] }> | undefined, from?: number): MixClip[];
+/** `duck`: its gain as it gives way to speech, an ffmpeg expression of its stream's t (ducking.mjs duckExpression). */
+export interface MixClip { file: string; at: number; from: number; to?: number; volume: number; speed?: number; fade?: MixFade; duck?: string; channels?: number }
+export declare function audioClips(root: string, entry: string, clips: Array<{ src: string; at?: number; from?: number; to?: number; volume?: number; speed?: number; fade?: readonly [number, number]; duck?: number }> | undefined, from?: number): MixClip[];
 export declare function fadeFilter(fade: MixFade | undefined): string;
 /** `limit`: its peaks caught under the delivery ceiling (loudness.mjs limiterFilter), as a film's sound is delivered. */
 export declare function mix(clips: MixClip[], duration: number, file: string, codec?: string[], opts?: { limit?: boolean }): Promise<void>;
