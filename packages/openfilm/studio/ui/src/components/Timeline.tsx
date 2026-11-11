@@ -538,9 +538,9 @@ function trimHit(width: number): number {
   return Math.min(SELECT_HIT, Math.max(2, Math.floor(width / 4)));
 }
 
-/** Whether a press is on a clip or one of its edges (not the empty track space). */
-function overClip(e: React.PointerEvent): boolean {
-  return Boolean((e.target as Element | null)?.closest?.('[data-block-id]'));
+/** Whether the pointer is on a clip, keyframe, or curve handle. */
+function overTimelineItem(e: React.PointerEvent): boolean {
+  return Boolean((e.target as Element | null)?.closest?.('[data-block-id], [data-keyframe], [data-graph-key], [data-curve-handle]'));
 }
 
 function trackKindHeight(kind: string): number {
@@ -2076,12 +2076,11 @@ export const Timeline = React.memo(function Timeline({
   }, [msAtClientX, onReferRuler, playable, totalMs]);
 
   /**
-   * A press within ±4 px of the playhead line in the empty track space grabs the playhead. Not over a clip: a clip a
-   * few pixels wide under the line could not be selected, dragged or trimmed (the ruler and the knob drag the
-   * playhead anywhere). Computed in the capture phase instead of a permanent transparent strip, for the same reason.
+   * A press within ±4 px of the playhead line in the empty track space grabs the playhead. Clips and keyframes keep
+   * their own hit targets. The ruler and the knob can also drag the playhead.
    */
   const grabPlayhead = React.useCallback((e: React.PointerEvent) => {
-    if (e.button !== 0 || !playable || !hasLanes || overClip(e)) return;
+    if (e.button !== 0 || !playable || !hasLanes || overTimelineItem(e)) return;
     if (playheadGapPx(e.clientX, timeMsRef.current) > PLAYHEAD_GRAB_PX) return;
     e.stopPropagation();
     startScrub(e);
@@ -2094,7 +2093,7 @@ export const Timeline = React.memo(function Timeline({
   const hotPlayhead = React.useCallback((e: React.PointerEvent) => {
     const el = scrollRef.current;
     if (!el) return;
-    const hot = playable && hasLanes && !overClip(e)
+    const hot = playable && hasLanes && !overTimelineItem(e)
       && playheadGapPx(e.clientX, timeMsRef.current) <= PLAYHEAD_GRAB_PX;
     el.classList.toggle('tl-playhead-hot', hot);
   }, [playable, hasLanes, playheadGapPx]);

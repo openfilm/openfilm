@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost, type HostAgent, type HostOpenFilmModel } from '@/lib/host';
 import { PROVIDER_SITES } from '@/lib/providers';
@@ -8,6 +8,7 @@ import { ProviderMark } from './ProviderMark';
 import { DialogClose, DialogIdentity } from './DialogIdentity';
 import { ReorderList } from './ReorderList';
 import { SettingsButton, SettingsSwitch, settingsError } from './ui';
+import { mergeModelMenu } from '@/lib/agent-model-menu';
 
 /** Account information and this computer's model menu, edited together and saved explicitly. */
 export function OpenFilmAgentDialog({ agent, onClose, actions, connectionStatus, connectionError }: {
@@ -23,6 +24,13 @@ export function OpenFilmAgentDialog({ agent, onClose, actions, connectionStatus,
   const [models, setModels] = React.useState<HostOpenFilmModel[]>(() => agent.openfilm?.models ?? []);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const dirty = React.useRef(false);
+  const snapshot = JSON.stringify(agent.openfilm?.models ?? []);
+  React.useEffect(() => {
+    const next = JSON.parse(snapshot) as HostOpenFilmModel[];
+    setModels((was) => dirty.current ? mergeModelMenu(was, next) : next);
+  }, [snapshot]);
+  const change = (next: HostOpenFilmModel[]) => { dirty.current = true; setModels(next); };
   React.useLayoutEffect(() => {
     const node = dialog.current;
     if (!node) return undefined;
@@ -32,6 +40,7 @@ export function OpenFilmAgentDialog({ agent, onClose, actions, connectionStatus,
     return () => { node.close(); document.body.style.overflow = overflow; };
   }, []);
   const save = studioHost?.agents?.saveOpenFilmModels;
+  const refreshModels = studioHost?.agents?.refreshModels;
   const submit = async () => {
     if (!save || busy) return;
     setBusy(true);
@@ -64,9 +73,15 @@ export function OpenFilmAgentDialog({ agent, onClose, actions, connectionStatus,
       <div className="min-h-0 overflow-y-auto px-7 py-5">
         <p className="text-[14px] leading-relaxed text-[var(--text-muted)]">{t('settings.agents.openfilmShared')}</p>
         {connectionError ? <p role="alert" className={`${settingsError} mt-3`}>{connectionError}</p> : null}
-        <h4 className="mb-1 mt-6 text-[15px] font-medium">{t('settings.agents.openfilmModels')}</h4>
+        <div className="mb-1 mt-6 flex items-center justify-between gap-3">
+          <h4 className="text-[15px] font-medium">{t('settings.agents.openfilmModels')}</h4>
+          {refreshModels ? <SettingsButton variant="quiet" onClick={() => void refreshModels('openfilm', { fresh: true })}>
+            <RefreshCw size={14} />{t('settings.agents.modelsRefresh')}
+          </SettingsButton> : null}
+        </div>
+        <p className="mb-2 text-[12px] text-[var(--text-faint)]">{t('settings.agents.modelsBackgroundHint')}</p>
         <p className="mb-3 text-[13px] leading-relaxed text-[var(--text-muted)]">{t(pendingService ? 'settings.agents.openfilmModelsPendingInfo' : 'settings.agents.openfilmModelsHint')}</p>
-        <ReorderList items={models} onChange={setModels} label={t('settings.agents.openfilmModels')} disabled={busy}
+        <ReorderList items={models} onChange={change} label={t('settings.agents.openfilmModels')} disabled={busy}
           itemAttribute="data-model-id" dragLabel={(model) => modelWords('openfilmModelDrag', model.name)}>
           {(model) => (
             <>
@@ -74,14 +89,14 @@ export function OpenFilmAgentDialog({ agent, onClose, actions, connectionStatus,
               <span className={`min-w-0 flex-1 text-[14px] ${model.shown ? '' : 'text-[var(--text-faint)]'}`}>{model.name}</span>
               {pendingService && !model.available ? <span className="shrink-0 text-[12px] text-[var(--text-muted)]">{t('settings.agents.openfilmModelsPending')}</span> : null}
               <SettingsSwitch checked={model.shown} disabled={busy || model.shown && visible === 1} label={modelWords('openfilmModelShow', model.name)}
-                onChange={(shown) => setModels((was) => was.map((m) => m.id === model.id ? { ...m, shown } : m))} />
+                onChange={(shown) => change(models.map((m) => m.id === model.id ? { ...m, shown } : m))} />
             </>
           )}
         </ReorderList>
         {error ? <p role="alert" className={`${settingsError} mt-3`}>{error}</p> : null}
       </div>
       <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] px-7 py-4">
-        <SettingsButton variant="quiet" disabled={busy} onClick={() => setModels((was) => (agent.openfilm?.defaultOrder ?? []).flatMap((id) => was.filter((m) => m.id === id)))}>{t('settings.agents.openfilmModelsReset')}</SettingsButton>
+        <SettingsButton variant="quiet" disabled={busy} onClick={() => change((agent.openfilm?.defaultOrder ?? []).flatMap((id) => models.filter((m) => m.id === id)))}>{t('settings.agents.openfilmModelsReset')}</SettingsButton>
         <div className="flex gap-2">
           <SettingsButton variant="quiet" onClick={onClose}>{t('settings.agents.cancel')}</SettingsButton>
           <SettingsButton variant="primary" disabled={busy || !save || !visible} onClick={() => void submit()}>{busy ? <Loader2 size={15} className="animate-spin" /> : null}{t('settings.agents.openfilmModelsSave')}</SettingsButton>

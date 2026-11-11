@@ -177,7 +177,7 @@ test('Codex is signed in in Codex: one found is never signed out here, and keeps
   assert.deepEqual(ownSignIn(AGENTS.claude, { signedIn: false, account: null }), { signedIn: false, account: null });
 });
 
-test("the model service's refusal Codex sends as its reply fails the turn; a model this Codex is too old for says to update it", () => {
+test("a model refusal fails the turn and names the selected CLI without assuming it is outdated", () => {
   const chunk = (text) => ({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
   const said = `{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account."}}\n\n`;
   const refused = codexServiceError(chunk(said));
@@ -188,9 +188,9 @@ test("the model service's refusal Codex sends as its reply fails the turn; a mod
   assert.equal(codexServiceError({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: said } }), null);
 
   const old = codexRefusal(refused, '/usr/local/bin/codex', () => '0.156.1');
-  assert.equal(old.code, 'outdated');
-  assert.equal(old.message, "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account. Update Codex (this one is 0.156.1), or choose another model.");
-  assert.match(codexRefusal(refused, '/usr/local/bin/codex', () => null).message, / Update Codex, or choose another model\.$/);
+  assert.equal(old.code, 'unsupported-model');
+  assert.equal(old.message, "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account. Selected Codex CLI: 0.156.1. Choose another model or check for a Codex update.");
+  assert.match(codexRefusal(refused, '/usr/local/bin/codex', () => null).message, / Choose another model or check for a Codex update\.$/);
   const other = codexRefusal({ message: 'Rate limit reached.', status: 429 }, '/usr/local/bin/codex', () => '0.163.0');
   assert.equal(other.message, 'Rate limit reached.');
   assert.equal(other.code, undefined);

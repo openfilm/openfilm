@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { builtInRoot, libraryFavorites, libraryFile, libraryIndex, libraryVoices, setLibraryFavorites, voiceKey } from './library.mjs';
@@ -108,6 +108,25 @@ test('the starred things are kept in the shared prefs, those of the library only
     assert.deepEqual(setLibraryFavorites('all'), []);
   } finally {
     if (before === undefined) delete process.env.OPENFILM_SHARED_HOME; else process.env.OPENFILM_SHARED_HOME = before;
+  }
+});
+
+test('installed and discoverable skills can both be starred and unstarred in shared preferences', () => {
+  const home = mkdtempSync(join(tmpdir(), 'of-skill-stars-'));
+  const was = process.env.OPENFILM_SHARED_HOME;
+  process.env.OPENFILM_SHARED_HOME = home;
+  try {
+    const installed = 'skill:openfilm/edit';
+    const discover = 'skill:community/preview';
+    assert.deepEqual(setLibraryFavorites([installed, discover, discover, 'skill:../preview']), [installed, discover]);
+    assert.deepEqual(libraryFavorites(), [installed, discover]);
+    assert.deepEqual(setLibraryFavorites([discover]), [discover]);
+    assert.deepEqual(libraryFavorites(), [discover]);
+    assert.deepEqual(setLibraryFavorites([]), []);
+    assert.deepEqual(libraryFavorites(), []);
+  } finally {
+    if (was === undefined) delete process.env.OPENFILM_SHARED_HOME; else process.env.OPENFILM_SHARED_HOME = was;
+    rmSync(home, { recursive: true, force: true });
   }
 });
 

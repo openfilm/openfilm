@@ -18,7 +18,7 @@
  *
  * Pictures are kept within the model services' size limits (pi-config.mjs): a request carries those of the latest
  * KEEP_PICTURE_RESULTS tool results that hold one, and at most IMAGE_BUDGET of them, the oldest left out of the request
- * first (never out of the session). A service refusing a request as too large (HTTP 413, a proxy's page included) is
+ * first. Tool pictures are reduced before Pi saves them. A service refusing a request as too large (HTTP 413, a proxy's page included) is
  * tried again once with half of those pictures, as Pi tries a busy one; that half stays the conversation's limit. A
  * request with no pictures in it is not tried again: its own words are too large, and the turn says so.
  *
@@ -29,7 +29,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import * as acp from '@agentclientprotocol/sdk';
-import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, createAgentSession } from '@earendil-works/pi-coding-agent';
+import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, createAgentSession, formatDimensionNote, resizeImage } from '@earendil-works/pi-coding-agent';
 import { Agent, install, setGlobalDispatcher } from 'undici';
 import { agentSessionsDir, openLog } from './chat-store.mjs';
 import { IMAGE_BUDGET, THINKING, TOO_LARGE, WAIT_MINUTES, contextUsed, effortOption, fitImages, modelOption, modelsJson, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
@@ -40,6 +40,10 @@ console.log = console.info = console.warn = console.debug = (...args) => process
 /* some services think quietly for minutes before they answer: wait that long for a byte (Node's fetch stops at 5
    minutes), with fetch and its connections from one undici, as Pi's own command line sets them */
 const WAIT_MS = WAIT_MINUTES * 60_000;
+const PROGRESS_MS = 2 * 60_000;
+const TOOL_IMAGE_SIDE = 768;
+const TOOL_IMAGE_BYTES = 96 * 1024;
+const TURN_TOOL_IMAGE_CHARS = 4 * 1024 * 1024;
 setGlobalDispatcher(new Agent({ headersTimeout: WAIT_MS, bodyTimeout: WAIT_MS }));
 install();
 
@@ -95,7 +99,7 @@ function modelLog(cwd, turnId) {
   let system = 'null';
   let tools = 'null';
   return {
-    write({ startedAt, messages, toolsNow, answer }) {
+    write({ startedAt, messages, imageContext, toolsNow, answer }) {
       const all = messages.map((m) => JSON.stringify(m));
       let prefix = 0;
       while (prefix < keys.length && prefix < all.length && keys[prefix] === all[prefix]) prefix += 1;
@@ -103,6 +107,7 @@ function modelLog(cwd, turnId) {
       const systemKey = JSON.stringify(answer?.systemPrompt ?? null);
       file.write('call', {
         startedAt, ms: Date.now() - startedAt, prefix, messages: messages.slice(prefix),
+        ...(imageContext?.removed ? { imageContext } : {}),
         ...(toolsKey !== tools ? { tools: toolsNow } : {}), ...(systemKey !== system ? { systemPrompt: answer?.systemPrompt ?? null } : {}),
         answer: answer?.message ?? null,
       });
@@ -128,6 +133,15 @@ async function open(client, cwd, resumeId) {
   /* the pictures a request carries at most (pi-config.mjs IMAGE_BUDGET), and those the last one carried (bytes) */
   let imageBudget = IMAGE_BUDGET;
   let imagesSent = 0;
+  let imagesRemoved = 0;
+  let toolImageChars = 0;
+  let toldAboutImages = false;
+  let awaitingAnswer = false;
+  let lastVisible = Date.now();
+  const send = (update) => {
+    if (update.sessionUpdate === 'agent_message_chunk' || update.sessionUpdate === 'notice') lastVisible = Date.now();
+    void client.sessionUpdate({ sessionId, update }).catch(() => {});
+  };
   const resourceLoader = new DefaultResourceLoader({
     cwd, agentDir: config.agentDir, settingsManager, noExtensions: true, noPromptTemplates: true, noThemes: true,
     /* OpenFilm's skills, and no other Pi would find (in the project, or its own folders), listed in the order named */
@@ -143,13 +157,38 @@ async function open(client, cwd, resumeId) {
         pi.on('context', (event) => {
           const fitted = fitImages(event.messages, imageBudget);
           imagesSent = fitted.kept;
+          imagesRemoved = fitted.removed;
+          if (imagesRemoved && !toldAboutImages) {
+            toldAboutImages = true;
+            send({ sessionUpdate: 'notice', severity: 'info', title: 'Older pictures were left out of the model’s context.' });
+          }
           return fitted.messages === event.messages ? undefined : { messages: fitted.messages };
+        });
+        pi.on('tool_result', async (event) => {
+          if (!event.content.some(block => block.type === 'image')) return;
+          const content = [];
+          for (const block of event.content) {
+            if (block.type !== 'image') { content.push(block); continue; }
+            const available = Math.min(TOOL_IMAGE_BYTES, Math.floor((TURN_TOOL_IMAGE_CHARS - toolImageChars) / 4) * 3);
+            const preview = available >= 1024 ? await resizeImage(Buffer.from(block.data, 'base64'), block.mimeType, {
+              maxWidth: TOOL_IMAGE_SIDE, maxHeight: TOOL_IMAGE_SIDE, maxBytes: available,
+            }).catch(() => null) : null;
+            if (!preview || toolImageChars + preview.data.length > TURN_TOOL_IMAGE_CHARS) {
+              content.push({ type: 'text', text: '[The picture was omitted to keep this turn small. The original is still on disk.]' });
+              continue;
+            }
+            toolImageChars += preview.data.length;
+            content.push({ type: 'image', mimeType: preview.mimeType, data: preview.data });
+            const dimensions = formatDimensionNote(preview);
+            if (dimensions) content.push({ type: 'text', text: dimensions });
+          }
+          return { content, details: event.details };
         });
       } },
       { name: 'openfilm-log', hidden: true, factory: (pi) => {
-        pi.on('context_with_system', (event) => { pending = { startedAt: Date.now(), messages: event.messages }; });
+        pi.on('context_with_system', (event) => { pending = { startedAt: Date.now(), messages: event.messages, imageContext: { keptBytes: imagesSent, removed: imagesRemoved } }; });
       } },
-      { name: 'openfilm-ask', hidden: true, factory: (pi) => pi.registerTool(askTool(client, () => sessionId)) },
+      { name: 'openfilm-ask', hidden: true, factory: (pi) => pi.registerTool(askTool(client, () => sessionId, (waiting) => { awaitingAnswer = waiting; })) },
     ],
   });
   await resourceLoader.reload();
@@ -172,7 +211,16 @@ async function open(client, cwd, resumeId) {
   /* a conversation taken up again on a model no longer set up: on the one a session starts on */
   if (!now.id) await use(entry, onModel, entry.effort);
   sessionId = session.sessionId;
-  const send = (update) => { void client.sessionUpdate({ sessionId, update }).catch(() => {}); };
+  entry.startProgress = () => {
+    lastVisible = Date.now();
+    toolImageChars = 0;
+    toldAboutImages = false;
+    return setInterval(() => {
+      if (!awaitingAnswer && Date.now() - lastVisible >= PROGRESS_MS) {
+        send({ sessionUpdate: 'notice', severity: 'info', title: 'Still working on this turn.' });
+      }
+    }, 15_000);
+  };
 
   session.subscribe((event) => {
     switch (event.type) {
@@ -191,7 +239,7 @@ async function open(client, cwd, resumeId) {
         if (message.stopReason === 'error' && TOO_LARGE.test(String(message.errorMessage ?? '')) && imagesSent > 0) imageBudget = Math.floor(imagesSent / 2);
         if (pending && entry.log) {
           const toolsNow = (session.agent?.state?.tools ?? []).map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
-          entry.log.write({ startedAt: pending.startedAt, messages: pending.messages, toolsNow, answer: { message, systemPrompt: session.systemPrompt } });
+          entry.log.write({ ...pending, toolsNow, answer: { message, systemPrompt: session.systemPrompt } });
         }
         pending = null;
         const used = contextUsed(message, session.model);
@@ -230,7 +278,7 @@ async function open(client, cwd, resumeId) {
  * shape agents.mjs formQuestions reads: a field per question, a choice a `oneOf`, beside it a field for the person's own
  * words). Resolves with what they answered, or that they skipped it.
  */
-function askTool(client, sessionOf) {
+function askTool(client, sessionOf, setAwaitingAnswer) {
   return {
     name: 'ask',
     label: 'Ask',
@@ -268,10 +316,11 @@ function askTool(client, sessionOf) {
           : { type: 'string', title: q.header ?? '', description: q.question, oneOf: choices };
         properties[`q${i}_own`] = { type: 'string', title: 'In your own words', _meta: { _askUserQuestionCustomAnswer: { questionId: `q${i}` } } };
       });
+      setAwaitingAnswer(true);
       const reply = await client.createElicitation({
         sessionId: sessionOf(), toolCallId, mode: 'form', message: questions[0]?.question ?? '',
         requestedSchema: { type: 'object', properties },
-      }).catch(() => ({ action: 'cancel' }));
+      }).catch(() => ({ action: 'cancel' })).finally(() => setAwaitingAnswer(false));
       const said = reply.action === 'accept' ? questions.map((q, i) => {
         const own = reply.content?.[`q${i}_own`];
         const chosen = reply.content?.[`q${i}`];
@@ -331,12 +380,14 @@ const connection = new acp.AgentSideConnection((client) => ({
     entry.log = typeof meta.turnId === 'string' && typeof meta.cwd === 'string' ? modelLog(meta.cwd, meta.turnId) : null;
     entry.answer = null;
     entry.overflow = null;
+    const progress = entry.startProgress();
     try {
       const { text, images } = promptOf(params.prompt);
       await session.prompt(text, images.length ? { images } : undefined);
       const last = entry.answer ?? [...session.messages].reverse().find((m) => m.role === 'assistant');
       return { stopReason: stopReason(entry.overflow && last?.stopReason !== 'aborted' ? { stopReason: 'error', errorMessage: entry.overflow } : last) };
     } finally {
+      clearInterval(progress);
       entry.log?.end();
       entry.log = null;
     }

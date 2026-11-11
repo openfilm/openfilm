@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
@@ -10,7 +10,7 @@ import { AgentSession } from './agents.mjs';
 import { agentOffer } from './openfilm-agent.mjs';
 
 /** A service on the Chat Completions API that answers "ok" and notes the model each request named (and each request, and its key). */
-async function service({ broke = false, fails = null, busyOnce = false, largest = Infinity } = {}) {
+async function service({ broke = false, fails = null, busyOnce = false, largest = Infinity, reads = 0 } = {}) {
   const asked = [];
   const bodies = [];
   const keys = [];
@@ -29,6 +29,14 @@ async function service({ broke = false, fails = null, busyOnce = false, largest 
       if (fails) { res.writeHead(400, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: fails } })); return; }
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const chunk = (choice, extra = {}) => `data: ${JSON.stringify({ id: 'c', object: 'chat.completion.chunk', created: 0, model, choices: [choice], ...extra })}\n\n`;
+      if (asked.length <= reads) {
+        res.end(chunk({ index: 0, delta: { role: 'assistant', tool_calls: [{
+          index: 0, id: `read-${asked.length}`, type: 'function',
+          function: { name: 'read', arguments: '{"path":"frame.png"}' },
+        }] }, finish_reason: null })
+          + chunk({ index: 0, delta: {}, finish_reason: 'tool_calls' }) + 'data: [DONE]\n\n');
+        return;
+      }
       res.end(chunk({ index: 0, delta: { role: 'assistant', content: 'ok' }, finish_reason: null })
         + chunk({ index: 0, delta: {}, finish_reason: 'stop' }, { usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } })
         + 'data: [DONE]\n\n');
@@ -246,6 +254,37 @@ function noisePng(w, h) {
   const rows = Buffer.concat(Array.from({ length: h }, () => Buffer.concat([Buffer.from([0]), randomBytes(w * 3)])));
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(rows, { level: 0 })), chunk('IEND', Buffer.alloc(0))]);
 }
+
+test('a turn with 38 screenshot reads stores small previews and reports dropped context to the model and log', { timeout: 60_000 }, async () => {
+  const svc = await service({ reads: 38 });
+  const root = mkdtempSync(join(tmpdir(), 'of-pi-previews-'));
+  const updates = [];
+  const session = new AgentSession({
+    agent: 'byok', cwd: root, onUpdate: update => updates.push(update),
+    harness: { home: join(root, 'home'), models: [own('vision_stub', svc.url)], model: 'vision_stub', env: { 'OPENFILM_BYOK_KEY_vision_stub': 'sk' } },
+  });
+  try {
+    writeFileSync(join(root, 'frame.png'), noisePng(1100, 760));
+    await session.start();
+    await session.prompt([{ type: 'text', text: 'Check the film' }], { turnId: 'local-preview-test' });
+    assert.equal(svc.bodies.length, 39);
+    const last = JSON.stringify(svc.bodies.at(-1));
+    assert.match(last, /frame.png.*was left out of this request/);
+    const images = [...last.matchAll(/data:image\/[^;]+;base64,([a-z0-9+/=]+)/gi)];
+    assert.ok(images.length >= 1 && images.length <= 5);
+    assert.ok(images.every(([, data]) => data.length <= 128 * 1024));
+    const stored = join(root, '.film', 'chat', 'agent');
+    const transcript = readFileSync(join(stored, readdirSync(stored).find(name => name.endsWith('.jsonl'))), 'utf8');
+    assert.ok(transcript.length < 4.5 * 1024 * 1024, 'stored transcript stays small after all reads');
+    assert.equal(updates.filter(update => update.sessionUpdate === 'notice' && /Older pictures/.test(update.title)).length, 1);
+    const logged = readFileSync(join(root, '.film', 'logs', 'local-preview-test.model.jsonl'), 'utf8');
+    assert.match(logged, /"imageContext":\{"keptBytes":\d+,"removed":\d+\}/);
+  } finally {
+    session.close();
+    svc.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('a request refused as too large is tried again at once with half of its pictures, and the turn goes on', { timeout: 60_000 }, async () => {
   const svc = await service({ largest: 8 * 1024 * 1024 });

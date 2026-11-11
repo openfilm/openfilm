@@ -153,6 +153,8 @@ export const es: Words = {
     model: 'Modelo',
     /* the one value of a model or an effort the agent offers no choice of */
     optionDefault: 'Predeterminado',
+    optionUpdating: "Actualizando…",
+    optionUnavailable: "No disponible",
     openAttachment: 'Ver {name}',
     revealFolder: 'Mostrar {name} en su carpeta',
     openSettings: 'Abrir Configuración',

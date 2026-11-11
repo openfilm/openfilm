@@ -135,9 +135,10 @@ test("a request's pictures within its budget: the newest kept, the older ones a 
     { role: 'assistant', content: [{ type: 'toolCall', id: 't2', name: 'read', arguments: { path: '.film/look/00.07.png' } }] },
     { role: 'toolResult', toolCallId: 't2', toolName: 'read', content: [pic(60)] },
   ];
-  assert.deepEqual(fitImages(messages, 150), { messages, kept: 150 }, 'within it: the same messages');
+  assert.deepEqual(fitImages(messages, 150), { messages, kept: 150, removed: 0 }, 'within it: the same messages');
   assert.equal(fitImages(messages, 150).messages, messages);
-  const { messages: fitted, kept } = fitImages(messages, 120);
+  const { messages: fitted, kept, removed } = fitImages(messages, 120);
+  assert.equal(removed, 1);
   assert.equal(kept, 110);
   assert.deepEqual(fitted[4].content, [pic(60)], 'the newest kept');
   assert.deepEqual(fitted[2].content[1], pic(50));
@@ -165,7 +166,8 @@ test("pictures only in the latest five tool results that hold one; an older one'
     messages.push({ role: 'assistant', content: [{ type: 'toolCall', id: `t${n}`, name: 'read', arguments: { path: `f${n}.png` } }] });
     messages.push({ role: 'toolResult', toolCallId: `t${n}`, toolName: 'read', content: [{ type: 'text', text: 'Read image file [image/png]' }, pic] });
   }
-  const { messages: fitted, kept } = fitImages(messages, Infinity);
+  const { messages: fitted, kept, removed } = fitImages(messages, Infinity);
+  assert.equal(removed, 2);
   const shown = fitted.filter((m) => m.role === 'toolResult').map((m) => m.content[1].type);
   assert.deepEqual(shown, ['text', 'text', 'image', 'image', 'image', 'image', 'image'], 'the latest five keep theirs');
   assert.equal(fitted[2].content[1].text, '[A picture (f1.png) was left out of this request to keep it small. Read it again to see it.]');

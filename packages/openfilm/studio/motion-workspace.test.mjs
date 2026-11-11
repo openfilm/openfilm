@@ -35,6 +35,20 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
     await page.addInitScript(() => { localStorage.setItem('openfilm.project.timelineH', '440'); });
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
     await page.locator('[data-block-kind="caption"]').first().waitFor({ state: 'visible' });
+    assert.equal(await page.locator('[data-timeline-view-item="motion"]').count(), 0);
+    const switcher = page.locator('[data-work-mode]');
+    await page.getByRole('button', { name: 'OpenFilm menu' }).click();
+    await page.getByRole('menuitem', { name: 'Settings' }).click();
+    const settings = page.getByRole('dialog');
+    await settings.getByRole('button', { name: 'Advanced', exact: true }).click();
+    const motion = settings.getByRole('switch', { name: 'Motion (Beta)' });
+    await motion.waitFor();
+    assert.equal(await motion.getAttribute('aria-checked'), 'false');
+    await settings.getByRole('switch', { name: 'Canvas' }).click();
+    assert.equal(await switcher.count(), 0, 'only Edit remains');
+    await motion.click();
+    await page.keyboard.press('Escape');
+    await page.reload();
     await page.locator('[data-timeline-view-item="motion"]').click();
     const layer = page.locator('[data-motion-layer="card"]');
     await layer.waitFor({ state: 'visible' });
@@ -50,6 +64,26 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
       assert.fail('the motion edit was not written');
     };
     await until(async () => Object.keys((await film()).keyframes ?? {}).length > 0);
+
+    const keys = page.locator('[data-motion-lane="translate"] [data-keyframe]');
+    const key = keys.first();
+    await key.waitFor();
+    const original = await key.getAttribute('data-keyframe');
+    const bounds = await key.boundingBox();
+    const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 32, y, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForFunction((before) => {
+      const key = document.querySelector('[data-motion-lane="translate"] [data-keyframe]');
+      return key && key.getAttribute('data-keyframe') !== before;
+    }, original, { timeout: 6000 });
+    await key.click();
+    await page.keyboard.press('ControlOrMeta+c');
+    await page.keyboard.press('ControlOrMeta+v');
+    await keys.nth(1).waitFor();
+
     await page.getByRole('button', { name: 'New layer', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Rectangle', exact: true }).click();
     await until(async () => (await film()).tracks.flatMap((track) => track.clips).length === 2);

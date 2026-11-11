@@ -536,6 +536,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [setCanvasOpen, keepMotionOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   /* the ways of working turned on (Settings → Advanced): one turned off while in use gives way to the first still on */
   const workModes = useWorkModes();
+  const canToggleCanvas = workModes.includes('canvas') && workModes.length > 1;
   React.useEffect(() => { if (!workModes.includes(workMode)) setWorkMode(workModes[0]!); }, [workModes, workMode, setWorkMode]);
   /* what an agent lays out on the canvas (`openfilm canvas apply`) is shown: the canvas opens on it */
   React.useEffect(() => projectEvents(projectId, (event) => { if (event.type === 'canvas') setCanvasOpen(true); }), [projectId, setCanvasOpen]);
@@ -564,7 +565,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [canvasProject, canvasKept]);
   /* the edit or the canvas, from either (keymap `work-mode`, ⌘E): not while typing, nor over a dialog */
   const workModeRef = React.useRef(() => {});
-  workModeRef.current = () => setCanvasOpen(!canvasOpen);
+  workModeRef.current = () => { if (canToggleCanvas) setCanvasOpen(!canvasOpen); };
   React.useEffect(() => {
     const press = (event: KeyboardEvent) => {
       const el = event.target as HTMLElement | null;
@@ -5652,13 +5653,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </>)}
               <ExportTray ref={exportTrayRef} projectId={projectId} onError={toast.showError} />
               {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
-              <Tooltip label={[t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas'), keyHint('work-mode')].filter(Boolean).join(' · ')} side="bottom">
+              {canToggleCanvas ? <Tooltip label={[t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas'), keyHint('work-mode')].filter(Boolean).join(' · ')} side="bottom">
                 <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} disabled={Boolean(layoutDraft.draft)} onClick={() => setCanvasOpen(!canvasOpen)}
                   className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
                   {canvasOpen ? <Workflow size={14} /> : <Scissors size={14} />}
                   {t(canvasOpen ? 'canvas.title' : 'canvas.editTitle')}
                 </button>
-              </Tooltip>
+              </Tooltip> : null}
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>

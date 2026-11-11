@@ -153,6 +153,8 @@ export const zhCN: Words = {
     model: '模型',
     /* the one value of a model or an effort the agent offers no choice of */
     optionDefault: '默认',
+    optionUpdating: "更新中…",
+    optionUnavailable: "暂不可用",
     openAttachment: '查看 {name}',
     revealFolder: '在文件夹中显示 {name}',
     openSettings: '打开设置',

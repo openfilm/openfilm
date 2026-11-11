@@ -153,6 +153,8 @@ export const ja: Words = {
     model: 'モデル',
     /* the one value of a model or an effort the agent offers no choice of */
     optionDefault: 'デフォルト',
+    optionUpdating: "更新中…",
+    optionUnavailable: "取得できません",
     openAttachment: '{name} を表示',
     revealFolder: '{name} をフォルダに表示',
     openSettings: '設定を開く',

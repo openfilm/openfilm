@@ -22,12 +22,14 @@ import { CHAT_MIN, STUDIO_MIN, WINDOW_MIN, placeOnDisplays, readWindowState, wri
 import { createPagePresentation, paintPage, preparePage, revealPage, syncPagePointer } from './page-presentation.mjs';
 import { closeTabOrWindow, keepWindowOnClose, quitAfterStudio } from './window-lifecycle.mjs';
 import { appLanguage } from './i18n/language.mjs';
+import { PAGE_FAILURE_WORDS } from './i18n/page-failure.mjs';
 import { applicationMenuTemplate } from './menu.mjs';
 import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
 import { registerSkillsIpc } from './skills-ipc.mjs';
 import { createRoster } from './agent-roster.mjs';
 import { createOpenFilmAgent } from './openfilm-agent.mjs';
+import { createAgentCatalogs } from './agent-catalogs.mjs';
 import { AGENTS, checkAgentProgram, closeEverySession, diagnoseAgent, forgetAgentStatus, listAgents, localAgent, openAgentInstaller, openAgentSignIn, setChosenPaths, signOutAgent } from './agents.mjs';
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
 import { installOpenfilmCommand } from './openfilm-command.mjs';
@@ -91,6 +93,7 @@ let tabs = null;
 /** the page of each tab that has one (a tab left behind long enough has none until it is shown again) */
 /** @type {Map<string, WebContentsView>} */
 const views = new Map();
+const unresponsivePages = new WeakSet();
 let pagePresentation = null;
 /** the page in front */
 const activeView = () => views.get(pagePresentation?.currentId() ?? tabs?.activeId() ?? HOME) ?? null;
@@ -119,6 +122,7 @@ let cancelWindowClose = () => {};
 let localAgents = null;
 /** @type {ReturnType<typeof createRoster> | null} */
 let roster = null;
+let agentCatalogs = null;
 
 /** the board Studio's panes sit on (its --bg-app), so the window never flashes another color */
 const BACKGROUND = { light: '#e4e4e8', dark: '#141414' };
@@ -186,7 +190,8 @@ function makeView(tabId) {
   /* what went wrong with the page, for the log (logs/studio.log) */
   v.webContents.on('render-process-gone', (_event, details) => log(`page: renderer gone (${details.reason}, ${details.exitCode})\n`));
   v.webContents.on('did-fail-load', (_event, code, description, url, mainFrame) => { if (mainFrame && code !== -3 && pagePresentation?.wantedId() === tabId) log(`page: ${description} (${code}) loading ${url.replace(/key=[^&]+/, 'key=…')}\n`); });
-  v.webContents.on('unresponsive', () => log('page: not responding\n'));
+  v.webContents.on('unresponsive', () => { unresponsivePages.add(v); log('page: not responding\n'); });
+  v.webContents.on('responsive', () => unresponsivePages.delete(v));
   /* the page gone (a crash): it comes back where it was; the agents' turns go on in this process meanwhile */
   v.webContents.on('render-process-gone', (_event, details) => { if (details.reason !== 'clean-exit' && !quitting) setTimeout(() => { if (!v.webContents.isDestroyed()) v.webContents.reload(); }, 500); });
   return v;
@@ -235,15 +240,47 @@ function presentation() {
       return { view: v, ready };
     },
     resume: windows ? undefined : (id, v) => stage(id, v, () => paintPage(v.webContents, frameOptions(id))),
-    present(_id, v) {
+    canKeep: v => !unresponsivePages.has(v) && !v.webContents.isDestroyed() && !v.webContents.isCrashed(),
+    present(id, v) {
       if (!win) return;
       revealPage(win.contentView, v, views.values());
       if (!windows) v.webContents.setBackgroundThrottling(true);
+      tabs?.activate(id === HOME ? null : id);
+      tellTabs();
       /* the pages now behind it are told: one waiting to be covered (its projects window opening another tab) is done */
       for (const page of views.values()) if (page !== v && !page.webContents.isDestroyed()) page.webContents.send('desktop:tabs:covered');
     },
     discard: destroyView,
-    onError: (error) => { if (!quitting) log(`page: could not prepare replacement (${String(error.message).replace(/key=[^&\s)]+/g, 'key=…')})\n`); },
+    onError: reportPageFailure,
+  });
+}
+
+let pageFailureDialog = null;
+function reportPageFailure(error, id, retained) {
+  if (quitting || !win) return;
+  log(`page: could not prepare replacement (${String(error.message).replace(/key=[^&\s)]+/g, 'key=…')})\n`);
+  if (retained) {
+    tabs?.activate(retained === HOME ? null : retained);
+    tellTabs();
+  }
+  // A native message is visible even if the editor has stopped processing events.
+  // If Projects also fails, expose a way to retry even when there is no usable page.
+  if (id === HOME && !retained) {
+    if (pageFailureDialog) pageFailureDialog.abort();
+  } else if (pageFailureDialog) return;
+  const controller = new AbortController();
+  pageFailureDialog = controller;
+  const retry = id === HOME && !retained;
+  const language = appLanguage(state.language, app.getPreferredSystemLanguages());
+  const [message, detail, tryAgain, dismiss] = PAGE_FAILURE_WORDS[language] ?? PAGE_FAILURE_WORDS.en;
+  // A window-owned sheet lets the main process continue preparing the fallback.
+  void dialog.showMessageBox(win, {
+    type: 'warning', title: PRODUCT_NAME, message, detail, signal: controller.signal,
+    buttons: retry ? [tryAgain, dismiss] : [dismiss], cancelId: retry ? 1 : 0,
+  }).then(({ response }) => {
+    if (retry && response === 0 && !quitting && pagePresentation?.wantedId() === HOME && pagePresentation.currentId() !== HOME) void showPage(HOME);
+  }).catch(error => log(`page: could not show recovery dialog (${error.message})\n`)).finally(() => {
+    if (pageFailureDialog === controller) pageFailureDialog = null;
   });
 }
 
@@ -541,6 +578,7 @@ async function start() {
     /* what before-quit would do, done first (`quitting`), so the quit Squirrel starts is not held up or cancelled */
     beforeInstall: async () => {
       quitting = true;
+      agentCatalogs?.close();
       localAgents?.closeAll();
       closeEverySession();
       for (const v of views.values()) v.webContents.on('will-prevent-unload', (event) => event.preventDefault());
@@ -750,9 +788,17 @@ async function start() {
   });
   // Services and Agents may both change the account. Read the shared state even when its settings page is closed.
   setInterval(() => { void openfilmAgent.refresh(); }, 2000).unref();
+  agentCatalogs = createAgentCatalogs({
+    dataDir: DATA,
+    openSession: (id, onOptions) => localAgents.openProbeSession(id, onOptions),
+    onUpdated: (id) => localAgents.refreshSkills(id),
+    onChange: () => { if (roster) broadcast('desktop:agents', roster.list()); },
+  });
+  setInterval(() => agentCatalogs.refreshDue(), 30_000).unref();
   roster = createRoster({
     openfilm: openfilmAgent,
     dataDir: DATA,
+    catalog: (id) => agentCatalogs.state(id),
     localAgents: listAgents,
     localAgent,
     openSignIn: (id) => openAgentSignIn(id, { track: true }),
@@ -766,7 +812,7 @@ async function start() {
     resetAgent: (id) => { forgetAgentStatus(id); forgetAgentUsage(id); localAgents?.refreshSkills(id); },
     seal,
     unseal,
-    onChange: (list) => broadcast('desktop:agents', list),
+    onChange: (list) => { agentCatalogs.sync(list); broadcast('desktop:agents', roster?.list() ?? list); },
     /* the program the person points at, for an agent not found where it is looked for */
     usePaths: setChosenPaths,
     pickProgram: async (_id, words) => {
@@ -817,6 +863,12 @@ async function start() {
   });
   agentHandle('desktop:agents:shown', ({ id, shown }) => { roster.setShown(String(id), shown === true); return { ok: true }; });
   agentHandle('desktop:agents:openfilm-models', ({ config }) => openfilmAgent.saveModels(config));
+  agentHandle('desktop:agents:model-menu', ({ id, config }) => agentCatalogs.saveModels(String(id), config));
+  agentHandle('desktop:agents:model-refresh', ({ id, model, fresh }) => {
+    if (id === 'openfilm') { void openfilmAgent.refresh({ fresh: fresh === true }); return { ok: true }; }
+    agentCatalogs.refresh(String(id), { fresh: fresh === true, model });
+    return { ok: true };
+  });
   agentHandle('desktop:agents:own-model', ({ config }) => roster.saveOwnModel(config));
   agentHandle('desktop:agents:own-model-remove', ({ id }) => { roster.removeOwnModel(String(id)); return { ok: true }; });
   ipcMain.handle('desktop:reveal', (event, path) => { if (fromPage(event) && typeof path === 'string' && path) shell.showItemInFolder(path); });
@@ -899,6 +951,6 @@ app.on('before-quit', (event) => {
   quitAfterStudio(event, {
     quitting, markQuitting: () => { quitting = true; }, studio,
     /* and the ones opened only to ask (signed in? its options?), which belong to no chat */
-    closeAgents: () => { localAgents?.closeAll(); closeEverySession(); }, quit: () => app.quit(),
+    closeAgents: () => { agentCatalogs?.close(); localAgents?.closeAll(); closeEverySession(); }, quit: () => app.quit(),
   });
 });

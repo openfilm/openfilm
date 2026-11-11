@@ -1013,14 +1013,15 @@ export function codexServiceError(update) {
 }
 
 /**
- * The turn's error for a refusal. A model "not supported when using Codex" is one this Codex is too old for (Codex
- * lists models it cannot use yet): updating it, or another model, is the fix.
+ * The turn's error for a refusal. Codex's model catalog may include a model the service refuses for this session.
+ * Name the selected CLI separately from the service's reason.
  * @param {{ message: string }} refused @param {string | undefined} path @param {(file: string) => string | null} [versionOf]
  */
 export function codexRefusal(refused, path, versionOf = codexVersion) {
   if (!/not supported when using Codex/i.test(refused.message)) return new Error(refused.message);
   const version = path ? versionOf(path) : null;
-  return Object.assign(new Error(`${refused.message} Update Codex${version ? ` (this one is ${version})` : ''}, or choose another model.`), { code: 'outdated' });
+  const selected = version ? ` Selected Codex CLI: ${version}.` : '';
+  return Object.assign(new Error(`${refused.message}${selected} Choose another model or check for a Codex update.`), { code: 'unsupported-model' });
 }
 
 /**

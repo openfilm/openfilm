@@ -383,6 +383,7 @@ function commandFor(ref: StudioRef): StudioCommand {
     list: native.agents.list,
     connect: native.agents.connect,
     onChange: native.agents.onChange,
+    refreshModels: native.agents.refreshModels,
   },
   localAgents: native.localAgents,
   openSettings: (section: string) => command?.({ type: 'settings', section: section === 'providers' ? 'providers' : 'agents' }),
