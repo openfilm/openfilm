@@ -1,6 +1,7 @@
 /** Platform choices fill the same editable settings as the default video preset. */
 import type { FilmFrameFill, FilmFrameId } from './film-frame.ts';
 import { exportPreset, presetFps, type ExportQuality, type ExportVideoCodec } from './export-spec.ts';
+import { DELIVERY_LOUDNESS, keptLoudness } from './delivery-loudness.ts';
 
 export interface VideoExportSettings {
   /** 'default', 'custom', or a platform id. */
@@ -14,8 +15,11 @@ export interface VideoExportSettings {
   audio: boolean;
   burn: boolean;
   sidecar: 'none' | 'srt' | 'vtt';
-  /** The whole film's loudness in LUFS, true peaks under -1 dBTP; null: as mixed. */
+  /** The whole film's loudness in LUFS, true peaks under -1 dBTP; null: as mixed. What the preview is heard at too
+      (lib/delivery-loudness). */
   loudness: number | null;
+  /** The person picked the loudness (kept null before was the old default, not a choice). */
+  loudnessChosen?: boolean;
 }
 
 export const DEFAULT_VIDEO_EXPORT: VideoExportSettings = {
@@ -29,7 +33,7 @@ export const DEFAULT_VIDEO_EXPORT: VideoExportSettings = {
   audio: true,
   burn: true,
   sidecar: 'none',
-  loudness: null,
+  loudness: DELIVERY_LOUDNESS,
 };
 
 export function videoExportPreset(id: string, projectFps: number): VideoExportSettings {
@@ -59,6 +63,7 @@ export function patchVideoExport(
 /** Keep older video settings. As before, opening Export starts with sound enabled. */
 export function readVideoExport(raw?: Partial<VideoExportSettings>): VideoExportSettings {
   const video = { ...DEFAULT_VIDEO_EXPORT, ...raw, audio: true };
+  video.loudness = keptLoudness(raw ? raw.loudness : DEFAULT_VIDEO_EXPORT.loudness, raw?.loudnessChosen === true);
   if (raw?.preset === 'default' || raw?.preset === 'custom' || exportPreset(raw?.preset)) return video;
   const standard = Object.entries(DEFAULT_VIDEO_EXPORT).every(
     ([key, value]) => key === 'preset' || video[key as keyof VideoExportSettings] === value

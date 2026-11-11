@@ -330,6 +330,18 @@ test('a video exported at a loudness has its sound there, true peaks under -1 dB
   assert.ok(peak <= -1, `true peak ${peak}`);
 });
 
+test('the sound exported at a loudness: the mix brought there, the stems as they are', ffmpeg, async () => {
+  const { loudnessOf } = await import('../../src/loudness.mjs');
+  const done = await exported({ kind: 'audio', format: 'wav', stems: true, loudness: -20 }, 'Level');
+  const [mixed, ...stems] = done.outputs;
+  const { lufs, peak } = await loudnessOf(mixed);
+  assert.ok(Math.abs(lufs - -20) <= 0.5, `integrated loudness ${lufs}`);
+  assert.ok(peak <= -1, `true peak ${peak}`);
+  const plain = await exported({ kind: 'audio', format: 'wav', stems: true }, 'Plain');
+  for (const [i, stem] of stems.entries()) assert.deepEqual(readFileSync(stem), readFileSync(plain.outputs[i + 1]), 'a stem is not touched');
+  assert.throws(() => createExports({ captions: subtitles }).start(project(), { kind: 'audio', loudness: -2 }), ExportError);
+});
+
 test('what an export Studio could not finish left behind goes before the next one; what a running Studio is making stays', ffmpeg, async () => {
   /* a process that has ended, one still running, and this one */
   const gone = spawn(process.execPath, ['-e', '']);

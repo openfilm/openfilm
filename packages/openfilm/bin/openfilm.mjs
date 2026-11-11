@@ -114,8 +114,10 @@ openfilm skill remove <name>
   --blur          motion blur (8 samples)   --samples <n>   --shutter <0..1>
   --alpha         transparent background    --workers <n>   parallel browsers
   --subtitles     burn in a project's subtitles from before caption tracks
-  --loudness=<n>  the sound at n LUFS (-70 to -5; -14 for online video), true peaks under -1 dBTP; the
-                  picture is not touched. Write it with = so the minus sign is read as the value`,
+  --loudness=<n>  the sound at n LUFS (-70 to -5; -14 for online video, what Studio exports at unless the
+                  person picks another), true peaks under -1 dBTP; the picture is not touched. Write it
+                  with = so the minus sign is read as the value. Without it, the sound as mixed, its peaks
+                  caught so it never clips`,
 };
 
 /* `openfilm` alone: the manual, the whole of what an agent needs to know. `get` takes any options its verb has,

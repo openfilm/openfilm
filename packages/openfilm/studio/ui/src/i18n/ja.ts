@@ -406,6 +406,7 @@ export const ja: Words = {
     subtitles: '字幕',
     burnIn: '字幕を映像に焼き込む',
     noSidecar: 'ファイルなし',
+    loudness: 'ラウドネス',
     loudnessAsMixed: 'ミックスのまま',
     loudnessHint: '作品全体をこのラウドネスにそろえ、トゥルーピークは -1 dBTP 以下に抑えます。YouTube や配信には -14、ポッドキャストには -16、放送には -23。',
     gifWidth: 'サイズ',

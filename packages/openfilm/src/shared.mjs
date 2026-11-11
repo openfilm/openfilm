@@ -5,6 +5,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { FilmPage, FrameError, launch, serve } from './host.mjs';
 import { FILM_FILE, readFilmFile } from './film-doc.mjs';
 import { readableLink, referenceSource } from './media-links.mjs';
+import { limiterFilter } from './loudness.mjs';
 
 /**
  * A film argument (a project folder with film.html, a folder inside one, a folder with index.html, or an .html file)
@@ -273,9 +274,12 @@ export function fadeFilter(fade) {
   return `aeval='val(ch)*clip(${parts.join('*')},0,1)':c=same`;
 }
 
-/** Mix clips into one track of `duration` seconds. */
-export async function mix(clips, duration, file, codec = ['-c:a', 'aac', '-b:a', '192k']) {
-  const { inputs, filter } = mixGraph(clips.map((c) => ({ ...c, channels: c.channels ?? audioChannels(c.file) })), duration);
+/**
+ * Mix clips into one track of `duration` seconds. `limit`: its peaks caught under the delivery ceiling
+ * (loudness.mjs limiterFilter), as a film's sound is delivered; without it, the sum as it is (to be measured).
+ */
+export async function mix(clips, duration, file, codec = ['-c:a', 'aac', '-b:a', '192k'], { limit = false } = {}) {
+  const { inputs, filter } = mixGraph(clips.map((c) => ({ ...c, channels: c.channels ?? audioChannels(c.file) })), duration, { limit });
   /* a mix takes seconds; one that has not ended in minutes never will */
   const timeoutMs = (120 + duration * 2) * 1000;
   /* a long graph goes in a file of its own: a command line has a limit (32,767 characters on Windows), and a film of
@@ -299,7 +303,7 @@ export const COMMAND_ROOM = 24_000;
  * clip deep inside a long recording is not decoded from the start); one used by several is read once and split, each
  * part cut from it, so a film that uses one sound a hundred times has one input, not a hundred.
  */
-export function mixGraph(clips, duration) {
+export function mixGraph(clips, duration, { limit = false } = {}) {
   /** @type {Map<string, number[]>} */
   const uses = new Map();
   clips.forEach((c, i) => uses.set(c.file, [...(uses.get(c.file) ?? []), i]));
@@ -335,7 +339,8 @@ export function mixGraph(clips, duration) {
      first, from its samples (it starts at 0 and has no gaps): at times amix's frames come without any (ffmpeg 8 on
      Linux, about one mix in 25 with three inputs), and apad, which pads by them, then padded nothing and a film whose
      last sound ended before it did got a mix that ended there */
-  const sum = `${clips.map((_, i) => `[a${i}]`).join('')}amix=inputs=${clips.length}:normalize=0:dropout_transition=0,asetpts=N/SR/TB,apad=whole_dur=${duration},atrim=0:${duration}[out]`;
+  const limited = limit ? `,${limiterFilter()},asetpts=N/SR/TB` : '';
+  const sum = `${clips.map((_, i) => `[a${i}]`).join('')}amix=inputs=${clips.length}:normalize=0:dropout_transition=0,asetpts=N/SR/TB${limited},apad=whole_dur=${duration},atrim=0:${duration}[out]`;
   return { inputs, filter: [...splits, ...chains, sum].join(';') };
 }
 

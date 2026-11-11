@@ -403,6 +403,7 @@ export const ko: Words = {
     subtitles: '자막',
     burnIn: '자막을 화면에 입히기',
     noSidecar: '파일 없음',
+    loudness: '라우드니스',
     loudnessAsMixed: '믹스 그대로',
     loudnessHint: '영상 전체를 이 라우드니스로 맞추고 트루 피크는 -1 dBTP 아래로 둡니다. YouTube와 스트리밍은 -14, 팟캐스트는 -16, 방송은 -23.',
     gifWidth: '크기',

@@ -406,6 +406,7 @@ export const es: Words = {
     subtitles: 'Subtítulos',
     burnIn: 'Incrustar los subtítulos en la imagen',
     noSidecar: 'Sin archivo',
+    loudness: 'Sonoridad',
     loudnessAsMixed: 'Como está mezclado',
     loudnessHint: 'Toda la película a esta sonoridad, con picos reales por debajo de -1 dBTP. -14 para YouTube y streaming, -16 para pódcast, -23 para televisión.',
     gifWidth: 'Tamaño',

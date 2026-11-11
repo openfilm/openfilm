@@ -250,6 +250,10 @@ export const api = {
   loudness: (id: string, path: string, from: number, to: number) => call<{ lufs: number | null; peak: number | null }>(
     `${p(id)}/media?what=loudness&path=${encodeURIComponent(path)}&from=${from}&to=${to}`,
   ),
+  /** how loud the film's sound is as mixed, before any loudness target or limiter: integrated LUFS (null: silent) and true peak */
+  mixLoudness: (id: string, sounds: readonly unknown[], duration: number) => call<{ lufs: number | null; peak: number | null }>(
+    `${p(id)}/mix-loudness`, { method: 'POST', json: { sounds, duration } },
+  ),
   /** a video's frame (`ms` of its own time) made a still beside it; answers its path */
   freezeFrame: (id: string, path: string, ms: number) => call<{ path: string }>(`${p(id)}/files/still`, { method: 'POST', json: { path, ms } }).then((r) => r.path),
   /** The project's own cover for its card (studio/server/cover.mjs): a picture from this computer, a picture of the project,

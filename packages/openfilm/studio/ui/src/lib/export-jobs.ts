@@ -20,7 +20,7 @@ export type ExportRequest = { range?: [number, number]; ranges?: [number, number
   | (Framing & { kind: 'video'; codec: ExportVideoCodec; shortEdge?: number; fps: number; quality: ExportQuality; audio: boolean;
     clip?: string; scale?: number; preset?: string; sidecar?: 'srt' | 'vtt'; loudness?: number })
   | (Framing & { kind: 'gif'; width: number; fps: number })
-  | { kind: 'audio'; format: 'wav' | 'm4a' | 'mp3'; mix: boolean; stems: boolean }
+  | { kind: 'audio'; format: 'wav' | 'm4a' | 'mp3'; mix: boolean; stems: boolean; loudness?: number }
   | (Framing & { kind: 'stills'; as?: 'files' | 'zip'; format: 'png' | 'jpg'; shortEdge: number; at?: number[] })
   | (Framing & { kind: 'poster'; format: 'png' | 'jpg'; shortEdge: number; at?: number })
   | { kind: 'subtitles'; format: 'srt' | 'vtt' | 'txt' }

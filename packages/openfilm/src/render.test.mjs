@@ -372,6 +372,24 @@ test('--subtitles burns the project\'s subtitles into its film, named as its ren
   }
 });
 
+test('sounds that add up past full scale are caught under the ceiling in any render: a film never clips', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-limit-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, 'assets'));
+  writeFileSync(join(dir, 'page.html'), '<!doctype html><body style="margin:0;background:#204080"><script>window.film = { duration: 2, width: 160, height: 90, frame() {} };</script>');
+  /* two sounds each near full scale, in phase on two tracks: together twice it */
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'aevalsrc=0.9*sin(2*PI*220*t):s=48000:d=2', '-c:a', 'pcm_f32le', join(dir, 'assets', 'a.wav')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+    { clips: [{ id: 'p', src: 'page.html' }] }, { clips: [{ id: 'a', src: 'assets/a.wav' }] }, { clips: [{ id: 'b', src: 'assets/a.wav' }] },
+  ] }));
+  const { loudnessOf } = await import('./loudness.mjs');
+  for (const name of ['film.mp4', 'film.mov']) {
+    const done = await render([dir], { workers: 1, silent: false, onProgress() {}, fps: 10, hardware: false, out: join(dir, name) });
+    const { peak } = await loudnessOf(done.out);
+    assert.ok(peak <= -0.5, `${name}: true peak ${peak} dBTP`);
+  }
+});
+
 test('--loudness brings the sound to the target with true peaks under -1 dBTP, the picture as drawn; a target out of range is refused (#323)', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'of-render-loud-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

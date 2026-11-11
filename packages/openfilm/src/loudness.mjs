@@ -14,6 +14,15 @@ const RATE = 48000;
 const OVERSAMPLE = 4;
 const HEADROOM = 1;
 
+/**
+ * A limiter as a filter: peaks over `ceiling` (dBFS) caught at four times the rate, so the peaks between samples are
+ * seen too, then back at the mix's rate. What every film's sound goes through as it is delivered, at the ceiling
+ * TRUE_PEAK less HEADROOM by default: added sounds never clip, and what is under it is not touched.
+ * @param {number} [ceiling]
+ */
+export const limiterFilter = (ceiling = TRUE_PEAK - HEADROOM) =>
+  `aresample=${RATE * OVERSAMPLE},alimiter=limit=${(10 ** (ceiling / 20)).toFixed(4)}:attack=3:release=60:level=false:asc=1:latency=1,aresample=${RATE}`;
+
 /** Whether `n` is a loudness target there can be. @param {unknown} n @returns {n is number} */
 export const isLoudness = (n) => typeof n === 'number' && Number.isFinite(n) && n >= LOUDNESS_RANGE[0] && n <= LOUDNESS_RANGE[1];
 
@@ -66,7 +75,7 @@ export async function toLoudness(from, to, codec, { lufs, peak = TRUE_PEAK, sign
   let ceiling = peak - HEADROOM;
   let after = before;
   for (let pass = 0; pass < 3; pass += 1) {
-    await encode(`aresample=${RATE * OVERSAMPLE},volume=${gain.toFixed(2)}dB,alimiter=limit=${(10 ** (ceiling / 20)).toFixed(4)}:attack=3:release=60:level=false:asc=1:latency=1,aresample=${RATE}`);
+    await encode(`volume=${gain.toFixed(2)}dB,${limiterFilter(ceiling)}`);
     after = await loudnessOf(to, signal);
     if (Math.abs(after.lufs - lufs) <= LOUDNESS_SLACK && after.peak <= peak) break;
     gain += lufs - after.lufs;

@@ -47,3 +47,14 @@ test('previous video and social settings migrate without discarding the chosen e
   );
   assert.equal(legacySocialVideo('douyin', 'high', 'auto', 60).preset, 'douyin');
 });
+
+test('a film is delivered at -14 LUFS until the person picks another loudness, "as mixed" included', () => {
+  assert.equal(DEFAULT_VIDEO_EXPORT.loudness, -14);
+  /* kept null before -14 was the default: not a choice */
+  const before = readVideoExport({ loudness: null });
+  assert.deepEqual([before.loudness, before.preset], [-14, 'default']);
+  assert.equal(readVideoExport({ loudness: null, loudnessChosen: true }).loudness, null);
+  assert.equal(readVideoExport({ loudness: -23 }).loudness, -23);
+  const picked = patchVideoExport(DEFAULT_VIDEO_EXPORT, { loudness: null, loudnessChosen: true });
+  assert.equal(readVideoExport(picked).loudness, null);
+});

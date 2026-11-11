@@ -407,6 +407,7 @@ export const zhCN: Words = {
     subtitles: '字幕',
     burnIn: '将字幕烧录到画面中',
     noSidecar: '不导出文件',
+    loudness: '响度',
     loudnessAsMixed: '按混音原样',
     loudnessHint: '整片调到这个响度，真峰值不超过 -1 dBTP。-14 适合 YouTube 和各视频平台，-16 适合播客，-23 适合电视广播。',
     gifWidth: '尺寸',

@@ -22,7 +22,7 @@
  *       loudness the sound brought to this many LUFS (-70 to -5), true peaks under -1 dBTP (render --loudness);
  *                none: as mixed
  *   { kind: 'gif', frame?, fill?, width? (long side, default 640), fps? (default 15) }
- *   { kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean (default true), stems?: boolean }
+ *   { kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean (default true), stems?: boolean, loudness? }
  *       mix: `<name> - mix`; stems: voice, music, sound effects and the footage's own sound, each its own file
  *       (`<name> - voice`…), a sound grouped by where it is (assets/audio/music/…, assets/audio/sfx/…, anything
  *       else is voice) and a video's sound as the footage's (nle.mjs soundStem)
@@ -76,7 +76,7 @@ import { FilmPage, launch } from '../../src/host.mjs';
 import { alphaCompositeFilter, broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, onTheChip, prores709, proresOptions } from '../../src/encoders.mjs';
 import { COMMAND_ROOM, filmSound, filterScriptOption, kill as killProcess, mix, open } from '../../src/shared.mjs';
 import { defaultWorkers, machine } from '../../src/render.mjs';
-import { isLoudness, LOUDNESS_RANGE } from '../../src/loudness.mjs';
+import { isLoudness, LOUDNESS_RANGE, toLoudness } from '../../src/loudness.mjs';
 import { selectionClips } from '../../src/render-ranges.mjs';
 import { filmVideos } from '../../src/seekable.mjs';
 import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFilmFile } from '../../src/film-doc.mjs';
@@ -111,7 +111,7 @@ export { exportsRoot };
  *   fps?: number, quality?: Quality, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean, loudness?: number,
  *   samples?: number, shutter?: number }} VideoAsk
  * @typedef {Framing & { kind: 'gif', width?: number, fps?: number }} GifAsk
- * @typedef {{ kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean, stems?: boolean }} AudioAsk
+ * @typedef {{ kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean, stems?: boolean, loudness?: number }} AudioAsk
  * @typedef {Framing & { kind: 'stills', as?: 'files' | 'zip', format?: 'png' | 'jpg', shortEdge?: number, at?: number[] }} StillsAsk
  * @typedef {Framing & { kind: 'poster', format?: 'png' | 'jpg', shortEdge?: number, at?: number }} PosterAsk
  * @typedef {{ kind: 'subtitles', format?: 'srt' | 'vtt' | 'txt' }} SubtitlesAsk
@@ -362,6 +362,7 @@ function checked(/** @type {ExportAsk} */ ask) {
     case 'audio':
       if (ask.format !== undefined && !(ask.format in SOUND_CODECS)) throw new ExportError('sound as wav, m4a or mp3');
       if (ask.mix === false && !ask.stems) throw new ExportError('choose the mix, the stems, or both');
+      if (ask.loudness !== undefined && !isLoudness(ask.loudness)) throw new ExportError(`loudness: ${LOUDNESS_RANGE[0]} to ${LOUDNESS_RANGE[1]} LUFS`);
       break;
     case 'stills':
     case 'poster':
@@ -1057,10 +1058,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const allClips = await filmSound(probe, selected ? 0 : from);
       const clips = selected ? selectionClips(allClips, selected) : allClips;
       if (!clips.length) throw new ExportError('this film has no sound');
-      /** @type {{ suffix: string, clips: typeof clips }[]} */
+      /** @type {{ suffix: string, clips: typeof clips, mix?: boolean }[]} */
       const plan = [];
       /* named for what each is: the whole mix, or one stem of it */
-      if (ask.mix !== false) plan.push({ suffix: ' - mix', clips });
+      if (ask.mix !== false) plan.push({ suffix: ' - mix', clips, mix: true });
       if (ask.stems) {
         for (const role of STEMS) {
           const part = clips.filter((c) => soundStem(relative(root, c.file).split(sep).join('/')) === role);
@@ -1076,7 +1077,15 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         const part = partialOf(out, job.id);
         outputs.push(part);
         update(job, { out: outputs[0], outputs: [...outputs], progress: Math.floor((i / plan.length) * 100) / 100 });
-        await mix(step.clips, to - from, part, codec);
+        /* the mix as the film's sound is delivered: brought to the loudness asked (render --loudness), or its peaks
+           caught under the ceiling; a stem as it is, for mixing elsewhere */
+        if (step.mix && ask.loudness != null) {
+          const wav = `${part}.mix.wav`;
+          try {
+            await mix(step.clips, to - from, wav, ['-c:a', 'pcm_f32le']);
+            await toLoudness(wav, part, codec, { lufs: ask.loudness, signal });
+          } finally { await rm(wav, { force: true }); }
+        } else await mix(step.clips, to - from, part, codec, { limit: Boolean(step.mix) });
         await renameSafely(part, out);
         outputs[i] = out;
         update(job, { out: outputs[0], outputs: [...outputs] });

@@ -83,4 +83,6 @@ The words of a sound or a video are a WebVTT beside it with the same name (`vo/1
 
 `openfilm look`, in the film's folder: a contact sheet of the whole film with its sound, and a check that the same t draws the same picture. `look 4.5` is one frame at full size, `look 3-6` a stretch, `look assets/a.mp4` a media file. After a render, `look --full` watches every frame of the rendered film for white flashes, jumping frames, still pictures and black, and `look --loudness=-14` says how far the mix is from a delivery loudness. Reading a frame it saves shows it to you: check every shot with it after you change the film, and never say it works or looks right before you have.
 
+A film rendered for the person to publish is rendered with `--loudness=-14`, the loudness Studio exports and previews at, unless they ask for another (`-16` a podcast, `-23` broadcast).
+
 A render that stopped on its own (a crash or the computer asleep) is resumed by running it again with the same options: it draws only what it had not finished. Cancelling on purpose clears its chunks.

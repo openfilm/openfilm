@@ -24,6 +24,7 @@ import { FRAME_RATES } from '@/lib/timecode';
 import { applyRangeDelivery, readExportRanges, requestDurationMs, type ExportRangeDraft, type RangeDelivery } from '@/lib/export-range';
 import { api } from '@/api';
 import { DEFAULT_VIDEO_EXPORT, legacySocialVideo, patchVideoExport, readVideoExport, videoExportPreset, type VideoExportSettings } from '@/lib/video-export-preset';
+import { announceDeliveryLoudness, DELIVERY_LOUDNESS, keptLoudness } from '@/lib/delivery-loudness';
 import {
   CODEC_LABEL,
   EXPORT_ALPHA_CODECS,
@@ -97,7 +98,8 @@ interface Settings {
   gif: { width: number; fps: number; frame: FrameChoice; fill: FilmFrameFill; burn: boolean };
   /** `source`: a block's clip id, or the whole film. */
   alpha: { codec: ExportVideoCodec; source: string; shortEdge: number; scale: number; fps: number; audio: boolean };
-  audio: { format: 'wav' | 'm4a' | 'mp3'; mix: boolean; stems: boolean };
+  /** `loudness`: the mix's, as a video's (lib/delivery-loudness); the stems stay as they are */
+  audio: { format: 'wav' | 'm4a' | 'mp3'; mix: boolean; stems: boolean; loudness: number | null; loudnessChosen?: boolean };
   /** For an editing program: the sound as clips or as mixed stems. */
   /** the app it is for: `draft` 剪映 (in Chinese) or CapCut (elsewhere), the same draft; `auto`: the draft when that app
       is on this computer, else Premiere Pro */
@@ -118,7 +120,7 @@ const DEFAULTS: Settings = {
   video: { ...DEFAULT_VIDEO_EXPORT },
   gif: { width: 640, fps: 15, frame: 'current', fill: 'contain', burn: true },
   alpha: { codec: 'prores4444', source: WHOLE_FILM, shortEdge: 1080, scale: 1, fps: 30, audio: true },
-  audio: { format: 'wav', mix: true, stems: false },
+  audio: { format: 'wav', mix: true, stems: false, loudness: DELIVERY_LOUDNESS },
   nle: { app: 'auto', fps: 'source', audio: 'clips', media: 'copy', alphaDraft: 'auto', alphaXml: 'prores4444' },
   subtitles: { format: 'srt' },
   images: { as: 'files', format: 'png', shortEdge: 1080, frame: 'current', fill: 'contain', burn: false },
@@ -165,7 +167,7 @@ function loadSettings(language: string, projectFps: number): Settings {
       video,
       gif: { ...DEFAULTS.gif, ...raw.gif },
       alpha: { ...DEFAULTS.alpha, ...raw.alpha, audio: true },
-      audio: { ...DEFAULTS.audio, ...raw.audio },
+      audio: { ...DEFAULTS.audio, ...raw.audio, loudness: keptLoudness(raw.audio ? raw.audio.loudness : DELIVERY_LOUDNESS, raw.audio?.loudnessChosen === true) },
       nle,
       subtitles: { ...DEFAULTS.subtitles, ...raw.subtitles },
       images,
@@ -180,6 +182,8 @@ function loadSettings(language: string, projectFps: number): Settings {
 
 function saveSettings(s: Settings): void {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch { /* storage off (private window) */ }
+  /* the preview is heard at the video's loudness */
+  announceDeliveryLoudness();
 }
 
 const SHORT_EDGES = [480, 720, 1080, 1440, 2160];
@@ -441,7 +445,9 @@ export function ExportCenter(props: ExportCenterProps) {
         return [{ kind: 'gif', frame: resolveFrame(s.gif.frame), fill: s.gif.fill, width: s.gif.width, fps: s.gif.fps, label: 'GIF', ...burn(s.gif.burn) }];
       case 'audio': {
         const stems = s.audio.stems;
-        return [{ kind: 'audio', format: audioFormat, stems, mix: stems ? s.audio.mix : true, label: t(stems ? 'exportCenter.audioStems' : 'exportCenter.audioMix') }];
+        const mixed = stems ? s.audio.mix : true;
+        return [{ kind: 'audio', format: audioFormat, stems, mix: mixed, label: t(stems ? 'exportCenter.audioStems' : 'exportCenter.audioMix'),
+          ...(mixed && s.audio.loudness != null ? { loudness: s.audio.loudness } : {}) }];
       }
       case 'nle':
         return [{
@@ -745,7 +751,7 @@ export function ExportCenter(props: ExportCenterProps) {
                                 { value: 'mixed', label: t('exportCenter.loudnessAsMixed') },
                                 ...LOUDNESS_TARGETS.map((n) => ({ value: String(n), label: `${n} LUFS` })),
                               ]}
-                              onChange={(v) => patch('video', { loudness: v === 'mixed' ? null : Number(v) })}
+                              onChange={(v) => patch('video', { loudness: v === 'mixed' ? null : Number(v), loudnessChosen: true })}
                             />
                             <span className="mt-1 block text-[11px] leading-snug text-[var(--text-faint)]">{t('exportCenter.loudnessHint')}</span>
                           </div>
@@ -966,6 +972,19 @@ export function ExportCenter(props: ExportCenterProps) {
                       )}
                     </div>
                   </Field>
+                  {(s.audio.mix || !s.audio.stems) && (
+                    <Field label={t('exportCenter.loudness')}>
+                      <Segmented
+                        value={s.audio.loudness == null ? 'mixed' : String(s.audio.loudness)}
+                        options={[
+                          { value: 'mixed', label: t('exportCenter.loudnessAsMixed') },
+                          ...LOUDNESS_TARGETS.map((n) => ({ value: String(n), label: `${n} LUFS` })),
+                        ]}
+                        onChange={(v) => patch('audio', { loudness: v === 'mixed' ? null : Number(v), loudnessChosen: true })}
+                      />
+                      <span className="mt-1 block text-[11px] leading-snug text-[var(--text-faint)]">{t('exportCenter.loudnessHint')}</span>
+                    </Field>
+                  )}
                   <Hint>{t('exportCenter.stemsHint')}</Hint>
                 </>
               )}

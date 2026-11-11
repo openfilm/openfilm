@@ -28,7 +28,7 @@ import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { mediaReferences } from '../../src/media-links.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
-import { MediaError, frame, loudness, mixedWaveform, poster, probe, waveform } from './derived.mjs';
+import { MediaError, frame, loudness, mixLoudness, mixedWaveform, poster, probe, waveform } from './derived.mjs';
 import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, restoreFilm, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
 import * as personEdits from './person-edits.mjs';
 import { createAutoVersions } from './auto-versions.mjs';
@@ -1233,6 +1233,28 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const source = typeof from === 'string' ? await projectById(from).catch(() => null) : null;
       if (!source || source.missing) throw new HttpError(404, 'The project it was copied from is not there any more.');
       return json(res, 200, await savedCall(() => bringClip(project.path, source.path, clip, source.name)));
+    }
+    /* how loud the film's sound is as mixed (derived.mjs mixLoudness): the sounds the preview plays, and how long the
+       film is; what the preview turns its sound by to be heard at the loudness it is delivered at */
+    if (rest === 'mix-loudness' && req.method === 'POST') {
+      const { sounds, duration } = /** @type {{ sounds?: unknown, duration?: unknown }} */ (await readJson(req) ?? {});
+      if (!Array.isArray(sounds) || sounds.length > 5000 || typeof duration !== 'number' || !(duration > 0 && duration <= 24 * 3600)) throw new HttpError(400, 'sounds: a list of the film\'s sounds; duration: seconds');
+      /* the preview names each sound on the address the film is served at: taken back to its path in the project,
+         and only a file the project serves (any other is no sound of this film) */
+      const base = new URL(pages.folderUrl(project));
+      const local = /** @type {import('../../src/host.mjs').FilmSound[]} */ (sounds).flatMap((sound) => {
+        if (!sound || typeof sound.src !== 'string') return [];
+        const source = new URL(sound.src, base);
+        if (source.origin !== base.origin || !source.pathname.startsWith(base.pathname)) return [];
+        const path = decodeURIComponent(source.pathname.slice(base.pathname.length));
+        return path && servable(project.path, path) ? [{ ...sound, src: path.split('/').map(encodeURIComponent).join('/') }] : [];
+      });
+      try {
+        return json(res, 200, await mixLoudness(project.path, local, duration));
+      } catch (e) {
+        if (e instanceof MediaError) throw e;
+        throw new HttpError(422, String(/** @type {Error} */ (e)?.message ?? e));
+      }
     }
     /* what Studio works out from a media file: its length and size, a poster, a frame, a waveform (see derived.mjs) */
     if (rest === 'media' && req.method === 'GET') {

@@ -170,6 +170,7 @@ import type { LayerPropsActions } from './FilmInspector';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { libraryApi, librarySources, parseLibraryRef, type LibraryAbout } from '@/lib/media-library';
 import { MediaLibraryPane } from './MediaLibraryPage';
+import { deliveryGainDb, deliveryLoudness, onDeliveryLoudness } from '@/lib/delivery-loudness';
 import { batchMap } from '@/lib/batch-map';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
@@ -4573,6 +4574,26 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const mtimeOf = React.useMemo(() => new Map([...(rawListing?.files ?? []), ...(rawListing?.pages ?? [])].map((f) => [f.path, f.mtime])), [rawListing]);
   /* a sound made again in place is heard as it is now, not as it was decoded */
   React.useEffect(() => { player.current.setVersions((src) => mtimeOf.get(src)); }, [mtimeOf]);
+  /* the preview heard at the loudness the film is delivered at (lib/delivery-loudness): the mix measured as it is
+     (again once its sounds, or a file of theirs, change; a moment after the last change), turned by the difference */
+  const [deliveryLufs, setDeliveryLufs] = React.useState(deliveryLoudness);
+  React.useEffect(() => onDeliveryLoudness(setDeliveryLufs), []);
+  const mixKey = React.useMemo(() => (info?.sounds.length
+    ? JSON.stringify([info.duration, info.sounds.map((s) => [s.src, s.at, s.from, s.to, s.volume, s.speed, s.fade, mtimeOf.get(s.src)])])
+    : ''), [info, mtimeOf]);
+  const [mixLufs, setMixLufs] = React.useState<{ key: string; lufs: number | null } | null>(null);
+  React.useEffect(() => {
+    if (!mixKey || !info) return undefined;
+    let live = true;
+    const sounds = info.sounds, duration = info.duration;
+    const wait = window.setTimeout(() => {
+      void api.mixLoudness(projectId, sounds, duration).then((r) => { if (live) setMixLufs({ key: mixKey, lufs: r.lufs }); }, () => {});
+    }, 800);
+    return () => { live = false; window.clearTimeout(wait); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, mixKey]);
+  /* while a change is measured, the last measure stands: the sound does not jump to as-mixed and back */
+  React.useEffect(() => { player.current.setDelivery(deliveryGainDb(deliveryLufs, mixKey ? mixLufs?.lufs : null)); }, [deliveryLufs, mixLufs, mixKey]);
   refSource.current = { projectId, version: (path) => mtimeOf.get(path) };
   /* a page clip's pictures are drawn with the changes made inside it (its overrides), by its id: changed, asked again */
   const tweakTokens = React.useMemo(() => {

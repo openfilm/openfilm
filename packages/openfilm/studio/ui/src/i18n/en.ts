@@ -407,6 +407,7 @@ export const en = {
     subtitles: 'Subtitles',
     burnIn: 'Burn subtitles into the picture',
     noSidecar: 'No file',
+    loudness: 'Loudness',
     loudnessAsMixed: 'As mixed',
     loudnessHint: 'The whole film brought to this loudness, true peaks under -1 dBTP. -14 for YouTube and streaming, -16 for podcasts, -23 for broadcast.',
     gifWidth: 'Size',

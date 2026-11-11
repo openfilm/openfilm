@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MediaError, frame, loudness, loudnessOf, poster, probe, soundOf, waveform } from './derived.mjs';
+import { MediaError, frame, loudness, loudnessOf, mixLoudness, poster, probe, soundOf, waveform } from './derived.mjs';
 
 let root;
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
@@ -78,6 +78,20 @@ test('loudness: the part of the file asked for, in LUFS; 6 dB quieter reads 6 LU
   assert.equal((await loudness(root, 'assets/half.wav', 3.05, 4)).lufs, null);
   assert.equal((await loudness(root, 'assets/half.wav', 3.05, 4)).lufs, null, 'the cache answers the same');
   await assert.rejects(loudness(root, 'assets/tone.wav', 2, 1), (e) => e instanceof MediaError && e.status === 400);
+});
+
+test('the mix\'s loudness: the sounds added as a render adds them, before any limiter; none for silence', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  /* stereo: a mono sound is put on both sides in the mix (as a browser plays it), 3 LU over the file measured alone */
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=2', '-ac', '2', join(root, 'assets', 'mixone.wav')]);
+  const one = await loudness(root, 'assets/mixone.wav', 0, 2);
+  const sound = { src: 'assets/mixone.wav', at: 0, from: 0, to: 2, volume: 1, speed: 1 };
+  const alone = await mixLoudness(root, [sound], 2);
+  assert.ok(alone.lufs != null && one.lufs != null && Math.abs(alone.lufs - one.lufs) < 0.3, `${alone.lufs} ${one.lufs}`);
+  /* the same sound twice, in phase: twice as loud (6 dB), measured as it is, not caught by a limiter */
+  const twice = await mixLoudness(root, [sound, { ...sound }], 2);
+  assert.ok(twice.lufs != null && Math.abs(twice.lufs - alone.lufs - 6) < 0.3, `${twice.lufs} ${alone.lufs}`);
+  assert.deepEqual(await mixLoudness(root, [{ ...sound, volume: 0 }], 2), { lufs: null, peak: null });
+  assert.deepEqual(await mixLoudness(root, [], 2), { lufs: null, peak: null });
 });
 
 test('loudness is read from ebur128\'s summary, not its running lines', () => {

@@ -144,6 +144,28 @@ export function soundsDue(sounds: readonly Sound[], from: number, until: number,
   return due;
 }
 
+/**
+ * A limiter as an export's (src/loudness.mjs limiterFilter): peaks over -2 dBFS caught at once, let go over 60 ms,
+ * what is under them untouched. The browser's compressor raises everything it passes by a makeup gain of its own
+ * ((1 / its gain at full scale)^0.6, as the Web Audio spec has it): taken off after it, so under the ceiling the
+ * sound is heard at the level it is exported at.
+ */
+export const LIMIT_DB = -2;
+const LIMIT_RATIO = 20;
+export function limiter(ctx: BaseAudioContext): { in: AudioNode; out: AudioNode } {
+  const c = ctx.createDynamicsCompressor();
+  c.threshold.value = LIMIT_DB;
+  c.knee.value = 0;
+  c.ratio.value = LIMIT_RATIO;
+  c.attack.value = 0.001;
+  c.release.value = 0.06;
+  const fullScaleDb = LIMIT_DB - LIMIT_DB / LIMIT_RATIO;
+  const back = ctx.createGain();
+  back.gain.value = 10 ** ((0.6 * fullScaleDb) / 20);
+  c.connect(back);
+  return { in: c, out: back };
+}
+
 export class Player {
   private ctx: AudioContext | null = null;
   /** each file's decoded sound, and the version of the file it was decoded from (undefined: not known then) */
@@ -166,8 +188,12 @@ export class Player {
   /** which call to play is the latest: an earlier one still waiting for the sound gives up */
   private starts = 0;
   private master: GainNode | null = null;
-  /** every sound, before the person's volume: what the meters read */
+  /** every sound added together, as the film's sound is before it is delivered */
   private mix: GainNode | null = null;
+  /** the mix turned to the loudness the film is delivered at (setDelivery), then its peaks caught as an export catches
+      them: what the meters read, before the person's volume */
+  private delivery: GainNode | null = null;
+  private deliveryDb = 0;
   private analysers: [AnalyserNode, AnalyserNode] | null = null;
   private samples: MixSamples | null = null;
   /** the clips heard (solo); null: all of them */
@@ -271,10 +297,14 @@ export class Player {
       this.master.gain.value = this.muted ? 0 : this.volume;
       this.master.connect(this.ctx.destination);
       this.mix = this.ctx.createGain();
-      this.mix.connect(this.master);
+      this.delivery = this.ctx.createGain();
+      this.delivery.gain.value = 10 ** (this.deliveryDb / 20);
+      const caught = limiter(this.ctx);
+      this.mix.connect(this.delivery).connect(caught.in);
+      caught.out.connect(this.master);
       /* a splitter takes two channels in: a mono mix is heard, and metered, on both */
       const split = this.ctx.createChannelSplitter(2);
-      this.mix.connect(split);
+      caught.out.connect(split);
       const meter = (channel: number) => {
         const a = this.ctx!.createAnalyser();
         a.fftSize = 2048;
@@ -325,6 +355,17 @@ export class Player {
   /** Try to start the sound again (a click or key on the page lets a browser that refused it before). */
   wake() {
     if (this.ctx && this.ctx.state !== 'running') void this.ctx.resume().catch(() => {});
+  }
+
+  /**
+   * How far the mix is turned (dB) to be heard at the loudness the film is delivered at (lib/delivery-loudness): 0 as
+   * mixed. Eased over a few milliseconds, so a change while playing does not click.
+   */
+  setDelivery(db: number) {
+    const next = Number.isFinite(db) ? Math.max(-24, Math.min(24, db)) : 0;
+    if (next === this.deliveryDb) return;
+    this.deliveryDb = next;
+    if (this.delivery && this.ctx) this.delivery.gain.setTargetAtTime(10 ** (next / 20), this.ctx.currentTime, 0.02);
   }
 
   setVolume(v: number) {
@@ -595,6 +636,7 @@ export class Player {
     this.ctx = null;
     this.master = null;
     this.mix = null;
+    this.delivery = null;
     this.analysers = null;
   }
 }

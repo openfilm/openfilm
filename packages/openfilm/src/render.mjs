@@ -339,12 +339,13 @@ export async function render(args, opts = {}) {
     if (opts.signal?.aborted) throw new Error('cancelled');
     const sound = clips.length ? join(work, `sound${extname(out) === '.mp4' ? '.m4a' : extname(out) === '.webm' ? '.webm' : '.wav'}`) : null;
     /* --loudness: the mix as it is (32-bit float: sounds added together pass full scale), brought to the target as it
-       is encoded; the picture is not touched */
+       is encoded; the picture is not touched. Without it, the mix as it is, its peaks caught under the ceiling: sounds
+       added together never clip */
     if (sound && opts.loudness != null) {
       const wav = join(work, 'mix.wav');
       await mix(clips, to - from, wav, ['-c:a', 'pcm_f32le']);
       loud = await toLoudness(wav, sound, format.audio, { lufs: opts.loudness, signal: opts.signal });
-    } else if (sound) await mix(clips, to - from, sound, format.audio);
+    } else if (sound) await mix(clips, to - from, sound, format.audio, { limit: true });
     const after = [...format.tag, ...(extname(out) === '.mp4' ? ['-movflags', '+faststart'] : [])];
     /* the parts straight into `out`, with the sound: a page's frames are on the disk twice at most while it is written,
        not three times (a long page drawn as PNG for an editing project is gigabytes). A part with nothing to add is
