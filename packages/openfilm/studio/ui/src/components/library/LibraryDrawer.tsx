@@ -96,8 +96,8 @@ export type SkillsRequest = { name?: string; n: number };
 export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, showSkills, under = 0, shown: isShown = true }: {
   media: React.ReactNode;
   /** the project's own media, or Saved */
-  mediaScope: 'project' | 'saved';
-  onMediaScope: (next: 'project' | 'saved') => void;
+  mediaScope: 'project' | 'saved' | 'all';
+  onMediaScope: (next: 'project' | 'saved' | 'all') => void;
   mediaRequest?: number;
   actions: LibraryActions;
   tried?: string | null;
@@ -457,8 +457,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
             {cat === 'media' ? (
               <>
                 {/* what the person brought into this project (what it took from the library stays in its category),
-                    then Saved */}
+                    every project's and folder's (All media), then Saved */}
                 <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaImport')}</SideBox>
+                <SideBox on={mediaScope === 'all'} onClick={() => onMediaScope('all')}>{t('assetDrawer.mediaAll')}</SideBox>
                 <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.favorites')}</SideBox>
               </>
             ) : cat === 'skill' ? (

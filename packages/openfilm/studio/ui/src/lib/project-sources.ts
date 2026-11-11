@@ -10,6 +10,7 @@
  *   GET  /api/skills?project=<id>   → { skills } (the project's, the person's own, the official ones)
  *   POST /api/projects/:id/locate { path } → { project }
  */
+import { refreshPlugins } from './plugins.ts';
 
 export type BrowseFolder = { name: string; path: string; film: boolean };
 export type BrowseListing = {
@@ -74,6 +75,8 @@ export type SkillEntry = {
   update?: { version: string; commit: string }; retired?: true;
   /** turned off: offered to no agent until it is turned on again */
   off?: true;
+  /** one of OpenFilm's own, off because the plugin it goes with is off (lib/plugins): turned on, its plugin is too */
+  plugin?: string;
 };
 /** an example film's part, as its index names it (`S2-Hook`), from and to in seconds */
 export type ExampleSegment = { title: string; from: number; to: number };
@@ -111,6 +114,8 @@ export const seenExamples = (): Example[] | null => seen.examples;
 /** When Discover's index was last read (ISO time), as the skills read last say; null: never. */
 export const seenCatalog = (): string | null => seen.catalog;
 /** The skills read last for a project (else for no project: the official ones and the person's own), or null. */
+/** What was last seen of the skills is let go: a plugin turned on or off changes which are on. */
+export const forgetSeenSkills = (): void => { seen.skills.clear(); };
 export const seenSkills = (projectId?: string | null): SkillEntry[] | null => seen.skills.get(projectId ?? '') ?? seen.skills.get('') ?? null;
 
 /** The desktop's add dialog and Studio's gallery share the window. */
@@ -173,10 +178,12 @@ export const sourcesApi = {
   },
   /** a skill turned on or off for every project; whoever lists skills (the gallery, the desktop's chat) reads them again */
   setSkillOn: async (uid: string, on: boolean): Promise<void> => {
-    await call<{ on: boolean }>(`skills/${encodeURIComponent(uid)}/on`, 'PUT', { on });
+    const said = await call<{ on: boolean; plugin?: string }>(`skills/${encodeURIComponent(uid)}/on`, 'PUT', { on });
+    /* its plugin was off and is on with it now: the workbench shows */
+    if (said.plugin) refreshPlugins();
     for (const [key, skills] of seen.skills) seen.skills.set(key, skills.map((skill) => {
       if (skill.uid !== uid) return skill;
-      const { off: _was, ...rest } = skill;
+      const { off: _was, plugin: _plugin, ...rest } = skill;
       return on ? rest : { ...rest, off: true as const };
     }));
     window.dispatchEvent(new Event(SKILLS_CHANGED));

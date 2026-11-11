@@ -129,6 +129,14 @@ test("a file's reference says what it is, its length and size when known", () =>
   assert.deepEqual(fileRef({ path: 'scenes/a.html', name: 'a', dir: '', size: 9, kind: 'mg', mtimeMs: 1 }), { kind: 'file', path: 'scenes/a.html', fileKind: 'page' });
 });
 
+test('a file a service made says how; one found on the web, or with nothing known, does not', () => {
+  const picture = { path: 'assets/image/fox.png', name: 'fox.png', dir: 'image', size: 9, kind: 'image' as const, mtimeMs: 1 };
+  assert.deepEqual(fileRef(picture, undefined, { words: 'a fox in snow', by: 'fal.ai', model: 'flux-2' }),
+    { kind: 'file', path: 'assets/image/fox.png', fileKind: 'image', made: { prompt: 'a fox in snow', by: 'fal.ai', model: 'flux-2' } });
+  assert.deepEqual(fileRef(picture, undefined, { words: 'foxes', by: 'Pexels', found: true }), { kind: 'file', path: 'assets/image/fox.png', fileKind: 'image' });
+  assert.deepEqual(fileRef(picture, undefined, { words: '', by: '' }), { kind: 'file', path: 'assets/image/fox.png', fileKind: 'image' });
+});
+
 const line = {
   startMs: 12400, durMs: 2700, text: 'the quick brown fox',
   words: [

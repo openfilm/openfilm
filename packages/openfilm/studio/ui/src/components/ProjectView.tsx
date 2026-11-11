@@ -27,7 +27,7 @@ import { declared, withDeclarations } from '@/lib/clip-look';
 import { declarations } from '../../../../src/film-doc.mjs';
 import { PARTS, compoundFolder, compoundOf, dissolvedOf, srcInto, srcOutOf } from '../../../server/compound.mjs';
 import type { FilmValue } from '../../../server/ops.mjs';
-import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
+import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type MediaMade, type MissingMedia, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
 import { Player } from '@/editor/player';
@@ -129,7 +129,7 @@ import { MediaPool, type ImportProgress } from './MediaPool';
 import { LayersPanel } from './LayersPanel';
 import type { LayerRow, LayerSelection } from '@/lib/layers-tree';
 import { SourcePreview } from './SourcePreview';
-import { ResourceInspector } from './ResourceInspector';
+import { ResourceInspector, type MadeProps } from './ResourceInspector';
 import { FilmInspector } from './FilmInspector';
 import { Timeline, timelineFitHeight, type TimelineCommands, type TimelineHistory } from './Timeline';
 import { useEditorTools } from './use-editor-tools';
@@ -168,6 +168,7 @@ import { pasteTargets, targetById } from '@/lib/layer-paste-target';
 import { PropertiesSection, type PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
+import { ALL, allActions, allSources, isAllPath, useAllMedia } from '@/lib/all-media';
 import { batchMap } from '@/lib/batch-map';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
@@ -186,10 +187,11 @@ const PANE = 'relative flex min-h-0 min-w-0 flex-col overflow-hidden';
 const PICTURE_FILE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
 /* ⌘ is the modifier on a Mac, Ctrl elsewhere (the editor's keys, lib/timeline-keys) */
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-/** Which the media pane shows, the project's media or Saved: kept while Studio is open, across projects. */
-/** The media shown: the project's own, or Saved. */
-type MediaScope = 'project' | 'saved';
+/** Which the media pane shows, the project's media, All media or Saved: kept while Studio is open, across projects. */
+type MediaScope = 'project' | 'saved' | 'all';
 const MEDIA_SCOPE: { current: MediaScope } = { current: 'project' };
+/** Where a file picked outside the project is read: All media's, or Saved's. */
+const outsideSources = (file: { path: string }) => (isAllPath(file.path) ? allSources : savedSources);
 /** where the app's panel starts: under Studio's top bar (its h-8) */
 const HOST_PANEL_TOP = 32;
 
@@ -579,8 +581,28 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
   /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
      origin: see stillUrl) */
-  const refOfFile = React.useCallback((file: WorkspaceResource) => fileRef(file, file.kind === 'mg' ? mediaSources.pagePoster?.(file)
-    : file.kind === 'image' ? stillUrl(projectId, file.path, Math.round(file.mtimeMs)) : file.kind === 'video' ? mediaSources.poster?.(file) : undefined), [mediaSources, projectId]);
+  /* how the project's media was made (studio/server/media-made.mjs), by path: read with the files, and again when a
+     run of `get` has put what it landed on record. A file pointed at for the agent says it too */
+  const [mediaMade, setMediaMade] = React.useState<Record<string, MediaMade>>({});
+  React.useEffect(() => {
+    let live = true;
+    void api.mediaMade(projectId).then((made) => { if (live) setMediaMade(made); }, () => {});
+    return () => { live = false; };
+  }, [projectId, filesTick]);
+  const refOfFile = React.useCallback((file: WorkspaceResource, made: MediaMade | undefined = mediaMade[file.path]) => fileRef(file, file.kind === 'mg' ? mediaSources.pagePoster?.(file)
+    : file.kind === 'image' ? stillUrl(projectId, file.path, Math.round(file.mtimeMs)) : file.kind === 'video' ? mediaSources.poster?.(file) : undefined, made), [mediaSources, projectId, mediaMade]);
+  /* a file of All media or of Saved pointed at for the agent: brought into the project first (how it was made comes
+     with it), so what the agent is given is a file of the project it can use as it is */
+  const referOutside = React.useCallback(async (file: WorkspaceResource) => {
+    if (!studioHost?.refer) return;
+    try {
+      const taken = await api.takeSaved(projectId, file.path);
+      if (!('path' in taken)) return;
+      const made = (await api.mediaMade(projectId).catch(() => ({} as Record<string, MediaMade>)))[taken.path];
+      const { bundle: _bundle, ...rest } = file;
+      studioHost.refer(refOfFile({ ...rest, path: taken.path }, made));
+    } catch (e) { toast.showError(e instanceof Error ? e.message : String(e)); }
+  }, [projectId, refOfFile, toast]);
 
   /* ── transport: the sound is the clock; the picture follows it, drawn in the preview from the player's line ── */
   const player = React.useRef(new Player());
@@ -3216,6 +3238,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     return { ...listing, files: listing.files.filter(keep), pages: listing.pages.filter(keep) };
   }, [listing, mediaScope, libraryIndex, revealMedia?.path]);
   const savedListing = useSavedListing(mediaScope === 'saved');
+  const allMedia = useAllMedia(mediaScope === 'all');
   const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => {
     /* in the app a dropped file's path is known: copied on this computer, not sent through the page */
     const paths = files.map((file) => studioHost?.folders?.pathOf(file) ?? '');
@@ -3233,7 +3256,34 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       setCanvasAddFiles({ paths: [...new Set(paths)], n: performance.now() });
     } catch (error) { toast.showError(error instanceof Error ? error.message : String(error)); }
   };
-  const mediaPool = (inDrawer = false) => (mediaScope === 'saved' ? (
+  const mediaPool = (inDrawer = false) => (mediaScope === 'all' ? (
+    /* All media (lib/all-media): looked at here, brought into the project as it is used, as a thing of Saved is */
+    <MediaPool
+      key="all"
+      projectId={ALL}
+      listing={allMedia.listing}
+      sources={allSources}
+      selectedPath={pickedSaved ? pickedMedia?.path ?? null : null}
+      onSelectFile={(file) => { pickMedia(file); setPickedSaved(Boolean(file)); }}
+      onImport={async () => []}
+      onMove={async () => 'failed'}
+      onDelete={async () => 'failed'}
+      onNewFolder={async () => 'failed'}
+      onReveal={allActions.reveal}
+      {...(studioHost?.refer ? { onReferFile: (file: WorkspaceResource) => void referOutside(file) } : {})}
+      links={false}
+      scope="all"
+      onScope={inDrawer ? undefined : switchMedia}
+      fromOf={allMedia.fromOf}
+      wordsOf={allMedia.wordsOf}
+      folders={allMedia.folders}
+      scanning={allMedia.scanning}
+      onAddFolder={() => allActions.addFolder(t('media.pickMediaFolder'))}
+      onRemoveFolder={(path) => void allActions.removeFolder(path)}
+      onRevealFolder={allActions.revealFolder}
+      onAdd={(file) => { if (canvasOpen) void requestCanvasFiles(file.path, true); else void placeSaved(file, { atPlayhead: true }); }}
+    />
+  ) : mediaScope === 'saved' ? (
     <MediaPool
       key="saved"
       projectId={SAVED}
@@ -3248,6 +3298,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onReveal={savedActions.reveal}
       onPick={onPick}
       onBring={(paths, into) => savedActions.bring(paths, into)}
+      {...(studioHost?.refer ? { onReferFile: (file: WorkspaceResource) => void referOutside(file) } : {})}
       links={false}
       scope="saved"
       onScope={inDrawer ? undefined : switchMedia}
@@ -3275,6 +3326,10 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onBring={onBring}
       onRelink={onRelink}
       onCollect={onCollect}
+      missing={missingMedia.length}
+      onFindMissing={() => void findMissing()}
+      wordsOf={madeWords}
+      versionsOf={madeVersions}
       onSave={saveFiles}
       scope="project"
       onScope={inDrawer ? undefined : switchMedia}
@@ -4655,7 +4710,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     let awaiting = false;
     for (const b of blocksRef.current) {
       if (!b.src || !(b.src.startsWith('assets/') || /\.html?$/i.test(b.src))) continue;
-      if (paths.has(b.src)) { firstMissedIn.current.delete(b.src); continue; }
+      /* a link is listed though it leads nowhere: its file is as gone as one that is not listed */
+      if (paths.has(b.src) && !rawListing.links?.[b.src]?.missing) { firstMissedIn.current.delete(b.src); continue; }
       const since = firstMissedIn.current.get(b.src);
       if (!since) firstMissedIn.current.set(b.src, rawListing);
       if (!since || since === rawListing) { awaiting = true; continue; }
@@ -4713,11 +4769,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (!ok) return [];
     return folder ? (typeof answer.path === 'string' ? [answer.path] : []) : Array.isArray(answer.paths) ? answer.paths.map(String) : [];
   }, [postJson]);
-  const onBring = React.useCallback(async (paths: string[], into: string, mode: 'copy' | 'link'): Promise<string[]> => {
+  const onBring = React.useCallback(async (paths: string[], into: string, mode: 'auto' | 'link'): Promise<string[]> => {
     const { ok, answer } = await postJson(`${projectApi}/files/bring`, { paths, into, mode });
     if (!ok) throw new Error(String(answer.error ?? t('assets.uploadFailed')));
+    /* big media that could only come in as a second copy was left where it is kept, and linked: said, so it is no surprise */
+    if (mode === 'auto' && Array.isArray(answer.linked) && answer.linked.length) showToast(t('media.keptInPlace').replace('{n}', String(answer.linked.length)));
     return Array.isArray(answer.landed) ? answer.landed.map(String) : [];
-  }, [projectApi, postJson, t]);
+  }, [projectApi, postJson, t, showToast]);
   const onRelink = React.useCallback(async (path: string, folder: boolean): Promise<MediaResult> => {
     const to = (await onPick(t('media.pickRelink'), folder));
     if (to === 'no-dialog' || !to.length) return 'ok';
@@ -4726,6 +4784,93 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const onCollect = React.useCallback(async (path: string): Promise<MediaResult> => (
     (await postJson(`${projectApi}/files/collect`, { path })).ok ? 'ok' : 'failed'
   ), [projectApi, postJson]);
+  /* media that cannot be found (studio/server/media-reconnect.mjs): asked for when a link leads nowhere or a clip
+     names a file that is gone. What Studio finds on its own is connected again unasked, and said once; for the
+     rest the person points at the folder it is in now */
+  const [missingMedia, setMissingMedia] = React.useState<MissingMedia[]>([]);
+  const linkMissing = React.useMemo(() => Object.values(rawListing?.links ?? {}).some((l) => l.missing), [rawListing]);
+  const clipMissing = React.useMemo(() => [...mediaTrouble.values()].includes('missing'), [mediaTrouble]);
+  React.useEffect(() => {
+    if (!linkMissing && !clipMissing) { setMissingMedia([]); return undefined; }
+    let live = true;
+    void api.missingMedia(projectId).then((missing) => { if (live) setMissingMedia(missing); }, () => {});
+    return () => { live = false; };
+  }, [projectId, rawListing, linkMissing, clipMissing]);
+  /* how the project's media was made (studio/server/media-made.mjs), by path: read with the files, and again when a
+     run of `get` has put what it landed on record. The media pane searches the words and shows versions as one; the
+     inspector says it all, and asks for the same once more (`mediaMade`, read above with the files) */
+  const madeWords = React.useCallback((file: WorkspaceResource) => mediaMade[file.path]?.words, [mediaMade]);
+  const madeVersions = React.useCallback((file: WorkspaceResource) => mediaMade[file.path]?.versions, [mediaMade]);
+  /* what "Make another" made is picked once the listing has it (it may have it before the run answers, or after) */
+  const [pickWhenListed, setPickWhenListed] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const file = pickWhenListed ? listing?.files.find((f) => f.path === pickWhenListed) : undefined;
+    if (!file) return;
+    setPickWhenListed(null);
+    pickMedia(file);
+    setRevealMedia((cur) => ({ path: file.path, seq: (cur?.seq ?? 0) + 1, highlight: true }));
+  }, [listing, pickWhenListed, pickMedia]);
+  const makeAgain = React.useCallback(async (made: MediaMade) => {
+    const folder = loaded?.project.path;
+    if (!folder || !made.again) return;
+    try {
+      const receipt = JSON.parse(await api.make(folder, made.again.verb, made.again.args, { via: made.again.via, ...(made.again.model ? { model: made.again.model } : {}) })) as { src?: string; images?: Array<{ src?: string }> };
+      const path = receipt.src ?? receipt.images?.[0]?.src;
+      if (!path) return;
+      setPickWhenListed(path);
+      toast.show(t('made.made').replace('{name}', path.slice(path.lastIndexOf('/') + 1)));
+    } catch (e) { toast.showError(e instanceof Error ? e.message : String(e)); }
+  }, [loaded?.project.path, t, toast]);
+  /* a file of All media says how it was made as any project knows it: asked for as it is picked */
+  const [outsideMade, setOutsideMade] = React.useState<{ path: string; made: MediaMade } | null>(null);
+  const outsidePath = pickedSaved && pickedMedia && isAllPath(pickedMedia.path) ? pickedMedia.path : null;
+  React.useEffect(() => {
+    if (!outsidePath) { setOutsideMade(null); return undefined; }
+    let live = true;
+    void allActions.made(outsidePath).then((made) => { if (live) setOutsideMade(made ? { path: outsidePath, made } : null); });
+    return () => { live = false; };
+  }, [outsidePath]);
+  /** What the inspector says of how a file was made: one of the project's, or one of All media. */
+  const madeFor = (file: WorkspaceResource): MadeProps | undefined => {
+    if (pickedSaved && file === pickedMedia) return outsideMade?.path === file.path ? { made: outsideMade.made } : undefined;
+    const made = mediaMade[file.path];
+    return made ? {
+      made, sources: mediaSources,
+      fileAt: (path) => listing?.files.find((f) => f.path === path),
+      onShow: (path) => showFile(path),
+      onAgain: () => makeAgain(made),
+    } : undefined;
+  };
+  /* media kept elsewhere is renamed or moved without the project's folder changing: its links are looked at again
+     when the person comes back to the window, and the listing is taken when one of them changed */
+  const hasLinks = React.useMemo(() => Object.keys(rawListing?.links ?? {}).length > 0, [rawListing]);
+  React.useEffect(() => {
+    if (!hasLinks) return undefined;
+    const back = () => {
+      void api.files(projectId).then((next) => setRawListing((now) => (JSON.stringify(now?.links ?? {}) === JSON.stringify(next.links ?? {}) ? now : next)), () => {});
+    };
+    window.addEventListener('focus', back);
+    return () => window.removeEventListener('focus', back);
+  }, [hasLinks, projectId]);
+  React.useEffect(() => projectEvents(projectId, (e) => {
+    if (e.type !== 'files' || !e.reconnected) return;
+    showToast(t('media.reconnected').replace('{n}', String(e.reconnected)));
+    /* the picture had nothing to draw for it: drawn again now that it is back */
+    preview.current?.reload?.();
+  }), [projectId, showToast, t]);
+  const findMissing = React.useCallback(async () => {
+    const picked = await onPick(t('media.pickMissingFolder'), true);
+    if (picked === 'no-dialog') { toast.show(t('media.noDialog')); return; }
+    if (!picked[0]) return;
+    try {
+      const { found, missing } = await api.reconnectMedia(projectId, picked[0]);
+      setMissingMedia(missing);
+      if (found) preview.current?.reload?.();
+      toast.show(!found ? t('media.reconnectNone')
+        : missing.length ? t('media.reconnectedSome').replace('{n}', String(found)).replace('{left}', String(missing.length))
+          : t('media.reconnected').replace('{n}', String(found)));
+    } catch (e) { toast.showError(e instanceof Error ? e.message : String(e)); }
+  }, [projectId, onPick, toast, t]);
   /*
    * resolves with where each file landed (a taken name gets a number); one that is no readable media is said at once.
    * Each file's progress is its bytes sent (XMLHttpRequest: fetch cannot tell how much of a body has gone), then 1 and
@@ -4740,7 +4885,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       for (const [i, path] of paths.entries()) {
         onProgress(i, -1);
         // eslint-disable-next-line no-await-in-loop
-        const [at] = await onBring([path], into, 'copy');
+        const [at] = await onBring([path], into, 'auto');
         if (at) landed.push(at);
         onProgress(i, 1, at);
       }
@@ -4770,7 +4915,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the person's own from this computer, into the project, for a template's places: where they landed */
   const importOwn = React.useCallback(async (): Promise<string[]> => {
     const picked = await onPick(t('template.import'), false);
-    if (picked !== 'no-dialog') return picked.length ? onBring(picked, 'assets', 'copy') : [];
+    if (picked !== 'no-dialog') return picked.length ? onBring(picked, 'assets', 'auto') : [];
     const files = await new Promise<File[]>((done) => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -4787,7 +4932,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const picked = await onPick(t('editorTools.replacePick'), false);
     if (picked !== 'no-dialog') {
       if (!picked.length) return null;
-      const [at] = await onBring([picked[0]!], 'assets', 'copy');
+      const [at] = await onBring([picked[0]!], 'assets', 'auto');
       return at ?? null;
     }
     const file = await new Promise<File | null>((done) => {
@@ -5605,7 +5750,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                 {pickedMedia ? (
                   <div className="absolute inset-x-0 bottom-0 top-8 z-20">
                     {/* a bundle of Saved plays its page as its clip had it; any other bundle shows its picture */}
-                    <SourcePreview file={pickedSaved && pickedMedia.bundle && !pickedMedia.bundle.page && !pickedMedia.bundle.file ? { ...pickedMedia, kind: 'image' } : pickedMedia} sources={pickedSaved ? savedSources : mediaSources} onClose={() => pickMedia(null)} onPlace={placeFromSource} />
+                    <SourcePreview file={pickedSaved && pickedMedia.bundle && !pickedMedia.bundle.page && !pickedMedia.bundle.file ? { ...pickedMedia, kind: 'image' } : pickedMedia} sources={pickedSaved ? outsideSources(pickedMedia) : mediaSources} onClose={() => pickMedia(null)} onPlace={placeFromSource} />
                   </div>
                 ) : null}
                 {dropped?.length || undone.length ? (
@@ -5651,8 +5796,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                             </div>
                           ) : null}
                           {missingHere && !fullscreen && !agentWorking ? (
-                            <div data-preview-missing="" className="pointer-events-none absolute left-2 top-2 z-10 max-w-[80%] truncate rounded-[4px] bg-black/75 px-2 py-1 text-[11px] text-white">
-                              {t('project.previewMissing').replace('{file}', missingHere)}
+                            <div data-preview-missing="" className="absolute left-2 top-2 z-10 flex max-w-[80%] items-center gap-2 rounded-[4px] bg-black/75 px-2 py-1 text-[11px] text-white">
+                              <span className="min-w-0 truncate">{t('project.previewMissing').replace('{file}', missingHere)}</span>
+                              <button type="button" onClick={() => void findMissing()} className="shrink-0 underline underline-offset-2 hover:text-white/80">{t('media.findMissing')}</button>
                             </div>
                           ) : null}
   {preparingHere ? (
@@ -5791,7 +5937,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   {!editFree ? <PaneDivider width={inspectorShownWidth} onResize={commitInspectorWidth} containerRef={viewerRowRef} label={t('inspector.resize')} min={MIN_INSPECTOR} minRest={MIN_VIEWER} relative side={editPrefs.inspectorSide === 'left' ? 'start' : 'end'} style={{ order: editPrefs.inspectorSide === 'left' ? 21 : 79 }} /> : null}
                   <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-inspector style={{ width: inspectorShownWidth, order: editPrefs.inspectorSide === 'left' ? 20 : 80, ...freeStyle('inspector') }}>
                   {typeof inspectorContent === 'object' ? (
-                    <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? savedSources : mediaSources).file(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
+                    <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? outsideSources(inspectorContent) : mediaSources).file(inspectorContent)} from={pickedSaved && inspectorContent === pickedMedia ? allMedia.aboutOf(inspectorContent) : undefined} made={madeFor(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
                   ) : inspectorContent === 'captions' ? (
                     <CaptionInspector projectId={projectId} width={inspectorShownWidth} onClose={closeInspector} timeMs={timeMs} onSeek={seek} onTranslated={addTranslation}
                       infoOf={captionInfoOf} onCut={cutRanges} onAdd={addCaption} />

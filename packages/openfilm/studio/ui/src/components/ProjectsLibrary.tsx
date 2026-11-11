@@ -31,6 +31,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { ProjectsView, type LibraryProject } from './ProjectsView';
 import { FolderBrowserDialog, GitHubDialog } from './ProjectSources';
 import { ExamplesGallery, TitleSwitch, type ExamplePart } from './ExamplesGallery';
+import { MediaLibraryPage } from './MediaLibraryPage';
 import { ProjectCoverContext, posterUrl, useProjectCover } from './ProjectCover';
 import { LARGE_DIALOG_SIZE } from './dialog-chrome';
 
@@ -226,8 +227,8 @@ function useProjectLibrary(open: boolean) {
   return { projects, folders, loaded, loadFailed, retryLoad, error, flash, reload: reloadFolders, agentRunning, workingIn, deleteProjects, renameProject, createFolder, renameFolder, moveFolder, moveProject, deleteFolder, coverChanged };
 }
 
-/** The launcher's two views: the person's projects, and the examples to start from (ExamplesGallery). */
-export type LauncherView = 'projects' | 'examples';
+/** The launcher's views: the person's projects, their media library (MediaLibraryPage), and the examples to start from (ExamplesGallery). */
+export type LauncherView = 'projects' | 'library' | 'examples';
 
 /** The switch between them, in the title row (the Community's is the same). */
 /** How long the projects window waits for the tab it opened to cover it before it closes anyway. */
@@ -235,7 +236,7 @@ const COVER_WAIT_MS = 4000;
 
 export function LauncherSwitch({ view, onView }: { view: LauncherView; onView: (view: LauncherView) => void }) {
   const t = useT();
-  return <TitleSwitch items={[{ id: 'projects' as const, label: t('launcher.projects') }, { id: 'examples' as const, label: t('launcher.examples') }]} value={view} onChange={onView} />;
+  return <TitleSwitch items={[{ id: 'projects' as const, label: t('launcher.projects') }, { id: 'library' as const, label: t('launcher.library') }, { id: 'examples' as const, label: t('launcher.examples') }]} value={view} onChange={onView} />;
 }
 
 
@@ -471,7 +472,9 @@ export function ProjectsPopover({
       >
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           {cover.picker}
-          {view === 'examples' ? (
+          {view === 'library' ? (
+            <MediaLibraryPage heading={<LauncherSwitch view={view} onView={showView} />} onClose={onClose} />
+          ) : view === 'examples' ? (
             <ExamplesGallery
               key={examples?.example ?? ''}
               heading={<LauncherSwitch view={view} onView={showView} />}

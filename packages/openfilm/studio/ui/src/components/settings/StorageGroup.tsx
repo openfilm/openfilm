@@ -4,10 +4,13 @@
  * folder dialog), opened in the file manager, or set back to its default. When projects are in it, a change asks
  * whether they move too; left behind, they stay where they are, and in the list. Exports have no setting: the export
  * dialog picks the folder and keeps the last one.
+ *
+ * Below it, what the projects take on disk, and how much of that is cache (studio/server/storage.mjs): what the
+ * preview and exports made and can make again. One button clears it; each project's share is a click away.
  */
 import React from 'react';
 import { useT } from '@/i18n';
-import { api, type StudioLocation, type StudioLocations } from '@/api';
+import { api, type StorageUsage, type StudioLocation, type StudioLocations } from '@/api';
 import { studioHost } from '@/lib/host';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { SettingsButton, SettingsField, SettingsGroup, SettingsItem, settingsError } from './ui';
@@ -17,6 +20,11 @@ type Which = keyof StudioLocations;
 /** Bytes as the person reads a disk's free space: GB, or MB below one. */
 function size(bytes: number): string {
   return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(bytes >= 1e11 ? 0 : 1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`;
+}
+
+/** Bytes a folder takes, down to nothing: GB, MB, or 0. */
+function amount(bytes: number): string {
+  return bytes < 5e5 ? '0 MB' : size(bytes);
 }
 
 export function StorageGroup() {
@@ -31,6 +39,16 @@ export function StorageGroup() {
   const [note, setNote] = React.useState<{ which: Which; text: string } | null>(null);
   const load = React.useCallback(() => { void api.locations().then(setWhere).catch(() => {}); }, []);
   React.useEffect(load, [load]);
+  /* measured once the page is open (every project's folder is read: a moment for a big library) */
+  const [usage, setUsage] = React.useState<StorageUsage | null>(null);
+  const [each, setEach] = React.useState(false);
+  const [clearing, setClearing] = React.useState(false);
+  const [cleared, setCleared] = React.useState<number | null>(null);
+  React.useEffect(() => { let live = true; void api.storage().then((u) => { if (live) setUsage(u); }, () => {}); return () => { live = false; }; }, []);
+  const clear = async () => {
+    setClearing(true);
+    try { const done = await api.clearStorage(); setUsage(done); setCleared(done.freed); } catch { /* as it was */ } finally { setClearing(false); }
+  };
   if (!where) return null;
 
   const apply = async (which: Which, folder: string | null, move: boolean) => {
@@ -106,6 +124,33 @@ export function StorageGroup() {
   return (
     <SettingsGroup title={t('settings.storage.group')}>
       {row('projects', where.projects)}
+      <SettingsItem
+        title={t('settings.storage.usage')}
+        description={usage ? (
+          <>
+            <span className="mt-1 block text-[13px]">
+              {t('settings.storage.usageDesc').replace('{count}', String(usage.projects.length)).replace('{size}', amount(usage.total)).replace('{clearable}', amount(usage.clearable))}
+            </span>
+            {cleared != null ? <span className="mt-1 block text-[13px]" role="status">{t('settings.storage.cleared').replace('{size}', amount(cleared))}</span> : null}
+            {each ? (
+              <ul data-storage-projects="" className="mt-2 max-h-[220px] overflow-y-auto pr-1">
+                {usage.projects.map((p) => (
+                  <li key={p.id} className="flex items-baseline gap-3 py-0.5 text-[13px]" title={p.path}>
+                    <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                    <span className="shrink-0 tabular-nums">{t('settings.storage.projectLine').replace('{size}', amount(p.total)).replace('{clearable}', amount(p.clearable))}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        ) : <span className="mt-1 block text-[13px]">{t('settings.storage.usageLoading')}</span>}
+        control={usage ? (
+          <>
+            {usage.projects.length ? <SettingsButton variant="quiet" aria-expanded={each} onClick={() => setEach((on) => !on)}>{t('settings.storage.details')}</SettingsButton> : null}
+            <SettingsButton disabled={clearing || usage.clearable < 1e6} onClick={() => void clear()}>{t('settings.storage.clear')}</SettingsButton>
+          </>
+        ) : null}
+      />
       <ConfirmDialog
         open={!!asking}
         title={t('settings.storage.moveTitle')}

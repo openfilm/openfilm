@@ -55,6 +55,13 @@ import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-font
 import { FILM_PAGE, PageFrameError, closePageFrames, compoundSound, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
+import { createMediaIndexer, mediaFolders, mediaSummary } from './media-index.mjs';
+import { allMedia, fileOf, isAllPath, setMediaFolder, takeMedia, whereAll } from './all-media.mjs';
+import { carryMade, madeAnywhere, madeView } from './media-made.mjs';
+import { LibraryError, aboutFile, duplicates, fileIn, inPlace, libraryPlaces, listFolder, markFile, placeOf, renameFile, searchLibrary, trashFile as trashLibraryFile } from './media-library.mjs';
+import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
+import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
+import { clearProjectCache, storage } from './storage.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
@@ -117,9 +124,9 @@ export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
  * is working in right now (an app with a chat), which cannot be renamed or deleted meanwhile. `askAgent`: in an app with
  * a chat, one question answered by the person's agent's own model, for Studio's own work that needs a model
  * (translating subtitles); without it, that goes to a service connected for it. Resolves once both servers listen.
- * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent }} [options]
+ * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent, indexMedia?: boolean }} [options]
  */
-export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent } = {}) {
+export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent, indexMedia = false } = {}) {
   void refreshCommunity();
   let COOKIE = cookieName(port);
   let FRAMED = framedCookieName(port);
@@ -127,7 +134,21 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   const cookieKey = (/** @type {Req} */ req) => (sameKey(cookie(req, COOKIE)) ? cookie(req, COOKIE) : cookie(req, FRAMED));
   key ??= advertise ? studioKey() : randomBytes(24).toString('hex');
   /* every change of an open project's folder: a version once it rests, when the person asked for that */
-  const watchers = createWatchers({ onChange: (root, e) => { if (e.type === 'film' || e.type === 'files') autoVersions.changed(root); } });
+  const watchers = createWatchers({ onChange: (root, e) => {
+    if (e.type === 'film' || e.type === 'files') autoVersions.changed(root);
+    if (e.type === 'files') mediaIndex.soon(root);
+  } });
+  /* what is known of the person's media (media-index.mjs): a project's, a moment after its files changed or it was
+     opened; `indexMedia` (the Studio the person runs, not one a test starts): every project's, once Studio is up */
+  /** when the media library's places were last read again for it (ms) */
+  let libraryRead = 0;
+  const mediaIndex = createMediaIndexer({
+    onError: (root, e) => console.warn(`media index: ${root}: ${e instanceof Error ? e.message : String(e)}`),
+    /* media that went missing is looked for unasked (media-reconnect.mjs): the pages hear how many came back */
+    onProject: createReconnector({ onFound: (root, found) => watchers.emit(root, { type: 'files', reconnected: found.length }) }),
+  });
+  const sweepMedia = indexMedia ? setTimeout(() => { void mediaIndex.sweep().catch(() => {}); }, 20_000) : null;
+  sweepMedia?.unref();
   /** questions about spending for the person, in the pages showing a project (see get.mjs) */
   const asks = createAsks({ emit: (root, event) => watchers.emit(root, event), roots: watchers.roots });
   /** the editor pages open right now, and whether each is in sight: `/open` switches them to a project */
@@ -352,7 +373,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* ── `openfilm get`: media from a provider, landed in the project; spending is asked here first (see get.mjs) ── */
     if (parts[0] === 'get') {
       making += req.method === 'POST' ? 1 : 0;
-      try { return await getRoute(req, res, parts.slice(1), asks); } finally { making -= req.method === 'POST' ? 1 : 0; }
+      try { return await getRoute(req, res, parts.slice(1), asks, (root) => watchers.emit(root, { type: 'files', made: true })); } finally { making -= req.method === 'POST' ? 1 : 0; }
     }
 
     /* ── `openfilm canvas`: an agent's steps on a project's canvas, shown on the board at once (canvas.mjs) ── */
@@ -469,6 +490,152 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* where new projects go (src/locations.mjs): the folder, its default, and its disk's free space; a POST opens it
        in the system's file manager */
     if (parts[0] === 'locations' && parts.length === 1 && req.method === 'GET') return json(res, 200, locations());
+    /* the room every project takes, and what of it can be cleared (storage.mjs); a POST clears one project's cache
+       (`id`) or every project's, and says how much came back. What a render reads back is left in a project where
+       an export or an agent is at work */
+    if (parts[0] === 'storage' && parts.length === 1 && req.method === 'GET') return json(res, 200, await storage());
+    if (parts[0] === 'storage' && parts[1] === 'clear' && parts.length === 2 && req.method === 'POST') {
+      const { id } = /** @type {{ id?: unknown }} */ (await readJson(req));
+      const listed = (await listProjects()).filter((p) => !p.missing && (id == null || p.id === id));
+      let freed = 0;
+      for (const p of listed) {
+        const busy = agentIn(p.path) || exports.list(p.id).some((job) => job.status === 'waiting' || job.status === 'running');
+        freed += await clearProjectCache(p.path, { busy });
+      }
+      return json(res, 200, { freed, ...await storage() });
+    }
+    /* OpenFilm's plugins (src/plugins.mjs): each with whether it is on; one turned on or off (PUT plugins/:id { on }),
+       answered with them all. 409 for the last workbench on */
+    if (parts[0] === 'plugins' && parts.length === 1 && req.method === 'GET') return json(res, 200, { plugins: pluginStates() });
+    if (parts[0] === 'plugins' && parts.length === 2 && req.method === 'PUT') {
+      const { on } = /** @type {{ on?: unknown }} */ (await readJson(req) ?? {});
+      if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
+      try { setPluginOn(parts[1], on); } catch (e) { throw new HttpError(/there is no plugin/i.test(/** @type {Error} */ (e).message) ? 404 : 409, /** @type {Error} */ (e).message); }
+      return json(res, 200, { plugins: pluginStates() });
+    }
+    /* the person's media in numbers (media-index.mjs): places, files, the room they take and the room copies take */
+    if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
+    /* the media library (media-library.mjs): its places; a folder of one as the disk has it (`dir` inside the place);
+       a file's bytes and what Studio works out from it; what is known of one file (the projects that use it, how it
+       was made); a folder or file shown in the file manager. Folders are added and taken away under all-media below */
+    if (parts[0] === 'media-library') {
+      const sub = parts.slice(1).join('/');
+      if (sub === 'places' && req.method === 'GET') {
+        /* the library is being looked at: its places are read again behind, so a search knows what is there now */
+        if (Date.now() - libraryRead > 60_000) { libraryRead = Date.now(); void mediaIndex.sweep().catch(() => {}); }
+        return json(res, 200, { ...await libraryPlaces(), scanning: mediaIndex.busy() });
+      }
+      /* files of the whole library, by name, folder or prompt (`q`), of one `kind`, only what a service `made`:
+         { files, total, scanning } (still being read: more may be found in a moment) */
+      if (sub === 'search' && req.method === 'GET') {
+        const sort = url.searchParams.get('sort');
+        return json(res, 200, { ...await searchLibrary({
+          q: (url.searchParams.get('q') ?? '').slice(0, 200), kind: ['video', 'image', 'audio'].find((k) => k === url.searchParams.get('kind')) ?? null,
+          made: url.searchParams.get('made') === '1', sort: sort === 'name' || sort === 'size' ? sort : 'date', limit: Number(url.searchParams.get('limit')) || 300,
+          mark: url.searchParams.get('mark') === 'like' ? 'like' : url.searchParams.get('mark') === 'no' ? 'no' : null, unused: url.searchParams.get('unused') === '1',
+        }), scanning: mediaIndex.busy() });
+      }
+      /* files of the added folders that are the same bytes as another, group by group, and the room they take */
+      if (sub === 'duplicates' && req.method === 'GET') return json(res, 200, { ...await duplicates(), scanning: mediaIndex.busy() });
+      const body = req.method === 'POST' ? /** @type {{ place?: unknown, path?: unknown }} */ (await readJson(req) ?? {}) : null;
+      const at = await placeOf(body ? body.place : url.searchParams.get('place'));
+      if (!at) throw new HttpError(404, 'That place is not in the library.');
+      const path = body ? body.path ?? '' : url.searchParams.get('path') ?? '';
+      if (sub === 'list' && req.method === 'GET') {
+        const listing = await listFolder(at, url.searchParams.get('dir') ?? '');
+        if (!listing) throw new HttpError(404, 'That folder is not there.');
+        return json(res, 200, listing);
+      }
+      if (sub === 'reveal' && req.method === 'POST') {
+        const abs = inPlace(at, path);
+        if (!abs || !existsSync(abs)) throw new HttpError(404, 'That is not there.');
+        if (abs === at.root) openFile(abs); else reveal(abs);
+        return json(res, 200, {});
+      }
+      /* what the person says of a file (POST mark { mark: 'like' | 'no' | null }); a file of an added folder renamed
+         (POST rename { name } → { path }) or moved to the trash (POST trash). The folder is read again behind, and a
+         project that links to the file looks for it where it went */
+      if (body && (sub === 'mark' || sub === 'rename' || sub === 'trash')) {
+        try {
+          if (sub === 'mark') {
+            const mark = /** @type {{ mark?: unknown }} */ (body).mark;
+            const said = await markFile(at, path, mark === 'like' || mark === 'no' ? mark : null);
+            if (!said) throw new HttpError(404, 'That file is not there.');
+            return json(res, 200, said);
+          }
+          const linked = (await aboutFile(at, path))?.linkedBy ?? [];
+          const done = sub === 'rename' ? await renameFile(at, path, /** @type {{ name?: unknown }} */ (body).name) : await trashLibraryFile(at, path);
+          void mediaIndex.folder(at.root);
+          for (const p of linked) mediaIndex.soon(p.path);
+          return json(res, 200, done ?? {});
+        } catch (e) {
+          if (e instanceof LibraryError) throw new HttpError(e.status, e.message);
+          throw e;
+        }
+      }
+      const file = fileIn(at, path);
+      if (!file) throw new HttpError(404, 'That file is not there.');
+      if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, file.abs);
+      if (sub === 'about' && req.method === 'GET') {
+        const about = await aboutFile(at, path);
+        /* where a project is on this computer is not the page's to know */
+        return json(res, 200, about ? { ...about, linkedBy: about.linkedBy.map(({ id, name }) => ({ id, name })) } : null);
+      }
+      if (sub === 'media' && req.method === 'GET') {
+        const what = url.searchParams.get('what');
+        const o = { cache: file.cache };
+        if (what === 'probe') return json(res, 200, await probe(file.root, file.rel, o));
+        if (what === 'wave') return json(res, 200, await waveform(file.root, file.rel, o));
+        const jpeg = what === 'poster' ? await poster(file.root, file.rel, o)
+          : what === 'frame' ? await frame(file.root, file.rel, Number(url.searchParams.get('ms')), Number(url.searchParams.get('w')), o) : null;
+        if (!jpeg) throw new HttpError(400, 'what: probe, poster, frame or wave');
+        res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
+        return res.end(jpeg);
+      }
+    }
+    /* All media (all-media.mjs): every project's media and the added folders', one line a file, the newest first
+       (`scanning`: more may come in); a file's bytes and what Studio works out from it; where it is, shown in the file
+       manager; a folder added (the one given, else the person's pick) or taken away */
+    if (parts[0] === 'all-media') {
+      const sub = parts.slice(1).join('/');
+      if (!sub && req.method === 'GET') return json(res, 200, { ...await allMedia(), scanning: mediaIndex.busy() });
+      if (sub === 'folders/reveal' && req.method === 'POST') {
+        const { path: shown } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
+        if (typeof shown !== 'string' || !mediaFolders().includes(resolve(shown))) throw new HttpError(404, 'not a folder of All media');
+        openFile(resolve(shown));
+        return json(res, 200, {});
+      }
+      if (sub === 'folders' && (req.method === 'POST' || req.method === 'DELETE')) {
+        const { path: asked, title } = /** @type {{ path?: unknown, title?: unknown }} */ (await readJson(req).catch(() => ({})) ?? {});
+        const on = req.method === 'POST';
+        const path = asked ?? (on ? await pickFolder({ title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose a folder', at: null })
+          .catch((e) => { throw new HttpError(501, String(e?.message ?? e)); }) : null);
+        if (path == null) return json(res, 200, { folders: mediaFolders(), added: null });
+        let folders;
+        try { folders = await setMediaFolder(/** @type {string} */ (path), on); }
+        catch (e) { throw new HttpError(/** @type {{ status?: number }} */ (e).status ?? 400, /** @type {Error} */ (e).message); }
+        if (on) void mediaIndex.folder(resolve(/** @type {string} */ (path)));
+        return json(res, 200, { folders, added: on ? resolve(/** @type {string} */ (path)) : null });
+      }
+      const at = await whereAll(sub === 'reveal' ? (/** @type {{ path?: unknown }} */ (await readJson(req) ?? {})).path : url.searchParams.get('path'));
+      if (!at) throw new HttpError(404, 'That file is not there any more.');
+      if (sub === 'reveal' && req.method === 'POST') { reveal(fileOf(at)); return json(res, 200, {}); }
+      /* how it was made, as any project knows it (media-made.mjs): { made } (null: nothing on record) */
+      if (sub === 'made' && req.method === 'GET') return json(res, 200, { made: await madeAnywhere(at.fp) });
+      if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, fileOf(at));
+      if (sub === 'media' && req.method === 'GET') {
+        const what = url.searchParams.get('what');
+        const { root, rel } = at;
+        const o = { cache: at.cache };
+        if (what === 'probe') return json(res, 200, await probe(root, rel, o));
+        if (what === 'wave') return json(res, 200, await waveform(root, rel, o));
+        const jpeg = what === 'poster' ? await poster(root, rel, o)
+          : what === 'frame' ? await frame(root, rel, Number(url.searchParams.get('ms')), Number(url.searchParams.get('w')), o) : null;
+        if (!jpeg) throw new HttpError(400, 'what: probe, poster, frame or wave');
+        res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
+        return res.end(jpeg);
+      }
+    }
     /* the library moved (projects.mjs moveLibrary): { path } (null: the default), and with `move` its projects go too */
     if (parts[0] === 'locations' && parts[1] === 'projects' && parts.length === 2 && req.method === 'PUT') {
       const { path: asked, move } = /** @type {{ path?: unknown, move?: unknown }} */ (await readJson(req) ?? {});
@@ -536,6 +703,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const offered = catalogSkills(catalog).filter((k) => !had.has(k.uid));
       const origins = skillOrigins();
       const off = new Set(skillsOff());
+      const withPlugin = skillsOfPluginsOff();
       const agentsCall = new Map(offeredSkills({ project: project?.path ?? null }).named.map((k) => [k.uid, k.as]));
       const media = (/** @type {string} */ uid, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(uid)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
       const all = [...coreSkills().map((k) => ({ ...k, core: true, installed: true })), ...skills.map((k) => ({ ...k, core: false, installed: true })),
@@ -557,6 +725,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           ...(k.installed && k.source === 'official' && !k.core ? standing.get(k.uid) ?? {} : {}),
           /* turned off: offered to no agent until it is turned on again */
           ...(k.installed && keeps(off, k) ? { off: true } : {}),
+          /* one of OpenFilm's own that goes with a plugin now off (src/plugins.mjs): off with it, and on again with it */
+          ...(k.core && withPlugin.has(k.name) ? { off: true, plugin: withPlugin.get(k.name) } : {}),
         })),
       });
     }
@@ -611,7 +781,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
       if (!skill) throw new HttpError(404, 'no such skill');
       setSkillOn(skill.uid, on);
-      return json(res, 200, { on });
+      /* one of OpenFilm's own that goes with a plugin now off: turned on, its plugin is too (it is given to no agent
+         otherwise, src/plugins.mjs) */
+      const plugin = on ? skillsOfPluginsOff().get(skill.name) : undefined;
+      if (plugin && coreSkills().some((k) => k.uid === skill.uid)) setPluginOn(plugin, true);
+      return json(res, 200, { on, ...(plugin ? { plugin } : {}) });
     }
     /* Only the person's own skill can be changed; a project override must not edit a hidden personal skill. */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'cover' && (req.method === 'PUT' || req.method === 'DELETE')) {
@@ -775,7 +949,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       }
     }
     /* an editor page shows it: the person opened it, so it is the one `openfilm open` alone comes back to */
-    if (rest === 'opened' && req.method === 'POST') return json(res, 200, { project: await markOpened(project.id) });
+    if (rest === 'opened' && req.method === 'POST') {
+      mediaIndex.soon(project.path);
+      return json(res, 200, { project: await markOpened(project.id) });
+    }
     /* the fonts its pages declare with @font-face, and with `page` (a project path) the families that page can draw with
        and names (project-fonts.mjs): the font menu's "In this project" */
     if (rest === 'fonts' && req.method === 'GET') {
@@ -927,11 +1104,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        given (the desktop app knows a dropped file's), else the person's pick in the system's dialog. { landed } */
     if (rest === 'files/bring' && req.method === 'POST') {
       const { into, mode, paths, folder, title } = /** @type {{ into?: unknown, mode?: unknown, paths?: unknown, folder?: unknown, title?: unknown }} */ (await readJson(req));
-      const how = mode === 'link' ? 'link' : 'copy';
+      /* `auto`: as it takes least room (files.mjs bringIn); `linked`: what was left where it is kept for that */
+      const how = mode === 'link' ? 'link' : mode === 'auto' ? 'auto' : 'copy';
+      /** @type {string[]} */
+      const linked = [];
       const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
       const picked = Array.isArray(paths) ? paths.map(String)
         : await (folder === true ? pickFolder(ask).then((p) => (p ? [p] : [])) : pickFiles(ask)).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); });
-      return json(res, 200, { landed: await notifyReferences(() => bringIn(project.path, String(into ?? 'assets'), picked, how)) });
+      return json(res, 200, { landed: await notifyReferences(() => bringIn(project.path, String(into ?? 'assets'), picked, how, { onLinked: (rel) => linked.push(rel) })), linked });
     }
     /* a link pointed somewhere else (files.mjs relink): the path given, else the person's pick. { path } (null: cancelled) */
     if (rest === 'files/relink' && req.method === 'POST') {
@@ -964,6 +1144,27 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (!(rate > 0 && rate <= 240)) throw new HttpError(400, 'fps: a frame rate');
       const { proxies } = readPrefs();
       return json(res, 200, { late: list, ranges: list.length ? ensurePreviews(project.path, /** @type {[number, number][]} */ (list), rate, proxies.height) : [] });
+    }
+    /* what the project is missing (media-reconnect.mjs): links that lead nowhere, files its clips name that are gone */
+    /* how the project's media was made, by path (media-made.mjs): what each was asked with, by whom, from which
+       files, its other versions, and the same asked again */
+    if (rest === 'files/made' && req.method === 'GET') return json(res, 200, { made: await madeView(project.path) });
+    if (rest === 'files/missing' && req.method === 'GET') {
+      /* asked because something looks missing: it is looked for (the pages hear when it is back) */
+      mediaIndex.soon(project.path);
+      return json(res, 200, { missing: (await missingMedia(project.path)).map(({ path, name, folder, linked, was }) => ({ path, name, folder, linked, was })) });
+    }
+    /* what is missing looked for and connected again, in a folder the person points at too: the one given, else
+       their pick (`folder: true`). { found, missing } (`cancelled`: no folder was picked) */
+    if (rest === 'files/reconnect' && req.method === 'POST') {
+      const { folder, title } = /** @type {{ folder?: unknown, title?: unknown }} */ (await readJson(req));
+      const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
+      const where = typeof folder === 'string' ? folder
+        : folder === true ? await pickFolder(ask).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); }) : undefined;
+      if (folder === true && !where) return json(res, 200, { cancelled: true });
+      const { found, missing } = await reconnect(project.path, { folders: where ? [where] : [] });
+      if (found.length) watchers.emit(project.path, { type: 'files' });
+      return json(res, 200, { found: found.length, missing: missing.map(({ path, name, folder: isFolder, linked, was }) => ({ path, name, folder: isFolder, linked, was })) });
     }
     /* what a link leads to copied into the project in its place (files.mjs collect) */
     if (rest === 'files/collect' && req.method === 'POST') {
@@ -1037,7 +1238,17 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     if (rest === 'saved/take' && req.method === 'POST') {
       const { path: from } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
-      return json(res, 200, await savedCall(() => takeSaved(project.path, from)));
+      /* a file of All media (all-media.mjs) comes in as media the person brings in does; one already here is that one */
+      if (isAllPath(from)) {
+        const path = await takeMedia(project.path, /** @type {string} */ (from));
+        if (!path) throw new HttpError(404, 'That file is not there any more.');
+        /* how it was made comes with it (media-made.mjs) */
+        await carryMade(project.path, path);
+        return json(res, 200, { path });
+      }
+      const taken = await savedCall(() => takeSaved(project.path, from));
+      if ('path' in taken) await carryMade(project.path, taken.path);
+      return json(res, 200, taken);
     }
     /* a page as text, read and written by what Studio writes into a page (layers pasted, page-text.mjs) */
     if (rest === 'page' && req.method === 'GET') return json(res, 200, await readPage(project.path, url.searchParams.get('path')));
@@ -1305,6 +1516,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     const exporting = exports.stopAll();
     fetches.stopAll();
     autoVersions.stop();
+    if (sweepMedia) clearTimeout(sweepMedia);
+    mediaIndex.close();
     await closePageFrames();
     watchers.closeAll();
     await pages.close();

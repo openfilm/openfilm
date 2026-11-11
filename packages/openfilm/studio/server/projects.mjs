@@ -7,6 +7,7 @@
  *   film.html, its pages and code, assets/   the work
  *   .film/id, .film/subtitles.json           its id (a copy gets its own) and the subtitles' style (captions.mjs)
  *   .film/settings.json                      the editor's settings: its frame rate, its tracks' names (project-settings.mjs)
+ *   .film/media.json                         what is known of each media file: its fingerprint, to find it again (media-index.mjs)
  *   .film/history/                           its versions (history.mjs)
  *   .film/chat/                              an app's conversations about it, with its agent's sessions
  *   .film/logs/                              an app's full record of every turn, for debugging

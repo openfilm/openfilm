@@ -107,7 +107,7 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
     .map((g) => ({ ...g, skills: g.skills.filter((k) => !q || [k.name, k.description].some((w) => w.toLowerCase().includes(q))) }))
     .filter((g) => g.skills.length);
   const turn = (skill: SkillEntry, on: boolean) => {
-    setSkills((list) => list.map((k) => (k.uid === skill.uid ? (on ? { ...k, off: undefined } : { ...k, off: true as const }) : k)));
+    setSkills((list) => list.map((k) => (k.uid === skill.uid ? (on ? { ...k, off: undefined, plugin: undefined } : { ...k, off: true as const }) : k)));
     void sourcesApi.setSkillOn(skill.uid, on).catch(() => { void sourcesApi.skills(projectId).then(setSkills); });
   };
   /* named in the message as agents know it (`as`: another of its name is beside it) */

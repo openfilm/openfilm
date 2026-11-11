@@ -83,6 +83,8 @@ try {
     stays: true,
     working: () => working,
     askAgent,
+    /* the person's own Studio: it keeps the record of their media up to date (media-index.mjs) */
+    indexMedia: true,
     /* the window's page, Studio's editor with the chat beside it (shell/), in place of the editor alone */
     ...(process.env.OPENFILM_EDITOR_DIR ? { editorDir: process.env.OPENFILM_EDITOR_DIR } : {}),
   });

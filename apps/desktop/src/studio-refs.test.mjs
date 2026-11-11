@@ -29,6 +29,14 @@ test('the block after the message says what each number is, with the film\'s sta
 </studio_references>`);
 });
 
+test('a file a service made says who made it and the words it was asked with', () => {
+  const made = { ...file, path: 'assets/image/fox.png', made: { prompt: 'a fox in "snow"', by: 'fal.ai', model: 'flux-2' } };
+  assert.match(studioReferencesText([made], { stage: { w: 1920, h: 1080 } }), /\[1\] file assets\/image\/fox\.png \(image, 1200×400\) · made by fal\.ai flux-2 · prompt "a fox in \\"snow\\""\n/);
+  assert.match(studioReferencesText([{ ...made, made: { prompt: 'a fox' } }], { stage: { w: 1920, h: 1080 } }), /\(image, 1200×400\) · prompt "a fox"\n/);
+  /* the pill keeps it, so a sent message still says it */
+  assert.deepEqual(refFromPill(refPill(undefined, made)).made, made.made);
+});
+
 test('no references, no block; the stage comes from a picture when the selection has none; what is unknown is left out', () => {
   assert.equal(studioReferencesText([]), '');
   const text = studioReferencesText([moment, { kind: 'clip', id: null, loc: null, label: 'Intro "a"', clipKind: 'video', src: null, start: 0, end: 2 }]);

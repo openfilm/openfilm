@@ -64,7 +64,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
   const patch = (change: (k: SkillEntry) => SkillEntry) => setSkills((list) => list.map((k) => (k.uid === skill.uid ? change(k) : k)));
   const reload = () => { void sourcesApi.skills(projectId).then(setSkills); };
   const turn = (on: boolean) => {
-    patch((k) => { const { off: _was, ...rest } = k; return on ? rest : { ...rest, off: true }; });
+    patch((k) => { const { off: _was, plugin: _plugin, ...rest } = k; return on ? rest : { ...rest, off: true }; });
     void sourcesApi.setSkillOn(skill.uid, on).catch(reload);
   };
   /* installing downloads it (a few seconds): said while it does, and why when it cannot */
@@ -142,7 +142,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
         <h2 className="min-w-0 flex-1 text-[17px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{words.title}</h2>
         {installed ? <SettingsSwitch checked={!skill.off} onChange={turn} label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words.title)} /> : null}
       </div>
-      {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.skillOff')}</p> : null}
+      {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', t(`settings.plugins.names.${skill.plugin}`)) : t('gallery.skillOff')}</p> : null}
       {skill.retired ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
         {/* the community's: whose it is, their account a link; OpenFilm's own: its kind */}
