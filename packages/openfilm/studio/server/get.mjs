@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
 import { spokenLines } from './captions.mjs';
 import { dropTranscripts, readTranscript, transcriptIsCurrent, transcriptPath, writeTranscript } from './transcripts.mjs';
-import { inside } from './files.mjs';
+import { readable } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { kindOf, modelFor, providerKey } from './keys.mjs';
 import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
@@ -271,7 +271,7 @@ export async function checkArgs(root, verb, given) {
 /** A file of the project the option names, of the kind it wants. @param {string} root @param {string} rel @param {string} name @param {'speech' | 'picture' | 'clip'} want */
 async function projectFile(root, rel, name, want) {
   let abs;
-  try { abs = inside(root, rel); } catch { throw usage(`--${name} ${rel} is not a path inside the project`); }
+  try { abs = readable(root, rel); } catch { throw usage(`--${name} ${rel} is not a path inside the project`); }
   if (!(await stat(abs).catch(() => null))?.isFile()) throw usage(`--${name} ${rel} is not in the project`);
   const kind = clipKind(rel);
   if (want === 'speech' ? kind !== 'sound' && kind !== 'video' : want === 'clip' ? kind !== 'video' : kind !== 'still') {
@@ -423,7 +423,7 @@ function deadline(seconds, outer) {
 
 /** A project file for a provider: as it is, or (`speech`) the sound alone, small. @param {string} root @param {string} rel @param {boolean} speech @param {AbortSignal} signal @param {'mp3'} [speechFormat] */
 async function readInput(root, rel, speech, signal, speechFormat) {
-  const abs = inside(root, rel);
+  const abs = readable(root, rel);
   const bytes = speech ? await speechOf(abs, signal, speechFormat) : await readFile(abs);
   if (bytes.length > MAX_INPUT_BYTES) {
     throw new GetError(speech
