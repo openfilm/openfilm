@@ -581,8 +581,28 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
   /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
      origin: see stillUrl) */
-  const refOfFile = React.useCallback((file: WorkspaceResource) => fileRef(file, file.kind === 'mg' ? mediaSources.pagePoster?.(file)
-    : file.kind === 'image' ? stillUrl(projectId, file.path, Math.round(file.mtimeMs)) : file.kind === 'video' ? mediaSources.poster?.(file) : undefined), [mediaSources, projectId]);
+  /* how the project's media was made (studio/server/media-made.mjs), by path: read with the files, and again when a
+     run of `get` has put what it landed on record. A file pointed at for the agent says it too */
+  const [mediaMade, setMediaMade] = React.useState<Record<string, MediaMade>>({});
+  React.useEffect(() => {
+    let live = true;
+    void api.mediaMade(projectId).then((made) => { if (live) setMediaMade(made); }, () => {});
+    return () => { live = false; };
+  }, [projectId, filesTick]);
+  const refOfFile = React.useCallback((file: WorkspaceResource, made: MediaMade | undefined = mediaMade[file.path]) => fileRef(file, file.kind === 'mg' ? mediaSources.pagePoster?.(file)
+    : file.kind === 'image' ? stillUrl(projectId, file.path, Math.round(file.mtimeMs)) : file.kind === 'video' ? mediaSources.poster?.(file) : undefined, made), [mediaSources, projectId, mediaMade]);
+  /* a file of All media or of Saved pointed at for the agent: brought into the project first (how it was made comes
+     with it), so what the agent is given is a file of the project it can use as it is */
+  const referOutside = React.useCallback(async (file: WorkspaceResource) => {
+    if (!studioHost?.refer) return;
+    try {
+      const taken = await api.takeSaved(projectId, file.path);
+      if (!('path' in taken)) return;
+      const made = (await api.mediaMade(projectId).catch(() => ({} as Record<string, MediaMade>)))[taken.path];
+      const { bundle: _bundle, ...rest } = file;
+      studioHost.refer(refOfFile({ ...rest, path: taken.path }, made));
+    } catch (e) { toast.showError(e instanceof Error ? e.message : String(e)); }
+  }, [projectId, refOfFile, toast]);
 
   /* ── transport: the sound is the clock; the picture follows it, drawn in the preview from the player's line ── */
   const player = React.useRef(new Player());
@@ -3250,6 +3270,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onDelete={async () => 'failed'}
       onNewFolder={async () => 'failed'}
       onReveal={allActions.reveal}
+      {...(studioHost?.refer ? { onReferFile: (file: WorkspaceResource) => void referOutside(file) } : {})}
       links={false}
       scope="all"
       onScope={inDrawer ? undefined : switchMedia}
@@ -3277,6 +3298,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onReveal={savedActions.reveal}
       onPick={onPick}
       onBring={(paths, into) => savedActions.bring(paths, into)}
+      {...(studioHost?.refer ? { onReferFile: (file: WorkspaceResource) => void referOutside(file) } : {})}
       links={false}
       scope="saved"
       onScope={inDrawer ? undefined : switchMedia}
@@ -4776,13 +4798,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [projectId, rawListing, linkMissing, clipMissing]);
   /* how the project's media was made (studio/server/media-made.mjs), by path: read with the files, and again when a
      run of `get` has put what it landed on record. The media pane searches the words and shows versions as one; the
-     inspector says it all, and asks for the same once more */
-  const [mediaMade, setMediaMade] = React.useState<Record<string, MediaMade>>({});
-  React.useEffect(() => {
-    let live = true;
-    void api.mediaMade(projectId).then((made) => { if (live) setMediaMade(made); }, () => {});
-    return () => { live = false; };
-  }, [projectId, filesTick]);
+     inspector says it all, and asks for the same once more (`mediaMade`, read above with the files) */
   const madeWords = React.useCallback((file: WorkspaceResource) => mediaMade[file.path]?.words, [mediaMade]);
   const madeVersions = React.useCallback((file: WorkspaceResource) => mediaMade[file.path]?.versions, [mediaMade]);
   /* what "Make another" made is picked once the listing has it (it may have it before the run answers, or after) */

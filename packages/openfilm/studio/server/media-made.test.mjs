@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fingerprint } from '../../src/media-fingerprint.mjs';
-import { madeAnywhere, madeFile, madeView, noteMade, readMade, wordsByFingerprint } from './media-made.mjs';
+import { carryMade, madeAnywhere, madeFile, madeView, noteMade, readMade, wordsByFingerprint } from './media-made.mjs';
 import { scanProject } from './media-index.mjs';
 import { createProject } from './projects.mjs';
 
@@ -151,4 +151,21 @@ test('what a canvas made before there was a record says its words and who made i
   await picture(root, 'a', 1, { prompt: 'a red door, open' }, 5000);
   assert.equal((await madeView(root))['assets/image/a.png'].words, 'a red door, open');
   assert.deepEqual([...(await wordsByFingerprint()).values()].sort(), ['a red door', 'a red door, open']);
+});
+
+test('a file brought in from another project keeps how it was made, under where it landed', async () => {
+  const from = await createProject('From');
+  const into = await createProject('Into');
+  await picture(from.path, 'hero', 1, { prompt: 'a fox in snow' }, 1000);
+  await scanProject(from.path);
+  media(into.path, 'assets/the fox.png', 9);
+  copyFileSync(join(from.path, 'assets/image/hero.png'), join(into.path, 'assets/the fox.png'));
+  assert.equal(await carryMade(into.path, 'assets/the fox.png'), true);
+  const made = (await madeView(into.path))['assets/the fox.png'];
+  assert.deepEqual({ words: made.words, by: made.by, model: made.model, out: made.again.args.out }, { words: 'a fox in snow', by: 'fal.ai', model: 'flux-2', out: 'the-fox-2' });
+  /* known here already, or known nowhere: nothing is done */
+  assert.equal(await carryMade(into.path, 'assets/the fox.png'), false);
+  media(into.path, 'assets/own.png', 5);
+  assert.equal(await carryMade(into.path, 'assets/own.png'), false);
+  assert.equal(await carryMade(into.path, 'assets/nope.png'), false);
 });

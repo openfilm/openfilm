@@ -370,7 +370,8 @@ export interface StudioRefImage { src?: string; viewer?: boolean; crop?: StageBo
  *   · time    a moment of the film
  *   · range   a stretch of the film (marked on the timeline's ruler, or with I and O): the clips playing in it
  *   · track   a whole track
- *   · file    a file of the project (the media pane): its path, kind, and length / size when known
+ *   · file    a file of the project (the media pane): its path, kind, and length / size when known; when a service
+ *             made it (studio/server/media-made.mjs), how (`made`: the words it was asked with, who made it, the model)
  *   · example  an example film (ExamplesGallery), or a part of it (`start`–`end`, a `segment` it names): where it comes
  *             from (`url`), and its folder on this computer to read how it is made (`folder`: fetched by the app
  *             when the message is sent, if not yet); `canvas` when its folder has the canvas it was made on
@@ -395,7 +396,7 @@ export type StudioRef = (
   | { kind: 'time'; time: number }
   | { kind: 'range'; start: number; end: number; clipIds: string[] }
   | { kind: 'track'; track: number; label: string; clipIds: string[] }
-  | { kind: 'file'; path: string; fileKind: string; duration?: number; w?: number; h?: number }
+  | { kind: 'file'; path: string; fileKind: string; duration?: number; w?: number; h?: number; made?: { prompt?: string; by?: string; model?: string } }
   | { kind: 'node'; id: string; nodeKind: string; label: string; text?: string; prompt?: string; path?: string; versions?: number }
   | { kind: 'subtitle'; start: number; end: number; text: string; lang?: string | null; index?: number; words?: Array<{ text: string; start: number; end: number }> }
   | { kind: 'example'; id: string; title: string; url: string; folder?: string; start?: number; end?: number; segment?: string; description?: string; canvas?: boolean }

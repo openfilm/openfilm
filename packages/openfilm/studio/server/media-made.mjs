@@ -105,6 +105,36 @@ function askOf(/** @type {string} */ verb, /** @type {Made['args']} */ args, /**
   return createHash('sha1').update(JSON.stringify([verb, wordsOf(args).trim().replace(/\s+/g, ' '), from])).digest('hex').slice(0, 16);
 }
 
+/** Write the record, the newest {@link KEPT_MAX} of it. */
+async function keep(/** @type {string} */ root, /** @type {Record<string, Made>} */ made) {
+  const newest = Object.entries(made).sort((a, b) => a[1].at - b[1].at).slice(-KEPT_MAX);
+  await mkdir(dirname(madeFile(root)), { recursive: true });
+  await writeAtomic(madeFile(root), `${JSON.stringify({ version: 1, made: Object.fromEntries(newest) }, null, 1)}\n`);
+  kept.delete(madeFile(root));
+}
+
+/**
+ * A file brought into the project from another one (All media, Saved) keeps how it was made: what the first listed
+ * project that knows the file says of it is put on this project's record too, under where it landed here. Nothing
+ * known, or known here already: nothing done. Never fails the bringing in.
+ * @param {string} root @param {string} path where it landed, in the project
+ */
+export async function carryMade(root, path) {
+  try {
+    const abs = inProject(root, path);
+    const fp = abs ? await fingerprint(abs) : null;
+    const here = readMade(root);
+    if (!fp || here[fp]) return false;
+    for (const p of (await listProjects()).filter((p) => !p.missing && p.path !== root)) {
+      const m = (await known(p.path, readRecord(projectRecordFile(p.path)).files))[fp];
+      if (!m) continue;
+      await keep(root, { ...here, [fp]: { ...m, path } });
+      return true;
+    }
+  } catch { /* said nothing of */ }
+  return false;
+}
+
 /**
  * Note how the files a run of `openfilm get` just landed were made. `paths`: the options of the verb that name files
  * of the project (what it was made from); `index`: the provider's own word on each file (whose a found one is).
@@ -149,10 +179,7 @@ export async function noteMade(root, { verb, args, paths, via, by, model, files,
       noted++;
     }
     if (!noted) return 0;
-    const newest = Object.entries(made).sort((a, b) => a[1].at - b[1].at).slice(-KEPT_MAX);
-    await mkdir(dirname(madeFile(root)), { recursive: true });
-    await writeAtomic(madeFile(root), `${JSON.stringify({ version: 1, made: Object.fromEntries(newest) }, null, 1)}\n`);
-    kept.delete(madeFile(root));
+    await keep(root, made);
     /* the project's record knows the new files at once: they are found by fingerprint from here on */
     await scanProject(root).catch(() => {});
     return noted;

@@ -224,6 +224,7 @@ export function pillCard(pill: { id: string; label: string; target?: Record<stri
       row('kind', ref.fileKind);
       if (ref.w && ref.h) row('size', `${ref.w}×${ref.h}`);
       if (ref.duration) row('length', `${ref.duration.toFixed(1)} s`);
+      row('words', ref.made?.prompt ? `“${words(ref.made.prompt, 120)}”` : null);
       break;
     case 'node':
       row('node', `${ref.id} · ${ref.nodeKind}`);
@@ -289,7 +290,13 @@ function refLine(ref: StudioRef): string {
     ].filter(Boolean).join(' · ');
     case 'file': {
       const facts = [ref.fileKind, ref.w && ref.h ? `${ref.w}×${ref.h}` : null, ref.duration ? sec(ref.duration) : null].filter(Boolean);
-      return `file ${ref.path}${facts.length ? ` (${facts.join(', ')})` : ''}`;
+      /* one a service made: how, so the agent can ask for more like it (`openfilm get`) */
+      const by = ref.made ? [ref.made.by, ref.made.model].filter(Boolean).join(' ') : '';
+      return [
+        `file ${ref.path}${facts.length ? ` (${facts.join(', ')})` : ''}`,
+        by ? `made by ${by}` : null,
+        ref.made?.prompt ? `prompt ${quote(ref.made.prompt, 600)}` : null,
+      ].filter(Boolean).join(' · ');
     }
     /* not in the film: the canvas beside it, changed with `openfilm canvas apply` */
     case 'node': return [

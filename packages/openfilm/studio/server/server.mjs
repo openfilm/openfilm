@@ -57,7 +57,7 @@ import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCov
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaFolders, mediaSummary } from './media-index.mjs';
 import { allMedia, fileOf, isAllPath, setMediaFolder, takeMedia, whereAll } from './all-media.mjs';
-import { madeAnywhere, madeView } from './media-made.mjs';
+import { carryMade, madeAnywhere, madeView } from './media-made.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
@@ -1144,9 +1144,13 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (isAllPath(from)) {
         const path = await takeMedia(project.path, /** @type {string} */ (from));
         if (!path) throw new HttpError(404, 'That file is not there any more.');
+        /* how it was made comes with it (media-made.mjs) */
+        await carryMade(project.path, path);
         return json(res, 200, { path });
       }
-      return json(res, 200, await savedCall(() => takeSaved(project.path, from)));
+      const taken = await savedCall(() => takeSaved(project.path, from));
+      if ('path' in taken) await carryMade(project.path, taken.path);
+      return json(res, 200, taken);
     }
     /* a page as text, read and written by what Studio writes into a page (layers pasted, page-text.mjs) */
     if (rest === 'page' && req.method === 'GET') return json(res, 200, await readPage(project.path, url.searchParams.get('path')));

@@ -211,6 +211,11 @@ export interface MediaPoolProps {
    */
   fileRef?: (file: WorkspaceResource) => StudioRef;
   onRefer?: (ref: StudioRef) => void;
+  /**
+   * In All media and Saved: a file as a reference in the app's chat, which the host brings into the project first (the
+   * file menu's "Reference in chat"; a drag carries no reference there, as bringing it in takes a moment).
+   */
+  onReferFile?: (file: WorkspaceResource) => void;
   /** Open this file's folder, scroll to its tile and optionally highlight it once. */
   reveal?: { path: string; seq: number; highlight?: boolean; done?: boolean } | null;
   onRevealed?: (seq: number) => void;
@@ -260,6 +265,7 @@ export function MediaPool({
   links = true,
   fileRef,
   onRefer,
+  onReferFile,
   reveal,
   onRevealed,
   shown = true,
@@ -661,10 +667,15 @@ export function MediaPool({
     })),
   ];
   const fileMenu = (file: WorkspaceResource): ContextMenuEntry[] => (inAll ? [
+    ...(onReferFile ? [{ id: 'refer', label: t('host.refer'), icon: <MessageSquarePlus size={14} />, onSelect: () => onReferFile(file) }] : []),
     ...(onReveal ? [{ id: 'reveal', label: t('projects.revealFolder'), icon: <FolderOpen size={14} />, onSelect: () => onReveal(file.path) }] : []),
   ] : [
     ...(fileRef && onRefer ? [
       { id: 'refer', label: t('host.refer'), icon: <MessageSquarePlus size={14} />, onSelect: () => onRefer(fileRef(file)) },
+      { id: 'refer-sep', separator: true } as const,
+    ] : onReferFile && !file.bundle ? [
+      /* a file of Saved (a clip or a group kept there is no file to point at) */
+      { id: 'refer', label: t('host.refer'), icon: <MessageSquarePlus size={14} />, onSelect: () => onReferFile(file) },
       { id: 'refer-sep', separator: true } as const,
     ] : []),
     ...commonEntries(file.path),

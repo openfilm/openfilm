@@ -175,12 +175,17 @@ export function trackRef(tracks: readonly TimelineTrack[], docIndex: number): St
   return { kind: 'track', track: docIndex, label, clipIds: [...new Set(rows.flatMap((tr) => tr.blocks.flatMap((b) => (b.clipId ? [b.clipId] : []))))] };
 }
 
-/** A file of the media pane; `image` its poster (a video, a page) or itself (a still). */
-export function fileRef(file: WorkspaceResource, image?: string): StudioRef {
+/**
+ * A file of the media pane; `image` its poster (a video, a page) or itself (a still); `made`: how a service made it
+ * (its record: the words it was asked with, the service, the model), for the agent to make more like it.
+ */
+export function fileRef(file: WorkspaceResource, image?: string, made?: { words?: string; by?: string; model?: string; found?: boolean }): StudioRef {
+  const how = made && !made.found ? { ...(made.words ? { prompt: made.words } : {}), ...(made.by ? { by: made.by } : {}), ...(made.model ? { model: made.model } : {}) } : null;
   return {
     kind: 'file', path: file.path, fileKind: file.kind === 'mg' ? 'page' : file.kind,
     ...(file.durationMs ? { duration: sec(file.durationMs) } : {}),
     ...(file.w && file.h ? { w: file.w, h: file.h } : {}),
+    ...(how && Object.keys(how).length ? { made: how } : {}),
     ...(image ? { image: { src: image } } : {}),
   };
 }
