@@ -82,6 +82,7 @@ export const ja: Words = {
     turnOn: '{name} をオンにする',
     turnOff: '{name} をオフにする',
     skillOff: 'オフです。オンに戻すまで、エージェントはこのスキルを使いません。',
+    skillOffPlugin: "「{plugin}」プラグインと一緒にオフになっています。オンにすると、プラグインもオンになります。",
     mine: '自分の',
     project: 'このプロジェクト',
     cat: { launch: '製品発表', explainer: '解説', slides: 'スライドを動画に', captions: '字幕とテロップ', ads: '広告', commerce: 'セールスポイント', music: '音楽' },
@@ -2576,6 +2577,7 @@ export const ja: Words = {
     sections: {
       agents: 'エージェント',
       models: 'サービス',
+      plugins: "プラグイン",
       developer: '開発者',
       general: '一般',
       shortcuts: 'キーボードショートカット',
@@ -2635,10 +2637,18 @@ export const ja: Words = {
       auto: '自動バージョン',
       autoHint: '作業中にバージョンを自動でコミットします。エージェントの作業の前後と、作品が数分変わらないとき。作品が変わったときだけです。',
     },
-    workModes: {
-      motionBeta: 'モーション（ベータ版）',
-      group: 'ワークスペース',
-      footnote: '使わないものはオフにできます。1 つだけ残すと、上部の切り替えボタンは表示されません。',
+    plugins: {
+      intro: "OpenFilm を構成するもの。使うものだけオンにします。オンの間だけ、そのワークベンチが表示され、エージェントがそのスキルを使います。",
+      footnote: "プラグインで作った映像は、オフにしても同じように再生・書き出しできます。ワークベンチは必ず 1 つオンのままです。1 つだけのとき、上部の切り替えボタンは表示されません。",
+      beta: "ベータ",
+      turnOn: "{name}をオンにする",
+      turnOff: "{name}をオフにする",
+      failed: "変更できませんでした。",
+      withSkills: "付属スキル：{skills}",
+      sep: "、",
+      names: { edit: "編集", canvas: "キャンバス", motion: "モーション" },
+      notes: { edit: "映像を切る：クリップ、トラック、音。", canvas: "素材を作る：アイデア、参考、ショットをボードに並べて生成します。", motion: "レイヤーとキーフレーム：アニメーションを手で細かく調整します。" },
+      skills: { canvas: "キャンバス" },
     },
     advanced: {
       intro: "最適な設定になっています。通常は変更する必要はありません。",

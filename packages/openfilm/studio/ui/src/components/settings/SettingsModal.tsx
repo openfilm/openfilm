@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, Search, SquareTerminal, Loader2, SlidersHorizontal } from 'lucide-react';
+import { X, Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, Search, SquareTerminal, Loader2, SlidersHorizontal, Puzzle } from 'lucide-react';
 import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type LanguageChoice } from '@/i18n';
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
 import { showWhatsNew } from '@/lib/whats-new';
@@ -23,16 +23,16 @@ import { ShortcutsSection } from './ShortcutsSection';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
 import { useThemeMode, type ThemeMode } from './theme';
 import { StorageGroup } from './StorageGroup';
-import { WORK_MODES, setWorkMode, useWorkModes, type WorkMode } from '../../lib/work-modes';
+import { PluginsSection } from './PluginsSection';
 import { LARGE_DIALOG_SIZE } from '../dialog-chrome';
 import { LibraryCategoriesGroup } from './LibraryCategoriesGroup';
 
-export type SettingsSection = 'general' | 'agents' | 'models' | 'developer' | 'shortcuts' | 'advanced';
+export type SettingsSection = 'general' | 'agents' | 'models' | 'plugins' | 'developer' | 'shortcuts' | 'advanced';
 
-/* the nav, in groups: what OpenFilm does, then help (Agents only inside an app with a chat: lib/host.ts `agents`;
+/* the nav, in groups: what OpenFilm does and is made of (its plugins), then help (Agents only inside an app with a chat: lib/host.ts `agents`;
    Advanced for what is already set for the best experience; Developer always, for its diagnostics) */
 const NAV: Array<{ group: 'settings' | 'help'; sections: SettingsSection[] }> = [
-  { group: 'settings', sections: ['general', ...(studioHost?.agents ? ['agents' as const] : []), 'models'] },
+  { group: 'settings', sections: ['general', ...(studioHost?.agents ? ['agents' as const] : []), 'models', 'plugins'] },
   { group: 'help', sections: ['shortcuts', 'advanced', 'developer'] },
 ];
 
@@ -47,6 +47,7 @@ const SECTION_ICON: Record<SettingsSection, React.ReactNode> = {
   general: <Settings2 size={18} strokeWidth={1.75} />,
   agents: <Bot size={18} strokeWidth={1.75} />,
   models: <Boxes size={18} strokeWidth={1.75} />,
+  plugins: <Puzzle size={18} strokeWidth={1.75} />,
   developer: <SquareTerminal size={18} strokeWidth={1.75} />,
   shortcuts: <Keyboard size={18} strokeWidth={1.75} />,
   advanced: <SlidersHorizontal size={18} strokeWidth={1.75} />,
@@ -58,9 +59,10 @@ const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
   general: ['settings.appearance', 'settings.storage'],
   agents: 'settings.agents',
   models: ['settings.models', 'settings.providers'],
+  plugins: 'settings.plugins',
   developer: ['settings.developer', 'settings.report'],
   shortcuts: 'settings.shortcuts',
-  advanced: ['settings.advanced', 'settings.workModes', ...(studioHost?.notifications ? ['settings.notifications'] : []), 'settings.versions', 'settings.playback', 'settings.libraryCategories'],
+  advanced: ['settings.advanced', ...(studioHost?.notifications ? ['settings.notifications'] : []), 'settings.versions', 'settings.playback', 'settings.libraryCategories'],
 };
 
 export interface SettingsModalProps {
@@ -193,6 +195,7 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
             {showing === 'models' && <ModelsSection />}
             {showing === 'developer' && <DeveloperSection />}
             {showing === 'shortcuts' && <ShortcutsSection />}
+            {showing === 'plugins' && <PluginsSection />}
             {showing === 'advanced' && <AdvancedSection />}
             </div>
           </div>
@@ -322,21 +325,6 @@ function PlaybackGroup() {
   );
 }
 
-/** The ways of working a project offers (lib/work-modes): with one on, the top bar has no switch. The last stays on. */
-function WorkModesGroup() {
-  const t = useT();
-  const on = useWorkModes();
-  const NAME: Record<WorkMode, [string, string]> = { edit: ['canvas.modeEdit', 'canvas.noteEdit'], canvas: ['canvas.modeCanvas', 'canvas.noteCanvas'], motion: ['settings.workModes.motionBeta', 'canvas.noteMotion'] };
-  return (
-    <SettingsGroup title={t('settings.workModes.group')} footnote={t('settings.workModes.footnote')}>
-      {WORK_MODES.map((m) => (
-        <SettingsItem key={m} title={t(NAME[m][0])} description={t(NAME[m][1])}
-          control={<SettingsSwitch checked={on.includes(m)} disabled={on.length === 1 && on.includes(m)} onChange={(v) => setWorkMode(m, v)} label={t(NAME[m][0])} />} />
-      ))}
-    </SettingsGroup>
-  );
-}
-
 /**
  * Versions saved on their own (studio/server/auto-versions.mjs): whether open projects save them while they are worked
  * on. Showing these versions is controlled by the type filter in Version history.
@@ -367,7 +355,6 @@ function AdvancedSection() {
   const t = useT();
   return (
     <SettingsPage note={t('settings.advanced.intro')}>
-      <WorkModesGroup />
       {studioHost?.notifications ? <NotificationsGroup /> : null}
       <VersionsGroup />
       <PlaybackGroup />

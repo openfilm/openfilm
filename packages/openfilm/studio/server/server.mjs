@@ -58,6 +58,7 @@ import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex
 import { createMediaIndexer, mediaFolders, mediaSummary } from './media-index.mjs';
 import { allMedia, fileOf, isAllPath, setMediaFolder, takeMedia, whereAll } from './all-media.mjs';
 import { carryMade, madeAnywhere, madeView } from './media-made.mjs';
+import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
@@ -500,6 +501,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       }
       return json(res, 200, { freed, ...await storage() });
     }
+    /* OpenFilm's plugins (src/plugins.mjs): each with whether it is on; one turned on or off (PUT plugins/:id { on }),
+       answered with them all. 409 for the last workbench on */
+    if (parts[0] === 'plugins' && parts.length === 1 && req.method === 'GET') return json(res, 200, { plugins: pluginStates() });
+    if (parts[0] === 'plugins' && parts.length === 2 && req.method === 'PUT') {
+      const { on } = /** @type {{ on?: unknown }} */ (await readJson(req) ?? {});
+      if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
+      try { setPluginOn(parts[1], on); } catch (e) { throw new HttpError(/there is no plugin/i.test(/** @type {Error} */ (e).message) ? 404 : 409, /** @type {Error} */ (e).message); }
+      return json(res, 200, { plugins: pluginStates() });
+    }
     /* the person's media in numbers (media-index.mjs): places, files, the room they take and the room copies take */
     if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
     /* All media (all-media.mjs): every project's media and the added folders', one line a file, the newest first
@@ -612,6 +622,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const offered = catalogSkills(catalog).filter((k) => !had.has(k.uid));
       const origins = skillOrigins();
       const off = new Set(skillsOff());
+      const withPlugin = skillsOfPluginsOff();
       const agentsCall = new Map(offeredSkills({ project: project?.path ?? null }).named.map((k) => [k.uid, k.as]));
       const media = (/** @type {string} */ uid, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(uid)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
       const all = [...coreSkills().map((k) => ({ ...k, core: true, installed: true })), ...skills.map((k) => ({ ...k, core: false, installed: true })),
@@ -633,6 +644,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           ...(k.installed && k.source === 'official' && !k.core ? standing.get(k.uid) ?? {} : {}),
           /* turned off: offered to no agent until it is turned on again */
           ...(k.installed && keeps(off, k) ? { off: true } : {}),
+          /* one of OpenFilm's own that goes with a plugin now off (src/plugins.mjs): off with it, and on again with it */
+          ...(k.core && withPlugin.has(k.name) ? { off: true, plugin: withPlugin.get(k.name) } : {}),
         })),
       });
     }
@@ -687,7 +700,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
       if (!skill) throw new HttpError(404, 'no such skill');
       setSkillOn(skill.uid, on);
-      return json(res, 200, { on });
+      /* one of OpenFilm's own that goes with a plugin now off: turned on, its plugin is too (it is given to no agent
+         otherwise, src/plugins.mjs) */
+      const plugin = on ? skillsOfPluginsOff().get(skill.name) : undefined;
+      if (plugin && coreSkills().some((k) => k.uid === skill.uid)) setPluginOn(plugin, true);
+      return json(res, 200, { on, ...(plugin ? { plugin } : {}) });
     }
     /* Only the person's own skill can be changed; a project override must not edit a hidden personal skill. */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'cover' && (req.method === 'PUT' || req.method === 'DELETE')) {

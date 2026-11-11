@@ -83,6 +83,7 @@ export const en = {
     turnOn: 'Turn on {name}',
     turnOff: 'Turn off {name}',
     skillOff: 'Off. Agents aren\'t offered it until you turn it on again.',
+    skillOffPlugin: "Off with the {plugin} plugin. Turning it on turns the plugin on too.",
     mine: 'Yours',
     project: 'This project',
     cat: { launch: 'Product launches', explainer: 'Explainers', slides: 'Slides to video', captions: 'Captions and titles', ads: 'Ads', commerce: 'Selling points', music: 'Music' },
@@ -2577,6 +2578,7 @@ export const en = {
     sections: {
       agents: 'Agents',
       models: 'Services',
+      plugins: "Plugins",
       developer: 'Developer',
       general: 'General',
       shortcuts: 'Keyboard shortcuts',
@@ -2636,10 +2638,18 @@ export const en = {
       auto: 'Auto versions',
       autoHint: 'Commit a version on its own while you work: before and after an agent’s turn, and when the film rests for a couple of minutes. Only when the film changed.',
     },
-    workModes: {
-      motionBeta: 'Motion (Beta)',
-      group: 'Ways of working',
-      footnote: 'Turn off what you don’t use. With one left on, the top bar has no switch.',
+    plugins: {
+      intro: "What OpenFilm is made of. Turn on what you use: a plugin's workbench shows, and your agent learns its skills, only while it is on.",
+      footnote: "A film made with a plugin plays and exports the same with the plugin off. One workbench stays on; with one on, the top bar has no switch.",
+      beta: "Beta",
+      turnOn: "Turn on {name}",
+      turnOff: "Turn off {name}",
+      failed: "That could not be changed.",
+      withSkills: "Comes with the skill: {skills}",
+      sep: ", ",
+      names: { edit: "Edit", canvas: "Canvas", motion: "Motion" },
+      notes: { edit: "Cutting the film: clips, tracks, sound.", canvas: "Making material: ideas, references and shots laid out and generated on a board.", motion: "Layers and keyframes: animation adjusted by hand." },
+      skills: { canvas: "Canvas" },
     },
     advanced: {
       intro: "These are set for the best experience. You don’t need to change them.",

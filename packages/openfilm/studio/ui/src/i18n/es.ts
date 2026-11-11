@@ -82,6 +82,7 @@ export const es: Words = {
     turnOn: 'Activar {name}',
     turnOff: 'Desactivar {name}',
     skillOff: 'Desactivada. Ningún agente la usará hasta que la vuelvas a activar.',
+    skillOffPlugin: "Desactivada con el plugin {plugin}. Al activarla, el plugin también se activa.",
     mine: 'Tuya',
     project: 'Este proyecto',
     cat: { launch: 'Lanzamientos', explainer: 'Explicaciones', slides: 'Diapositivas a vídeo', captions: 'Subtítulos y títulos', ads: 'Anuncios', commerce: 'Puntos de venta', music: 'Música' },
@@ -2576,6 +2577,7 @@ export const es: Words = {
     sections: {
       agents: 'Agentes',
       models: 'Servicios',
+      plugins: "Plugins",
       developer: 'Desarrollador',
       general: 'General',
       shortcuts: 'Atajos de teclado',
@@ -2635,10 +2637,18 @@ export const es: Words = {
       auto: 'Versiones automáticas',
       autoHint: 'Confirma una versión por sí sola mientras trabajas: antes y después del turno de un agente, y cuando la película pasa un par de minutos sin cambios. Solo si la película cambió.',
     },
-    workModes: {
-      motionBeta: 'Movimiento (beta)',
-      group: 'Espacios de trabajo',
-      footnote: 'Desactiva los que no uses. Con uno solo, la barra superior no muestra el selector.',
+    plugins: {
+      intro: "De qué está hecho OpenFilm. Activa lo que uses: el espacio de trabajo de un plugin se muestra, y tu agente aprende sus skills, solo mientras está activado.",
+      footnote: "Un vídeo hecho con un plugin se reproduce y se exporta igual con el plugin desactivado. Siempre queda un espacio de trabajo activado; con uno solo, la barra superior no muestra el cambio.",
+      beta: "Beta",
+      turnOn: "Activar {name}",
+      turnOff: "Desactivar {name}",
+      failed: "No se pudo cambiar.",
+      withSkills: "Incluye la skill: {skills}",
+      sep: ", ",
+      names: { edit: "Edición", canvas: "Lienzo", motion: "Movimiento" },
+      notes: { edit: "Cortar el vídeo: clips, pistas, sonido.", canvas: "Crear material: ideas, referencias y planos dispuestos y generados en un tablero.", motion: "Capas y fotogramas clave: animación ajustada a mano." },
+      skills: { canvas: "Lienzo" },
     },
     advanced: {
       intro: "Ya están ajustados para la mejor experiencia. Normalmente no hace falta cambiarlos.",

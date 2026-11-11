@@ -79,6 +79,7 @@ export const ko: Words = {
     turnOn: '{name} 켜기',
     turnOff: '{name} 끄기',
     skillOff: '꺼져 있습니다. 다시 켜기 전까지 에이전트는 이 스킬을 쓰지 않습니다.',
+    skillOffPlugin: "\"{plugin}\" 플러그인과 함께 꺼져 있습니다. 켜면 플러그인도 함께 켜집니다.",
     mine: '내 스킬',
     project: '이 프로젝트',
     cat: { launch: '제품 출시', explainer: '해설', slides: '슬라이드를 영상으로', captions: '자막과 타이틀', ads: '광고', commerce: '판매 포인트', music: '음악' },
@@ -2572,6 +2573,7 @@ export const ko: Words = {
     sections: {
       agents: '에이전트',
       models: '서비스',
+      plugins: "플러그인",
       developer: '개발자',
       general: '일반',
       shortcuts: '키보드 단축키',
@@ -2631,10 +2633,18 @@ export const ko: Words = {
       auto: '자동 버전',
       autoHint: '작업하는 동안 버전을 자동으로 커밋합니다. 에이전트 작업 전후, 그리고 영상이 몇 분 동안 바뀌지 않을 때. 영상이 바뀐 경우에만 저장합니다.',
     },
-    workModes: {
-      motionBeta: '모션(베타)',
-      group: '작업 공간',
-      footnote: '쓰지 않는 작업 공간은 끌 수 있습니다. 하나만 남으면 상단의 전환 버튼이 사라집니다.',
+    plugins: {
+      intro: "OpenFilm을 이루는 것들입니다. 쓰는 것만 켜세요. 켜져 있는 동안에만 그 작업대가 보이고, 에이전트가 그 스킬을 씁니다.",
+      footnote: "플러그인으로 만든 영상은 플러그인을 꺼도 똑같이 재생되고 내보내집니다. 작업대는 하나 이상 켜져 있어야 하며, 하나만 켜져 있으면 위쪽 전환 버튼이 보이지 않습니다.",
+      beta: "베타",
+      turnOn: "{name} 켜기",
+      turnOff: "{name} 끄기",
+      failed: "바꾸지 못했습니다.",
+      withSkills: "함께 오는 스킬: {skills}",
+      sep: ", ",
+      names: { edit: "편집", canvas: "캔버스", motion: "모션" },
+      notes: { edit: "영상 자르기: 클립, 트랙, 소리.", canvas: "소재 만들기: 아이디어, 참고 자료, 장면을 보드에 펼치고 생성합니다.", motion: "레이어와 키프레임: 애니메이션을 손으로 세밀하게 조정합니다." },
+      skills: { canvas: "캔버스" },
     },
     advanced: {
       intro: "최적의 환경으로 설정되어 있어 보통은 바꿀 필요가 없습니다.",

@@ -83,6 +83,7 @@ export const zhCN: Words = {
     turnOn: '开启 {name}',
     turnOff: '关闭 {name}',
     skillOff: '已关闭。重新开启前，智能体不会用到它。',
+    skillOffPlugin: "跟着\"{plugin}\"插件一起关了。打开它，插件也会一起打开。",
     mine: '我的',
     project: '本项目',
     cat: { launch: '产品发布', explainer: '科普讲解', slides: '幻灯片转视频', captions: '字幕与花字', ads: '广告', commerce: '电商卖点', music: '音乐' },
@@ -2577,6 +2578,7 @@ export const zhCN: Words = {
     sections: {
       agents: '智能体',
       models: '服务',
+      plugins: "插件",
       developer: '开发者',
       general: '通用',
       shortcuts: '键盘快捷键',
@@ -2636,10 +2638,18 @@ export const zhCN: Words = {
       auto: '自动保存版本',
       autoHint: '工作时自动提交版本：智能体每一轮开始前和结束后，以及影片停下几分钟没变时。只有影片变了才保存。',
     },
-    workModes: {
-      motionBeta: '动效台（测试版）',
-      group: '工作台',
-      footnote: '关掉用不到的工作台。只剩一个时，顶栏不再显示切换按钮。',
+    plugins: {
+      intro: "OpenFilm 由这些组成。用到哪个开哪个：插件开着，它的工作台才显示，智能体才会学它的技能。",
+      footnote: "用某个插件做出来的片子，插件关掉后照样播放和导出。至少要开着一个工作台；只剩一个时，顶栏不再显示切换按钮。",
+      beta: "测试版",
+      turnOn: "打开{name}",
+      turnOff: "关闭{name}",
+      failed: "没能改动。",
+      withSkills: "附带技能：{skills}",
+      sep: "、",
+      names: { edit: "剪辑台", canvas: "画布", motion: "动效台" },
+      notes: { edit: "剪片子：片段、轨道、声音。", canvas: "做素材：在画布上摆开想法、参考和镜头，并生成。", motion: "图层和关键帧：亲手精细地调动效。" },
+      skills: { canvas: "画布" },
     },
     advanced: {
       intro: "这些已设为最佳体验，一般不用改。",

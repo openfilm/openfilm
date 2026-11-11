@@ -40,8 +40,8 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
     await page.getByRole('button', { name: 'OpenFilm menu' }).click();
     await page.getByRole('menuitem', { name: 'Settings' }).click();
     const settings = page.getByRole('dialog');
-    await settings.getByRole('button', { name: 'Advanced', exact: true }).click();
-    const motion = settings.getByRole('switch', { name: 'Motion (Beta)' });
+    await settings.getByRole('button', { name: 'Plugins', exact: true }).click();
+    const motion = settings.getByRole('switch', { name: 'Turn on Motion' });
     await motion.waitFor();
     assert.equal(await motion.getAttribute('aria-checked'), 'false');
     await settings.getByRole('switch', { name: 'Canvas' }).click();
