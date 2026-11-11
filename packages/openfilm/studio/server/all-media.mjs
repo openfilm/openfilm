@@ -17,6 +17,7 @@ import { basename, extname, isAbsolute, join, parse, resolve } from 'node:path';
 import { sharedHome, setSharedPref } from '../../src/locations.mjs';
 import { bringIn, readable } from './files.mjs';
 import { folderRecordFile, mediaFolders, projectRecordFile, readRecord, scanProject } from './media-index.mjs';
+import { wordsByFingerprint } from './media-made.mjs';
 import { listProjects } from './projects.mjs';
 
 /** The top of these paths, as the pane names them. */
@@ -24,8 +25,8 @@ export const ALL = 'all';
 
 /**
  * @typedef {{ path: string, name: string, kind: import('./media-index.mjs').MediaKind, size: number, mtime: number,
- *   from: string, uses: number }} AllFile   `from`: the project or folder it is shown from; `uses`: how many
- *   projects have it
+ *   from: string, uses: number, words?: string }} AllFile   `from`: the project or folder it is shown from; `uses`:
+ *   how many projects have it; `words`: what it was asked for with, when a service made it (media-made.mjs)
  * @typedef {{ fp: string, root: string, rel: string, abs: string, project: boolean, cache: string }} Where
  */
 
@@ -79,8 +80,9 @@ export async function allMedia() {
   }
   const files = [...byFp.values()].sort((a, b) => b.mtime - a.mtime || a.name.localeCompare(b.name));
   places = new Map(files.map((f) => [f.path, f.at]));
+  const words = await wordsByFingerprint();
   return {
-    files: files.map(({ at, ...f }) => ({ ...f, uses: usedIn.get(at.fp)?.size ?? 0 })),
+    files: files.map(({ at, ...f }) => ({ ...f, uses: usedIn.get(at.fp)?.size ?? 0, ...(words.has(at.fp) ? { words: /** @type {string} */ (words.get(at.fp)).slice(0, 2000) } : {}) })),
     folders: folders.map((path) => ({ path, name: basename(path) || path, missing: !existsSync(path) })),
   };
 }

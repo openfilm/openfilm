@@ -38,6 +38,7 @@ import { inside } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { kindOf, modelFor, providerKey } from './keys.mjs';
 import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
+import { noteMade } from './media-made.mjs';
 import { addedDir } from './providers/added.mjs';
 import { mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
@@ -299,10 +300,10 @@ async function projectFile(root, rel, name, want) {
  * GetError (or a provider's own Error) saying why it did not run.
  * `model`: the provider's model for this run, instead of the person's choice for this kind of media.
  * @param {string} root @param {string} verb @param {Record<string, unknown>} given
- * `tell`: says a Notice to the person in Studio.
- * @param {{ via?: string, model?: string, yes?: boolean, ask?: Ask, tell?: (notice: Notice) => void, signal?: AbortSignal }} [options]
+ * `tell`: says a Notice to the person in Studio. `made`: told once how the files it landed were made is on record.
+ * @param {{ via?: string, model?: string, yes?: boolean, ask?: Ask, tell?: (notice: Notice) => void, made?: (root: string) => void, signal?: AbortSignal }} [options]
  */
-export async function runGet(root, verb, given, { via, model, yes = false, ask, tell, signal = new AbortController().signal } = {}) {
+export async function runGet(root, verb, given, { via, model, yes = false, ask, tell, made, signal = new AbortController().signal } = {}) {
   const args = await checkArgs(root, verb, given);
   if (verb === 'call') {
     const { custom } = await providerSettings();
@@ -365,7 +366,11 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
         ...(words ? { prompt: words.length > 200 ? `${words.slice(0, 199).trimEnd()}…` : words } : {}) });
     }
     const result = await provider.run(/** @type {Verb} */ (verb), args, ctx);
-    await land(root, verb, args, result);
+    const files = await land(root, verb, args, result);
+    /* how each was made, kept with the project (media-made.mjs): a generated file's name says nothing of it */
+    const noted = await noteMade(root, { verb, args, paths: Object.keys(spec.options).filter((name) => spec.options[name].path), via: provider.id, by: provider.name,
+      model: runModel, files, index: result.index });
+    if (noted) made?.(root);
     return [...said, show(await receiptFor(root, verb, args, result.receipt))].join('\n');
   } catch (e) {
     if (clock.timedOut()) throw new GetError(`${provider.name} did not finish within ${spec.timeoutSec + 60} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
@@ -499,6 +504,8 @@ function wordsOf(raw) {
  * @param {string} root @param {string} verb @param {Record<string, unknown>} args @param {RunResult} result
  */
 async function land(root, verb, args, result) {
+  /** @type {string[]} */
+  const landed = [];
   for (const file of result.files ?? []) {
     if (!landable(file?.path) || file.path.endsWith('.vtt')) continue;
     const abs = join(root, file.path);
@@ -507,11 +514,12 @@ async function land(root, verb, args, result) {
     if ((await lstat(abs).catch(() => null))?.isSymbolicLink()) await rm(abs);
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, file.bytes);
+    landed.push(file.path);
     /* a sound or video made again under its name: the old take's subtitles go (its own are written below) */
     const kind = clipKind(file.path);
     if (kind === 'sound' || kind === 'video') await dropTranscripts(root, file.path);
   }
-  if (verb !== 'tts' && verb !== 'asr') return;
+  if (verb !== 'tts' && verb !== 'asr') return landed;
   for (const row of result.index ?? []) {
     /* asr: beside the recording --src names, checked already (in the project, not the tools'); tts: beside the
        provider's file, under assets/ */
@@ -527,6 +535,7 @@ async function land(root, verb, args, result) {
     await writeTranscript(root, src, { lines, ...(speaker ? { speaker } : {}) });
     if (verb === 'asr') break;
   }
+  return landed;
 }
 
 /**
@@ -735,8 +744,9 @@ export function createAsks(pages) {
  *   POST /api/get/library   { verb, args } → { code, lines }: a search of OpenFilm's own library (src/library-search.mjs),
  *                           answered with the library and its model kept loaded here, so it takes milliseconds
  * @param {Req} req @param {Res} res @param {string[]} parts the path after /api/get @param {ReturnType<typeof createAsks>} asks
+ * @param {(root: string) => void} [made] told once how the files a run landed were made is on record (media-made.mjs)
  */
-export async function getRoute(req, res, parts, asks) {
+export async function getRoute(req, res, parts, asks, made) {
   if (!parts.length && req.method === 'GET') {
     const query = new URL(req.url ?? '', 'http://studio').searchParams;
     return json(res, 200, await catalog(query.get('verb') ?? undefined, { web: query.get('web') === '1' }));
@@ -767,6 +777,7 @@ export async function getRoute(req, res, parts, asks) {
       yes: body.yes === true,
       ask: (spend) => asks.ask(root, spend, controller.signal),
       tell: (notice) => asks.tell(root, notice),
+      ...(made ? { made } : {}),
       signal: controller.signal,
     });
     json(res, 200, { ok: true, text });

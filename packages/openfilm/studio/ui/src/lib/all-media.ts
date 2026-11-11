@@ -5,6 +5,7 @@
  * of Saved (`saved/take`), and one the project has already is that one.
  */
 import React from 'react';
+import type { MediaMade } from '@/api';
 import { mediaFetch } from './media-queue';
 import { factsOfProbe, type MediaFacts, type MediaListing, type MediaSources, type WorkspaceResource } from './workspace-resources';
 
@@ -12,7 +13,7 @@ import { factsOfProbe, type MediaFacts, type MediaListing, type MediaSources, ty
 export const ALL = 'all';
 export const isAllPath = (path: string) => path.startsWith(`${ALL}/`);
 
-interface AllFile { path: string; name: string; kind: 'video' | 'image' | 'audio'; size: number; mtime: number; from: string; uses: number }
+interface AllFile { path: string; name: string; kind: 'video' | 'image' | 'audio'; size: number; mtime: number; from: string; uses: number; words?: string }
 export interface MediaFolder { path: string; name: string; missing: boolean }
 interface AllBody { files: AllFile[]; folders: MediaFolder[]; scanning: boolean }
 
@@ -44,6 +45,8 @@ export function useAllMedia(on: boolean): {
   listing: MediaListing | null; fromOf: (file: WorkspaceResource) => string | undefined;
   /** Where it is from, and how many projects have it (the inspector says both). */
   aboutOf: (file: { path: string }) => { name: string; uses: number } | undefined;
+  /** The words a service was asked for it with (searched as its name is). */
+  wordsOf: (file: WorkspaceResource) => string | undefined;
   folders: readonly MediaFolder[]; scanning: boolean;
 } {
   const seen = React.useSyncExternalStore(
@@ -91,12 +94,17 @@ export function useAllMedia(on: boolean): {
   const about = React.useMemo(() => new Map((body?.files ?? []).map((f) => [f.path, { name: f.from, uses: f.uses }])), [body]);
   const fromOf = React.useCallback((file: WorkspaceResource) => about.get(file.path)?.name, [about]);
   const aboutOf = React.useCallback((file: { path: string }) => about.get(file.path), [about]);
-  return { listing, fromOf, aboutOf, folders: body?.folders ?? [], scanning: Boolean(body?.scanning) };
+  const words = React.useMemo(() => new Map((body?.files ?? []).flatMap((f) => (f.words ? [[f.path, f.words] as const] : []))), [body]);
+  const wordsOf = React.useCallback((file: WorkspaceResource) => words.get(file.path), [words]);
+  return { listing, fromOf, aboutOf, wordsOf, folders: body?.folders ?? [], scanning: Boolean(body?.scanning) };
 }
 
 const send = (method: string, url: string, body: unknown) => fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
 export const allActions = {
+  /** How a file of All media was made, as any project knows it (null: nothing on record). */
+  made: (path: string): Promise<MediaMade | null> => fetch(`/api/all-media/made?path=${enc(path)}`, { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null), () => null).then((body: { made?: MediaMade | null } | null) => body?.made ?? null),
   /** Show where the file is, in the file manager. */
   reveal: (path: string) => { void send('POST', '/api/all-media/reveal', { path }); },
   /**

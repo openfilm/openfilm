@@ -196,6 +196,13 @@ export interface MediaPoolProps {
   onRevealFolder?: (path: string) => void;
   /** All media is still being read: more may come in. */
   scanning?: boolean;
+  /** The words a service was asked for a file with (studio/server/media-made.mjs): a search finds it by them too. */
+  wordsOf?: (file: WorkspaceResource) => string | undefined;
+  /**
+   * Every version of the thing a file is one of, by path, the oldest first (alone: none). Versions in one folder show
+   * as one tile, the newest, counted; the one picked or pointed at shows in its place (the inspector lists them all).
+   */
+  versionsOf?: (file: WorkspaceResource) => readonly string[] | undefined;
   /** Upload may also link media kept elsewhere (a project's); without it, files are copied in only (Saved). */
   links?: boolean;
   /**
@@ -248,6 +255,8 @@ export function MediaPool({
   onRemoveFolder,
   onRevealFolder,
   scanning = false,
+  wordsOf,
+  versionsOf,
   links = true,
   fileRef,
   onRefer,
@@ -318,7 +327,25 @@ export function MediaPool({
   /* every folder under assets/ but a tool's (fonts) */
   const folders = React.useMemo(() => (media ? media.dirs.filter((dir) => !hiddenDir(dir)) : []), [media]);
 
-  const items = React.useMemo((): Item[] | null => {
+  /* versions of one thing shown together are one tile: the one picked or pointed at, else the newest */
+  const revealing = reveal && !reveal.done ? reveal.path : null;
+  const stacked = React.useCallback((files: WorkspaceResource[]) => {
+    /** how many versions each tile shown stands for */
+    const counts = new Map<string, number>();
+    if (!versionsOf) return { files, counts };
+    const here = new Set(files.map((f) => f.path));
+    const wanted = (path: string) => picked.includes(path) || path === selectedPath || path === revealing || path === litPath;
+    const kept = files.filter((f) => {
+      const together = (versionsOf(f) ?? []).filter((path) => here.has(path));
+      if (together.length < 2) return true;
+      const face = together.find(wanted) ?? together[together.length - 1];
+      if (face === f.path) counts.set(f.path, together.length);
+      return face === f.path;
+    });
+    return { files: kept, counts };
+  }, [versionsOf, picked, selectedPath, revealing, litPath]);
+
+  const listed = React.useMemo((): { items: Item[]; counts: ReadonlyMap<string, number> } | null => {
     if (!allFiles) return null;
     const q = query.trim();
     const order = (a: WorkspaceResource, b: WorkspaceResource) => {
@@ -329,17 +356,21 @@ export function MediaPool({
       return byName(a.name, b.name);
     };
     /* searching or showing one kind looks through every folder at once */
+    const said = (f: WorkspaceResource, of?: (file: WorkspaceResource) => string | undefined) => Boolean(q && of && mediaNameMatches(of(f) ?? '', q));
     if (q || view.filter !== 'all') {
-      return allFiles
-        .filter((f) => (view.filter === 'all' || filterOf(f) === view.filter) && (mediaNameMatches(f.name, q) || Boolean(q && fromOf && mediaNameMatches(fromOf(f) ?? '', q))))
-        .sort(order).map((file) => ({ type: 'file', file }));
+      const found = stacked(allFiles
+        .filter((f) => (view.filter === 'all' || filterOf(f) === view.filter) && (mediaNameMatches(f.name, q) || said(f, fromOf) || said(f, wordsOf)))
+        .sort(order));
+      return { items: found.files.map((file) => ({ type: 'file', file })), counts: found.counts };
     }
     /* the project's pages are at the top; a page put in a folder is in its folder */
-    const here = allFiles.filter((f) => (inMedia(f.path) ? relDir(assetRel(f.path)) === at : at === '')).sort(order);
+    const here = stacked(allFiles.filter((f) => (inMedia(f.path) ? relDir(assetRel(f.path)) === at : at === '')).sort(order));
     /* the folders here, what each holds and its cover (lib/media-folders) */
     const sub = folderFaces(allFiles, folders, at, (path) => (inMedia(path) ? assetRel(path) : null)).map((face) => ({ type: 'folder' as const, ...face }));
-    return [...sub, ...here.map((file) => ({ type: 'file' as const, file }))];
-  }, [allFiles, folders, at, query, view, assetRel, inMedia, inAll, fromOf]);
+    return { items: [...sub, ...here.files.map((file) => ({ type: 'file' as const, file }))], counts: here.counts };
+  }, [allFiles, folders, at, query, view, assetRel, inMedia, inAll, fromOf, wordsOf, stacked]);
+  const items = listed?.items ?? null;
+  const stackCounts = listed?.counts;
 
   /* a file asked to be shown: its folder opened (pages are at the top), a search or a filter that hides it let go */
   const gridRef = React.useRef<HTMLDivElement>(null);
@@ -1111,6 +1142,7 @@ export function MediaPool({
                 onPress={(e) => press(item, e)}
                 typeText={item.file.bundle ? t(`saved.kind_${item.file.bundle.kind}`) : item.file.kind === 'mg' ? t('assets.kindPage') : extOf(item.file.name).toUpperCase()}
                 library={inSaved || inAll}
+                {...(stackCounts?.get(item.file.path) ? { versions: stackCounts.get(item.file.path)!, versionsLabel: t('made.versions').replace('{n}', String(stackCounts.get(item.file.path))) } : {})}
                 {...(item.file.bundle?.props ? { componentMark: t('saved.component') } : {})}
                 onMenu={(e) => menuFor(item, e)}
                 onRename={(name) => void rename(item.file.path, name, false)}
@@ -1353,6 +1385,9 @@ function FileTile(p: {
   library?: boolean;
   /** What hovering it says, in place of its name (or its path, when `where` is shown). */
   hint?: string;
+  /** It stands for this many versions of one thing (the others are listed in the inspector). */
+  versions?: number;
+  versionsLabel?: string;
   /** A bundle of Saved that offers properties: the word that marks it a component. */
   componentMark?: string;
 }) {
@@ -1433,6 +1468,9 @@ function FileTile(p: {
           {/* a bundle of Saved: a component, and how many clips a group holds */}
           {p.componentMark ? (
             <span className="absolute left-1 top-1 z-10 flex items-center gap-0.5 rounded bg-black/65 px-1 text-[9.5px] font-semibold leading-[15px] text-white/90"><ComponentIcon size={9} />{p.componentMark}</span>
+          ) : null}
+          {p.versions ? (
+            <span data-media-versions="" title={p.versionsLabel} className="absolute left-1 top-1 z-10 flex items-center gap-0.5 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white"><Layers size={10} />{p.versions}</span>
           ) : null}
           {bundle?.kind === 'group' && bundle.count ? (
             <span className="absolute bottom-1 left-1 z-10 flex items-center gap-0.5 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white"><Layers size={10} />{bundle.count}</span>

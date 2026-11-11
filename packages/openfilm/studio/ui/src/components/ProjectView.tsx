@@ -27,7 +27,7 @@ import { declared, withDeclarations } from '@/lib/clip-look';
 import { declarations } from '../../../../src/film-doc.mjs';
 import { PARTS, compoundFolder, compoundOf, dissolvedOf, srcInto, srcOutOf } from '../../../server/compound.mjs';
 import type { FilmValue } from '../../../server/ops.mjs';
-import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type MissingMedia, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
+import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type MediaMade, type MissingMedia, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
 import { Player } from '@/editor/player';
@@ -129,7 +129,7 @@ import { MediaPool, type ImportProgress } from './MediaPool';
 import { LayersPanel } from './LayersPanel';
 import type { LayerRow, LayerSelection } from '@/lib/layers-tree';
 import { SourcePreview } from './SourcePreview';
-import { ResourceInspector } from './ResourceInspector';
+import { ResourceInspector, type MadeProps } from './ResourceInspector';
 import { FilmInspector } from './FilmInspector';
 import { Timeline, timelineFitHeight, type TimelineCommands, type TimelineHistory } from './Timeline';
 import { useEditorTools } from './use-editor-tools';
@@ -3253,6 +3253,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       scope="all"
       onScope={inDrawer ? undefined : switchMedia}
       fromOf={allMedia.fromOf}
+      wordsOf={allMedia.wordsOf}
       folders={allMedia.folders}
       scanning={allMedia.scanning}
       onAddFolder={() => allActions.addFolder(t('media.pickMediaFolder'))}
@@ -3304,6 +3305,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onCollect={onCollect}
       missing={missingMedia.length}
       onFindMissing={() => void findMissing()}
+      wordsOf={madeWords}
+      versionsOf={madeVersions}
       onSave={saveFiles}
       scope="project"
       onScope={inDrawer ? undefined : switchMedia}
@@ -4770,6 +4773,57 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     void api.missingMedia(projectId).then((missing) => { if (live) setMissingMedia(missing); }, () => {});
     return () => { live = false; };
   }, [projectId, rawListing, linkMissing, clipMissing]);
+  /* how the project's media was made (studio/server/media-made.mjs), by path: read with the files, and again when a
+     run of `get` has put what it landed on record. The media pane searches the words and shows versions as one; the
+     inspector says it all, and asks for the same once more */
+  const [mediaMade, setMediaMade] = React.useState<Record<string, MediaMade>>({});
+  React.useEffect(() => {
+    let live = true;
+    void api.mediaMade(projectId).then((made) => { if (live) setMediaMade(made); }, () => {});
+    return () => { live = false; };
+  }, [projectId, filesTick]);
+  const madeWords = React.useCallback((file: WorkspaceResource) => mediaMade[file.path]?.words, [mediaMade]);
+  const madeVersions = React.useCallback((file: WorkspaceResource) => mediaMade[file.path]?.versions, [mediaMade]);
+  /* what "Make another" made is picked once the listing has it (it may have it before the run answers, or after) */
+  const [pickWhenListed, setPickWhenListed] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const file = pickWhenListed ? listing?.files.find((f) => f.path === pickWhenListed) : undefined;
+    if (!file) return;
+    setPickWhenListed(null);
+    pickMedia(file);
+    setRevealMedia((cur) => ({ path: file.path, seq: (cur?.seq ?? 0) + 1, highlight: true }));
+  }, [listing, pickWhenListed, pickMedia]);
+  const makeAgain = React.useCallback(async (made: MediaMade) => {
+    const folder = loaded?.project.path;
+    if (!folder || !made.again) return;
+    try {
+      const receipt = JSON.parse(await api.make(folder, made.again.verb, made.again.args, { via: made.again.via, ...(made.again.model ? { model: made.again.model } : {}) })) as { src?: string; images?: Array<{ src?: string }> };
+      const path = receipt.src ?? receipt.images?.[0]?.src;
+      if (!path) return;
+      setPickWhenListed(path);
+      toast.show(t('made.made').replace('{name}', path.slice(path.lastIndexOf('/') + 1)));
+    } catch (e) { toast.showError(e instanceof Error ? e.message : String(e)); }
+  }, [loaded?.project.path, t, toast]);
+  /* a file of All media says how it was made as any project knows it: asked for as it is picked */
+  const [outsideMade, setOutsideMade] = React.useState<{ path: string; made: MediaMade } | null>(null);
+  const outsidePath = pickedSaved && pickedMedia && isAllPath(pickedMedia.path) ? pickedMedia.path : null;
+  React.useEffect(() => {
+    if (!outsidePath) { setOutsideMade(null); return undefined; }
+    let live = true;
+    void allActions.made(outsidePath).then((made) => { if (live) setOutsideMade(made ? { path: outsidePath, made } : null); });
+    return () => { live = false; };
+  }, [outsidePath]);
+  /** What the inspector says of how a file was made: one of the project's, or one of All media. */
+  const madeFor = (file: WorkspaceResource): MadeProps | undefined => {
+    if (pickedSaved && file === pickedMedia) return outsideMade?.path === file.path ? { made: outsideMade.made } : undefined;
+    const made = mediaMade[file.path];
+    return made ? {
+      made, sources: mediaSources,
+      fileAt: (path) => listing?.files.find((f) => f.path === path),
+      onShow: (path) => showFile(path),
+      onAgain: () => makeAgain(made),
+    } : undefined;
+  };
   /* media kept elsewhere is renamed or moved without the project's folder changing: its links are looked at again
      when the person comes back to the window, and the listing is taken when one of them changed */
   const hasLinks = React.useMemo(() => Object.keys(rawListing?.links ?? {}).length > 0, [rawListing]);
@@ -5866,7 +5920,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
                   {!editFree ? <PaneDivider width={inspectorShownWidth} onResize={commitInspectorWidth} containerRef={viewerRowRef} label={t('inspector.resize')} min={MIN_INSPECTOR} minRest={MIN_VIEWER} relative side={editPrefs.inspectorSide === 'left' ? 'start' : 'end'} style={{ order: editPrefs.inspectorSide === 'left' ? 21 : 79 }} /> : null}
                   <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-inspector style={{ width: inspectorShownWidth, order: editPrefs.inspectorSide === 'left' ? 20 : 80, ...freeStyle('inspector') }}>
                   {typeof inspectorContent === 'object' ? (
-                    <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? outsideSources(inspectorContent) : mediaSources).file(inspectorContent)} from={pickedSaved && inspectorContent === pickedMedia ? allMedia.aboutOf(inspectorContent) : undefined} width={inspectorShownWidth} onClose={closeInspector} />
+                    <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? outsideSources(inspectorContent) : mediaSources).file(inspectorContent)} from={pickedSaved && inspectorContent === pickedMedia ? allMedia.aboutOf(inspectorContent) : undefined} made={madeFor(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
                   ) : inspectorContent === 'captions' ? (
                     <CaptionInspector projectId={projectId} width={inspectorShownWidth} onClose={closeInspector} timeMs={timeMs} onSeek={seek} onTranslated={addTranslation}
                       infoOf={captionInfoOf} onCut={cutRanges} onAdd={addCaption} />

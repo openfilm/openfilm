@@ -41,6 +41,17 @@ export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: st
 /** What the listed projects take on disk, the biggest first, in bytes: `clearable` is the cache that is made again when needed. */
 export type StorageUsage = { projects: { id: string; name: string; path: string; total: number; clearable: number }[]; total: number; clearable: number };
 export type MissingMedia = { path: string; name: string; folder: boolean; linked: boolean; was: string };
+/**
+ * How a media file was made (studio/server/media-made.mjs): the words it was asked with, who made it with which model,
+ * the rest of what was asked, the files it was made from (each where it is now; null: gone), every version of the
+ * thing in the project (this one among them, the oldest first; alone: none), whose it is when it was found on the
+ * web, and the same asked once more.
+ */
+export interface MediaMade {
+  verb: string; found: boolean; words: string; by: string; model?: string; at: number; args: Record<string, string>;
+  refs?: { as: string; path: string | null; name: string }[]; versions?: string[]; credit?: string; page?: string;
+  again?: { verb: string; args: Record<string, string | true | string[]>; via: string; model?: string };
+}
 export type Op =
   | { op: 'set'; clip: string; field: string; value?: unknown }
   | { op: 'move'; clip: string; at: number; track?: number; newTrack?: number; newTrackAttrs?: Track['attrs'] }
@@ -192,6 +203,8 @@ export const api = {
   files: (id: string) => call<Listing>(`${p(id)}/files`),
   /** what the project's media is missing, and the same looked for again in a folder the person points at */
   missingMedia: (id: string) => call<{ missing: MissingMedia[] }>(`${p(id)}/files/missing`).then((r) => r.missing),
+  /** how the project's media was made, by path */
+  mediaMade: (id: string) => call<{ made: Record<string, MediaMade> }>(`${p(id)}/files/made`).then((r) => r.made),
   reconnectMedia: (id: string, folder: string) => call<{ found: number; missing: MissingMedia[] }>(`${p(id)}/files/reconnect`, { method: 'POST', json: { folder } }),
   /** the editor's settings of the project (`.film/settings.json`): its frame rate, its tracks' names */
   settings: (id: string) => call<{ settings: ProjectSettings }>(`${p(id)}/settings`).then((r) => r.settings),
@@ -297,7 +310,7 @@ export type SpendAsk = {
 /** What the person is told without a question (studio/server/get.mjs): a provider with no balance left for a run. */
 export type StudioNotice = { id: string; kind: 'balance'; provider: string; providerId: string };
 
-export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths?: string[]; reconnected?: number } | { type: 'history' } | { type: 'export'; job: ExportJob } | { type: 'open'; to: string }
+export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths?: string[]; reconnected?: number; made?: boolean } | { type: 'history' } | { type: 'export'; job: ExportJob } | { type: 'open'; to: string }
   | { type: 'history-progress'; op: string; phase: string; done: number; total: number }
   | { type: 'ask'; ask: SpendAsk } | { type: 'asked'; id: string } | { type: 'notice'; notice: StudioNotice } | { type: 'project'; project: Project }
   /* an agent changed the canvas (`openfilm canvas apply`) */

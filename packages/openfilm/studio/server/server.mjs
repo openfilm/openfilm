@@ -57,6 +57,7 @@ import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCov
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaFolders, mediaSummary } from './media-index.mjs';
 import { allMedia, fileOf, isAllPath, setMediaFolder, takeMedia, whereAll } from './all-media.mjs';
+import { madeAnywhere, madeView } from './media-made.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
@@ -368,7 +369,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* ── `openfilm get`: media from a provider, landed in the project; spending is asked here first (see get.mjs) ── */
     if (parts[0] === 'get') {
       making += req.method === 'POST' ? 1 : 0;
-      try { return await getRoute(req, res, parts.slice(1), asks); } finally { making -= req.method === 'POST' ? 1 : 0; }
+      try { return await getRoute(req, res, parts.slice(1), asks, (root) => watchers.emit(root, { type: 'files', made: true })); } finally { making -= req.method === 'POST' ? 1 : 0; }
     }
 
     /* ── `openfilm canvas`: an agent's steps on a project's canvas, shown on the board at once (canvas.mjs) ── */
@@ -528,6 +529,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const at = await whereAll(sub === 'reveal' ? (/** @type {{ path?: unknown }} */ (await readJson(req) ?? {})).path : url.searchParams.get('path'));
       if (!at) throw new HttpError(404, 'That file is not there any more.');
       if (sub === 'reveal' && req.method === 'POST') { reveal(fileOf(at)); return json(res, 200, {}); }
+      /* how it was made, as any project knows it (media-made.mjs): { made } (null: nothing on record) */
+      if (sub === 'made' && req.method === 'GET') return json(res, 200, { made: await madeAnywhere(at.fp) });
       if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, fileOf(at));
       if (sub === 'media' && req.method === 'GET') {
         const what = url.searchParams.get('what');
@@ -1045,6 +1048,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       return json(res, 200, { late: list, ranges: list.length ? ensurePreviews(project.path, /** @type {[number, number][]} */ (list), rate, proxies.height) : [] });
     }
     /* what the project is missing (media-reconnect.mjs): links that lead nowhere, files its clips name that are gone */
+    /* how the project's media was made, by path (media-made.mjs): what each was asked with, by whom, from which
+       files, its other versions, and the same asked again */
+    if (rest === 'files/made' && req.method === 'GET') return json(res, 200, { made: await madeView(project.path) });
     if (rest === 'files/missing' && req.method === 'GET') {
       /* asked because something looks missing: it is looked for (the pages hear when it is back) */
       mediaIndex.soon(project.path);

@@ -569,3 +569,28 @@ test('a voice-over spoken again without word timings: the last take\'s transcrip
   assert.equal(existsSync(join(root, 'assets/audio/vo/intro.vtt')), false);
   assert.match(said, /"transcript": "none: the service does not time words/);
 });
+
+test('what a run lands is on record with how it was made, and the run says so once', async () => {
+  const root = project();
+  const told = [];
+  await runGet(root, 'sfx', { out: 'ding', prompt: 'a chime', sec: '1' }, { made: (at) => told.push(at) });
+  const { readMade, madeView } = await import('./media-made.mjs');
+  const [record] = Object.values(readMade(root));
+  assert.deepEqual({ path: record.path, verb: record.verb, via: record.via, by: record.by, model: record.model, args: record.args, refs: record.refs },
+    { path: 'assets/audio/sfx/ding.mp3', verb: 'sfx', via: 'elevenlabs', by: 'ElevenLabs', model: 'eleven_text_to_sound_v2', args: { prompt: 'a chime', sec: 1 }, refs: [] });
+  assert.deepEqual(told, [root]);
+  assert.deepEqual((await madeView(root))['assets/audio/sfx/ding.mp3'].again, { verb: 'sfx', via: 'elevenlabs', model: 'eleven_text_to_sound_v2', args: { out: 'ding-2', prompt: 'a chime', sec: '1' } });
+  /* asked again as the record says: a new file beside the first, a version of the same thing */
+  const { again } = (await madeView(root))['assets/audio/sfx/ding.mp3'];
+  refuse = (call) => (call.path === '/v1/sound-generation' ? [200, mp3(1.5)] : [404, {}]);
+  await runGet(root, again.verb, again.args, { via: again.via, model: again.model });
+  refuse = null;
+  assert.ok(existsSync(join(root, 'assets/audio/sfx/ding-2.mp3')));
+  assert.deepEqual((await madeView(root))['assets/audio/sfx/ding-2.mp3'].versions, ['assets/audio/sfx/ding.mp3', 'assets/audio/sfx/ding-2.mp3']);
+  told.length = 1;
+  /* a transcript makes no media: nothing more is said */
+  mkdirSync(join(root, 'assets/upload'), { recursive: true });
+  writeFileSync(join(root, 'assets/upload/talk.wav'), wav(new Uint8Array(32000), 16000));
+  await runGet(root, 'asr', { src: 'assets/upload/talk.wav' }, { made: (at) => told.push(at) });
+  assert.equal(told.length, 1);
+});
