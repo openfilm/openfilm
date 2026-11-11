@@ -1386,7 +1386,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
 
       const timeline = planNleTimeline({ stage: doc.stage, duration: duration || 0.001, pictures, sounds },
         { title, fps, audio: mode, media: ask.media ?? 'copy', mediaDir: join(final, 'media'), stems: [...stems.keys()],
-          audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app), footage: ask.footage ?? 'auto' });
+          audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app), embeddedAudio: Boolean(app), footage: ask.footage ?? 'auto' });
       const staged = (/** @type {import('./nle.mjs').NleFile} */ f) => join(staging, 'media', basename(f.path));
 
       /* each web page (and each picture Basic Motion can't place) drawn alone, full frame, with alpha. Several are drawn at
@@ -1493,6 +1493,20 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         /* a draft's PNG page keeps each picture once, for as long as it shows (剪映 plays a picture's own length): a
            fraction of the frames, the same pixels */
         if (app && clear && alpha !== 'prores') await keepChanges(staged(file), stop.signal);
+        /* A rendered picture still owns the sound recorded with it. Put that sound on the rendered media's clock;
+           clip gain, mute and fades remain editable in the draft instead of becoming detached audio clips. */
+        const audio = /** @type {Extract<import('./nle.mjs').NleMediaJob, { kind: 'render' }>} */ (file.job).audio;
+        if (audio) {
+          const seconds = file.durationFrames / timeline.rate.fps;
+          const temp = `${staged(file)}.audio.mov`;
+          try {
+            await run(['-i', staged(file), '-ss', String(audio.from), '-t', String(audio.to - audio.from), '-i', audio.path,
+              '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy',
+              '-af', `asetpts=PTS-STARTPTS,${tempo(audio.speed)},apad=whole_dur=${seconds},atrim=0:${seconds}`,
+              '-c:a', 'pcm_s16le', '-ar', '48000', '-ac', String(file.audio?.channels ?? 2), '-t', String(seconds), temp], stop.signal);
+            await rename(temp, staged(file));
+          } finally { await rm(temp, { force: true }); }
+        }
       };
       try {
         let left = totalFrames;
