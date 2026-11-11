@@ -127,7 +127,8 @@ export function ModelPopover({ placement = 'bottom', align = 'start', agent: con
   const ready = (id: LocalAgentId) => shown.find((a) => a.id === id)?.status === 'ready';
   const selectedReady = ready(agent);
   const configurationRevision = la.roster?.find((a) => a.id === agent)?.configurationRevision;
-  React.useEffect(() => { if (selectedReady) void ensureOptions(agent); }, [agent, selectedReady, configurationRevision, ensureOptions]);
+  const agentPath = la.roster?.find((a) => a.id === agent)?.path;
+  React.useEffect(() => { if (selectedReady) void ensureOptions(agent); }, [agent, selectedReady, configurationRevision, agentPath, ensureOptions]);
   React.useEffect(() => {
     if (!open) return;
     void refresh();

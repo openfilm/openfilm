@@ -45,14 +45,14 @@ interface LocalAgentStore extends Persisted {
   setPref(agent: LocalAgentId, configId: string, value: unknown): void;
   /** The option list a session reported, kept for the menu. */
   noteOptions(agent: LocalAgentId, options: ConfigOptions | null): void;
-  /** No option list yet: ask for one (a session opened and closed, nothing said, nothing spent). */
-  /** Ask the agent for its options once; one that failed is asked again only on `retry` (the menu opened, Retry). */
+  /** Ask for options without a prompt. `retry` also refreshes an old catalog when the menu opens. */
   ensureOptions(agent: LocalAgentId, opts?: { retry?: boolean }): Promise<void>;
 }
 
 const probing = new Set<LocalAgentId>();
-/** The last model asked for this launch. Refresh saved catalogs once, and dependent options on each model pick. */
-const askedThisLaunch = new Map<LocalAgentId, string>();
+/** Reuse recent catalogs; opening the menu later discovers models released while the app stays open. */
+const OPTIONS_MAX_AGE = 5 * 60 * 1000;
+const askedThisLaunch = new Map<LocalAgentId, { key: string; at: number }>();
 
 /** A selected model can have different effort/speed options from the agent's default model. */
 function probeModel(state: Persisted, agent: LocalAgentId): string | undefined {
@@ -65,7 +65,8 @@ function probeModel(state: Persisted, agent: LocalAgentId): string | undefined {
   return typeof model === 'string' && option?.options?.some((o) => o.value === model) ? model : undefined;
 }
 
-const probeKey = (agent: LocalAgentId, model: string | undefined, revision = 0) => JSON.stringify([agent, model, revision]);
+const probeKey = (agent: LocalAgentId, model: string | undefined, roster: RosterAgent | undefined) =>
+  JSON.stringify([agent, model, roster?.configurationRevision ?? 0, roster?.path ?? null]);
 
 const KEY = 'openfilm.local-agents.v2';
 
@@ -267,15 +268,17 @@ export const useLocalAgents = create<LocalAgentStore>((set, get) => ({
     if (agent === 'byok' || agent === 'openfilm' && get().roster?.some((a) => a.id === agent && a.openfilm) || probing.has(agent)) return;
     if (!get().roster?.some((a) => a.id === agent && a.shown && a.status === 'ready')) return;
     const model = probeModel(get(), agent);
-    const currentKey = () => probeKey(agent, probeModel(get(), agent), get().roster?.find((a) => a.id === agent)?.configurationRevision ?? 0);
+    const currentKey = () => probeKey(agent, probeModel(get(), agent), get().roster?.find((a) => a.id === agent));
     const key = currentKey();
     const kept = Boolean(get().options[agent]);
     const matched = model == null || get().options[agent]?.find((o) => o.category === 'model')?.currentValue === model;
-    if (askedThisLaunch.get(agent) === key && (matched || get().optionsError[agent]) && (!retry || !get().optionsError[agent])) return;
+    const asked = askedThisLaunch.get(agent);
+    const expired = retry && asked && Date.now() - asked.at >= OPTIONS_MAX_AGE;
+    if (asked?.key === key && !expired && (matched || get().optionsError[agent]) && (!retry || !get().optionsError[agent])) return;
     const api = desktopBridge()?.localAgents;
     if (!api) return;
     probing.add(agent);
-    askedThisLaunch.set(agent, key);
+    askedThisLaunch.set(agent, { key, at: Date.now() });
     set({ optionsError: { ...get().optionsError, [agent]: undefined } });
     try {
       const r = await api.probe(agent, model).catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e), code: undefined }));

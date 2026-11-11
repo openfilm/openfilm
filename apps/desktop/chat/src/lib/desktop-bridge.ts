@@ -24,6 +24,8 @@ export interface RosterAgent {
   install?: string | null;
   setupRequired?: string | null;
   configurationRevision?: number;
+  /** The detected native executable; bundled app updates may change it without a settings change. */
+  path?: string | null;
   openfilm?: { order: string[]; hidden: string[]; defaultOrder: string[]; model?: string; models: Array<{ id: string; name: string; shown: boolean; available: boolean; levels?: string[]; effort?: string }> };
   error?: string;
   /** Whose sign-in it uses, when the agent tells (no key or token). */
