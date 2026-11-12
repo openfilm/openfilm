@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, utimesSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProject } from './projects.mjs';
-import { clearProjectCache, projectUsage, storage } from './storage.mjs';
+import { clearProjectCache, places, projectUsage, storage } from './storage.mjs';
 
 const KEYS = ['OPENFILM_HOME', 'OPENFILM_SHARED_HOME', 'OPENFILM_LIBRARY'];
 let before;
@@ -89,4 +89,22 @@ test('every listed project with what it takes, the biggest first, and the sums',
   assert.deepEqual(all.projects.map((p) => [p.id, p.name, p.clearable]), [[big.id, 'Big', 1550], [small.id, 'Small', 1550]]);
   assert.equal(all.clearable, 3100);
   assert.equal(all.total, all.projects[0].total + all.projects[1].total);
+});
+
+test('beside the projects: Mine, the skills, what was fetched of the library, the models, and the rest of the home, none counted twice', async () => {
+  const home = process.env.OPENFILM_HOME;
+  const saved = join(home, '..', 'Saved');
+  process.env.OPENFILM_SAVED = saved;
+  process.env.OPENFILM_SKILLS = join(home, '..', 'Skills');
+  try {
+    put(saved, 'clip.mp4', 500);
+    put(process.env.OPENFILM_SKILLS, 'mine/SKILL.md', 20);
+    put(home, 'skills-installed/a/SKILL.md', 30);
+    put(home, 'library/audio/x.mp3', 700);
+    put(home, 'library/models/m.onnx', 900);
+    put(home, 'cache/vision/1/v.onnx', 100);
+    put(home, 'prefs.json', 5);
+    const by = Object.fromEntries((await places()).map((p) => [p.id, p.bytes]));
+    assert.deepEqual(by, { saved: 500, skills: 50, library: 700, models: 1000, other: 5 });
+  } finally { delete process.env.OPENFILM_SAVED; delete process.env.OPENFILM_SKILLS; }
 });

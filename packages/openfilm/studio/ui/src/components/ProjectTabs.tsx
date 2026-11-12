@@ -1,10 +1,9 @@
 /** The desktop's projects as a continuous tab strip. Only a tab has a context menu; the empty title bar stays quiet. */
 import React from 'react';
-import { Clapperboard, FolderOpen, Image, LibraryBig, Pencil, Plus, X } from 'lucide-react';
+import { Clapperboard, FolderOpen, Image, Pencil, Plus, X } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import { useT } from '@/i18n';
 import { studioHost, type HostTab } from '@/lib/host';
-import { LIBRARY_TAB } from '@/lib/library-page';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { useHostTabs } from './ProjectCard';
 import { Toast, useToast } from './Toast';
@@ -27,8 +26,6 @@ export function ProjectTabs({ current, onProjects, onRenameCurrent, onCoverCurre
   const finished = React.useRef(false);
   const list = React.useRef<HTMLDivElement>(null);
   const beginRename = (tab: HostTab) => {
-    /* the library's tab is no project's: nothing to rename */
-    if (tab.projectId === LIBRARY_TAB) return;
     if (tab.id === self && onRenameCurrent) onRenameCurrent();
     else setEditing({ tab, name: tab.title || t('project.untitled') });
   };
@@ -49,7 +46,7 @@ export function ProjectTabs({ current, onProjects, onRenameCurrent, onCoverCurre
     }
   };
   const target = tabs.find(tab => tab.id === context?.id);
-  const entries: ContextMenuEntry[] = target && host && target.projectId !== LIBRARY_TAB ? [
+  const entries: ContextMenuEntry[] = target && host ? [
     { id: 'rename', icon: <Pencil size={14} />, label: t('projectMenu.rename'), onSelect: () => beginRename(target) },
     { id: 'cover', icon: <Image size={14} />, label: t('switcher.cover'), disabled: target.id !== self || !onCoverCurrent, hint: t('projectTabs.coverCurrent'), onSelect: onCoverCurrent },
     { id: 'reveal', icon: <FolderOpen size={14} />, label: t('switcher.reveal'), onSelect: () => { void api.revealProject(target.projectId).catch(() => toast.showError(t('projectTabs.revealFailed'))); } },
@@ -72,7 +69,7 @@ export function ProjectTabs({ current, onProjects, onRenameCurrent, onCoverCurre
           {tab.id === self && current ? current : <button type="button" role="tab" aria-selected={tab.id === self} aria-hidden={editing?.tab.id === tab.id || undefined} tabIndex={editing?.tab.id === tab.id ? -1 : self === null || tab.id === self ? 0 : -1} className={styles.select}
             onClick={event => { if (event.detail < 2) host.show(tab.id); }} onDoubleClick={event => { event.preventDefault(); event.stopPropagation(); beginRename(tab); }}
             onMouseDown={event => { if (event.button === 0 && event.detail === 2) { event.preventDefault(); event.stopPropagation(); beginRename(tab); } }}>
-            {tab.projectId === LIBRARY_TAB ? <LibraryBig size={13} /> : <Clapperboard size={13} />}<span className={`${styles.name} ${editing?.tab.id === tab.id ? 'invisible' : ''}`}>{tab.title || t('project.untitled')}</span>
+            <Clapperboard size={13} /><span className={`${styles.name} ${editing?.tab.id === tab.id ? 'invisible' : ''}`}>{tab.title || t('project.untitled')}</span>
           </button>}
           {editing?.tab.id === tab.id ? <input ref={input} className={`${styles.rename} ${styles.tabRename}`} aria-label={t('projectMenu.rename')} maxLength={56} value={editing.name}
             onChange={event => setEditing({ ...editing, name: event.target.value })} onBlur={() => void finishRename(true)}
@@ -83,7 +80,7 @@ export function ProjectTabs({ current, onProjects, onRenameCurrent, onCoverCurre
       </div>
       <button type="button" className={styles.add} aria-label={t('projectTabs.new')} onClick={onProjects}><Plus size={16} /></button>
     </div>
-    {context && target && entries.length ? <ContextMenu x={context.x} y={context.y} items={entries} onClose={() => setContext(null)} /> : null}
+    {context && target ? <ContextMenu x={context.x} y={context.y} items={entries} onClose={() => setContext(null)} /> : null}
     <Toast toast={toast.current} />
   </>;
 }

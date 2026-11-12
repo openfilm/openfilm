@@ -1,10 +1,13 @@
 /**
- * The parts every section of Settings is made of. A page reads like a document: titled groups with room between them,
- * and in each a list of rows parted by hairlines, each its title and what it does on the left, its control on the
- * right. Controls are quiet until pointed at: a choice of two or three is a segmented control, on/off a switch, a
- * longer list a select.
+ * The parts every section of Settings is made of, as a computer's system settings draws them: a page is a column of
+ * cards, each a group of rows parted by hairlines (its title above it, a footnote under it), each row its title and
+ * what it does on the left, its control on the right. A row that leads to a page of its own ends in a chevron
+ * (SettingsNavRow); a section that is such a list of pages opens on a card that says what it is (SettingsHero).
+ * Controls are quiet until pointed at: a choice of two or three is a segmented control, on/off a switch, a longer
+ * list a select.
  */
 import React from 'react';
+import { ChevronRight } from 'lucide-react';
 
 /** A section's body: an optional note, then its groups. */
 export function SettingsPage({ note, children }: { note?: React.ReactNode; children: React.ReactNode }) {
@@ -16,14 +19,48 @@ export function SettingsPage({ note, children }: { note?: React.ReactNode; child
   );
 }
 
-/** A titled group of rows; `footnote` goes under it. */
+/** A card of rows, its title above it; `footnote` goes under it. */
 export function SettingsGroup({ title, footnote, children }: { title?: React.ReactNode; footnote?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="mb-10 last:mb-0">
-      {title ? <h3 className="mb-1 text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{title}</h3> : null}
-      <div className="flex flex-col divide-y divide-[var(--border)]">{children}</div>
-      {footnote ? <p className="pt-2 text-[13.5px] leading-relaxed text-[var(--text-faint)]">{footnote}</p> : null}
+    <section className="mb-6 last:mb-0">
+      {title ? <h3 className="mb-2 px-1 text-[13.5px] font-semibold text-[var(--text)]">{title}</h3> : null}
+      <div className="flex flex-col divide-y divide-[var(--border)] rounded-[12px] bg-[var(--settings-card)] px-4">{children}</div>
+      {footnote ? <p className="px-1 pt-2 text-[13px] leading-relaxed text-[var(--text-faint)]">{footnote}</p> : null}
     </section>
+  );
+}
+
+/** A section's or a page's mark: its glyph, white, on a rounded square of its color. */
+export function SettingsTile({ color, size = 28, children }: { color: string; size?: number; children: React.ReactNode }) {
+  return (
+    <span aria-hidden className="grid shrink-0 place-items-center text-white shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.16)]"
+      style={{ width: size, height: size, borderRadius: Math.round(size * 0.24), background: color }}>
+      {children}
+    </span>
+  );
+}
+
+/** What a section is, on the card it opens on: its mark, large, its name and a line about it. */
+export function SettingsHero({ tile, title, description }: { tile: React.ReactNode; title: React.ReactNode; description?: React.ReactNode }) {
+  return (
+    <div className="mb-6 flex flex-col items-center rounded-[12px] bg-[var(--settings-card)] px-8 pb-7 pt-8 text-center">
+      {tile}
+      <h2 className="mt-4 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{title}</h2>
+      {description ? <p className="mt-1.5 max-w-[560px] text-[14px] leading-relaxed text-[var(--text-muted)]">{description}</p> : null}
+    </div>
+  );
+}
+
+/** A row that opens a page of its own: its mark, its name, what is set there (or how much), a chevron. */
+export function SettingsNavRow({ tile, title, value, onClick }: { tile?: React.ReactNode; title: React.ReactNode; value?: React.ReactNode; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="-mx-4 flex min-h-[52px] items-center gap-3 px-4 py-2.5 text-left transition first:rounded-t-[12px] last:rounded-b-[12px] hover:bg-[var(--bg-hover)]">
+      {tile}
+      <span className="min-w-0 flex-1 truncate text-[15px] text-[var(--text)]">{title}</span>
+      {value != null ? <span className="shrink-0 text-[14px] tabular-nums text-[var(--text-muted)]">{value}</span> : null}
+      <ChevronRight size={16} strokeWidth={2} className="shrink-0 text-[var(--text-faint)]" aria-hidden />
+    </button>
   );
 }
 
@@ -37,7 +74,7 @@ export function SettingsItem({ mark, title, badge, description, control, childre
   children?: React.ReactNode;
 }) {
   return (
-    <div className="py-4">
+    <div className="py-3">
       <div className="flex min-h-10 items-center gap-4">
         {mark ? <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[var(--bg-field)] text-[var(--text)]">{mark}</span> : null}
         <div className="min-w-0 flex-1">

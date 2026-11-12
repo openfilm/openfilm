@@ -59,7 +59,7 @@ import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
 import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
-import { clearProjectCache, storage } from './storage.mjs';
+import { clearProjectCache, places, storage } from './storage.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
@@ -490,7 +490,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* the room every project takes, and what of it can be cleared (storage.mjs); a POST clears one project's cache
        (`id`) or every project's, and says how much came back. What a render reads back is left in a project where
        an export or an agent is at work */
-    if (parts[0] === 'storage' && parts.length === 1 && req.method === 'GET') return json(res, 200, await storage());
+    if (parts[0] === 'storage' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await storage(), places: await places() });
+    /* one of the places beside the projects (storage.mjs places) in the file manager */
+    if (parts[0] === 'storage' && parts[1] === 'open' && parts.length === 2 && req.method === 'POST') {
+      const { place } = /** @type {{ place?: unknown }} */ (await readJson(req) ?? {});
+      const folder = (await places()).find((p) => p.id === place)?.paths.find((at) => existsSync(at));
+      if (!folder) throw new HttpError(404, 'not found');
+      openFile(folder);
+      return json(res, 200, { ok: true });
+    }
     if (parts[0] === 'storage' && parts[1] === 'clear' && parts.length === 2 && req.method === 'POST') {
       const { id } = /** @type {{ id?: unknown }} */ (await readJson(req));
       const listed = (await listProjects()).filter((p) => !p.missing && (id == null || p.id === id));
@@ -499,7 +507,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const busy = agentIn(p.path) || exports.list(p.id).some((job) => job.status === 'waiting' || job.status === 'running');
         freed += await clearProjectCache(p.path, { busy });
       }
-      return json(res, 200, { freed, ...await storage() });
+      return json(res, 200, { freed, ...await storage(), places: await places() });
     }
     /* OpenFilm's plugins (src/plugins.mjs): each with whether it is on; one turned on or off (PUT plugins/:id { on }),
        answered with them all. 409 for the last workbench on */

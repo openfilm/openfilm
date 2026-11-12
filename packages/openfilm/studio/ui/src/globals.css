@@ -50,6 +50,10 @@
   --bg-viewer: #fbfbfc;
   /* the one-pixel lines between the panes and under the top bar (the board under them showing through) */
   --dock-line: #d2d2d8;
+  /* Settings: its sidebar, its pages, and the cards on them */
+  --settings-side: #ebebee;
+  --settings-pane: #f4f4f6;
+  --settings-card: #ffffff;
   --bg-field: rgba(16, 16, 24, 0.055);
   --bg-hover: rgba(16, 16, 24, 0.05);
   --bg-pressed: rgba(16, 16, 24, 0.09);
@@ -129,6 +133,9 @@
   --bg-raised: #202020;
   --bg-viewer: #181818;
   --dock-line: #000000;
+  --settings-side: #1b1b1b;
+  --settings-pane: #212121;
+  --settings-card: rgba(255, 255, 255, 0.05);
   --bg-field: rgba(255, 255, 255, 0.08);
   --bg-hover: rgba(255, 255, 255, 0.06);
   --bg-pressed: rgba(255, 255, 255, 0.12);
