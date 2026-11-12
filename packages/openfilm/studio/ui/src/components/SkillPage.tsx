@@ -169,6 +169,17 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
           <p className="mt-1 text-[11.5px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginWritesNote')}</p>
         </div>
       ) : null}
+      {/* one that brings a program: it runs on this computer once the person lets it */}
+      {skill.program && installed ? (
+        <div className="mt-3 rounded-[10px] border border-[var(--border)] px-3 py-2.5">
+          <div className="flex items-center gap-3">
+            <span className="min-w-0 flex-1 text-[12.5px] font-medium text-[var(--text)]">{t('gallery.pluginRuns')}</span>
+            <SettingsSwitch checked={Boolean(skill.runs)} label={t('gallery.pluginRuns')}
+              onChange={(on) => { patch((k) => { const { runs: _was, ...rest } = k; return on ? { ...rest, runs: true as const } : rest; }); void sourcesApi.setPluginRuns(skill.uid, on, projectId).catch(reload); }} />
+          </div>
+          <p className="mt-1 text-[11.5px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginRunsNote')}</p>
+        </div>
+      ) : null}
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
         {/* the community's: whose it is, their account a link; OpenFilm's own: its kind */}
         {communityOf(skill) ? (

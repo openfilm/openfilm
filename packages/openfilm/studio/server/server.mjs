@@ -67,8 +67,9 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { coreSkills, keeps, listSkills, offeredSkills, pluginWrites, removeSkill, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
+import { coreSkills, keeps, listSkills, offeredSkills, pluginRuns, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
 import { startPluginPages } from './plugin-pages.mjs';
+import { startPluginPrograms } from './plugin-programs.mjs';
 import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
@@ -602,7 +603,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
              whether the person lets it change them */
           /* the commands it brings (src/skills.mjs commandsIn), by name: `openfilm <its name> <command>` */
           ...(k.commands && k.installed && !k.core ? { commands: Object.keys(k.commands) } : {}),
-          ...(k.page && k.installed && !k.core ? (() => {
+          /* the program it brings (src/skills.mjs programIn) serves its surface itself, once started (`start` below),
+             which the person lets it or not */
+          ...(k.program && k.installed && !k.core ? { program: true, ...(pluginRuns(k, project ?? null) ? { runs: true } : {}) } : {}),
+          ...(k.page && !k.program && k.installed && !k.core ? (() => {
             const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.page }, project ?? null);
             return { surface: at.page, ...(at.project ? { files: at.project } : {}), ...(pluginWrites(k, project ?? null) ? { writes: true } : {}) };
           })() : {}),
@@ -674,6 +678,33 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       try { setPluginWrites(skill, project, on); } catch (e) { throw new HttpError(409, /** @type {Error} */ (e).message); }
       return json(res, 200, { writes: on });
     }
+    /* a plugin with a program let run it on this computer, or no longer (PUT { on }), as `writes` is kept; no longer
+       let, what runs of it is stopped */
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'runs' && req.method === 'PUT') {
+      const on = (await readJson(req))?.on;
+      if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
+      const skill = await skillAt(decodeURIComponent(parts[1]));
+      if (!skill?.program) throw new HttpError(404, 'no such plugin');
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) ?? null : null;
+      try { setPluginRuns(skill, project, on); } catch (e) { throw new HttpError(409, /** @type {Error} */ (e).message); }
+      if (!on) pluginPrograms.stop(skill.uid);
+      return json(res, 200, { runs: on });
+    }
+    /* a plugin's program for a project (POST, `?project=`): started when it is not running → { url }, what its surface
+       shows. 403 until the person lets it run, 409 while the plugin is off, 502 (saying why) when it does not start */
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'start' && req.method === 'POST') {
+      const skill = await skillAt(decodeURIComponent(parts[1]));
+      const program = skill?.program;
+      if (!skill || !program) throw new HttpError(404, 'no such plugin');
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) ?? null : null;
+      if (!project) throw new HttpError(404, 'no such project');
+      if (keeps(new Set(skillsOff()), skill)) throw new HttpError(409, 'This plugin is off.');
+      try {
+        return json(res, 200, { url: await pluginPrograms.ensure({ uid: skill.uid, source: skill.source, folder: skill.folder, program }, { id: project.id, path: project.path }) });
+      } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 500, e instanceof Error ? e.message : String(e)); }
+    }
     /* a skill turned on or off, by uid, for every project (PUT { on }) */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'on' && req.method === 'PUT') {
       const on = (await readJson(req))?.on;
@@ -687,7 +718,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (core && !plugin) throw new HttpError(409, 'This skill is part of OpenFilm itself: it has no switch.');
       if (plugin) {
         try { setPluginOn(plugin, on); } catch (e) { throw new HttpError(409, /** @type {Error} */ (e).message); }
-      } else setSkillOn(skill.uid, on);
+      } else {
+        setSkillOn(skill.uid, on);
+        if (!on) pluginPrograms.stop(skill.uid);
+      }
       return json(res, 200, { on, ...(plugin ? { plugin } : {}) });
     }
     /* Only the person's own skill can be changed; a project override must not edit a hidden personal skill. */
@@ -1412,6 +1446,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
      origin), else on any */
   const pluginOptions = { secret: key, mayWrite: (/** @type {{ uid: string, source: string }} */ plugin, /** @type {{ id: string }} */ project) => pluginWrites(plugin, project) };
   const pluginPages = await startPluginPages({ port: port ? address.port + 2 : 0, ...pluginOptions }).catch(() => startPluginPages({ port: 0, ...pluginOptions }));
+  /* the programs of plugins that bring one, started as their workbenches are shown */
+  const pluginPrograms = startPluginPrograms({ bin: join(studioHome(), 'plugin-bin'), mayRun: (plugin, project) => pluginRuns(plugin, project) });
   if (advertise) {
     /* Discover read as Studio starts, so its skills are there when it first opens (and on an empty conversation) */
     readDiscover({ fresh: 60_000 }).catch(() => { /* offline: what was read before, said so when Discover opens */ });
@@ -1444,6 +1480,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     watchers.closeAll();
     await pages.close();
     await pluginPages.close();
+    pluginPrograms.close();
     editor.closeAllConnections();
     for (const socket of streamSockets) socket.destroy();
     await new Promise((done) => editor.close(() => done(undefined)));

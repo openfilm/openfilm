@@ -153,7 +153,8 @@ test('a plugin someone made: its page on the plugins\' origin, the project read 
     rmSync(root, { recursive: true, force: true });
   });
   const PAGE = '<!doctype html><title>Board</title><script src="app.js"></script>';
-  for (const [name, files] of [['board', { 'index.html': PAGE, 'app.js': 'window.board = 1;', '.env': 'SECRET=1' }], ['plain', {}], ['tool', { 'package.json': '{"bin":{"run":"run.mjs","check":"./run.mjs"}}', 'run.mjs': '' }]]) {
+  for (const [name, files] of [['board', { 'index.html': PAGE, 'app.js': 'window.board = 1;', '.env': 'SECRET=1' }], ['plain', {}], ['tool', { 'package.json': '{"bin":{"run":"run.mjs","check":"./run.mjs"}}', 'run.mjs': '' }],
+    ['bench', { 'index.html': PAGE, 'package.json': '{"scripts":{"start":"node server.mjs"}}', 'server.mjs': 'import { createServer } from "node:http"; createServer((q, r) => r.end(process.env.OPENFILM_PROJECT)).listen(Number(process.env.PORT), process.env.HOST);' }]]) {
     mkdirSync(join(variables.OPENFILM_SKILLS, name), { recursive: true });
     writeFileSync(join(variables.OPENFILM_SKILLS, name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\n---\nSteps.`);
     for (const [file, text] of Object.entries(files)) writeFileSync(join(variables.OPENFILM_SKILLS, name, file), text);
@@ -171,6 +172,26 @@ test('a plugin someone made: its page on the plugins\' origin, the project read 
   const tool = (await listed()).find((k) => k.uid === 'local/tool');
   assert.deepEqual([tool.commands, tool.surface], [['run', 'check'], undefined]);
   assert.equal(board.commands, undefined);
+  /* one that brings a program: listed as one, with no page of the plugins' origin; whether it runs is the person's to say */
+  const bench = (await listed()).find((k) => k.uid === 'local/bench');
+  assert.deepEqual([bench.program, bench.runs, bench.surface], [true, undefined, undefined]);
+  assert.equal((await api(`/api/skills/local%2Fbench/start?project=${project.id}`, { method: 'POST' })).status, 403);
+  assert.equal((await api('/api/skills/local%2Fplain/runs', { method: 'PUT', body: { on: true } })).status, 404);
+  assert.equal((await api('/api/skills/local%2Fbench/runs', { method: 'PUT', body: { on: true } })).status, 200);
+  assert.equal((await listed()).find((k) => k.uid === 'local/bench').runs, true);
+  assert.equal((await api('/api/skills/local%2Fbench/start', { method: 'POST' })).status, 404);
+  if (process.platform !== 'win32') {
+    /* started for the project, and stopped when the plugin is turned off */
+    const started = await api(`/api/skills/local%2Fbench/start?project=${project.id}`, { method: 'POST' });
+    assert.equal(started.status, 200);
+    const { url } = await started.json();
+    assert.equal(await (await fetch(url)).text(), project.path);
+    assert.equal((await api('/api/skills/local%2Fbench/on', { method: 'PUT', body: { on: false } })).status, 200);
+    assert.equal((await api(`/api/skills/local%2Fbench/start?project=${project.id}`, { method: 'POST' })).status, 409);
+    let stopped = false;
+    for (let i = 0; i < 50 && !stopped; i++) { stopped = await fetch(url, { signal: AbortSignal.timeout(1000) }).then(() => false, () => true); if (!stopped) await new Promise((r) => setTimeout(r, 100)); }
+    assert.ok(stopped, 'the program stopped with its plugin');
+  }
   /* OpenFilm's own are not plugins of this kind */
   assert.ok((await listed()).filter((k) => k.core).every((k) => k.surface === undefined && k.commands === undefined));
 

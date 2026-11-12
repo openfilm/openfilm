@@ -1,7 +1,7 @@
 /**
  * The plugins a project has: OpenFilm's own (lib/plugins), then the ones someone made: a skill that brings something
- * that runs, a surface (a web page at its folder's root; openfilm/src/skills.mjs SKILL_PAGE) or commands (its
- * package.json's `bin`), among the person's own, this project's, and those installed. One of those is a plugin like any
+ * that runs, a surface (a web page at its folder's root; openfilm/src/skills.mjs SKILL_PAGE), commands (its
+ * package.json's `bin`) or a program that serves its surface (its `scripts.start`), among the person's own, this project's, and those installed. One of those is a plugin like any
  * other: its skill is what an agent is given, its page (when it has one) is its workbench, and its switch is the
  * skill's.
  */
@@ -14,10 +14,11 @@ export const pluginOfSkill = (skill: SkillEntry): Plugin => ({
   id: skill.uid, title: skill.shown?.title ?? { en: skill.name }, summary: skill.shown?.summary ?? { en: skill.description },
   ...(skill.icon ? { icon: skill.icon } : {}), skills: [skill.name], on: !skill.off, skill: skill.uid,
   ...(skill.surface ? { workbench: skill.uid, page: skill.surface } : {}), ...(skill.files ? { files: skill.files } : {}),
+  ...(skill.program ? { workbench: skill.uid, program: true, runs: Boolean(skill.runs) } : {}),
 });
 
 /** Whether a skill is a plugin: it brings something that runs. */
-export const isPlugin = (skill: SkillEntry): boolean => Boolean(skill.surface || skill.commands?.length);
+export const isPlugin = (skill: SkillEntry): boolean => Boolean(skill.surface || skill.commands?.length || skill.program);
 
 /** The skills of a list that are plugins, installed. */
 export const skillPlugins = (skills: readonly SkillEntry[]): Plugin[] => skills.filter((k) => isPlugin(k) && k.installed !== false).map(pluginOfSkill);

@@ -502,6 +502,18 @@ test('a skill whose package.json has a bin brings commands: it is a plugin someo
   rmSync(root, { recursive: true, force: true });
 });
 
+test('a skill whose package.json has scripts.start brings a program: it is a plugin someone made', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-start-'));
+  const made = (name, pkg) => readSkill(skill(join(root, name), name, 'A bench', 'Steps', { 'package.json': typeof pkg === 'string' ? pkg : JSON.stringify(pkg) }), 'mine');
+  assert.equal(made('bench', { scripts: { start: ' node server.mjs ' } }).program, 'node server.mjs');
+  /* none: no start, an empty one, one that is no command line, a package.json that cannot be read */
+  assert.equal(made('built', { scripts: { build: 'tsc' } }).program, undefined);
+  assert.equal(made('empty', { scripts: { start: '  ' } }).program, undefined);
+  assert.equal(made('odd', { scripts: { start: ['node'] } }).program, undefined);
+  assert.equal(made('broken', '{').program, undefined);
+  rmSync(root, { recursive: true, force: true });
+});
+
 test('a skill with a page at its root has a surface: it is a plugin someone made', () => {
   const root = mkdtempSync(join(tmpdir(), 'of-skill-page-'));
   const plain = readSkill(skill(join(root, 'plain'), 'plain', 'Only teaches'), 'mine');

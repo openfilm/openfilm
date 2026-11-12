@@ -68,6 +68,8 @@ export type SkillEntry = {
   surface?: string; files?: string; writes?: true;
   /** the commands it brings (`openfilm <its name> <command>`), which make it a plugin too */
   commands?: string[];
+  /** it brings a program that serves its surface (started by `startPlugin`); `runs`: the person lets it run */
+  program?: true; runs?: true;
   /** where its source can be read (a repository's address) */
   repository?: string;
   /** what it needs beyond OpenFilm, by language; the computers it runs on (none: every one), and whether this one is not among them */
@@ -114,6 +116,8 @@ async function call<T>(path: string, method = 'GET', json?: unknown, timeout?: n
 /* what the galleries read last: shown at once when one opens, and asked for again behind it */
 const seen: { examples: Example[] | null; skills: Map<string, SkillEntry[]>; catalog: string | null } = { examples: null, skills: new Map(), catalog: null };
 const skillReads = new Map<string, number>();
+/* the read of each list started last: one overtaken by a later read answers with that one's, never with what was seen before */
+const skillReading = new Map<string, Promise<SkillEntry[]>>();
 /** The examples read last, or null. */
 export const seenExamples = (): Example[] | null => seen.examples;
 /** When Discover's index was last read (ISO time), as the skills read last say; null: never. */
@@ -153,13 +157,15 @@ export const sourcesApi = {
   skills: (projectId?: string | null) => {
     const key = projectId ?? '', revision = (skillReads.get(key) ?? 0) + 1;
     skillReads.set(key, revision);
-    return call<{ skills: SkillEntry[]; catalog?: { read: string } | null }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'GET', undefined, 10_000)
+    const read: Promise<SkillEntry[]> = call<{ skills: SkillEntry[]; catalog?: { read: string } | null }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'GET', undefined, 10_000)
       .then((r) => {
         if (r.catalog?.read && Number.isFinite(Date.parse(r.catalog.read)) && (!seen.catalog || Date.parse(r.catalog.read) >= Date.parse(seen.catalog))) seen.catalog = r.catalog.read;
-        if (revision !== skillReads.get(key)) return seenSkills(projectId) ?? r.skills;
+        if (revision !== skillReads.get(key)) return skillReading.get(key) ?? r.skills;
         seen.skills.set(key, r.skills);
         return r.skills;
       }, () => seenSkills(projectId) ?? []);
+    skillReading.set(key, read);
+    return read;
   },
   /** Discover's index read again from GitHub, unless read less than `fresh` ms ago (the skills it names fetched): → when,
    *  or throws when it cannot be read */
@@ -198,6 +204,14 @@ export const sourcesApi = {
     await call<{ writes: boolean }>(`skills/${encodeURIComponent(uid)}/writes${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'PUT', { on });
     window.dispatchEvent(new Event(SKILLS_CHANGED));
   },
+  /** a plugin with a program let run it on this computer, or no longer (kept as `writes` is); whoever lists skills reads them again */
+  setPluginRuns: async (uid: string, on: boolean, projectId?: string | null): Promise<void> => {
+    await call<{ runs: boolean }>(`skills/${encodeURIComponent(uid)}/runs${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'PUT', { on });
+    window.dispatchEvent(new Event(SKILLS_CHANGED));
+  },
+  /** a plugin's program for a project, started when it is not running: the address its surface shows. A SourceError with status 403 until the person lets it run. */
+  startPlugin: async (uid: string, projectId: string): Promise<string> =>
+    (await call<{ url: string }>(`skills/${encodeURIComponent(uid)}/start?project=${encodeURIComponent(projectId)}`, 'POST')).url,
   /** one of Discover's installed (downloaded, at the version it shows) or uninstalled; whoever lists skills reads them again */
   setSkillInstalled: async (uid: string, installed: boolean): Promise<void> => {
     await call<{ installed: boolean }>(`skills/${encodeURIComponent(uid)}/installed`, 'PUT', { installed });

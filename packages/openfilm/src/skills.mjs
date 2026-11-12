@@ -83,6 +83,18 @@ export function commandsIn(folder, name) {
 }
 
 /**
+ * The program a plugin brings: its package.json's `scripts.start`, npm's own field, a command line run in its folder
+ * that stays running and serves the plugin's surface (studio/server/plugin-programs.mjs). None: undefined.
+ * @param {string} folder @returns {string | undefined}
+ */
+export function programIn(folder) {
+  try {
+    const start = JSON.parse(readFileSync(join(folder, 'package.json'), 'utf8'))?.scripts?.start;
+    return typeof start === 'string' && start.trim() ? start.trim() : undefined;
+  } catch { return undefined; }
+}
+
+/**
  * What the person's leave to change projects is kept by, for a plugin someone made: its uid; one a project brings is
  * let in that project alone (every project's `project/<name>` is another plugin).
  * @param {{ uid: string, source: string }} plugin @param {{ id: string } | null} [project]
@@ -110,6 +122,29 @@ export function setPluginWrites(plugin, project, on, home) {
   const keys = new Set(Array.isArray(kept) ? kept.filter((k) => typeof k === 'string') : []);
   if (on) keys.add(key); else keys.delete(key);
   setSharedPref('pluginWrites', [...keys].sort(), home);
+}
+
+/**
+ * Whether the person lets this plugin run its program (programIn) on this computer (the shared prefs.json,
+ * `pluginRuns`, kept as pluginWrites is): off until they say.
+ * @param {{ uid: string, source: string }} plugin @param {{ id: string } | null} [project] @param {string} [home]
+ */
+export function pluginRuns(plugin, project, home) {
+  const key = writesKey(plugin, project), kept = sharedPref('pluginRuns', home);
+  return key != null && Array.isArray(kept) && kept.includes(key);
+}
+
+/**
+ * The person lets a plugin run its program, or no longer. Throws for a project's own plugin named without its project.
+ * @param {{ uid: string, source: string }} plugin @param {{ id: string } | null} project @param {boolean} on @param {string} [home]
+ */
+export function setPluginRuns(plugin, project, on, home) {
+  const key = writesKey(plugin, project);
+  if (key == null) throw new Error('A plugin a project brings is allowed in that project: name the project.');
+  const kept = sharedPref('pluginRuns', home);
+  const keys = new Set(Array.isArray(kept) ? kept.filter((k) => typeof k === 'string') : []);
+  if (on) keys.add(key); else keys.delete(key);
+  setSharedPref('pluginRuns', [...keys].sort(), home);
 }
 /** The project's own skills, beside film.html. */
 export const PROJECT_SKILLS = 'skills';
@@ -280,10 +315,11 @@ export function parseSkillFile(text) {
 
 /**
  * @typedef {{ uid: string, name: string, description: string, folder: string, source: SkillSource, file: string,
- *   scripts: string[], over?: SkillSource[], shown?: SkillShown, version?: string, page?: string, commands?: Record<string, string> } & SkillLook} Skill
+ *   scripts: string[], over?: SkillSource[], shown?: SkillShown, version?: string, page?: string, commands?: Record<string, string>, program?: string } & SkillLook} Skill
  *   `uid`: whose it is and its name (SKILL_UID). `over`: the places that had the same skill (its uid), which this one
  *   takes the place of. `version`: its openfilm.json's, else its front matter's. `page`: its surface (SKILL_PAGE), when
- *   it has one. `commands`: the commands it brings (commandsIn), by name. One with a page or commands is a plugin.
+ *   it has one. `commands`: the commands it brings (commandsIn), by name. `program`: the program it brings (programIn). One with any
+ *   of the three is a plugin.
  * @typedef {{ title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string> }} SkillShown
  *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title, a one-line summary and a few lines
  *   on who it is for and what it does, by language (`en`, `zh-CN`…); the SKILL.md's description is for the agent
@@ -353,7 +389,7 @@ export function readSkill(folder, source) {
   const from = source === 'official' ? skillSource(folder) : null;
   const origin = source === 'mine' ? skillOrigins(dirname(folder))[basename(folder)] : from ? { from: /** @type {const} */ ('link'), address: from.repo } : undefined;
   return { uid: skillUid(source, name, origin), name, description: (fields.description ?? '').trim(), folder, source, file, scripts: scriptsIn(folder), ...extra,
-    ...(existsSync(join(folder, SKILL_PAGE)) ? { page: SKILL_PAGE } : {}), ...(commandsIn(folder, name) ? { commands: commandsIn(folder, name) } : {}) };
+    ...(existsSync(join(folder, SKILL_PAGE)) ? { page: SKILL_PAGE } : {}), ...(commandsIn(folder, name) ? { commands: commandsIn(folder, name) } : {}), ...(programIn(folder) ? { program: programIn(folder) } : {}) };
 }
 
 /** The scripts a skill brings (any file under scripts/, and executables anywhere), for the person to see. */
