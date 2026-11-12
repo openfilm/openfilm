@@ -456,11 +456,11 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
           <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[calc(var(--drawer-under,0px)+10px)] pt-2.5">
             {cat === 'media' ? (
               <>
-                {/* what the person brought into this project (what it took from the library stays in its category),
-                    their media library (the folders they keep media in, every project's), then Saved */}
-                <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaImport')}</SideBox>
-                <SideBox on={mediaScope === 'all'} onClick={() => onMediaScope('all')}>{t('assetDrawer.mediaLibrary')}</SideBox>
-                <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.favorites')}</SideBox>
+                {/* this project's media; what the person keeps to use in every film (Saved); the folders of this
+                    computer they keep media in */}
+                <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
+                <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mediaMine')}</SideBox>
+                <SideBox on={mediaScope === 'all'} onClick={() => onMediaScope('all')}>{t('assetDrawer.mediaComputer')}</SideBox>
               </>
             ) : cat === 'skill' ? (
               <>

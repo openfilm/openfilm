@@ -1,25 +1,21 @@
 // @ts-check
 /**
- * The person's media library: the folders of this computer they keep media in, shown as they are (their own folders
- * inside, the files in each), and each project's media beside them. It is where a person looks through, finds and
- * tends their media whether or not a film uses it, so it starts from their folders, not from the projects.
+ * The person's media on this computer: the folders they keep media in, shown as they are (their own folders inside,
+ * the files in each), to look through and take from, whether or not a film uses them. Projects are not in it: a
+ * project's media is the project's, and what a person reuses in every film they keep in Saved (saved.mjs).
  *
  * A folder is listed straight from the disk as it is opened, so it shows at once however large the place is; what
  * takes reading every file (fingerprints, which projects use a file) is worked out for the file asked about, or
  * behind, by the index (media-index.mjs).
  *
- * Looking for a file anywhere in the library (`searchLibrary`) reads the index instead: every file of every place
- * by name, without walking the disk, so it answers at once; it knows a place as it was last read (the places are read
- * again as the library is opened).
+ * Looking for a file in all the folders (`searchLibrary`) reads the index instead: every file by name, without
+ * walking the disk, so it answers at once; it knows a folder as it was last read (they are read again as the library
+ * is opened). An agent's search (media-library-get.mjs) takes the files kept in Saved with them.
  *
- * What the person says of a file is kept by its fingerprint (`marks.json` beside the index, in the home every
- * OpenFilm on this computer shares), so it stays when the file is renamed or moved: liked, or not wanted (`no`), which
- * hides it without touching it. Only a file of a folder the person added is renamed or moved to the trash here; a
- * project's files are tended in the project, where its clips follow.
+ * A file of a folder the person added is renamed or moved to the trash here, as in the file manager.
  *
- * A place is named `folder:<full path>` (one the person added, `setMediaFolder`), `project:<id>` (a listed project:
- * its assets/) or `saved` (the files the person kept in Saved, saved.mjs; the clips and pages kept there are not
- * files to look through, and stay in the project drawer's Saved). Nothing outside a place is ever listed or read, and
+ * A place is named `folder:<full path>` (one the person added, `setMediaFolder`) or `saved` (the files kept in Saved;
+ * the clips and pages kept there are not files to look through). Nothing outside a place is ever listed or read, and
  * nothing here writes into an added folder: what Studio works out from its files is kept in Studio's own folder
  * (`folderCache`).
  *
@@ -27,17 +23,16 @@
  * room where the disk allows, and one the project has already, under any name, is that one.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { readdir, rename, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, parse, resolve, sep } from 'node:path';
-import { fingerprint, isFingerprint } from '../../src/media-fingerprint.mjs';
+import { fingerprint } from '../../src/media-fingerprint.mjs';
 import { setSharedPref, sharedHome } from '../../src/locations.mjs';
-import { writeAtomic } from './atomic.mjs';
-import { bringIn, cleanName, inProject, kindOf, readable } from './files.mjs';
+import { bringIn, cleanName, kindOf, readable } from './files.mjs';
 import { libraryRoot as savedRoot } from './saved.mjs';
 import { moveToTrash } from './trash.mjs';
-import { carryMade, madeAnywhere, readMade, wordsByFingerprint } from './media-made.mjs';
+import { carryMade, madeAnywhere, wordsByFingerprint } from './media-made.mjs';
 import { folderRecordFile, mediaFolders, projectRecordFile, readRecord, scanProject } from './media-index.mjs';
 import { TOOL_DIR, listProjects } from './projects.mjs';
 
@@ -49,11 +44,10 @@ const shown = (/** @type {string} */ name) => !name.startsWith('.') && !SKIP.has
 const AT_ONCE = 16;
 
 /**
- * @typedef {{ place: string, root: string, name: string, project?: { id: string, path: string }, saved?: boolean, cache: string }} Place
+ * @typedef {{ place: string, root: string, name: string, saved?: boolean, cache: string }} Place
  *   `root`: the folder listed; `cache`: where what Studio works out from its files is kept
- * @typedef {'like' | 'no'} Mark
- * @typedef {{ name: string, path: string, kind: 'video' | 'image' | 'audio', size: number, mtime: number, mark?: Mark }} LibraryFile
- *   `path`: inside the place, `/` between folders; `mark`: what the person said of it, when its fingerprint is known
+ * @typedef {{ name: string, path: string, kind: 'video' | 'image' | 'audio', size: number, mtime: number }} LibraryFile
+ *   `path`: inside the place, `/` between folders
  */
 
 /** Where Studio keeps what it works out from the files of an added folder. */
@@ -83,37 +77,11 @@ export async function setMediaFolder(path, on) {
   return mediaFolders();
 }
 
-const marksFile = () => join(sharedHome(), 'media-index', 'marks.json');
-/** @type {{ stamp: string, marks: Record<string, Mark> } | null} */
-let keptMarks = null;
-
-/** What the person said of files, by fingerprint. @returns {Record<string, Mark>} */
-export function readMarks() {
-  let stamp;
-  try { const info = statSync(marksFile(), { bigint: true }); stamp = `${marksFile()}:${info.ino}:${info.size}:${info.mtimeNs}`; } catch { keptMarks = null; return {}; }
-  if (keptMarks?.stamp === stamp) return keptMarks.marks;
-  /** @type {Record<string, Mark>} */
-  const marks = {};
-  try {
-    for (const [fp, mark] of Object.entries(JSON.parse(readFileSync(marksFile(), 'utf8'))?.marks ?? {})) if (isFingerprint(fp) && (mark === 'like' || mark === 'no')) marks[fp] = mark;
-  } catch { /* unreadable: nothing said */ }
-  keptMarks = { stamp, marks };
-  return marks;
-}
-
-/** Fingerprints read here for one file (a mark, what is known of it), until the index has them: by full path. */
+/** Fingerprints read here for one file (what is known of it), by full path. */
 /** @type {Map<string, { size: number, mtime: number, fp: string }>} */
 const read = new Map();
 
-/** A listed file's fingerprint as the index (or a reading here) has it for the file as it is now, or null. */
-function knownFp(/** @type {Place} */ at, /** @type {string} */ path, /** @type {number} */ size, /** @type {number} */ mtime) {
-  const e = at.project ? readRecord(projectRecordFile(at.project.path)).files[`assets/${path}`] : readRecord(folderRecordFile(at.root)).files[path];
-  if (e && !e.gone && e.size === size && e.mtime === mtime) return e.fp;
-  const seen = read.get(join(at.root, ...path.split('/')));
-  return seen && seen.size === size && seen.mtime === mtime ? seen.fp : null;
-}
-
-/** A file's fingerprint, read now (and remembered for the listings until the index has it). Null: not a file here, or its bytes are elsewhere. */
+/** A file's fingerprint, read now (and remembered while the file stays as it is). Null: not a file here, or its bytes are elsewhere. */
 async function fpOf(/** @type {{ abs: string }} */ file) {
   const info = await stat(file.abs).catch(() => null);
   if (!info?.isFile()) return null;
@@ -125,42 +93,17 @@ async function fpOf(/** @type {{ abs: string }} */ file) {
   return fp;
 }
 
-/**
- * Say of a file that it is liked, or not wanted, or (null) neither. Resolves with its mark, or null when it is no
- * file of the place.
- * @param {Place} at @param {unknown} path @param {Mark | null} mark
- */
-export async function markFile(at, path, mark) {
-  const file = fileIn(at, path);
-  const fp = file ? await fpOf(file) : null;
-  if (!fp) return null;
-  const marks = { ...readMarks() };
-  if (mark) marks[fp] = mark; else delete marks[fp];
-  await mkdir(dirname(marksFile()), { recursive: true });
-  await writeAtomic(marksFile(), `${JSON.stringify({ version: 1, marks }, null, 1)}\n`);
-  keptMarks = null;
-  return { mark };
+/** The folders added (`missing`: not there now, a disk that is out). */
+export function libraryPlaces() {
+  return { folders: mediaFolders().map((path) => ({ place: `folder:${path}`, path, name: basename(path) || path, missing: !existsSync(path) })) };
 }
 
-/** The places there are: the folders added (`missing`: not there now, a disk that is out) and the listed projects. */
-export async function libraryPlaces() {
-  const projects = (await listProjects()).filter((p) => !p.missing);
-  return {
-    folders: mediaFolders().map((path) => ({ place: `folder:${path}`, path, name: basename(path) || path, missing: !existsSync(path) })),
-    projects: projects.map((p) => ({ place: `project:${p.id}`, id: p.id, name: p.name || basename(p.path) })),
-  };
-}
-
-/** The place a name stands for, or null when there is none (a folder not added, a project not listed). @param {unknown} place @returns {Promise<Place | null>} */
+/** The place a name stands for, or null when there is none (a folder not added). @param {unknown} place @returns {Promise<Place | null>} */
 export async function placeOf(place) {
   if (typeof place !== 'string') return null;
   if (place.startsWith('folder:')) {
     const path = resolve(place.slice(7));
     return mediaFolders().includes(path) ? { place, root: path, name: basename(path) || path, cache: folderCache(path) } : null;
-  }
-  if (place.startsWith('project:')) {
-    const project = (await listProjects()).find((p) => p.id === place.slice(8) && !p.missing);
-    return project ? { place, root: join(project.path, 'assets'), name: project.name || basename(project.path), project: { id: project.id, path: project.path }, cache: project.path } : null;
   }
   if (place === 'saved') { const root = await savedRoot(); return { place, root, name: 'Saved', saved: true, cache: root }; }
   return null;
@@ -188,9 +131,7 @@ async function each(items, work) {
 
 /**
  * What a folder of a place holds: its folders (each with how many folders and media files are in it) and its media
- * files, by name. A link is followed in a project where the project itself reads through it (media the person linked,
- * files.mjs `readable`), and left out of an added folder (one that leads back up would never end). Null when the
- * folder is not there.
+ * files, by name. A link is left out (one that leads back up would never end). Null when the folder is not there.
  * @param {Place} at @param {string} [dir] inside the place
  * @returns {Promise<{ dirs: { name: string, path: string, items: number }[], files: LibraryFile[] } | null>}
  */
@@ -200,9 +141,7 @@ export async function listFolder(at, dir = '') {
   const entries = await readdir(abs, { withFileTypes: true }).catch(() => null);
   if (!entries) return null;
   const inside = (/** @type {string} */ name) => (dir ? `${dir}/${name}` : name);
-  const marks = readMarks();
-  const followed = (/** @type {import('node:fs').Dirent} */ e) => !e.isSymbolicLink() || Boolean(at.project && inProject(at.project.path, `assets/${inside(e.name)}`));
-  const seen = await each(entries.filter((e) => shown(e.name) && followed(e)), async (e) => {
+  const seen = await each(entries.filter((e) => shown(e.name) && !e.isSymbolicLink()), async (e) => {
     const info = await stat(join(abs, e.name)).catch(() => null);
     if (!info) return null;
     if (info.isDirectory()) {
@@ -214,9 +153,7 @@ export async function listFolder(at, dir = '') {
     }
     const kind = kindOf(e.name);
     if (!info.isFile() || !KINDS.has(kind)) return null;
-    const mtime = Math.round(info.mtimeMs);
-    const mark = marks[knownFp(at, inside(e.name), info.size, mtime) ?? ''];
-    return { file: /** @type {LibraryFile} */ ({ name: e.name, path: inside(e.name), kind, size: info.size, mtime, ...(mark ? { mark } : {}) }) };
+    return { file: /** @type {LibraryFile} */ ({ name: e.name, path: inside(e.name), kind, size: info.size, mtime: Math.round(info.mtimeMs) }) };
   });
   const byName = (/** @type {{ name: string }} */ a, /** @type {{ name: string }} */ b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
   return {
@@ -233,16 +170,13 @@ export async function listFolder(at, dir = '') {
 export function fileIn(at, path) {
   const abs = inPlace(at, path);
   if (!abs || abs === at.root || !KINDS.has(kindOf(basename(abs)))) return null;
-  if (!at.project) return { abs, root: at.root, rel: /** @type {string} */ (path), cache: at.cache };
-  /* a project's file is read as the project reads it: through a link only to a place the person linked */
-  const read = inProject(at.project.path, `assets/${path}`);
-  return read ? { abs: read, root: at.project.path, rel: `assets/${path}`, cache: at.cache } : null;
+  return { abs, root: at.root, rel: /** @type {string} */ (path), cache: at.cache };
 }
 
 /**
  * What is known of one file beyond what its folder says: the projects that use it (the same file, under any name,
- * by its fingerprint), those among them that link to this very file where it is kept (`linkedBy`), how it was made
- * when a service made it, and what the person said of it. Read from the file as it is asked.
+ * by its fingerprint), those among them that link to this very file where it is kept (`linkedBy`), and how it was
+ * made when a service made it. Read from the file as it is asked.
  * @param {Place} at @param {unknown} path
  */
 export async function aboutFile(at, path) {
@@ -260,8 +194,7 @@ export async function aboutFile(at, path) {
     /* it links to this very file, where it is kept: moved away or renamed, the project has to find it again */
     if (has.some((e) => e.at === file.abs)) linkedBy.push({ id: p.id, name: p.name || basename(p.path), path: p.path });
   }
-  const mark = readMarks()[fp];
-  return { usedIn, linkedBy, made: await madeAnywhere(fp), ...(mark ? { mark } : {}) };
+  return { usedIn, linkedBy, made: await madeAnywhere(fp) };
 }
 
 /** Where a file of a place is, to read: its place and the folders it is in (`Footage / 2026-10 beach`). @param {Place} at @param {string} path */
@@ -270,103 +203,81 @@ export function whereOf(at, path) {
   return cut < 0 ? at.name : `${at.name} / ${path.slice(0, cut).split('/').join(' / ')}`;
 }
 
-/**
- * @typedef {LibraryFile & { place: string, where: string, copies?: number }} Found   `where`: its place and the
- *   folders it is in, to read (`Footage / 2026-10 beach`); `copies`: how many files of the same bytes it is one of
- */
+/** @typedef {LibraryFile & { place: string, where: string }} Found   `where`: its place and the folders it is in, to read (`Footage / 2026-10 beach`) */
 
-/**
- * Files of the whole library, from the index: those whose name, folders or place hold every word asked for (as do
- * the words a service was asked for it with, for media a service made), of one kind when asked, only what a service
- * made when asked. The same file in several places is found once, in a folder the person added before a project.
- * `mark`: only what the person liked, or said they do not want; what they do not want is found no other way.
- * `unused`: only files of the added folders that no project has.
- * `sort`: the newest first, by name, or the largest first. At most `limit` are returned; `total` is how many matched.
- * @param {{ q?: string, kind?: string | null, made?: boolean, mark?: Mark | null, unused?: boolean, sort?: 'date' | 'name' | 'size', limit?: number }} [asked]
- * @returns {Promise<{ files: Found[], total: number }>}
- */
-export async function searchLibrary({ q = '', kind = null, made = false, mark = null, unused = false, sort = 'date', limit = 300 } = {}) {
-  const words = q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
-  const projects = (await listProjects()).filter((p) => !p.missing);
-  const asked = await wordsByFingerprint();
-  /** what a service made, by fingerprint: with the words it was asked with, or with none */
-  const byService = new Set(asked.keys());
-  for (const p of projects) for (const fp of Object.keys(readMade(p.path))) byService.add(fp);
-  const marks = readMarks();
-  /** every file a project has, by fingerprint */
-  const inProjects = new Set();
-  if (unused) for (const p of projects) for (const e of Object.values(readRecord(projectRecordFile(p.path)).files)) if (!e.gone) inProjects.add(e.fp);
-  /** @type {Map<string, Found>} */
-  const found = new Map();
-  const take = (/** @type {string} */ place, /** @type {string} */ placeName, /** @type {string} */ path, /** @type {import('./media-index.mjs').MediaEntry} */ e) => {
-    /* the same file again: the one kept longest stands for them (a copy is younger than what it was made from), and
-       of two as old, the one nearer its place's top (a copy is often put in a folder of its own) */
-    const had = found.get(e.fp);
-    const deep = (/** @type {string} */ at) => at.split('/').length;
-    if (had && (had.place.startsWith('folder:') !== place.startsWith('folder:') || had.mtime < e.mtime || (had.mtime === e.mtime && deep(had.path) <= deep(path)))) return;
-    if (e.gone || (kind && e.kind !== kind) || (made && !byService.has(e.fp))) return;
-    if (mark ? marks[e.fp] !== mark : marks[e.fp] === 'no') return;
-    if (unused && inProjects.has(e.fp)) return;
-    const cut = path.lastIndexOf('/');
-    const where = cut < 0 ? placeName : `${placeName} / ${path.slice(0, cut).split('/').join(' / ')}`;
-    if (words.length) {
-      const hay = `${where} / ${path.slice(cut + 1)}\n${asked.get(e.fp) ?? ''}`.toLowerCase();
-      if (!words.every((w) => hay.includes(w))) return;
-    }
-    found.set(e.fp, { place, where, name: path.slice(cut + 1), path, kind: e.kind, size: e.size, mtime: e.mtime, ...(marks[e.fp] ? { mark: marks[e.fp] } : {}) });
-  };
-  for (const root of mediaFolders()) {
-    for (const [path, e] of Object.entries(readRecord(folderRecordFile(root)).files)) take(`folder:${root}`, basename(root) || root, path, e);
-  }
-  for (const p of unused ? [] : projects) {
-    for (const [path, e] of Object.entries(readRecord(projectRecordFile(p.path)).files)) {
-      if (path.startsWith('assets/')) take(`project:${p.id}`, p.name || basename(p.path), path.slice(7), e);
+/** Folders of Saved looked into at most. */
+const SAVED_DEPTH = 6;
+
+/** @typedef {{ path: string, abs: string, kind: 'video' | 'image' | 'audio', size: number, mtime: number }} SavedFile */
+
+/** The plain files kept in Saved (not the clips, groups and pages kept there), read from the disk: it is small. @returns {Promise<SavedFile[]>} */
+export async function savedFiles() {
+  const root = await savedRoot();
+  /** @type {SavedFile[]} */
+  const out = [];
+  async function walk(/** @type {string} */ dir, /** @type {string} */ rel, /** @type {number} */ depth) {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const e of entries) {
+      if (!shown(e.name) || e.isSymbolicLink()) continue;
+      const abs = join(dir, e.name);
+      const path = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { if (depth < SAVED_DEPTH && !existsSync(join(abs, 'saved.json'))) await walk(abs, path, depth + 1); continue; }
+      const kind = kindOf(e.name);
+      const info = e.isFile() && KINDS.has(kind) ? await stat(abs).catch(() => null) : null;
+      if (info) out.push({ path, abs, kind: /** @type {'video' | 'image' | 'audio'} */ (kind), size: info.size, mtime: Math.round(info.mtimeMs) });
     }
   }
-  const files = [...found.values()].sort(sort === 'name'
-    ? (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
-    : sort === 'size' ? (a, b) => b.size - a.size : (a, b) => b.mtime - a.mtime || a.name.localeCompare(b.name));
-  return { files: files.slice(0, Math.max(1, Math.min(2000, limit))), total: files.length };
+  await walk(root, '', 0);
+  return out;
 }
 
 /**
- * Files of the added folders that are the same bytes as another, each group together (the group that would give
- * back the most room first; in a group the oldest first, and of two as old the one nearer its place's top), and the
- * room keeping one of each would give back. Two
- * names of one file (a hard link) take the room once and are no copies. A project's own copies are left out: they
- * are the project's.
- * @returns {Promise<{ files: Found[], groups: number, spare: number }>}
+ * Files of the added folders, from the index: those whose name or folders hold every word asked for (as do the words
+ * a service was asked for it with, for media a service made), of one kind when asked. The same file twice is found
+ * once. `saved`: the files kept in Saved too, first (what the person kept to use again). `sort`: the newest first, by
+ * name, or the largest first. At most `limit` are returned; `total` is how many matched.
+ * @param {{ q?: string, kind?: string | null, saved?: boolean, sort?: 'date' | 'name' | 'size', limit?: number }} [asked]
+ * @returns {Promise<{ files: Found[], total: number }>}
  */
-export async function duplicates() {
-  /** @type {Map<string, Found[]>} */
-  const byFp = new Map();
+export async function searchLibrary({ q = '', kind = null, saved = false, sort = 'date', limit = 300 } = {}) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
+  const asked = await wordsByFingerprint();
+  const fits = (/** @type {string} */ hay) => !words.length || words.every((w) => hay.toLowerCase().includes(w));
+  const whereIn = (/** @type {string} */ placeName, /** @type {string} */ path) => {
+    const cut = path.lastIndexOf('/');
+    return cut < 0 ? placeName : `${placeName} / ${path.slice(0, cut).split('/').join(' / ')}`;
+  };
+  /** @type {Found[]} */
+  const first = [];
+  if (saved) {
+    for (const f of await savedFiles()) {
+      const where = whereIn('Saved', f.path);
+      if ((kind && f.kind !== kind) || !fits(`${where} / ${basename(f.path)}`)) continue;
+      first.push({ place: 'saved', where, name: basename(f.path), path: f.path, kind: f.kind, size: f.size, mtime: f.mtime });
+    }
+  }
+  /** @type {Map<string, Found>} */
+  const found = new Map();
   for (const root of mediaFolders()) {
-    const name = basename(root) || root;
+    const placeName = basename(root) || root;
     for (const [path, e] of Object.entries(readRecord(folderRecordFile(root)).files)) {
-      if (e.gone) continue;
-      const cut = path.lastIndexOf('/');
-      byFp.set(e.fp, [...(byFp.get(e.fp) ?? []), { place: `folder:${root}`, where: cut < 0 ? name : `${name} / ${path.slice(0, cut).split('/').join(' / ')}`, name: path.slice(cut + 1),
-        path, kind: e.kind, size: e.size, mtime: e.mtime }]);
+      if (e.gone || (kind && e.kind !== kind)) continue;
+      /* the same file again: the one kept longest stands for them (a copy is younger than what it was made from), and
+         of two as old, the one nearer its folder's top */
+      const had = found.get(e.fp);
+      const deep = (/** @type {string} */ at) => at.split('/').length;
+      if (had && (had.mtime < e.mtime || (had.mtime === e.mtime && deep(had.path) <= deep(path)))) continue;
+      const where = whereIn(placeName, path);
+      const name = path.slice(path.lastIndexOf('/') + 1);
+      if (!fits(`${where} / ${name}\n${asked.get(e.fp) ?? ''}`)) continue;
+      found.set(e.fp, { place: `folder:${root}`, where, name, path, kind: e.kind, size: e.size, mtime: e.mtime });
     }
   }
-  const marks = readMarks();
-  const groups = [];
-  for (const [fp, files] of byFp) {
-    if (files.length < 2) continue;
-    /* as the disk has them now: those still there, one for each file whatever its names */
-    const seen = new Set();
-    const there = [];
-    for (const f of files) {
-      const info = await stat(join(f.place.slice(7), ...f.path.split('/'))).catch(() => null);
-      if (!info?.isFile() || info.size !== f.size || seen.has(`${info.dev}:${info.ino}`)) continue;
-      seen.add(`${info.dev}:${info.ino}`);
-      there.push({ ...f, ...(marks[fp] ? { mark: marks[fp] } : {}) });
-    }
-    const deep = (/** @type {Found} */ f) => f.path.split('/').length;
-    if (there.length > 1) groups.push(there.sort((a, b) => a.mtime - b.mtime || deep(a) - deep(b) || a.path.localeCompare(b.path)).map((f) => ({ ...f, copies: there.length })));
-  }
-  groups.sort((a, b) => b[0].size * (b.length - 1) - a[0].size * (a.length - 1));
-  return { files: groups.flat(), groups: groups.length, spare: groups.reduce((sum, g) => sum + g[0].size * (g.length - 1), 0) };
+  const order = sort === 'name'
+    ? (/** @type {Found} */ a, /** @type {Found} */ b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    : sort === 'size' ? (/** @type {Found} */ a, /** @type {Found} */ b) => b.size - a.size : (/** @type {Found} */ a, /** @type {Found} */ b) => b.mtime - a.mtime || a.name.localeCompare(b.name);
+  const files = [...first.sort(order), ...[...found.values()].sort(order)];
+  return { files: files.slice(0, Math.max(1, Math.min(2000, limit))), total: files.length };
 }
 
 /** Why a file of the library was not renamed. */
@@ -375,9 +286,8 @@ export class LibraryError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
 }
 
-/** A file of a folder the person added (not a project's, not of Saved), or the reason it is not one to change here. */
+/** A file of a folder the person added (not of Saved), or the reason it is not one to change here. */
 function ownFile(/** @type {Place} */ at, /** @type {unknown} */ path) {
-  if (at.project) throw new LibraryError('A project\'s files are renamed and removed in the project, where its clips follow.');
   if (at.saved) throw new LibraryError('What is in Saved is renamed and removed in Saved.');
   const file = fileIn(at, path);
   if (!file || !existsSync(file.abs)) throw new LibraryError('That file is not there.', 404);
@@ -386,8 +296,8 @@ function ownFile(/** @type {Place} */ at, /** @type {unknown} */ path) {
 
 /**
  * Rename a file of an added folder, in its folder. The name is cleaned as an imported file's is and keeps what kind
- * of media it is; one already taken is refused. What the person said of the file stays (it is kept by fingerprint),
- * and a project that links to it finds it again by its fingerprint. Resolves with its new path in the place.
+ * of media it is; one already taken is refused. A project that links to it finds it again by its fingerprint.
+ * Resolves with its new path in the place.
  * @param {Place} at @param {unknown} path @param {unknown} name
  */
 export async function renameFile(at, path, name) {
@@ -438,19 +348,16 @@ export async function takeFile(at, path, root) {
 }
 
 /**
- * The file with this fingerprint, wherever the library has it (a folder the person added before a project), used in
- * the project at `root`: its path there, or null when no place has it any more.
+ * The file with this fingerprint, in Saved or an added folder, used in the project at `root`: its path there, or null
+ * when neither has it any more.
  * @param {string} fp @param {string} root
  */
 export async function takeByFingerprint(fp, root) {
-  const places = [
-    ...mediaFolders().map((folder) => ({ base: folder, files: readRecord(folderRecordFile(folder)).files })),
-    ...(await listProjects()).filter((p) => !p.missing && p.path !== root).map((p) => ({ base: p.path, files: readRecord(projectRecordFile(p.path)).files })),
-  ];
-  for (const { base, files } of places) {
-    for (const [path, e] of Object.entries(files)) {
+  for (const f of await savedFiles()) if (await fingerprint(f.abs).catch(() => null) === fp) return takeInto(root, f.abs);
+  for (const folder of mediaFolders()) {
+    for (const [path, e] of Object.entries(readRecord(folderRecordFile(folder)).files)) {
       if (e.fp !== fp || e.gone) continue;
-      const abs = e.at ?? join(base, ...path.split('/'));
+      const abs = e.at ?? join(folder, ...path.split('/'));
       if (await fingerprint(abs).catch(() => null) === fp) return takeInto(root, abs);
     }
   }

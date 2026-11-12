@@ -169,7 +169,7 @@ import { PropertiesSection, type PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { libraryApi, librarySources, parseLibraryRef, type LibraryAbout } from '@/lib/media-library';
-import { MediaLibraryPane } from './MediaLibraryPage';
+import { MediaLibraryPane } from './MediaLibraryPane';
 import { deliveryGainDb, deliveryLoudness, onDeliveryLoudness } from '@/lib/delivery-loudness';
 import { batchMap } from '@/lib/batch-map';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
@@ -3258,15 +3258,14 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     } catch (error) { toast.showError(error instanceof Error ? error.message : String(error)); }
   };
   const mediaPool = (inDrawer = false) => (mediaScope === 'all' ? (
-    /* the media library at the project's side (MediaLibraryPage `MediaLibraryPane`): a file is watched here and
-       brought into the project as it is used, as a thing of Saved is */
+    /* this computer's folders at the project's side (MediaLibraryPane): a file is watched here and brought into the
+       project as it is used, as a thing of Saved is */
     <MediaLibraryPane
       key="all"
       selected={pickedSaved && pickedMedia && parseLibraryRef(pickedMedia.path) ? pickedMedia.path : null}
       onPick={(file) => { pickMedia(file); setPickedSaved(Boolean(file)); }}
       onAdd={(file) => { if (canvasOpen) void requestCanvasFiles(file.path, true); else void placeSaved(file, { atPlayhead: true }); }}
       {...(studioHost?.refer ? { onRefer: (file: WorkspaceResource) => void referOutside(file) } : {})}
-      onManage={() => setProjectsOpen({ library: true })}
     />
   ) : mediaScope === 'saved' ? (
     <MediaPool
@@ -5506,7 +5505,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
   };
   /* the projects window: closed, open on the projects (true), or on the examples (and one example's page) */
-  const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string } | { library: true }>(false);
+  const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string }>(false);
   /* the library's skills as the app's chat asked to show them (LibraryDrawer `showSkills`) */
   const [skillsShown, setSkillsShown] = React.useState<SkillsRequest | null>(null);
   const [settingsOpen, setSettingsOpen] = useSettings();
@@ -6168,7 +6167,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         onClose={() => setHistoryOpen(false)}
         onOpenProject={(id) => { setHistoryOpen(false); if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }} />
       <ProjectsPopover open={projectsOpen !== false} currentProjectId={projectId}
-        {...(typeof projectsOpen === 'object' ? ('library' in projectsOpen ? { library: true } : { examples: projectsOpen }) : {})}
+        {...(typeof projectsOpen === 'object' ? { examples: projectsOpen } : {})}
         onOpen={(id) => { if (!studioHost?.tabs) setProjectsOpen(false); onProject(id); }} onCurrentRemoved={onLeave} onClose={() => setProjectsOpen(false)}
         onUseCanvas={(example) => {
           setProjectsOpen(false);

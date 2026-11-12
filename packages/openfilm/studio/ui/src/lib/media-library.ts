@@ -1,11 +1,11 @@
 /**
- * The media library as Studio's page shows it (studio/server/media-library.mjs): the places there are (the folders
- * the person added, the projects), a folder of one as the disk has it, each file's bytes and what Studio works out
- * from it, and what is known of one file (the projects that use it, how it was made).
+ * This computer's media as the assets drawer shows it (studio/server/media-library.mjs): the folders the person added,
+ * a folder of one as the disk has it, each file's bytes and what Studio works out from it, and what is known of one
+ * file (the projects that use it, how it was made).
  *
- * A place is `folder:<path>`, `project:<id>` or `saved`; a path is inside its place, `/` between folders.
+ * A place is `folder:<path>`; a path is inside its place, `/` between folders.
  *
- * Inside a project, a file of the library is handled as a thing of Saved is (lib/saved): it is named by a reference
+ * Inside a project, a file of these folders is handled as a thing of Saved is (lib/saved): it is named by a reference
  * (`libraryRef`) in place of a project path, read through `librarySources`, and brought into the project as it is
  * used (Studio's `saved/take` takes the reference).
  */
@@ -15,18 +15,14 @@ import { factsOfProbe, type MediaFacts, type MediaSources, type WorkspaceResourc
 import { mediaFetch } from './media-queue.ts';
 
 export interface LibraryFolder { place: string; path: string; name: string; missing: boolean }
-export interface LibraryProject { place: string; id: string; name: string }
-export interface LibraryPlaces { folders: LibraryFolder[]; projects: LibraryProject[]; scanning: boolean }
-/** What the person said of a file: liked, or not wanted (hidden, never touched). */
-export type LibraryMark = 'like' | 'no';
-export interface LibraryFile { name: string; path: string; kind: 'video' | 'image' | 'audio'; size: number; mtime: number; mark?: LibraryMark }
+export interface LibraryPlaces { folders: LibraryFolder[]; scanning: boolean }
+export interface LibraryFile { name: string; path: string; kind: 'video' | 'image' | 'audio'; size: number; mtime: number }
 export interface LibraryListing { dirs: { name: string; path: string; items: number }[]; files: LibraryFile[] }
-/** A file found anywhere in the library: its place, and where it is to read (`Footage / 2026-10 beach`). */
-export interface FoundFile extends LibraryFile { place: string; where: string; copies?: number }
-/** `groups`, `spare`: of files that are the same bytes as another, how many groups, and the room keeping one of each gives back. */
-export interface LibraryFound { files: FoundFile[]; total: number; scanning: boolean; groups?: number; spare?: number }
+/** A file found in the folders: its place, and where it is to read (`Footage / 2026-10 beach`). */
+export interface FoundFile extends LibraryFile { place: string; where: string }
+export interface LibraryFound { files: FoundFile[]; total: number; scanning: boolean }
 /** `linkedBy`: the projects that link to this very file where it is kept. */
-export interface LibraryAbout { usedIn: { id: string; name: string }[]; linkedBy: { id: string; name: string }[]; made: MediaMade | null; mark?: LibraryMark; where?: string }
+export interface LibraryAbout { usedIn: { id: string; name: string }[]; linkedBy: { id: string; name: string }[]; made: MediaMade | null; where?: string }
 
 const q = (place: string, path: string) => `place=${encodeURIComponent(place)}&path=${encodeURIComponent(path)}`;
 const get = async <T>(url: string): Promise<T | null> => fetch(url, { cache: 'no-store' }).then((r) => (r.ok ? r.json() as Promise<T> : null), () => null);
@@ -87,16 +83,9 @@ export async function factsOf(place: string, file: LibraryFile): Promise<MediaFa
 export const libraryApi = {
   places: () => get<LibraryPlaces>('/api/media-library/places'),
   list: (place: string, dir: string) => get<LibraryListing>(`/api/media-library/list?place=${encodeURIComponent(place)}&dir=${encodeURIComponent(dir)}`),
-  /** Files of the whole library by name, folder or prompt (`q`), of one kind, only what a service made. */
-  search: (asked: { q?: string; kind?: string | null; made?: boolean; mark?: LibraryMark | null; unused?: boolean; sort?: 'date' | 'name' | 'size'; limit?: number }) => get<LibraryFound>(
-    `/api/media-library/search?q=${encodeURIComponent(asked.q ?? '')}${asked.kind ? `&kind=${asked.kind}` : ''}${asked.made ? '&made=1' : ''}${asked.mark ? `&mark=${asked.mark}` : ''}${asked.unused ? '&unused=1' : ''}&sort=${asked.sort ?? 'date'}&limit=${asked.limit ?? 300}`),
-  /** Files of the added folders that are the same bytes as another, group by group. */
-  duplicates: async (): Promise<LibraryFound | null> => {
-    const found = await get<{ files: FoundFile[]; groups: number; spare: number; scanning: boolean }>('/api/media-library/duplicates');
-    return found ? { ...found, total: found.files.length } : null;
-  },
-  /** Say of a file that it is liked, not wanted, or (null) neither. */
-  mark: async (place: string, path: string, mark: LibraryMark | null): Promise<boolean> => (await post('/api/media-library/mark', { place, path, mark })).ok,
+  /** Files of the added folders by name, folder or prompt (`q`), of one kind. */
+  search: (asked: { q?: string; kind?: string | null; sort?: 'date' | 'name' | 'size'; limit?: number }) => get<LibraryFound>(
+    `/api/media-library/search?q=${encodeURIComponent(asked.q ?? '')}${asked.kind ? `&kind=${asked.kind}` : ''}&sort=${asked.sort ?? 'date'}&limit=${asked.limit ?? 300}`),
   /** Rename a file of an added folder. Resolves with its new path; rejects with why not (the name is taken). */
   rename: async (place: string, path: string, name: string): Promise<string> => {
     const res = await post('/api/media-library/rename', { place, path, name });

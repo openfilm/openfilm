@@ -1,7 +1,7 @@
 // @ts-check
 /**
- * `openfilm get my-media`: the person's own media library for an agent (media-library.mjs): the footage, pictures and
- * sound they keep on this computer, in the folders they added and in their other projects. An agent looks there
+ * `openfilm get my-media`: the person's own media for an agent (media-library.mjs): what they kept in Saved to use in
+ * every film, and the footage, pictures and sound in the folders of this computer they added. An agent looks there
  * before OpenFilm's library and before making anything: what the person shot or already paid for is the film's first
  * material. Free, offline, and answered here from the index, with no Studio running.
  *
@@ -21,11 +21,11 @@ export const MY_MEDIA = 'my-media';
 /** The verb as `openfilm get` lists it, with OpenFilm's own library's. */
 export const myMediaVerb = () => ({
   verb: MY_MEDIA,
-  help: 'Free and offline: the person\'s own media library, the footage, pictures and sound they keep on this computer and in their other projects. Look here first, before OpenFilm\'s library and before making anything. '
-    + 'Words find a file by its name, its folders, a project\'s name, or the prompt a generated one was made with; without words, the newest. '
-    + 'Each match says its id, what it is, where it is, which projects use it, and whether the person liked it. --take <id> brings it into the project and says its path.',
+  help: 'Free and offline: the person\'s own media, what they kept in Saved to use in every film and the footage, pictures and sound in the folders of this computer they added. Look here first, before OpenFilm\'s library and before making anything. '
+    + 'Words find a file by its name, its folders, or the prompt a generated one was made with; without words, the newest. What is kept in Saved comes first. '
+    + 'Each match says its id, what it is, where it is and which projects use it. --take <id> brings it into the project and says its path.',
   options: {
-    prompt: { value: 'text' }, kind: { value: 'kind', choices: ['video', 'image', 'audio'] }, liked: {}, unused: {},
+    prompt: { value: 'text' }, kind: { value: 'kind', choices: ['video', 'image', 'audio'] },
     limit: { value: 'n', min: 1, max: 50, default: 12, alias: 'n' }, take: { value: 'id' },
   },
 });
@@ -33,7 +33,7 @@ export const myMediaVerb = () => ({
 const size = (/** @type {number} */ bytes) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`);
 
 /**
- * `openfilm get my-media [--prompt <words>] [--kind video|image|audio] [--liked] [--unused] [--limit n]`, or
+ * `openfilm get my-media [--prompt <words>] [--kind video|image|audio] [--limit n]`, or
  * `--take <id>` with the project folder the command was run in. `code` as `openfilm get` has it: 0 done, 1 it did not
  * run, 2 a wrong command.
  * @param {Record<string, string | true | (string | true)[]>} flags @param {string | null} folder the project around the current folder
@@ -47,7 +47,6 @@ export async function myMediaGet(flags, folder) {
   const unknown = Object.keys(given).find((name) => !(name in spec));
   if (unknown) return wrong(`there is no --${unknown}; it takes ${Object.keys(spec).map((o) => `--${o}`).join(', ')}`);
   for (const name of ['prompt', 'kind', 'limit', 'take']) if (given[name] !== undefined && typeof given[name] !== 'string') return wrong(`--${name} takes a value, once`);
-  for (const name of ['liked', 'unused']) if (given[name] !== undefined && given[name] !== true) return wrong(`--${name} takes no value`);
   const { prompt, kind, limit, take } = /** @type {Record<string, string | undefined>} */ (given);
 
   if (take !== undefined) {
@@ -62,8 +61,8 @@ export async function myMediaGet(flags, folder) {
   const count = limit === undefined ? spec.limit.default : Number(limit);
   if (!(Number.isInteger(count) && count >= spec.limit.min && count <= spec.limit.max)) return wrong(`--limit is a whole number from ${spec.limit.min} to ${spec.limit.max}, not ${limit}`);
   const q = (prompt ?? '').trim();
-  const { files, total } = await searchLibrary({ q, kind: kind ?? null, mark: given.liked ? 'like' : null, unused: given.unused === true, sort: 'date', limit: count });
-  const what = [given.liked ? 'liked' : null, given.unused ? 'not used in any project' : null, kind ?? null].filter(Boolean).join(', ');
+  const { files, total } = await searchLibrary({ q, kind: kind ?? null, saved: true, sort: 'date', limit: count });
+  const what = kind ?? '';
   if (!files.length) {
     return { code: 0, lines: [`Nothing in the person's media library${q ? ` for “${q}”` : ''}${what ? ` (${what})` : ''}. `
       + 'It finds a file by its name, folders and prompt, not by what is in the picture: try other words, or fewer. Then OpenFilm\'s library (`openfilm get`), or make it.'] };
@@ -72,16 +71,16 @@ export async function myMediaGet(flags, folder) {
   const projects = (await listProjects()).filter((p) => !p.missing);
   const records = projects.map((p) => ({ name: p.name || basename(p.path), fps: new Set(Object.values(readRecord(projectRecordFile(p.path)).files).filter((e) => !e.gone).map((e) => e.fp)) }));
   const asked = await wordsByFingerprint();
-  const lines = [`${files.length}${total > files.length ? ` of ${total}` : ''} in the person's media library${q ? ` for “${q}”` : ''}${what ? ` (${what})` : ''}, the newest first:`, ''];
+  const lines = [`${files.length}${total > files.length ? ` of ${total}` : ''} in the person's media library${q ? ` for “${q}”` : ''}${what ? ` (${what})` : ''}, what is kept in Saved first, then the newest:`, ''];
   for (const [i, f] of files.entries()) {
     const at = await placeOf(f.place);
     const file = at ? fileIn(at, f.path) : null;
     const fp = file ? await fingerprint(file.abs).catch(() => null) : null;
     if (!fp) continue;
     const usedIn = records.filter((r) => r.fps.has(fp)).map((r) => r.name);
-    lines.push(`${String(i + 1).padStart(2)}. ${f.name}   ${f.kind} · ${size(f.size)} · ${new Date(f.mtime).toISOString().slice(0, 10)}${f.mark === 'like' ? ' · liked by the person' : ''}`);
+    lines.push(`${String(i + 1).padStart(2)}. ${f.name}   ${f.kind} · ${size(f.size)} · ${new Date(f.mtime).toISOString().slice(0, 10)}`);
     lines.push(`    id ${fp.slice(3)}`);
-    lines.push(`    in ${f.where}`);
+    lines.push(`    in ${f.place === 'saved' ? `${f.where}, kept by the person to use in every film` : f.where}`);
     if (asked.get(fp)) lines.push(`    made with the prompt: ${JSON.stringify(/** @type {string} */ (asked.get(fp)).slice(0, 300))}`);
     lines.push(`    ${usedIn.length ? `used in: ${usedIn.join(', ')}` : 'not used in any project yet'}`);
   }

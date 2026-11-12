@@ -57,7 +57,7 @@ import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCov
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaFolders, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
-import { LibraryError, aboutFile, duplicates, fileIn, inPlace, libraryPlaces, libraryRef, listFolder, markFile, placeOf, renameFile, searchLibrary, setMediaFolder, takeFile, trashFile as trashLibraryFile, whereOf } from './media-library.mjs';
+import { LibraryError, aboutFile, fileIn, inPlace, libraryPlaces, libraryRef, listFolder, placeOf, renameFile, searchLibrary, setMediaFolder, takeFile, trashFile as trashLibraryFile, whereOf } from './media-library.mjs';
 import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
@@ -523,16 +523,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (sub === 'places' && req.method === 'GET') {
         /* the library is being looked at: its places are read again behind, so a search knows what is there now */
         if (Date.now() - libraryRead > 60_000) { libraryRead = Date.now(); void mediaIndex.sweep().catch(() => {}); }
-        return json(res, 200, { ...await libraryPlaces(), scanning: mediaIndex.busy() });
+        return json(res, 200, { ...libraryPlaces(), scanning: mediaIndex.busy() });
       }
-      /* files of the whole library, by name, folder or prompt (`q`), of one `kind`, only what a service `made`:
-         { files, total, scanning } (still being read: more may be found in a moment) */
+      /* files of the added folders, by name, folder or prompt (`q`), of one `kind`: { files, total, scanning } (still
+         being read: more may be found in a moment) */
       if (sub === 'search' && req.method === 'GET') {
         const sort = url.searchParams.get('sort');
         return json(res, 200, { ...await searchLibrary({
           q: (url.searchParams.get('q') ?? '').slice(0, 200), kind: ['video', 'image', 'audio'].find((k) => k === url.searchParams.get('kind')) ?? null,
-          made: url.searchParams.get('made') === '1', sort: sort === 'name' || sort === 'size' ? sort : 'date', limit: Number(url.searchParams.get('limit')) || 300,
-          mark: url.searchParams.get('mark') === 'like' ? 'like' : url.searchParams.get('mark') === 'no' ? 'no' : null, unused: url.searchParams.get('unused') === '1',
+          sort: sort === 'name' || sort === 'size' ? sort : 'date', limit: Number(url.searchParams.get('limit')) || 300,
         }), scanning: mediaIndex.busy() });
       }
       if (sub === 'folders' && (req.method === 'POST' || req.method === 'DELETE')) {
@@ -547,8 +546,6 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (on) void mediaIndex.folder(resolve(/** @type {string} */ (picked)));
         return json(res, 200, { folders, added: on ? resolve(/** @type {string} */ (picked)) : null });
       }
-      /* files of the added folders that are the same bytes as another, group by group, and the room they take */
-      if (sub === 'duplicates' && req.method === 'GET') return json(res, 200, { ...await duplicates(), scanning: mediaIndex.busy() });
       const body = req.method === 'POST' ? /** @type {{ place?: unknown, path?: unknown }} */ (await readJson(req) ?? {}) : null;
       const at = await placeOf(body ? body.place : url.searchParams.get('place'));
       if (!at) throw new HttpError(404, 'That place is not in the library.');
@@ -564,17 +561,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (abs === at.root) openFile(abs); else reveal(abs);
         return json(res, 200, {});
       }
-      /* what the person says of a file (POST mark { mark: 'like' | 'no' | null }); a file of an added folder renamed
-         (POST rename { name } → { path }) or moved to the trash (POST trash). The folder is read again behind, and a
-         project that links to the file looks for it where it went */
-      if (body && (sub === 'mark' || sub === 'rename' || sub === 'trash')) {
+      /* a file of an added folder renamed (POST rename { name } → { path }) or moved to the trash (POST trash). The
+         folder is read again behind, and a project that links to the file looks for it where it went */
+      if (body && (sub === 'rename' || sub === 'trash')) {
         try {
-          if (sub === 'mark') {
-            const mark = /** @type {{ mark?: unknown }} */ (body).mark;
-            const said = await markFile(at, path, mark === 'like' || mark === 'no' ? mark : null);
-            if (!said) throw new HttpError(404, 'That file is not there.');
-            return json(res, 200, said);
-          }
           const linked = (await aboutFile(at, path))?.linkedBy ?? [];
           const done = sub === 'rename' ? await renameFile(at, path, /** @type {{ name?: unknown }} */ (body).name) : await trashLibraryFile(at, path);
           void mediaIndex.folder(at.root);
