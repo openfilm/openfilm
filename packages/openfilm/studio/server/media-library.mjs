@@ -15,8 +15,9 @@
  * A file of a folder the person added is renamed or moved to the trash here, as in the file manager; a file is moved
  * between Saved and those folders (`moveFile`), as the person tidies what is theirs.
  *
- * A place is named `folder:<full path>` (one the person added, `setMediaFolder`) or `saved` (the files kept in Saved;
- * the clips and pages kept there are not files to look through). Nothing outside a place is ever listed or read, and
+ * A place is named `folder:<full path>` (one the person linked, `setMediaFolder`), `saved` (the files kept in Saved;
+ * the clips and pages kept there are not files to look through) or `saved:<folder>` (a folder of Saved: Favorites, or
+ * one the person made, to move a file to). Nothing outside a place is ever listed or read, and
  * nothing here writes into an added folder: what Studio works out from its files is kept in Studio's own folder
  * (`folderCache`).
  *
@@ -107,6 +108,14 @@ export async function placeOf(place) {
     return mediaFolders().includes(path) ? { place, root: path, name: basename(path) || path, cache: folderCache(path) } : null;
   }
   if (place === 'saved') { const root = await savedRoot(); return { place, root, name: 'Saved', saved: true, cache: root }; }
+  /* a folder of the library (Favorites, or one the person made), to move a file to */
+  if (place.startsWith('saved:')) {
+    const lib = await savedRoot();
+    const rel = place.slice(6);
+    const root = inPlace({ place: 'saved', root: lib, name: 'Saved', saved: true, cache: lib }, rel);
+    if (!root || root === lib || !(await stat(root).catch(() => null))?.isDirectory() || existsSync(join(root, 'saved.json'))) return null;
+    return { place, root, name: rel.split('/').pop() ?? rel, saved: true, cache: lib };
+  }
   return null;
 }
 

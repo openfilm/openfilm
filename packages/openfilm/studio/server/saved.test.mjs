@@ -1,10 +1,10 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeFolder, moveFile } from './files.mjs';
-import { bringClip, libraryRel, listLibrary, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { bringClip, libraryRel, libraryRoot, listLibrary, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 
 let saved;
 let before;
@@ -47,8 +47,8 @@ function project() {
 test('a saved clip is a folder of the library named as the person reads it, with every file it loads and none it does not', async () => {
   const root = project();
   const path = await saveClip(root, 'title', { name: 'Lower third', durationMs: 2000, w: 400, h: 200 });
-  assert.equal(path, 'saved/Lower third');
-  const dir = join(saved, 'Lower third');
+  assert.equal(path, 'saved/Favorites/Lower third');
+  const dir = join(saved, 'Favorites', 'Lower third');
   for (const rel of ['pages/title.html', 'pages/title.css', 'pages/inset.html', 'assets/logo.png']) assert.ok(existsSync(join(dir, 'files', rel)), rel);
   for (const rel of ['pages/other.html', 'assets/unused.png', 'film.html']) assert.ok(!existsSync(join(dir, 'files', rel)), rel);
   const kept = JSON.parse(readFileSync(join(dir, 'saved.json'), 'utf8'));
@@ -58,7 +58,7 @@ test('a saved clip is a folder of the library named as the person reads it, with
   assert.deepEqual(kept.clip.attrs, { 'data-props': '[{"name":"Title","type":"text","at":"#t"}]' }, 'its properties kept (a component); a link to clips of the film it came from not');
   assert.deepEqual(kept.clip.overrides, [{ at: '#t', text: 'Hello', style: { '--accent': '#00ff00' } }]);
   assert.deepEqual(kept.clip.box, { x: 10, y: 20, w: 400, h: 200 });
-  assert.equal(await saveClip(root, 'title', { name: 'Lower third' }), 'saved/Lower third 2', 'a name taken gets a number');
+  assert.equal(await saveClip(root, 'title', { name: 'Lower third' }), 'saved/Favorites/Lower third 2', 'a name taken gets a number');
   await assert.rejects(saveClip(root, 'nope'), /not in the film/);
 });
 
@@ -71,26 +71,26 @@ test('the library lists files of any kind and folders as a project\'s media, a b
   writeFileSync(join(saved, '.DS_Store'), 'x');
   await saveClip(root, 'title', { name: 'Lower third', durationMs: 2000, w: 400, h: 200, into: 'saved/Logos' });
   const { files, folders, pages } = await listLibrary();
-  assert.deepEqual(folders, ['saved/Logos']);
+  assert.deepEqual(folders, ['saved/Favorites', 'saved/Logos']);
   assert.deepEqual(pages, []);
-  assert.deepEqual(files.map((f) => [f.path, f.kind]), [['saved/Logos/acme.svg', 'image'], ['saved/Logos/Lower third', 'page'], ['saved/notes.pdf', 'other']]);
+  assert.deepEqual(files.map((f) => [f.path, f.kind]), [['saved/Favorites/notes.pdf', 'other'], ['saved/Logos/acme.svg', 'image'], ['saved/Logos/Lower third', 'page']]);
   /* its page where the library has it, laid out and changed as its clip had it: the viewer plays it as the film did */
-  assert.deepEqual(files[1].saved, {
+  assert.deepEqual(files[2].saved, {
     kind: 'clip', props: 1, durationMs: 2000, w: 400, h: 200, page: 'Logos/Lower third/files/pages/title.html',
     size: { w: 1080, h: 1920 }, overrides: [{ at: '#t', text: 'Hello', style: { '--accent': '#00ff00' } }],
   });
   /* a clip of a video or a sound: its file, which the pane plays and pictures (its waveform) as the file itself */
   await saveClip(root, 'v', { name: 'Shot' });
-  const shot = (await listLibrary()).files.find((f) => f.path === 'saved/Shot');
+  const shot = (await listLibrary()).files.find((f) => f.path === 'saved/Favorites/Shot');
   assert.equal(shot?.kind, 'video');
-  assert.equal(/** @type {any} */ (shot?.saved)?.file, 'saved/Shot/files/assets/v.mp4');
+  assert.equal(/** @type {any} */ (shot?.saved)?.file, 'saved/Favorites/Shot/files/assets/v.mp4');
 });
 
 test('a bundle moves and is renamed as a folder; taken into a project, its files go under saved/ there once, its page still finding them', async () => {
   const root = project();
   await saveClip(root, 'title', { name: 'Lower third' });
   await makeFolder(saved, 'Titles');
-  await moveFile(saved, 'Lower third', 'Titles/Blue lower third');
+  await moveFile(saved, 'Favorites/Lower third', 'Titles/Blue lower third');
   const other = mkdtempSync(join(tmpdir(), 'of-saved-other-'));
   const taken = await takeSaved(other, 'saved/Titles/Blue lower third');
   assert.ok('clip' in taken);
@@ -108,14 +108,14 @@ test('a bundle moves and is renamed as a folder; taken into a project, its files
 test('a file of any kind is saved as itself, and taken as an import into assets/; a page with what it loads', async () => {
   const root = project();
   writeFileSync(join(root, 'assets', 'brief.pdf'), 'pdf');
-  assert.equal(await saveFile(root, 'assets/logo.png'), 'saved/logo.png');
-  assert.equal(await saveFile(root, 'assets/logo.png'), 'saved/logo.png', 'the same bytes there already are that file');
-  assert.equal(await saveFile(root, 'assets/brief.pdf', { into: 'saved' }), 'saved/brief.pdf');
-  assert.equal(await saveFile(root, 'pages/title.html'), 'saved/title');
-  assert.ok(existsSync(join(saved, 'title', 'files', 'assets', 'logo.png')));
+  assert.equal(await saveFile(root, 'assets/logo.png'), 'saved/Favorites/logo.png');
+  assert.equal(await saveFile(root, 'assets/logo.png'), 'saved/Favorites/logo.png', 'the same bytes there already are that file');
+  assert.equal(await saveFile(root, 'assets/brief.pdf', { into: 'saved/Briefs' }), 'saved/Briefs/brief.pdf');
+  assert.equal(await saveFile(root, 'pages/title.html'), 'saved/Favorites/title');
+  assert.ok(existsSync(join(saved, 'Favorites', 'title', 'files', 'assets', 'logo.png')));
   const other = mkdtempSync(join(tmpdir(), 'of-saved-other-'));
-  assert.deepEqual(await takeSaved(other, 'saved/logo.png'), { path: 'assets/logo.png' });
-  assert.deepEqual(await takeSaved(other, 'saved/title'), { path: 'saved/title/pages/title.html' });
+  assert.deepEqual(await takeSaved(other, 'saved/Favorites/logo.png'), { path: 'assets/logo.png' });
+  assert.deepEqual(await takeSaved(other, 'saved/Favorites/title'), { path: 'saved/Favorites/title/pages/title.html' });
   await assert.rejects(saveFile(root, '../outside.png'), /a file of the project/);
   await assert.rejects(saveFile(root, 'assets/gone.png'), /not in the project/);
 });
@@ -123,19 +123,33 @@ test('a file of any kind is saved as itself, and taken as an import into assets/
 test('clips saved together keep their tracks and times from the first, and the links among them only', async () => {
   const root = project();
   const path = await saveGroup(root, ['title', 'v', 'a', 'w'], { name: 'Opener' });
-  assert.equal(path, 'saved/Opener');
+  assert.equal(path, 'saved/Favorites/Opener');
   const other = mkdtempSync(join(tmpdir(), 'of-saved-other-'));
   const taken = await takeSaved(other, path);
   assert.ok('clips' in taken);
   assert.deepEqual(taken.clips.map(({ track, at, clip }) => [track, at, clip.src, clip.attrs?.['data-link'] ?? null]), [
-    [0, 2, 'saved/Opener/pages/title.html', null],
-    [1, 0, 'saved/Opener/assets/v.mp4', 'L'],
-    [1, 6, 'saved/Opener/assets/v.mp4', null],
-    [2, 0, 'saved/Opener/assets/v.mp4', 'L'],
+    [0, 2, 'saved/Favorites/Opener/pages/title.html', null],
+    [1, 0, 'saved/Favorites/Opener/assets/v.mp4', 'L'],
+    [1, 6, 'saved/Favorites/Opener/assets/v.mp4', null],
+    [2, 0, 'saved/Favorites/Opener/assets/v.mp4', 'L'],
   ]);
   const listed = (await listLibrary()).files.find((f) => f.path === path);
   assert.deepEqual([listed?.kind, listed?.saved?.kind, listed?.saved?.count], ['page', 'group', 4]);
   await assert.rejects(saveGroup(root, ['title', 'gone']), /not all in the film/);
+});
+
+test('what lay at the top of the library goes into Favorites; the person\'s own folders stay beside it', async () => {
+  mkdirSync(join(saved, 'Brand'), { recursive: true });
+  writeFileSync(join(saved, 'Brand', 'logo.png'), 'a');
+  writeFileSync(join(saved, 'intro.mp4'), 'b');
+  mkdirSync(join(saved, 'A clip', 'files'), { recursive: true });
+  writeFileSync(join(saved, 'A clip', 'saved.json'), '{}');
+  mkdirSync(join(saved, 'Favorites'), { recursive: true });
+  writeFileSync(join(saved, 'Favorites', 'intro.mp4'), 'c');
+  await libraryRoot();
+  assert.deepEqual(readdirSync(saved).filter((n) => !n.startsWith('.')).sort(), ['Brand', 'Favorites']);
+  assert.deepEqual(readdirSync(join(saved, 'Favorites')).sort(), ['A clip', 'intro 2.mp4', 'intro.mp4']);
+  assert.equal(readFileSync(join(saved, 'Favorites', 'intro 2.mp4'), 'utf8'), 'b');
 });
 
 test('a place in the library is named from saved/', () => {

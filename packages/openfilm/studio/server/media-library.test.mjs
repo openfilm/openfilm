@@ -165,27 +165,36 @@ test('a file of an added folder is renamed where it is, keeping its kind', async
   assert.deepEqual(await renameFile(at, 'shots/b.mp4', 'b.mp4'), { path: 'shots/b.mp4' });
 });
 
-test('a file moves between Saved and an added folder, keeping its name or taking a number, never a clip kept in Saved', async () => {
+test('a file moves between a folder of Saved and a linked folder, keeping its name or taking a number, never a clip kept in Saved', async () => {
   const folder = elsewhere();
   media(join(folder, 'shots', 'a.mp4'), 1);
   media(join(folder, 'logo.png'), 2);
   await setMediaFolder(folder, true);
   const at = await placeOf(`folder:${folder}`);
-  const saved = await placeOf('saved');
-  assert.deepEqual(await moveFile(at, 'shots/a.mp4', saved), { place: 'saved', path: 'a.mp4' });
-  assert.ok(existsSync(join(saved.root, 'a.mp4')) && !existsSync(join(folder, 'shots', 'a.mp4')));
-  /* back, to the folder's top */
-  assert.deepEqual(await moveFile(saved, 'a.mp4', at), { place: `folder:${folder}`, path: 'a.mp4' });
+  const lib = (await placeOf('saved')).root;
+  const favorites = await placeOf('saved:Favorites');
+  assert.deepEqual(await moveFile(at, 'shots/a.mp4', favorites), { place: 'saved:Favorites', path: 'a.mp4' });
+  assert.ok(existsSync(join(lib, 'Favorites', 'a.mp4')) && !existsSync(join(folder, 'shots', 'a.mp4')));
+  /* to a folder the person made in Saved, and back; never one that is not there or outside */
+  mkdirSync(join(lib, 'Brand'));
+  const brand = await placeOf('saved:Brand');
+  assert.deepEqual(await moveFile(favorites, 'a.mp4', brand), { place: 'saved:Brand', path: 'a.mp4' });
+  assert.deepEqual(await moveFile(brand, 'a.mp4', favorites), { place: 'saved:Favorites', path: 'a.mp4' });
+  assert.equal(await placeOf('saved:Nope'), null);
+  assert.equal(await placeOf('saved:../x'), null);
+  /* back, to the linked folder's top */
+  assert.deepEqual(await moveFile(favorites, 'a.mp4', at), { place: `folder:${folder}`, path: 'a.mp4' });
   /* a name taken there: the next number */
-  media(join(saved.root, 'logo.png'), 3);
-  assert.deepEqual(await moveFile(at, 'logo.png', saved), { place: 'saved', path: 'logo 2.png' });
+  media(join(lib, 'Favorites', 'logo.png'), 3);
+  assert.deepEqual(await moveFile(at, 'logo.png', favorites), { place: 'saved:Favorites', path: 'logo 2.png' });
   /* already there: stays */
   assert.deepEqual(await moveFile(at, 'a.mp4', at), { place: `folder:${folder}`, path: 'a.mp4' });
-  /* a clip kept in Saved is a folder of its own, no file to move */
-  mkdirSync(join(saved.root, 'a clip', 'files'), { recursive: true });
-  writeFileSync(join(saved.root, 'a clip', 'saved.json'), '{}');
-  await assert.rejects(moveFile(saved, 'a clip', at), /not there/);
-  await assert.rejects(moveFile(at, 'nope.mp4', saved), /not there/);
+  /* a clip kept in Saved is a folder of its own: no file to move, and no place to move to */
+  mkdirSync(join(lib, 'Favorites', 'a clip', 'files'), { recursive: true });
+  writeFileSync(join(lib, 'Favorites', 'a clip', 'saved.json'), '{}');
+  await assert.rejects(moveFile(favorites, 'a clip', at), /not there/);
+  assert.equal(await placeOf('saved:Favorites/a clip'), null);
+  await assert.rejects(moveFile(at, 'nope.mp4', favorites), /not there/);
 });
 
 test('a folder taken out of the library leaves nothing behind, and is itself left as it is', async () => {
@@ -239,7 +248,7 @@ test('Saved is a place: the files kept there, not the clips and pages kept as fo
   mkdirSync(join(at.root, 'a clip', 'files'), { recursive: true });
   writeFileSync(join(at.root, 'a clip', 'saved.json'), JSON.stringify({ kind: 'clip', clip: { src: 'a.mp4' } }));
   media(join(at.root, 'a clip', 'files', 'a.mp4'), 3);
-  assert.deepEqual((await listFolder(at)).dirs.map((d) => d.name), ['stings']);
+  assert.deepEqual((await listFolder(at)).dirs.map((d) => d.name), ['Favorites', 'stings']);
   assert.deepEqual((await listFolder(at)).files.map((f) => f.name), ['logo.png']);
   await assert.rejects(renameFile(at, 'logo.png', 'mark.png'), /in Saved/);
 });

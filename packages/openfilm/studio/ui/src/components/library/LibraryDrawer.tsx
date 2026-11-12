@@ -11,7 +11,7 @@
  * it among the favorites, for every project.
  */
 import React from 'react';
-import { ChevronDown, ChevronsLeft, ChevronsRight, FolderOpen, Plus, Search, Star, Unplug, X } from 'lucide-react';
+import { ChevronDown, ChevronsLeft, ChevronsRight, Link2, Plus, Search, Star, Unplug, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
@@ -33,7 +33,6 @@ import { PLAIN } from './OnPicture';
 import { isClipMotion } from '@/lib/clip-presets';
 import { useLibraryArrangement } from './arrangement';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
-import type { LibraryFolder } from '@/lib/media-library';
 
 type Category = 'media' | 'skill' | 'voice' | 'captions' | LibraryCategory;
 /* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, the skills, then the
@@ -100,14 +99,19 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, myMedia, mediaR
   /** the project's own media; or My media: Saved, or (`all`) a folder of the person's (`myMedia.folder`) */
   mediaScope: 'project' | 'saved' | 'all';
   onMediaScope: (next: 'project' | 'saved' | 'all') => void;
-  /** My media's folders, listed under Saved: the one shown, picking one, adding one, and a folder's own menu */
+  /**
+   * My media's folders in the side bar: Favorites first, then the person's own (made in the library, or linked where
+   * they are kept); the one shown; one picked; its menu; a new one made or linked (the "+"); one being named.
+   */
   myMedia?: {
-    folders: readonly LibraryFolder[];
-    folder: string | null;
-    onFolder: (place: string) => void;
-    onAdd: () => void;
-    onReveal: (folder: LibraryFolder) => void;
-    onRemove: (folder: LibraryFolder) => void;
+    folders: readonly { id: string; name: string; linked?: boolean; missing?: boolean }[];
+    shown: string | null;
+    onPick: (id: string) => void;
+    menuOf: (id: string) => ContextMenuEntry[];
+    onNew: () => void;
+    onLink: () => void;
+    naming: string | null;
+    onName: (id: string, name: string | null) => void;
   };
   mediaRequest?: number;
   actions: LibraryActions;
@@ -149,6 +153,20 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, myMedia, mediaR
   const [mineOpen, setMineOpen] = React.useState(true);
   const [railMenu, setRailMenu] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
   const mine = mediaScope !== 'project';
+  /* the person's own in the other categories: 我的, its 收藏 (what they starred) under it */
+  const [starsOpen, setStarsOpen] = React.useState(true);
+  const starred = (onStarred: boolean) => (
+    <>
+      <SideBox on={onStarred && !starsOpen} holds={onStarred && starsOpen} open={starsOpen} onClick={() => { if (!starsOpen) setStarsOpen(true); else if (onStarred) setStarsOpen(false); else pickGroup(FAVORITES); }}>
+        {t('assetDrawer.mine')}
+      </SideBox>
+      {starsOpen ? (
+        <div className="flex flex-col pb-1">
+          <SideLine on={onStarred} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideLine>
+        </div>
+      ) : null}
+    </>
+  );
   const [starredText, setStarredText] = React.useState(SHOWN.starredText);
   const [stickerOpen, setStickerOpen] = React.useState(SHOWN.stickerOpen);
   const [presets, , dropPreset] = useSavedLooks();
@@ -478,27 +496,29 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, myMedia, mediaR
                   onClick={() => { if (mine) setMineOpen((o) => !o); else { setMineOpen(true); onMediaScope('saved'); } }}>
                   {t('assetDrawer.mediaMine')}
                 </SideBox>
-                {mineOpen ? (
+                {mineOpen && myMedia ? (
                   <div className="flex flex-col pb-1" data-my-media="">
-                    <SideLine on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('saved.title')}</SideLine>
-                    {myMedia?.folders.map((f) => (
-                      <SideLine key={f.place} on={mediaScope === 'all' && myMedia.folder === f.place} faint={f.missing} onClick={() => myMedia.onFolder(f.place)}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          setRailMenu({ x: e.clientX, y: e.clientY, items: [
-                            ...(f.missing ? [] : [{ id: 'reveal', label: t('projects.revealFolder'), icon: <FolderOpen size={14} />, onSelect: () => myMedia.onReveal(f) }]),
-                            { id: 'remove', label: t('mediaLibrary.remove').replace('{name}', f.name), note: t('mediaLibrary.removeNote'), icon: <X size={14} />, onSelect: () => myMedia.onRemove(f) },
-                          ] });
-                        }}>
-                        {f.missing ? <Unplug size={11} className="mr-1 inline align-[-1px]" /> : null}{f.name}
+                    {myMedia.folders.map((f) => (myMedia.naming === f.id ? (
+                      <input key={f.id} autoFocus defaultValue={f.name} aria-label={t('assets.rename')} data-my-media-name=""
+                        onFocus={(e) => e.currentTarget.select()}
+                        onBlur={(e) => myMedia.onName(f.id, e.currentTarget.value)}
+                        onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') e.currentTarget.blur(); else if (e.key === 'Escape') myMedia.onName(f.id, null); }}
+                        className="mx-1 rounded bg-[var(--bg-field)] px-1.5 py-1 text-[12px] text-[var(--text)] outline-none ring-1 ring-[var(--accent)]" />
+                    ) : (
+                      <SideLine key={f.id} on={myMedia.shown === f.id && mine} faint={f.missing} onClick={() => myMedia.onPick(f.id)}
+                        onContextMenu={(e) => { const items = myMedia.menuOf(f.id); if (!items.length) return; e.preventDefault(); setRailMenu({ x: e.clientX, y: e.clientY, items }); }}>
+                        {f.missing ? <Unplug size={11} className="mr-1 inline align-[-1px]" /> : f.linked ? <Link2 size={11} className="mr-1 inline align-[-1px]" /> : null}{f.name}
                       </SideLine>
-                    ))}
-                    {myMedia ? (
-                      <button type="button" onClick={myMedia.onAdd} data-add-folder=""
-                        className="flex items-center gap-1 truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] font-medium text-[var(--text-muted)] hover:text-[var(--accent)]">
-                        <Plus size={12} className="shrink-0" />{t('mediaLibrary.addFolder')}
-                      </button>
-                    ) : null}
+                    )))}
+                    {/* a folder of their own: made here, or one of this computer linked where it is */}
+                    <button type="button" onClick={myMedia.onNew} data-my-media-new=""
+                      className="flex items-center gap-1 truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] font-medium text-[var(--text-muted)] hover:text-[var(--accent)]">
+                      <Plus size={12} className="shrink-0" />{t('mediaLibrary.newFolder')}
+                    </button>
+                    <button type="button" onClick={myMedia.onLink} data-my-media-link="" title={`${t('mediaLibrary.linkFolder')}\n${t('mediaLibrary.linkFolderNote')}`}
+                      className="flex items-center gap-1 truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] font-medium text-[var(--text-muted)] hover:text-[var(--accent)]">
+                      <Link2 size={12} className="shrink-0" />{t('mediaLibrary.linkFolderShort')}
+                    </button>
                   </div>
                 ) : null}
               </>
@@ -506,7 +526,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, myMedia, mediaR
               <>
                 {/* Installed first opened, in parts by whose they are (SkillsPane); the starred; Discover, OpenFilm's to take up */}
                 <SideBox on={skillLine === 'installed'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
-                <SideBox on={skillLine === 'favorites'} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
+                {starred(skillLine === 'favorites')}
                 <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
               </>
             ) : cat === 'text' ? (
@@ -528,7 +548,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, myMedia, mediaR
             ) : cat === 'sticker' ? (
               <>
                 {/* the starred; the moving stickers; the still ones (the emoji) */}
-                <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
+                {starred(group === FAVORITES && !q)}
                 {stickerSection(LIVE, t('assetDrawer.stickersLive'))}
                 {stickerSection(STILL, t('assetDrawer.stickersStill'))}
               </>
@@ -539,7 +559,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, myMedia, mediaR
               </>
             ) : (
               <>
-                <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
+                {starred(group === FAVORITES && !q)}
                 {cat === 'voice' ? <SideBox on={group === FEATURED && !q} onClick={() => pickGroup(FEATURED)}>{t('assetDrawer.featured')}</SideBox> : null}
                 <SideBox on={group !== FAVORITES && group !== FEATURED && folded && !q} holds={group !== FAVORITES && group !== FEATURED && !folded && !q} open={!folded} onClick={fold}>
                   {t(cat === 'voice' ? 'assetDrawer.services' : 'assetDrawer.library')}

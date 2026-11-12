@@ -186,6 +186,8 @@ export interface MediaPoolProps {
    * move, delete, drag onto the timeline.
    */
   scope?: 'project' | 'saved';
+  /** What its top folder is called (default: Saved's name, or All for a project's media). */
+  title?: string;
   onScope?: (next: 'project' | 'saved') => void;
   /** The words a service was asked for a file with (studio/server/media-made.mjs): a search finds it by them too. */
   wordsOf?: (file: WorkspaceResource) => string | undefined;
@@ -245,6 +247,7 @@ export function MediaPool({
   onSave,
   moveOut,
   scope = 'project',
+  title,
   onScope,
   wordsOf,
   versionsOf,
@@ -280,7 +283,7 @@ export function MediaPool({
   const inSaved = scope === 'saved';
   React.useEffect(() => { setQuery(''); }, [scope]);
   /* the top folder: All of the project's media, or Saved */
-  const topName = inSaved ? t('saved.title') : t('media.filter_all');
+  const topName = title ?? (inSaved ? t('saved.title') : t('media.filter_all'));
 
   React.useEffect(() => { setView(loadView(projectId)); setAtState(OPEN_FOLDER.get(projectId) ?? ''); setPicked([]); }, [projectId]);
   /* the file the viewer shows is the host's: the one clicked last, when it is a file. One shown from elsewhere (a click

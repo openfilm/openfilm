@@ -1,8 +1,7 @@
 /**
- * A folder of the person's own, at a project's side (the assets drawer's My media, under Saved): one of the folders
- * of this computer they keep media in, shown as it is on the disk, to take media from (lib/media-library;
- * studio/server/media-library.mjs). The drawer's side bar lists Saved and these folders, adds one and stops showing
- * one (`useMyFolders`); this pane is the folder picked there. Nothing is copied or moved by looking: a file comes into
+ * A folder of this computer the person linked into My media (the assets drawer's side bar lists it under Favorites and
+ * the folders they made; `useMyFolders` links one and stops showing one), shown as it is on the disk, to take media
+ * from (lib/media-library; studio/server/media-library.mjs). This pane is the folder picked there. Nothing is copied or moved by looking: a file comes into
  * the project as it is used.
  *
  * Its own folders open inside it. The search looks through all of My media: Saved's files, then every folder. A video
@@ -112,11 +111,11 @@ function useListing(place: string | null, dir: string, again: number) {
   return state?.key === key ? state : null;
 }
 
-export function MediaLibraryPane({ folder, folders, selected, onPick, onAdd, onRefer }: {
+export function MediaLibraryPane({ folder, targets, selected, onPick, onAdd, onRefer }: {
   /** the folder picked in the side bar */
   folder: LibraryFolder;
-  /** every folder added, to move a file to */
-  folders: readonly LibraryFolder[];
+  /** My media's folders a file may be moved to (`saved:<folder>` or `folder:<path>`), as the side bar lists them */
+  targets: readonly { place: string; name: string }[];
   /** the reference of the file the viewer shows, when it is one of My media's */
   selected: string | null;
   onPick: (file: WorkspaceResource | null) => void;
@@ -170,13 +169,13 @@ export function MediaLibraryPane({ folder, folders, selected, onPick, onAdd, onR
     const moved = await libraryApi.move(place, file.path, to);
     if (!moved) { setNotice(t('mediaLibrary.moveFailed')); return; }
     unpick(place, file.path);
-    if (place === SAVED_PLACE || to === SAVED_PLACE) refreshSaved();
+    if (place.startsWith(SAVED_PLACE) || to.startsWith(SAVED_PLACE)) refreshSaved();
     setAgain((n) => n + 1);
   };
-  /* Saved first, then the folders; where the file is now (the top of its folder) is no place to move it */
+  /* My media's folders, as the side bar lists them; where the file is now (the top of its folder) is no place to move it */
   const moveEntry = (place: string, file: LibraryFile): ContextMenuEntry => ({
     id: 'move-to', label: t('media.moveTo'), icon: <FolderInput size={14} />,
-    submenu: [{ place: SAVED_PLACE, name: t('saved.title') }, ...folders.filter((f) => !f.missing)].map((f) => {
+    submenu: targets.map((f) => {
       const here = f.place === place && !file.path.includes('/');
       return { id: `move:${f.place}`, label: f.name, checked: here, disabled: here, ...(here ? { hint: t('media.moveHere') } : {}), onSelect: () => { void moveTo(place, file, f.place); } };
     }),

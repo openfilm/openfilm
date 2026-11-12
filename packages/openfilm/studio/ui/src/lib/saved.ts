@@ -89,6 +89,31 @@ export function useSavedListing(on: boolean): MediaListing | null {
   ) : null), [raw, facts]);
 }
 
+/** Favorites: the folder of the library where what the person saves goes (studio/server/saved.mjs FAVORITES). */
+export const FAVORITES = 'Favorites';
+
+/**
+ * One top folder of the library (Favorites, or one the person made) as a pane of its own: its files and folders, named
+ * from it, as the media pane lists a project's media from assets/.
+ */
+export function savedFolderListing(listing: MediaListing | null, folder: string): MediaListing | null {
+  if (!listing) return null;
+  const top = `${folder}/`;
+  const inner = (d: string) => (d.startsWith(top) ? [d.slice(top.length)] : []);
+  return {
+    ...listing,
+    dir: `${SAVED}/${folder}`,
+    files: listing.files.filter((f) => f.path.startsWith(`${SAVED}/${top}`)).map((f) => ({ ...f, dir: f.dir === folder ? '' : f.dir.slice(top.length) })),
+    dirs: listing.dirs.flatMap(inner),
+    ...(listing.made ? { made: listing.made.flatMap(inner) } : {}),
+    ...(listing.linkedDirs ? { linkedDirs: Object.fromEntries(Object.entries(listing.linkedDirs).flatMap(([d, l]) => inner(d).map((r) => [r, l] as const))) } : {}),
+    pages: [],
+  };
+}
+
+/** The folders at the library's top that the person made (Favorites is not one of them), by name. */
+export const savedFolders = (listing: MediaListing | null): string[] => (listing?.dirs ?? []).filter((d) => !d.includes('/') && d !== FAVORITES);
+
 const result = async (res: Response): Promise<MediaResult> => (res.ok ? 'ok' : res.status === 409 ? recycleRefusalOf(await res.json().catch(() => null)) ?? 'taken' : 'failed');
 const send = (method: string, url: string, body: unknown) => fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
