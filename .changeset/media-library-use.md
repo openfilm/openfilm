@@ -13,7 +13,9 @@ to). What lay loose at the top of Saved moves into Favorites, and a folder added
 the top of Mine. Other projects' media is not mixed in anywhere; to use something again in the next film, keep it in
 Mine.
 
-The other categories put what is yours first the same way: Mine, with Favorites (what you starred) under it.
+The other categories put what is yours first the same way: Mine, with Favorites (what you starred) under it. Sounds,
+Music and Stickers have Imported there too: your own sound or pictures, kept in Mine's Favorites, imported or linked
+with Upload as anywhere in Mine.
 
 Your agent knows your media: `openfilm get my-media` searches Mine, through the folders you linked, by name, folder
 and prompt, says which projects use each file, and `--take <id>` brings one into the film. It is told to look there

@@ -55,9 +55,9 @@ import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-font
 import { FILM_PAGE, PageFrameError, closePageFrames, compoundSound, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
-import { createMediaIndexer, mediaFolders, mediaSummary } from './media-index.mjs';
+import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
-import { LibraryError, aboutFile, fileIn, inPlace, libraryPlaces, libraryRef, listFolder, moveFile as moveLibraryFile, placeOf, renameFile, searchLibrary, setMediaFolder, takeFile, trashFile as trashLibraryFile, whereOf } from './media-library.mjs';
+import { LibraryError, moveFile as moveLibraryFile, placeOf } from './media-library.mjs';
 import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
@@ -139,8 +139,6 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   } });
   /* what is known of the person's media (media-index.mjs): a project's, a moment after its files changed or it was
      opened; `indexMedia` (the Studio the person runs, not one a test starts): every project's, once Studio is up */
-  /** when the media library's places were last read again for it (ms) */
-  let libraryRead = 0;
   const mediaIndex = createMediaIndexer({
     onError: (root, e) => console.warn(`media index: ${root}: ${e instanceof Error ? e.message : String(e)}`),
     /* media that went missing is looked for unasked (media-reconnect.mjs): the pages hear how many came back */
@@ -515,90 +513,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* the person's media in numbers (media-index.mjs): places, files, the room they take and the room copies take */
     if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
-    /* the media library (media-library.mjs): its places; a folder of one as the disk has it (`dir` inside the place);
-       a file's bytes and what Studio works out from it; what is known of one file (the projects that use it, how it
-       was made); a folder or file shown in the file manager; a folder added to the library (POST folders: the one
-       given, else the person's pick in the system's dialog) or taken out of it (DELETE folders { path }) */
-    if (parts[0] === 'media-library') {
-      const sub = parts.slice(1).join('/');
-      if (sub === 'places' && req.method === 'GET') {
-        /* the library is being looked at: its places are read again behind, so a search knows what is there now */
-        if (Date.now() - libraryRead > 60_000) { libraryRead = Date.now(); void mediaIndex.sweep().catch(() => {}); }
-        return json(res, 200, { ...libraryPlaces(), scanning: mediaIndex.busy() });
-      }
-      /* files of the added folders (`saved`: and of Saved, first), by name, folder or prompt (`q`), of one `kind`:
-         { files, total, scanning } (still being read: more may be found in a moment) */
-      if (sub === 'search' && req.method === 'GET') {
-        const sort = url.searchParams.get('sort');
-        return json(res, 200, { ...await searchLibrary({
-          q: (url.searchParams.get('q') ?? '').slice(0, 200), kind: ['video', 'image', 'audio'].find((k) => k === url.searchParams.get('kind')) ?? null,
-          saved: url.searchParams.get('saved') === '1', sort: sort === 'name' || sort === 'size' ? sort : 'date', limit: Number(url.searchParams.get('limit')) || 300,
-        }), scanning: mediaIndex.busy() });
-      }
-      if (sub === 'folders' && (req.method === 'POST' || req.method === 'DELETE')) {
-        const { path: asked, title } = /** @type {{ path?: unknown, title?: unknown }} */ (await readJson(req).catch(() => ({})) ?? {});
-        const on = req.method === 'POST';
-        const picked = asked ?? (on ? await pickFolder({ title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose a folder', at: null })
-          .catch((e) => { throw new HttpError(501, String(e?.message ?? e)); }) : null);
-        if (picked == null) return json(res, 200, { folders: mediaFolders(), added: null });
-        let folders;
-        try { folders = await setMediaFolder(/** @type {string} */ (picked), on); }
-        catch (e) { throw new HttpError(/** @type {{ status?: number }} */ (e).status ?? 400, /** @type {Error} */ (e).message); }
-        if (on) void mediaIndex.folder(resolve(/** @type {string} */ (picked)));
-        return json(res, 200, { folders, added: on ? resolve(/** @type {string} */ (picked)) : null });
-      }
-      const body = req.method === 'POST' ? /** @type {{ place?: unknown, path?: unknown }} */ (await readJson(req) ?? {}) : null;
-      const at = await placeOf(body ? body.place : url.searchParams.get('place'));
-      if (!at) throw new HttpError(404, 'That place is not in the library.');
-      const path = body ? body.path ?? '' : url.searchParams.get('path') ?? '';
-      if (sub === 'list' && req.method === 'GET') {
-        const listing = await listFolder(at, url.searchParams.get('dir') ?? '');
-        if (!listing) throw new HttpError(404, 'That folder is not there.');
-        return json(res, 200, listing);
-      }
-      if (sub === 'reveal' && req.method === 'POST') {
-        const abs = inPlace(at, path);
-        if (!abs || !existsSync(abs)) throw new HttpError(404, 'That is not there.');
-        if (abs === at.root) openFile(abs); else reveal(abs);
-        return json(res, 200, {});
-      }
-      /* a file of an added folder renamed (POST rename { name } → { path }) or moved to the trash (POST trash); a file
-         moved between Saved and the added folders (POST move { to: place } → { place, path }). The folders are read
-         again behind, and a project that links to the file looks for it where it went */
-      if (body && (sub === 'rename' || sub === 'trash' || sub === 'move')) {
-        try {
-          const to = sub === 'move' ? await placeOf(/** @type {{ to?: unknown }} */ (body).to) : null;
-          if (sub === 'move' && !to) throw new HttpError(404, 'That place is not in the library.');
-          const linked = (await aboutFile(at, path))?.linkedBy ?? [];
-          const done = sub === 'rename' ? await renameFile(at, path, /** @type {{ name?: unknown }} */ (body).name)
-            : sub === 'move' ? await moveLibraryFile(at, path, /** @type {import('./media-library.mjs').Place} */ (to)) : await trashLibraryFile(at, path);
-          if (!at.saved) void mediaIndex.folder(at.root);
-          if (to && !to.saved) void mediaIndex.folder(to.root);
-          for (const p of linked) mediaIndex.soon(p.path);
-          return json(res, 200, done ?? {});
-        } catch (e) {
-          if (e instanceof LibraryError) throw new HttpError(e.status, e.message);
-          throw e;
-        }
-      }
-      const file = fileIn(at, path);
-      if (!file) throw new HttpError(404, 'That file is not there.');
-      if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, file.abs);
-      if (sub === 'about' && req.method === 'GET') {
-        const about = await aboutFile(at, path);
-        /* where a project is on this computer is not the page's to know */
-        return json(res, 200, about ? { ...about, linkedBy: about.linkedBy.map(({ id, name }) => ({ id, name })), where: whereOf(at, String(path)) } : null);
-      }
-      if (sub === 'media' && req.method === 'GET') {
-        const what = url.searchParams.get('what');
-        const o = { cache: file.cache };
-        if (what === 'probe') return json(res, 200, await probe(file.root, file.rel, o));
-        if (what === 'wave') return json(res, 200, await waveform(file.root, file.rel, o));
-        const jpeg = what === 'poster' ? await poster(file.root, file.rel, o)
-          : what === 'frame' ? await frame(file.root, file.rel, Number(url.searchParams.get('ms')), Number(url.searchParams.get('w')), o) : null;
-        if (!jpeg) throw new HttpError(400, 'what: probe, poster, frame or wave');
-        res.writeHead(200, { 'content-type': pictureType(jpeg), 'cache-control': 'private, max-age=86400', 'content-length': jpeg.length });
-        return res.end(jpeg);
+    /* Mine (media-library.mjs): a file moved from one of its folders to another (POST move { place, path, to } →
+       { place, path }) */
+    if (parts[0] === 'media-library' && parts[1] === 'move' && parts.length === 2 && req.method === 'POST') {
+      const body = /** @type {{ place?: unknown, path?: unknown, to?: unknown }} */ (await readJson(req) ?? {});
+      const [at, to] = [await placeOf(body.place), await placeOf(body.to)];
+      if (!at || !to) throw new HttpError(404, 'That place is not in Mine.');
+      try { return json(res, 200, await moveLibraryFile(at, body.path, to)); } catch (e) {
+        if (e instanceof LibraryError) throw new HttpError(e.status, e.message);
+        throw e;
       }
     }
     /* the library moved (projects.mjs moveLibrary): { path } (null: the default), and with `move` its projects go too */
@@ -1203,15 +1126,6 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     if (rest === 'saved/take' && req.method === 'POST') {
       const { path: from } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
-      /* a file of the media library (media-library.mjs) comes in as media the person brings in does; one already
-         here is that one, and how it was made comes with it */
-      const lib = libraryRef(from);
-      if (lib) {
-        const at = await placeOf(lib.place);
-        const path = at ? await takeFile(at, lib.path, project.path) : null;
-        if (!path) throw new HttpError(404, 'That file is not there any more.');
-        return json(res, 200, { path });
-      }
       const taken = await savedCall(() => takeSaved(project.path, from));
       if ('path' in taken) await carryMade(project.path, taken.path);
       return json(res, 200, taken);

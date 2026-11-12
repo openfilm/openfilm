@@ -3330,6 +3330,35 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       setCanvasAddFiles({ paths: [...new Set(paths)], n: performance.now() });
     } catch (error) { toast.showError(error instanceof Error ? error.message : String(error)); }
   };
+  /* a category's own files in the drawer (sounds, music, stickers: its Imported): Mine's Favorites, of that kind only;
+     what is uploaded there goes into Favorites */
+  const mineFiles = (cat: 'sound' | 'music' | 'sticker') => {
+    const kind = cat === 'sticker' ? 'image' : 'audio';
+    const favorites = savedFolderListing(savedAll, FAVORITES);
+    const listing = favorites ? { ...favorites, files: favorites.files.filter((f) => f.kind === kind) } : null;
+    return (
+      <MediaPool
+        key={`mine:${cat}`}
+        title={t('assetDrawer.mineImported')}
+        projectId={SAVED}
+        listing={listing}
+        sources={savedSources}
+        selectedPath={pickedSaved ? pickedMedia?.path ?? null : null}
+        onSelectFile={(file) => { pickMedia(file); setPickedSaved(Boolean(file)); }}
+        onImport={savedImport}
+        onMove={savedActions.move}
+        onDelete={savedActions.remove}
+        onNewFolder={savedActions.newFolder}
+        onReveal={savedActions.reveal}
+        onPick={onPick}
+        onBring={(paths, into, mode) => savedActions.bring(paths, into, mode)}
+        {...(studioHost?.refer ? { onReferFile: (file: WorkspaceResource) => void referOutside(file) } : {})}
+        moveOut={savedMoveOut}
+        scope="saved"
+        onAdd={(file) => { if (canvasOpen) void requestCanvasFiles(file.path, true); else void placeSaved(file, { atPlayhead: true }); }}
+      />
+    );
+  };
   const mediaPool = (inDrawer = false) => (mediaScope === 'saved' ? (
     <MediaPool
       key={`saved:${savedFolder}`}
@@ -6251,7 +6280,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         rect={independentLibrary ? freeGeometry?.panels.library ?? dockGeometry.library : chatLibraryRect}
         free={Boolean(freeGeometry)}
         onResize={updateWorkspace}>
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} myMedia={myMedia} mediaRequest={revealMedia?.seq} actions={canvasOpen ? { ...library.actions, add: item => { if (['page', 'sound', 'group'].includes(item.kind)) void requestCanvasFiles(`${BUILT_IN}/${item.id}`, true); else { setCanvasOpen(false); library.actions.add(item); } }, tryOut: () => {} } : library.actions}
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} myMedia={myMedia} mineFiles={mineFiles} mediaRequest={revealMedia?.seq} actions={canvasOpen ? { ...library.actions, add: item => { if (['page', 'sound', 'group'].includes(item.kind)) void requestCanvasFiles(`${BUILT_IN}/${item.id}`, true); else { setCanvasOpen(false); library.actions.add(item); } }, tryOut: () => {} } : library.actions}
             tried={libraryTrial?.id ?? null} templateStatus={templateStatus} previewBar={canvasOpen ? null : libraryPreviewBar} previewPicture={canvasOpen || fullscreen ? null : libraryPreviewPicture} dismissRef={dismissLibraryPreview}
             onPreviewStart={canvasOpen ? pause : beginLibraryPreview} onDownloadFailed={onLibraryDownloadFailed} shown={libraryOpen} under={!independentLibrary ? hostAssets?.bottom ?? 0 : 0}
             captions={{

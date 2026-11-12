@@ -61,11 +61,7 @@ async function source(/** @type {string} */ root, /** @type {string} */ rel) {
   return { abs, key };
 }
 
-/**
- * A cached result: the file in `.film/cache/<kind>/` under `root`, made by `make` (written whole, through a temporary
- * name). A file of a folder that is no project (one the person added to their media, media-index.mjs) is worked out
- * the same way, its cache kept where Studio says (`{ cache }` below), never in the person's folder.
- */
+/** A cached result: the file in `.film/cache/<kind>/`, made by `make` (written whole, through a temporary name). */
 async function cached(/** @type {string} */ root, /** @type {string} */ kind, /** @type {string} */ name, /** @type {() => Promise<Buffer>} */ make) {
   const dir = join(root, TOOL_DIR, 'cache', kind);
   const file = join(dir, name);
@@ -81,13 +77,13 @@ async function cached(/** @type {string} */ root, /** @type {string} */ kind, /*
  * a still has no duration. The size is the picture as it is shown: a video turned a quarter (a phone's portrait video)
  * has its sides swapped. `codec`, `pixfmt`, `profile` and `level` are its picture's (proxies.mjs tells heavy footage by
  * them, and asks the editor whether its browser decodes it).
- * @param {string} root @param {string} rel @param {{ cache?: string }} [o]
+ * @param {string} root @param {string} rel
  */
-export async function probe(root, rel, { cache = root } = {}) {
+export async function probe(root, rel) {
   const { abs, key } = await source(root, rel);
   /* `.4`: since the size is as shown (an older answer has a turned video's sides as stored), with the codec, its
      profile and level */
-  const bytes = await cached(cache, 'probe', `${key}.4.json`, async () => {
+  const bytes = await cached(root, 'probe', `${key}.4.json`, async () => {
     const out = JSON.parse((await tool('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', abs])).toString());
     const video = out.streams?.find((/** @type {{ codec_type: string }} */ s) => s.codec_type === 'video');
     const audio = out.streams?.some((/** @type {{ codec_type: string }} */ s) => s.codec_type === 'audio');
@@ -112,11 +108,11 @@ export async function probe(root, rel, { cache = root } = {}) {
  * A video's or a picture's poster: one frame a second in (or its first), 480 px wide, as JPEG; as PNG when it has an
  * alpha in its pixels (a ProRes 4444, a PNG), so what it leaves clear stays clear.
  */
-export async function poster(/** @type {string} */ root, /** @type {string} */ rel, /** @type {{ cache?: string }} */ { cache = root } = {}) {
+export async function poster(/** @type {string} */ root, /** @type {string} */ rel) {
   const { abs, key } = await source(root, rel);
-  const clear = hasAlpha({ pix_fmt: (await probe(root, rel, { cache }).catch(() => null))?.pixfmt });
+  const clear = hasAlpha({ pix_fmt: (await probe(root, rel).catch(() => null))?.pixfmt });
   const as = clear ? ['-pix_fmt', 'rgba', '-vcodec', 'png'] : ['-vcodec', 'mjpeg', '-q:v', '4'];
-  return cached(cache, 'posters', `${key}.${clear ? 'png' : 'jpg'}`, async () => {
+  return cached(root, 'posters', `${key}.${clear ? 'png' : 'jpg'}`, async () => {
     const grab = (/** @type {string} */ at) => tool('ffmpeg', ['-v', 'error', '-ss', at, '-i', abs, '-frames:v', '1', '-vf', 'scale=480:-2', '-f', 'image2pipe', ...as, '-']);
     const frame = await grab('1').catch(() => Buffer.alloc(0));
     return frame.length ? frame : grab('0');
@@ -124,11 +120,11 @@ export async function poster(/** @type {string} */ root, /** @type {string} */ r
 }
 
 /** The frame of a video at `ms`, `width` px wide (the timeline's thumbnails). */
-export async function frame(/** @type {string} */ root, /** @type {string} */ rel, /** @type {number} */ ms, /** @type {number} */ width, /** @type {{ cache?: string }} */ { cache = root } = {}) {
+export async function frame(/** @type {string} */ root, /** @type {string} */ rel, /** @type {number} */ ms, /** @type {number} */ width) {
   if (!(Number.isFinite(ms) && ms >= 0)) throw new MediaError('which moment?', 400);
   const w = Math.max(32, Math.min(640, Math.round(width / 2) * 2 || 160));
   const { abs, key } = await source(root, rel);
-  return cached(cache, 'frames', `${key}-${Math.round(ms)}-${w}.jpg`, () => tool('ffmpeg', [
+  return cached(root, 'frames', `${key}-${Math.round(ms)}-${w}.jpg`, () => tool('ffmpeg', [
     '-v', 'error', '-ss', String(ms / 1000), '-i', abs, '-frames:v', '1', '-vf', `scale=${w}:-2`, '-f', 'image2pipe', '-vcodec', 'mjpeg', '-q:v', '5', '-',
   ]));
 }
@@ -140,11 +136,11 @@ const RATE = 8000;
 /**
  * A sound's waveform (or a video's sound): `{ duration (s), peaks }`, `peaks` between 0 and 1, PEAKS_PER_SECOND of them
  * a second.
- * @param {string} root @param {string} rel @param {{ cache?: string }} [o]
+ * @param {string} root @param {string} rel
  */
-export async function waveform(root, rel, { cache = root } = {}) {
+export async function waveform(root, rel) {
   const { abs, key } = await source(root, rel);
-  const bytes = await cached(cache, 'waves', `${key}.json`, async () => {
+  const bytes = await cached(root, 'waves', `${key}.json`, async () => {
     const pcm = await tool('ffmpeg', ['-v', 'error', '-i', abs, '-vn', '-ac', '1', '-ar', String(RATE), '-f', 's16le', '-']);
     return Buffer.from(JSON.stringify(peaksOf(pcm)));
   });

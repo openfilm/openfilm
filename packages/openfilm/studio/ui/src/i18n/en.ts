@@ -1060,6 +1060,7 @@ export const en = {
     slots: '{n} clips',
     mediaProject: "This project",
     mine: "Mine",
+    mineImported: "Imported",
     favorites: 'Favorites',
     featured: 'Featured',
     all: 'All',

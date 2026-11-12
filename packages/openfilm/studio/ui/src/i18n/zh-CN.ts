@@ -1060,6 +1060,7 @@ export const zhCN: Words = {
     slots: '{n} 段',
     mediaProject: "本项目",
     mine: "我的",
+    mineImported: "导入的",
     favorites: '收藏',
     featured: '精选',
     all: '全部',

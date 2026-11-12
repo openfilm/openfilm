@@ -1059,6 +1059,7 @@ export const es: Words = {
     slots: '{n} clips',
     mediaProject: "Este proyecto",
     mine: "Mío",
+    mineImported: "Importados",
     favorites: 'Favoritos',
     featured: 'Destacadas',
     all: 'Todo',

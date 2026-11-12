@@ -1056,6 +1056,7 @@ export const ko: Words = {
     slots: '{n}개 클립',
     mediaProject: "이 프로젝트",
     mine: "내 항목",
+    mineImported: "가져온 항목",
     favorites: '즐겨찾기',
     featured: '추천',
     all: '전체',

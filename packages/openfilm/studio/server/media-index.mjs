@@ -1,7 +1,7 @@
 // @ts-check
 /**
- * What this computer knows of the person's media: each media file of every project, and of every folder they added,
- * by its fingerprint (src/media-fingerprint.mjs). With it a file that was moved or renamed can be found again, and
+ * What this computer knows of the person's media: each media file of every project, by its fingerprint
+ * (src/media-fingerprint.mjs). With it a file that was moved or renamed can be found again, and
  * the same file in five projects is known to be one file.
  *
  * A project keeps its own record, `.film/media.json`: for each media file under assets/ (through its links too), its
@@ -9,18 +9,13 @@
  * so a file can still be looked for after the project moved or Studio's own files were cleared. A file that left the
  * project stays in the record for a while, marked `gone`: its film may still name it.
  *
- * A folder that is no project keeps nothing in it: its record is Studio's own (`media-index/` in the home every
- * OpenFilm on this computer shares), and says only what is in the folder now.
- *
- * Both are worked out from the disk and can be made again: a file whose size and time did not change is not read
+ * It is worked out from the disk and can be made again: a file whose size and time did not change is not read
  * again, and nothing here is the only copy of anything.
  */
-import { createHash } from 'node:crypto';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
-import { mkdir, readdir, stat } from 'node:fs/promises';
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { mkdir, stat } from 'node:fs/promises';
+import { dirname, isAbsolute, join, sep } from 'node:path';
 import { fingerprint, isFingerprint } from '../../src/media-fingerprint.mjs';
-import { sharedHome, sharedPref } from '../../src/locations.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { kindOf, listFiles, readable } from './files.mjs';
 import { compoundOuter } from './parts.mjs';
@@ -30,8 +25,7 @@ import { TOOL_DIR, listProjects } from './projects.mjs';
  * @typedef {'video' | 'image' | 'audio'} MediaKind
  * @typedef {{ fp: string, size: number, mtime: number, kind: MediaKind, at?: string, gone?: number }} MediaEntry
  *   `at`: where the file really is, when a link leads to it; `gone`: when it was first found missing from the project
- * @typedef {{ version: 1, files: Record<string, MediaEntry> }} MediaRecord   by project path (`assets/a.mp4`), or by
- *   the path inside an added folder
+ * @typedef {{ version: 1, files: Record<string, MediaEntry> }} MediaRecord   by project path (`assets/a.mp4`)
  * @typedef {{ path: string, size: number, mtime: number, kind: MediaKind, abs: string, at?: string }} Found
  */
 
@@ -40,16 +34,9 @@ const KINDS = new Set(['video', 'image', 'audio']);
 const GONE_FOR = 180 * 24 * 3600 * 1000;
 /** Files read at once: a few, so a slow disk is not asked for many places at a time. */
 const AT_ONCE = 4;
-/** An added folder is walked this deep, and no further than this many media files. */
-const FOLDER_DEPTH = 12;
-const FOLDER_FILES = 200_000;
 
 /** A project's record. */
 export const projectRecordFile = (/** @type {string} */ root) => join(root, TOOL_DIR, 'media.json');
-/** Where Studio keeps the records of folders that are no projects. */
-const indexHome = () => join(sharedHome(), 'media-index');
-/** An added folder's record. */
-export const folderRecordFile = (/** @type {string} */ root) => join(indexHome(), `${createHash('sha1').update(resolve(root)).digest('hex').slice(0, 16)}.json`);
 
 /** @type {Map<string, { stamp: string, record: MediaRecord }>} */
 const records = new Map();
@@ -162,46 +149,9 @@ export async function scanProject(root, { now = Date.now() } = {}) {
   return { root: project, files: found.length, hashed, changed, missing: missing.length };
 }
 
-/**
- * Bring the record of a folder that is no project up to its media, at any depth. Hidden files and folders are left
- * out, and links are not followed (a link back up would never end).
- * @param {string} root
- */
-export async function scanFolder(root) {
-  const base = resolve(root);
-  /** @type {Found[]} */
-  const found = [];
-  async function walk(/** @type {string} */ dir, /** @type {number} */ depth) {
-    let entries;
-    try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
-    for (const entry of entries) {
-      if (found.length >= FOLDER_FILES) return;
-      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
-      const abs = join(dir, entry.name);
-      if (entry.isDirectory()) { if (depth < FOLDER_DEPTH) await walk(abs, depth + 1); continue; }
-      if (!entry.isFile()) continue;
-      const kind = kindOf(entry.name);
-      if (!KINDS.has(kind)) continue;
-      const info = await stat(abs).catch(() => null);
-      if (info) found.push({ path: abs.slice(base.length + 1).split(sep).join('/'), size: info.size, mtime: Math.round(info.mtimeMs), kind: /** @type {MediaKind} */ (kind), abs });
-    }
-  }
-  await walk(base, 0);
-  const file = folderRecordFile(base);
-  const { record, hashed, changed } = await refresh(readRecord(file), found);
-  if (changed) await writeRecord(file, record);
-  return { root: base, files: found.length, hashed, changed };
-}
-
-/** The folders the person added to their media, beside the projects (the shared prefs.json, `mediaFolders`). */
-export function mediaFolders() {
-  const value = sharedPref('mediaFolders');
-  return Array.isArray(value) ? value.filter((v) => typeof v === 'string' && isAbsolute(v)).map((v) => resolve(v)) : [];
-}
-
-/** Every place whose media is known: the listed projects that are there, and the added folders. */
+/** Every place whose media is known: the listed projects that are there. */
 export async function mediaPlaces() {
-  return { projects: (await listProjects()).filter((p) => !p.missing).map((p) => p.path), folders: mediaFolders() };
+  return { projects: (await listProjects()).filter((p) => !p.missing).map((p) => p.path) };
 }
 
 /**
@@ -210,15 +160,12 @@ export async function mediaPlaces() {
  * @returns {Promise<{ fp: string, abs: string, size: number, kind: MediaKind, place: string, path: string, project: boolean }[]>}
  */
 export async function knownMedia() {
-  const { projects, folders } = await mediaPlaces();
+  const { projects } = await mediaPlaces();
   const out = [];
-  for (const [roots, project] of /** @type {const} */ ([[projects, true], [folders, false]])) {
-    for (const root of roots) {
-      const record = readRecord(project ? projectRecordFile(root) : folderRecordFile(root));
-      for (const [path, e] of Object.entries(record.files)) {
-        if (e.gone) continue;
-        out.push({ fp: e.fp, abs: e.at ?? join(root, ...path.split('/')), size: e.size, kind: e.kind, place: root, path, project });
-      }
+  for (const root of projects) {
+    for (const [path, e] of Object.entries(readRecord(projectRecordFile(root)).files)) {
+      if (e.gone) continue;
+      out.push({ fp: e.fp, abs: e.at ?? join(root, ...path.split('/')), size: e.size, kind: e.kind, place: root, path, project: true });
     }
   }
   return out;
@@ -251,7 +198,7 @@ export async function whereIs(fp) {
  * room taken by further copies of a file already counted (a file that links lead to from several projects is one).
  */
 export async function mediaSummary() {
-  const { projects, folders } = await mediaPlaces();
+  const { projects } = await mediaPlaces();
   /** @type {Map<string, { fp: string, size: number }>} */
   const files = new Map();
   for (const m of await knownMedia()) if (!files.has(m.abs)) files.set(m.abs, { fp: m.fp, size: m.size });
@@ -261,7 +208,7 @@ export async function mediaSummary() {
   for (const { fp, size } of files.values()) { bytes += size; different.set(fp, size); }
   let once = 0;
   for (const size of different.values()) once += size;
-  return { projects: projects.length, folders: folders.length, files: files.size, different: different.size, bytes, copies: bytes - once };
+  return { projects: projects.length, files: files.size, different: different.size, bytes, copies: bytes - once };
 }
 
 /**
@@ -298,12 +245,10 @@ export function createMediaIndexer({ wait = 1500, onError = () => {}, onProject 
       timer.unref();
       timers.set(root, timer);
     },
-    /** Scan this added folder (it was just added). @param {string} root */
-    folder: (root) => queue(root, scanFolder),
     /** Scan every place, one after another. */
     async sweep() {
-      const { projects, folders } = await mediaPlaces();
-      await Promise.all([...projects.map((root) => queue(root, project)), ...folders.map((root) => queue(root, scanFolder))]);
+      const { projects } = await mediaPlaces();
+      await Promise.all(projects.map((root) => queue(root, project)));
     },
     /** Whether a scan is under way or waiting. */
     busy: () => scanning > 0 || timers.size > 0,

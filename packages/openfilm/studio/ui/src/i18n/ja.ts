@@ -1059,6 +1059,7 @@ export const ja: Words = {
     slots: '{n} 素材',
     mediaProject: "このプロジェクト",
     mine: "マイ",
+    mineImported: "インポート済み",
     favorites: 'お気に入り',
     featured: 'おすすめ',
     all: 'すべて',

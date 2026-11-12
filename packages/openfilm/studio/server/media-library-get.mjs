@@ -61,7 +61,7 @@ export async function myMediaGet(flags, folder) {
   const count = limit === undefined ? spec.limit.default : Number(limit);
   if (!(Number.isInteger(count) && count >= spec.limit.min && count <= spec.limit.max)) return wrong(`--limit is a whole number from ${spec.limit.min} to ${spec.limit.max}, not ${limit}`);
   const q = (prompt ?? '').trim();
-  const { files, total } = await searchLibrary({ q, kind: kind ?? null, saved: true, sort: 'date', limit: count });
+  const { files, total } = await searchLibrary({ q, kind: kind ?? null, sort: 'date', limit: count });
   const what = kind ?? '';
   if (!files.length) {
     return { code: 0, lines: [`Nothing in the person's media library${q ? ` for “${q}”` : ''}${what ? ` (${what})` : ''}. `

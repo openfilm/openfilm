@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fingerprint } from '../../src/media-fingerprint.mjs';
 import { bringIn } from './files.mjs';
-import { createMediaIndexer, folderRecordFile, knownMedia, mediaSummary, projectRecordFile, readRecord, scanFolder, scanProject, whereIs } from './media-index.mjs';
+import { createMediaIndexer, knownMedia, mediaSummary, projectRecordFile, readRecord, scanProject, whereIs } from './media-index.mjs';
 import { createProject } from './projects.mjs';
 
 const KEYS = ['OPENFILM_HOME', 'OPENFILM_SHARED_HOME', 'OPENFILM_LIBRARY'];
@@ -32,7 +32,6 @@ function media(path, seed, size = 300_000) {
   return path;
 }
 const elsewhere = () => realpathSync(mkdtempSync(join(tmpdir(), 'of-media-elsewhere-')));
-const folders = (list) => { mkdirSync(home, { recursive: true }); writeFileSync(join(home, 'prefs.json'), JSON.stringify({ mediaFolders: list })); };
 
 test('a project records each media file under assets/ once, and reads a file again only when it changed', async () => {
   const { path: root } = await createProject('One');
@@ -88,28 +87,11 @@ test('a linked file is recorded where it really is, and found again after it was
   assert.deepEqual(readRecord(projectRecordFile(root)).files['assets/clip.mp4'], entry);
   assert.deepEqual(await whereIs(entry.fp), []);
 
-  /* the folder it is in is one of the person's media folders: there it is */
-  folders([nas]);
-  await scanFolder(nas);
+  /* another project linked it where it is now: there it is */
+  const { path: other } = await createProject('Other');
+  await bringIn(other, 'assets', [join(nas, 'day1', 'take-3.mp4')], 'link');
+  await scanProject(other);
   assert.deepEqual(await whereIs(entry.fp), [{ abs: join(nas, 'day1', 'take-3.mp4'), size: entry.size, own: false }]);
-});
-
-test('a folder that is no project is recorded in Studio\'s own files: nested media, nothing hidden, nothing written in it', async () => {
-  const at = elsewhere();
-  media(join(at, 'a.mov'), 1);
-  media(join(at, 'deep', 'er', 'b.wav'), 2);
-  media(join(at, '.hidden', 'c.mp4'), 3);
-  media(join(at, 'deep', '.DS_Store'), 4);
-  writeFileSync(join(at, 'readme.md'), '#');
-  const scan = await scanFolder(at);
-  assert.equal(scan.files, 2);
-  assert.deepEqual(Object.keys(readRecord(folderRecordFile(at)).files), ['a.mov', 'deep/er/b.wav']);
-  assert.ok(folderRecordFile(at).startsWith(join(home, 'media-index')));
-  assert.equal(existsSync(join(at, '.film')), false);
-
-  rmSync(join(at, 'a.mov'));
-  await scanFolder(at);
-  assert.deepEqual(Object.keys(readRecord(folderRecordFile(at)).files), ['deep/er/b.wav']);
 });
 
 test('a file is only where it was checked to be: one changed in place since the record is not it', async () => {
@@ -133,7 +115,7 @@ test('the numbers count a file many links lead to once, and a copy of it as a co
   media(join(two, 'assets', 'own.mp3'), 6, 100_000);
   await scanProject(one);
   await scanProject(two);
-  assert.deepEqual(await mediaSummary(), { projects: 2, folders: 0, files: 3, different: 2, bytes: 900_000, copies: 400_000 });
+  assert.deepEqual(await mediaSummary(), { projects: 2, files: 3, different: 2, bytes: 900_000, copies: 400_000 });
 });
 
 test('a record that cannot be read is an empty one, and the next scan makes it again', async () => {
@@ -149,11 +131,8 @@ test('a record that cannot be read is an empty one, and the next scan makes it a
 test('the scans run one at a time: a project a moment after it changed, every place on a sweep', async () => {
   const { path: one } = await createProject('Soon');
   const { path: two } = await createProject('Sweep');
-  const at = elsewhere();
   media(join(one, 'assets', 'a.mp4'), 1);
   media(join(two, 'assets', 'b.mp4'), 2);
-  media(join(at, 'c.mp4'), 3);
-  folders([at]);
   const indexer = createMediaIndexer({ wait: 20 });
   indexer.soon(one);
   indexer.soon(one);
@@ -164,7 +143,7 @@ test('the scans run one at a time: a project a moment after it changed, every pl
   assert.deepEqual(readRecord(projectRecordFile(two)).files, {});
   await indexer.sweep();
   assert.equal(indexer.busy(), false);
-  assert.equal((await knownMedia()).length, 3);
+  assert.equal((await knownMedia()).length, 2);
   indexer.close();
   indexer.soon(two);
   assert.equal(indexer.busy(), false);
