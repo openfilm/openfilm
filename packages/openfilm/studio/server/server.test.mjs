@@ -32,6 +32,23 @@ const api = (path, { method = 'GET', body, key = studio.key, headers = {} } = {}
   redirect: 'manual',
 });
 
+test('the favorites API keeps skill stars across reads and removes only the selected star', async () => {
+  const path = '/api/library/favorites';
+  const previous = await (await api(path)).json();
+  const ids = ['skill:river/remake', 'skill:openfilm/remake', 'skill:project/my-style', 'effects/snow'];
+  try {
+    const saved = await api(path, { method: 'PUT', body: { ids: [...ids, ids[0], 'skill:../bad', 'not-in-library'] } });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(await saved.json(), { ids });
+    assert.deepEqual(await (await api(path)).json(), { ids });
+    const removed = await api(path, { method: 'PUT', body: { ids: ids.slice(1) } });
+    assert.deepEqual(await removed.json(), { ids: ids.slice(1) });
+    assert.deepEqual(await (await api(path)).json(), { ids: ids.slice(1) });
+  } finally {
+    await api(path, { method: 'PUT', body: previous });
+  }
+});
+
 /** A page's stream of events (a WebSocket), until `until(events)`. */
 function collect(path, until) {
   return new Promise((done, fail) => {

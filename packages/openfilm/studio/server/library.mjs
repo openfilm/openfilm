@@ -35,6 +35,7 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { communityCatalog, communityReady, fetchCommunity, isCommunity, refreshCommunity } from './community-library.mjs';
 import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
+import { SKILL_UID } from '../../src/skills.mjs';
 
 export { refreshCommunity };
 
@@ -276,17 +277,20 @@ export async function libraryFileFetched(/** @type {unknown} */ rel) {
 /** Where the starred things are kept in the shared prefs.json. */
 const FAVORITES = 'libraryFavorites';
 
-/** The ids the person starred (a voice's is voiceKey's), in the order they were starred, those still in the library only. */
+/** Skill stars outlive a catalog refresh or a change of project; they are shown when that uid is available again. */
+const skillFavorite = (/** @type {string} */ id) => id.startsWith('skill:') && SKILL_UID.test(id.slice(6));
+
+/** The ids the person starred, in order: available library things and voices, and skills by their uid. */
 export function libraryFavorites() {
   const starred = sharedPref(FAVORITES);
   const ids = starrable();
-  return Array.isArray(starred) ? [...new Set(starred.filter((id) => typeof id === 'string' && ids.has(id)))] : [];
+  return Array.isArray(starred) ? [...new Set(starred.filter((id) => typeof id === 'string' && (ids.has(id) || skillFavorite(id))))] : [];
 }
 
-/** Keep `ids` as the starred ones (those not in the library left out). Returns them as kept. */
+/** Keep valid skill ids and available library things as favorites. Returns them as kept. */
 export function setLibraryFavorites(/** @type {unknown} */ ids) {
   const known = starrable();
-  const next = Array.isArray(ids) ? [...new Set(ids.filter((id) => typeof id === 'string' && known.has(id)))] : [];
+  const next = Array.isArray(ids) ? [...new Set(ids.filter((id) => typeof id === 'string' && (known.has(id) || skillFavorite(id))))] : [];
   setSharedPref(FAVORITES, next);
   return next;
 }
