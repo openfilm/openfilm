@@ -22,7 +22,6 @@ import { SettingsSelect } from './SettingsSelect';
 import { ShortcutsSection } from './ShortcutsSection';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
 import { useThemeMode, type ThemeMode } from './theme';
-import { StorageGroup } from './StorageGroup';
 import { openLibraryPage } from '@/lib/library-page';
 import { PluginsSection } from './PluginsSection';
 import { LARGE_DIALOG_SIZE } from '../dialog-chrome';
@@ -248,7 +247,11 @@ function GeneralSection({ onClose }: { onClose: () => void }) {
           )}
         />
       </SettingsGroup>
-      <StorageGroup onManage={() => { onClose(); openLibraryPage(); }} />
+      {/* projects, Mine, favorites, skills and storage: all tended in asset management, a page (a tab) of its own */}
+      <SettingsGroup title={t('libraryPage.title')}>
+        <SettingsItem title={t('libraryPage.title')} description={t('libraryPage.settingsNote')}
+          control={<SettingsButton onClick={() => { onClose(); openLibraryPage(); }}>{t('libraryPage.open')}</SettingsButton>} />
+      </SettingsGroup>
       {studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}
     </SettingsPage>
   );

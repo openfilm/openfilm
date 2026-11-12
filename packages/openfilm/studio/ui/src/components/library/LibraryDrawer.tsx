@@ -32,7 +32,6 @@ import { arrangedCategories } from '@/lib/library-categories';
 import { PLAIN } from './OnPicture';
 import { isClipMotion } from '@/lib/clip-presets';
 import { useLibraryArrangement } from './arrangement';
-import { openLibraryPage } from '@/lib/library-page';
 
 type Category = 'media' | 'skill' | 'voice' | 'captions' | LibraryCategory;
 /* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, the skills, then the
@@ -460,11 +459,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 {/* this project's media; Mine, the person's own for every film (what they keep there, in their folders) */}
                 <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
                 <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mine')}</SideBox>
-                {/* all of it, with room: the library page */}
-                <button type="button" onClick={openLibraryPage} data-open-library=""
-                  className="truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] font-medium text-[var(--text-muted)] hover:text-[var(--accent)]">
-                  {t('libraryPage.manage')}
-                </button>
               </>
             ) : cat === 'skill' ? (
               <>

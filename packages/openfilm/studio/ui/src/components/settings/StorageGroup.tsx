@@ -27,8 +27,7 @@ function amount(bytes: number): string {
   return bytes < 5e5 ? '0 MB' : size(bytes);
 }
 
-/** `onManage`: Settings' way to the library page (lib/library-page.ts), where all of it is tended with room. */
-export function StorageGroup({ onManage }: { onManage?: () => void } = {}) {
+export function StorageGroup() {
   const t = useT();
   const [where, setWhere] = React.useState<StudioLocations | null>(null);
   const [busy, setBusy] = React.useState<Which | null>(null);
@@ -165,10 +164,6 @@ export function StorageGroup({ onManage }: { onManage?: () => void } = {}) {
         onAlt={() => { const a = asking; setAsking(null); if (a) void apply(a.which, a.folder, false); }}
         onCancel={() => setAsking(null)}
       />
-      {onManage ? (
-        <SettingsItem title={t('libraryPage.title')} description={t('libraryPage.manageNote')}
-          control={<SettingsButton onClick={onManage}>{t('libraryPage.manage')}</SettingsButton>} />
-      ) : null}
     </SettingsGroup>
   );
 }

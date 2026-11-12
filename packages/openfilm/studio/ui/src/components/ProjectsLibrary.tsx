@@ -247,6 +247,7 @@ export function ProjectsPopover({
   onClose,
   examples,
   onUseCanvas,
+  inline = false,
 }: {
   open: boolean;
   /** The project open in the editor ("" when none: Studio has no project to show, and this window is all there is). */
@@ -264,6 +265,8 @@ export function ProjectsPopover({
   examples?: { example?: string };
   /** over a film: an example's canvas laid down on its own */
   onUseCanvas?: (example: Example) => void;
+  /** shown in a page (the library page's Projects), filling it, rather than over it */
+  inline?: boolean;
 }) {
   const t = useT();
   const lib = useProjectLibrary(open);
@@ -460,12 +463,13 @@ export function ProjectsPopover({
 
   const content = (
     <>
-      <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={close} />
+      {inline ? null : <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={close} />}
       <div
-        role="dialog"
+        role={inline ? 'region' : 'dialog'}
         aria-label={t('project.projects')}
-        aria-modal="true"
-        className={`fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-topbar-popover)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]`}
+        aria-modal={inline ? undefined : 'true'}
+        className={inline ? 'relative flex h-full min-h-0 w-full flex-col overflow-hidden'
+          : `fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-topbar-popover)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]`}
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
@@ -632,5 +636,5 @@ export function ProjectsPopover({
       />
     </>
   );
-  return createPortal(content, document.body);
+  return inline ? content : createPortal(content, document.body);
 }

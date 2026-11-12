@@ -1,6 +1,6 @@
 /** The desktop's projects as a continuous tab strip. Only a tab has a context menu; the empty title bar stays quiet. */
 import React from 'react';
-import { Clapperboard, FolderOpen, Image, Pencil, Plus, X } from 'lucide-react';
+import { Clapperboard, FolderOpen, Image, LibraryBig, Pencil, Plus, X } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import { useT } from '@/i18n';
 import { studioHost, type HostTab } from '@/lib/host';
@@ -72,7 +72,7 @@ export function ProjectTabs({ current, onProjects, onRenameCurrent, onCoverCurre
           {tab.id === self && current ? current : <button type="button" role="tab" aria-selected={tab.id === self} aria-hidden={editing?.tab.id === tab.id || undefined} tabIndex={editing?.tab.id === tab.id ? -1 : self === null || tab.id === self ? 0 : -1} className={styles.select}
             onClick={event => { if (event.detail < 2) host.show(tab.id); }} onDoubleClick={event => { event.preventDefault(); event.stopPropagation(); beginRename(tab); }}
             onMouseDown={event => { if (event.button === 0 && event.detail === 2) { event.preventDefault(); event.stopPropagation(); beginRename(tab); } }}>
-            <Clapperboard size={13} /><span className={`${styles.name} ${editing?.tab.id === tab.id ? 'invisible' : ''}`}>{tab.title || t('project.untitled')}</span>
+            {tab.projectId === LIBRARY_TAB ? <LibraryBig size={13} /> : <Clapperboard size={13} />}<span className={`${styles.name} ${editing?.tab.id === tab.id ? 'invisible' : ''}`}>{tab.title || t('project.untitled')}</span>
           </button>}
           {editing?.tab.id === tab.id ? <input ref={input} className={`${styles.rename} ${styles.tabRename}`} aria-label={t('projectMenu.rename')} maxLength={56} value={editing.name}
             onChange={event => setEditing({ ...editing, name: event.target.value })} onBlur={() => void finishRename(true)}
