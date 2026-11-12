@@ -1,21 +1,26 @@
 /**
- * The plugins a project has: OpenFilm's own (lib/plugins), then the ones someone made, which are skills with a surface
- * (a web page at their folder's root; openfilm/src/skills.mjs SKILL_PAGE): the person's own, this project's, and those
- * installed. One of those is a plugin like any other: its skill is what an agent is given, its page is its workbench,
- * and its switch is the skill's.
+ * The plugins a project has: OpenFilm's own (lib/plugins), then the ones someone made: a skill that brings something
+ * that runs, a surface (a web page at its folder's root; openfilm/src/skills.mjs SKILL_PAGE) or commands (its
+ * package.json's `bin`), among the person's own, this project's, and those installed. One of those is a plugin like any
+ * other: its skill is what an agent is given, its page (when it has one) is its workbench, and its switch is the
+ * skill's.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { usePlugins, type Plugin } from './plugins.ts';
 import { seenSkills, watchSkills, type SkillEntry } from './project-sources.ts';
 
-/** A skill with a surface, as the plugin it is: its workbench is named by its uid. */
+/** A skill that is a plugin, as one: with a surface, its workbench is named by its uid. */
 export const pluginOfSkill = (skill: SkillEntry): Plugin => ({
   id: skill.uid, title: skill.shown?.title ?? { en: skill.name }, summary: skill.shown?.summary ?? { en: skill.description },
-  ...(skill.icon ? { icon: skill.icon } : {}), workbench: skill.uid, skills: [skill.name], on: !skill.off, page: skill.surface!, skill: skill.uid, ...(skill.files ? { files: skill.files } : {}),
+  ...(skill.icon ? { icon: skill.icon } : {}), skills: [skill.name], on: !skill.off, skill: skill.uid,
+  ...(skill.surface ? { workbench: skill.uid, page: skill.surface } : {}), ...(skill.files ? { files: skill.files } : {}),
 });
 
-/** The skills of a list that are plugins: installed, with a surface. */
-export const skillPlugins = (skills: readonly SkillEntry[]): Plugin[] => skills.filter((k) => k.surface && k.installed !== false).map(pluginOfSkill);
+/** Whether a skill is a plugin: it brings something that runs. */
+export const isPlugin = (skill: SkillEntry): boolean => Boolean(skill.surface || skill.commands?.length);
+
+/** The skills of a list that are plugins, installed. */
+export const skillPlugins = (skills: readonly SkillEntry[]): Plugin[] => skills.filter((k) => isPlugin(k) && k.installed !== false).map(pluginOfSkill);
 
 export function usePluginsOf(projectId: string | null): readonly Plugin[] {
   const plugins = usePlugins();

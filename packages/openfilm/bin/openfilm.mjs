@@ -10,6 +10,7 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm get     [what] [--options]  media: free from OpenFilm's library (music, sounds, transitions…), else a connected service
   openfilm canvas  [apply <steps>]     the canvas beside the edit: read it, or lay out notes, files and what to make on it
   openfilm skills                      the skills this film can be made with; \`openfilm skill <name>\` prints one
+  openfilm <plugin> [command] …        a command a plugin brings; its skill says what it does
   openfilm update                      the newest OpenFilm; Studio starts again on it
   openfilm doctor                      what this computer has for OpenFilm, to paste into an issue
 
@@ -161,7 +162,14 @@ const keptNotice = async (/** @type {string} */ from = '.') => {
   console.error(note.line);
   await note.said();
 };
-if (RAW[0] === 'get') {
+/* a command a plugin brings (src/plugin-commands.mjs): every word after its name is its own, as typed. OpenFilm's own
+   commands are never a plugin's */
+const OWN = ['open', 'look', 'render', 'get', 'canvas', 'skills', 'skill', 'update', 'doctor'];
+const ofPlugin = RAW[0] && !RAW[0].startsWith('-') && !OWN.includes(RAW[0])
+  ? await (await import('../src/plugin-commands.mjs')).runPluginCommand(RAW, RUN) : null;
+if (ofPlugin != null) {
+  process.exitCode = ofPlugin;
+} else if (RAW[0] === 'get') {
   await keptNotice();
   let result;
   try { result = await (await import('../studio/client.mjs')).getMedia(RAW.slice(1), (line) => console.error(line)); }

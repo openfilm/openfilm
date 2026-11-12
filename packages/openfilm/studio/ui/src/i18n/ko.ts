@@ -82,6 +82,7 @@ export const ko: Words = {
     skillOffPlugin: "\"{plugin}\" 플러그인과 함께 꺼져 있습니다.",
     pluginWrites: "프로젝트 파일 변경 허용",
     pluginWritesNote: "꺼져 있으면 이 화면은 프로젝트 파일을 읽기만 합니다. 켜면 열려 있는 프로젝트의 파일을 고쳐 쓸 수도 있습니다(에이전트와 같습니다). 신뢰하는 플러그인만 켜세요.",
+    pluginCommands: "함께 오는 명령",
     mine: '내 스킬',
     project: '이 프로젝트',
     cat: { launch: '제품 출시', explainer: '해설', slides: '슬라이드를 영상으로', captions: '자막과 타이틀', ads: '광고', commerce: '판매 포인트', music: '음악' },

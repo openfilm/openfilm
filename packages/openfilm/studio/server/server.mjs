@@ -600,6 +600,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           /* one with a surface (a page of its own, src/skills.mjs SKILL_PAGE) is a plugin: where its page is, on the
              plugins' origin (plugin-pages.mjs); listed for a project, where that project's files are for it; and
              whether the person lets it change them */
+          /* the commands it brings (src/skills.mjs commandsIn), by name: `openfilm <its name> <command>` */
+          ...(k.commands && k.installed && !k.core ? { commands: Object.keys(k.commands) } : {}),
           ...(k.page && k.installed && !k.core ? (() => {
             const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.page }, project ?? null);
             return { surface: at.page, ...(at.project ? { files: at.project } : {}), ...(pluginWrites(k, project ?? null) ? { writes: true } : {}) };

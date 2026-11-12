@@ -7,7 +7,7 @@
  * uid. They are in parts, each headed with its count: the person's own first (theirs, and this project's), OpenFilm's
  * and the community's installed, then each agent's own under that agent's name (off until let in). OpenFilm's own
  * system skills (how a film is made, its media, its canvas) are not here: each is with the plugin it goes with
- * (PluginsPane), where a skill with a surface of its own (a plugin someone made) is too. The person's own and the community's
+ * (PluginsPane), where a skill that brings a surface or commands (a plugin someone made) is too. The person's own and the community's
  * are there with none too, as an invitation: Import, and Browse community (Discover). Import is beside the search too
  * (LibraryDrawer). Each part folds under its head (kept while Studio is open). Discover is a gallery of tiles to
  * browse: cover, title, what it is for; under the pointer a star and a "+", which names it in the chat's message (its
@@ -18,6 +18,7 @@ import { ChevronDown, Compass, FolderDown, Plus, RefreshCw, Star } from 'lucide-
 import { useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
 import { toggleFavorite, useLibraryFavorites } from '@/lib/library';
+import { isPlugin } from '@/lib/project-plugins';
 import { communityOf, makerOf, seenCatalog, seenSkills, sourcesApi, SourceError, watchSkills, type SkillEntry } from '@/lib/project-sources';
 import { byOrder, SkillCover, SkillMark, SkillPage, useSkillWords } from '../SkillPage';
 import { SettingsSwitch } from '../settings/ui';
@@ -89,7 +90,7 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
   const agents = useAgentSkills(installed);
   const q = query.trim().toLowerCase();
   const found = skills
-    .filter((k) => !k.core && !k.surface)
+    .filter((k) => !k.core && !isPlugin(k))
     .filter((k) => !q || [words(k).title, words(k).summary, k.name, k.uid].some((w) => w?.toLowerCase().includes(q)))
     .sort(byOrder);
   /* Discover's installed: OpenFilm's own, then the community's (each made by someone else, under their name) */

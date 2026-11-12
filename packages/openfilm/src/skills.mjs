@@ -58,6 +58,30 @@ export const SKILL_FILE = 'SKILL.md';
  */
 export const SKILL_PAGE = 'index.html';
 
+/** A command's name, as a plugin's package.json names it. */
+export const COMMAND_NAME = /^[a-z][a-z0-9-]{0,31}$/;
+
+/**
+ * The commands a plugin brings: its package.json's `bin`, npm's own field, each a file in its folder. `openfilm <plugin>
+ * <command>` runs one (src/plugin-commands.mjs), for an agent and for other plugins alike; a `bin` that is one file is
+ * one command named after the plugin, run as `openfilm <plugin>`. A name that is none, or a file that is not there, is
+ * left out. None: undefined.
+ * @param {string} folder @param {string} name the plugin's
+ * @returns {Record<string, string> | undefined} command → its file, in the folder
+ */
+function commandsIn(folder, name) {
+  let bin;
+  try { bin = JSON.parse(readFileSync(join(folder, 'package.json'), 'utf8'))?.bin; } catch { return undefined; }
+  const entries = typeof bin === 'string' ? [[name, bin]] : bin && typeof bin === 'object' && !Array.isArray(bin) ? Object.entries(bin) : [];
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const [command, file] of entries) {
+    const at = fileIn(folder, typeof file === 'string' ? file.replace(/^\.\//, '') : file);
+    if (COMMAND_NAME.test(command) && at) out[command] = at;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 /**
  * What the person's leave to change projects is kept by, for a plugin someone made: its uid; one a project brings is
  * let in that project alone (every project's `project/<name>` is another plugin).
@@ -256,10 +280,10 @@ export function parseSkillFile(text) {
 
 /**
  * @typedef {{ uid: string, name: string, description: string, folder: string, source: SkillSource, file: string,
- *   scripts: string[], over?: SkillSource[], shown?: SkillShown, version?: string, page?: string } & SkillLook} Skill
+ *   scripts: string[], over?: SkillSource[], shown?: SkillShown, version?: string, page?: string, commands?: Record<string, string> } & SkillLook} Skill
  *   `uid`: whose it is and its name (SKILL_UID). `over`: the places that had the same skill (its uid), which this one
  *   takes the place of. `version`: its openfilm.json's, else its front matter's. `page`: its surface (SKILL_PAGE), when
- *   it has one.
+ *   it has one. `commands`: the commands it brings (commandsIn), by name. One with a page or commands is a plugin.
  * @typedef {{ title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string> }} SkillShown
  *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title, a one-line summary and a few lines
  *   on who it is for and what it does, by language (`en`, `zh-CN`…); the SKILL.md's description is for the agent
@@ -329,7 +353,7 @@ export function readSkill(folder, source) {
   const from = source === 'official' ? skillSource(folder) : null;
   const origin = source === 'mine' ? skillOrigins(dirname(folder))[basename(folder)] : from ? { from: /** @type {const} */ ('link'), address: from.repo } : undefined;
   return { uid: skillUid(source, name, origin), name, description: (fields.description ?? '').trim(), folder, source, file, scripts: scriptsIn(folder), ...extra,
-    ...(existsSync(join(folder, SKILL_PAGE)) ? { page: SKILL_PAGE } : {}) };
+    ...(existsSync(join(folder, SKILL_PAGE)) ? { page: SKILL_PAGE } : {}), ...(commandsIn(folder, name) ? { commands: commandsIn(folder, name) } : {}) };
 }
 
 /** The scripts a skill brings (any file under scripts/, and executables anywhere), for the person to see. */

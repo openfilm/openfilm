@@ -86,6 +86,7 @@ export const en = {
     skillOffPlugin: "Off with the {plugin} plugin.",
     pluginWrites: "Allow it to change project files",
     pluginWritesNote: "Off, its page only reads the project. On, it can also write files in the project you have open, as your agent can. Turn it on only for a plugin you trust.",
+    pluginCommands: "Commands it brings",
     mine: 'Yours',
     project: 'This project',
     cat: { launch: 'Product launches', explainer: 'Explainers', slides: 'Slides to video', captions: 'Captions and titles', ads: 'Ads', commerce: 'Selling points', music: 'Music' },

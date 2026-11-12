@@ -153,7 +153,7 @@ test('a plugin someone made: its page on the plugins\' origin, the project read 
     rmSync(root, { recursive: true, force: true });
   });
   const PAGE = '<!doctype html><title>Board</title><script src="app.js"></script>';
-  for (const [name, files] of [['board', { 'index.html': PAGE, 'app.js': 'window.board = 1;', '.env': 'SECRET=1' }], ['plain', {}]]) {
+  for (const [name, files] of [['board', { 'index.html': PAGE, 'app.js': 'window.board = 1;', '.env': 'SECRET=1' }], ['plain', {}], ['tool', { 'package.json': '{"bin":{"run":"run.mjs","check":"./run.mjs"}}', 'run.mjs': '' }]]) {
     mkdirSync(join(variables.OPENFILM_SKILLS, name), { recursive: true });
     writeFileSync(join(variables.OPENFILM_SKILLS, name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\n---\nSteps.`);
     for (const [file, text] of Object.entries(files)) writeFileSync(join(variables.OPENFILM_SKILLS, name, file), text);
@@ -167,8 +167,12 @@ test('a plugin someone made: its page on the plugins\' origin, the project read 
   const listed = async (query = `?project=${project.id}`) => (await (await api(`/api/skills${query}`)).json()).skills;
   const board = (await listed()).find((k) => k.uid === 'local/board');
   assert.equal((await listed()).find((k) => k.uid === 'local/plain').surface, undefined);
+  /* one that brings commands is listed with their names: a plugin with no surface */
+  const tool = (await listed()).find((k) => k.uid === 'local/tool');
+  assert.deepEqual([tool.commands, tool.surface], [['run', 'check'], undefined]);
+  assert.equal(board.commands, undefined);
   /* OpenFilm's own are not plugins of this kind */
-  assert.ok((await listed()).filter((k) => k.core).every((k) => k.surface === undefined));
+  assert.ok((await listed()).filter((k) => k.core).every((k) => k.surface === undefined && k.commands === undefined));
 
   /* its page: on the plugins' origin (another than the editor's and the film's), as its author wrote it, nothing hidden */
   assert.ok(studio.pluginOrigin !== studio.origin && studio.pluginOrigin !== studio.filmOrigin);

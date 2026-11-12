@@ -18,6 +18,9 @@ test('a skill with a surface is a plugin: its workbench named by its uid, its sw
     id: 'local/board', title: { en: 'Board', 'zh-CN': '分镜板' }, summary: { en: 'Shots laid out.' }, icon: 'layers',
     workbench: 'local/board', skills: ['board'], on: true, page: 'http://localhost:1/p/t/index.html', skill: 'local/board',
   });
+  /* one with commands and no page is a plugin too, with no workbench to switch to */
+  const tool = skillPlugins([skill({ uid: 'local/denoise', name: 'denoise', commands: ['denoise'] })])[0]!;
+  assert.deepEqual([tool.id, tool.workbench, tool.page, tool.skill], ['local/denoise', undefined, undefined, 'local/denoise']);
   /* without words of its own, its name and what it tells the agent */
   assert.deepEqual([list[1].title, list[1].summary], [{ en: 'tool' }, { en: 'A storyboard' }]);
 });

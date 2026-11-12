@@ -147,6 +147,17 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       </div>
       {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', inLanguage(plugins.find((p) => p.id === skill.plugin)?.title, lang) ?? skill.plugin) : t('gallery.skillOff')}</p> : null}
       {skill.retired ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
+      {/* the commands a plugin brings, as an agent (or another plugin) runs them */}
+      {skill.commands?.length ? (
+        <div className="mt-3">
+          <div className="text-[11.5px] font-medium text-[var(--text-muted)]">{t('gallery.pluginCommands')}</div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {skill.commands.map((c) => (
+              <code key={c} className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[11px] text-[var(--text-muted)]">openfilm {skill.name}{c === skill.name ? '' : ` ${c}`}</code>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {/* a plugin someone made (a skill with a surface): its page reads the project; whether it may change it is the person's to say */}
       {skill.surface && installed ? (
         <div className="mt-3 rounded-[10px] border border-[var(--border)] px-3 py-2.5">

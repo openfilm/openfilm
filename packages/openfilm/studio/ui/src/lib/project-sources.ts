@@ -66,6 +66,8 @@ export type SkillEntry = {
   /** it has a surface (a page of its own), which makes it a plugin (lib/project-plugins): the page's address; listed
    *  for a project, where that project's files are for the page; and whether the person lets it change them */
   surface?: string; files?: string; writes?: true;
+  /** the commands it brings (`openfilm <its name> <command>`), which make it a plugin too */
+  commands?: string[];
   /** where its source can be read (a repository's address) */
   repository?: string;
   /** what it needs beyond OpenFilm, by language; the computers it runs on (none: every one), and whether this one is not among them */

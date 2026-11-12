@@ -484,6 +484,24 @@ test('a skill named with capitals is found by its name alone', () => {
   }
 });
 
+test('a skill whose package.json has a bin brings commands: it is a plugin someone made', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-bin-'));
+  const made = (name, bin, files = {}) => readSkill(skill(join(root, name), name, 'A tool', 'Steps', { 'package.json': JSON.stringify({ name, bin }), ...files }), 'mine');
+  assert.equal(readSkill(skill(join(root, 'plain'), 'plain', 'Only teaches'), 'mine').commands, undefined);
+  /* each name of `bin` is a command, its file in the folder (with or without `./`) */
+  assert.deepEqual(made('outline', { list: 'bin/list.mjs', count: './bin/count.mjs' }, { 'bin/list.mjs': '', 'bin/count.mjs': '' }).commands, { list: 'bin/list.mjs', count: 'bin/count.mjs' });
+  /* a `bin` that is one file is one command, named after the plugin */
+  assert.deepEqual(made('denoise', 'run.mjs', { 'run.mjs': '' }).commands, { denoise: 'run.mjs' });
+  /* left out: a name that is no command's, a file that is not there, a file outside the folder */
+  writeFileSync(join(root, 'outside.mjs'), '');
+  assert.deepEqual(made('picky', { Bad_Name: 'a.mjs', '--flag': 'a.mjs', gone: 'gone.mjs', out: '../outside.mjs', ok: 'a.mjs' }, { 'a.mjs': '' }).commands, { ok: 'a.mjs' });
+  /* nothing that is a command, or a package.json that cannot be read: none */
+  assert.equal(made('empty', {}).commands, undefined);
+  assert.equal(made('list', ['a.mjs'], { 'a.mjs': '' }).commands, undefined);
+  assert.equal(readSkill(skill(join(root, 'broken'), 'broken', 'Broken', 'Steps', { 'package.json': '{' }), 'mine').commands, undefined);
+  rmSync(root, { recursive: true, force: true });
+});
+
 test('a skill with a page at its root has a surface: it is a plugin someone made', () => {
   const root = mkdtempSync(join(tmpdir(), 'of-skill-page-'));
   const plain = readSkill(skill(join(root, 'plain'), 'plain', 'Only teaches'), 'mine');

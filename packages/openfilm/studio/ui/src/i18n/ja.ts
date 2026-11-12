@@ -85,6 +85,7 @@ export const ja: Words = {
     skillOffPlugin: "「{plugin}」プラグインと一緒にオフになっています。",
     pluginWrites: "プロジェクトのファイルの変更を許可",
     pluginWritesNote: "オフのとき、この画面はプロジェクトのファイルを読むだけです。オンにすると、開いているプロジェクトのファイルを書き換えることもできます（エージェントと同じです）。信頼できるプラグインだけオンにしてください。",
+    pluginCommands: "追加されるコマンド",
     mine: '自分の',
     project: 'このプロジェクト',
     cat: { launch: '製品発表', explainer: '解説', slides: 'スライドを動画に', captions: '字幕とテロップ', ads: '広告', commerce: 'セールスポイント', music: '音楽' },
