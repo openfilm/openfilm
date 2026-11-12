@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { exportEstimateBytes, exportFilmPixels, exportFramedDims, exportGifDims, exportGifEstimateBytes, exportPreset, exportPresetsFor, presetFps, rangeMarks } from './export-spec.ts';
+import { exportEstimateBytes, exportFilmPixels, exportFramedDims, exportGifDims, exportGifEstimateBytes, exportPreset, exportPresetsFor, presetFps, rangeMarks, sizeTargetBitrate, sizeTargetLeast, targetAudioBps, targetEstimateBytes, TARGET_MBPS } from './export-spec.ts';
 import { filmFrameBox } from './film-frame.ts';
 
 const stage = { w: 1920, h: 1080 };
@@ -126,4 +126,21 @@ test('a platform gets the film\'s own frames a second, up to the most it shows',
   assert.equal(presetFps(bilibili, 23.976), 23.976);
   assert.equal(presetFps(douyin, 60), 30, 'up to what the platform shows');
   assert.equal(presetFps(douyin, 0), 30, 'no rate known: the platform\'s');
+});
+
+test('a file size becomes a bitrate that leaves room for the sound and the encoder, and the size shown is under it', () => {
+  /* 12 s under 8 MB with AAC: 4.86 Mb/s for the picture (measured at 6.92 MB) */
+  const h264 = sizeTargetBitrate('h264', 8e6, 12_000, targetAudioBps('h264'));
+  assert.equal(Math.round(h264 / 1e4) / 100, 4.86);
+  assert.ok(targetEstimateBytes(h264, 12_000, targetAudioBps('h264')) < 8e6);
+  /* VP9 holds no peaks: asked less (measured: 5 MB came to 4.85) */
+  assert.ok(sizeTargetBitrate('vp9', 5e6, 12_000, targetAudioBps('vp9')) < sizeTargetBitrate('h264', 5e6, 12_000, targetAudioBps('vp9')));
+  /* a silent film gives the sound's share to the picture */
+  assert.ok(sizeTargetBitrate('h264', 8e6, 12_000, 0) > h264);
+  /* too small for its length: nothing left, and the least it can ask is where the lowest bitrate begins */
+  assert.equal(sizeTargetBitrate('h264', 100_000, 60_000, targetAudioBps('h264')), 0);
+  const least = sizeTargetLeast('h264', 60_000, targetAudioBps('h264'));
+  assert.ok(sizeTargetBitrate('h264', least, 60_000, targetAudioBps('h264')) >= TARGET_MBPS[0] * 1e6 - 1);
+  assert.ok(sizeTargetBitrate('h264', least * 0.98, 60_000, targetAudioBps('h264')) < TARGET_MBPS[0] * 1e6);
+  assert.equal(sizeTargetBitrate('h264', 8e6, 0, 0), 0);
 });

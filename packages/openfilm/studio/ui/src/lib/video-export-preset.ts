@@ -10,6 +10,13 @@ export interface VideoExportSettings {
   shortEdge: number;
   fps: number | 'source';
   quality: ExportQuality;
+  /** A delivery's target in place of the quality (export-spec TARGET_CODECS): the picture's bitrate, or the whole
+      file's size; null: the quality. */
+  target: 'bitrate' | 'size' | null;
+  /** The picture's bitrate asked, in Mb/s. */
+  targetMbps: number;
+  /** The file's size asked, in MB of a million bytes: under the limit however it is counted. */
+  targetMB: number;
   frame: FilmFrameId | 'current';
   fill: FilmFrameFill;
   audio: boolean;
@@ -28,6 +35,9 @@ export const DEFAULT_VIDEO_EXPORT: VideoExportSettings = {
   shortEdge: 1080,
   fps: 'source',
   quality: 'high',
+  target: null,
+  targetMbps: 8,
+  targetMB: 50,
   frame: 'current',
   fill: 'contain',
   audio: true,

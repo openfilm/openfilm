@@ -177,7 +177,9 @@ export async function render(args, opts = {}) {
   let format = chip ? { ...own, ...chip.format } : own;
   let encoder = chip?.encoder ?? encoderOf(own.video);
   let onChip = !!chip;
-  const workers = Math.max(1, Math.min(pool ? lent.length : Number(opts.workers ?? defaultWorkers(machine(), total)), total));
+  /* `partSeconds` (a host encoding at a bitrate): each part that long at least, and no more browsers than parts */
+  const chunks = chunksOf(f0, f1, fps, opts.partSeconds);
+  const workers = Math.max(1, Math.min(pool ? lent.length : Number(opts.workers ?? defaultWorkers(machine(), total)), total, chunks.length));
   /** @type {string[]} videos whose copy could not be made: drawn as they are, said as it happens and in the result */
   const uncopied = [];
   /* the videos get copies this browser plays: those it does not decode here (ProRes; HEVC without a chip for it), and
@@ -207,7 +209,6 @@ export async function render(args, opts = {}) {
      (render-resume.mjs). A pool's process draws several renders at once, each into a folder of its own */
   const store = chunkStore(outDir(dir, 'render'), opts.resumeAs ?? out, extname(out));
   const work = store.folder;
-  const chunks = chunksOf(f0, f1, fps);
   const settingsFor = (/** @type {typeof format} */ f) => settingsOf({ entry, root, frames: [f0, f1], fps: ffmpegRate(rate), size, scale, samples, shutter, alpha,
     duration: Number.isFinite(end) ? end : null, fine: !!opts.fine, spans: selection?.spans ?? null, format: f,
     ...(alpha && samples > 1 ? { alphaMix: 1 } : {}) });

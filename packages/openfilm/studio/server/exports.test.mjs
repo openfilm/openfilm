@@ -322,6 +322,33 @@ test('a cancelled export stops and leaves no file, and a bad ask is refused befo
   }
 });
 
+test('a bitrate is held on the processor, near it on average and under it with its peaks held there; a wrong one is refused', ffmpeg, async () => {
+  const exports = createExports();
+  for (const bad of [{ kind: 'video', bitrate: 50_000 }, { kind: 'video', bitrate: 3e8 }, { kind: 'video', bitrate: '4M' }, { kind: 'video', bitrate: 4e6, quality: 'high' },
+    { kind: 'video', codec: 'prores422hq', bitrate: 4e6 }, { kind: 'video', codec: 'hevc_alpha', bitrate: 4e6 }, { kind: 'video', maxrate: 4e6 },
+    { kind: 'video', bitrate: 4e6, maxrate: 3e6 }, { kind: 'video', bitrate: 4e6, maxrate: 9e6 }]) {
+    assert.throws(() => exports.start(project(), bad), ExportError, JSON.stringify(bad));
+  }
+  /* six seconds of moving noise, a picture no encoder makes small: one part of six seconds (no shorter one is left at the end) */
+  const folder = join(scratch, 'Rate');
+  mkdirSync(folder);
+  writeFileSync(join(folder, 'noise.html'), `<!doctype html><body style="margin:0"><canvas id="c" width="320" height="180"></canvas>
+<script>const c=document.getElementById('c').getContext('2d');window.film={duration:6,width:320,height:180,frame(t){let s=Math.floor(t*30)+1;
+const im=c.createImageData(320,180);for(let i=0;i<im.data.length;i+=4){s=(s*1664525+1013904223)>>>0;im.data[i]=im.data[i+1]=im.data[i+2]=s>>>24;im.data[i+3]=255}c.putImageData(im,0,0)}}</script></body>`);
+  writeFileSync(join(folder, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ src: 'noise.html', id: 'noise' }] }] }));
+  const rate = (file) => {
+    const bytes = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=size', '-of', 'csv=p=0', file], { encoding: 'utf8' })
+      .trim().split('\n').reduce((n, size) => n + Number(size), 0);
+    return (bytes * 8) / Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], { encoding: 'utf8' }));
+  };
+  const average = await exported({ kind: 'video', bitrate: 400_000, audio: false }, 'Rate', folder);
+  assert.equal(average.encoder, 'libx264', 'never the chip: its encoders do not hold a rate');
+  assert.ok(Math.abs(rate(average.out) / 400_000 - 1) < 0.1, `near the rate: ${Math.round(rate(average.out) / 1000)}k`);
+  const capped = await exported({ kind: 'video', bitrate: 400_000, maxrate: 400_000, audio: false }, 'Rate', folder);
+  /* within the twentieth a file size leaves (export-spec.ts): the encoder's buffer of a second can start full */
+  assert.ok(rate(capped.out) <= 400_000 * 1.05, `its peaks held to it: ${Math.round(rate(capped.out) / 1000)}k`);
+});
+
 test('a video exported at a loudness has its sound there, true peaks under -1 dBTP (render --loudness, #323)', ffmpeg, async () => {
   const { loudnessOf } = await import('../../src/loudness.mjs');
   const done = await exported({ kind: 'video', loudness: -23 }, 'Loud');
@@ -1546,7 +1573,7 @@ test('the API: where exports go and what can be made here; several at once; open
     const listed = await (await api(`/projects/${project.id}/exports`)).json();
     assert.deepEqual(listed.exports, []);
     assert.equal(listed.folder, exportsRoot());
-    assert.deepEqual(Object.keys(listed.can).sort(), ['h264', 'hevc', 'hevcAlpha', 'mp3', 'prores', 'proresChip', 'vp9']);
+    assert.deepEqual(Object.keys(listed.can).sort(), ['h264', 'hevc', 'hevcAlpha', 'hevcBitrate', 'mp3', 'prores', 'proresChip', 'vp9']);
     assert.deepEqual(Object.keys(listed.drafts).sort(), ['capcut', 'jianying'], 'whether 剪映 and CapCut are here, for an editing project');
     assert.equal(listed.subtitles, 0, 'no subtitle cues in a new project');
     const bad = await api(`/projects/${project.id}/exports`, { method: 'POST', body: { jobs: [{ kind: 'audio' }, { kind: 'slides', format: 'key' }] } });

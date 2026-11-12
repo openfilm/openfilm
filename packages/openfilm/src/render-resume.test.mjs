@@ -35,6 +35,18 @@ test('a film is cut in chunks of whole seconds, one to ten, by its frames alone:
   assert.equal(chunksOf(95, 400, 30)[0].b, 125);
 });
 
+test('a render held to a bitrate has chunks of five seconds at least, a shorter last one joined to the one before', () => {
+  const seconds = (chunks) => chunks.map((c) => (c.b - c.a) / 30);
+  /* twelve seconds: five, then seven (two would not settle at the rate) */
+  assert.deepEqual(seconds(chunksOf(0, 360, 30, 5)), [5, 7]);
+  assert.deepEqual(seconds(chunksOf(0, 1200, 30, 5)), [5, 5, 5, 5, 5, 5, 5, 5]);
+  /* a long film keeps its ten-second chunks; one of three seconds is one chunk */
+  assert.deepEqual(seconds(chunksOf(0, 54_000, 30, 5)).slice(0, 2), [10, 10]);
+  assert.deepEqual(seconds(chunksOf(0, 90, 30, 5)), [3]);
+  /* without it, as before */
+  assert.deepEqual(seconds(chunksOf(0, 360, 30)), [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+});
+
 test('a small file is known by what is in it, a large one by its size and time; one gone is nothing', () => {
   const dir = scratch();
   try {

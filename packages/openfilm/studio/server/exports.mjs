@@ -10,13 +10,17 @@
  *
  * What an export asks (POST exports, one ask or `{ jobs: [ask…], folder? }`):
  *
- *   { kind: 'video', codec?, frame?, fill?, shortEdge?, fps?, quality?, audio?, clip?, scale?, preset?, sidecar?, loudness? }
+ *   { kind: 'video', codec?, frame?, fill?, shortEdge?, fps?, quality?, bitrate?, maxrate?, audio?, clip?, scale?, preset?, sidecar?, loudness? }
  *       codec    h264 (default) | hevc | vp9 | prores422hq | prores4444 | hevc_alpha | png (a zipped PNG sequence);
  *                vp9, prores4444, hevc_alpha and png keep transparency
  *       frame    native (default), or a ratio W:H from 1:4 to 4:1 (16:9, 9:16, 4:5, 2.39:1…): a delivery frame around
  *                the film, which is fitted with bars (fill: 'contain', default) or fills it and is cropped (fill: 'cover')
  *       shortEdge the picture's short side in pixels (default: the film's own size)
  *       clip     only this clip of film.html (by id), from its start, at the stage's size × `scale` (default 1)
+ *       bitrate  the picture's average bits a second (BITRATE_RANGE), instead of a quality: a delivery's rate or
+ *                size, for h264, hevc and vp9 (see targetEncoding)
+ *       maxrate  with a bitrate, its peaks over a second, bitrate to twice it (default: a fifth over); a file size's
+ *                bitrate is asked with its peaks at it, so the file never comes out over
  *       preset   a platform's name, for the file name
  *       sidecar  'srt' | 'vtt': the subtitles as a file beside the video too
  *       loudness the sound brought to this many LUFS (-70 to -5), true peaks under -1 dBTP (render --loudness);
@@ -108,7 +112,7 @@ export { exportsRoot };
  * @typedef {'standard' | 'high' | 'master'} Quality
  * @typedef {{ frame?: FrameId, fill?: 'contain' | 'cover', burnSubtitles?: boolean }} Framing
  * @typedef {Framing & { kind: 'video', codec?: VideoCodec, shortEdge?: number, scale?: number,
- *   fps?: number, quality?: Quality, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean, loudness?: number,
+ *   fps?: number, quality?: Quality, bitrate?: number, maxrate?: number, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean, loudness?: number,
  *   samples?: number, shutter?: number }} VideoAsk
  * @typedef {Framing & { kind: 'gif', width?: number, fps?: number }} GifAsk
  * @typedef {{ kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean, stems?: boolean, loudness?: number }} AudioAsk
@@ -151,6 +155,8 @@ export async function exportCapabilities() {
   return {
     h264: have.has('libx264'),
     hevc: have.has('libx265') || have.has('hevc_videotoolbox'),
+    /* a bitrate held on the processor (targetEncoding): HEVC's needs libx265 */
+    hevcBitrate: have.has('libx265'),
     hevcAlpha: have.has('hevc_videotoolbox'),
     vp9: have.has('libvpx-vp9'),
     prores: have.has('prores_ks') || have.has('prores_videotoolbox'),
@@ -290,6 +296,9 @@ export async function sweep(dir, pattern) {
 
 const ALPHA_CODECS = new Set(['vp9', 'prores4444', 'hevc_alpha', 'png']);
 const CODECS = ['h264', 'hevc', 'vp9', 'prores422hq', 'prores4444', 'hevc_alpha', 'png'];
+/** The codecs a bitrate can be asked of (targetEncoding), and the bitrates, in bits a second. */
+const TARGET_CODECS = ['h264', 'hevc', 'vp9'];
+const BITRATE_RANGE = /** @type {const} */ ([100_000, 200_000_000]);
 const CODEC_EXT = /** @type {Record<VideoCodec, string>} */ ({ h264: '.mp4', hevc: '.mp4', vp9: '.webm', prores422hq: '.mov', prores4444: '.mov', hevc_alpha: '.mov', png: '.zip' });
 const SOUND_CODECS = /** @type {Record<string, string[]>} */ ({ wav: ['-c:a', 'pcm_s16le'], m4a: ['-c:a', 'aac', '-b:a', '256k'], mp3: ['-c:a', 'libmp3lame', '-b:a', '256k'] });
 
@@ -349,6 +358,12 @@ function checked(/** @type {ExportAsk} */ ask) {
       if (ask.samples !== undefined && (!Number.isInteger(ask.samples) || !between(ask.samples, 1, 64))) throw new ExportError('samples: 1 to 64 whole samples');
       if (!between(ask.shutter, 0, 1)) throw new ExportError('shutter: 0 to 1');
       if (ask.quality !== undefined && !['standard', 'high', 'master'].includes(ask.quality)) throw new ExportError('quality: standard, high or master');
+      if (ask.bitrate !== undefined) {
+        if (ask.quality !== undefined) throw new ExportError('choose a quality or a bitrate, not both');
+        if (!TARGET_CODECS.includes(ask.codec ?? 'h264')) throw new ExportError(`bitrate: for ${TARGET_CODECS.join(', ')}`);
+        if (!isNum(ask.bitrate) || !between(ask.bitrate, ...BITRATE_RANGE)) throw new ExportError(`bitrate: ${BITRATE_RANGE[0] / 1e6} to ${BITRATE_RANGE[1] / 1e6} Mb/s, in bits a second`);
+      }
+      if (ask.maxrate !== undefined && !(ask.bitrate !== undefined && isNum(ask.maxrate) && between(ask.maxrate, ask.bitrate, ask.bitrate * 2))) throw new ExportError('maxrate: with a bitrate, from it to twice it');
       if (ask.hardware !== undefined && typeof ask.hardware !== 'boolean') throw new ExportError('hardware: true or false');
       if (ask.clip !== undefined && (typeof ask.clip !== 'string' || !ask.clip || ask.clip.length > 200)) throw new ExportError(`clip: a clip id of ${FILM_FILE}`);
       if (ask.preset !== undefined && (typeof ask.preset !== 'string' || ask.preset.length > 60)) throw new ExportError('preset: a name, at most 60 characters');
@@ -673,6 +688,35 @@ function encoding(codec, quality, size, fps, have, hw = null) {
 }
 
 /**
+ * How render should encode a codec at a bitrate asked (a delivery's rate, or a file size the dialog turned into one):
+ * on the processor, whose encoders hold an average (the chip's may not: the Mac's wrote 8.6 Mb/s on a busy picture
+ * asked for 3). Its peaks over a second are held to `peak` (a fifth over unless asked): a stretch that turns busy late
+ * in a part otherwise takes what the quiet start left, and peaks of half again came out a tenth over the rate in all.
+ * Each of render's parts is an encode held to the rate on its own, so a part is PART_SECONDS at least: shorter ones do
+ * not settle (a second's parts came out a sixth over).
+ * @param {VideoCodec} codec @param {number} bits a second @param {number | undefined} peak @param {Set<string>} have
+ */
+function targetEncoding(codec, bits, peak, have) {
+  const k = (/** @type {number} */ n) => `${Math.round(n / 1000)}k`;
+  const rate = ['-b:v', k(bits), '-maxrate', k(peak ?? bits * 1.2), '-bufsize', k(bits)];
+  switch (codec) {
+    case 'h264':
+      return { encoder: 'libx264', format: { video: ['-c:v', 'libx264', '-preset', 'medium', ...rate, ...BT709] } };
+    case 'hevc':
+      if (!have.has('libx265')) throw new ExportError('a bitrate for HEVC needs ffmpeg with libx265');
+      return { encoder: 'libx265', format: { video: ['-c:v', 'libx265', '-preset', 'medium', ...rate, '-x265-params', 'log-level=error', '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
+    case 'vp9':
+      /* libvpx holds the average alone (in one pass it takes no notice of the peaks), and goes no coarser than its
+         last quantizer: a picture of noise asked for a low rate comes out over it */
+      return { encoder: 'libvpx-vp9', format: { video: ['-c:v', 'libvpx-vp9', ...rate, '-row-mt', '1', ...BT709] } };
+    default:
+      throw new ExportError(`bitrate: for ${TARGET_CODECS.join(', ')}`);
+  }
+}
+/** The seconds of each part render encodes at a bitrate asked, at least (targetEncoding). */
+const PART_SECONDS = 5;
+
+/**
  * Whether a video with an alpha channel lets anything through: a few frames' alpha, sampled. Null when it can't be
  * read here.
  * @param {string} file @param {boolean} vp9
@@ -927,14 +971,15 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const fps = ask.fps;
       const quality = ask.quality ?? 'high';
       const have = await encoders();
-      const chipFor = chipCodec(codec, quality);
+      /* a bitrate asked is held on the processor (targetEncoding) */
+      const chipFor = ask.bitrate ? null : chipCodec(codec, quality);
       const hw = ask.hardware !== false && chipFor ? await hardwareEncoder(chipFor, have) : null;
       /** @param {string | null} chip */
       const how = (chip) => {
-        const { encoder, format } = encoding(codec, quality, size, fps ?? 30, have, chip);
+        const { encoder, format } = ask.bitrate ? targetEncoding(codec, ask.bitrate, ask.maxrate, have) : encoding(codec, quality, size, fps ?? 30, have, chip);
         const container = /** @type {{ pix?: string }} */ (format).pix ?? (codec === 'h264' || codec === 'hevc' ? YUV_709('yuv420p') : codec === 'vp9' ? YUV_709('yuva420p') : 'format=yuva444p10le');
         /* master: frames taken as PNG and footage read from copies near the file (`fine`), so nothing on the way bands */
-        return { encoder, opts: { fps, samples: ask.samples, shutter: ask.shutter, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(quality === 'master' ? { fine: true } : {}), ...(clip || burn ? { root } : {}) } };
+        return { encoder, opts: { fps, samples: ask.samples, shutter: ask.shutter, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(quality === 'master' ? { fine: true } : {}), ...(ask.bitrate ? { partSeconds: PART_SECONDS } : {}), ...(clip || burn ? { root } : {}) } };
       };
       let { encoder, opts } = how(hw);
       update(job, { encoder });
