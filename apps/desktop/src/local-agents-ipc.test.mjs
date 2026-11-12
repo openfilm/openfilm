@@ -113,3 +113,37 @@ setInterval(() => {}, 1000);
     setChosenPaths({});
   }
 });
+
+test("a long agent record is read into the turn's model log off the main thread: the app answers meanwhile (#431)", async () => {
+  const { keepAgentRecord } = await import('./local-agents-ipc.mjs');
+  const { claudeProjectName } = await import('./agent-records.mjs');
+  const home = mkdtempSync(join(tmpdir(), 'of-record-'));
+  const cwd = join(home, 'film');
+  mkdirSync(join(cwd, '.film'), { recursive: true });
+  const dir = join(home, 'claude', 'projects', claudeProjectName(cwd));
+  mkdirSync(dir, { recursive: true });
+  /* a turn of many requests, each tool result long: every request carries all of them again */
+  const at = (n) => new Date(Date.UTC(2026, 10, 12, 0, 0, 0, n)).toISOString();
+  const rows = [{ type: 'user', uuid: 'u0', parentUuid: null, timestamp: at(1), message: { role: 'user', content: [{ type: 'text', text: 'Make a film' }] } }];
+  const ROUNDS = 300;
+  for (let i = 0; i < ROUNDS; i += 1) {
+    rows.push({ type: 'assistant', uuid: `r${i}`, parentUuid: rows.at(-1).uuid, timestamp: at(10 + i * 4), requestId: `req${i}`,
+      message: { id: `msg${i}`, model: 'claude-x', role: 'assistant', content: [{ type: 'tool_use', id: `tu${i}`, name: 'Bash', input: { command: 'openfilm look' } }], stop_reason: 'tool_use', usage: { input_tokens: 1, output_tokens: 1 } } });
+    rows.push({ type: 'user', uuid: `u${i + 1}`, parentUuid: `r${i}`, timestamp: at(12 + i * 4), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `tu${i}`, content: `${i} ${'x'.repeat(40_000)}`, is_error: false }] } });
+  }
+  writeFileSync(join(dir, 'sess-long-1.jsonl'), rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  /* the longest the main thread went without a tick while the record was read */
+  let last = performance.now(), longest = 0;
+  const tick = setInterval(() => { const now = performance.now(); longest = Math.max(longest, now - last); last = now; }, 5);
+  const logged = [];
+  try {
+    await keepAgentRecord({ agent: 'claude', sessionId: 'sess-long-1', cwd, turnId: 'local:long1', from: 0, to: Date.now(), settleMs: 0, env: { CLAUDE_CONFIG_DIR: join(home, 'claude') }, log: (line) => logged.push(line) });
+    /* (a tick after it, to count a stretch that ran up to its end) */
+    await new Promise((done) => setTimeout(done, 30));
+  } finally { clearInterval(tick); }
+  assert.deepEqual(logged, []);
+  const { logsDir } = await import('./chat-store.mjs');
+  const { readFileSync } = await import('node:fs');
+  assert.equal(readFileSync(join(logsDir(cwd), 'local-long1.model.jsonl'), 'utf8').trim().split('\n').length, ROUNDS);
+  assert.ok(longest < 250, `the main thread stood still for ${Math.round(longest)} ms`);
+});

@@ -12,6 +12,8 @@ import { watch } from './watch.mjs';
 
 const MEDIA = /\.(mp4|mov|m4v|webm|mkv|avi|png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|flac)$/i;
 const CELL_WIDTH = 480;
+/* the long edge of a single frame look writes: about what a model service reads a picture at without shrinking it */
+const FRAME_EDGE = 1568;
 /* VP9's and VP8's alpha is a side channel ffmpeg's own decoders drop: libvpx reads it, when this ffmpeg has it */
 const LIBVPX = { vp9: 'libvpx-vp9', vp8: 'libvpx' };
 let decoders;
@@ -81,12 +83,13 @@ export async function look(args, opts = {}) {
     const shoot = async (t) => { await film.seek(clamp(t)); return film.capture({ format: 'png' }); };
 
     if (at != null) {
-      // One frame at full size, and the same frame again after another one: it must not change.
+      // One frame, and the same frame again after another one: it must not change.
       const t = clamp(at);
       if (at >= dur) warnings.push(`${fmt(at)} is past the film's end (${fmt(dur)}): its last frame is drawn`);
       const png = await shoot(t);
-      const file = join(dir, `${fmt(t)}.png`);
-      writeFileSync(file, png);
+      const frame = framePicture(png, dir);
+      const file = join(dir, `${fmt(t)}.${frame.ext}`);
+      writeFileSync(file, frame.data);
       files.push(file);
       /* another frame between: half the film away, or a second on for a page with no end */
       await shoot(Number.isFinite(dur) ? (t < dur / 2 ? t + dur / 2 : t - dur / 2) : t + 1);
@@ -311,6 +314,29 @@ function cellPicture(png, dir) {
   finally { rmSync(`${stem}-in.png`, { force: true }); rmSync(`${stem}.png`, { force: true }); }
 }
 
+/**
+ * A single frame as look writes it: a JPEG at most FRAME_EDGE on its long edge, light enough for an agent to keep
+ * several in a conversation (a full 4K frame as PNG is 5 to 11 MB, sent again with every request after it). A frame
+ * with alpha stays a PNG, at most as large, so what a layer draws is judged without a ground it never asked for. The
+ * frame as it is when ffmpeg cannot.
+ * @param {Buffer} png @param {string} dir @returns {{ data: Buffer, ext: 'jpg' | 'png' }}
+ */
+export function framePicture(png, dir) {
+  /* the browser and ffmpeg write RGB when nothing shows through: alpha is the color types with it */
+  const alpha = png[25] === 4 || png[25] === 6;
+  if (alpha && Math.max(png.readUInt32BE(16), png.readUInt32BE(20)) <= FRAME_EDGE) return { data: png, ext: 'png' };
+  const ext = alpha ? 'png' : 'jpg';
+  const stem = join(dir, `.frame-${process.pid}-${hash(png)}`);
+  try {
+    writeFileSync(`${stem}-in.png`, png);
+    const fit = `scale=w='min(${FRAME_EDGE},iw)':h='min(${FRAME_EDGE},ih)':force_original_aspect_ratio=decrease:flags=lanczos`;
+    const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-i', `${stem}-in.png`, '-vf', `${fit},format=${alpha ? 'rgba' : 'yuvj444p'}`,
+      ...(alpha ? [] : ['-q:v', '2']), '-frames:v', '1', '-update', '1', `${stem}.${ext}`], { timeout: 30_000, windowsHide: true });
+    return r.status === 0 ? { data: readFileSync(`${stem}.${ext}`), ext } : { data: png, ext: 'png' };
+  } catch { return { data: png, ext: 'png' }; }
+  finally { rmSync(`${stem}-in.png`, { force: true }); rmSync(`${stem}.${ext}`, { force: true }); }
+}
+
 async function sheet(browser, shots, meta, from, to, wave, marks, label = 'sound mix') {
   const cols = shots.length <= 4 ? shots.length : shots.length <= 9 ? 3 : 4;
   const cellW = CELL_WIDTH;
@@ -386,8 +412,8 @@ export async function watchLines(file, fps, from, to, { decode = [], alpha = fal
 }
 
 /**
- * A media file on its own, to choose what to use from it: frames across the file (or a range, or one second at
- * full size) and its own sound, from ffmpeg. Output goes to the project's .film/cache/look (see homeFor).
+ * A media file on its own, to choose what to use from it: frames across the file (or a range, or one frame, as
+ * framePicture writes it) and its own sound, from ffmpeg. Output goes to the project's .film/cache/look (see homeFor).
  * `full`: a video's every frame is watched too (watchLines), as a rendered film is checked.
  */
 async function lookMedia(target, at, range, opts) {
@@ -423,8 +449,9 @@ async function lookMedia(target, at, range, opts) {
   if (video && (at != null || still)) {
     if (opts.full && !still) watched.push('! --full watches a stretch of frames, not one: give a range (a-b) or none');
     const t = still ? 0 : Math.min(Math.max(0, at), Math.max(0, dur - 0.04));
-    const out = join(dir, still ? `${name}.png` : `${name}-${fmt(t)}.png`);
-    writeFileSync(out, grab(t)); files.push(out);
+    const frame = framePicture(grab(t), dir);
+    const out = join(dir, still ? `${name}.${frame.ext}` : `${name}-${fmt(t)}.${frame.ext}`);
+    writeFileSync(out, frame.data); files.push(out);
   } else {
     const [from, to] = range ? [Math.max(0, range[0]), Math.min(range[1], dur)] : [0, dur];
     const count = Math.max(1, Math.round(opts.count ?? 12));

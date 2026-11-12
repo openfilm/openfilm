@@ -16,6 +16,7 @@ import { FILM_SUBTITLE_DEFAULT, filmSubtitleShown, isFilmSubtitleLanguage, subti
 export { subtitleStyleVtt };
 import { FileError, inside } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
+import { studioWrote } from './person-edits.mjs';
 
 /** Where Studio puts a caption track's file it makes. */
 export const CAPTIONS_FOLDER = 'captions';
@@ -221,7 +222,8 @@ async function subtitlesTrack(root, name, clips = null) {
  * words timed has one; nothing is transcribed here). With no such track in the film, and none made before (a file of
  * them in captions/ the film has no track for is one the person took out), a track of them is put on top once
  * something is said. One in the film still as Studio wrote it (untouchedSpeech) is written again when what is said
- * changes, its look kept (a cue's own look goes: the cues are new); one the person changed by hand is theirs.
+ * changes, its look kept (a cue's own look goes: the cues are new); one the person changed by hand is theirs. Either
+ * write is Studio's own, so the agents are told of it (person-edits.mjs studioWrote).
  * @param {string} root @param {{ name?: unknown, label: string }} o
  * @returns {Promise<{ made?: string, updated?: string }>}
  */
@@ -248,6 +250,7 @@ export async function syncSpeechCaptions(root, { name, label }) {
     const next = writeVtt({ ...was, notes: said.notes, styles, cues: said.cues.map((c) => ({ ...c, settings: was.cues[0]?.settings ?? c.settings })) });
     if (next === writeVtt(was)) return {};
     await writeAtomic(captionFile(root, speech.src), next);
+    studioWrote(root, `file\0${speech.src}`, `Studio wrote ${speech.src} again to match what is said in the film now.`);
     return { updated: speech.src };
   }
   if (!said.cues.length) return {};
@@ -257,5 +260,7 @@ export async function syncSpeechCaptions(root, { name, label }) {
   }
   const made = await subtitlesTrack(root, name ?? label);
   await editProjectFilm(root, null, [{ op: 'captions', at: 0, captions: { src: made.src, kind: 'captions', label } }]);
+  /* made by Studio, not asked for: the agent is told, so a film.html it wrote from an earlier copy is not a surprise */
+  studioWrote(root, `track\0${made.src}`, `Studio added a caption track of what is said to film.html: ${made.src}.`);
   return { made: made.src };
 }

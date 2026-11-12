@@ -392,8 +392,10 @@ export function writeModelLog(project, turnId, lines) {
   const kept = [];
   let size = 0;
   for (const [i, call] of lines.entries()) {
-    const line = keptLine(project, JSON.stringify(call));
-    if (size + line.length > MODEL_LOG_MAX) {
+    /* a request longer than a string can be (RangeError) is past MODEL_LOG_MAX too */
+    let line = null;
+    try { line = keptLine(project, JSON.stringify(call)); } catch (e) { if (!(e instanceof RangeError)) throw e; }
+    if (line == null || size + line.length > MODEL_LOG_MAX) {
       kept.push(JSON.stringify({ t: Date.now(), kind: 'cut', max: MODEL_LOG_MAX, dropped: lines.length - i }));
       break;
     }

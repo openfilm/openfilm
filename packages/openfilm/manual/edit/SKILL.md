@@ -77,7 +77,7 @@ A folder:
 - The picture is captured once `frame` returns, or once the Promise it returns resolves. Create a WebGL context with `preserveDrawingBuffer: true`.
 - A page has no sound: every sound is a clip in film.html. A shot's sound effect goes at the film second it plays: the page clip's `at`, plus the page's t, less the clip's in point (a hit at t = 2 in a clip at 5 goes at 7). When you move the page clip, move its sounds with it.
 
-The words of a sound or a video are a WebVTT beside it with the same name (`vo/1.wav` → `vo/1.vtt`): a cue per subtitle line, a timestamp tag at each word. When the person asks for captions, Studio makes a caption track of them (SPEC: Captions); never draw subtitles in a page.
+The words of a sound or a video are a WebVTT beside it with the same name (`vo/1.wav` → `vo/1.vtt`): a cue per subtitle line, a timestamp tag at each word. When the first words timed this way come in, Studio adds a caption track of them to film.html by itself (SPEC: Captions); never draw subtitles in a page.
 
 ## Seeing it
 

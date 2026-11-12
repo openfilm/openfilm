@@ -64,12 +64,12 @@ openfilm skill remove <name>
   look: `openfilm look [what] [t | a-b]
 
   what   the project (default), a web page (.html), or a media file (video, image, sound)
-  t      one frame at full size, e.g. 4.5
+  t      one frame, e.g. 4.5: a JPEG at most 1568 px on its long edge (a PNG when it has transparency)
   a-b    a dense sheet of a stretch, e.g. 3-6
          without either: a contact sheet of the whole thing, its sound and loudness, and a check that
          the same t draws the same picture
 
-  Writes PNGs under .film/cache/look/ of the project and prints their paths. A project Studio has not shown yet is
+  Writes pictures under .film/cache/look/ of the project and prints their paths. A project Studio has not shown yet is
   opened in Studio first, so the person watches it.
 
   --count <n>     frames in a sheet (12)
