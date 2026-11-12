@@ -62,6 +62,6 @@ test('the generated .cmd keeps % and & literal when cmd.exe runs it', { skip: pr
     }));
     const out = execFileSync('cmd', ['/c', script], { encoding: 'utf8' });
     assert.match(out, /PLAYWRIGHT_BROWSERS_PATH=C:\\OpenFilm\\R&D%\\pw/);
-    assert.match(out, /PATH=C:\\R&D\\ffmpeg;/);
+    assert.match(out, /^Path=C:\\R&D\\ffmpeg;/im, 'cmd prints the variable as Path');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
