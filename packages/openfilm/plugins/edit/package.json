@@ -1,0 +1,7 @@
+{
+  "name": "openfilm-edit",
+  "private": true,
+  "bin": {
+    "add": "add.mjs"
+  }
+}

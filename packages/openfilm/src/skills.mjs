@@ -69,7 +69,7 @@ export const COMMAND_NAME = /^[a-z][a-z0-9-]{0,31}$/;
  * @param {string} folder @param {string} name the plugin's
  * @returns {Record<string, string> | undefined} command → its file, in the folder
  */
-function commandsIn(folder, name) {
+export function commandsIn(folder, name) {
   let bin;
   try { bin = JSON.parse(readFileSync(join(folder, 'package.json'), 'utf8'))?.bin; } catch { return undefined; }
   const entries = typeof bin === 'string' ? [[name, bin]] : bin && typeof bin === 'object' && !Array.isArray(bin) ? Object.entries(bin) : [];

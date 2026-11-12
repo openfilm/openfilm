@@ -580,5 +580,5 @@ function mintClipId(/** @type {string[]} */ used, /** @type {string | undefined}
 }
 
 /** Studio's kind of a clip (mg, video, audio) and of a track (from what is on it). */
-const studioKind = (/** @type {Clip} */ clip) => { const k = kindOf(clip); return k === 'page' ? 'mg' : k === 'sound' ? 'audio' : 'video'; };
-const trackKind = (/** @type {Track} */ track) => { const kinds = new Set(track.clips.map((c) => studioKind(c))); return kinds.size === 1 ? [...kinds][0] : 'video'; };
+export const studioKind = (/** @type {Clip} */ clip) => { const k = kindOf(clip); return k === 'page' ? 'mg' : k === 'sound' ? 'audio' : 'video'; };
+export const trackKind = (/** @type {Track} */ track) => { const kinds = new Set(track.clips.map((c) => studioKind(c))); return kinds.size === 1 ? [...kinds][0] : 'video'; };

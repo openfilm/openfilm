@@ -4,7 +4,8 @@
  * run for whoever asks: an agent, the person, another plugin. A command is the plugin's way of doing something for
  * others that changing a file cannot do; what it does and takes is said in the plugin's SKILL.md.
  *
- * The plugin is named as a skill is: by its name, or `owner/name` when two have that name (a project's own first,
+ * OpenFilm's own plugins bring theirs the same way (plugins/<id>/package.json), and are named by their id first. One
+ * someone made is named as a skill is: by its name, or `owner/name` when two have that name (a project's own first,
  * then the person's, then the installed). It runs only while the plugin is on. A `.js`, `.mjs` or `.cjs` file is run
  * by this Node; any other file is run as it is (its first line says by what). It is given every word after its name
  * as it was typed, the folder it was run in, and:
@@ -15,23 +16,33 @@
  */
 import { spawn } from 'node:child_process';
 import { extname, join } from 'node:path';
-import { keeps, listSkills, skillsOff } from './skills.mjs';
+import { PLUGINS, pluginStates, pluginsDir } from './plugins.mjs';
+import { commandsIn, keeps, listSkills, skillsOff } from './skills.mjs';
 import { projectAround } from './skills-cli.mjs';
 
 /**
  * What `openfilm <words…>` names among the plugins' commands, or null when its first word names no plugin with one.
- * @param {string[]} words @param {{ cwd?: string, home?: string, mine?: string, official?: string }} [where]
- * @returns {null | { error: string, status: number } | { plugin: import('./skills.mjs').Skill, command: string, file: string, rest: string[], project: string | null }}
+ * `plugins`: where OpenFilm's own plugins are (for a test).
+ * @typedef {{ name: string, uid: string, folder: string, source: string, commands: Record<string, string> }} Having a plugin with commands
+ * @param {string[]} words @param {{ cwd?: string, home?: string, mine?: string, official?: string, plugins?: string }} [where]
+ * @returns {null | { error: string, status: number } | { plugin: Having, command: string, file: string, rest: string[], project: string | null }}
  */
-export function pluginCommand(words, { cwd = '.', home, ...places } = {}) {
+export function pluginCommand(words, { cwd = '.', home, plugins = pluginsDir(), ...places } = {}) {
   const [key, ...after] = words;
   if (!key) return null;
   const project = projectAround(cwd);
-  const having = listSkills({ project, ...places }).filter((s) => s.commands && (key.includes('/') ? s.uid === key : s.name === key));
+  /* OpenFilm's own, by its id: its skill is what says what its commands do */
+  const own = PLUGINS.find((p) => p.id === key);
+  const ownCommands = own ? commandsIn(join(plugins, own.id), own.id) : undefined;
+  /** @type {Having[]} */
+  const having = own && ownCommands
+    ? [{ name: own.id, uid: own.skills[0] ?? own.id, folder: join(plugins, own.id), source: 'own', commands: ownCommands }]
+    : listSkills({ project, ...places }).flatMap((s) => (s.commands && (key.includes('/') ? s.uid === key : s.name === key) ? [{ name: s.name, uid: s.uid, folder: s.folder, source: s.source, commands: s.commands }] : []));
   if (!having.length) return null;
   if (having.length > 1) return { status: 2, error: `Two plugins are named ${key}: say which, ${having.map((s) => `\`openfilm ${s.uid}\``).join(' or ')}.` };
-  const plugin = having[0], commands = /** @type {Record<string, string>} */ (plugin.commands);
-  if (keeps(new Set(skillsOff(home)), plugin)) return { status: 1, error: `The ${plugin.name} plugin is off: the person turns it on in the library's Plugins tab.` };
+  const plugin = having[0], commands = plugin.commands;
+  const off = plugin.source === 'own' ? !pluginStates(home).find((p) => p.id === plugin.name)?.on : keeps(new Set(skillsOff(home)), plugin);
+  if (off) return { status: 1, error: `The ${plugin.name} plugin is off: the person turns it on in the library's Plugins tab.` };
   /* one command named after the plugin: `openfilm <plugin> …` is it; else the next word says which */
   const names = Object.keys(commands);
   const whole = names.length === 1 && names[0] === plugin.name;

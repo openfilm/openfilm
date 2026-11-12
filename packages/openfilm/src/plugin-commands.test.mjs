@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pluginCommand, runPluginCommand } from './plugin-commands.mjs';
+import { pluginsDir, setPluginOn } from './plugins.mjs';
 import { setSkillOn } from './skills.mjs';
 
 /** A plugin folder: a SKILL.md, a package.json with `bin`, and its files. */
@@ -72,6 +73,25 @@ test('a plugin that is off runs nothing, and two of one name are told apart', ()
   assert.equal(two.status, 2);
   assert.match(two.error, /^Two plugins are named outline: say which, `openfilm project\/outline` or `openfilm local\/outline`\.$/);
   assert.equal(pluginCommand(['project/outline', 'list'], where).plugin.source, 'project');
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('OpenFilm\'s own plugins bring commands the same way, named by their id, and run only while on', () => {
+  const { root, where } = places();
+  const found = pluginCommand(['edit', 'add', 'assets/a.mp4'], where);
+  assert.deepEqual([found.command, found.file, found.rest, found.plugin.source], ['add', join(pluginsDir(), 'edit', 'add.mjs'), ['assets/a.mp4'], 'own']);
+  /* its skill is what says what its commands do */
+  assert.match(pluginCommand(['edit'], where).error, /^Its commands: `openfilm edit add`\. `openfilm skill edit` says what each does\.$/);
+  /* one someone made with the same name does not take its place: it is named owner/name */
+  plugin(join(where.mine, 'edit'), 'edit', { add: 'add.mjs' }, { 'add.mjs': '' });
+  assert.equal(pluginCommand(['edit', 'add'], where).plugin.source, 'own');
+  assert.equal(pluginCommand(['local/edit', 'add'], where).plugin.source, 'mine');
+  setPluginOn('edit', false, where.home);
+  const off = pluginCommand(['edit', 'add', 'assets/a.mp4'], where);
+  assert.equal(off.status, 1);
+  assert.match(off.error, /^The edit plugin is off: /);
+  /* a plugin of OpenFilm's with no commands is no command */
+  assert.equal(pluginCommand(['motion', 'add'], where), null);
   rmSync(root, { recursive: true, force: true });
 });
 
