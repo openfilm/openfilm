@@ -14,11 +14,12 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronRight, KeyRound, Settings } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, KeyRound, Settings } from 'lucide-react';
 import { keepFocus, Popover } from './Popover';
 import { useT } from '@/i18n';
 import { Tooltip } from '@/components/Tooltip';
 import { AgentIcon } from '@/components/AgentIcons';
+import { BrandLogo } from '@/components/BrandLogo';
 import { POPOVER_CHROME } from '@/components/ComposerCard';
 import { desktopBridge, type LocalAgentId, type RosterAgent } from '@/lib/desktop-bridge';
 import { agentModelSummary, agentOptions, currentAgent, effectivePrefs, offeredChoices, offeredOption, optionLabel, optionValue, shownAgents, useLocalAgents } from '@/state/local-agent-store';
@@ -55,17 +56,37 @@ function failureReason(error: { text: string } | undefined): string | null {
 }
 
 export function ChatAgentIcon({ id, size = 14 }: { id: LocalAgentId; size?: number }) {
+  if (id === 'openfilm') return <BrandLogo size={size} />;
   if (id === 'byok') return <KeyRound size={size} />;
   return <AgentIcon id={id} size={size} />;
+}
+
+export function CanvasModelPicker({ triggerClassName }: { triggerClassName?: string }) {
+  return <div className="of-chat min-w-0" data-canvas-writing-model=""><ModelPopover placement="top" triggerClassName={triggerClassName} /></div>;
+}
+
+export function canvasWritingModel() {
+  const state = useLocalAgents.getState();
+  const agent = currentAgent(state);
+  if (!shownAgents(state.roster).some((entry) => entry.id === agent && entry.status === 'ready')) return null;
+  const options = agentOptions(state, agent);
+  const prefs = effectivePrefs(state.prefs, agent, state.roster, options);
+  const picked: Record<string, string | number | boolean> = {};
+  for (const option of menuOptions(options, '').filter((row) => offeredOption(agent, state.roster, row))) {
+    const value = optionValue(options, prefs, option.id);
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') picked[option.id] = value;
+  }
+  return { agent, options: picked };
 }
 
 /**
  * The composer's agent menu. In a conversation, `agent` and `prefs` are the ones it goes on with (lib/conversation-agent),
  * and `onPick` and `onPref` keep a change on it too; without them, the agent and options picked last.
  */
-export function ModelPopover({ placement = 'bottom', align = 'start', agent: conversationAgent, prefs: conversationPrefs, onPick, onPref }: {
+export function ModelPopover({ placement = 'bottom', align = 'start', agent: conversationAgent, prefs: conversationPrefs, onPick, onPref, triggerClassName }: {
   placement?: 'top' | 'bottom';
   align?: 'start' | 'end';
+  triggerClassName?: string;
   agent?: LocalAgentId;
   prefs?: Partial<Record<LocalAgentId, Record<string, unknown>>>;
   onPick?: (agent: LocalAgentId) => void;
@@ -206,13 +227,16 @@ export function ModelPopover({ placement = 'bottom', align = 'start', agent: con
   const sideMenu = open && choosing && typeof document !== 'undefined' ? createPortal(
     <div ref={sideRef} onMouseEnter={() => showSide(choosing.id)} onMouseLeave={hideSideSoon}
       style={{ ...POPOVER_CHROME, padding: 4, overflowY: 'auto', ...(sideStyle ?? { position: 'fixed', left: -9999, top: 0 }) }}>
-      {/* the names only: no descriptions, and the choices the menu offers (rowChoices) */}
+      {/* The model's maker for OpenFilm, then its name; the choices follow Settings' order and visibility. */}
       {rowChoices(agent, choosing, chosenValue(choosing)).map((choice) => {
         const selected = chosenValue(choosing) === choice.value;
         return (
           <button key={String(choice.value)} type="button" onMouseDown={keepFocus}
-            onClick={() => pickChoice(choosing, choice.value)} className={ROW}>
+            disabled={choice.disabled} title={choice.disabled ? t('composer.modelUnavailableInfo') : undefined}
+            onClick={() => pickChoice(choosing, choice.value)} className={`${ROW} disabled:cursor-default disabled:opacity-50`}>
+            {agent === 'openfilm' && choosing.category === 'model' ? <span className="flex w-4 shrink-0 justify-center text-[var(--text-muted)]"><AgentIcon id={String(choice.value).startsWith('anthropic/') ? 'claude' : String(choice.value).startsWith('openai/') ? 'codex' : 'deepseek'} size={14} /></span> : null}
             <span className="min-w-0 flex-1 truncate text-[var(--text)]">{choice.name}</span>
+            {choice.disabled ? <span className="text-[11px] text-[var(--text-muted)]">{t('composer.modelUnavailable')}</span> : null}
             <Check size={13} className={`ml-2 shrink-0 text-[var(--text)] ${selected ? '' : 'invisible'}`} />
           </button>
         );
@@ -233,14 +257,15 @@ export function ModelPopover({ placement = 'bottom', align = 'start', agent: con
       trigger={
         <Tooltip label={t('composer.model')}>
           <button type="button" onMouseDown={keepFocus}
-            className="group inline-flex h-8 max-w-full items-center rounded-full px-2 text-[12.5px] font-medium transition hover:bg-[var(--bg-hover)]">
+            className={triggerClassName ? `group max-w-full ${triggerClassName}` : 'group inline-flex h-8 max-w-full items-center rounded-full px-2 text-[12.5px] font-medium transition hover:bg-[var(--bg-hover)]'}>
             <span className="inline-flex min-w-0 max-w-[190px] items-center gap-1.5 truncate whitespace-nowrap">
-              <span className="shrink-0 text-[var(--text-muted)]"><ChatAgentIcon id={agent} size={13} /></span>
-              <span className="truncate text-[var(--text-muted)] transition group-hover:text-[var(--text)]">
+              <span className={triggerClassName ? 'shrink-0' : 'shrink-0 text-[var(--text-muted)]'}><ChatAgentIcon id={agent} size={triggerClassName ? 14 : 13} /></span>
+              <span className={triggerClassName ? 'truncate' : 'truncate text-[var(--text-muted)] transition group-hover:text-[var(--text)]'}>
                 {(ready(agent) && triggerModel) || (current ? nameOf(current) : t('composer.agentNone'))}
               </span>
               {ready(agent) && triggerEffort ? <span className="text-[var(--text-muted)] transition group-hover:text-[var(--text-muted)]">{triggerEffort}</span> : null}
             </span>
+            {triggerClassName ? <ChevronDown size={13} className="shrink-0" /> : null}
           </button>
         </Tooltip>
       }

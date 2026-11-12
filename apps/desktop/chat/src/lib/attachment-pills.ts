@@ -67,7 +67,12 @@ export function attachmentsInText<T extends AttachmentRecord>(files: readonly T[
 export function attachmentWords(file: Pick<AttachmentRecord, 'path' | 'folder'>): string | null {
   if (!file.path) return null;
   const path = file.folder ? `${file.path.replace(/[\\/]+$/, '')}/` : file.path;
-  return /\s/.test(path) ? `\`${path}\`` : path;
+  if (!/[\s`]/.test(path)) return path;
+  const ticks = [...path.matchAll(/`+/g)].reduce((longest, match) => Math.max(longest, match[0].length), 0);
+  const fence = '`'.repeat(ticks + 1);
+  // Code spans keep backslashes literal. A longer fence and padding keep any backticks in the path literal too.
+  const content = ticks || (path.startsWith(' ') && path.endsWith(' ')) ? ` ${path} ` : path;
+  return `${fence}${content}${fence}`;
 }
 
 /**

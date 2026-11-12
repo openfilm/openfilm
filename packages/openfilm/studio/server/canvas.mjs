@@ -29,14 +29,17 @@
  *
  *   POST /api/canvas { folder, ops?, by? } → { ok: true, canvas, added } or { ok: false, text }
  */
-import { mkdir, readFile, readdir, rename, stat } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { mkdir, open, readFile, readdir, rename, stat } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
 import { FILM_FILE } from '../../src/film-doc.mjs';
+import { WRITING_ATTACHMENT_LIMIT, writingAttachmentKind } from '../../src/canvas-attachments.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { TOOL_DIR } from './projects.mjs';
 import { moveToTrash } from './trash.mjs';
 import { noteMade } from './canvas-history.mjs';
+import { frame, probe } from './derived.mjs';
+import { readable } from './files.mjs';
 
 export const CANVAS_FILE = `${TOOL_DIR}/canvas.json`;
 /** the project's other boards, and the first one's id */
@@ -62,7 +65,7 @@ const VERSIONS_MAX = 50;
 const SHORT_MAX = 120;
 
 /**
- * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string } | { path: string } | { group: string, color: string } | { make: string } | { cut: true })} CanvasNode
+ * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, z?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string } | { path: string, title?: string } | { group: string, color: string } | { make: string, title?: string } | { cut: true })} CanvasNode
  * @typedef {{ id: string, from: string, to: string, order?: number }} CanvasEdge
  * @typedef {{ nodes: CanvasNode[], edges: CanvasEdge[], name?: string }} Canvas
  */
@@ -93,11 +96,14 @@ export function parseCanvas(raw) {
     if (x == null || y == null) continue;
     const w = size(n.w);
     const h = size(n.h);
-    const box = { id: /** @type {string} */ (n.id), x, y, ...(w ? { w } : {}), ...(h ? { h } : {}) };
+    const box = { id: /** @type {string} */ (n.id), x, y, ...(w ? { w } : {}), ...(h ? { h } : {}),
+      ...(typeof n.z === 'number' && Number.isSafeInteger(n.z) && n.z > 0 ? { z: n.z } : {}) };
     const parent = { ...(isId(n.parent) ? { parent: /** @type {string} */ (n.parent) } : {}), ...readBy(n.by) };
-    if (MAKE_KINDS.includes(String(n.make))) out.nodes.push({ ...box, ...parent, ...readMake(n), make: String(n.make) });
+    const title = typeof n.title === 'string' ? n.title.trim().slice(0, SHORT_MAX) : '';
+    const named = title ? { title } : {};
+    if (MAKE_KINDS.includes(String(n.make))) out.nodes.push({ ...box, ...parent, ...named, ...readMake(n), make: String(n.make) });
     else if (n.cut === true) out.nodes.push({ ...box, ...parent, cut: true });
-    else if (projectPath(n.path)) out.nodes.push({ ...box, ...parent, path: /** @type {string} */ (n.path) });
+    else if (projectPath(n.path)) out.nodes.push({ ...box, ...parent, ...named, path: /** @type {string} */ (n.path) });
     else if (typeof n.text === 'string') out.nodes.push({ ...box, ...parent, text: n.text.slice(0, TEXT_MAX) });
     else if (typeof n.group === 'string') {
       out.nodes.push({ ...box, ...readBy(n.by), group: n.group.trim().slice(0, NAME_MAX), color: GROUP_COLORS.includes(String(n.color)) ? String(n.color) : 'gray' });
@@ -259,25 +265,80 @@ export async function canvasRoute(req, res, root, rest) {
   return false;
 }
 
+/** Read files through Studio's project path rules and describe visual attachments in prompt-image order.
+ * @param {string} root @param {string[]} paths
+ */
+async function writingReferences(root, paths) {
+  /** @type {import('./get.mjs').WritingImage[]} */
+  const images = [];
+  /** @type {string[]} */
+  const references = [];
+  for (const path of paths) {
+    const name = basename(path);
+    try {
+      const kind = writingAttachmentKind(path);
+      if (kind === 'text') {
+        const source = readable(root, path);
+        if (!(await stat(source)).isFile()) throw new Error('Expected a file.');
+        const file = await open(source, 'r');
+        try {
+          const limit = 64 << 10;
+          const data = Buffer.alloc(limit + 1);
+          const { bytesRead } = await file.read(data, 0, data.length, 0);
+          if (bytesRead > limit) throw new Error('Text attachments can be up to 64 KiB.');
+          const encoding = data[0] === 0xff && data[1] === 0xfe ? 'utf-16le' : data[0] === 0xfe && data[1] === 0xff ? 'utf-16be' : 'utf-8';
+          references.push(`Text attachment ${JSON.stringify(name)}:\n${new TextDecoder(encoding, { fatal: true }).decode(data.subarray(0, bytesRead))}`);
+        } finally { await file.close(); }
+      } else if (kind) {
+        const duration = kind === 'video' ? Number((await probe(root, path)).duration) : 0;
+        const times = duration >= 1 ? [0, duration / 2, duration * 0.85] : [0];
+        const frames = await Promise.all(times.map(async (seconds) => ({ seconds, bytes: await frame(root, path, seconds * 1000, 640) })));
+        const labels = [];
+        for (const { seconds, bytes } of frames) {
+          if (!bytes.length) continue;
+          if (bytes.length > (5 << 20)) throw new Error('The image is too large.');
+          images.push({ mimeType: 'image/jpeg', data: bytes.toString('base64') });
+          labels.push(kind === 'video' ? `image ${images.length} at ${seconds.toFixed(2)}s` : `image ${images.length}`);
+        }
+        if (!labels.length) throw new Error('No picture could be decoded.');
+        references.push(`${kind === 'video' ? 'Video reference frames from' : 'Image attachment'} ${JSON.stringify(name)}: ${labels.join(', ')}.`);
+      } else throw new Error('Unsupported attachment type.');
+    } catch (error) {
+      throw new HttpError(422, `Could not read attachment “${name}”: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return { images, references };
+}
+
 /**
  * A text node's words written by the person's own agent (an app with a chat, `askAgent`): POST `canvas-write`
- * { prompt, inputs: [the words wired in] } → { text }, the words alone. Without an agent ready: 409, code no-agent.
+ * { prompt, inputs: [the words wired in], model?, attachments?: [project paths] } → { text }.
  * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string} rest
  * @param {import('./get.mjs').AskAgent | undefined} askAgent
+ * @param {string} [root]
  */
-export async function canvasWriteRoute(req, res, rest, askAgent) {
+export async function canvasWriteRoute(req, res, rest, askAgent, root = '') {
   if (rest !== 'canvas-write' || req.method !== 'POST') return false;
-  const body = /** @type {{ prompt?: unknown, inputs?: unknown }} */ (await readJson(req));
+  const body = /** @type {{ prompt?: unknown, inputs?: unknown, model?: unknown, attachments?: unknown }} */ (await readJson(req));
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim().slice(0, TEXT_MAX) : '';
   const inputs = (Array.isArray(body.inputs) ? body.inputs : []).filter((i) => typeof i === 'string' && i.trim()).slice(0, 20).map((i) => /** @type {string} */ (i).slice(0, TEXT_MAX));
-  if (!prompt && !inputs.length) throw new HttpError(400, 'say what to write');
+  const paths = body.attachments ?? [];
+  if (!Array.isArray(paths) || paths.length > WRITING_ATTACHMENT_LIMIT || !paths.every(projectPath)) throw new HttpError(400, 'invalid writing attachments');
+  if (!prompt && !inputs.length && !paths.length) throw new HttpError(400, 'say what to write');
+  const model = body.model;
+  if (model !== undefined && (!isRecord(model) || !isId(model.agent) || !isRecord(model.options)
+    || !Object.values(model.options).every((value) => typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))) {
+    throw new HttpError(400, 'invalid writing model');
+  }
   if (!askAgent) throw new HttpError(409, 'Writing on the canvas is done by your agent, in the app with a chat.', { code: 'no-agent' });
+  const { images, references } = await writingReferences(root, [...new Set(paths)]);
   const ask = ['Write what the person asks, for a text node on the canvas of their film project (a script, a shot list, a prompt, a description).',
     'Answer with the text itself, in the language they ask in, with no preamble and no closing remark. Markdown headings, bold and lists are fine.',
     ...(inputs.length ? ['', 'What is wired into it:', ...inputs.map((i, n) => `[${n + 1}] ${i}`)] : []),
-    '', 'What they ask:', prompt || 'Write it from what is wired in.'].join('\n');
+    ...(references.length ? ['', 'Reference attachments (image numbers are in the order supplied):', ...references] : []),
+    '', 'What they ask:', prompt || 'Write it from the provided references.'].join('\n');
   try {
-    json(res, 200, { text: (await askAgent(ask)).trim() });
+    json(res, 200, { text: (await askAgent(ask, undefined, /** @type {import('./get.mjs').WritingModel | undefined} */ (model), images)).trim() });
   } catch (e) {
     if (/** @type {{ code?: unknown }} */ (e)?.code === 'no-agent') throw new HttpError(409, e instanceof Error ? e.message : String(e), { code: 'no-agent' });
     throw e;

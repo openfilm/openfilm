@@ -14,6 +14,7 @@ export interface HostDeveloper { logs: boolean; changes: boolean }
 
 /** The project identity and current folder shared with an embedded chat. */
 export interface HostProject { id: string; name: string; path: string }
+export type HostWritingModel = { agent: HostAgentId; options: Record<string, string | number | boolean> };
 
 export interface StudioHost {
   /** the version of this interface the app speaks */
@@ -42,6 +43,8 @@ export interface StudioHost {
    * (the examples' "Explain how it's made"). Sent only when the person sends it.
    */
   ask?: (request: { text: string; refs: StudioRef[] }) => void;
+  /** The desktop composer's model picker and the options to use for the next canvas writing request. */
+  canvasWriting?: { Picker: React.ComponentType<{ triggerClassName?: string }>; selection: () => HostWritingModel | null };
   /**
    * What is selected in the project shown and where the playhead is, each time either changes (the time a few times
    * a second while playing): what a chat's "@current selection" and "@current time" point at.
@@ -68,11 +71,15 @@ export interface StudioHost {
     label: string;
     open: boolean;
     width: number;
+    /** Its preferred width, including while closed (when the shown width is zero). */
+    preferredWidth?: number;
     assets?: { open: boolean; bottom: number };
     setOpen: (open: boolean) => void;
     setAssetsOpen?: (open: boolean) => void;
     setWidth?: (width: number, done?: boolean) => void;
-    onChange: (listener: (state: { open: boolean; width: number; assets?: { open: boolean; bottom: number } }) => void) => void;
+    setBounds?: (bounds: { left: number; top: number; width: number; height: number } | null) => void;
+    setPlacement?: (placement: { side: 'left' | 'right'; libraryDock: 'left' | 'right' | 'bottom' | 'chat' }) => void;
+    onChange: (listener: (state: { open: boolean; width: number; preferredWidth?: number; assets?: { open: boolean; bottom: number } }) => void) => void | (() => void);
   };
   /**
    * The app's chat names a skill in the message being written: the library's skills call this for one tried there,
@@ -106,6 +113,7 @@ export interface StudioHost {
     /** Codex: what is left of its plan, as it says for the account signed in (null: it can't say; other agents, null) */
     usage?: (id: HostAgentId, fresh?: boolean) => Promise<HostAgentUsage | null>;
     setShown: (id: HostAgentId, shown: boolean) => Promise<unknown>;
+    saveOpenFilmModels?: (config: { order: string[]; hidden: string[] }) => Promise<{ ok: boolean; error?: string }>;
     locate?: (id: HostAgentId, words?: { title?: string; button?: string; kind?: 'file' | 'folder' }) => Promise<{ ok: boolean; error?: string; path?: string; version?: string; code?: 'not-a-program' | 'did-not-start' | 'app' | 'not-cursor-agent' | string }>;
     install?: (id: HostAgentId) => Promise<{ ok: boolean; error?: string }>;
     useAutomatic?: (id: HostAgentId) => Promise<unknown>;
@@ -160,6 +168,15 @@ export interface StudioHost {
     get: () => Promise<HostDeveloper>;
     set: (next: Partial<HostDeveloper>) => Promise<unknown>;
     onChange: (listener: (prefs: HostDeveloper) => void) => () => void;
+  };
+  /**
+   * The app's notifications, for Settings → Advanced: the system's notification of a chat's turn done, stopped by an
+   * error, or waiting for an answer, while the window is not in front (on, until switched off).
+   */
+  notifications?: {
+    get: () => Promise<boolean>;
+    set: (on: boolean) => Promise<unknown>;
+    onChange: (listener: (on: boolean) => void) => () => void;
   };
   /**
    * The app keeps each open project in a tab of its own window, one shown at a time, and draws nothing of them: Studio
@@ -224,7 +241,7 @@ export interface HostUpdateState {
 /** An update of the app, ready to install or installing; `waiting`: why the last Restart did not go ahead. */
 export type HostUpdate = { status: 'ready' | 'installing'; version: string; waiting?: 'agent-busy' | 'exporting' | 'install-failed' | null };
 
-export type HostAgentId = 'codex' | 'claude' | 'antigravity' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'minimax' | 'deepseek' | 'byok';
+export type HostAgentId = 'openfilm' | 'codex' | 'claude' | 'antigravity' | 'copilot' | 'cursor' | 'opencode' | 'codebuddy' | 'qwen' | 'kimi' | 'minimax' | 'deepseek' | 'byok';
 /**
  * What was searched for an agent (`agents.diagnose`): the report to copy, the program's name, where it was found, and
  * when it was not, why: chosen-missing (the program chosen is gone) · wsl (only inside WSL, which the app cannot use) ·
@@ -271,7 +288,10 @@ export interface HostAgent {
   signOut?: boolean;
   /** The own key's models, each set up on its own; the first is the one a conversation starts on. */
   byok?: { models: HostOwnModel[] };
+  openfilm?: { order: string[]; hidden: string[]; defaultOrder: string[]; model?: string; models: HostOpenFilmModel[] };
 }
+
+export interface HostOpenFilmModel { id: string; name: string; shown: boolean; available: boolean; levels?: string[]; effort?: string }
 
 /**
  * One of the person's own models: its `id` (the app's), the `name` the chat's menu shows, its service (API `format`
@@ -423,7 +443,9 @@ export function applyStudioHost(root: HTMLElement = document.documentElement) {
   const titlebar = studioHost?.titlebar;
   if (!titlebar) return;
   const set = (inset: unknown) => {
-    if (typeof inset === 'number' && inset >= 0) root.style.setProperty('--titlebar-logo-x', `${Math.max(6, Math.min(inset, 200))}px`);
+    if (typeof inset !== 'number' || !Number.isFinite(inset) || inset < 0) return;
+    root.style.setProperty('--titlebar-logo-x', `${Math.min(inset, 200)}px`);
+    root.dataset.hostTitlebarInset = inset === 0 ? 'none' : 'controls';
   };
   root.dataset.hostTitlebar = '';
   if (typeof titlebar.insetRight === 'number' && titlebar.insetRight > 0) root.style.setProperty('--titlebar-right-x', `${Math.min(titlebar.insetRight, 240)}px`);
@@ -436,10 +458,13 @@ export type HostPanel = {
   label: string;
   open: boolean;
   width: number;
+  preferredWidth: number;
   setOpen: (open: boolean) => void;
   /** null: the app keeps no assets of its own (Studio's left pane holds them) */
   assets: { open: boolean; bottom: number; setOpen: (open: boolean) => void } | null;
   setWidth: (width: number, done?: boolean) => void;
+  setBounds: (bounds: { left: number; top: number; width: number; height: number } | null) => void;
+  setPlacement: (placement: { side: 'left' | 'right'; libraryDock: 'left' | 'right' | 'bottom' | 'chat' }) => void;
 };
 
 /**
@@ -453,21 +478,27 @@ function keepPanelWidth({ open, width }: { open: boolean; width: number }) {
 
 export function useHostPanel(): HostPanel | null {
   const panel = studioHost?.panel;
-  const read = (next: { open: boolean; width: number; assets?: { open: boolean; bottom: number } }) => ({
-    open: Boolean(next.open),
-    width: Math.max(0, Number(next.width) || 0),
-    assetsOpen: Boolean(next.assets?.open),
-    bottom: Math.max(0, Number(next.assets?.bottom) || 0),
-  });
+  const preferredWidth = React.useRef(panel?.preferredWidth || panel?.width || 420);
+  const read = (next: { open: boolean; width: number; preferredWidth?: number; assets?: { open: boolean; bottom: number } }) => {
+    if ((next.preferredWidth ?? next.width) > 0) preferredWidth.current = next.preferredWidth || next.width;
+    return {
+      open: Boolean(next.open),
+      width: Math.max(0, Number(next.width) || 0),
+      preferredWidth: preferredWidth.current,
+      assetsOpen: Boolean(next.assets?.open),
+      bottom: Math.max(0, Number(next.assets?.bottom) || 0),
+    };
+  };
   const [state, setState] = React.useState(() => (panel ? read(panel) : null));
   React.useEffect(() => {
     if (!panel) return;
     keepPanelWidth(read(panel));
-    panel.onChange((next) => {
+    const stop = panel.onChange((next) => {
       const now = read(next);
       keepPanelWidth(now);
       setState(now);
     });
+    return typeof stop === 'function' ? stop : undefined;
   }, [panel]);
   if (!panel || !state) return null;
   const setAssetsOpen = panel.setAssetsOpen;
@@ -475,9 +506,12 @@ export function useHostPanel(): HostPanel | null {
     label: panel.label,
     open: state.open,
     width: state.width,
+    preferredWidth: state.preferredWidth,
     setOpen: (open) => panel.setOpen(open),
     setWidth: (width, done) => panel.setWidth?.(width, done),
-    assets: setAssetsOpen ? { open: state.open && state.assetsOpen, bottom: state.bottom, setOpen: (open) => setAssetsOpen(open) } : null,
+    setBounds: bounds => panel.setBounds?.(bounds),
+    setPlacement: placement => panel.setPlacement?.(placement),
+    assets: setAssetsOpen ? { open: state.assetsOpen, bottom: state.bottom, setOpen: (open) => setAssetsOpen(open) } : null,
   };
 }
 

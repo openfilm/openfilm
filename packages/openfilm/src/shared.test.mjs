@@ -105,6 +105,9 @@ test('fileOf: a sound stays inside the film\'s folder, however its path is writt
     writeFileSync(join(ws, 'assets', 'a.mp3'), 'inside');
     writeFileSync(join(root, 'outside.mp3'), 'outside');
     assert.equal(fileOf(ws, 'film.html', 'assets/a.mp3'), join(ws, 'assets', 'a.mp3'));
+    assert.equal(fileOf(ws, 'film.html', '100%.m4a'), join(ws, '100%.m4a'));
+    assert.equal(fileOf(ws, 'film.html', 'take%2.mp3'), join(ws, 'take%2.mp3'));
+    assert.equal(fileOf(ws, 'film.html', 'a%23b.mp3'), join(ws, 'a#b.mp3'));
     assert.equal(fileOf(ws, 'scenes/one.html', '../assets/a.mp3'), join(ws, 'assets', 'a.mp3'));
     /* the URL resolves `..` above the root to the root: still inside */
     assert.equal(fileOf(ws, 'film.html', '../../outside.mp3'), join(ws, 'outside.mp3'));

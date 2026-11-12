@@ -1,5 +1,5 @@
 /**
- * Round the canvas's own code, loaded when it is first shown: when it cannot be (a Studio updated or rebuilt since the
+ * Round the canvas's own code, warmed in the background: when it cannot load (a Studio updated or rebuilt since the
  * page loaded, the network gone), the board says so and offers to load the page again, rather than the page going
  * blank.
  */

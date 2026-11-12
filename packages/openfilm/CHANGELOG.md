@@ -1,5 +1,120 @@
 # openfilm
 
+## 0.3.2
+
+### Patch Changes
+
+- Refresh canvas models as soon as a media service connects or its model changes in Settings, including sign-in completed in the browser.
+- Keep the assets drawer and workspace aligned with the chat divider while resizing. Show in Assets scrolls to and briefly highlights the canvas file without changing the editing selection.
+- Attach text, images and video references to canvas writing nodes. Organize compatible timeline tracks with undo, and keep picture and sound solo selections independent.
+- 7c6bf43: Show mixed audio waveforms on compound clips, including templates. Mark compound clips on the timeline and offer an Open compound clip action in the context menu.
+- 7c6bf43: Duplicate a project from the Projects menu to open an independent copy of its current edit in the same project group.
+- 03168c3: Studio: example films and download estimates over an hour show hours instead of a minute count past 60
+- 7c6bf43: Keep export progress in the project title bar, with a task list that opens above any workspace layout. Give voice previews a circular orb that carries over the voice avatar's light spots and pulses with the audio.
+- 7344f84: Studio: export sizes near 1 MB and 1 GB no longer read 1024 KB or 1024 MB
+- 7c6bf43: Mark transparent HEVC exports as straight alpha so editors that honor the alpha mode blend soft glows and edges at the intended opacity.
+- 7c6bf43: Keep editable subtitle font size, installed font, weight, color and outline when exporting a 剪映 or CapCut draft.
+  Keep copied and rendered media linked when a 剪映 draft is renamed.
+- 7c6bf43: Keep static rotation, opacity, and simple hard-edged rectangle masks editable in Jianying drafts. More complex clip effects keep their rendered appearance.
+- 7c6bf43: Keep masks, crops and other rendered clip effects when exporting an editing project in automatic effects mode. Render the part used on the timeline and keep full-length footage for further editing, converting containers such as WebM when needed.
+- 454426e: Studio: the library category list no longer shows a category twice when a saved order repeats it
+- 7c6bf43: Show a circular loading indicator while library assets load and offer retry when a download fails, load sticker animations only on click, and use the viewer's transport for asset previews. Clicking the timeline restores the project viewer. Keep the add button visible while cached media opens, and add assets with the button, keyboard or drag. Hover on a visual card to preview it in place. Template previews share one cached video between the card and viewer. Moving away stops playback but leaves downloads running. Audio previews start on click. Voices show their download status in the same position as the use button, and sticker cards are larger. Voice previews animate the colors of each voice’s avatar in the viewer. Sounds and music show their own artwork. Clicking empty space dismisses the selected preview.
+- 805c947: Studio: workspace preset thumbnails in a narrow window no longer draw the inspector outside the picture
+- 7c6bf43: Link Windows media files and folders even when a network share refuses system links. The project's references keep the originals in place and work for preview and export. Use Alt to toggle whole clips and their layers together in the Layers panel, or Shift to select a range by clicking or dragging. OpenFilm's agent asks for sign-in when its credential is rejected and keeps technical service errors in its connection details.
+- 27be758: Studio: editing-project exports keep the file name of footage written with Windows backslash paths
+- 7c6bf43: Add TBC mischief 1 and Grok Imagine Video 1.5 Lite to the OpenRouter video models in Studio and the CLI.
+- 7c6bf43: Open projects pick up changes to the timeline even if the system misses a file notification. The editor retries a failed refresh, keeps newer edits over older responses, and continues to refresh after a save and its recovery read both fail. Keep the editing timeline, film preview and canvas mounted at their own workspace sizes while switching between them.
+- 7c6bf43: Refresh a paused preview when a page's images finish loading so image-based cards can appear without moving the playhead.
+- d23613a: On Windows, an editing-software export whose browsers crash draws those pages again instead of failing with a permission error.
+- 7c6bf43: Always keep effects and include visible timeline subtitles when exporting an editing project. Use the Settings palette in the export dialog.
+- 8ef4514: Studio: the Spanish editing-export hint names the application in all three places, as the other four languages do
+- 7c6bf43: Show the first frame of canvas videos when idle, share their sound setting, and restart playback on each hover. Show media import progress in place and add frame capture and draggable video headers with inline renaming. Keep the model picker compact and make the side buttons easier to see and use.
+- c6bc8e9: Studio: a key from another character set is refused with a forbidden, not a server error
+- 7c6bf43: Load thumbnails for visible media cards before scanning the rest of the project. This keeps large projects from opening with an empty row of previews.
+- 38b79d0: Studio: What's New is shown again when a beta.2 build is followed by beta.10
+
+## 0.3.1
+
+### Patch Changes
+
+- Editing-project exports for Premiere Pro, Final Cut Pro, Jianying and CapCut can use complete original footage, by reference or full copy, preserving source in/out handles, native frame rates, playback speeds and disabled clips. Rendered-effects export remains available; web pages still render when needed.
+
+- The canvas module preloads after the first paint and warms in the background after opening a project. Its first display has a loading view, hidden warming does not save a board, and returning to the edit keeps the canvas hidden.
+
+- Timeline ranges have a visible close button and clear with Escape even when clips are selected. Open menus keep their Escape priority.
+
+- Layout → Edit layout opens a temporary editor for the current work mode. Move any panel into nested splits, swap panels, dock at workspace edges and resize live. Done saves the layout; Cancel restores it, with undo and redo while editing. The library retains its original UI without an extra header. Edit and canvas presets stay within their own mode, and canvas resizing preserves the current view center. Named layouts support import and export.
+
+- Click a library asset to download its missing files and preview automatically, including stickers, community effects and templates. Download icons are passive status indicators. Compact loading bars indicate the wait without extra explanatory text. Previews can be cancelled or retried and ignore late events from previous previews. Template videos start automatically when ready and stop when closed. Background waveform downloads leave connections available for playback.
+
+- Settings keeps Codex usage percentages on one line and lists Google Antigravity and DeepSeek Harness first among optional agents.
+
+- Disable or enable selected timeline clips with Shift+E or the clip menu, with undo and redo. Their source trims, levels and neighbouring clips stay in place; disabled clips are neither drawn nor heard, and export to editing projects disabled.
+
+- Jianying and CapCut drafts retain complete video and audio sources and native playback speeds. Processed footage retains the full source duration and editable trim handles, with an untouched source in the media library.
+
+- Transparent exports resize and average motion-blur samples using alpha-weighted color, preventing bright fringes. Switching between transparent and opaque PNG frames no longer resets the sampling filters and drops output frames.
+
+- [#375](https://github.com/openfilm/openfilm/pull/375) [`46811b0`](https://github.com/openfilm/openfilm/commit/46811b0a2359666cfc03e3dd6f64e0f1e08db764) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Back on the edit from the canvas, the canvas's cards no longer stay on top of the picture and the inspector.
+
+- [#381](https://github.com/openfilm/openfilm/pull/381) [`b108090`](https://github.com/openfilm/openfilm/commit/b1080902e6847f55323dbc092981c0cc685a4578) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Undoing a chat turn restores its canvas boards along with its files. A turn that only changes the canvas can be undone too. Open boards refresh after the restore and forget undo steps that could bring back references to files the turn's undo removed.
+
+- [#376](https://github.com/openfilm/openfilm/pull/376) [`c4e178a`](https://github.com/openfilm/openfilm/commit/c4e178ae5aaf2a9a61342b32f530e1bff006214f) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Canvas characters: a picture is kept only from inside the project. On Windows a path written with backslashes could reach a picture outside it.
+
+- [#372](https://github.com/openfilm/openfilm/pull/372) [`873eb0e`](https://github.com/openfilm/openfilm/commit/873eb0e7257e354d38b5aac1930a4b868dc60ca3) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Studio and `openfilm get` can discover, preview and use reviewed community sounds, music, transitions and effects from the OpenFilm library.
+
+- [#362](https://github.com/openfilm/openfilm/pull/362) [`90fed06`](https://github.com/openfilm/openfilm/commit/90fed06b47e510c92ab31c1a8d5843e6901ab5c6) Thanks [@deepankar-sah](https://github.com/deepankar-sah)! - Desktop: support Google Antigravity as a coding agent via the Agent Client Protocol (ACP).
+
+- [#385](https://github.com/openfilm/openfilm/pull/385) [`111b513`](https://github.com/openfilm/openfilm/commit/111b51362e9d76c2f304bbdf1fe0f5cb88a42a73) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Local model installation is reported complete only after its provider settings have had a chance to refresh. A fast download could previously show a model as installed while its media kind was still unselected.
+
+- [#384](https://github.com/openfilm/openfilm/pull/384) [`574e6fe`](https://github.com/openfilm/openfilm/commit/574e6fee757e6e77fb49f050702f98ad23cefcde) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - The project title's hover card retries a poster that is still being drawn, using the same bounded delays as the Projects list. A first request that arrived too early used to leave its cover permanently blank.
+
+- [#309](https://github.com/openfilm/openfilm/pull/309) [`916e845`](https://github.com/openfilm/openfilm/commit/916e845614ff10c5360c9d4e057b1e3db138ec36) Thanks [@rick-mingyu-liu](https://github.com/rick-mingyu-liu)! - Render: a render that stops on its own (an error, a crash, the computer asleep or out of power, the app quit) is resumed by the next one of the same file with the same settings, which draws only what is left. The film is drawn in chunks of whole seconds, one to ten, that the browsers take in turn, and each chunk finished is kept with the files it was drawn from, those it asked for and did not find included: a render that finds one of them changed, or other settings, starts clean. Studio's export resumes the same way; one cancelled on purpose leaves nothing behind. Chunks no one resumes are removed after two weeks, and so are the parts a crashed render left before.
+
+- [#348](https://github.com/openfilm/openfilm/pull/348) [`af52c5c`](https://github.com/openfilm/openfilm/commit/af52c5c096aab2584711e96fa505ba76477deb35) Thanks [@rick-mingyu-liu](https://github.com/rick-mingyu-liu)! - Restoring a version no longer stops half way when the trash will not take a file (on Windows, the Recycle Bin refusing one too big for it): the version is put back around it, the file stays where it is, and Studio names the files that stayed. Before, the files already written stayed written, the rest did not, and History still showed the version the person was on.
+
+- [#377](https://github.com/openfilm/openfilm/pull/377) [`4df6f94`](https://github.com/openfilm/openfilm/commit/4df6f941cd6803f0b597994e30391be4531202ab) Thanks [@WEBGRS](https://github.com/WEBGRS)! - A transition clicked in the library plays once on the picture, and a click on it plays it again. It used to repeat until it was let go. Enter and "+" still put it in.
+
+- [#361](https://github.com/openfilm/openfilm/pull/361) [`9bdcbb5`](https://github.com/openfilm/openfilm/commit/9bdcbb54cf5bbe4e1975590301b537284ae8dc0f) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Studio on Linux: deleting a file, a folder or a skill on another disk than the home folder (a project on a second drive) failed with "cross-device link not permitted". It is now copied into the trash with its record and then removed, so it can still be restored.
+
+- [#374](https://github.com/openfilm/openfilm/pull/374) [`8cea0e9`](https://github.com/openfilm/openfilm/commit/8cea0e949648ddc860b7fd0c92c65a14161c4869) Thanks [@WEBGRS](https://github.com/WEBGRS)! - Undo of a chat turn: the film goes back as the turn found it. Studio took the film put back for a write of the agent's and merged the turn's clips into it, so a clip came back whose page the undo had just moved to the trash.
+
+- [#383](https://github.com/openfilm/openfilm/pull/383) [`684d04d`](https://github.com/openfilm/openfilm/commit/684d04d2041d1442ec14d85d175e1413e7628d86) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - A page is loaded again when Windows briefly has no network buffer for a module needed to initialize the film. Previously only a failed page navigation was retried, so a transient failure of captions or overrides could stop an export. Permanent errors are still reported without retrying.
+
+- [#407](https://github.com/openfilm/openfilm/pull/407) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a clip with a fragment in its src still counts as using that file
+
+- [#393](https://github.com/openfilm/openfilm/pull/393) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: splitting a caption cue at its middle keeps an emoji whole, instead of writing half a character into each cue.
+
+- [#402](https://github.com/openfilm/openfilm/pull/402) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a damaged character record no longer takes the whole characters panel down
+
+- [#392](https://github.com/openfilm/openfilm/pull/392) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a cookie whose value is not percent-encoded is ignored, instead of stopping the request it came on.
+
+- Discover shows its official offline snapshot on a new installation while checking the live skill index. Refreshes have a deadline, retain usable cached skills when one download fails, and can be retried in the gallery. Pinned file manifests avoid GitHub's anonymous API quota and detect incomplete downloads. Older responses no longer erase a newly refreshed skill list.
+
+- [#386](https://github.com/openfilm/openfilm/pull/386) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - doctor: a report takes keys and email addresses out of the Studio log lines it quotes, as it says it does
+
+- [#396](https://github.com/openfilm/openfilm/pull/396) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - HEVC master exports use finer grain-aware software encoding so subtle changing texture is not flattened into a still pattern. Master files can be larger and take longer to encode.
+
+- [#388](https://github.com/openfilm/openfilm/pull/388) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a long file name is not cut in the middle of a character
+
+- [#387](https://github.com/openfilm/openfilm/pull/387) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a byte range past a media file's end is answered, not left hanging
+
+- [#395](https://github.com/openfilm/openfilm/pull/395) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a file replaced under the same name, size and date gets a new preview, instead of the old one being kept.
+
+- [#405](https://github.com/openfilm/openfilm/pull/405) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Render: a resumed render does not reuse chunks drawn from a file that was replaced
+
+- [#404](https://github.com/openfilm/openfilm/pull/404) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - CLI: a SKILL.md with empty front matter keeps its body and name
+
+- [#389](https://github.com/openfilm/openfilm/pull/389) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - CLI: a skill named with capitals is found by its name alone
+
+- [#403](https://github.com/openfilm/openfilm/pull/403) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - CLI: a sound whose name contains a percent sign is found instead of stopping look and render
+
+- [#394](https://github.com/openfilm/openfilm/pull/394) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: a template's object-position is read as CSS reads it, so its framing control starts where the picture actually sits.
+
+- [#406](https://github.com/openfilm/openfilm/pull/406) Thanks [@yunloong-Y](https://github.com/yunloong-Y)! - Studio: an rgba() color in a template keeps its alpha when its scheme changes
+
+- [#280](https://github.com/openfilm/openfilm/pull/280) Thanks [@rick-mingyu-liu](https://github.com/rick-mingyu-liu)! - While OpenFilm is not in front, the system says when the chat's agent has finished a turn, stopped with an error, or waits for your answer (a question or a permission). Clicking the notification brings the window back on that project's tab; the taskbar button flashes on Windows and the Dock icon bounces on macOS. Settings › General › Notifications switches them off. An error is shown without your home folder, keys or email addresses.
+
 ## 0.3.0
 
 ### Minor Changes

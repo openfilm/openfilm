@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import {
   CaptionError, SUBTITLE_STYLE_FILE, captionRoutes, captionText, filmCaptions, readSubtitleStyle, spokenLines,
-  transcriptOutlasts, translateFilmSubtitles, writeSubtitleStyle,
+  subtitlesForExport, transcriptOutlasts, translateFilmSubtitles, writeSubtitleStyle,
 } from './captions.mjs';
 import { FILM_SUBTITLE_DEFAULT, filmSubtitleShown, filmSubtitleSrt, filmSubtitleVtt } from './film-subtitle.mjs';
 import { HttpError, json } from './http.mjs';
@@ -35,6 +35,32 @@ function project(tracks, files = {}) {
 }
 
 const shown = (cues) => cues.map(({ startMs, durMs, text, clip }) => ({ startMs, durMs, text, clip }));
+
+test('editing project subtitles come from all visible timeline tracks', async () => {
+  const track = (src, hidden = false) => ({ clips: [], captions: { src }, hidden });
+  const cue = (sec, text) => `WEBVTT\n\n00:00:0${sec}.000 --> 00:00:0${sec + 1}.000\n${text}\n`;
+  const files = { 'first.vtt': cue(3, 'First track'), 'second.vtt': cue(1, 'Second track'), 'hidden.vtt': cue(2, 'Hidden track') };
+  const root = project([track('first.vtt'), track('second.vtt'), track('hidden.vtt', true)], files);
+  assert.deepEqual((await subtitlesForExport(root, { timelineOnly: true })).cues.map((c) => c.text), ['Second track', 'First track']);
+  const audio = project([{ clips: [{ src: 'speech.wav', time: [0, 3] }] }], { 'speech.wav': '', 'speech.vtt': VTT });
+  assert.deepEqual((await subtitlesForExport(audio, { timelineOnly: true })).cues, []);
+});
+
+test('editing project subtitles accept escaped cue IDs and ignore malformed selectors', async () => {
+  const vtt = `WEBVTT
+
+STYLE
+::cue(#${'\\!'.repeat(2048)})) { color: red; }
+::cue(#part\\)2) { color: blue; }
+
+part)2
+00:00:01.000 --> 00:00:02.000
+Caption
+`;
+  const root = project([{ clips: [], captions: { src: 'captions.vtt' } }], { 'captions.vtt': vtt });
+  const { cues } = await subtitlesForExport(root, { timelineOnly: true });
+  assert.equal(cues[0].draftLook.css.color, 'blue');
+});
 
 test('a transcript breaks into lines at sentence ends, timed by its words', () => {
   assert.deepEqual(spokenLines(TEXT, WORDS, 3000).map(({ text, startMs, endMs }) => ({ text, startMs, endMs })), [

@@ -277,3 +277,14 @@ test('a turn with a log and no saved record is found with its events; a saved on
   assert.deepEqual(found.map((f) => f.turnId), ['local:lost1']);
   assert.deepEqual(found[0].events.map((e) => e.kind), ['prompt', 'update']);
 });
+
+test('a very long attachment name keeps its ending whole', () => {
+  const dir = project();
+  const bytes = new Uint8Array([1, 2, 3]);
+  const first = saveAttachment(dir, 'a'.repeat(196) + '.jpeg', bytes).path;
+  assert.ok(first.endsWith('.jpeg'), first);
+  assert.ok(first.length <= '.film/attachments/'.length + 200, first);
+  const second = saveAttachment(dir, 'a'.repeat(196) + '.jpeg', bytes).path;
+  assert.ok(second.endsWith(' 2.jpeg'), second);
+  assert.ok(second.length <= '.film/attachments/'.length + 200, second);
+});

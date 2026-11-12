@@ -7,7 +7,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createExports, diskFull, exportCapabilities, exportsRoot, ExportError, frameBox, dimsForShortEdge, keepChanges, projectFiles, projectSizes, shareOf, writableFolder } from './exports.mjs';
 import { encoders, hardwareEncoder } from '../../src/encoders.mjs';
-import { allocateLanes, containMotion, fadeKeyframes, frameSpan, nleRate, planNleTimeline, probeSource, xmemlDocument } from './nle.mjs';
+import { allocateLanes, containMotion, fadeKeyframes, frameSpan, nleRate, ownLook, planNleTimeline, probeSource, xmemlDocument } from './nle.mjs';
 import { fcpxmlDocument } from './fcpxml.mjs';
 import { pptxParts } from './slides.mjs';
 import { filmSubtitleSrt, parseFilmSubtitleStyle } from './film-subtitle.mjs';
@@ -15,6 +15,7 @@ import { zipFiles } from './zip.mjs';
 import { launch } from '../../src/host.mjs';
 import { layoutTracks } from '../ui/src/lib/timeline-layout.ts';
 import { filmHtml } from '../../src/film-doc.mjs';
+import { JIANYING_DRAFT_PATH } from './jianying.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 const ffmpeg = { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 };
@@ -433,6 +434,24 @@ test('every codec carries the colors the page draws, tagged BT.709, through the 
   }
 });
 
+test('HEVC with alpha declares the straight color it stores for a faint glow', ffmpeg, async (t) => {
+  if (!(await exportCapabilities()).hevcAlpha) return t.skip('no VideoToolbox HEVC encoder');
+  const dir = join(scratch, 'HEVC glow');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'glow.html'), `<!doctype html><style>html,body{margin:0}</style>
+<div style="position:absolute;inset:0 50% 0 0;background:rgba(255,255,255,.08)"></div>
+<div style="position:absolute;inset:0 0 0 50%;background:white"></div>
+<script>window.film={duration:.4,width:320,height:180,frame(){}}</script>`);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ src: 'glow.html', id: 'glow' }] }] }));
+  const done = await exported({ kind: 'video', codec: 'hevc_alpha', fps: 5, audio: false }, 'HEVC glow', dir);
+  const movie = readFileSync(done.out);
+  assert.ok(movie.includes(Buffer.from('4e01a50400007f9080', 'hex')), 'the alpha-channel SEI declares straight alpha');
+  // The base layer keeps white at both opacities. A compositor reads the separate alpha layer to blend it.
+  const frame = firstFrame(done.out);
+  assert.ok(near(frame.at(80, 90), [255, 255, 255], 5), `faint glow: ${frame.at(80, 90)}`);
+  assert.ok(near(frame.at(240, 90), [255, 255, 255], 5), `opaque white: ${frame.at(240, 90)}`);
+});
+
 test('footage no browser reads, placed whole (no trim): its length is ffprobe\'s, in a video and in a draft', { ...ffmpeg, timeout: 240_000 }, async () => {
   const dir = join(scratch, 'Whole ProRes');
   mkdirSync(dir, { recursive: true });
@@ -656,6 +675,39 @@ test('the editor\'s timeline: frames rounded edge by edge, tracks spread, placem
   assert.deepEqual(containMotion({ w: 100, h: 100 }, { w: 1920, h: 1080 }, { x: 760, y: 0, w: 400, h: 200 }), { kind: 'motion', motion: { scale: 200, center: { h: 0, v: -0.407407 } } });
   assert.equal(containMotion({ w: 100, h: 100 }, { w: 1920, h: 1080 }, { x: 0, y: 0, r: 10 }).kind, 'bake');
   assert.equal(containMotion({}, { w: 1920, h: 1080 }).kind, 'bake');
+});
+
+test('a picture filling the frame, or placed in its box, is Basic Motion; a fill its box cuts inside the frame is drawn', () => {
+  const stage = { w: 180, h: 320 };
+  /* a narrower 9:16 talking head filling a 9:16 frame: as wide as the frame, its top and bottom past it */
+  assert.deepEqual(containMotion({ w: 144, h: 320 }, stage, undefined, { fit: 'cover', position: '50% 50%' }),
+    { kind: 'motion', motion: { scale: 125, center: { h: 0, v: 0 } } });
+  /* framed higher: 30% of the 80 px it spills goes above */
+  assert.deepEqual(containMotion({ w: 144, h: 320 }, stage, undefined, { fit: 'cover', position: '50% 30%' }),
+    { kind: 'motion', motion: { scale: 125, center: { h: 0, v: 0.05 } } });
+  /* a box larger than the frame cuts only what the frame cuts */
+  assert.equal(containMotion({ w: 144, h: 320 }, stage, { x: -10, y: -10, w: 200, h: 340 }, { fit: 'cover' }).kind, 'motion');
+  /* a fill in a small box is cut by its box, inside the frame */
+  assert.equal(containMotion({ w: 144, h: 320 }, stage, { x: 20, y: 20, w: 100, h: 100 }, { fit: 'cover' }).kind, 'bake');
+  /* a fill that does not spill (the same shape) cuts nothing, wherever its box is */
+  assert.deepEqual(containMotion({ w: 100, h: 100 }, stage, { x: 40, y: 0, w: 100, h: 100 }, { fit: 'cover' }),
+    containMotion({ w: 100, h: 100 }, stage, { x: 40, y: 0, w: 100, h: 100 }));
+  /* fitted, at the left of a wide box, in px or a share of the room */
+  assert.deepEqual(containMotion({ w: 100, h: 100 }, { w: 1920, h: 1080 }, { x: 760, y: 0, w: 400, h: 200 }, { position: '0% 50%' }),
+    { kind: 'motion', motion: { scale: 200, center: { h: -0.052083, v: -0.407407 } } });
+  assert.deepEqual(containMotion({ w: 100, h: 100 }, { w: 1920, h: 1080 }, { x: 760, y: 0, w: 400, h: 200 }, { position: '0px 0px' }),
+    containMotion({ w: 100, h: 100 }, { w: 1920, h: 1080 }, { x: 760, y: 0, w: 400, h: 200 }, { position: '0% 50%' }));
+  for (const look of [{ fit: 'fill' }, { fit: 'none' }, { fit: 'scale-down' }, { position: 'calc(50% + 4px) 50%' }, { position: 'right 10px top 0%' }]) {
+    assert.equal(containMotion({ w: 144, h: 320 }, stage, undefined, look).kind, 'bake', JSON.stringify(look));
+  }
+});
+
+test('a style that says only what CSS does anyway, or where the picture sits in its box, is no look of its own', () => {
+  assert.deepEqual(ownLook('object-fit: contain; object-position: 50% 50%; opacity: 1; filter: none; border-radius: 0px; mix-blend-mode: normal'), []);
+  assert.deepEqual(ownLook('object-fit: cover; object-position: 50% 30%; opacity: 1.0 !important'), []);
+  assert.deepEqual(ownLook('opacity: 0.5; object-fit: cover; border-radius: 8px; filter: blur(2px)'),
+    [['opacity', '0.5'], ['border-radius', '8px'], ['filter', 'blur(2px)']]);
+  assert.deepEqual(ownLook('image-rendering: pixelated'), [['image-rendering', 'pixelated']], 'a property it does not know stays a look');
 });
 
 test('fades in the editor\'s timeline: a picture that fades is rendered; a sound that fades is its own part with level keyframes', () => {
@@ -928,12 +980,12 @@ test('Final Cut Pro connections retain their parent and sequence positions acros
   }
 });
 
-test('Final Cut Pro export packages FCPXML, rendered pages, audio and optional subtitle sidecars', ffmpeg, async () => {
+test('Final Cut Pro export packages FCPXML, rendered pages, audio and timeline subtitles', ffmpeg, async () => {
   for (const audio of ['clips', 'stems']) {
-    const done = await exported({ kind: 'nle', format: 'fcpxml', fps: 25, audio, subtitles: audio === 'clips' });
+    const done = await exported({ kind: 'nle', format: 'fcpxml', fps: 25, audio, subtitles: false });
     assert.match(done.out, /Tiny\.fcpxml$/);
     for (const file of done.outputs) assert.ok(existsSync(file), file);
-    assert.equal(done.outputs.some((f) => f.endsWith('.srt')), audio === 'clips');
+    assert.ok(done.outputs.some((f) => f.endsWith('.srt')), 'an old subtitles setting cannot suppress the timeline cues');
     const [{ error, found }] = await parseXml([readFileSync(done.out, 'utf8')], (doc) => ({
       version: doc.documentElement.getAttribute('version'),
       primary: [...doc.querySelectorAll('sequence > spine > clip')].map((c) => c.getAttribute('name')),
@@ -945,7 +997,7 @@ test('Final Cut Pro export packages FCPXML, rendered pages, audio and optional s
     }));
     assert.equal(error, null);
     assert.equal(found.version, '1.10');
-    assert.deepEqual(found.subtitles, audio === 'clips' ? ['Ann：Hello there', 'And welcome'] : []);
+    assert.deepEqual(found.subtitles, ['Ann：Hello there', 'And welcome']);
     assert.equal(found.captions, 0, 'subtitles use ordinary title clips instead of the fixed caption area');
     assert.deepEqual(found.primary, ['title'], 'Studio’s main picture track becomes the primary storyline');
     assert.equal(found.clips.filter((c) => c.kind === 'video').length, 2);
@@ -984,7 +1036,7 @@ test('editing software: an xmeml folder; pages rendered with alpha, footage plac
     { muted: true, clips: [{ src: 'assets/audio/music/bed.wav', id: 'bed', speed: 2, volume: 0.7 }] },
   ] }));
 
-  const done = await exported({ kind: 'nle', fps: 25 }, 'Cut', cut);
+  const done = await exported({ kind: 'nle', footage: 'render', fps: 25 }, 'Cut', cut);
   const folder = join(exportsRoot(), 'Cut · Editor XML');
   /* the outputs are this system's paths: Windows separates them with \ */
   const rel = done.outputs.map((f) => f.slice(folder.length + 1).replaceAll('\\', '/'));
@@ -1044,10 +1096,10 @@ test('editing software: an xmeml folder; pages rendered with alpha, footage plac
   assert.ok(Number(/max_volume: (-?[\d.]+) dB/.exec(tail)?.[1] ?? -99) > -20, 'the slowed sound plays to the end of its clip');
 
   /* the mixed stems instead, the media left where it is */
-  const stems = await exported({ kind: 'nle', fps: 25, audio: 'stems', media: 'link', subtitles: false }, 'Cut', cut);
+  const stems = await exported({ kind: 'nle', footage: 'render', fps: 25, audio: 'stems', media: 'link', subtitles: false }, 'Cut', cut);
   const folder2 = join(exportsRoot(), 'Cut · Editor XML 2');
   assert.deepEqual(stems.outputs.map((f) => f.slice(folder2.length + 1).replaceAll('\\', '/')),
-    ['Cut.xml', 'media/Cut - footage.wav', 'media/Cut - voice.wav', 'media/badge.png', 'media/slow.mov', 'media/title-2.mov', 'media/title.mov']);
+    ['Cut.xml', 'Cut.srt', 'media/Cut - footage.wav', 'media/Cut - voice.wav', 'media/badge.png', 'media/slow.mov', 'media/title-2.mov', 'media/title.mov']);
   const xml = readFileSync(stems.out, 'utf8');
   assert.match(xml, /<pathurl>file:\/\/localhost\/[^<]*\/Cut\/footage\/shot%20one\.mp4<\/pathurl>/, 'linked to the footage where it is');
   assert.ok(!xml.includes('<link>'), 'a stem is not linked to a picture');
@@ -1083,7 +1135,7 @@ test('剪映: the same timeline as a draft in 剪映\'s drafts folder, its media
   const materials = new Map([...info.materials.videos, ...info.materials.audios].map((m) => [m.id, m]));
   for (const seg of info.tracks.filter((t) => t.type !== 'text').flatMap((t) => t.segments)) {
     const m = materials.get(seg.material_id);
-    assert.ok(m && existsSync(m.path) && m.path.startsWith(join(folder, 'media')), `${m?.path}`);
+    assert.ok(m?.path.startsWith(`${JIANYING_DRAFT_PATH}/media/`) && existsSync(m.path.replace(JIANYING_DRAFT_PATH, folder)), `${m?.path}`);
   }
   /* the footage plays its own sound at its level, so there is no second clip of it */
   const shot = info.tracks.flatMap((t) => t.segments).find((s) => materials.get(s.material_id)?.path.endsWith('shot one.mp4') && s.clip);
@@ -1161,7 +1213,7 @@ test('剪映: footage drawn with a look of its own and nothing under it is opaqu
   const drafts = join(scratch, 'Ground drafts');
   mkdirSync(drafts, { recursive: true });
   const exports = createExports({ captions: subtitles, drafts: (app) => (app === 'jianying' ? drafts : null) });
-  const done = await ended(exports, exports.start(project('Ground', dir), { kind: 'nle', format: 'jianying', fps: 25, subtitles: false }));
+  const done = await ended(exports, exports.start(project('Ground', dir), { kind: 'nle', footage: 'render', format: 'jianying', fps: 25, subtitles: false }));
   assert.equal(done.status, 'done', done.error);
   const media = (name) => join(dirname(done.out), 'media', name);
   /* `alone` has nothing under it (`under` ends where it starts, give or take a hair): what the film shows there, its round corners on the film's background, as H.264 */

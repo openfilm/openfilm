@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, wr
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { FilmPage, FrameError, launch, serve } from './host.mjs';
 import { FILM_FILE, readFilmFile } from './film-doc.mjs';
-import { readableLink } from './media-links.mjs';
+import { readableLink, referenceSource } from './media-links.mjs';
 
 /**
  * A film argument (a project folder with film.html, a folder inside one, a folder with index.html, or an .html file)
@@ -168,12 +168,15 @@ export async function write(stream, buf) {
  * src/media-links.mjs), as the file server does.
  */
 export function fileOf(root, entry, src) {
-  const path = decodeURIComponent(new URL(String(src), `http://film/${entry}`).pathname);
+  const path = new URL(String(src), `http://film/${entry}`).pathname
+    .replace(/(?:%[0-9a-f]{2})+/gi, (m) => { try { return decodeURIComponent(m); } catch { return m; } });
   /* the URL takes care of `..` before the path is decoded: `%2F` decoded after it is a `/` the join resolves, so
      the file is checked to be inside the folder, and, when it is there, not a link out of it */
   const home = resolve(root);
   const file = resolve(join(root, path));
   if (file !== home && !file.startsWith(home + sep)) throw new Error(`${src}: outside the film's folder`);
+  const linked = referenceSource(home, file);
+  if (linked) return linked;
   if (existsSync(file)) {
     const real = realpathSync(file), base = realpathSync(home);
     if (real !== base && !real.startsWith(base + sep) && !readableLink(home, file)) throw new Error(`${src}: a link out of the film's folder`);

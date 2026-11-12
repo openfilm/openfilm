@@ -40,7 +40,8 @@ export const AGENT_PROGRAMS = Object.freeze({
   deepseek: { names: ['dsh'], dirs: (home, win, apps = ['/Applications', join(home, 'Applications')]) => (win
     ? [join(localAppData(home), 'Programs', 'DeepSeek Harness', 'resources', 'runtime', 'cli', 'bin')]
     : apps.map((dir) => dirname(join(dir, 'DeepSeek Harness.app', DSH_IN_APP)))) },
-  /* Google Antigravity keeps agy in %LOCALAPPDATA%\agy\bin on Windows */
+  /* Antigravity's ACP server is the separately installed agy CLI, not its desktop app. The official installer
+     uses ~/.local/bin (HOME_BIN_CANDIDATES) on macOS/Linux and %LOCALAPPDATA%\agy\bin on Windows. */
   antigravity: {
     names: ['agy'],
     dirs: (home, win) => (win ? [join(localAppData(home), 'agy', 'bin')] : []),
@@ -315,8 +316,9 @@ export function antigravityVersion(file, { ask = askVersion } = {}) {
 /** Whether version `a` is later than `b` (dotted numbers); false when either is unknown. */
 export function laterVersion(a, b) {
   if (!a || !b) return false;
-  const x = a.split('.').map(Number);
-  const y = b.split('.').map(Number);
+  const parts = (s) => String(s).replace(/-.*$/, '').split('.').map((p) => Number(p) || 0);
+  const x = parts(a);
+  const y = parts(b);
   for (let i = 0; i < Math.max(x.length, y.length); i += 1) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
   return false;
 }
@@ -417,8 +419,9 @@ export function cmdTarget(cmd, depth = 0) {
       if (next) return next;
       continue;
     }
-    // MiniMax's SQLite is built for the installer's Node, which can differ from Electron's module ABI.
-    if (/[\\/]@minimax-ai[\\/]code[\\/]/i.test(target) && existsFile(target)) return null;
+    // MiniMax's SQLite is built for the installer's Node, which can differ from Electron's module ABI; DeepSeek
+    // Harness (from 0.2.2) loads an addon that starts only on the Electron builds it names, which the app's may not be.
+    if (/[\\/](?:@minimax-ai[\\/]code|@deepseek-ai[\\/]dsh)[\\/]/i.test(target) && existsFile(target)) return null;
     if (/[\\/]@openai[\\/]codex[\\/]/i.test(target) && /\.js$/i.test(target)) {
       const triple = process.arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc';
       const pkg = target.replace(/[\\/]bin[\\/][^\\/]+$/, '');
@@ -481,10 +484,12 @@ const WINDOWS_APP_NAMES = {
   kimi: /^Kimi(?:\s|$)/i,
   minimax: /^MiniMax(?:\s|$)/i,
   deepseek: /^DeepSeek Harness(?:\s|$)/i,
+  antigravity: /^(?:Google\s+)?Antigravity(?:\s|$)/i,
 };
 const WINDOWS_APP_FOLDERS = {
   copilot: /^GitHub Copilot$/i, cursor: /^cursor$/i, opencode: /^(?:@opencodedesktop|OpenCode)$/i,
   codebuddy: /^CodeBuddy/i, kimi: /^Kimi/i, minimax: /^MiniMax/i, deepseek: /^DeepSeek Harness$/i,
+  antigravity: /^Antigravity$/i,
 };
 const directoryExists = (dir) => { try { return statSync(dir).isDirectory(); } catch { return false; } };
 /** Registered custom folders and the maker's default folders. Stale registry entries never count. */
@@ -634,6 +639,7 @@ const DESKTOP_APPS = {
   codebuddy: { name: 'CodeBuddy', mac: /^CodeBuddy.*\.app$/i, win: (local) => folders(join(local, 'Programs'), /^CodeBuddy/i) },
   kimi: { name: 'Kimi', mac: /^Kimi.*\.app$/i, win: (local) => folders(join(local, 'Programs'), /^Kimi/i) },
   minimax: { name: 'MiniMax', mac: /^MiniMax.*\.app$/i, win: (local) => folders(join(local, 'Programs'), /^MiniMax/i) },
+  antigravity: { name: 'Antigravity', mac: /^(?:Google )?Antigravity\.app$/i, win: (local) => folders(join(local, 'Programs'), /^Antigravity$/i) },
 };
 
 /** The folders in a folder whose names match. */
@@ -662,6 +668,8 @@ export function desktopApp(id, { home = homedir(), applicationDirs = ['/Applicat
  * install page (AGENT_DOWNLOADS).
  */
 export const AGENT_INSTALLERS = Object.freeze({
+  /* antigravity.google/docs/getting-started?tab=cli — the desktop download does not install agy */
+  antigravity: { sh: 'curl -fsSL https://antigravity.google/cli/install.sh | bash', ps: 'irm https://antigravity.google/cli/install.ps1 | iex' },
   /* cursor.com/docs/cli/installation */
   cursor: { sh: 'curl https://cursor.com/install -fsS | bash', ps: "irm 'https://cursor.com/install?win32=true' | iex" },
   /* docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli */

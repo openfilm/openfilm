@@ -5,22 +5,24 @@
  * and a cut its own (onto the timeline). Floating, they keep their size however far the board is zoomed.
  */
 import React from 'react';
-import { NodeToolbar, Position } from '@xyflow/react';
+import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  AlignLeft, ArrowUp, AudioLines, Brush, Camera, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, Download, FolderSearch, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Video, X,
+  AlignLeft, ArrowUp, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type ModelSpec, type VideoMode } from '@/lib/canvas';
+import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
 import { PRESETS, PRESET_GROUPS, presetOf, type CanvasPreset } from '@/lib/canvas-presets';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
+import { studioHost } from '@/lib/host';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
 import { modelTime, timeLabel, useBoard, type Choice, type MakeData } from './board';
-import { frameOf, splitGrid } from './pixels';
+import { splitGrid } from './pixels';
 import { ProviderMark } from '../settings/ProviderMark';
 import { useDraft } from './words';
 import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
 import { VoiceId, VoicePicker, defaultVoice, serviceOf, voicesOf } from './voices';
+import { WRITING_ATTACHMENT_ACCEPT, WRITING_ATTACHMENT_LIMIT, writingAttachmentKind } from '../../../../../src/canvas-attachments.mjs';
 
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 /** the lengths offered for each kind, in seconds */
@@ -35,6 +37,32 @@ const OPTION_TITLE = 'mb-1.5 text-[11.5px] text-[var(--cv-ink-3)]';
 const PICK = 'flex h-8 min-w-0 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
 /** the panel under a selected node: wider and rounder than the menus, a hairline round it */
 const PANEL = 'cv-pop relative rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
+const PROMPT = 'mt-2.5 block max-h-[42vh] w-full resize-none bg-transparent px-1 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]';
+const COMPOSER_FOOTER = 'mt-1 flex min-w-0 items-center gap-0.5';
+const SEND = 'flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]';
+
+function Composer({ id, shown, expanded, setExpanded, children }: {
+  id: string; shown: boolean; expanded: boolean; setExpanded: (expanded: boolean) => void; children: React.ReactNode;
+}) {
+  const t = useT();
+  const board = useBoard();
+  const label = t(expanded ? 'canvas.panel.collapse' : 'canvas.panel.expand');
+  return (
+    <NodeToolbar nodeId={id} isVisible={shown} position={Position.Bottom} offset={14}>
+      <div data-canvas-composer="" className={`nodrag nopan nowheel w-[min(660px,86vw)] px-3 pb-2 pt-3 ${PANEL}`} onKeyDown={(event) => event.stopPropagation()}>
+        <Tooltip label={label}>
+          <button type="button" aria-label={label} aria-expanded={expanded} onClick={() => {
+            setExpanded(!expanded);
+            if (!expanded) board.showComposer?.(id);
+          }} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
+            {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
+        </Tooltip>
+        {children}
+      </div>
+    </NodeToolbar>
+  );
+}
 
 /** A shape as a little frame of it (16:9 wide, 9:16 tall). */
 function RatioIcon({ ratio, size = 16 }: { ratio: string; size?: number }) {
@@ -47,19 +75,50 @@ function RatioIcon({ ratio, size = 16 }: { ratio: string; size?: number }) {
   );
 }
 
+export function SelectionToolbar({ ids, onGroup, onUngroup, onDuplicate, onRemove }: {
+  ids: string[];
+  onGroup?: () => void;
+  onUngroup?: () => void;
+  onDuplicate: () => void;
+  onRemove: () => void;
+}) {
+  const t = useT();
+  const top = useStore((state) => {
+    if (state.userSelectionActive) return null;
+    const y = Math.min(...ids.map((id) => state.nodeLookup.get(id)?.internals.positionAbsolute.y ?? Infinity));
+    return y * state.transform[2] + state.transform[1];
+  });
+  if (top === null) return null;
+  const action = 'flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]';
+  return (
+    <NodeToolbar nodeId={ids} isVisible position={Position.Top} offset={Math.min(32, top - 48)} style={{ zIndex: 4 }}>
+      <div data-canvas-selection-toolbar="" role="group" className={`nodrag nopan flex w-max items-center gap-0.5 p-1 ${CARD}`}>
+        {onGroup ? <button type="button" className={action} onClick={onGroup}><Group size={15} />{t('canvas.groupThem')}</button> : null}
+        {onUngroup ? <button type="button" className={action} onClick={onUngroup}><Ungroup size={15} />{t('canvas.ungroup')}</button> : null}
+        <Tooltip label={t('canvas.duplicate')}>
+          <button type="button" aria-label={t('canvas.duplicate')} className={action} onClick={onDuplicate}><CopyPlus size={15} /></button>
+        </Tooltip>
+        <Tooltip label={t('canvas.remove')}>
+          <button type="button" aria-label={t('canvas.remove')} className={action} onClick={onRemove}><Trash2 size={15} /></button>
+        </Tooltip>
+      </div>
+    </NodeToolbar>
+  );
+}
+
 /** What can be done with what a node shows: onto the timeline, shown in the Assets, saved, seen whole. */
 export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | null }) {
   const t = useT();
   const board = useBoard();
   const [grid, setGrid] = React.useState(false);
-  if (board.readOnly || !file) return null;
-  const btn = 'flex h-8 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
-  const icon = 'flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+  if (board.readOnly || !file || board.single !== id) return null;
+  const btn = 'nodrag flex h-8 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+  const icon = 'nodrag flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
   const base = file.name.replace(/\.[^.]+$/, '');
   const fail = (e: unknown) => console.warn(e);
-  return (
-    <NodeToolbar nodeId={id} isVisible={board.single === id} position={Position.Top} offset={36}>
-      <div className={`nodrag nopan flex items-center gap-0.5 p-1 ${CARD}`}>
+  const video = file.kind === 'video';
+  const actions = (
+      <div className={`nopan flex w-max items-center gap-0.5 p-1 ${CARD} ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
         {file.kind === 'image' ? (
           <>
             <button type="button" className={btn} onClick={() => board.spawn(id, 'image', { preset: 'cameras9', opts: { ratio: '1:1' } })}><Orbit size={14} />{t('canvas.actions.angles')}</button>
@@ -77,12 +136,6 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
             <button type="button" className={btn} onClick={() => board.cutout(id, file.path)}><Eraser size={14} />{t('canvas.actions.cutout')}</button>
           </>
         ) : null}
-        {file.kind === 'video' ? (
-          <button type="button" className={btn} onClick={() => {
-            const playing = document.querySelector<HTMLVideoElement>(`.react-flow__node[data-id="${CSS.escape(id)}"] video`);
-            void frameOf(board.sources.file(file), playing?.currentTime ?? 0, `${base}-frame.png`).then((frame) => board.bring(id, [frame]), fail);
-          }}><Camera size={14} />{t('canvas.actions.frame')}</button>
-        ) : null}
         {file.kind !== 'other' ? <button type="button" className={btn} onClick={() => board.addToFilm(file)}><Clapperboard size={14} />{t('canvas.addToFilm')}</button> : null}
         <span className="mx-0.5 h-4 w-px bg-[var(--cv-float-line)]" />
         {board.reveal ? (
@@ -97,7 +150,22 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
           <button type="button" aria-label={t('canvas.actions.view')} className={icon} onClick={() => board.view(file.path)}><Maximize2 size={15} /></button>
         </Tooltip>
       </div>
-    </NodeToolbar>
+  );
+  return video ? <VideoActionBar>{actions}</VideoActionBar> : (
+    <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={36}>{actions}</NodeToolbar>
+  );
+}
+
+/** Keep the video tools inside the draggable node while matching the other floating tools' screen size. */
+function VideoActionBar({ children }: { children: React.ReactNode }) {
+  const zoom = useStore((state) => state.transform[2]);
+  return (
+    <div data-canvas-node-header="" data-canvas-video-controls="" data-canvas-video-toolbar="" className="absolute bottom-full left-1/2 z-20 origin-bottom -translate-x-1/2"
+      style={{ scale: 1 / zoom, marginBottom: Math.max(36, 30 * zoom) / zoom }}
+      onKeyDown={(event) => event.stopPropagation()}
+      onClick={(event) => { if ((event.target as Element).closest('button, a')) event.stopPropagation(); }}>
+      {children}
+    </div>
   );
 }
 
@@ -157,24 +225,6 @@ function Choices({ title, items, columns }: { title: string; columns: number; it
   );
 }
 
-/** What a model makes, in a few words: its lengths, the pictures it takes, what it is made from. */
-function specLine(spec: ModelSpec | undefined, t: (key: string) => string): string {
-  if (!spec) return '';
-  const range = spec.only?.length ? [Math.min(...spec.only), Math.max(...spec.only)] : spec.seconds;
-  return [
-    spec.needs === 'clip' ? t('canvas.spec.fromClip') : spec.needs === 'audio' ? t('canvas.spec.fromAudio') : '',
-    range ? t('canvas.spec.seconds').replace('{a}', String(range[0])).replace('{b}', String(range[1])) : '',
-    spec.refs ? t('canvas.spec.refs').replace('{n}', String(spec.refs)) : '',
-    spec.refs === 0 && spec.frames ? t('canvas.spec.frames') : '',
-    spec.sizes?.length ? (spec.sizes.length > 1 ? t('canvas.spec.sizes').replace('{a}', spec.sizes[0]!.toUpperCase()).replace('{b}', spec.sizes[spec.sizes.length - 1]!.toUpperCase()) : spec.sizes[0]!.toUpperCase()) : '',
-    spec.voice ? t('canvas.spec.voice') : '',
-    spec.clip ? t('canvas.spec.clip') : '',
-    spec.transparent ? t('canvas.spec.transparent') : '',
-    spec.formats?.some((f) => f !== 'png') ? spec.formats.filter((f) => f !== 'png').map((f) => f.toUpperCase()).join(' / ') : '',
-    spec.mask || spec.markup ? t('canvas.spec.redraw') : '',
-  ].filter(Boolean).join(' · ');
-}
-
 /**
  * Which model a node makes with: as Settings say, or one of every service's, the person's own first; a service not
  * connected yet is there too, a click away from connecting it.
@@ -187,26 +237,17 @@ function ModelPicker({ choices, picked, fallback, onPick, onConnect }: {
   const q = query.trim().toLowerCase();
   const shown = q ? choices.filter((c) => `${c.name} ${c.provider}`.toLowerCase().includes(q)) : choices;
   const row = (c: Choice) => {
-    const line = specLine(c.spec, t);
     const on = picked?.via === c.via && picked?.model === c.model;
     /* how long it takes, as this person's runs with it took */
     const took = modelTime(c.via, c.model);
     return (
       <button key={`${c.via}|${c.model ?? ''}`} type="button" onClick={() => (c.connected ? onPick(c) : onConnect())}
-        className={`group/model flex w-full min-w-0 items-start gap-2.5 rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-[var(--cv-float-hover)] ${on ? 'bg-[var(--cv-float-hover)]' : ''} ${c.connected ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
+        className={`flex w-full min-w-0 items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-[var(--cv-float-hover)] ${on ? 'bg-[var(--cv-float-hover)]' : ''} ${c.connected ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] bg-[var(--cv-chip)]"><ProviderMark id={c.via} size={13} /></span>
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 flex-1 truncate leading-5">{c.name}</span>
-            {took !== null ? <span className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-ink-2)]" title={t('canvas.panel.models.took')}>{timeLabel(took)}</span> : null}
-            {on ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" />
-              : !c.connected ? <span className="shrink-0 rounded-md border !border-[var(--cv-float-line)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-label)]">{t('canvas.panel.models.connect')}</span> : null}
-          </span>
-          {/* what it is and what it takes, said when pointed at (or picked) */}
-          <span className={`text-[11.5px] leading-snug text-[var(--cv-label)] ${on ? 'block' : 'hidden group-hover/model:block'}`}>
-            {[c.provider, c.kind === 'sfx' || c.kind === 'music' || c.kind === 'tts' ? t(`canvas.make.${c.kind}`) : '', line].filter(Boolean).join(' · ')}
-          </span>
-        </span>
+        <span className="min-w-0 flex-1 truncate leading-5">{c.name}</span>
+        {took !== null ? <span className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-ink-2)]" title={t('canvas.panel.models.took')}>{timeLabel(took)}</span> : null}
+        {on ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" />
+          : !c.connected ? <span className="shrink-0 rounded-md border !border-[var(--cv-float-line)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-label)]">{t('canvas.panel.models.connect')}</span> : null}
       </button>
     );
   };
@@ -308,14 +349,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const assetRows = board.files.filter((f) => (f.kind === 'image' || (data.make === 'video' && f.kind === 'video')) && !inputs.some((i) => i.path === f.path))
     .map((f) => { const src = thumb(f); return { key: f.path, value: f.path, label: f.name, note: f.dir || undefined, icon: src ? <img src={src} alt="" className="h-8 w-11 rounded object-cover" /> : <Images size={15} /> }; });
   return (
-    <NodeToolbar nodeId={id} isVisible={shown} position={Position.Bottom} offset={14}>
-      <div className={`nodrag nopan nowheel w-[min(660px,86vw)] px-3 pb-2 pt-3 ${PANEL}`} onKeyDown={(event) => event.stopPropagation()}>
-        <Tooltip label={t(expanded ? 'canvas.panel.collapse' : 'canvas.panel.expand')}>
-          <button type="button" aria-label={t(expanded ? 'canvas.panel.collapse' : 'canvas.panel.expand')} onClick={() => setExpanded((v) => !v)}
-            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
-            {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-          </button>
-        </Tooltip>
+    <Composer id={id} shown={shown} expanded={expanded} setExpanded={setExpanded}>
         {!takesPictures ? (
           /* a sound is a voice-over, music or a sound effect: each made by its own models */
           <div className="flex items-center gap-1 pr-9">
@@ -420,9 +454,9 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); board.make(id); }
           }}
           placeholder={preset ? t('canvas.presets.hint') : t(`canvas.panel.placeholder.${data.make}`)}
-          className="mt-2.5 w-full resize-none bg-transparent px-1 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]"
+          className={PROMPT}
         />
-        <div className="mt-1 flex min-w-0 items-center gap-0.5">
+        <div className={COMPOSER_FOOTER}>
           {every.length ? (
             <Popover open={open === 'model'} onOpenChange={(v) => setOpen(v ? 'model' : null)} placement="auto"
               trigger={(
@@ -596,13 +630,12 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
           ) : (
             <Tooltip label={`${(data.versions?.length ? t('canvas.make.again') : t('canvas.make.run'))} · ${MOD}↵`}>
               <button type="button" aria-label={t('canvas.make.run')} disabled={!choices.length} onClick={() => board.make(id)}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]"><ArrowUp size={17} /></button>
+                className={SEND}><ArrowUp size={17} /></button>
             </Tooltip>
           )}
         </div>
         {error ? <div className="mt-2 select-text text-[12px] leading-snug text-red-500">{error}</div> : null}
-      </div>
-    </NodeToolbar>
+    </Composer>
   );
 }
 
@@ -615,23 +648,75 @@ export function NotePanel({ id }: { id: string }) {
   const board = useBoard();
   const [ask, setAsk] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
+  const [expanded, setExpanded] = React.useState(false);
+  const [attachments, setAttachments] = React.useState<string[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const write = board.write;
+  const upload = board.uploadWritingFiles;
+  const Picker = studioHost?.canvasWriting?.Picker;
   if (!write) return null;
-  const wired = board.single === id ? board.inputs(id).filter((i) => i.text != null).length : 0;
+  const shown = board.single === id && !board.readOnly;
+  const wired = shown ? board.inputs(id).filter((i) => i.text != null).length : 0;
+  const canSend = !busy && !uploading && Boolean(ask.trim() || wired || attachments.length);
+  const attach = async (files: File[]) => {
+    if (!upload || !files.length || uploading || busy) return;
+    if (files.length + attachments.length > WRITING_ATTACHMENT_LIMIT || files.some((file) => !writingAttachmentKind(file.name))) {
+      setError(t('canvas.write.attachTypes').replace('{n}', String(WRITING_ATTACHMENT_LIMIT)));
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const kept = await upload(files, (_index, _progress, path) => {
+        if (path) setAttachments((current) => [...new Set([...current, path])]);
+      });
+      setAttachments((current) => [...new Set([...current, ...kept])]);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : t('assets.uploadFailed'));
+    } finally {
+      setUploading(false);
+    }
+  };
   const send = () => {
-    if (busy || (!ask.trim() && !wired)) return;
+    if (!canSend) return;
     setBusy(true);
     setError(null);
     /* written: the ask is done; refused: it stays, to send again */
-    void write(id, ask.trim()).then((why) => { setBusy(false); setError(why); if (!why) setAsk(''); });
+    void write(id, ask.trim(), attachments).then((why) => {
+      setBusy(false);
+      setError(why);
+      if (!why) { setAsk(''); setAttachments([]); setExpanded(false); }
+    });
   };
   return (
-    <NodeToolbar nodeId={id} isVisible={board.single === id && !board.readOnly} position={Position.Bottom} offset={14}>
-      <div className={`nodrag nopan nowheel w-[min(560px,86vw)] px-3 pb-2 pt-3 ${PANEL}`} onKeyDown={(event) => event.stopPropagation()}>
+    <Composer id={id} shown={shown} expanded={expanded} setExpanded={setExpanded}>
+        <div className="flex h-6 items-center gap-1 pr-9">
+          {upload ? <label className={`relative focus-within:outline ${CHIP} ${busy || uploading ? 'opacity-60' : 'cursor-pointer'}`} title={t('canvas.write.attach')}>
+            <input type="file" multiple accept={WRITING_ATTACHMENT_ACCEPT} disabled={busy || uploading} aria-label={t('canvas.write.attach')}
+              className="absolute inset-0 size-full cursor-pointer opacity-0 disabled:cursor-default" onChange={(event) => {
+                const files = Array.from(event.currentTarget.files ?? []);
+                event.currentTarget.value = '';
+                void attach(files);
+              }} />
+            <Plus size={13} />{t('canvas.panel.upload')}
+          </label> : null}
+          {uploading ? <span role="status" className="truncate text-xs text-[var(--cv-label)]">{t('canvas.importUploading')}</span> : null}
+        </div>
+        {attachments.length ? <div className="mt-2.5 flex max-h-24 flex-wrap gap-1 overflow-y-auto">
+          {attachments.map((path) => {
+            const name = path.split('/').pop() ?? path;
+            return <span key={path} className="inline-flex max-w-full items-center gap-1 rounded-md bg-[var(--cv-chip)] px-2 py-1 text-xs text-[var(--cv-ink-2)]">
+              <span className="truncate" title={name}>{name}</span>
+              <button type="button" disabled={busy || uploading} aria-label={`${t('canvas.remove')} ${name}`} onClick={() => setAttachments((current) => current.filter((item) => item !== path))}>
+                <X size={12} />
+              </button>
+            </span>;
+          })}
+        </div> : null}
         <textarea
           value={ask}
-          rows={2}
+          rows={expanded ? 14 : 3}
           disabled={busy}
           onChange={(event) => { setAsk(event.target.value); setError(null); }}
           onKeyDown={(event) => {
@@ -640,24 +725,24 @@ export function NotePanel({ id }: { id: string }) {
             else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); send(); }
           }}
           placeholder={t('canvas.write.placeholder')}
-          className="w-full resize-none bg-transparent px-1 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)] disabled:opacity-60"
+          className={`${PROMPT} disabled:opacity-60`}
         />
-        <div className="mt-1 flex min-w-0 items-center gap-1">
-          <span className="flex h-8 min-w-0 items-center gap-1.5 px-1 text-[12.5px] text-[var(--cv-label)]">
-            <Sparkles size={14} className="shrink-0" /><span className="truncate">{busy ? t('canvas.write.busy') : t('canvas.write.by')}</span>
-          </span>
+        <div className={COMPOSER_FOOTER}>
+          {Picker ? <Picker triggerClassName={PICK} /> : <span className={PICK}>
+            <Sparkles size={14} className="shrink-0" /><span className="truncate">{t('canvas.write.by')}</span>
+          </span>}
+          {busy ? <span role="status" className="truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.write.busy')}</span> : null}
           <span className="flex-1" />
           {wired ? <span className="mr-1 truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.write.wired').replace('{n}', String(wired))}</span> : null}
           <Tooltip label={`${t('canvas.write.run')} · ${MOD}↵`}>
-            <button type="button" aria-label={t('canvas.write.run')} disabled={busy || (!ask.trim() && !wired)} onClick={send}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]">
+            <button type="button" aria-label={t('canvas.write.run')} disabled={!canSend} onClick={send}
+              className={SEND}>
               {busy ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <ArrowUp size={17} />}
             </button>
           </Tooltip>
         </div>
         {error ? <div className="mt-2 select-text text-[12px] leading-snug text-red-500">{error}</div> : null}
-      </div>
-    </NodeToolbar>
+    </Composer>
   );
 }
 

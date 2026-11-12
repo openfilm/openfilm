@@ -15,7 +15,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    # Match the signed desktop build runner. The macOS 26 pool repeatedly stalled browser and FFmpeg tests.
+    runs-on: ${{ matrix.os == 'macos-latest' && 'macos-15' || matrix.os }}
     # a test that hangs ends the job, not hours later
     timeout-minutes: 45
     env:

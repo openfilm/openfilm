@@ -1,0 +1,8 @@
+.pane { position:fixed; z-index:35; display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--bg-panel); border:0; }
+.pane[data-workspace-root] { border-top:1px solid var(--dock-line); }
+.pane[hidden] { display:none; }
+.content { position:relative; display:flex; flex:1; flex-direction:column; min-height:0; min-width:0; overflow:hidden; }
+.seam { position:absolute; z-index:10; touch-action:none; outline:none; }
+.left { top:0; bottom:0; left:-5px; width:9px; cursor:col-resize; }
+.right { top:0; bottom:0; right:-5px; width:9px; cursor:col-resize; }
+.top { top:-5px; left:0; right:0; height:9px; cursor:row-resize; }

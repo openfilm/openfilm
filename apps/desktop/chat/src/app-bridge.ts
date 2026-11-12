@@ -60,6 +60,8 @@ interface AppBridge {
   setChatOpen(open: boolean): void;
   /** the project's assets, drawn by Studio over this column while open (main.mjs `assets`) */
   assetsOpen(): boolean;
+  assetsOverlay?(): boolean;
+  onAssetsOverlay?(listener: (open: boolean) => void): () => void;
   setAssetsOpen(open: boolean): void;
   onAssets(listener: (open: boolean) => void): () => void;
   /** while the assets are open: the composer's height (all the view keeps), and a menu of ours open (it needs the column) */

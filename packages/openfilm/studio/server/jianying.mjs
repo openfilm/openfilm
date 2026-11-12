@@ -28,14 +28,17 @@
  */
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import { filmSubtitleLanguageOf } from './film-subtitle.mjs';
+import { ownLook } from './nle.mjs';
+import { jianyingCaptionStyle } from './jianying-captions.mjs';
 
 /**
  * @typedef {import('./nle.mjs').NleTimeline} NleTimeline
  * @typedef {import('./nle.mjs').NleClip} NleClip
  * @typedef {import('./nle.mjs').NleFile} NleFile
- * @typedef {{ text: string, startMs: number, durMs: number }} JianyingCue
+ * @typedef {import('./nle.mjs').DraftClipLook} DraftClipLook
+ * @typedef {{ text: string, startMs: number, durMs: number, draftLook?: import('./jianying-captions.mjs').CaptionLook }} JianyingCue
  */
 
 /** @typedef {'jianying' | 'capcut'} DraftApp */
@@ -86,10 +89,13 @@ const hex = () => randomUUID().replace(/-/g, '');
 /** A photo's length in 剪映: three hours, so any clip of it fits. */
 const PHOTO_US = 10_800_000_000;
 
+// 剪映 expands this marker against the opened draft's folder. Plain relative paths only work in the media library.
+export const JIANYING_DRAFT_PATH = '##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##';
+
 /** The material kinds an empty draft lists (剪映 reads the draft whether or not they are there). */
 const MATERIAL_KINDS = [
   'ai_translates', 'audio_balances', 'audio_effects', 'audio_fades', 'audio_track_indexes', 'audios', 'beats', 'canvases',
-  'chromas', 'color_curves', 'digital_humans', 'drafts', 'effects', 'flowers', 'green_screens', 'handwrites', 'hsl', 'images',
+  'chromas', 'color_curves', 'common_mask', 'digital_humans', 'drafts', 'effects', 'flowers', 'green_screens', 'handwrites', 'hsl', 'images',
   'log_color_wheels', 'loudnesses', 'manual_deformations', 'masks', 'material_animations', 'material_colors',
   'multi_language_refs', 'placeholders', 'plugin_effects', 'primary_color_wheels', 'realtime_denoises', 'shapes',
   'smart_crops', 'smart_relights', 'sound_channel_mappings', 'speeds', 'stickers', 'tail_leaders', 'text_templates', 'texts',
@@ -102,9 +108,38 @@ const PLATFORM = /** @type {Record<DraftApp, object>} */ ({
   capcut: { app_id: 359289, app_source: 'cc', app_version: '5.9.0', os: 'windows' },
 });
 
-/** A clip's picture settings: none (as placed), or scaled and moved. */
-const clipSettings = (/** @type {number} */ scale, /** @type {number} */ x, /** @type {number} */ y) => ({
-  alpha: 1, flip: { horizontal: false, vertical: false }, rotation: 0, scale: { x: scale, y: scale }, transform: { x, y },
+/** @typedef {{ opacity: number, maskImage: string, maskComposite: string, simple: boolean }} DraftStyle */
+
+/* The inspector writes a square-cornered, unfeathered rectangle as two intersecting bands with hard stops.
+   Keep the parser narrow: another shape, a soft edge, or an additional effect must still render. */
+const percent = String.raw`(-?(?:\d+(?:\.\d+)?|\.\d+))%`;
+const black = String.raw`(?:#000(?:000)?|black|rgb\(\s*0,\s*0,\s*0\s*\))`;
+const transparent = String.raw`(?:transparent|rgba\(\s*0,\s*0,\s*0,\s*0\s*\))`;
+const band = (/** @type {string} */ direction) => String.raw`linear-gradient\(\s*${direction}${transparent}\s+${percent}\s*,\s*${black}\s+${percent}\s*,\s*${black}\s+${percent}\s*,\s*${transparent}\s+${percent}\s*\)`;
+const rectangle = new RegExp(String.raw`^${band(String.raw`90deg\s*,\s*`)}\s*,\s*${band(String.raw`(?:(?:180deg|to bottom)\s*,\s*)?`)}$`, 'i');
+const nativeProperties = new Set(['opacity', 'mask-image', 'mask-composite']);
+
+/**
+ * A static look that can be recreated with editable 剪映 controls.
+ * @param {string} style @param {DraftStyle | null} css @param {number} rotation @param {boolean} maskFits
+ * @returns {DraftClipLook | undefined}
+ */
+export function jianyingClipLook(style, css, rotation, maskFits) {
+  if (!css?.simple || ownLook(style).some(([key]) => !nativeProperties.has(key))) return;
+  const { opacity, maskImage, maskComposite } = css;
+  if (maskImage === 'none') return { opacity, rotation };
+  // A draft mask is relative to the actual picture. CSS masks may be relative to a letterboxed clip box.
+  if (!maskFits || rotation !== 0 || !/^intersect(?:,\s*intersect)?$/.test(maskComposite)) return;
+  const match = rectangle.exec(maskImage);
+  if (!match) return;
+  const [x1, x2, x3, x4, y1, y2, y3, y4] = match.slice(1).map((v) => Number(v) / 100);
+  if (x1 !== x2 || x3 !== x4 || y1 !== y2 || y3 !== y4 || x1 < 0 || y1 < 0 || x3 > 1 || y3 > 1 || x1 >= x3 || y1 >= y3) return;
+  return { opacity, rotation, rectangle: { left: x1, top: y1, right: x3, bottom: y3 } };
+}
+
+/** A clip's picture settings, as the controls in the editor read them. */
+const clipSettings = (/** @type {number} */ scale, /** @type {number} */ x, /** @type {number} */ y, /** @type {DraftClipLook | undefined} */ look = undefined) => ({
+  alpha: look?.opacity ?? 1, flip: { horizontal: false, vertical: false }, rotation: look?.rotation ?? 0, scale: { x: scale, y: scale }, transform: { x, y },
 });
 
 /**
@@ -126,7 +161,8 @@ const round6 = (/** @type {number} */ n) => { const r = Math.round(n * 1e6) / 1e
  * The draft: `info` (draft_info.json) and `meta` (draft_meta_info.json), for the folder `folder` in the app's drafts
  * folder `root`.
  * @param {NleTimeline} timeline
- * @param {{ app?: DraftApp, name: string, folder: string, root: string, cues?: readonly JianyingCue[], language?: string | null, now?: number }} opts
+ * @param {{ app?: DraftApp, name: string, folder: string, root: string, cues?: readonly JianyingCue[], language?: string | null,
+ *   fonts?: ReadonlyMap<string, import('./jianying-captions.mjs').DraftFont>, now?: number }} opts
  */
 export function jianyingDraft(timeline, opts) {
   const platform = PLATFORM[opts.app ?? 'jianying'];
@@ -143,13 +179,22 @@ export function jianyingDraft(timeline, opts) {
   const library = [];
   /** @type {Map<string, string>} a file's entry in the library, by its path */
   const entryOf = new Map();
-  const register = (/** @type {NleFile} */ file, /** @type {'video' | 'photo' | 'music'} */ kind, /** @type {string} */ name) => {
+  /** @param {NleFile} file */
+  const draftMediaPath = (file) => {
+    if (opts.app === 'capcut' || file.job.kind === 'link') return null;
+    const inside = relative(join(opts.folder, 'media'), file.path);
+    if (!inside || isAbsolute(inside) || inside === '..' || inside.startsWith(`..${sep}`)) return null;
+    return `media/${inside.split(sep).join('/')}`;
+  };
+  const register = (/** @type {NleFile} */ file, /** @type {'video' | 'photo' | 'music'} */ wanted, /** @type {string} */ name) => {
     const known = entryOf.get(file.path);
     if (known) return known;
+    const kind = file.video ? file.video.still ? 'photo' : 'video' : wanted;
     const id = randomUUID().toUpperCase();
+    const inside = draftMediaPath(file);
     library.push({
       ai_group_type: '', create_time: -1, duration: kind === 'photo' ? 5_000_000 : us(file.durationFrames), enter_from: 0,
-      extra_info: name, file_Path: file.path, height: file.video?.h ?? 0, id, import_time: -1, import_time_ms: -1, item_source: 1,
+      extra_info: name, file_Path: inside ? `./${inside}` : file.path, height: file.video?.h ?? 0, id, import_time: -1, import_time_ms: -1, item_source: 1,
       material_color_tag: '', md5: '', metetype: kind, roughcut_time_range: { duration: -1, start: -1 },
       sub_time_range: { duration: -1, start: -1 }, type: 0, width: file.video?.w ?? 0,
     });
@@ -163,6 +208,8 @@ export function jianyingDraft(timeline, opts) {
     if (known) return known;
     const id = hex();
     const name = file.path.split(/[\\/]/).pop() ?? file.name;
+    const inside = draftMediaPath(file);
+    const path = inside ? `${JIANYING_DRAFT_PATH}/${inside}` : file.path;
     if (media === 'video') {
       const still = Boolean(file.video?.still);
       materials.videos.push({
@@ -171,22 +218,41 @@ export function jianyingDraft(timeline, opts) {
         crop_ratio: 'free', crop_scale: 1, duration: still ? PHOTO_US : us(file.durationFrames),
         height: file.video?.h ?? timeline.height, width: file.video?.w ?? timeline.width,
         id, local_material_id: register(file, still ? 'photo' : 'video', name), material_id: id, material_name: name, media_path: '',
-        path: file.path, type: still ? 'photo' : 'video',
+        path, type: still ? 'photo' : 'video',
       });
     } else {
       materials.audios.push({
         app_id: 0, category_id: '', category_name: 'local', check_flag: 3, copyright_limit_type: 'none',
         duration: us(file.durationFrames), effect_id: '', formula_id: '', id, local_material_id: register(file, 'music', name), music_id: id,
-        name, path: file.path,
+        name, path,
         source_platform: 0, type: 'extract_music', wave_points: [],
       });
     }
     materialOf.set(key, id);
     return id;
   };
-  const speed = () => {
+  const speed = (value = 1) => {
     const id = hex();
-    materials.speeds.push({ curve_speed: null, id, mode: 0, speed: 1, type: 'speed' });
+    materials.speeds.push({ curve_speed: null, id, mode: 0, speed: value, type: 'speed' });
+    return id;
+  };
+
+  /** @param {NonNullable<DraftClipLook['rectangle']>} rect */
+  const mask = ({ left, top, right, bottom }) => {
+    const id = hex();
+    const material = {
+      id, name: '矩形', type: 'mask', platform: 'all', position_info: '', resource_type: 'rectangle', resource_id: '6791700809454195207',
+      config: { aspectRatio: 1, centerX: round6(left + right - 1), centerY: round6(1 - top - bottom),
+        width: round6(right - left), height: round6(bottom - top), feather: 0, rotation: 0, roundCorner: 0, invert: false },
+    };
+    materials.masks.push(material);
+    materials.common_mask.push({
+      ...material, config: { ...material.config, expansion: 0 },
+      category: 'video', category_id: 'jichu', category_name: '基础', is_old_version: false, loader_work_space: '',
+      panel: '', source_platform: 0, track_segment: '',
+      text_config: { align_type: 15, bold_width: 0, char_spacing: 0, content: '', font_name: '', font_path: '', font_resource_id: '',
+        font_size: 15, has_underline: false, italic_degree: 0, line_gap: 0, scale: 1 },
+    });
     return id;
   };
 
@@ -201,10 +267,10 @@ export function jianyingDraft(timeline, opts) {
   });
 
   /* footage's own sound, by the picture it belongs to: the video clip plays it at its level */
-  /** @type {Map<string, number>} linkGroup → level */
+  /** @type {Map<string, { level: number, kept: number }>} linkGroup → current and original levels */
   const ownSound = new Map();
   for (const t of timeline.audio) {
-    for (const c of t.clips) if (c.linkGroup && !c.levels) ownSound.set(c.linkGroup, t.enabled && c.enabled ? c.gain ?? 1 : 0);
+    for (const c of t.clips) if (c.linkGroup && !c.levels) ownSound.set(c.linkGroup, { level: t.enabled && c.enabled ? c.gain ?? 1 : 0, kept: c.gain ?? 1 });
   }
 
   /* pictures: the plan's first track is the bottom one, as 剪映's first video track (its main track) is */
@@ -219,12 +285,15 @@ export function jianyingDraft(timeline, opts) {
         const fit = Math.min(timeline.width / w, timeline.height / h);
         const scale = round6((c.motion ? c.motion.scale / 100 : 1) / fit);
         const x = round6((c.motion?.center.h ?? 0) * 2), y = round6(-(c.motion?.center.v ?? 0) * 2);
-        const level = c.linkGroup && ownSound.has(c.linkGroup) ? /** @type {number} */ (ownSound.get(c.linkGroup)) : 0;
+        const sound = c.linkGroup ? ownSound.get(c.linkGroup) : undefined;
+        const level = sound?.level ?? 0;
+        const refs = [speed(c.speed)];
+        if (c.draftLook?.rectangle) refs.push(mask(c.draftLook.rectangle));
         return segment({
           material_id: material(file, 'video'), target_timerange: span(c.start, c.end),
           source_timerange: file.video?.still ? { start: 0, duration: us(c.end) - us(c.start) } : span(c.in, c.out),
-          visible: t.enabled && c.enabled, volume: level, last_nonzero_volume: level || 1,
-          extra_material_refs: [speed()], clip: clipSettings(scale, x, y), uniform_scale: { on: true, value: 1 },
+          visible: t.enabled && c.enabled, volume: level, last_nonzero_volume: sound?.kept || 1,
+          speed: c.speed ?? 1, extra_material_refs: refs, clip: clipSettings(scale, x, y, c.draftLook), uniform_scale: { on: true, value: 1 },
           hdr_settings: { intensity: 1, mode: 1, nits: 1000 }, render_index: index,
         });
       }),
@@ -241,7 +310,7 @@ export function jianyingDraft(timeline, opts) {
       segments: clips.map((c) => {
         const file = /** @type {NleFile} */ (files.get(c.fileId));
         const level = c.levels ? Math.max(...c.levels.map((k) => k.value)) : c.gain ?? 1;
-        const refs = [speed()];
+        const refs = [speed(c.speed)];
         /* a fade: the plan's level keyframes (silent at an end) as 剪映's fade in and out */
         if (c.levels && c.levels.length > 1) {
           const keys = c.levels;
@@ -256,6 +325,7 @@ export function jianyingDraft(timeline, opts) {
         }
         return segment({
           material_id: material(file, 'audio'), target_timerange: span(c.start, c.end), source_timerange: span(c.in, c.out),
+          speed: c.speed ?? 1,
           volume: c.enabled ? round6(level) : 0, last_nonzero_volume: round6(level) || 1,
           extra_material_refs: refs, clip: null, hdr_settings: null, render_index: index,
         });
@@ -279,17 +349,14 @@ export function jianyingDraft(timeline, opts) {
       segments: cues.map((cue) => {
         const id = hex();
         const text = cue.text.trim();
+        const { glyph, material: style } = jianyingCaptionStyle(cue.draftLook, timeline, opts.fonts);
         materials.texts.push({
           id, type: 'subtitle', add_type: 1, recognize_task_id: task, recognize_text: text, language, group_id: group,
           words: { start_time: [], end_time: [], text: [] }, current_words: { start_time: [], end_time: [], text: [] },
-          subtitle_keywords: { range: [] }, typesetting: 0, alignment: 1, letter_spacing: 0, line_spacing: 0.02, line_feed: 1,
-          line_max_width: 0.82, force_apply_line_max_width: false, check_flag: 15, global_alpha: 1,
+          subtitle_keywords: { range: [] }, typesetting: 0, line_spacing: 0.02, line_feed: 1,
+          line_max_width: 0.82, force_apply_line_max_width: false, global_alpha: 1, ...style,
           content: JSON.stringify({
-            styles: [{
-              fill: { alpha: 1, content: { render_type: 'solid', solid: { alpha: 1, color: [1, 1, 1] } } },
-              range: [0, [...text].length], size: 6, bold: false, italic: false, underline: false,
-              strokes: [{ content: { render_type: 'solid', solid: { alpha: 1, color: [0, 0, 0] } }, width: 0.08 }],
-            }],
+            styles: [{ range: [0, [...text].length], ...glyph }],
             text,
           }),
         });
@@ -303,6 +370,8 @@ export function jianyingDraft(timeline, opts) {
   }
 
   const duration = us(timeline.durationFrames);
+  /* A processed clip can have an untouched original beside its rendered file, ready to replace it in the editor. */
+  for (const file of timeline.files) if (file.video || !entryOf.has(file.path)) material(file, file.video ? 'video' : 'audio');
   const draftId = randomUUID().toUpperCase();
   const now = opts.now ?? Date.now();
   const info = {

@@ -1,0 +1,29 @@
+.editor { position:fixed; inset:32px 0 0; z-index:9000; user-select:none; background:rgb(0 0 0 / .12); }
+.tile { position:fixed; border:1px dashed color-mix(in srgb,var(--accent) 65%,transparent); border-radius:5px; background:color-mix(in srgb,var(--bg-panel) 8%,transparent); overflow:hidden; cursor:grab; touch-action:none; }
+.handle { display:flex; align-items:center; gap:7px; position:absolute; top:8px; left:8px; max-width:calc(100% - 48px); min-height:30px; padding:5px 10px; border:1px solid var(--border-strong); border-radius:6px; background:var(--bg-panel); box-shadow:0 2px 8px #0002; color:var(--text); font-size:12px; cursor:grab; touch-action:none; }
+.handle span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hide { position:absolute; top:8px; right:8px; display:grid; place-items:center; width:28px; height:30px; border-radius:5px; background:var(--bg-panel); color:var(--text-muted); }
+.hide:hover { color:var(--text); background:var(--bg-hover); }
+.moving,.moving .tile,.moving .handle { cursor:grabbing; }
+.drop { position:fixed; z-index:9002; display:grid; place-items:center; border:2px solid var(--accent); background:color-mix(in srgb,var(--accent) 24%,transparent); pointer-events:none; border-radius:5px; }
+.drop span { padding:5px 10px; border-radius:5px; background:var(--bg-panel); color:var(--text); font-size:12px; }
+.tools { composes:surface from './ToolbarSurface.module.css'; position:fixed; z-index:9005; bottom:18px; left:50%; transform:translateX(-50%); width:680px; max-width:calc(100vw - 32px); padding:12px; }
+.instructions { display:flex; flex-direction:column; gap:4px; padding:0 3px 10px; }
+.instructions strong { font-size:13px; color:var(--text); font-weight:500; }
+.instructions>span { color:var(--text-muted); font-size:11px; line-height:1.5; }
+.palette { display:flex; flex-wrap:wrap; gap:5px; padding-bottom:10px; }
+.chip { display:flex; align-items:center; gap:5px; padding:5px 8px; min-height:28px; border:1px solid var(--border); border-radius:5px; font-size:11px; color:var(--text-muted); cursor:pointer; }
+.chip[aria-pressed='true'] { background:var(--bg-field); color:var(--text); border-color:var(--border-strong); }
+.actions { display:flex; align-items:center; gap:5px; padding-top:10px; }
+.actions button { display:flex; align-items:center; justify-content:center; gap:5px; min-height:28px; min-width:28px; padding:5px 8px; border-radius:5px; font-size:12px; color:var(--text-muted); }
+.actions button:hover,.chip:hover { background:var(--bg-hover); color:var(--text); }
+.actions button:disabled { opacity:.3; cursor:default; }
+.actions .done { background:var(--primary); color:var(--on-primary); }
+.spacer { flex:1; }
+.editor button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.seam { position:fixed; touch-action:none; outline:none; }
+.vertical { cursor:col-resize; }
+.horizontal { cursor:row-resize; }
+
+.integration { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 3px; border-top:1px solid var(--border); color:var(--text-muted); font-size:12px; }
+.actions { border-top:1px solid var(--border); }

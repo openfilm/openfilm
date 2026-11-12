@@ -28,13 +28,14 @@
  * ever written.
  */
 import { createWriteStream, existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
-import { mkdir, rename, rm } from 'node:fs/promises';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { communityCatalog, communityReady, fetchCommunity, isCommunity, refreshCommunity } from './community-library.mjs';
 import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
+import { SKILL_UID } from '../../src/skills.mjs';
 
 export { refreshCommunity };
 
@@ -80,16 +81,32 @@ function located(/** @type {string} */ rel) {
   for (const root of [builtInRoot(), libraryCache()]) {
     let at;
     try { at = inside(root, rel); } catch { return null; }
-    if (existsSync(at)) return at;
+    if (existsSync(at)) {
+      /* A failed bundle stays resumable, but is not offered as complete. Older complete caches need no marker. */
+      if (root === libraryCache() && statSync(at).isDirectory() && existsSync(join(at, '.partial'))) continue;
+      return at;
+    }
   }
   return null;
 }
 
 /** @type {Map<string, Promise<string | null>>} */
 const fetching = new Map();
+/** @type {Map<string, Promise<void>>} A bundle and its card's poster can ask for the same file concurrently. */
+const filesFetching = new Map();
+
+/** @param {string} rel */
+function fetchFile(rel) {
+  const pending = filesFetching.get(rel);
+  if (pending) return pending;
+  if (located(rel)) return Promise.resolve();
+  const job = downloadFile(rel).finally(() => filesFetching.delete(rel));
+  filesFetching.set(rel, job);
+  return job;
+}
 
 /** One file of the published library into the cache: whole or not at all. */
-async function fetchFile(/** @type {string} */ rel) {
+async function downloadFile(/** @type {string} */ rel) {
   /* a model is a hundred megabytes: time for a slow line */
   const res = await fetch(`${libraryHost()}/${rel.split('/').map(encodeURIComponent).join('/')}`, { signal: AbortSignal.timeout(rel.startsWith('models/') ? 30 * 60_000 : 60_000) });
   if (!res.ok) throw new Error(`the library's ${rel} came back ${res.status}`);
@@ -113,10 +130,10 @@ async function fetchFile(/** @type {string} */ rel) {
 export function fetchLibrary(/** @type {unknown} */ rel) {
   if (typeof rel !== 'string' || !rel || !SAFE_PLACE.test(rel) || rel.split('/').some((part) => part === '..' || part === '.')) return Promise.resolve(null);
   if (isCommunity(rel)) return fetchCommunity(libraryCache(), rel);
-  const here = located(rel);
-  if (here || !PUBLISHED.some((part) => rel.startsWith(part))) return Promise.resolve(here);
   const was = fetching.get(rel);
   if (was) return was;
+  const here = located(rel);
+  if (here || !PUBLISHED.some((part) => rel.startsWith(part))) return Promise.resolve(here);
   const job = (async () => {
     try {
       /* a file has a name with a dot; a bundle is a folder, its files listed beside it */
@@ -126,7 +143,11 @@ export function fetchLibrary(/** @type {unknown} */ rel) {
         if (!res.ok) return null;
         const files = /** @type {unknown} */ (await res.json());
         if (!Array.isArray(files)) return null;
+        const folder = inside(libraryCache(), rel);
+        await mkdir(folder, { recursive: true });
+        await writeFile(join(folder, '.partial'), '');
         for (const file of files) if (typeof file === 'string') await fetchFile(`${rel}/${file}`);
+        await rm(join(folder, '.partial'), { force: true });
       }
       return located(rel);
     } catch {
@@ -152,13 +173,25 @@ export function partsOf(item) {
 export function notHere(ids) {
   if (!Array.isArray(ids)) return [];
   const byId = new Map((/** @type {{ items: { id: string, music?: string }[] }} */ (libraryIndex())).items.map((i) => [i.id, i]));
-  return ids.filter((id) => { const item = typeof id === 'string' ? byId.get(id) : undefined; return Boolean(item && partsOf(item).some((rel) => isCommunity(rel) ? !communityReady(libraryCache(), rel) : !located(rel))); });
+  return ids.filter((id) => {
+    if (typeof id !== 'string') return false;
+    const item = byId.get(id);
+    if (item) return partsOf(item).some((rel) => isCommunity(rel) ? !communityReady(libraryCache(), rel) : !located(rel));
+    /* The samples and examples are played directly and are not items in the add-to-project index. */
+    return /^(voices|examples)\//.test(id) && SAFE_PLACE.test(id) && !id.split('/').some((part) => part === '..' || part === '.') && !located(id);
+  });
 }
 
-/** Fetch what a thing of the library needs (partsOf); whether it is all here now. @param {unknown} id */
+/** Fetch an indexed asset's dependencies or a template's published preview. @param {unknown} id */
 export async function fetchItem(id) {
-  if (typeof id === 'string' && isCommunity(id)) await refreshCommunity();
-  const item = (/** @type {{ items: { id: string, music?: string }[] }} */ (libraryIndex())).items.find((i) => i.id === id);
+  if (typeof id !== 'string') return false;
+  if (isCommunity(id)) await refreshCommunity();
+  const items = /** @type {{ items: { id: string, kind?: string, music?: string }[] }} */ (libraryIndex()).items;
+  if (id.startsWith('examples/') && id.endsWith('.mp4')) {
+    const template = items.find((item) => item.id === id.slice('examples/'.length, -'.mp4'.length) && item.kind === 'group');
+    return Boolean(template && await fetchLibrary(id));
+  }
+  const item = items.find((i) => i.id === id);
   if (!item) return false;
   for (const rel of partsOf(item)) if (!(await fetchLibrary(rel))) return false;
   return true;
@@ -244,17 +277,20 @@ export async function libraryFileFetched(/** @type {unknown} */ rel) {
 /** Where the starred things are kept in the shared prefs.json. */
 const FAVORITES = 'libraryFavorites';
 
-/** The ids the person starred (a voice's is voiceKey's), in the order they were starred, those still in the library only. */
+/** Skill stars outlive a catalog refresh or a change of project; they are shown when that uid is available again. */
+const skillFavorite = (/** @type {string} */ id) => id.startsWith('skill:') && SKILL_UID.test(id.slice(6));
+
+/** The ids the person starred, in order: available library things and voices, and skills by their uid. */
 export function libraryFavorites() {
   const starred = sharedPref(FAVORITES);
   const ids = starrable();
-  return Array.isArray(starred) ? [...new Set(starred.filter((id) => typeof id === 'string' && ids.has(id)))] : [];
+  return Array.isArray(starred) ? [...new Set(starred.filter((id) => typeof id === 'string' && (ids.has(id) || skillFavorite(id))))] : [];
 }
 
-/** Keep `ids` as the starred ones (those not in the library left out). Returns them as kept. */
+/** Keep valid skill ids and available library things as favorites. Returns them as kept. */
 export function setLibraryFavorites(/** @type {unknown} */ ids) {
   const known = starrable();
-  const next = Array.isArray(ids) ? [...new Set(ids.filter((id) => typeof id === 'string' && known.has(id)))] : [];
+  const next = Array.isArray(ids) ? [...new Set(ids.filter((id) => typeof id === 'string' && (known.has(id) || skillFavorite(id))))] : [];
   setSharedPref(FAVORITES, next);
   return next;
 }

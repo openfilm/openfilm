@@ -21,10 +21,11 @@
  * (its maker's own are always on). Skills are managed in Community.
  */
 import React from 'react';
-import { Check, CircleHelp, Download, KeyRound, Loader2, Plus, RefreshCw, X } from 'lucide-react';
+import { Check, CircleHelp, Download, ExternalLink, KeyRound, Loader2, Plus, RefreshCw, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { BYOK_EFFORTS, studioHost, type HostAgent, type HostAgentDiagnosis, type HostAgentId, type HostAgentUsage, type HostByokEffort, type HostByokEffortLevel, type HostByokFormat, type HostOwnModel } from '@/lib/host';
 import { parseContextLength } from '@/lib/context-length';
+import { PROVIDER_SITES } from '@/lib/providers';
 import { accountOrg, missingActions, ownModelError, switchOffer } from '@/lib/agent-row';
 
 /** What is left of the plan: what Codex can say (the app's agent-usage.mjs; Claude Code's own report is wrong for Team accounts). */
@@ -36,6 +37,7 @@ import { agentMark } from '@/lib/provider-marks';
 import { SettingsSelect } from './SettingsSelect';
 import { SettingsButton, SettingsField, SettingsGroup, SettingsInset, SettingsItem, SettingsLinkButton, SettingsPage, SettingsStatus, SettingsSwitch, settingsError } from './ui';
 import { AgentConnectionHelp } from './AgentConnectionHelp';
+import { OpenFilmAgentDialog } from './OpenFilmAgentDialog';
 
 function useHostAgents(): HostAgent[] | null {
   const [agents, setAgents] = React.useState<HostAgent[] | null>(null);
@@ -60,6 +62,7 @@ function useHostAgents(): HostAgent[] | null {
 
 /** The person's own agents (the app's AGENTS), in the roster's order. */
 const OWN: readonly HostAgentId[] = ['codex', 'claude', 'copilot', 'cursor', 'opencode', 'codebuddy', 'qwen', 'kimi', 'minimax', 'deepseek', 'antigravity'];
+const MORE_ORDER: Partial<Record<HostAgentId, number>> = { antigravity: 0, deepseek: 1 };
 /** whose maker's mark is its company's */
 function AgentMark({ id }: { id: HostAgentId }) {
   return id === 'byok' ? <KeyRound size={16} /> : <ProviderMark id={agentMark(id)} size={17} />;
@@ -109,7 +112,7 @@ function UsageBar({ window: w }: { window: HostAgentUsage['windows'][number] }) 
       <div className="h-1.5 min-w-[80px] flex-1 overflow-hidden rounded-full bg-[var(--bg-field)]" role="progressbar" aria-label={label} aria-valuenow={used} aria-valuemin={0} aria-valuemax={100}>
         <div className={`h-full rounded-full ${used >= 90 ? 'bg-[var(--err)]' : used >= 70 ? 'bg-[var(--warn)]' : 'bg-[var(--accent)]'}`} style={{ width: `${Math.max(used, 1.5)}%` }} />
       </div>
-      <span className="w-[64px] shrink-0 text-right tabular-nums text-[var(--text)]">{t('settings.agents.usageUsed').replace('{percent}', String(used))}</span>
+      <span className="w-[84px] shrink-0 whitespace-nowrap text-right tabular-nums text-[var(--text)]">{t('settings.agents.usageUsed').replace('{percent}', String(used))}</span>
       <span className="w-[120px] shrink-0 truncate text-[var(--text-faint)]">{resets ?? ''}</span>
     </div>
   );
@@ -127,6 +130,7 @@ export function AgentsSection() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
   const [keyOpen, setKeyOpen] = React.useState(false);
+  const [openfilmOpen, setOpenfilmOpen] = React.useState(false);
   const [diagnosis, setDiagnosis] = React.useState<{ id: HostAgentId; report: HostAgentDiagnosis | null; checking?: boolean; copied?: boolean } | null>(null);
   /* the agent whose installer the person is asked about */
   const [confirming, setConfirming] = React.useState<HostAgentId | null>(null);
@@ -149,7 +153,7 @@ export function AgentsSection() {
     setBusy(id);
     setError(null);
     setNotice(null);
-    const failed = (text: string) => { setError({ id, text }); if (id !== 'byok') setHelp(id); };
+    const failed = (text: string) => { setError({ id, text }); if (OWN.includes(id)) setHelp(id); };
     void run()
       .then((r) => { const res = r as { ok?: boolean; error?: string } | undefined; if (res && res.ok === false) failed(res.error ?? t('settings.agents.failed')); })
       .catch((e: unknown) => failed(e instanceof Error ? e.message : String(e)))
@@ -207,7 +211,7 @@ export function AgentsSection() {
     if (agent.connectionIssue && (agent.status === 'ready' || agent.status === 'off')) return t(`settings.agents.${agent.connectionIssue.kind === 'quota' ? 'quotaReached' : 'modelCredentials'}`);
     switch (agent.status) {
       case 'off': return t(agent.shown ? 'settings.agents.off' : 'settings.agents.available');
-      case 'sign-in': return t('settings.agents.signedOut');
+      case 'sign-in': return t(agent.id === 'openfilm' ? 'settings.agents.off' : 'settings.agents.signedOut');
       case 'waiting': return t('settings.agents.waiting');
       case 'missing':
         if (agent.setupRequired === 'code-tab') return t('settings.agents.claudeSetup');
@@ -234,12 +238,12 @@ export function AgentsSection() {
   };
 
   /* `chosen`: among the agents in use (not under "More agents", where one ready to use is offered to connect) */
-  const action = (agent: HostAgent, chosen = true) => {
+  const action = (agent: HostAgent, chosen = true, inHelp = false) => {
     const working = busy === agent.id;
     if (agent.status === 'ready' && chosen) {
       return <>
-        {offerSwitch(agent) ? <SettingsButton variant="quiet" disabled={working || switching === agent.id} onClick={() => setSwitching(agent.id)}>{t('settings.agents.switchAccount')}</SettingsButton> : null}
-        <SettingsButton variant="quiet" disabled={working} title={t('settings.agents.disconnectHint')} onClick={() => act(agent.id, () => host.disconnect(agent.id))}>{t('settings.agents.disconnect')}</SettingsButton>
+        {offerSwitch(agent) ? <SettingsButton variant="quiet" disabled={working || switching === agent.id} onClick={() => { if (inHelp) setHelp(null); setSwitching(agent.id); }}>{t('settings.agents.switchAccount')}</SettingsButton> : null}
+        <SettingsButton variant="quiet" disabled={working} title={t(agent.id === 'openfilm' ? 'settings.agents.openfilmDisconnect' : 'settings.agents.disconnectHint')} onClick={() => act(agent.id, () => host.disconnect(agent.id))}>{t('settings.agents.disconnect')}</SettingsButton>
       </>;
     }
     if (agent.status === 'missing') {
@@ -252,7 +256,7 @@ export function AgentsSection() {
         <>
           {/* its official installer, run once the person agrees to the command; else its install page */}
           {offer.install === 'run' ? (
-            <SettingsButton disabled={working || agent.installing || confirming === agent.id} onClick={() => setConfirming(agent.id)}>
+            <SettingsButton disabled={working || agent.installing || confirming === agent.id} onClick={() => { if (inHelp) setHelp(null); setConfirming(agent.id); }}>
               <Download size={16} />{t('settings.agents.installComponent')}
             </SettingsButton>
           ) : offer.install === 'page' && agent.install ? <SettingsLinkButton href={agent.install}><Download size={16} />{t('settings.agents.installComponent')}</SettingsLinkButton> : null}
@@ -260,7 +264,7 @@ export function AgentsSection() {
       );
     }
     if (agent.status === 'key') return <SettingsButton onClick={() => setKeyOpen(true)}>{t('settings.agents.setUpKey')}</SettingsButton>;
-    if (agent.status === 'unavailable') return null;
+    if (agent.status === 'unavailable') return agent.id === 'openfilm' ? <SettingsButton disabled={working} onClick={() => act(agent.id, () => host.connect(agent.id))}>{t('settings.agents.connect')}</SettingsButton> : null;
     if (agent.status === 'checking') return <Loader2 size={16} className="animate-spin text-[var(--text-muted)]" aria-hidden />;
     if (agent.status === 'waiting') return (
       <SettingsButton variant="quiet" disabled={working} onClick={() => act(agent.id, () => host.cancelSignIn ? host.cancelSignIn(agent.id) : host.disconnect(agent.id))}>
@@ -272,7 +276,7 @@ export function AgentsSection() {
       <>
         <SettingsButton disabled={working} onClick={() => act(agent.id, () => host.connect(agent.id))}>
           {working ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
-          {t(agent.status === 'sign-in' ? 'settings.agents.signInConnect' : 'settings.agents.connect')}
+          {t('settings.agents.connect')}
         </SettingsButton>
       </>
     );
@@ -284,10 +288,10 @@ export function AgentsSection() {
     const problem = agent.status === 'ready' && agent.problem ? agent.problem : null;
     /* older than the chat was tried with: it works, but may not list the newest models; how to update it */
     const outdated = chosen && agent.status === 'ready' && agent.outdated ? agent.outdated : null;
-    const said = error?.id === agent.id ? error.text : agent.error ?? (problem ? `${t('settings.agents.unreadable')} ${problem}` : undefined);
+    const said = error?.id === agent.id ? error.text : agent.id === 'openfilm' ? undefined : agent.error ?? (problem ? `${t('settings.agents.unreadable')} ${problem}` : undefined);
     const open = agent.id === 'byok' && keyOpen;
     /* where it is not found: why, on asking (Claude Code waiting for its app's Code tab is not lost) */
-    const showHelper = agent.id !== 'byok' && (['missing', 'off', 'sign-in', 'waiting'].includes(agent.status) || Boolean(said) || Boolean(agent.connectionIssue));
+    const showHelper = OWN.includes(agent.id) && (['missing', 'off', 'sign-in', 'waiting'].includes(agent.status) || Boolean(said) || Boolean(agent.connectionIssue));
     const description = agent.connectionIssue ? statusLine(agent) : agent.status === 'ready' ? chosen ? accountLine(agent) : t('settings.agents.available') : statusLine(agent);
     /* what is left of its plan: while being asked, and once told (an agent that can't say shows nothing) */
     const plan = usage[agent.id];
@@ -314,10 +318,10 @@ export function AgentsSection() {
             {agent.status === 'ready' && chosen && !problem && !agent.connectionIssue ? <SettingsStatus>{ownKey ? agent.byok!.models.map((m) => m.name).join(', ') : t('settings.agents.ready')}</SettingsStatus> : null}
           </>
         )}
-        description={description || showHelper ? <div className="flex items-center gap-1">
+        description={description || showHelper || agent.id === 'openfilm' ? <div className="flex items-center gap-1">
           {description ? <span className="min-w-0">{description}</span> : null}
-          {showHelper ? <button type="button" aria-label={t('settings.agents.helpFor').replace('{name}', agent.name)} title={t('settings.agents.helpFor').replace('{name}', agent.name)}
-            onClick={() => setHelp(agent.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><CircleHelp size={15} aria-hidden /></button> : null}
+          {showHelper || agent.id === 'openfilm' ? <button type="button" aria-label={agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', agent.name)} title={agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', agent.name)}
+            onClick={() => agent.id === 'openfilm' ? setOpenfilmOpen(true) : setHelp(agent.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><CircleHelp size={15} aria-hidden /></button> : null}
         </div> : null}
         control={(
           <>
@@ -371,7 +375,7 @@ export function AgentsSection() {
               <SettingsInset>
                 <p className="text-[14px] leading-relaxed text-[var(--text)]">
                   {switchHow === 'here'
-                    ? t('settings.agents.switchConfirm').replaceAll('{name}', agent.name)
+                    ? t(agent.id === 'openfilm' ? 'settings.agents.openfilmSwitch' : 'settings.agents.switchConfirm').replaceAll('{name}', agent.name)
                     : t('settings.agents.switchElsewhere').replaceAll('{name}', agent.name).replace('{where}', where)}
                 </p>
                 <div className="flex justify-end gap-1.5">
@@ -399,14 +403,24 @@ export function AgentsSection() {
   };
 
   const list = agents ?? [];
+  const dialogStatus = (agent: HostAgent) => {
+    const connected = agent.status === 'ready' && !agent.connectionIssue;
+    const text = connected ? t('settings.agents.ready') : statusLine(agent);
+    const account = accountLine(agent);
+    return text ? <span className="min-w-0 max-w-full truncate text-[var(--text-muted)]" title={account ?? undefined}>
+      {connected ? <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[var(--ok)] align-middle" aria-hidden /> : null}
+      {text}{account ? <span className="text-[var(--text-faint)]"> · {account}</span> : null}
+    </span> : null;
+  };
   const helpAgent = list.find((agent) => agent.id === help);
   const helpDiagnosis = diagnosis?.id === help ? diagnosis : null;
   const helpError = helpAgent ? error?.id === help ? error.text : helpAgent.error ?? (helpAgent.problem ? `${t('settings.agents.unreadable')} ${helpAgent.problem}` : undefined) : undefined;
   const byId = (id: HostAgentId) => list.find((a) => a.id === id);
-  /* always yours: Codex, Claude Code and your own key; then the others switched on, the rest under "More" */
-  const always = (['codex', 'claude', 'byok'] as const).map(byId).filter((a): a is HostAgent => Boolean(a));
+  /* always listed: Codex, Claude Code, OpenFilm and your own key; the others appear here once switched on */
+  const always = (['codex', 'claude', 'openfilm', 'byok'] as const).map(byId).filter((a): a is HostAgent => Boolean(a));
   const others = list.filter((a) => OWN.includes(a.id) && !always.includes(a));
-  const more = others.filter((a) => !a.shown);
+  const more = others.filter((a) => !a.shown).sort((a, b) => (MORE_ORDER[a.id] ?? 2) - (MORE_ORDER[b.id] ?? 2));
+  const openfilmAgent = byId('openfilm');
   return (
     <SettingsPage note={t('settings.agents.intro')}>
       <div className="mb-3 flex justify-end">
@@ -417,7 +431,16 @@ export function AgentsSection() {
         {[...always, ...others.filter((a) => a.shown)].map((a) => row(a))}
       </SettingsGroup>
       {more.length ? <SettingsGroup title={t('settings.agents.groupMore')}>{more.map((a) => row(a, false))}</SettingsGroup> : null}
+      {openfilmOpen && openfilmAgent ? <OpenFilmAgentDialog agent={openfilmAgent} onClose={() => setOpenfilmOpen(false)}
+        connectionStatus={dialogStatus(openfilmAgent)}
+        connectionError={error?.id === 'openfilm' ? error.text : openfilmAgent.error}
+        actions={openfilmAgent.status === 'ready' ? <>
+          <SettingsLinkButton href={`https://${PROVIDER_SITES.openfilm}/account`}>{t('settings.providers.account')}<ExternalLink size={12} /></SettingsLinkButton>
+          <SettingsButton variant="quiet" disabled={busy === 'openfilm'} title={t('settings.agents.openfilmDisconnect')}
+            onClick={() => act('openfilm', () => host.disconnect('openfilm'))}>{t('settings.providers.disconnect')}</SettingsButton>
+        </> : action(openfilmAgent)} /> : null}
       {helpAgent ? <AgentConnectionHelp key={helpAgent.id} agent={helpAgent}
+        actions={action(helpAgent, always.includes(helpAgent) || helpAgent.shown, true)} connectionStatus={dialogStatus(helpAgent)}
         status={helpAgent.status === 'ready' && !helpAgent.connectionIssue ? t('settings.agents.ready') : statusLine(helpAgent)}
         report={helpDiagnosis?.report ?? null} checking={Boolean(helpDiagnosis?.checking)}
         hint={helpDiagnosis?.report ? hintOf(helpDiagnosis.report) : null} error={helpError} notice={notice?.id === helpAgent.id ? notice.text : undefined} copied={helpDiagnosis?.copied}

@@ -8,22 +8,38 @@
  * example plays in its place with its music, sharp, under controls of its own (TemplateTrial).
  */
 import * as React from 'react';
-import { Pause, Play, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Pause, Play, RotateCw } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { TEXT_COMPONENT, builtInItem, BUILT_IN, defaultTextWords, libraryBox, libraryUrl, nameOf, pageUrl, previewUrl, type LibraryItem } from '@/lib/library';
+import { TEXT_COMPONENT, builtInItem, BUILT_IN, defaultTextWords, libraryBox, nameOf, pageUrl, previewUrl, templatePreviewUrl, type LibraryItem } from '@/lib/library';
 import { TransitionOnPicture } from './OnPicture';
+import { useAssetPlaybackKey } from './AudioList';
+import { PANE_BAR, PANE_BTN, PANE_ICON } from '../dock-pane-bar';
 
 /* a motion tried again and again: in, a while shown, out */
 const MOTION_SECONDS = 2.6;
 
-export function LibraryTrial({ item, frame = null, onLetGo }: {
+export type TemplatePreviewState = 'failed' | null;
+
+export function LibraryTrial({ item, frame = null, target, onLetGo, onTemplateState, onDownloadFailed }: {
   item: LibraryItem;
-  /** the film's picture at the playhead (else the person's own in the project), for what moves the picture itself */
   frame?: string | null;
+  target: HTMLDivElement | null;
   onLetGo: () => void;
+  onTemplateState: (id: string, state: TemplatePreviewState) => void;
+  onDownloadFailed: () => void;
 }) {
-  if (item.kind === 'group') return <TemplateTrial key={item.id} item={item} onLetGo={onLetGo} />;
-  return <PictureTrial item={item} frame={frame} onLetGo={onLetGo} />;
+  const lang = useLanguage();
+  if (item.kind === 'group') return <TemplateTrial item={item} target={target} onLetGo={onLetGo} onState={onTemplateState} onFailed={onDownloadFailed} />;
+  const name = nameOf(item.name, lang);
+  return <>
+    <PictureTrial item={item} frame={frame} onLetGo={onLetGo} />
+    {target ? createPortal(
+      <div className={`${PANE_BAR} px-3`} data-library-picture-bar="">
+        <span className="truncate text-[12px] text-[var(--text)]" title={name}>{name}</span>
+      </div>, target,
+    ) : null}
+  </>;
 }
 
 function PictureTrial({ item, frame, onLetGo }: { item: LibraryItem; frame: string | null; onLetGo: () => void }) {
@@ -78,20 +94,29 @@ function PictureTrial({ item, frame, onLetGo }: { item: LibraryItem; frame: stri
 
 const clock = (s: number) => { const n = Math.max(0, Math.floor(s)); return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`; };
 
-/**
- * A template's example in the viewer, as it plays put in: the whole of it at 1280×720 with its music (a published part
- * of the library, fetched the first time; its card's small silent preview while that cannot be had), over the film,
- * which it hides. Its own controls: what is previewed and a close, play and pause (a click on it, Space), where it is
- * and how long it runs, a bar to move in it. Esc, the close or the film played lets it go.
- */
-function TemplateTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: () => void }) {
+/** A template plays over the film while its transport replaces the one beneath the viewer. */
+function TemplateTrial({ item, target, onLetGo, onState, onFailed }: {
+  item: LibraryItem; target: HTMLDivElement | null;
+  onLetGo: () => void;
+  onState: (id: string, state: TemplatePreviewState) => void;
+  onFailed: () => void;
+}) {
   const t = useT();
   const lang = useLanguage();
   const video = React.useRef<HTMLVideoElement>(null);
-  const [src, setSrc] = React.useState(() => libraryUrl(`examples/${item.id}.mp4`));
-  const [playing, setPlaying] = React.useState(true);
+  const [src, setSrc] = React.useState(() => templatePreviewUrl(item));
+  const [playing, setPlaying] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [failed, setFailed] = React.useState(false);
+  const wanted = React.useRef(true);
   const [time, setTime] = React.useState(0);
   const [length, setLength] = React.useState((item.durationMs ?? 0) / 1000);
+  React.useEffect(() => {
+    const v = video.current;
+    /* StrictMode replays effect cleanup on the same element. Restore the source before its second setup. */
+    if (v && !v.hasAttribute('src')) v.src = src;
+    return () => { if (v) { v.pause(); v.removeAttribute('src'); v.load(); } };
+  }, []);
   React.useEffect(() => {
     if (!playing) return undefined;
     let frame = 0;
@@ -102,65 +127,74 @@ function TemplateTrial({ item, onLetGo }: { item: LibraryItem; onLetGo: () => vo
   const toggle = () => {
     const v = video.current;
     if (!v) return;
-    if (v.paused) void v.play().catch(() => {}); else v.pause();
+    if (!failed && (loading || !v.paused)) { wanted.current = false; v.pause(); setLoading(false); return; }
+    wanted.current = true;
+    setLoading(true);
+    setFailed(false);
+    if (failed) v.load();
+    void v.play().catch((error) => { if (wanted.current && error?.name !== 'AbortError') { setLoading(false); setFailed(true); } });
   };
-  const toggleRef = React.useRef(toggle);
-  toggleRef.current = toggle;
-  const letGo = React.useRef(onLetGo);
-  letGo.current = onLetGo;
-  /* Space plays and pauses it, not the film; Esc lets it go (before the editor's own keys) */
+  useAssetPlaybackKey(Boolean(target), toggle);
   React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const at = e.target as HTMLElement | null;
-      if (at && (at.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(at.tagName))) return;
-      if (e.code === 'Space' && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); e.stopImmediatePropagation(); toggleRef.current(); }
-      else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); letGo.current(); }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, []);
-  const stop = (e: React.PointerEvent) => e.stopPropagation();
+    onState(item.id, failed ? 'failed' : null);
+  }, [item.id, failed, onState]);
+  const reportFailure = React.useRef(onFailed);
+  reportFailure.current = onFailed;
+  React.useEffect(() => { if (failed) reportFailure.current(); }, [failed]);
   const seek = (s: number) => { const v = video.current; if (v) { v.currentTime = s; setTime(s); } };
-  return (
-    <div data-library-trial="" data-template-trial={item.id} className="absolute inset-0 z-[6] cursor-default overflow-hidden bg-black" onPointerDown={(e) => { e.stopPropagation(); toggle(); }}>
+  const name = nameOf(item.name, lang);
+  const label = t(failed ? 'assetDrawer.previewRetry' : playing || loading ? 'assetDrawer.pause' : 'assetDrawer.play');
+  return (<>
+    <div data-library-trial="" data-template-trial={item.id} className="absolute inset-0 z-[6] grid cursor-default grid-cols-1 grid-rows-1 place-items-center overflow-hidden bg-black"
+      onPointerDown={(e) => { e.stopPropagation(); onLetGo(); }}>
       <video
         ref={video}
+        data-asset-preview-control=""
+        onPointerDown={(e) => { e.stopPropagation(); toggle(); }}
         src={src}
-        autoPlay
+        autoPlay={wanted.current}
         loop
         playsInline
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onLoadedMetadata={(e) => { if (Number.isFinite(e.currentTarget.duration)) setLength(e.currentTarget.duration); }}
+        onLoadStart={() => { if (wanted.current) setLoading(true); }}
+        onPlaying={(e) => {
+          if (!wanted.current) { e.currentTarget.pause(); return; }
+          setPlaying(true); setLoading(false); setFailed(false);
+        }}
+        onWaiting={() => { if (wanted.current) { setLoading(true); setPlaying(false); } }}
+        onPause={() => { setPlaying(false); setLoading(false); }}
+        onLoadedMetadata={(e) => {
+          if (Number.isFinite(e.currentTarget.duration)) setLength(e.currentTarget.duration);
+        }}
         /* the example not had (offline, not published yet): the card's own preview */
-        onError={() => setSrc((was) => (was === previewUrl(item) ? was : previewUrl(item)))}
-        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+        onError={() => {
+          if (src !== previewUrl(item)) { setSrc(previewUrl(item)); if (wanted.current) setLoading(true); }
+          else { setLoading(false); setPlaying(false); setFailed(true); }
+        }}
+        className="block max-h-full max-w-full object-contain"
       />
-      <div onPointerDown={stop} className="absolute left-2 top-2 flex h-7 items-center gap-1.5 rounded-md bg-black/60 pl-2.5 pr-1 text-[12px] text-white/90 backdrop-blur-sm">
-        <span>{t('assetDrawer.previewing')}</span>
-        <span className="text-white/40">·</span>
-        <span className="max-w-[16em] truncate">{nameOf(item.name, lang)}</span>
-        <button type="button" data-template-trial-close="" title={t('assetDrawer.closePreview')} aria-label={t('assetDrawer.closePreview')} onClick={onLetGo} className="ml-0.5 grid h-5 w-5 place-items-center rounded text-white/70 hover:bg-white/15 hover:text-white">
-          <X size={13} strokeWidth={2.2} />
+    </div>
+    {target ? createPortal(
+      <div data-template-trial-bar="" className={`${PANE_BAR} gap-2 px-2 text-[11px] tabular-nums text-[var(--text)]`}>
+        <button type="button" data-template-trial-play={playing ? 'playing' : 'paused'} title={label} aria-label={label}
+          onMouseDown={(e) => e.preventDefault()} onClick={toggle} className={PANE_BTN}>
+          {failed ? <RotateCw size={PANE_ICON} />
+            : playing || loading ? <Pause size={PANE_ICON} fill="currentColor" /> : <Play size={PANE_ICON} fill="currentColor" />}
         </button>
-      </div>
-      <div onPointerDown={stop} className="absolute inset-x-2 bottom-2 flex h-8 items-center gap-2 rounded-md bg-black/60 px-1.5 text-[11px] tabular-nums text-white/85 backdrop-blur-sm">
-        <button type="button" data-template-trial-play={playing ? 'playing' : 'paused'} title={t(playing ? 'assetDrawer.pause' : 'assetDrawer.play')} aria-label={t(playing ? 'assetDrawer.pause' : 'assetDrawer.play')} onClick={toggle} className="grid h-6 w-6 shrink-0 place-items-center rounded text-white hover:bg-white/15">
-          {playing ? <Pause size={13} strokeWidth={2.4} fill="currentColor" /> : <Play size={13} strokeWidth={2.4} fill="currentColor" />}
-        </button>
-        <span data-template-trial-time="">{clock(time)}</span>
+        <span className="min-w-0 max-w-[36%] truncate text-[12px]" title={name}>{name}</span>
+        <span data-template-trial-time="" className="shrink-0 text-[var(--text-muted)]">{clock(time)}</span>
         <input
           type="range"
           min={0}
           max={length || 1}
           step={0.01}
           value={Math.min(time, length || 1)}
-          aria-label={nameOf(item.name, lang)}
+          aria-label={t('assetDrawer.seek')}
           onChange={(e) => seek(Number(e.target.value))}
-          className="h-1 min-w-0 flex-1 cursor-pointer accent-[var(--accent)]"
+          disabled={loading || failed || !length}
+          className="h-1 min-w-0 flex-1 cursor-pointer accent-[var(--accent)] disabled:opacity-40"
         />
-        <span className="text-white/55">{clock(length)}</span>
-      </div>
-    </div>
-  );
+        <span className="shrink-0 text-[var(--text-faint)]">{clock(length)}</span>
+      </div>, target,
+    ) : null}
+  </>);
 }
