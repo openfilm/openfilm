@@ -7,7 +7,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createExports, diskFull, exportCapabilities, exportsRoot, ExportError, frameBox, dimsForShortEdge, keepChanges, projectFiles, projectSizes, shareOf, writableFolder } from './exports.mjs';
 import { encoders, hardwareEncoder } from '../../src/encoders.mjs';
-import { allocateLanes, containMotion, fadeKeyframes, frameSpan, nleRate, planNleTimeline, probeSource, xmemlDocument } from './nle.mjs';
+import { allocateLanes, containMotion, fadeKeyframes, frameSpan, nleRate, ownLook, planNleTimeline, probeSource, xmemlDocument } from './nle.mjs';
 import { fcpxmlDocument } from './fcpxml.mjs';
 import { pptxParts } from './slides.mjs';
 import { filmSubtitleSrt, parseFilmSubtitleStyle } from './film-subtitle.mjs';
@@ -675,6 +675,39 @@ test('the editor\'s timeline: frames rounded edge by edge, tracks spread, placem
   assert.deepEqual(containMotion({ w: 100, h: 100 }, { w: 1920, h: 1080 }, { x: 760, y: 0, w: 400, h: 200 }), { kind: 'motion', motion: { scale: 200, center: { h: 0, v: -0.407407 } } });
   assert.equal(containMotion({ w: 100, h: 100 }, { w: 1920, h: 1080 }, { x: 0, y: 0, r: 10 }).kind, 'bake');
   assert.equal(containMotion({}, { w: 1920, h: 1080 }).kind, 'bake');
+});
+
+test('a picture filling the frame, or placed in its box, is Basic Motion; a fill its box cuts inside the frame is drawn', () => {
+  const stage = { w: 180, h: 320 };
+  /* a narrower 9:16 talking head filling a 9:16 frame: as wide as the frame, its top and bottom past it */
+  assert.deepEqual(containMotion({ w: 144, h: 320 }, stage, undefined, { fit: 'cover', position: '50% 50%' }),
+    { kind: 'motion', motion: { scale: 125, center: { h: 0, v: 0 } } });
+  /* framed higher: 30% of the 80 px it spills goes above */
+  assert.deepEqual(containMotion({ w: 144, h: 320 }, stage, undefined, { fit: 'cover', position: '50% 30%' }),
+    { kind: 'motion', motion: { scale: 125, center: { h: 0, v: 0.05 } } });
+  /* a box larger than the frame cuts only what the frame cuts */
+  assert.equal(containMotion({ w: 144, h: 320 }, stage, { x: -10, y: -10, w: 200, h: 340 }, { fit: 'cover' }).kind, 'motion');
+  /* a fill in a small box is cut by its box, inside the frame */
+  assert.equal(containMotion({ w: 144, h: 320 }, stage, { x: 20, y: 20, w: 100, h: 100 }, { fit: 'cover' }).kind, 'bake');
+  /* a fill that does not spill (the same shape) cuts nothing, wherever its box is */
+  assert.deepEqual(containMotion({ w: 100, h: 100 }, stage, { x: 40, y: 0, w: 100, h: 100 }, { fit: 'cover' }),
+    containMotion({ w: 100, h: 100 }, stage, { x: 40, y: 0, w: 100, h: 100 }));
+  /* fitted, at the left of a wide box, in px or a share of the room */
+  assert.deepEqual(containMotion({ w: 100, h: 100 }, { w: 1920, h: 1080 }, { x: 760, y: 0, w: 400, h: 200 }, { position: '0% 50%' }),
+    { kind: 'motion', motion: { scale: 200, center: { h: -0.052083, v: -0.407407 } } });
+  assert.deepEqual(containMotion({ w: 100, h: 100 }, { w: 1920, h: 1080 }, { x: 760, y: 0, w: 400, h: 200 }, { position: '0px 0px' }),
+    containMotion({ w: 100, h: 100 }, { w: 1920, h: 1080 }, { x: 760, y: 0, w: 400, h: 200 }, { position: '0% 50%' }));
+  for (const look of [{ fit: 'fill' }, { fit: 'none' }, { fit: 'scale-down' }, { position: 'calc(50% + 4px) 50%' }, { position: 'right 10px top 0%' }]) {
+    assert.equal(containMotion({ w: 144, h: 320 }, stage, undefined, look).kind, 'bake', JSON.stringify(look));
+  }
+});
+
+test('a style that says only what CSS does anyway, or where the picture sits in its box, is no look of its own', () => {
+  assert.deepEqual(ownLook('object-fit: contain; object-position: 50% 50%; opacity: 1; filter: none; border-radius: 0px; mix-blend-mode: normal'), []);
+  assert.deepEqual(ownLook('object-fit: cover; object-position: 50% 30%; opacity: 1.0 !important'), []);
+  assert.deepEqual(ownLook('opacity: 0.5; object-fit: cover; border-radius: 8px; filter: blur(2px)'),
+    [['opacity', '0.5'], ['border-radius', '8px'], ['filter', 'blur(2px)']]);
+  assert.deepEqual(ownLook('image-rendering: pixelated'), [['image-rendering', 'pixelated']], 'a property it does not know stays a look');
 });
 
 test('fades in the editor\'s timeline: a picture that fades is rendered; a sound that fades is its own part with level keyframes', () => {
