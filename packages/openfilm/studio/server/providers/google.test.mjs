@@ -210,6 +210,16 @@ test('a video run in the background: asked after until done, then deleted; one t
   await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /did not start the video/);
 
   asks = 0;
+  reply = (call) => {
+    if (isStart(call)) return [200, { id: 'v1_bg', status: 'in_progress' }];
+    if (call.method === 'DELETE') return [200, {}];
+    asks += 1;
+    return [200, { id: 'v1_bg' }];
+  };
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /Gemini Omni made no clip\./);
+  assert.equal(asks, 1, 'an answer with no status is not asked after again');
+
+  asks = 0;
   let cancelled = 0;
   reply = (call) => {
     if (isStart(call)) return [200, { id: 'v1_bg', status: 'in_progress' }];

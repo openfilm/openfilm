@@ -59,8 +59,9 @@ export default {
   models: MODELS,
   async run(verb, args, ctx) {
     const base = serviceUrl('GOOGLE', 'https://generativelanguage.googleapis.com');
-    const send = (/** @type {string} */ url, /** @type {RequestInit} */ init = {}) =>
-      call(NAME, url, { ...init, headers: { 'x-goog-api-key': ctx.key, 'content-type': 'application/json', ...init.headers } }, ctx);
+    /* `signal` is the run's own, but for a request that has to go out after the run was stopped */
+    const send = (/** @type {string} */ url, /** @type {RequestInit} */ init = {}, /** @type {AbortSignal} */ signal = ctx.signal) =>
+      call(NAME, url, { ...init, headers: { 'x-goog-api-key': ctx.key, 'content-type': 'application/json', ...init.headers } }, signal === ctx.signal ? ctx : { ...ctx, signal });
     const generate = async (/** @type {string} */ model, /** @type {unknown} */ body) =>
       /** @type {any} */ (await (await send(`${base}/v1beta/models/${model}:generateContent`, { method: 'POST', body: JSON.stringify(body) })).json());
 
@@ -251,7 +252,7 @@ function inline(/** @type {any} */ body, /** @type {string} */ what) {
  * address, since an answer carries 4 MB at most inline; the file is asked after until it is ready, then downloaded
  * with the key.
  * @param {Record<string, unknown>} args @param {RunContext} ctx @param {string} base
- * @param {(url: string, init?: RequestInit) => Promise<Response>} send
+ * @param {(url: string, init?: RequestInit, signal?: AbortSignal) => Promise<Response>} send
  */
 async function video(args, ctx, base, send) {
   const prompt = needed(args, 'prompt');
@@ -309,13 +310,14 @@ async function video(args, ctx, base, send) {
     if (id && !/^[\w-]+$/.test(id)) throw new Error(`${NAME} did not start the video.`);
     if (id) at = `${base}/v1beta/interactions/${id}`;
     try {
-      while (at && (!text(answer?.status) || answer.status === 'in_progress')) {
+      /* only a running interaction is asked after: an answer with no status is read as it is */
+      while (at && answer?.status === 'in_progress') {
         await sleep(polling.ms, ctx.signal);
         answer = await (await send(at)).json();
       }
     } catch (e) {
-      /* the run was stopped: Google stops making it too (the run's own signal is spent, so this goes without it) */
-      if (ctx.signal?.aborted) fetch(`${at}/cancel`, { method: 'POST', headers: { 'x-goog-api-key': ctx.key } }).catch(() => {});
+      /* the run was stopped: Google stops making it too (the run's own signal is spent, so this goes with its own) */
+      if (ctx.signal?.aborted) send(`${at}/cancel`, { method: 'POST' }, AbortSignal.timeout(30_000)).catch(() => {});
       throw e;
     }
     const why = text(answer?.error?.message) || interactionText(answer);
