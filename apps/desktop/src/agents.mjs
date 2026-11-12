@@ -45,6 +45,7 @@ import { nodeBinary } from './node-runtime.mjs';
 import { openfilmCommand } from './openfilm-command.mjs';
 import { outOfBalance } from './pi-config.mjs';
 import { AGENT_DEFINITIONS } from './agent-definitions.mjs';
+import { systemPrompt } from 'openfilm/system-prompt';
 
 const require = createRequire(import.meta.url);
 
@@ -144,24 +145,23 @@ In your replies, [[clip:ID]] (by its id in film.html), [[t:SECONDS]], [[range:ST
 (0 is the first) and [[file:PATH]] (a file of the project) show as links that open it in Studio.`;
 
 /**
- * What the agent is told about where it is, on top of its own instructions. `command`: the app's `openfilm` by its
- * whole path (openfilmCommand), named in place of the one on the PATH, which the agent's shell may not find first.
+ * What an agent of someone else's is told, on top of its own instructions: to run `openfilm`, which prints OpenFilm's
+ * system prompt (openfilm/src/system-prompt.mjs) and its skills, and which `openfilm` that is. Nothing of how any
+ * work is done: that is the skills'. `command`: the app's `openfilm` by its whole path (openfilmCommand), named in
+ * place of the one on the PATH, which the agent's shell may not find first.
  */
 export function agentInstructions(command = null) {
   const run = command ?? 'openfilm';
   const which = command
     ? `That is this app's own \`openfilm\` command, on the Studio beside you: run it by
-that path every time, as its manual does, not as \`openfilm\` (your shell may find another one first) and not as
+that path every time, as what it prints does, not as \`openfilm\` (your shell may find another one first) and not as
 \`npx openfilm\`, whatever a skill says.`
     : `Use the \`openfilm\` command on your PATH (this app's own, on the Studio beside you), not
 \`npx openfilm\`, whatever a skill says.`;
-  return `You are working inside OpenFilm, a desktop app for making videos. Beside this chat the person sees OpenFilm Studio,
-the video editor, showing the project in your working directory; it updates live as you save files.
-
-The project is an OpenFilm film: pages with window.film, cut together by film.html. Before you change anything, run
-\`${run}\` with no arguments and read the manual it prints; follow it. ${which} Studio is already open on this
-project: you never need \`${run} open\` and never open Studio in a browser, and the person exports the film from it.
-Run \`${run} look\` after each change to see what you made. Reply in the language the person writes in.
+  return `You are working inside OpenFilm, a desktop app for making videos. Before you do anything, run \`${run}\` with no
+arguments and follow what it prints: how to work here, and the skills that say how each kind of work is done.
+${which} Studio is already open beside this chat on the project in your working directory: you never need
+\`${run} open\` and never open Studio in a browser.
 
 ${STUDIO_REFERENCES}`;
 }
@@ -169,16 +169,20 @@ ${STUDIO_REFERENCES}`;
 export const INSTRUCTIONS = agentInstructions();
 
 /**
- * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): who it is,
- * where it is and how it talks with the person (agent-prompt.md: written for it, so not INSTRUCTIONS, which tell
- * another agent to go and read the manual), and how the person points at Studio (STUDIO_REFERENCES). How a film is
- * made is OpenFilm's skills' (openfilm/skills coreSkills), which Pi lists after it and the agent reads when a task
- * needs one. `edit` false: the person turned OpenFilm's `edit` off, so the prompt does not send the agent to it.
+ * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): OpenFilm's
+ * system prompt as an agent in the app has it (openfilm/src/system-prompt.mjs: where it is and how it talks with the
+ * person; not INSTRUCTIONS, which tell another agent to go and read it), and how the person points at Studio
+ * (STUDIO_REFERENCES). How each kind of work is done is OpenFilm's skills' (openfilm/skills coreSkills), which Pi
+ * lists after it and the agent reads when a task needs one.
  */
-export function ownAgentPrompt({ edit = true } = {}) {
-  const read = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
-  const prompt = edit ? read : read.replace(/: read `edit` before you make or change a film\./, '.');
-  return `${prompt}\n\n## Pointing at Studio\n\n${STUDIO_REFERENCES}`;
+export function ownAgentPrompt() {
+  return `${systemPrompt('app').trim()}
+
+Run OpenFilm's commands as \`openfilm\`, also where a skill says \`npx openfilm\`.
+
+## Pointing at Studio
+
+${STUDIO_REFERENCES}`;
 }
 
 /**
@@ -1260,7 +1264,7 @@ export class AgentSession {
     /* its skills and MCP servers: its maker's, OpenFilm's skills, and the person's own only those let in (agent-skills.mjs) */
     const skills = this.opts.skills
       ? await sessionSkills(this.opts.agent, { cwd: this.opts.cwd, env: shell, ...this.opts.skills }).catch(() => null) : null;
-    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt({ edit: skills?.piSkills?.names.includes('edit') ?? true }), skills: skills?.piSkills ?? null });
+    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt(), skills: skills?.piSkills ?? null });
     /* Developer mode: the agent's own logging switch, so the turn log has what its model got; none when the person
        set its telemetry themselves (agent-logs.mjs) */
     this.logging = this.opts.logDir && cli && !this.spec.adapter

@@ -226,7 +226,7 @@ test("an agent is told to run the app's openfilm by its whole path: its shell ma
   const command = openfilmCommand('/Users/me/Library/Application Support/OpenFilm/bin', 'darwin');
   assert.equal(command, "'/Users/me/Library/Application Support/OpenFilm/bin/openfilm'", 'quoted, for the space in it');
   const told = agentInstructions(command);
-  for (const run of [`\`${command}\` with no arguments`, `\`${command} open\``, `\`${command} look\``]) assert.ok(told.includes(run), run);
+  for (const run of [`\`${command}\` with no\narguments`, `\`${command} open\``]) assert.ok(told.includes(run), run);
   assert.match(told, /not as `openfilm` \(your shell may find another one first\)/);
   assert.ok(!told.includes('on your PATH'));
   assert.equal(openfilmCommand('C:\\Users\\me\\AppData\\Roaming\\OpenFilm\\bin', 'win32'), null, 'on Windows the name on the PATH');

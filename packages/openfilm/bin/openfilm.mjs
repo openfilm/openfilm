@@ -13,7 +13,8 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm update                      the newest OpenFilm; Studio starts again on it
   openfilm doctor                      what this computer has for OpenFilm, to paste into an issue
 
-  Run with no arguments for the manual; \`openfilm <command> --help\` for one command's options; --version for the version.
+  Run with no arguments for how to work here and the skills that say how; \`openfilm <command> --help\` for one command's options;
+  --version for the version.
   look, render, get and canvas work on the project around the current folder.
   Exit status: 0 done, 1 the film or the command failed (the output says why), 2 not a project or a wrong command.`;
 
@@ -120,7 +121,7 @@ openfilm skill remove <name>
                   caught so it never clips`,
 };
 
-/* `openfilm` alone: the manual, the whole of what an agent needs to know. `get` takes any options its verb has,
+/* `openfilm` alone: the system prompt (src/system-prompt.mjs) and OpenFilm's own skills, each in a line. `get` takes any options its verb has,
    so it goes to Studio (studio/client.mjs) before the fixed options below are parsed. */
 const RAW = process.argv.slice(2);
 /* the command as the agent can type it here: the one that ran it when it says so (OPENFILM_RUN: the development
@@ -129,17 +130,19 @@ const RAW = process.argv.slice(2);
 const RUN = process.env.OPENFILM_RUN || (process.env.npm_command === 'exec' ? 'npx -y openfilm@latest' : 'openfilm');
 /**
  * A newer openfilm, said once in a line before what the command prints: looked up on npm (at most daily, briefly) when
- * a session starts (the manual, open), else only as learnt before, so look, render and get never wait for it.
+ * a session starts (the system prompt, open), else only as learnt before, so look, render and get never wait for it.
  */
 const updateNotice = async (network) => {
   const latest = await (await import('../studio/client.mjs')).newerOpenfilm({ network }).catch(() => null);
   if (latest) console.error(`openfilm ${latest} is out (this is an older one): \`${RUN} update\` updates it, and Studio with it.`);
 };
 if (RAW.length === 0) {
-  const { readFileSync } = await import('node:fs');
   await updateNotice(true);
-  const { asRun, manualFor } = await import('../src/skills.mjs');
-  console.log(asRun(manualFor(readFileSync(new URL('../MANUAL.md', import.meta.url), 'utf8')), RUN));
+  const { asRun, promptSkills } = await import('../src/skills.mjs');
+  const { systemPrompt } = await import('../src/system-prompt.mjs');
+  /* an agent the desktop app started says so (OPENFILM_AGENT): Studio is beside it; any other is in a terminal */
+  const where = process.env.OPENFILM_AGENT?.startsWith('app:') ? 'app' : 'terminal';
+  console.log(asRun(`${systemPrompt(where)}\n${promptSkills()}`, RUN).trimEnd());
   process.exit(0);
 }
 if (RAW.length === 1 && (RAW[0] === '--version' || RAW[0] === '-v')) {

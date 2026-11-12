@@ -18,12 +18,12 @@
  *              `.source.json`. Every OpenFilm on this computer has the same ones.
  *
  * OpenFilm's own (coreSkills: `manual/` in this package) are how a film is made, its media and its canvas, which the
- * manual names: in every agent's hands while the plugin each goes with is on (src/plugins.mjs), never installed or
- * removed, so the manual stays a page.
+ * system prompt lists (promptSkills): in every agent's hands while the plugin each goes with is on (src/plugins.mjs), never installed or
+ * removed.
  *
  * Nothing here deletes a skill outright: one replaced or removed goes to the system's trash.
  *
- * `openfilm skills` lists them by uid and `openfilm skill <owner/name>` prints one, as `openfilm` prints the manual: that is how any
+ * `openfilm skills` lists them by uid and `openfilm skill <owner/name>` prints one, as `openfilm` prints the system prompt: that is how any
  * agent reads a skill. The desktop app's chat offers the same list (apps/desktop).
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -129,7 +129,7 @@ export function discoverSkills() {
     return skill ? [skill] : [];
   });
 }
-/** OpenFilm's own skills, released with this package beside the manual. */
+/** OpenFilm's own skills, released with this package beside the system prompt. */
 export const coreSkillsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'manual');
 /**
  * The person's own skills: OPENFILM_SKILLS, else `Skills/` beside the default projects library (OPENFILM_LIBRARY, else
@@ -502,21 +502,22 @@ export function offeredSkills({ home, ...where } = {}) {
 }
 
 /**
- * The manual as this computer's agents read it: its lines for OpenFilm's own skills that go with a plugin that is
- * off left out (an agent is not told to read what it is not given), and when plugins are off, a last line
- * saying which (src/plugins.mjs).
- * @param {string} manual MANUAL.md @param {string} [home]
+ * OpenFilm's own skills as the system prompt lists them (src/system-prompt.mjs; `openfilm` alone prints them after
+ * it): one line for each that an agent is given, its name and what its SKILL.md says it is for, in their order; one
+ * that goes with a plugin that is off is left out (an agent is not told to read what it is not given), and when
+ * plugins are off, a last line says which (src/plugins.mjs).
+ * @param {string} [home]
  */
-export function manualFor(manual, home) {
-  const gone = new Set(skillsOfPluginsOff(home).keys());
-  const lines = manual.split('\n').filter((line) => { const m = /^- `([a-z0-9-]+)`:/.exec(line); return !(m && gone.has(m[1])); });
+export function promptSkills(home) {
+  const gone = skillsOfPluginsOff(home);
+  const lines = coreSkills().filter((s) => !gone.has(s.name)).map((s) => `- \`${s.name}\`: ${s.description}`);
   const said = pluginsOffLine(home);
-  return said ? `${lines.join('\n').trimEnd()}\n\n${said}\n` : lines.join('\n');
+  return `${lines.join('\n')}${said ? `\n\n${said}` : ''}\n`;
 }
 
 /**
  * Text for an agent with OpenFilm's commands as `run` types them here (`npx -y openfilm@latest`, the app's own by its
- * path): the manual's and OpenFilm's own skills' `openfilm …`, and the official ones' `npx openfilm …`. A skill read
+ * path): the system prompt's and OpenFilm's own skills' `openfilm …`, and the official ones' `npx openfilm …`. A skill read
  * from its file says `openfilm`, which is the command on the PATH where OpenFilm is installed and in the desktop app.
  * @param {string} text @param {string} run
  */

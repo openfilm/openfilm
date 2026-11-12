@@ -128,7 +128,7 @@ export function skillsOfPluginsOff(home) {
 }
 
 /**
- * The line the manual ends with when plugins are off: which, and what each is for, so an agent can say what turning
+ * The line the system prompt's list of skills ends with when plugins are off: which, and what each is for, so an agent can say what turning
  * one on would give instead of working around it. Null when all there are to turn on are on.
  * @param {string} [home]
  */

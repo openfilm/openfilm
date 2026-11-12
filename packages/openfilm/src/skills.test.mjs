@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, asRun, coreSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
+import { addSkills, asRun, coreSkills, promptSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -372,16 +372,16 @@ test("a cover's format is what its bytes are, and a cover chosen before goes whe
   assert.throws(() => setSkillCover('own', `data:image/png;base64,${Buffer.from('GIF89a......').toString('base64')}`, { mine }), /PNG, JPEG or WebP/);
 });
 
-test("OpenFilm's own skills: in order, each named by the manual, printed with the command as run here, never in the library", async () => {
-  const manual = readFileSync(new URL('../MANUAL.md', import.meta.url), 'utf8');
+test("OpenFilm's own skills: in order, each listed after the system prompt, printed with the command as run here, never in the library", async () => {
+  const manual = promptSkills(mkdtempSync(join(tmpdir(), 'of-prompt-skills-')));
   const core = coreSkills();
   assert.deepEqual(core.map((s) => s.uid), ['openfilm/edit', 'openfilm/media', 'openfilm/canvas', 'openfilm/motion'], 'in the order agents are given them');
   for (const s of core) {
     assert.ok(s.shown?.title['zh-CN'] && s.shown.summary.en, `${s.name} has a title and a summary for people`);
-    assert.ok(manual.includes(`\`${s.name}\``), `the manual names ${s.name}`);
+    if (s.name !== 'motion') assert.ok(manual.includes(`- \`${s.name}\`: ${s.description}`), `the list names ${s.name} by what it says it is for`);
     assert.ok(s.description.length > 40, `${s.name} says when it is read`);
   }
-  assert.ok(manual.split(/\s+/).length < 400, 'the manual is a page: how a film is made is a skill');
+  assert.ok(manual.split(/\s+/).length < 400, 'a line for each: how a film is made is in the skill');
   const text = (name) => readFileSync(core.find((s) => s.name === name).file, 'utf8');
   assert.match(text('edit'), /The one rule: the picture depends only on t/);
   assert.match(text('media'), /--take <id>/);

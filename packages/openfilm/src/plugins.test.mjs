@@ -4,11 +4,10 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PLUGINS, pluginOfSkill, pluginStates, pluginsOffLine, readPlugins, setPluginOn, skillsOfPluginsOff, workbenchesOn } from './plugins.mjs';
-import { manualFor, offeredSkills, setSkillOn } from './skills.mjs';
+import { offeredSkills, promptSkills, setSkillOn } from './skills.mjs';
 
 const home = () => mkdtempSync(join(tmpdir(), 'of-plugins-'));
 const where = (h) => ({ home: h, mine: join(h, 'mine'), official: join(h, 'official') });
-const MANUAL = readFileSync(new URL('../MANUAL.md', import.meta.url), 'utf8');
 
 test('the edit and the canvas are on until the person says, Motion is not; the choice is kept by plugin', () => {
   const h = home();
@@ -39,27 +38,27 @@ test('every plugin can be off at once: no workbench is shown then', () => {
   assert.equal(JSON.parse(readFileSync(join(h, 'prefs.json'), 'utf8')).kept, 1);
 });
 
-test('a plugin off takes its skills from every agent, and the manual does not name them', () => {
+test('a plugin off takes its skills from every agent, and the system prompt\'s list does not name them', () => {
   const h = home();
   const names = () => offeredSkills(where(h)).given.map((s) => s.name);
   assert.deepEqual(names(), ['edit', 'media', 'canvas']);
   assert.equal(pluginsOffLine(h).startsWith('Plugins the person has turned off (the library\'s Plugins tab turns one on): motion ('), true);
-  assert.match(manualFor(MANUAL, h), /^- `canvas`:/m);
+  assert.match(promptSkills(h), /^- `canvas`:/m);
 
   setPluginOn('canvas', false, h);
   assert.deepEqual([...skillsOfPluginsOff(h)], [['canvas', 'canvas'], ['motion', 'motion']]);
   assert.deepEqual(names(), ['edit', 'media']);
-  const manual = manualFor(MANUAL, h);
+  const manual = promptSkills(h);
   assert.doesNotMatch(manual, /^- `canvas`:/m);
   assert.match(manual, /^- `edit`:/m);
   assert.match(manual, /turned off \(the library's Plugins tab turns one on\): canvas \(the board beside the edit[^)]*\); motion \(/);
 
-  /* on again, its skill is back; every plugin on, the manual is as it is written */
+  /* on again, its skill is back; every plugin on, the list is OpenFilm's own skills and nothing else */
   setPluginOn('canvas', true, h);
   setPluginOn('motion', true, h);
   assert.deepEqual(names(), ['edit', 'media', 'canvas', 'motion']);
   assert.equal(pluginsOffLine(h), null);
-  assert.equal(manualFor(MANUAL, h), MANUAL);
+  assert.deepEqual(promptSkills(h).trim().split('\n').map((line) => /^- `([a-z]+)`: \S/.exec(line)?.[1]), ['edit', 'media', 'canvas', 'motion'], 'each in a line, and no more');
 });
 
 test('one of OpenFilm\'s own skills has no switch of its own: it is on while its plugin is, and the media\'s always', () => {
@@ -69,11 +68,11 @@ test('one of OpenFilm\'s own skills has no switch of its own: it is on while its
   /* a choice kept before plugins had the one switch is not followed */
   setSkillOn('openfilm/media', false, h);
   setSkillOn('openfilm/canvas', false, h);
-  assert.match(manualFor(MANUAL, h), /^- `media`:/m);
+  assert.match(promptSkills(h), /^- `media`:/m);
   assert.deepEqual(names(), ['edit', 'media', 'canvas', 'motion']);
   /* the edit is a plugin like any other: off, an agent is not given its skill */
   setPluginOn('edit', false, h);
-  assert.doesNotMatch(manualFor(MANUAL, h), /^- `edit`:/m);
+  assert.doesNotMatch(promptSkills(h), /^- `edit`:/m);
   assert.deepEqual(names(), ['media', 'canvas', 'motion']);
   /* every plugin off: none of the skills that go with one; the media is no plugin, it is what every project stands on */
   setPluginOn('canvas', false, h);

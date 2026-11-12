@@ -50,7 +50,7 @@ export function openfilmCommand(bin, platform = process.platform) {
 /**
  * Write the command into `<dir>/bin` and answer that folder, for PATH. `ffmpeg`: the app's ffmpeg folder, first on the
  * command's PATH; `env`: what else it runs with. It names itself by its whole path (OPENFILM_RUN, openfilmCommand) in
- * all it prints, the manual too.
+ * all it prints, the system prompt too.
  */
 export function installOpenfilmCommand(dir, { node = nodeBinary(), platform = process.platform, ffmpeg = null, env = {} } = {}) {
   const bin = join(dir, 'bin');

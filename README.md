@@ -152,7 +152,7 @@ OpenFilm spends its effort where models fail: checking the film. `look` draws ev
 shuffled orders, and names any that changed, along with page errors, fonts that failed to load, missing sound files,
 and text cut off by the frame.
 
-[MANUAL.md](packages/openfilm/MANUAL.md) is the page `openfilm` prints, and
+[SYSTEM_PROMPT.md](packages/openfilm/SYSTEM_PROMPT.md) is what `openfilm` prints for an agent, and
 [packages/openfilm/manual](packages/openfilm/manual) holds OpenFilm's own skills; [SPEC.md](packages/openfilm/SPEC.md)
 is for anyone building a player, renderer or editor.
 

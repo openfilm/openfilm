@@ -143,7 +143,7 @@ Blender、视频生成模型）以视频或图片的形式接进来。
 OpenFilm 把功夫花在模型容易出错的地方：检查片子。`look` 会把总览里的每一帧按两种打乱的顺序各画一遍，指出前后不一致
 的帧，同时报告页面错误、加载失败的字体、缺失的声音文件，以及被画面边缘截断的文字。
 
-[MANUAL.md](packages/openfilm/MANUAL.md) 是 `openfilm` 打印的那一页，[packages/openfilm/manual](packages/openfilm/manual)
+[SYSTEM_PROMPT.md](packages/openfilm/SYSTEM_PROMPT.md) 是 `openfilm` 打印给智能体的系统提示词，[packages/openfilm/manual](packages/openfilm/manual)
 里是 OpenFilm 自带的技能；[SPEC.md](packages/openfilm/SPEC.md) 是给想做播放器、渲染器或剪辑器的人看的格式规范。
 
 ## 从源码运行

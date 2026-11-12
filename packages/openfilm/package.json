@@ -1,7 +1,7 @@
 {
   "name": "openfilm",
   "version": "0.3.2",
-  "description": "The open source AI video agent: films as web pages, the manual that teaches your coding agent to make them, the `openfilm` command, and Studio, the editor to change anything in them.",
+  "description": "The open source AI video agent: films as web pages, the skills that teach your coding agent to make them, the `openfilm` command, and Studio, the editor to change anything in them.",
   "license": "MIT",
   "homepage": "https://openfilm.dev",
   "repository": {
@@ -34,6 +34,7 @@
     "./problems": "./src/problems.mjs",
     "./skills": "./src/skills.mjs",
     "./skills-cli": "./src/skills-cli.mjs",
+    "./system-prompt": "./src/system-prompt.mjs",
     "./studio": "./studio/server/server.mjs",
     "./desktop-account": "./studio/server/account.mjs",
     "./studio-ui/*": "./studio/ui/src/*",
@@ -58,7 +59,7 @@
     "skill-catalog-seed.json",
     "src",
     "!src/*.test.mjs",
-    "MANUAL.md",
+    "SYSTEM_PROMPT.md",
     "studio/server/**/*.mjs",
     "studio/server/**/*.js",
     "!studio/server/**/*.test.mjs",
