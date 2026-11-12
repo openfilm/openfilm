@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeFolder, moveFile } from './files.mjs';
-import { bringClip, libraryRel, listLibrary, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { bringClip, libraryRel, listLibrary, saveClip, saveFile, saveGroup, takeSaved, fittedKeyframes } from './saved.mjs';
 
 let saved;
 let before;
@@ -224,4 +224,19 @@ test('a saved clip\'s @keyframes never change what the film\'s own clips play', 
   /* the same `pop` already there: nothing new */
   const same = await takeSaved(moving(), group);
   assert.deepEqual(Object.keys(same.keyframes), ['pop']);
+});
+
+test('a renamed @keyframes changes only the name an animation plays, not a property or a url that reads the same', () => {
+  const { keyframes, named } = fittedKeyframes({ rotate: 'to { rotate: 1turn; }' }, { rotate: 'to { rotate: -1turn; }' });
+  assert.deepEqual(Object.keys(keyframes), ['rotate-2']);
+  const clip = named({ src: 'a.jpg', style: 'rotate: 10deg; background: url(rotate.png); animation: rotate 1s both' });
+  assert.match(clip.style, /rotate: 10deg/);
+  assert.match(clip.style, /url\(rotate\.png\)/);
+  assert.match(clip.style, /animation: rotate-2 1s both/);
+});
+
+test('a clip\'s own motion keyframes keep their shape when renamed, so they are still read as a clip\'s own', () => {
+  const { keyframes, named } = fittedKeyframes({ 'x--scale': 'from { scale: 2; } to { scale: 1; }' }, { 'x--scale': 'from { scale: 3; } to { scale: 1; }' });
+  assert.deepEqual(Object.keys(keyframes), ['x-2--scale']);
+  assert.match(named({ src: 'a.jpg', style: 'animation: x--scale 1s both' }).style, /animation: x-2--scale 1s both/);
 });

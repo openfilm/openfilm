@@ -23,6 +23,7 @@
 import { existsSync, createReadStream } from 'node:fs';
 import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, posix } from 'node:path';
+import { animationsOf, withAnimations } from '../../src/clip-motion.mjs';
 import { FILM_FILE, clipKind, filmHtml } from '../../src/film-doc.mjs';
 import { savedRoot } from '../../src/locations.mjs';
 import { STUDIO_STATE, filmClosure, folderView } from './closure.mjs';
@@ -242,16 +243,22 @@ export function fittedKeyframes(/** @type {Record<string, string>} */ keyframes,
   /** @type {Map<string, string>} */
   const renamed = new Map();
   for (const [name, body] of Object.entries(keyframes)) {
+    /* a clip's own motion (`<id>--scale`) keeps its shape, `<id>-2--scale`, so it is still read as a clip's own */
+    const own = /^(.+)(--(?:translate|scale|rotate|opacity))$/.exec(name);
     let free = name;
-    for (let n = 2; film?.[free] != null && film[free] !== body; n++) free = `${name}-${n}`;
+    for (let n = 2; film?.[free] != null && film[free] !== body; n++) free = own ? `${own[1]}-${n}${own[2]}` : `${name}-${n}`;
     set[free] = body;
     if (free !== name) renamed.set(name, free);
   }
+  /* only the name each `animation` entry plays changes: a property or a url that reads the same is left alone */
   const named = (/** @type {any} */ clip) => {
     if (!renamed.size || typeof clip.style !== 'string') return clip;
-    let style = clip.style;
-    for (const [was, now] of renamed) style = style.replace(new RegExp(`(?<![\\w-])${was.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`, 'g'), now);
-    return { ...clip, style };
+    const entries = animationsOf(clip.style);
+    if (!entries.some((e) => renamed.has(e.split(/\s+/)[0]))) return clip;
+    return { ...clip, style: withAnimations(clip.style, entries.map((e) => {
+      const [name, ...rest] = e.split(/\s+/);
+      return renamed.has(name) ? [renamed.get(name), ...rest].join(' ') : e;
+    })) };
   };
   return { keyframes: set, named };
 }
