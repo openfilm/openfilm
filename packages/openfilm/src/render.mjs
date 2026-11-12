@@ -172,7 +172,9 @@ export async function render(args, opts = {}) {
      The result says which (`clear`) */
   const clearFormat = alpha && opts.clear ? { ...container, ...opts.clear } : null;
   let clear = false;
-  const size = { w: Math.round(meta.width * scale), h: Math.round(meta.height * scale) };
+  const evenSize = (/** @type {number} */ n) => n - (n % 2);
+  /* the size as it will be written, not as the maths says: the chip is asked about this one, and the summary names it */
+  const size = { w: evenSize(Math.round(meta.width * scale)), h: evenSize(Math.round(meta.height * scale)) };
   const chip = opts.format || opts.hardware === false ? null : await chipFormat(extname(out).toLowerCase(), size, fps);
   let format = chip ? { ...own, ...chip.format } : own;
   let encoder = chip?.encoder ?? encoderOf(own.video);
@@ -376,7 +378,7 @@ export async function render(args, opts = {}) {
     ...(clearFormat ? { clear } : {}),
     lines: [
       `→ ${shown(out)}`,
-      `  ${total} frames · ${fmt(to - from)} at ${Number(fps.toFixed(3))} fps · ${Math.round(meta.width * scale)}×${Math.round(meta.height * scale)}${samples > 1 ? ` · ${samples} samples/frame` : ''}${alpha ? ' · alpha' : ''} · ${workers} worker${workers > 1 ? 's' : ''} · ${encoder} · ${seconds.toFixed(1)} s`,
+      `  ${total} frames · ${fmt(to - from)} at ${Number(fps.toFixed(3))} fps · ${size.w}×${size.h}${samples > 1 ? ` · ${samples} samples/frame` : ''}${alpha ? ' · alpha' : ''} · ${workers} worker${workers > 1 ? 's' : ''} · ${encoder} · ${seconds.toFixed(1)} s`,
       ...loudnessLines(opts.loudness, loud, opts.silent),
       ...(reused ? [`  ${reused} of ${chunks.length} chunks were drawn by a render that stopped, and used`] : []),
       ...uncopied.map((file) => `✗ copy: ${shown(file)}: could not be made, drawn as it is`),
@@ -471,12 +473,17 @@ function alphaWatch() {
 
 /** Frames [a, b) of one page into one file; sub-frames are averaged by ffmpeg (tmix) and every n-th kept. */
 async function encode({ film, a, b, file }, { fps, rate, samples, shutter, alpha, duration, first = a, format, onFrame, still, opaque, signal, sourceFrame = (frame) => frame }) {
+  /* a 4:2:0 picture wants even dimensions. A --scale between two pixels (1920 x .667) makes the browser's surface
+     1281 wide: the file was written, and every strict H.264 encoder after it said `width not divisible by 2`.
+     Crop the odd last column or row on the way in: scaling 1281 to 1280 would resample the whole frame, a crop keeps
+     every pixel as drawn. An even size is left alone. */
+  const even = 'crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0,';
   const blur = samples > 1 ? `tmix=frames=${samples},select='eq(mod(n\\,${samples})\\,${samples - 1})',setpts=N/((${ffmpegRate(rate)})*TB),` : '';
   /* Chromium omits PNG's alpha plane for an entirely opaque frame. Reinitializing on that format change resets
      tmix and select's frame index, losing samples or even every frame of a short transparent export. */
   const enc = ffmpeg(['-f', 'image2pipe', '-framerate', ffmpegRate(rate, samples), '-c:v', still === 'png' ? 'png' : 'mjpeg',
     ...(alpha && samples > 1 ? ['-reinit_filter', '0'] : []), '-i', '-',
-    '-vf', (alpha && samples > 1 ? `${alphaCompositeFilter(blur.slice(0, -1))},` : blur) + format.pix, '-r', ffmpegRate(rate), ...format.video, file], { input: true });
+    '-vf', even + (alpha && samples > 1 ? `${alphaCompositeFilter(blur.slice(0, -1))},` : blur) + format.pix, '-r', ffmpegRate(rate), ...format.video, file], { input: true });
   /* a page drawn opaque: its alpha read beside the encoder, every frame */
   const watch = opaque ? alphaWatch() : null;
   /* a cancelled render stops its encoder at once: the frames ffmpeg still holds are thrown away, not encoded (a 4K
