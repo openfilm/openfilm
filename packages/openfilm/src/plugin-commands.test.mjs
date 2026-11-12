@@ -44,7 +44,7 @@ test('openfilm <plugin> <command> names a command a plugin brings', () => {
   assert.equal(none.status, 2);
   assert.match(none.error, /^Its commands: `openfilm outline list`, `openfilm outline count`\. `openfilm skill local\/outline` says what each does\.$/);
   assert.equal(wrong.status, 2);
-  assert.match(wrong.error, /^The outline plugin has no command nope\. Its commands: /);
+  assert.match(wrong.error, /^The outline skill has no command nope\. Its commands: /);
   assert.equal(help.status, 0);
   assert.match(help.error, /^Its commands: /);
   rmSync(root, { recursive: true, force: true });
@@ -64,14 +64,18 @@ test('a plugin that is off runs nothing, and two of one name are told apart', ()
   setSkillOn('local/outline', false, where.home);
   const off = pluginCommand(['outline', 'list'], where);
   assert.equal(off.status, 1);
-  assert.match(off.error, /^The outline plugin is off: /);
+  assert.match(off.error, /^The outline skill is off: the person turns it on in the library's Skills tab\.$/);
+  /* one with a surface is a plugin, and is said to be */
+  plugin(join(where.mine, 'board'), 'board', { list: 'list.mjs' }, { 'list.mjs': '', 'index.html': '<p>' });
+  setSkillOn('local/board', false, where.home);
+  assert.match(pluginCommand(['board', 'list'], where).error, /^The board plugin is off: the person turns it on in the library's Plugins tab\.$/);
   setSkillOn('local/outline', true, where.home);
   assert.equal(pluginCommand(['outline', 'list'], where).command, 'list');
   /* the project brings one of the same name */
   plugin(join(where.cwd, 'skills', 'outline'), 'outline', { list: 'list.mjs' }, { 'list.mjs': '' });
   const two = pluginCommand(['outline', 'list'], where);
   assert.equal(two.status, 2);
-  assert.match(two.error, /^Two plugins are named outline: say which, `openfilm project\/outline` or `openfilm local\/outline`\.$/);
+  assert.match(two.error, /^Two are named outline: say which, `openfilm project\/outline` or `openfilm local\/outline`\.$/);
   assert.equal(pluginCommand(['project/outline', 'list'], where).plugin.source, 'project');
   rmSync(root, { recursive: true, force: true });
 });
@@ -111,7 +115,7 @@ test('running one gives it its words, the project, its own folder and how openfi
     assert.deepEqual(said, []);
     /* what cannot be run is said, with how it was typed */
     assert.equal(await runPluginCommand(['outline', 'nope'], 'openfilm', (line) => said.push(line), where), 2);
-    assert.match(said[0], /^openfilm outline: The outline plugin has no command nope\. /);
+    assert.match(said[0], /^openfilm outline: The outline skill has no command nope\. /);
     assert.equal(await runPluginCommand(['nothing'], 'openfilm', (line) => said.push(line), where), null);
   } finally { delete process.env.OUT; }
   rmSync(root, { recursive: true, force: true });

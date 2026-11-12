@@ -1,9 +1,10 @@
 /**
- * The plugins a project has: OpenFilm's own (lib/plugins), then the ones someone made: a skill that brings something
- * that runs, a surface (a web page at its folder's root; openfilm/src/skills.mjs SKILL_PAGE), commands (its
- * package.json's `bin`) or a program that serves its surface (its `scripts.start`), among the person's own, this project's, and those installed. One of those is a plugin like any
- * other: its skill is what an agent is given, its page (when it has one) is its workbench, and its switch is the
- * skill's.
+ * The plugins a project has: OpenFilm's own (lib/plugins), then the ones someone made, among the person's own, this
+ * project's, and those installed. A skill shows nowhere but in the conversation; a plugin is one that also shows
+ * outside it: it brings a surface the person works in, a web page at its folder's root (openfilm/src/skills.mjs
+ * SKILL_PAGE) or a program that serves one (its `scripts.start`). Commands alone (its package.json's `bin`) leave a
+ * skill a skill. A plugin someone made is one like any other: its skill is what an agent is given, its surface is its
+ * workbench, and its switch is the skill's.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { usePlugins, type Plugin } from './plugins.ts';
@@ -17,8 +18,8 @@ export const pluginOfSkill = (skill: SkillEntry): Plugin => ({
   ...(skill.program ? { workbench: skill.uid, program: true, runs: Boolean(skill.runs) } : {}),
 });
 
-/** Whether a skill is a plugin: it brings something that runs. */
-export const isPlugin = (skill: SkillEntry): boolean => Boolean(skill.surface || skill.commands?.length || skill.program);
+/** Whether a skill is a plugin: it shows outside the conversation (openfilm/src/skills.mjs isPlugin). */
+export const isPlugin = (skill: SkillEntry): boolean => Boolean(skill.surface || skill.program);
 
 /** The skills of a list that are plugins, installed. */
 export const skillPlugins = (skills: readonly SkillEntry[]): Plugin[] => skills.filter((k) => isPlugin(k) && k.installed !== false).map(pluginOfSkill);

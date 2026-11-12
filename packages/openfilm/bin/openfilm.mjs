@@ -10,7 +10,7 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm get     [what] [--options]  media: free from OpenFilm's library (music, sounds, transitions…), else a connected service
   openfilm canvas  [apply <steps>]     the canvas beside the edit: read it, or lay out notes, files and what to make on it
   openfilm skills                      the skills this film can be made with; \`openfilm skill <name>\` prints one
-  openfilm <plugin> [command] …        a command a plugin brings; its skill says what it does
+  openfilm <name> [command] …          a command a skill or a plugin brings; its skill says what it does
   openfilm update                      the newest OpenFilm; Studio starts again on it
   openfilm doctor                      what this computer has for OpenFilm, to paste into an issue
 

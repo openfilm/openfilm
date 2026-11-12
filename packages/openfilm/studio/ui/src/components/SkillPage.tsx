@@ -147,7 +147,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       </div>
       {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', inLanguage(plugins.find((p) => p.id === skill.plugin)?.title, lang) ?? skill.plugin) : t('gallery.skillOff')}</p> : null}
       {skill.retired ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
-      {/* the commands a plugin brings, as an agent (or another plugin) runs them */}
+      {/* the commands it brings, as an agent (or a plugin) runs them */}
       {skill.commands?.length ? (
         <div className="mt-3">
           <div className="text-[11.5px] font-medium text-[var(--text-muted)]">{t('gallery.pluginCommands')}</div>
