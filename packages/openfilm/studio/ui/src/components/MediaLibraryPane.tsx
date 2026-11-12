@@ -1,21 +1,22 @@
 /**
- * This computer, at a project's side (the assets drawer's "This computer"): the folders the person keeps media in,
- * shown as they are on the disk, to take media from (lib/media-library; studio/server/media-library.mjs). Nothing is
- * copied or moved by looking: a file comes into the project as it is used.
+ * A folder of the person's own, at a project's side (the assets drawer's My media, under Saved): one of the folders
+ * of this computer they keep media in, shown as it is on the disk, to take media from (lib/media-library;
+ * studio/server/media-library.mjs). The drawer's side bar lists Saved and these folders, adds one and stops showing
+ * one (`useMyFolders`); this pane is the folder picked there. Nothing is copied or moved by looking: a file comes into
+ * the project as it is used.
  *
- * One folder at a time, picked from a menu where folders are added and taken away; its own folders open inside it.
- * The search looks in all of them. A video is looked through by moving the pointer across its tile. A click watches a
- * file in the project's viewer (where its inspector says which projects use it and how it was made), a double-click
- * or Enter puts it in the film, a drag takes it onto the timeline. Its menu points it at for the agent, shows it in
- * the file manager, renames it where it is, or moves it to the trash, as the file manager does.
- *
- * A folder taken away stays on the disk as it is.
+ * Its own folders open inside it. The search looks through all of My media: Saved's files, then every folder. A video
+ * is looked through by moving the pointer across its tile. A click watches a file in the project's viewer (where its
+ * inspector says which projects use it and how it was made), a double-click or Enter puts it in the film, a drag
+ * takes it onto the timeline. Its menu points it at for the agent, shows it in the file manager, renames it where it
+ * is, moves it to Saved or another folder, or moves it to the trash, as the file manager does.
  */
 import React from 'react';
-import { ChevronDown, ChevronRight, Clapperboard, Folder, FolderOpen, FolderPlus, HardDrive, MessageSquarePlus, Pencil, Plus, Search, Trash2, Unplug, X } from 'lucide-react';
+import { ChevronRight, Clapperboard, Folder, FolderInput, FolderOpen, MessageSquarePlus, Pencil, Plus, Search, Trash2, Unplug, X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
-import { factsOf, knownFacts, libraryApi, referenceOf, resourceOf, sourcesOf, type LibraryFile, type LibraryFound, type LibraryListing, type LibraryPlaces } from '@/lib/media-library';
+import { factsOf, knownFacts, libraryApi, libraryRef, referenceOf, resourceOf, sourcesOf, type LibraryFile, type LibraryFolder, type LibraryFound, type LibraryListing } from '@/lib/media-library';
+import { refreshSaved } from '@/lib/saved';
 import { formatClipDuration, formatFileSize, type MediaFacts, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
@@ -29,6 +30,8 @@ const PAD = 10;
 const TILE_TEXT = 44;
 /** How many found files are asked for at once. */
 const FOUND_MAX = 600;
+/** Saved, as a place of My media. */
+export const SAVED_PLACE = 'saved';
 
 /** A file shown: in its place; `where`, when it was found rather than opened to (its folder, to read). */
 type Shown = { file: LibraryFile; place: string; where?: string };
@@ -39,7 +42,40 @@ const sameFile = (a: Shown | null, b: Shown) => Boolean(a && a.place === b.place
 const SOURCES = new Map<string, MediaSources>();
 const sourcesFor = (place: string): MediaSources => SOURCES.get(place) ?? (SOURCES.set(place, sourcesOf(place)), SOURCES.get(place)!);
 
-/** What the folders hold that fits the words: asked a moment after the last key, and again while they are still being read. */
+/**
+ * The folders the person added, read again as the window comes back (a disk may have been plugged in): to list in the
+ * drawer's side bar, add to (the system's dialog) and stop showing (the folder stays on the disk as it is).
+ */
+export function useMyFolders(on: boolean) {
+  const [folders, setFolders] = React.useState<LibraryFolder[] | null>(null);
+  const read = React.useCallback(async () => {
+    const next = await libraryApi.places();
+    if (next) setFolders(next.folders);
+    return next?.folders ?? null;
+  }, []);
+  React.useEffect(() => {
+    if (!on) return undefined;
+    void read();
+    const back = () => { void read(); };
+    window.addEventListener('focus', back);
+    return () => window.removeEventListener('focus', back);
+  }, [on, read]);
+  /**
+   * A folder picked in the system's dialog and added: its place, null when none was picked; `wide` or `failed` when
+   * it could not be (a disk's top, the home folder: far more than media).
+   */
+  const add = React.useCallback(async (title: string): Promise<string | null | { error: 'wide' | 'failed' }> => {
+    try {
+      const added = await libraryApi.addFolder(title);
+      const next = await read();
+      return added ? next?.find((f) => f.path === added)?.place ?? null : null;
+    } catch (e) { return { error: (e as { reason?: string }).reason === 'wide' ? 'wide' : 'failed' }; }
+  }, [read]);
+  const remove = React.useCallback(async (path: string) => { await libraryApi.removeFolder(path); await read(); }, [read]);
+  return { folders, add, remove };
+}
+
+/** What My media holds that fits the words: asked a moment after the last key, and again while it is still being read. */
 function useSearch(q: string, again: number): LibraryFound | null {
   const [state, setState] = React.useState<{ key: string; found: LibraryFound } | null>(null);
   const key = q.trim();
@@ -49,7 +85,7 @@ function useSearch(q: string, again: number): LibraryFound | null {
     let live = true;
     let later = 0;
     const timer = window.setTimeout(() => {
-      void libraryApi.search({ q: key, sort: 'name', limit: FOUND_MAX }).then((found) => {
+      void libraryApi.search({ q: key, saved: true, sort: 'name', limit: FOUND_MAX }).then((found) => {
         if (!live || !found) return;
         setState({ key, found });
         if (found.scanning) later = window.setTimeout(() => setMore((n) => n + 1), 2500);
@@ -76,93 +112,52 @@ function useListing(place: string | null, dir: string, again: number) {
   return state?.key === key ? state : null;
 }
 
-export function MediaLibraryPane({ selected, onPick, onAdd, onRefer }: {
-  /** the reference of the file the viewer shows, when it is one of these folders' */
+export function MediaLibraryPane({ folder, folders, selected, onPick, onAdd, onRefer }: {
+  /** the folder picked in the side bar */
+  folder: LibraryFolder;
+  /** every folder added, to move a file to */
+  folders: readonly LibraryFolder[];
+  /** the reference of the file the viewer shows, when it is one of My media's */
   selected: string | null;
   onPick: (file: WorkspaceResource | null) => void;
   onAdd: (file: WorkspaceResource) => void;
   onRefer?: ((file: WorkspaceResource) => void) | undefined;
 }) {
   const t = useT();
-  const [places, setPlaces] = React.useState<LibraryPlaces | null>(null);
-  const [at, setAt] = React.useState<{ place: string; dir: string } | null>(null);
+  const [dir, setDir] = React.useState('');
   const [query, setQuery] = React.useState('');
   const [picked, setPicked] = React.useState<Shown | null>(null);
   const [again, setAgain] = React.useState(0);
   const [menu, setMenu] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
-  const [adding, setAdding] = React.useState(false);
   const [renaming, setRenaming] = React.useState<{ place: string; path: string; name: string } | null>(null);
   const [trashing, setTrashing] = React.useState<{ place: string; file: LibraryFile; linked: string[] } | null>(null);
 
-  const readPlaces = React.useCallback(async () => {
-    const next = await libraryApi.places();
-    if (next) setPlaces(next);
-    return next;
+  /* another folder picked in the side bar: its top; the window back: read again (a folder changed in the file manager) */
+  React.useEffect(() => { setDir(''); setQuery(''); }, [folder.place]);
+  React.useEffect(() => {
+    const back = () => setAgain((n) => n + 1);
+    window.addEventListener('focus', back);
+    return () => window.removeEventListener('focus', back);
   }, []);
-  /* read again as the window comes back: a disk may have been plugged in, a folder changed in the file manager */
-  React.useEffect(() => {
-    const read = () => { void readPlaces(); setAgain((n) => n + 1); };
-    read();
-    window.addEventListener('focus', read);
-    return () => window.removeEventListener('focus', read);
-  }, [readPlaces]);
-  /* the first folder there is, once they are read; none when the one shown was taken away */
-  React.useEffect(() => {
-    if (!places) return;
-    if (at && places.folders.some((f) => f.place === at.place)) return;
-    const first = places.folders.find((f) => !f.missing) ?? places.folders[0];
-    setAt(first ? { place: first.place, dir: '' } : null);
-  }, [places, at]);
   /* what the viewer shows went elsewhere: nothing here is picked */
   React.useEffect(() => { if (!selected) setPicked(null); }, [selected]);
 
-  const go = (place: string, dir: string) => { setAt({ place, dir }); setQuery(''); };
   const searching = Boolean(query.trim());
-  const listing = useListing(searching ? null : at?.place ?? null, at?.dir ?? '', again);
+  const listing = useListing(searching || folder.missing ? null : folder.place, dir, again);
   const found = useSearch(query, again);
   const items = React.useMemo((): Item[] => {
     if (searching) return (found?.files ?? []).map((file) => ({ type: 'file' as const, file, place: file.place, where: file.where }));
-    if (!listing?.listing || !at) return [];
-    return [...listing.listing.dirs.map((d) => ({ type: 'dir' as const, ...d })), ...listing.listing.files.map((file) => ({ type: 'file' as const, file, place: at.place }))];
-  }, [searching, found, listing, at]);
-
-  const folder = places?.folders.find((f) => f.place === at?.place);
-  const name = searching ? t('mediaLibrary.results') : folder?.name ?? t('assetDrawer.mediaComputer');
-  const crumbs = !searching && at?.dir ? at.dir.split('/') : [];
-
-  const addFolder = async () => {
-    if (adding) return;
-    setAdding(true);
-    setNotice(null);
-    try {
-      const added = await libraryApi.addFolder(t('mediaLibrary.pickFolder'));
-      const next = await readPlaces();
-      const place = added ? next?.folders.find((f) => f.path === added)?.place : undefined;
-      if (place) go(place, '');
-    } catch (e) { setNotice(t((e as { reason?: string }).reason === 'wide' ? 'mediaLibrary.tooWide' : 'mediaLibrary.addFailed')); }
-    finally { setAdding(false); }
-  };
-  const removeFolder = async (path: string) => {
-    await libraryApi.removeFolder(path);
-    setPicked(null);
-    onPick(null);
-    void readPlaces();
-  };
-  const foldersMenu = (e: React.MouseEvent<HTMLElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    setMenu({ x: r.left, y: r.bottom + 4, items: [
-      ...(places?.folders ?? []).map((f) => ({
-        id: f.place, label: f.name, icon: f.missing ? <Unplug size={14} /> : <Folder size={14} />, checked: !searching && at?.place === f.place,
-        ...(f.missing ? { note: t('mediaLibrary.offlineTitle') } : {}), onSelect: () => go(f.place, ''),
-      })),
-      { id: 'add-sep', separator: true } as const,
-      { id: 'add', label: t('mediaLibrary.addFolder'), icon: <FolderPlus size={14} />, onSelect: () => { void addFolder(); } },
-      ...(folder ? [
-        ...(folder.missing ? [] : [{ id: 'reveal', label: t('projects.revealFolder'), icon: <FolderOpen size={14} />, onSelect: () => libraryApi.reveal(folder.place, '') }]),
-        { id: 'remove', label: t('mediaLibrary.remove').replace('{name}', folder.name), note: t('mediaLibrary.removeNote'), icon: <X size={14} />, onSelect: () => { void removeFolder(folder.path); } },
-      ] : []),
-    ] });
+    if (!listing?.listing) return [];
+    return [...listing.listing.dirs.map((d) => ({ type: 'dir' as const, ...d })), ...listing.listing.files.map((file) => ({ type: 'file' as const, file, place: folder.place }))];
+  }, [searching, found, listing, folder.place]);
+  const crumbs = !searching && dir ? dir.split('/') : [];
+  /* the file the viewer shows, as it is when a menu's choice is done (the menu was made in the click that picked it) */
+  const shownNow = React.useRef(selected);
+  shownNow.current = selected;
+  const unpick = (place: string, path: string) => {
+    setPicked((p) => (p?.place === place && p.file.path === path ? null : p));
+    if (shownNow.current === libraryRef(place, path)) onPick(null);
   };
 
   /* what is known of its length goes with it: a clip on the timeline is as long as its file */
@@ -171,6 +166,21 @@ export function MediaLibraryPane({ selected, onPick, onAdd, onRefer }: {
     const about = await libraryApi.about(place, file.path);
     setTrashing({ place, file, linked: about?.linkedBy.map((p) => p.name) ?? [] });
   };
+  const moveTo = async (place: string, file: LibraryFile, to: string) => {
+    const moved = await libraryApi.move(place, file.path, to);
+    if (!moved) { setNotice(t('mediaLibrary.moveFailed')); return; }
+    unpick(place, file.path);
+    if (place === SAVED_PLACE || to === SAVED_PLACE) refreshSaved();
+    setAgain((n) => n + 1);
+  };
+  /* Saved first, then the folders; where the file is now (the top of its folder) is no place to move it */
+  const moveEntry = (place: string, file: LibraryFile): ContextMenuEntry => ({
+    id: 'move-to', label: t('media.moveTo'), icon: <FolderInput size={14} />,
+    submenu: [{ place: SAVED_PLACE, name: t('saved.title') }, ...folders.filter((f) => !f.missing)].map((f) => {
+      const here = f.place === place && !file.path.includes('/');
+      return { id: `move:${f.place}`, label: f.name, checked: here, disabled: here, ...(here ? { hint: t('media.moveHere') } : {}), onSelect: () => { void moveTo(place, file, f.place); } };
+    }),
+  });
   const use: TileUse = {
     onAdd: (place, file) => { void withFacts(place, file).then(onAdd); },
     onMenu: (e, place, file) => setMenu({ x: e.clientX, y: e.clientY, items: [
@@ -178,8 +188,10 @@ export function MediaLibraryPane({ selected, onPick, onAdd, onRefer }: {
       ...(onRefer ? [{ id: 'refer', label: t('host.refer'), icon: <MessageSquarePlus size={14} />, onSelect: () => { void withFacts(place, file).then(onRefer); } }] : []),
       { id: 'reveal', label: t('projects.revealFolder'), icon: <FolderOpen size={14} />, onSelect: () => libraryApi.reveal(place, file.path) },
       { id: 'tend-sep', separator: true } as const,
-      { id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => { setNotice(null); setRenaming({ place, path: file.path, name: file.name }); } },
-      { id: 'trash', label: t('mediaLibrary.discard'), icon: <Trash2 size={14} />, danger: true, onSelect: () => { void askTrash(place, file); } },
+      /* Saved's files are renamed and taken away in Saved */
+      ...(place === SAVED_PLACE ? [] : [{ id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => { setNotice(null); setRenaming({ place, path: file.path, name: file.name }); } }]),
+      moveEntry(place, file),
+      ...(place === SAVED_PLACE ? [] : [{ id: 'trash', label: t('mediaLibrary.discard'), icon: <Trash2 size={14} />, danger: true, onSelect: () => { void askTrash(place, file); } }]),
     ] }),
   };
   const rename = async (to: string) => {
@@ -189,7 +201,7 @@ export function MediaLibraryPane({ selected, onPick, onAdd, onRefer }: {
     if (!was || !clean || clean === was.name) return;
     try {
       await libraryApi.rename(was.place, was.path, clean);
-      if (picked?.place === was.place && picked.file.path === was.path) { setPicked(null); onPick(null); }
+      unpick(was.place, was.path);
       setAgain((n) => n + 1);
     } catch (e) {
       const reason = (e as { reason?: string }).reason;
@@ -203,59 +215,42 @@ export function MediaLibraryPane({ selected, onPick, onAdd, onRefer }: {
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-media-library-pane="" data-drag-home="">
-      {places && !places.folders.length ? (
-        /* nothing added yet: what this is, and the one thing to do */
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 pb-10 text-center">
-          <HardDrive size={22} strokeWidth={1.5} className="text-[var(--text-faint)]" />
-          <div className="text-[13.5px] font-medium text-[var(--text-muted)]">{t('mediaLibrary.emptyTitle')}</div>
-          <p className="max-w-[40ch] text-[12.5px] leading-relaxed text-[var(--text-faint)]">{t('mediaLibrary.emptyBody')}</p>
-          <button type="button" onClick={() => void addFolder()} disabled={adding}
-            className="mt-2 inline-flex h-8 items-center gap-2 rounded-lg bg-[var(--bg-pressed)] px-3.5 text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--border-strong)] disabled:opacity-60">
-            <FolderPlus size={14} />{t('mediaLibrary.addFolder')}
-          </button>
-          {notice ? <p role="alert" className="text-[12px] text-[var(--err)]">{notice}</p> : null}
-        </div>
-      ) : (
-        <>
-          <div className="flex shrink-0 items-center gap-1.5 px-2.5 pb-1.5 pt-2.5">
-            <button type="button" aria-haspopup="menu" onClick={foldersMenu} title={name}
-              className="flex h-7 min-w-0 max-w-[46%] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-pressed)] px-2 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--border-strong)]">
-              <span className="truncate">{name}</span><ChevronDown size={12} className="shrink-0" />
-            </button>
-            {/* in every folder at once: by name, by folder, by the words a picture or clip was made with */}
-            <label className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2 text-[12.5px] text-[var(--text-muted)]">
-              <Search size={13} className="shrink-0" />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('mediaLibrary.search')} aria-label={t('mediaLibrary.search')}
-                onKeyDown={(e) => { if (e.key === 'Escape' && query) { e.stopPropagation(); setQuery(''); } }}
-                className="min-w-0 flex-1 bg-transparent text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]" />
-              {query ? <button type="button" aria-label={t('media.clearSearch')} onClick={() => setQuery('')} className="shrink-0 hover:text-[var(--text)]"><X size={12} /></button> : null}
-            </label>
-          </div>
-          {crumbs.length && at ? (
-            <div className="flex h-6 shrink-0 items-center gap-0.5 overflow-hidden px-2.5 text-[12px]">
-              <button type="button" onClick={() => go(at.place, '')} className="shrink-0 rounded px-1 text-[var(--text-muted)] hover:text-[var(--text)]">{folder?.name ?? name}</button>
-              {crumbs.map((part, i) => (
-                <React.Fragment key={crumbs.slice(0, i + 1).join('/')}>
-                  <ChevronRight size={11} className="shrink-0 text-[var(--text-faint)]" />
-                  <button type="button" onClick={() => go(at.place, crumbs.slice(0, i + 1).join('/'))}
-                    className={`min-w-0 truncate rounded px-1 ${i === crumbs.length - 1 ? 'font-medium text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{part}</button>
-                </React.Fragment>
-              ))}
-            </div>
-          ) : null}
-          {notice ? <p role="alert" className="shrink-0 px-3 pb-1 text-[12px] leading-snug text-[var(--err)]">{notice}</p> : null}
-          {searching && found && !items.length ? (
-            <Blank icon={<Search size={22} strokeWidth={1.5} />} title={t('mediaLibrary.noneFound')} {...(found.scanning ? { body: t('mediaLibrary.stillReading') } : {})} />
-          ) : !searching && (listing?.gone || folder?.missing) ? (
-            <Blank icon={<Unplug size={22} strokeWidth={1.5} />} title={t('mediaLibrary.offlineTitle')} body={t('mediaLibrary.offlineBody')} />
-          ) : !searching && listing && !items.length ? (
-            <Blank icon={<Clapperboard size={22} strokeWidth={1.5} />} title={t('mediaLibrary.noMedia')} />
-          ) : (searching ? found : listing) ? (
-            <Grid key={searching ? `found\n${query}` : `${at?.place}\n${at?.dir}`} items={items} picked={picked} renaming={renaming}
-              onOpen={(path) => { if (at) go(at.place, path); }} onPick={pick} onRename={(to) => void rename(to)} onStopRename={() => setRenaming(null)} use={use} />
-          ) : <div className="flex-1" />}
-        </>
-      )}
+      <div className="flex shrink-0 items-center gap-1.5 px-2.5 pb-1.5 pt-2.5">
+        {/* in all of My media at once: by name, by folder, by the words a picture or clip was made with */}
+        <label className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2 text-[12.5px] text-[var(--text-muted)]">
+          <Search size={13} className="shrink-0" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('mediaLibrary.search')} aria-label={t('mediaLibrary.search')}
+            onKeyDown={(e) => { if (e.key === 'Escape' && query) { e.stopPropagation(); setQuery(''); } }}
+            className="min-w-0 flex-1 bg-transparent text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]" />
+          {query ? <button type="button" aria-label={t('media.clearSearch')} onClick={() => setQuery('')} className="shrink-0 hover:text-[var(--text)]"><X size={12} /></button> : null}
+        </label>
+      </div>
+      {/* where it is: the folder, and the folders inside it opened */}
+      <div className="flex h-6 shrink-0 items-center gap-0.5 overflow-hidden px-2.5 text-[12px]" data-library-crumbs="">
+        {searching ? <span className="px-1 font-medium text-[var(--text)]">{t('mediaLibrary.results')}</span> : (
+          <>
+            <button type="button" onClick={() => setDir('')} className={`shrink-0 rounded px-1 ${crumbs.length ? 'text-[var(--text-muted)] hover:text-[var(--text)]' : 'font-medium text-[var(--text)]'}`}>{folder.name}</button>
+            {crumbs.map((part, i) => (
+              <React.Fragment key={crumbs.slice(0, i + 1).join('/')}>
+                <ChevronRight size={11} className="shrink-0 text-[var(--text-faint)]" />
+                <button type="button" onClick={() => setDir(crumbs.slice(0, i + 1).join('/'))}
+                  className={`min-w-0 truncate rounded px-1 ${i === crumbs.length - 1 ? 'font-medium text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{part}</button>
+              </React.Fragment>
+            ))}
+          </>
+        )}
+      </div>
+      {notice ? <p role="alert" className="shrink-0 px-3 pb-1 text-[12px] leading-snug text-[var(--err)]">{notice}</p> : null}
+      {searching && found && !items.length ? (
+        <Blank icon={<Search size={22} strokeWidth={1.5} />} title={t('mediaLibrary.noneFound')} {...(found.scanning ? { body: t('mediaLibrary.stillReading') } : {})} />
+      ) : !searching && (listing?.gone || folder.missing) ? (
+        <Blank icon={<Unplug size={22} strokeWidth={1.5} />} title={t('mediaLibrary.offlineTitle')} body={t('mediaLibrary.offlineBody')} />
+      ) : !searching && listing && !items.length ? (
+        <Blank icon={<Clapperboard size={22} strokeWidth={1.5} />} title={t('mediaLibrary.noMedia')} />
+      ) : (searching ? found : listing) ? (
+        <Grid key={searching ? `found\n${query}` : `${folder.place}\n${dir}`} items={items} picked={picked} renaming={renaming}
+          onOpen={setDir} onPick={pick} onRename={(to) => void rename(to)} onStopRename={() => setRenaming(null)} use={use} />
+      ) : <div className="flex-1" />}
       {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} dense /> : null}
       <ConfirmDialog
         open={Boolean(trashing)}
@@ -273,7 +268,7 @@ export function MediaLibraryPane({ selected, onPick, onAdd, onRefer }: {
           if (!was) return;
           void libraryApi.trash(was.place, was.file.path).then((ok) => {
             if (!ok) { setNotice(t('mediaLibrary.discardFailed')); return; }
-            if (picked?.place === was.place && picked.file.path === was.file.path) { setPicked(null); onPick(null); }
+            unpick(was.place, was.file.path);
             setAgain((n) => n + 1);
           });
         }}

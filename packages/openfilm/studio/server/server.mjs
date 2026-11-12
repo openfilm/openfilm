@@ -57,7 +57,7 @@ import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCov
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaFolders, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
-import { LibraryError, aboutFile, fileIn, inPlace, libraryPlaces, libraryRef, listFolder, placeOf, renameFile, searchLibrary, setMediaFolder, takeFile, trashFile as trashLibraryFile, whereOf } from './media-library.mjs';
+import { LibraryError, aboutFile, fileIn, inPlace, libraryPlaces, libraryRef, listFolder, moveFile as moveLibraryFile, placeOf, renameFile, searchLibrary, setMediaFolder, takeFile, trashFile as trashLibraryFile, whereOf } from './media-library.mjs';
 import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
@@ -525,13 +525,13 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (Date.now() - libraryRead > 60_000) { libraryRead = Date.now(); void mediaIndex.sweep().catch(() => {}); }
         return json(res, 200, { ...libraryPlaces(), scanning: mediaIndex.busy() });
       }
-      /* files of the added folders, by name, folder or prompt (`q`), of one `kind`: { files, total, scanning } (still
-         being read: more may be found in a moment) */
+      /* files of the added folders (`saved`: and of Saved, first), by name, folder or prompt (`q`), of one `kind`:
+         { files, total, scanning } (still being read: more may be found in a moment) */
       if (sub === 'search' && req.method === 'GET') {
         const sort = url.searchParams.get('sort');
         return json(res, 200, { ...await searchLibrary({
           q: (url.searchParams.get('q') ?? '').slice(0, 200), kind: ['video', 'image', 'audio'].find((k) => k === url.searchParams.get('kind')) ?? null,
-          sort: sort === 'name' || sort === 'size' ? sort : 'date', limit: Number(url.searchParams.get('limit')) || 300,
+          saved: url.searchParams.get('saved') === '1', sort: sort === 'name' || sort === 'size' ? sort : 'date', limit: Number(url.searchParams.get('limit')) || 300,
         }), scanning: mediaIndex.busy() });
       }
       if (sub === 'folders' && (req.method === 'POST' || req.method === 'DELETE')) {
@@ -561,13 +561,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (abs === at.root) openFile(abs); else reveal(abs);
         return json(res, 200, {});
       }
-      /* a file of an added folder renamed (POST rename { name } → { path }) or moved to the trash (POST trash). The
-         folder is read again behind, and a project that links to the file looks for it where it went */
-      if (body && (sub === 'rename' || sub === 'trash')) {
+      /* a file of an added folder renamed (POST rename { name } → { path }) or moved to the trash (POST trash); a file
+         moved between Saved and the added folders (POST move { to: place } → { place, path }). The folders are read
+         again behind, and a project that links to the file looks for it where it went */
+      if (body && (sub === 'rename' || sub === 'trash' || sub === 'move')) {
         try {
+          const to = sub === 'move' ? await placeOf(/** @type {{ to?: unknown }} */ (body).to) : null;
+          if (sub === 'move' && !to) throw new HttpError(404, 'That place is not in the library.');
           const linked = (await aboutFile(at, path))?.linkedBy ?? [];
-          const done = sub === 'rename' ? await renameFile(at, path, /** @type {{ name?: unknown }} */ (body).name) : await trashLibraryFile(at, path);
-          void mediaIndex.folder(at.root);
+          const done = sub === 'rename' ? await renameFile(at, path, /** @type {{ name?: unknown }} */ (body).name)
+            : sub === 'move' ? await moveLibraryFile(at, path, /** @type {import('./media-library.mjs').Place} */ (to)) : await trashLibraryFile(at, path);
+          if (!at.saved) void mediaIndex.folder(at.root);
+          if (to && !to.saved) void mediaIndex.folder(to.root);
           for (const p of linked) mediaIndex.soon(p.path);
           return json(res, 200, done ?? {});
         } catch (e) {

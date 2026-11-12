@@ -3,7 +3,8 @@
  * a folder of one as the disk has it, each file's bytes and what Studio works out from it, and what is known of one
  * file (the projects that use it, how it was made).
  *
- * A place is `folder:<path>`; a path is inside its place, `/` between folders.
+ * A place is `folder:<path>`, or `saved` (Saved's own files, found by a search or moved there); a path is inside its
+ * place, `/` between folders.
  *
  * Inside a project, a file of these folders is handled as a thing of Saved is (lib/saved): it is named by a reference
  * (`libraryRef`) in place of a project path, read through `librarySources`, and brought into the project as it is
@@ -83,9 +84,14 @@ export async function factsOf(place: string, file: LibraryFile): Promise<MediaFa
 export const libraryApi = {
   places: () => get<LibraryPlaces>('/api/media-library/places'),
   list: (place: string, dir: string) => get<LibraryListing>(`/api/media-library/list?place=${encodeURIComponent(place)}&dir=${encodeURIComponent(dir)}`),
-  /** Files of the added folders by name, folder or prompt (`q`), of one kind. */
-  search: (asked: { q?: string; kind?: string | null; sort?: 'date' | 'name' | 'size'; limit?: number }) => get<LibraryFound>(
-    `/api/media-library/search?q=${encodeURIComponent(asked.q ?? '')}${asked.kind ? `&kind=${asked.kind}` : ''}&sort=${asked.sort ?? 'date'}&limit=${asked.limit ?? 300}`),
+  /** Files of the added folders (and with `saved`, of Saved first) by name, folder or prompt (`q`), of one kind. */
+  search: (asked: { q?: string; kind?: string | null; saved?: boolean; sort?: 'date' | 'name' | 'size'; limit?: number }) => get<LibraryFound>(
+    `/api/media-library/search?q=${encodeURIComponent(asked.q ?? '')}${asked.kind ? `&kind=${asked.kind}` : ''}${asked.saved ? '&saved=1' : ''}&sort=${asked.sort ?? 'date'}&limit=${asked.limit ?? 300}`),
+  /** A file moved to the top of another place (`saved`, or a folder added). Resolves with where it is now, or null. */
+  move: async (place: string, path: string, to: string): Promise<{ place: string; path: string } | null> => {
+    const res = await post('/api/media-library/move', { place, path, to });
+    return res.ok ? res.json() as Promise<{ place: string; path: string }> : null;
+  },
   /** Rename a file of an added folder. Resolves with its new path; rejects with why not (the name is taken). */
   rename: async (place: string, path: string, name: string): Promise<string> => {
     const res = await post('/api/media-library/rename', { place, path, name });

@@ -12,7 +12,8 @@
  * walking the disk, so it answers at once; it knows a folder as it was last read (they are read again as the library
  * is opened). An agent's search (media-library-get.mjs) takes the files kept in Saved with them.
  *
- * A file of a folder the person added is renamed or moved to the trash here, as in the file manager.
+ * A file of a folder the person added is renamed or moved to the trash here, as in the file manager; a file is moved
+ * between Saved and those folders (`moveFile`), as the person tidies what is theirs.
  *
  * A place is named `folder:<full path>` (one the person added, `setMediaFolder`) or `saved` (the files kept in Saved;
  * the clips and pages kept there are not files to look through). Nothing outside a place is ever listed or read, and
@@ -24,7 +25,7 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readdir, rename, rm, stat } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, parse, resolve, sep } from 'node:path';
 import { fingerprint } from '../../src/media-fingerprint.mjs';
@@ -312,6 +313,30 @@ export async function renameFile(at, path, name) {
   await rename(file.abs, to);
   const rel = /** @type {string} */ (path);
   return { path: rel.includes('/') ? `${rel.slice(0, rel.lastIndexOf('/'))}/${clean}` : clean };
+}
+
+/**
+ * Move a file to the top of another place (Saved, or a folder the person added), keeping its name, or the name with a
+ * number when one is taken there; across disks it is copied, then taken away. Only a media file moves: what Saved
+ * keeps as a folder of its own (a clip, a group, a page) stays in Saved. A project that links to it finds it again by
+ * its fingerprint. Resolves with where it is now.
+ * @param {Place} at @param {unknown} path @param {Place} to
+ */
+export async function moveFile(at, path, to) {
+  const file = fileIn(at, path);
+  if (!file || !(await stat(file.abs).catch(() => null))?.isFile()) throw new LibraryError('That file is not there.', 404);
+  const name = basename(file.abs);
+  if (dirname(file.abs) === to.root) return { place: to.place, path: name };
+  await mkdir(to.root, { recursive: true });
+  const { name: stem, ext } = parse(name);
+  let dest = join(to.root, name);
+  for (let n = 2; existsSync(dest); n++) dest = join(to.root, `${stem} ${n}${ext}`);
+  try { await rename(file.abs, dest); } catch (e) {
+    if (/** @type {{ code?: string }} */ (e).code !== 'EXDEV') throw e;
+    await copyFile(file.abs, dest);
+    await rm(file.abs);
+  }
+  return { place: to.place, path: basename(dest) };
 }
 
 /** Move a file of an added folder to the system's trash, where it can be taken back. @param {Place} at @param {unknown} path */

@@ -11,7 +11,7 @@
  * it among the favorites, for every project.
  */
 import React from 'react';
-import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 'lucide-react';
+import { ChevronDown, ChevronsLeft, ChevronsRight, FolderOpen, Plus, Search, Star, Unplug, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
@@ -32,6 +32,8 @@ import { arrangedCategories } from '@/lib/library-categories';
 import { PLAIN } from './OnPicture';
 import { isClipMotion } from '@/lib/clip-presets';
 import { useLibraryArrangement } from './arrangement';
+import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
+import type { LibraryFolder } from '@/lib/media-library';
 
 type Category = 'media' | 'skill' | 'voice' | 'captions' | LibraryCategory;
 /* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, the skills, then the
@@ -93,11 +95,20 @@ export interface LibraryActions {
 /** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
 export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, showSkills, under = 0, shown: isShown = true }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, myMedia, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, showSkills, under = 0, shown: isShown = true }: {
   media: React.ReactNode;
-  /** the project's own media, or Saved */
+  /** the project's own media; or My media: Saved, or (`all`) a folder of the person's (`myMedia.folder`) */
   mediaScope: 'project' | 'saved' | 'all';
   onMediaScope: (next: 'project' | 'saved' | 'all') => void;
+  /** My media's folders, listed under Saved: the one shown, picking one, adding one, and a folder's own menu */
+  myMedia?: {
+    folders: readonly LibraryFolder[];
+    folder: string | null;
+    onFolder: (place: string) => void;
+    onAdd: () => void;
+    onReveal: (folder: LibraryFolder) => void;
+    onRemove: (folder: LibraryFolder) => void;
+  };
   mediaRequest?: number;
   actions: LibraryActions;
   tried?: string | null;
@@ -134,6 +145,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   const cat: Category = categories.includes(shownCat) ? shownCat : 'media';
   const [group, setGroup] = React.useState<string>(firstLine(SHOWN.cat));
   const [textOpen, setTextOpen] = React.useState(SHOWN.textOpen);
+  /* My media opened in the side bar: Saved and the person's folders under it */
+  const [mineOpen, setMineOpen] = React.useState(true);
+  const [railMenu, setRailMenu] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
+  const mine = mediaScope !== 'project';
   const [starredText, setStarredText] = React.useState(SHOWN.starredText);
   const [stickerOpen, setStickerOpen] = React.useState(SHOWN.stickerOpen);
   const [presets, , dropPreset] = useSavedLooks();
@@ -456,11 +471,36 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
           <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[calc(var(--drawer-under,0px)+10px)] pt-2.5">
             {cat === 'media' ? (
               <>
-                {/* this project's media; what the person keeps to use in every film (Saved); the folders of this
-                    computer they keep media in */}
+                {/* this project's media; My media, everything of the person's beyond this film: Saved (what they
+                    keep to use in every film, where a clip is kept), then the folders of this computer they added */}
                 <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
-                <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mediaMine')}</SideBox>
-                <SideBox on={mediaScope === 'all'} onClick={() => onMediaScope('all')}>{t('assetDrawer.mediaComputer')}</SideBox>
+                <SideBox on={mine && !mineOpen} holds={mine && mineOpen} open={mineOpen}
+                  onClick={() => { if (mine) setMineOpen((o) => !o); else { setMineOpen(true); onMediaScope('saved'); } }}>
+                  {t('assetDrawer.mediaMine')}
+                </SideBox>
+                {mineOpen ? (
+                  <div className="flex flex-col pb-1" data-my-media="">
+                    <SideLine on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('saved.title')}</SideLine>
+                    {myMedia?.folders.map((f) => (
+                      <SideLine key={f.place} on={mediaScope === 'all' && myMedia.folder === f.place} faint={f.missing} onClick={() => myMedia.onFolder(f.place)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setRailMenu({ x: e.clientX, y: e.clientY, items: [
+                            ...(f.missing ? [] : [{ id: 'reveal', label: t('projects.revealFolder'), icon: <FolderOpen size={14} />, onSelect: () => myMedia.onReveal(f) }]),
+                            { id: 'remove', label: t('mediaLibrary.remove').replace('{name}', f.name), note: t('mediaLibrary.removeNote'), icon: <X size={14} />, onSelect: () => myMedia.onRemove(f) },
+                          ] });
+                        }}>
+                        {f.missing ? <Unplug size={11} className="mr-1 inline align-[-1px]" /> : null}{f.name}
+                      </SideLine>
+                    ))}
+                    {myMedia ? (
+                      <button type="button" onClick={myMedia.onAdd} data-add-folder=""
+                        className="flex items-center gap-1 truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] font-medium text-[var(--text-muted)] hover:text-[var(--accent)]">
+                        <Plus size={12} className="shrink-0" />{t('mediaLibrary.addFolder')}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </>
             ) : cat === 'skill' ? (
               <>
@@ -607,6 +647,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
           )}
         </div>
       </div>
+      {railMenu ? <ContextMenu x={railMenu.x} y={railMenu.y} items={railMenu.items} onClose={() => setRailMenu(null)} dense /> : null}
     </div>
   );
 }
@@ -685,15 +726,23 @@ function SideBox({ on, holds = false, open, onClick, children }: {
 }
 
 /** A line under the library's own: all of it, or a group. */
-function SideLine({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+function SideLine({ on, faint = false, onClick, onContextMenu, children }: {
+  on: boolean;
+  /** a place that is not there just now (a disk out) */
+  faint?: boolean;
+  onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={onContextMenu}
       aria-pressed={on}
       title={typeof children === 'string' ? children : undefined}
       /* the one shown in the accent, no fill */
-      className={`truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] ${on ? 'font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text)] hover:text-[var(--accent)]'}`}
+      className={`truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] ${on ? 'font-semibold text-[var(--accent)]' : `font-medium ${faint ? 'text-[var(--text-faint)]' : 'text-[var(--text)]'} hover:text-[var(--accent)]`}`}
     >
       {children}
     </button>

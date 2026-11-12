@@ -168,8 +168,8 @@ import { pasteTargets, targetById } from '@/lib/layer-paste-target';
 import { PropertiesSection, type PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
-import { libraryApi, librarySources, parseLibraryRef, type LibraryAbout } from '@/lib/media-library';
-import { MediaLibraryPane } from './MediaLibraryPane';
+import { libraryApi, librarySources, parseLibraryRef, type LibraryAbout, type LibraryFolder } from '@/lib/media-library';
+import { MediaLibraryPane, useMyFolders } from './MediaLibraryPane';
 import { deliveryGainDb, deliveryLoudness, onDeliveryLoudness } from '@/lib/delivery-loudness';
 import { batchMap } from '@/lib/batch-map';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
@@ -192,6 +192,8 @@ const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator
 /** Which the media pane shows, the project's media, the media library or Saved: kept while Studio is open, across projects. */
 type MediaScope = 'project' | 'saved' | 'all';
 const MEDIA_SCOPE: { current: MediaScope } = { current: 'project' };
+/** The folder of My media shown (scope `all`), kept while Studio is open. */
+const MY_FOLDER: { current: string | null } = { current: null };
 /** Where a file picked outside the project is read: the media library's, or Saved's. */
 const outsideSources = (file: { path: string }) => (parseLibraryRef(file.path) ? librarySources : savedSources);
 /** where the app's panel starts: under Studio's top bar (its h-8) */
@@ -3224,6 +3226,40 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the media pane shows the project's media, or Saved (lib/saved): the same pane, the button beside Upload switches */
   const [mediaScope, setMediaScope] = React.useState<MediaScope>(() => MEDIA_SCOPE.current);
   const switchMedia = React.useCallback((next: MediaScope) => { MEDIA_SCOPE.current = next; setMediaScope(next); }, []);
+  /* My media's folders (MediaLibraryPane): listed in the drawer's side bar under Saved, one shown at a time */
+  const myFolders = useMyFolders(true);
+  const [myFolder, setMyFolder] = React.useState<string | null>(() => MY_FOLDER.current);
+  const showMyFolder = React.useCallback((place: string) => { MY_FOLDER.current = place; setMyFolder(place); switchMedia('all'); }, [switchMedia]);
+  const shownFolder = mediaScope === 'all' ? myFolders.folders?.find((f) => f.place === myFolder) ?? null : null;
+  /* the folder shown was taken away (or never was): Saved in its place */
+  React.useEffect(() => { if (mediaScope === 'all' && myFolders.folders && !shownFolder) switchMedia('saved'); }, [mediaScope, myFolders.folders, shownFolder, switchMedia]);
+  const myMedia = {
+    folders: myFolders.folders ?? [],
+    folder: myFolder,
+    onFolder: showMyFolder,
+    onAdd: () => {
+      void myFolders.add(t('mediaLibrary.pickFolder')).then((added) => {
+        if (typeof added === 'string') showMyFolder(added);
+        else if (added) toast.showError(t(added.error === 'wide' ? 'mediaLibrary.tooWide' : 'mediaLibrary.addFailed'));
+      });
+    },
+    onReveal: (f: LibraryFolder) => libraryApi.reveal(f.place, ''),
+    onRemove: (f: LibraryFolder) => { void myFolders.remove(f.path); },
+  };
+  /* in Saved: a media file moved to one of the person's folders (the file picked, if it was one of them, no longer is:
+     read when the move is done, as the menu was made in the click that picked it) */
+  const pickedSavedPath = React.useRef<string | null>(null);
+  pickedSavedPath.current = pickedSaved ? pickedMedia?.path ?? null : null;
+  const savedMoveOut = {
+    targets: (myFolders.folders ?? []).filter((f) => !f.missing).map((f) => ({ id: f.place, label: f.name })),
+    onMove: (files: WorkspaceResource[], to: string) => {
+      if (files.some((f) => f.path === pickedSavedPath.current)) { pickMedia(null); setPickedSaved(false); }
+      void Promise.all(files.map((f) => libraryApi.move('saved', f.path.slice(SAVED.length + 1), to))).then((moved) => {
+        refreshSaved();
+        if (moved.some((m) => !m)) toast.showError(t('mediaLibrary.moveFailed'));
+      });
+    },
+  };
   const [revealMedia, setRevealMedia] = React.useState<{ path: string; seq: number; highlight: boolean; done?: boolean } | null>(null);
   const mediaRevealed = React.useCallback((seq: number) => {
     setRevealMedia((request) => request?.seq === seq && !request.done ? { ...request, done: true } : request);
@@ -3257,17 +3293,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       setCanvasAddFiles({ paths: [...new Set(paths)], n: performance.now() });
     } catch (error) { toast.showError(error instanceof Error ? error.message : String(error)); }
   };
-  const mediaPool = (inDrawer = false) => (mediaScope === 'all' ? (
-    /* this computer's folders at the project's side (MediaLibraryPane): a file is watched here and brought into the
+  const mediaPool = (inDrawer = false) => (mediaScope === 'all' && shownFolder ? (
+    /* a folder of the person's at the project's side (MediaLibraryPane): a file is watched here and brought into the
        project as it is used, as a thing of Saved is */
     <MediaLibraryPane
       key="all"
+      folder={shownFolder}
+      folders={myFolders.folders ?? []}
       selected={pickedSaved && pickedMedia && parseLibraryRef(pickedMedia.path) ? pickedMedia.path : null}
       onPick={(file) => { pickMedia(file); setPickedSaved(Boolean(file)); }}
       onAdd={(file) => { if (canvasOpen) void requestCanvasFiles(file.path, true); else void placeSaved(file, { atPlayhead: true }); }}
       {...(studioHost?.refer ? { onRefer: (file: WorkspaceResource) => void referOutside(file) } : {})}
     />
-  ) : mediaScope === 'saved' ? (
+  ) : mediaScope !== 'project' ? (
     <MediaPool
       key="saved"
       projectId={SAVED}
@@ -3283,6 +3321,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onPick={onPick}
       onBring={(paths, into) => savedActions.bring(paths, into)}
       {...(studioHost?.refer ? { onReferFile: (file: WorkspaceResource) => void referOutside(file) } : {})}
+      moveOut={savedMoveOut}
       links={false}
       scope="saved"
       onScope={inDrawer ? undefined : switchMedia}
@@ -6197,7 +6236,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         rect={independentLibrary ? freeGeometry?.panels.library ?? dockGeometry.library : chatLibraryRect}
         free={Boolean(freeGeometry)}
         onResize={updateWorkspace}>
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} mediaRequest={revealMedia?.seq} actions={canvasOpen ? { ...library.actions, add: item => { if (['page', 'sound', 'group'].includes(item.kind)) void requestCanvasFiles(`${BUILT_IN}/${item.id}`, true); else { setCanvasOpen(false); library.actions.add(item); } }, tryOut: () => {} } : library.actions}
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} myMedia={myMedia} mediaRequest={revealMedia?.seq} actions={canvasOpen ? { ...library.actions, add: item => { if (['page', 'sound', 'group'].includes(item.kind)) void requestCanvasFiles(`${BUILT_IN}/${item.id}`, true); else { setCanvasOpen(false); library.actions.add(item); } }, tryOut: () => {} } : library.actions}
             tried={libraryTrial?.id ?? null} templateStatus={templateStatus} previewBar={canvasOpen ? null : libraryPreviewBar} previewPicture={canvasOpen || fullscreen ? null : libraryPreviewPicture} dismissRef={dismissLibraryPreview}
             onPreviewStart={canvasOpen ? pause : beginLibraryPreview} onDownloadFailed={onLibraryDownloadFailed} shown={libraryOpen} under={!independentLibrary ? hostAssets?.bottom ?? 0 : 0}
             captions={{

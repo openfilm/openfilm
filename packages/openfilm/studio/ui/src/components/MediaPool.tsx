@@ -176,6 +176,11 @@ export interface MediaPoolProps {
   /** Files kept to use again in any project (lib/saved): the file menu's "Add to Saved". */
   onSave?: (files: WorkspaceResource[]) => void;
   /**
+   * Places beyond the pane a file may be moved to (in Saved: the person's own folders), listed in Move to under the
+   * pane's own folders. Only media files go there, never what Saved keeps as a folder of its own (a clip, a page).
+   */
+  moveOut?: { targets: readonly { id: string; label: string }[]; onMove: (files: WorkspaceResource[], to: string) => void };
+  /**
    * Which library the pane shows, the project's media or Saved (the person's own, for every project), and the button
    * beside Upload that switches between them. Both are the same pane: upload, folders, views, filters, sort, rename,
    * move, delete, drag onto the timeline.
@@ -238,6 +243,7 @@ export function MediaPool({
   missing = 0,
   onFindMissing,
   onSave,
+  moveOut,
   scope = 'project',
   onScope,
   wordsOf,
@@ -614,16 +620,22 @@ export function MediaPool({
   const moveEntry = (keys: readonly string[]): ContextMenuEntry => {
     const heres = new Set(keys.map(hereOf));
     const moving = keys.filter((key) => itemByKey.get(key)?.type === 'folder').map(assetRel);
+    /* beyond the pane (moveOut): media files only */
+    const files = keys.flatMap((key) => { const item = itemByKey.get(key); return item?.type === 'file' && !item.file.bundle ? [item.file] : []; });
+    const out = moveOut && files.length === keys.length ? moveOut.targets : [];
     return {
       id: 'move-to', label: t('media.moveTo'), icon: <FolderInput size={14} />,
-      submenu: moveTargets(folders, moving).map((rel) => {
-        const here = heres.size === 1 && heres.has(rel);
-        return {
-          id: `move:${rel}`, label: rel ? rel.split('/').join(' / ') : topName, checked: here, disabled: here,
-          ...(here ? { hint: t('media.moveHere') } : {}),
-          onSelect: () => { void moveAll(keys, rel); },
-        };
-      }),
+      submenu: [
+        ...moveTargets(folders, moving).map((rel) => {
+          const here = heres.size === 1 && heres.has(rel);
+          return {
+            id: `move:${rel}`, label: rel ? rel.split('/').join(' / ') : topName, checked: here, disabled: here,
+            ...(here ? { hint: t('media.moveHere') } : {}),
+            onSelect: () => { void moveAll(keys, rel); },
+          };
+        }),
+        ...(out.length ? [{ id: 'move-out-sep', separator: true } as const, ...out.map((o) => ({ id: `move-out:${o.id}`, label: o.label, onSelect: () => moveOut?.onMove(files, o.id) }))] : []),
+      ],
     };
   };
   const fileMenu = (file: WorkspaceResource): ContextMenuEntry[] => [
