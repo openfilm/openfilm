@@ -7,9 +7,9 @@
  * ffmpeg runs a few at a time: a project opened with fifty clips must not start fifty decoders. The editor's sound of
  * each file (soundOf) is made a few at a time of its own, so a long recording's does not hold up the thumbnails.
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -49,6 +49,31 @@ async function tool(/** @type {'ffmpeg' | 'ffprobe'} */ name, /** @type {string[
   } finally {
     slots.busy--;
     slots.waiting.shift()?.();
+  }
+}
+
+/**
+ * Run ffmpeg with `args` when one of SLOTS is free, its stdout handed to `take` a piece at a time as it comes, never
+ * held whole: a waveform's samples of a recording of hours would outgrow any buffer.
+ * @param {string[]} args @param {(piece: Buffer) => void} take
+ */
+async function streamed(args, take) {
+  if (SLOTS.busy >= SLOTS.size) await new Promise((r) => SLOTS.waiting.push(() => r(undefined)));
+  SLOTS.busy++;
+  try {
+    await new Promise((resolve, reject) => {
+      const child = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      let said = '';
+      child.stdout.on('data', take);
+      child.stderr.on('data', (/** @type {Buffer} */ piece) => { said = (said + piece.toString()).slice(-4096); });
+      child.on('error', (/** @type {NodeJS.ErrnoException} */ e) => reject(e.code === 'ENOENT'
+        ? new MediaError('ffmpeg is not installed (macOS: brew install ffmpeg · Debian/Ubuntu: sudo apt install ffmpeg · Windows: winget install ffmpeg)', 501)
+        : new MediaError(e.message)));
+      child.on('close', (code) => (code === 0 ? resolve(undefined) : reject(new MediaError(said.trim().split('\n').pop() || `ffmpeg exited with ${code}`))));
+    });
+  } finally {
+    SLOTS.busy--;
+    SLOTS.waiting.shift()?.();
   }
 }
 
@@ -141,8 +166,9 @@ const RATE = 8000;
 export async function waveform(root, rel) {
   const { abs, key } = await source(root, rel);
   const bytes = await cached(root, 'waves', `${key}.json`, async () => {
-    const pcm = await tool('ffmpeg', ['-v', 'error', '-i', abs, '-vn', '-ac', '1', '-ar', String(RATE), '-f', 's16le', '-']);
-    return Buffer.from(JSON.stringify(peaksOf(pcm)));
+    const peaks = peakCounter();
+    await streamed(['-v', 'error', '-i', abs, '-vn', '-ac', '1', '-ar', String(RATE), '-f', 's16le', '-'], peaks.add);
+    return Buffer.from(JSON.stringify(peaks.done()));
   });
   return JSON.parse(bytes.toString());
 }
@@ -171,7 +197,9 @@ export async function mixedWaveform(root, sounds, duration) {
       const pcm = join(scratch, 'mix.pcm');
       try {
         await mix(clips, duration, pcm, ['-ac', '1', '-ar', String(RATE), '-f', 's16le']);
-        return Buffer.from(JSON.stringify(peaksOf(await readFile(pcm))));
+        const peaks = peakCounter();
+        for await (const piece of createReadStream(pcm)) peaks.add(piece);
+        return Buffer.from(JSON.stringify(peaks.done()));
       } finally {
         await rm(scratch, { recursive: true, force: true });
       }
@@ -181,18 +209,37 @@ export async function mixedWaveform(root, sounds, duration) {
   return JSON.parse((await pending).toString());
 }
 
-/** Mono 16-bit samples at RATE → `{ duration (s), peaks }`. */
-function peaksOf(/** @type {Buffer} */ pcm) {
-  const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 2));
+/**
+ * Mono 16-bit samples at RATE, taken a piece at a time (`add`) → `{ duration (s), peaks }` (`done`): the loudest
+ * sample of each 1/PEAKS_PER_SECOND s, between 0 and 1. A piece may end inside a sample: its byte waits for the next.
+ */
+export function peakCounter() {
   const per = RATE / PEAKS_PER_SECOND;
+  /** @type {number[]} */
   const peaks = [];
-  for (let i = 0; i < samples.length; i += per) {
-    let max = 0;
-    const end = Math.min(samples.length, i + per);
-    for (let j = i; j < end; j++) { const v = Math.abs(samples[j]); if (v > max) max = v; }
-    peaks.push(Math.round((max / 32768) * 1000) / 1000);
-  }
-  return { duration: samples.length / RATE, peaks };
+  let max = 0;
+  let inWindow = 0;
+  let count = 0;
+  /** @type {Buffer | null} */
+  let half = null;
+  const peak = () => peaks.push(Math.round((max / 32768) * 1000) / 1000);
+  return {
+    add: (/** @type {Buffer} */ piece) => {
+      const bytes = half ? Buffer.concat([half, piece]) : piece;
+      const n = bytes.length >> 1;
+      half = bytes.length & 1 ? bytes.subarray(bytes.length - 1) : null;
+      for (let i = 0; i < n; i++) {
+        const v = Math.abs(bytes.readInt16LE(i * 2));
+        if (v > max) max = v;
+        if (++inWindow === per) { peak(); max = 0; inWindow = 0; }
+      }
+      count += n;
+    },
+    done: () => {
+      if (inWindow) peak();
+      return { duration: count / RATE, peaks };
+    },
+  };
 }
 
 /** Sound files small and compressed enough to be played as they are. */

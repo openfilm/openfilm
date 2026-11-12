@@ -11,11 +11,12 @@
  * `sounds` is the timeline's own list (src/timeline.mjs `__filmSounds`): each sound clip's sound and each video's own,
  * already placed and cut to its clip, with its volume and speed. Each file's sound is fetched small (`?film-sound`, see
  * studio/server/pages.mjs): a video's is a copy of its sound alone, never the whole video. A sound heard at its own
- * speed (its clip's speed by the viewer's is 1) is decoded and played sample-accurate. One heard faster or slower is
- * played by the browser's own media element with its pitch kept (`preservesPitch`), in the same mix: another speed is
- * heard at once, with nothing made for it, and its place is checked against the film as it plays. One whose rate is
- * beyond what a browser plays (faster than 16×, slower than 1/16×) is not heard: its picture goes on alone, by its
- * frames (src/timeline.mjs), and the export mixes it from the file. A sound not here yet
+ * speed (its clip's speed by the viewer's is 1) is decoded and played sample-accurate, unless it is longer than
+ * LONG_SOUND (a recording of hours would not fit in memory decoded): that one streams, as below. One heard faster or
+ * slower is played by the browser's own media element with its pitch kept (`preservesPitch`), in the same mix:
+ * another speed is heard at once, with nothing made for it, and its place is checked against the film as it plays.
+ * One whose rate is beyond what a browser plays (faster than 16×, slower than 1/16×) is not heard: its picture goes
+ * on alone, by its frames (src/timeline.mjs), and the export mixes it from the file. A sound not here yet
  * (its copy still being made) is silent until it is, then joins where the film is. Sounds are started a few seconds
  * ahead of the film, not all at once: a film of hundreds of sounds starts as quickly as one of a few.
  *
@@ -39,6 +40,20 @@ const LEAD = 0.03;
 const DRIFT = 0.12;
 /** After a sound is put back in its place, how long it is left to settle before it is checked again (ms). */
 const SETTLE_MS = 1000;
+/**
+ * Sounds longer than this (s) are not decoded: a media element plays them as they stream (see voice). Decoded, a
+ * sound is held whole at the context's rate, 32-bit, each channel: a 3-hour recording would be some 5 GB. Up to
+ * 30 minutes (about 690 MB in stereo at 48 kHz) it is still decoded, so a talking head of that length stays in sync
+ * sample for sample.
+ */
+export const LONG_SOUND = 30 * 60;
+/** The header the film's origin tells a sound's length in (s), see studio/server/pages.mjs SOUND_LENGTH. */
+const SOUND_LENGTH = 'x-film-sound-length';
+
+/** Whether a sound of `length` seconds is decoded (not known: it is, as before lengths were told). */
+export function decodes(length: number | null): boolean {
+  return length == null || !Number.isFinite(length) || length <= LONG_SOUND;
+}
 
 /** `fade`: its fades in and out, film seconds, already fitted to its length (src/timeline.mjs). */
 export type Sound = { src: string; at: number; from: number; to: number; volume: number; speed: number; clip?: string; fade?: [number, number] };
@@ -144,10 +159,27 @@ export function soundsDue(sounds: readonly Sound[], from: number, until: number,
   return due;
 }
 
+/**
+ * A file's sound from the film's origin: its bytes to decode, 'stream' when it is too long to decode (LONG_SOUND: its
+ * bytes are left unread, a media element streams it), null when there is no sound in it (204).
+ */
+async function soundOf(url: string): Promise<ArrayBuffer | 'stream' | null> {
+  const r = await fetch(url);
+  if (r.status === 204) return null;
+  if (!r.ok) throw new Error(String(r.status));
+  const told = r.headers.get(SOUND_LENGTH);
+  if (decodes(told == null ? null : Number(told))) return r.arrayBuffer();
+  void r.body?.cancel().catch(() => {});
+  return 'stream';
+}
+
 export class Player {
   private ctx: AudioContext | null = null;
-  /** each file's decoded sound, and the version of the file it was decoded from (undefined: not known then) */
-  private buffers = new Map<string, { version: number | undefined; buffer: Promise<AudioBuffer | null> }>();
+  /**
+   * each file's decoded sound, and the version of the file it was decoded from (undefined: not known then); 'stream'
+   * for one too long to decode (LONG_SOUND), played by a media element
+   */
+  private buffers = new Map<string, { version: number | undefined; buffer: Promise<AudioBuffer | 'stream' | null> }>();
   private origin = '';
   private versionOf: (src: string) => number | undefined = () => undefined;
   private sounds: Sound[] = [];
@@ -204,7 +236,7 @@ export class Player {
 
   /**
    * Fetches the sounds not decoded yet, or decoded from an older version; says whether there were any. A clip at another
-   * speed is never decoded: a media element plays it.
+   * speed is never decoded: a media element plays it; nor is a file whose sound is longer than LONG_SOUND.
    */
   private fetchSounds(): boolean {
     if (!this.origin) return false;
@@ -220,13 +252,12 @@ export class Player {
         continue;
       }
       const url = this.soundUrl(s.src);
-      this.buffers.set(s.src, { version, buffer: this.slot(s.src)
-        .then((done) => fetch(url)
-          /* 204: there is no sound in it */
-          .then((r) => (r.status === 204 ? null : r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
-          .finally(done))
-        .then((bytes) => (bytes ? ctx.decodeAudioData(bytes) : null))
-        .catch(() => null) });
+      const buffer = (async (): Promise<AudioBuffer | 'stream' | null> => {
+        const done = await this.slot(s.src);
+        const got = await soundOf(url).finally(done);
+        return got instanceof ArrayBuffer ? ctx.decodeAudioData(got) : got;
+      })().catch(() => null);
+      this.buffers.set(s.src, { version, buffer });
       fetched = true;
     }
     return fetched;
@@ -445,7 +476,8 @@ export class Player {
       if (stretchRate(s.speed, this.rate) != null) { this.voice(s, heard); continue; }
       void this.buffers.get(s.src)?.buffer.then((buffer) => {
         if (!buffer || !this.playing || this.heardLine !== heard) return;
-        this.schedule(buffer, s, heard);
+        if (buffer === 'stream') this.voice(s, heard);
+        else this.schedule(buffer, s, heard);
       });
     }
   }
@@ -487,7 +519,8 @@ export class Player {
   }
 
   /**
-   * One sound heard faster or slower: its file played by a media element at its rate, the pitch kept, through the mix.
+   * One sound heard faster or slower, or too long to decode: its file played by a media element at its rate, the pitch
+   * kept, through the mix.
    * It is put where the film will be when it starts and started then; keepVoices keeps it there.
    */
   private voice(s: Sound, heard: { t: number; at: number }) {
