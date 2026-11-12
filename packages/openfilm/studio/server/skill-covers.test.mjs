@@ -142,3 +142,37 @@ test('skills: turned off and on, an official one installed and uninstalled, one 
   assert.equal(await listed(), undefined);
   assert.ok(existsSync(join(variables.OPENFILM_TRASH_DIR, 'quiet')) || readdirSync(variables.OPENFILM_TRASH_DIR).length > 0, 'in the trash');
 });
+
+test('a skill with a surface is listed with its page\'s address, on the film\'s origin: the page as it is, and nothing hidden', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-surface-'));
+  const variables = { OPENFILM_HOME: join(root, 'home'), OPENFILM_LIBRARY: join(root, 'library'), OPENFILM_SKILLS: join(root, 'mine'), OPENFILM_TRASH_DIR: join(root, 'trash'), OPENFILM_SHARED_HOME: join(root, 'home') };
+  const previous = Object.fromEntries(Object.keys(variables).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, variables);
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    rmSync(root, { recursive: true, force: true });
+  });
+  const PAGE = '<!doctype html><title>Board</title><script src="app.js"></script>';
+  for (const [name, files] of [['board', { 'index.html': PAGE, 'app.js': 'window.board = 1;', '.env': 'SECRET=1' }], ['plain', {}]]) {
+    mkdirSync(join(variables.OPENFILM_SKILLS, name), { recursive: true });
+    writeFileSync(join(variables.OPENFILM_SKILLS, name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\n---\nSteps.`);
+    for (const [file, text] of Object.entries(files)) writeFileSync(join(variables.OPENFILM_SKILLS, name, file), text);
+  }
+  const studio = await startStudio({ port: 0, openBrowser: () => {} });
+  t.after(() => studio.close());
+  const { skills } = await (await fetch(`${studio.origin}/api/skills`, { headers: { 'x-studio-key': studio.key } })).json();
+  const board = skills.find((k) => k.uid === 'local/board');
+  assert.equal(skills.find((k) => k.uid === 'local/plain').surface, undefined);
+  /* OpenFilm's own are not plugins of this kind */
+  assert.ok(skills.filter((k) => k.core).every((k) => k.surface === undefined));
+  const { filmOrigin } = await (await fetch(`${studio.origin}/api/health`)).json();
+  assert.ok(board.surface.startsWith(`${filmOrigin}/p/`) && board.surface.endsWith('/index.html'), board.surface);
+  /* the page as its author wrote it: Studio puts nothing in it, as it does in a film's pages */
+  const page = await fetch(board.surface);
+  assert.equal(page.status, 200);
+  assert.equal(await page.text(), PAGE);
+  assert.equal(await (await fetch(new URL('app.js', board.surface))).text(), 'window.board = 1;');
+  assert.equal((await fetch(new URL('.env', board.surface))).status, 404);
+  /* read only: nothing is written through it */
+  assert.equal((await fetch(new URL('app.js', board.surface), { method: 'PUT', body: 'x' })).status, 405);
+});

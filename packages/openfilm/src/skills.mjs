@@ -49,6 +49,13 @@ function renameSyncSafe(/** @type {string} */ from, /** @type {string} */ to) {
 }
 
 export const SKILL_FILE = 'SKILL.md';
+/**
+ * A skill's surface: a web page at its folder's root. A skill that has one is a plugin of someone's own making: what
+ * it teaches an agent, and a workbench of its own in Studio where the person sees and adjusts the same thing (the
+ * library's Plugins tab lists it, and its switch is the skill's). Studio shows the page beside the library and the
+ * chat, served as a film's pages are: it reads the project's files and nothing of the editor.
+ */
+export const SKILL_PAGE = 'index.html';
 /** The project's own skills, beside film.html. */
 export const PROJECT_SKILLS = 'skills';
 /** The places skills are looked for, the first winning a name. */
@@ -218,9 +225,10 @@ export function parseSkillFile(text) {
 
 /**
  * @typedef {{ uid: string, name: string, description: string, folder: string, source: SkillSource, file: string,
- *   scripts: string[], over?: SkillSource[], shown?: SkillShown, version?: string } & SkillLook} Skill
+ *   scripts: string[], over?: SkillSource[], shown?: SkillShown, version?: string, page?: string } & SkillLook} Skill
  *   `uid`: whose it is and its name (SKILL_UID). `over`: the places that had the same skill (its uid), which this one
- *   takes the place of. `version`: its openfilm.json's, else its front matter's.
+ *   takes the place of. `version`: its openfilm.json's, else its front matter's. `page`: its surface (SKILL_PAGE), when
+ *   it has one.
  * @typedef {{ title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string> }} SkillShown
  *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title, a one-line summary and a few lines
  *   on who it is for and what it does, by language (`en`, `zh-CN`…); the SKILL.md's description is for the agent
@@ -289,7 +297,8 @@ export function readSkill(folder, source) {
   /* one of the person's is whose its origin says (kept beside it, skillOrigins) */
   const from = source === 'official' ? skillSource(folder) : null;
   const origin = source === 'mine' ? skillOrigins(dirname(folder))[basename(folder)] : from ? { from: /** @type {const} */ ('link'), address: from.repo } : undefined;
-  return { uid: skillUid(source, name, origin), name, description: (fields.description ?? '').trim(), folder, source, file, scripts: scriptsIn(folder), ...extra };
+  return { uid: skillUid(source, name, origin), name, description: (fields.description ?? '').trim(), folder, source, file, scripts: scriptsIn(folder), ...extra,
+    ...(existsSync(join(folder, SKILL_PAGE)) ? { page: SKILL_PAGE } : {}) };
 }
 
 /** The scripts a skill brings (any file under scripts/, and executables anywhere), for the person to see. */

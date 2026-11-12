@@ -119,7 +119,7 @@ import { WorkspaceLibraryPane } from './WorkspaceLibraryPane';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 import { useWorkModes } from '@/lib/work-modes';
-import { usePlugins } from '@/lib/plugins';
+import { usePluginsOf } from '@/lib/project-plugins';
 import { ModeSwitcher } from './ModeSwitcher';
 import { OWN_SURFACES, PluginSurface } from './surfaces';
 import { MotionPanel } from './MotionPanel';
@@ -222,6 +222,9 @@ const CanvasView = React.lazy(loadCanvas);
 /** whether a project shows its canvas, kept on this computer by project */
 const CANVAS_KEY = 'openfilm.canvas.open';
 const canvasShown = (projectId: string) => { try { return localStorage.getItem(`${CANVAS_KEY}:${projectId}`) === '1'; } catch { return false; } };
+/* the plugin's surface a project was left on (its workbench's name), kept as the canvas being open is */
+const SURFACE_KEY = 'openfilm.surface';
+const surfacePicked = (projectId: string) => { try { return localStorage.getItem(`${SURFACE_KEY}:${projectId}`); } catch { return null; } };
 
 const TOP_BTN =
   'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
@@ -536,26 +539,32 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     if (mode === 'motion') updateWorkspaceRef.current({ timeline: true, inspector: true });
   }, [setCanvasOpen, keepMotionOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   /* the ways of working turned on (Settings → Advanced): one turned off while in use gives way to the first still on */
-  const workModes = useWorkModes();
+  const workModes = useWorkModes(projectId);
   /* every plugin off: no workbench is shown, only the library (and the app's chat), which opens */
   const noBench = workModes.length === 0;
   React.useEffect(() => { if (noBench) updateWorkspaceRef.current({ assets: true }); }, [noBench]);
   /* a plugin's own surface shown in the panes' place (components/surfaces), by its workbench's name; none: the edit
-     or the canvas, which are held here */
-  const [surface, setSurface] = React.useState<string | null>(null);
+     or the canvas, which are held here. The one picked is kept for the project, and shown while its plugin is on */
+  const [pickedSurface, setPickedSurface] = React.useState<string | null>(() => surfacePicked(projectId));
+  React.useEffect(() => { setPickedSurface(surfacePicked(projectId)); }, [projectId]);
+  const setSurface = React.useCallback((next: string | null) => {
+    setPickedSurface(next);
+    try { if (next) localStorage.setItem(`${SURFACE_KEY}:${projectId}`, next); else localStorage.removeItem(`${SURFACE_KEY}:${projectId}`); } catch { /* for this launch only */ }
+  }, [projectId]);
+  const surface = pickedSurface != null && workModes.includes(pickedSurface) ? pickedSurface : null;
   const showWorkbench = React.useCallback((mode: string) => {
     if (mode === 'canvas' || mode === 'edit' || mode === 'motion') { setSurface(null); setWorkMode(mode); } else setSurface(mode);
-  }, [setWorkMode]);
+  }, [setWorkMode, setSurface]);
   /* the edit and the canvas are not shown: no workbench is on, or a plugin's surface is in their place */
   const away = noBench || surface != null;
   /* the workbenches to pick from on the top bar (Motion is picked in the edit's timeline); the edit and the canvas
      alone are one button that goes from one to the other */
-  const benchPlugins = usePlugins().filter((p) => p.on && p.workbench && p.workbench !== 'motion');
+  const benchPlugins = usePluginsOf(projectId).filter((p) => p.on && p.workbench && p.workbench !== 'motion');
+  const surfacePlugin = surface != null ? benchPlugins.find((p) => p.workbench === surface) : undefined;
   const pickBench = benchPlugins.length > 1 && benchPlugins.some((p) => !OWN_SURFACES.includes(p.workbench!));
   const canToggleCanvas = workModes.includes('canvas') && workModes.length > 1;
   React.useEffect(() => {
-    if (surface != null) { if (!workModes.includes(surface)) setSurface(null); return; }
-    if (workModes.length && !workModes.includes(workMode)) showWorkbench(workModes[0]!);
+    if (surface == null && workModes.length && !workModes.includes(workMode)) showWorkbench(workModes[0]!);
   }, [workModes, workMode, surface, showWorkbench]);
   /* what an agent lays out on the canvas (`openfilm canvas apply`) is shown: the canvas opens on it */
   React.useEffect(() => projectEvents(projectId, (event) => { if (event.type === 'canvas') setCanvasOpen(true); }), [projectId, setCanvasOpen]);
@@ -6137,7 +6146,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             <div data-workspace-surface={surface} className="relative z-[3] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
               style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(freeGeometry ? null : insetStyle(dockGeometry)) }}>
               <div className="relative flex min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
-                <PluginSurface id={surface} projectId={projectId} folder={loaded?.project.path ?? ''} />
+                <PluginSurface id={surface} page={surfacePlugin?.page} projectId={projectId} folder={loaded?.project.path ?? ''} film={folder} />
               </div>
             </div>
           ) : null}

@@ -63,6 +63,8 @@ export type SkillEntry = {
   kind?: 'workflow' | 'style'; order?: number; icon?: string;
   /** addresses of its cover picture and preview video, when it has them */
   cover?: string; preview?: string;
+  /** it has a surface (a page of its own), which makes it a plugin (lib/project-plugins): the page's address */
+  surface?: string;
   /** where its source can be read (a repository's address) */
   repository?: string;
   /** what it needs beyond OpenFilm, by language; the computers it runs on (none: every one), and whether this one is not among them */

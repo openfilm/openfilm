@@ -483,3 +483,14 @@ test('a skill named with capitals is found by its name alone', () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('a skill with a page at its root has a surface: it is a plugin someone made', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-page-'));
+  const plain = readSkill(skill(join(root, 'plain'), 'plain', 'Only teaches'), 'mine');
+  assert.equal(plain.page, undefined);
+  const board = readSkill(skill(join(root, 'board'), 'board', 'A storyboard', 'Steps', { 'index.html': '<!doctype html><title>Board</title>', 'ui/app.js': '' }), 'mine');
+  assert.equal(board.page, 'index.html');
+  /* a page somewhere else in it is not its surface */
+  assert.equal(readSkill(skill(join(root, 'deep'), 'deep', 'Deep', 'Steps', { 'ui/index.html': '<p>' }), 'mine').page, undefined);
+  rmSync(root, { recursive: true, force: true });
+});

@@ -6,12 +6,14 @@
  *
  * Each plugin is a line: its mark, its title, what it is for under it, and its switch. A click opens its page: the
  * same, said in full, and the skills it teaches an agent, each opening its own page (SkillPage). OpenFilm's own
- * skills are found here, with the plugin they go with, not among the library's Skills.
+ * skills are found here, with the plugin they go with, not among the library's Skills. After OpenFilm's own come the
+ * plugins someone made (lib/project-plugins): a skill with a surface, turned as a skill is, whose page is its skill's.
  */
 import React from 'react';
 import { ArrowLeft, AudioLines, Clapperboard, Film, FolderOpen, Layers, Palette, Puzzle, Scissors, Workflow, type LucideIcon } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { setPluginOn, usePlugins, type Plugin } from '@/lib/plugins';
+import { skillPlugins } from '@/lib/project-plugins';
 import { forgetSeenSkills, seenSkills, sourcesApi, watchSkills, type SkillEntry } from '@/lib/project-sources';
 import { inLanguage, SkillMark, SkillPage, useSkillWords } from '../SkillPage';
 import { SettingsSwitch } from '../settings/ui';
@@ -47,7 +49,7 @@ export function PluginsPane({ projectId }: { projectId: string | null }) {
   const t = useT();
   const words = usePluginWords();
   const skillWords = useSkillWords();
-  const plugins = usePlugins();
+  const own = usePlugins();
   const [opened, setOpened] = React.useState<string | null>(null);
   const [skillOpen, setSkillOpen] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -60,8 +62,14 @@ export function PluginsPane({ projectId }: { projectId: string | null }) {
     return () => { live = false; stop(); };
   }, [projectId]);
 
+  const plugins = React.useMemo(() => [...own, ...skillPlugins(skills)], [own, skills]);
   const turn = (plugin: Plugin, on: boolean) => {
     setError(null);
+    /* one someone made is turned as the skill it is */
+    if (plugin.skill) {
+      void sourcesApi.setSkillOn(plugin.skill, on).catch((e: unknown) => setError(e instanceof Error ? e.message : t('assetDrawer.pluginFailed')));
+      return;
+    }
     /* its skills go on and off with it: what was last seen of them is let go, and they are read again */
     void setPluginOn(plugin.id, on).then(() => { forgetSeenSkills(); return sourcesApi.skills(projectId).then(setSkills); })
       .catch((e: unknown) => setError(e instanceof Error && e.message !== 'failed' ? e.message : t('assetDrawer.pluginFailed')));
@@ -74,8 +82,9 @@ export function PluginsPane({ projectId }: { projectId: string | null }) {
   };
 
   const page = opened ? plugins.find((p) => p.id === opened) : undefined;
-  const skill = page && skillOpen ? skills.find((k) => k.uid === skillOpen) : undefined;
-  if (page && skill) return <SkillPage key={skill.uid} skill={skill} setSkills={setSkills} projectId={projectId} onBack={() => setSkillOpen(null)} />;
+  /* one someone made: its page is its skill's (where it came from, its switch, its removal) */
+  const skill = page?.skill ? skills.find((k) => k.uid === page.skill) : page && skillOpen ? skills.find((k) => k.uid === skillOpen) : undefined;
+  if (page && skill) return <SkillPage key={skill.uid} skill={skill} setSkills={setSkills} projectId={projectId} onBack={() => (page.skill ? setOpened(null) : setSkillOpen(null))} />;
   if (page) {
     const { title, summary } = words(page);
     const taught = page.skills.map((name) => skills.find((k) => k.core && k.name === name)).filter((k): k is SkillEntry => k != null);

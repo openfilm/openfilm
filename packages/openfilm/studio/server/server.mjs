@@ -594,6 +594,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           /* what it needs beyond OpenFilm, the computers it runs on, and whether this one is not among them */
           ...(k.needs ? { needs: k.needs } : {}), ...(k.platforms ? { platforms: k.platforms, ...(k.platforms.includes(thisPlatform()) ? {} : { elsewhere: true }) } : {}),
           ...(k.cover ? { cover: `${media(k.uid, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.uid, 'preview') } : {}),
+          /* one with a surface (a page of its own, src/skills.mjs SKILL_PAGE) is a plugin: where its page is, on the film's origin */
+          ...(k.page && k.installed && !k.core ? { surface: pages.pageUrl(k.uid, k.folder, k.page) } : {}),
           /* the person's own: where it came from (none kept: made where it is) */
           ...(k.source === 'mine' ? { origin: origins[basename(k.folder)] ?? { from: 'made' } } : {}),
           /* in Discover only, installed to be used; the person's own and a project's are theirs already */

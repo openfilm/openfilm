@@ -13,11 +13,12 @@ import { useSyncExternalStore } from 'react';
 export type Workbench = string;
 /**
  * A plugin: its words by language (`title`, `summary`), its mark's name, the workbench and the skills it brings, whether
- * it is on, and whether it is still being made good (`beta`) or not made yet (`soon`: no switch).
+ * it is on, and whether it is still being made good (`beta`) or not made yet (`soon`: no switch). One someone made is
+ * a skill with a surface (lib/project-plugins): `skill` its uid, by which it is turned, and `page` its surface's address.
  */
 export interface Plugin {
   id: string; title?: Record<string, string>; summary?: Record<string, string>; icon?: string;
-  workbench?: Workbench; skills: string[]; on: boolean; beta?: boolean; soon?: boolean;
+  workbench?: Workbench; skills: string[]; on: boolean; beta?: boolean; soon?: boolean; skill?: string; page?: string;
 }
 
 /** The plugins there are to turn as a new install has them, until Studio answers with every plugin. */
