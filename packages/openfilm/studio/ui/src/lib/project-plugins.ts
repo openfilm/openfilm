@@ -11,7 +11,7 @@ import { seenSkills, watchSkills, type SkillEntry } from './project-sources.ts';
 /** A skill with a surface, as the plugin it is: its workbench is named by its uid. */
 export const pluginOfSkill = (skill: SkillEntry): Plugin => ({
   id: skill.uid, title: skill.shown?.title ?? { en: skill.name }, summary: skill.shown?.summary ?? { en: skill.description },
-  ...(skill.icon ? { icon: skill.icon } : {}), workbench: skill.uid, skills: [skill.name], on: !skill.off, page: skill.surface!, skill: skill.uid,
+  ...(skill.icon ? { icon: skill.icon } : {}), workbench: skill.uid, skills: [skill.name], on: !skill.off, page: skill.surface!, skill: skill.uid, ...(skill.files ? { files: skill.files } : {}),
 });
 
 /** The skills of a list that are plugins: installed, with a surface. */

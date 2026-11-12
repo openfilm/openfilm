@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * OpenFilm Studio's server: one process for the whole editor. Two origins, so a web page can never reach the editor:
+ * OpenFilm Studio's server: one process for the whole editor. Three origins, so a web page can never reach the editor:
  *
  *   http://127.0.0.1:<port>      the editor's pages and its API. The API needs the launch key: as a cookie, set by
  *                                any page's address with ?key=… (/open?key=… too), or as `x-studio-key` (the CLI).
@@ -8,8 +8,10 @@
  *                                this machine (another browser, an agent's preview). Writes from a browser must come
  *                                from this origin.
  *   http://localhost:<port + 1>  the film itself: project files, read only, for the preview (see pages.mjs).
+ *   http://localhost:<port + 2>  the plugins people made: their pages, and the project's files for them, written only
+ *                                with the person's leave (see plugin-pages.mjs); any free port when that one is taken.
  *
- * Both answer only requests addressed to 127.0.0.1, localhost or [::1] at their own port (ownHost): another site
+ * Each answers only requests addressed to 127.0.0.1, localhost or [::1] at its own port (ownHost): another site
  * whose name is pointed at this machine (DNS rebinding) gets nothing, not even /api/health.
  */
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -65,7 +67,8 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { coreSkills, keeps, listSkills, offeredSkills, removeSkill, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
+import { coreSkills, keeps, listSkills, offeredSkills, pluginWrites, removeSkill, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
+import { startPluginPages } from './plugin-pages.mjs';
 import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
@@ -594,8 +597,13 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           /* what it needs beyond OpenFilm, the computers it runs on, and whether this one is not among them */
           ...(k.needs ? { needs: k.needs } : {}), ...(k.platforms ? { platforms: k.platforms, ...(k.platforms.includes(thisPlatform()) ? {} : { elsewhere: true }) } : {}),
           ...(k.cover ? { cover: `${media(k.uid, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.uid, 'preview') } : {}),
-          /* one with a surface (a page of its own, src/skills.mjs SKILL_PAGE) is a plugin: where its page is, on the film's origin */
-          ...(k.page && k.installed && !k.core ? { surface: pages.pageUrl(k.uid, k.folder, k.page) } : {}),
+          /* one with a surface (a page of its own, src/skills.mjs SKILL_PAGE) is a plugin: where its page is, on the
+             plugins' origin (plugin-pages.mjs); listed for a project, where that project's files are for it; and
+             whether the person lets it change them */
+          ...(k.page && k.installed && !k.core ? (() => {
+            const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.page }, project ?? null);
+            return { surface: at.page, ...(at.project ? { files: at.project } : {}), ...(pluginWrites(k, project ?? null) ? { writes: true } : {}) };
+          })() : {}),
           /* the person's own: where it came from (none kept: made where it is) */
           ...(k.source === 'mine' ? { origin: origins[basename(k.folder)] ?? { from: 'made' } } : {}),
           /* in Discover only, installed to be used; the person's own and a project's are theirs already */
@@ -651,6 +659,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (skill.source === 'mine') await removeSkill(skill.uid);
       else await moveToTrash(skill.folder);
       return json(res, 200, {});
+    }
+    /* a plugin someone made (a skill with a surface) let change projects, or no longer (PUT { on }); one a project
+       brings is let in that project (`?project=`) */
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'writes' && req.method === 'PUT') {
+      const on = (await readJson(req))?.on;
+      if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
+      const skill = await skillAt(decodeURIComponent(parts[1]));
+      if (!skill?.page) throw new HttpError(404, 'no such plugin');
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) ?? null : null;
+      try { setPluginWrites(skill, project, on); } catch (e) { throw new HttpError(409, /** @type {Error} */ (e).message); }
+      return json(res, 200, { writes: on });
     }
     /* a skill turned on or off, by uid, for every project (PUT { on }) */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'on' && req.method === 'PUT') {
@@ -1386,6 +1406,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     throw e;
   });
   filmOrigin = pages.origin;
+  /* the plugins' origin, on the port after the film's when that one is free (a page's own storage is kept by its
+     origin), else on any */
+  const pluginOptions = { secret: key, mayWrite: (/** @type {{ uid: string, source: string }} */ plugin, /** @type {{ id: string }} */ project) => pluginWrites(plugin, project) };
+  const pluginPages = await startPluginPages({ port: port ? address.port + 2 : 0, ...pluginOptions }).catch(() => startPluginPages({ port: 0, ...pluginOptions }));
   if (advertise) {
     /* Discover read as Studio starts, so its skills are there when it first opens (and on an empty conversation) */
     readDiscover({ fresh: 60_000 }).catch(() => { /* offline: what was read before, said so when Discover opens */ });
@@ -1400,6 +1424,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   const studio = {
     origin,
     filmOrigin: pages.origin,
+    pluginOrigin: pluginPages.origin,
     port: address.port,
     key,
     close() { return closing ??= shutDown(); },
@@ -1416,6 +1441,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     await closePageFrames();
     watchers.closeAll();
     await pages.close();
+    await pluginPages.close();
     editor.closeAllConnections();
     for (const socket of streamSockets) socket.destroy();
     await new Promise((done) => editor.close(() => done(undefined)));

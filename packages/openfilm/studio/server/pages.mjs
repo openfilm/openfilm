@@ -220,15 +220,6 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
 
   return {
     origin,
-    /**
-     * The address of a page in a folder that is no project's (a plugin's surface, in its skill's folder), by a name
-     * for the folder (`key`): served as it is, with nothing put in it, under a token of its own as a project is.
-     */
-    pageUrl: (/** @type {string} */ key, /** @type {string} */ folder, /** @type {string} */ page) => {
-      const token = tokenOf(`page\0${key}`);
-      if (byToken.get(token)?.root !== folder) byToken.set(token, { root: folder, files: folderFiles(folder, { inject: '', headers: policy() }) });
-      return `${origin}/p/${token}/${page}`;
-    },
     /** The address of a project's folder on the film's origin; a renamed folder keeps it (pass the project as it is now). */
     folderUrl: (/** @type {{ id: string, path: string }} */ project) => `${origin}/p/${serve(project)}/${within(project.path)}`,
     close: () => new Promise((done) => { server.closeAllConnections(); server.close(() => done(undefined)); }),

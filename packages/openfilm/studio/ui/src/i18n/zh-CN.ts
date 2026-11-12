@@ -84,6 +84,8 @@ export const zhCN: Words = {
     turnOff: '关闭 {name}',
     skillOff: '已关闭。重新开启前，智能体不会用到它。',
     skillOffPlugin: "跟着\"{plugin}\"插件一起关了。",
+    pluginWrites: "允许它修改项目文件",
+    pluginWritesNote: "关着时，它的界面只能读取项目文件。打开后，它还能改写你打开的项目里的文件，和智能体一样。只对你信任的插件打开。",
     mine: '我的',
     project: '本项目',
     cat: { launch: '产品发布', explainer: '科普讲解', slides: '幻灯片转视频', captions: '字幕与花字', ads: '广告', commerce: '电商卖点', music: '音乐' },

@@ -143,7 +143,7 @@ test('skills: turned off and on, an official one installed and uninstalled, one 
   assert.ok(existsSync(join(variables.OPENFILM_TRASH_DIR, 'quiet')) || readdirSync(variables.OPENFILM_TRASH_DIR).length > 0, 'in the trash');
 });
 
-test('a skill with a surface is listed with its page\'s address, on the film\'s origin: the page as it is, and nothing hidden', async (t) => {
+test('a plugin someone made: its page on the plugins\' origin, the project read from there, and written only once the person lets it', async (t) => {
   const root = mkdtempSync(join(tmpdir(), 'of-skill-surface-'));
   const variables = { OPENFILM_HOME: join(root, 'home'), OPENFILM_LIBRARY: join(root, 'library'), OPENFILM_SKILLS: join(root, 'mine'), OPENFILM_TRASH_DIR: join(root, 'trash'), OPENFILM_SHARED_HOME: join(root, 'home') };
   const previous = Object.fromEntries(Object.keys(variables).map((key) => [key, process.env[key]]));
@@ -160,19 +160,70 @@ test('a skill with a surface is listed with its page\'s address, on the film\'s 
   }
   const studio = await startStudio({ port: 0, openBrowser: () => {} });
   t.after(() => studio.close());
-  const { skills } = await (await fetch(`${studio.origin}/api/skills`, { headers: { 'x-studio-key': studio.key } })).json();
-  const board = skills.find((k) => k.uid === 'local/board');
-  assert.equal(skills.find((k) => k.uid === 'local/plain').surface, undefined);
+  const api = (path, { method = 'GET', body } = {}) => fetch(studio.origin + path, {
+    method, headers: { 'x-studio-key': studio.key, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined,
+  });
+  const project = (await (await api('/api/projects', { method: 'POST', body: { path: join(root, 'film') } })).json()).project;
+  const listed = async (query = `?project=${project.id}`) => (await (await api(`/api/skills${query}`)).json()).skills;
+  const board = (await listed()).find((k) => k.uid === 'local/board');
+  assert.equal((await listed()).find((k) => k.uid === 'local/plain').surface, undefined);
   /* OpenFilm's own are not plugins of this kind */
-  assert.ok(skills.filter((k) => k.core).every((k) => k.surface === undefined));
-  const { filmOrigin } = await (await fetch(`${studio.origin}/api/health`)).json();
-  assert.ok(board.surface.startsWith(`${filmOrigin}/p/`) && board.surface.endsWith('/index.html'), board.surface);
-  /* the page as its author wrote it: Studio puts nothing in it, as it does in a film's pages */
-  const page = await fetch(board.surface);
-  assert.equal(page.status, 200);
-  assert.equal(await page.text(), PAGE);
+  assert.ok((await listed()).filter((k) => k.core).every((k) => k.surface === undefined));
+
+  /* its page: on the plugins' origin (another than the editor's and the film's), as its author wrote it, nothing hidden */
+  assert.ok(studio.pluginOrigin !== studio.origin && studio.pluginOrigin !== studio.filmOrigin);
+  assert.ok(board.surface.startsWith(`${studio.pluginOrigin}/s/`) && board.surface.endsWith('/index.html'), board.surface);
+  assert.equal(await (await fetch(board.surface)).text(), PAGE);
   assert.equal(await (await fetch(new URL('app.js', board.surface))).text(), 'window.board = 1;');
   assert.equal((await fetch(new URL('.env', board.surface))).status, 404);
-  /* read only: nothing is written through it */
   assert.equal((await fetch(new URL('app.js', board.surface), { method: 'PUT', body: 'x' })).status, 405);
+  /* listed for no project, it has no project's files */
+  assert.equal((await listed('')).find((k) => k.uid === 'local/board').files, undefined);
+
+  /* the project's files, read as they are on disk: film.html with nothing put in it, and a tag to write it back by */
+  assert.ok(board.files.startsWith(`${studio.pluginOrigin}/f/`) && board.files.endsWith('/'), board.files);
+  const onDisk = readFileSync(join(project.path, 'film.html'), 'utf8');
+  const read = await fetch(new URL('film.html', board.files));
+  assert.equal(await read.text(), onDisk);
+  const tag = read.headers.get('etag');
+  assert.ok(tag);
+  assert.equal((await fetch(new URL('film.html', board.files), { headers: { 'if-none-match': tag } })).status, 304);
+  assert.equal((await fetch(new URL('.film/id', board.files))).status, 404);
+
+  /* a write: only from a page of the plugins' origin, and only once the person lets this plugin */
+  const put = (path, body, headers = {}) => fetch(new URL(path, board.files), { method: 'PUT', body, headers: { origin: studio.pluginOrigin, ...headers } });
+  assert.equal(board.writes, undefined);
+  assert.equal((await put('notes.md', 'hello')).status, 403);
+  assert.equal((await api('/api/skills/local%2Fboard/writes', { method: 'PUT', body: { on: true } })).status, 200);
+  assert.equal((await api('/api/skills/local%2Fplain/writes', { method: 'PUT', body: { on: true } })).status, 404);
+  assert.equal((await listed()).find((k) => k.uid === 'local/board').writes, true);
+  /* a film's page (the film's origin), any other site, or a request that says no origin: refused */
+  assert.equal((await put('notes.md', 'hello', { origin: studio.filmOrigin })).status, 403);
+  assert.equal((await put('notes.md', 'hello', { origin: 'https://example.com' })).status, 403);
+  assert.equal((await fetch(new URL('notes.md', board.files), { method: 'PUT', body: 'hello' })).status, 403);
+  assert.equal(existsSync(join(project.path, 'notes.md')), false);
+
+  const made = await put('notes/first.md', 'hello');
+  assert.equal(made.status, 201);
+  assert.equal(readFileSync(join(project.path, 'notes', 'first.md'), 'utf8'), 'hello');
+  /* written back by its tag; a tag of before, or "only if new" over a file, is refused and the file left */
+  assert.equal((await put('notes/first.md', 'again', { 'if-match': made.headers.get('etag') })).status, 204);
+  assert.equal((await put('notes/first.md', 'stale', { 'if-match': '"0-0"' })).status, 412);
+  assert.equal((await put('notes/first.md', 'new only', { 'if-none-match': '*' })).status, 412);
+  assert.equal(readFileSync(join(project.path, 'notes', 'first.md'), 'utf8'), 'again');
+  /* the film itself is written by the tag it was read with */
+  const next = onDisk.replace('</body>', '<section></section>\n</body>');
+  assert.equal((await put('film.html', next, { 'if-match': tag })).status, 204);
+  assert.equal(readFileSync(join(project.path, 'film.html'), 'utf8'), next);
+  /* never Studio's own folder, a hidden file, a folder, or a way out of the project */
+  for (const path of ['.film/settings.json', '.env', 'notes/', 'notes', '..%2Foutside.txt', 'a/..%2F..%2Foutside.txt']) {
+    const status = (await put(path, 'x')).status;
+    assert.ok([403, 404, 409].includes(status), `${path}: ${status}`);
+  }
+  assert.equal(existsSync(join(root, 'outside.txt')), false);
+  assert.equal(readdirSync(join(project.path, 'notes')).join(), 'first.md');
+  /* no longer let: its page reads on, and writes nothing */
+  assert.equal((await api('/api/skills/local%2Fboard/writes', { method: 'PUT', body: { on: false } })).status, 200);
+  assert.equal((await put('notes/first.md', 'after')).status, 403);
+  assert.equal((await fetch(new URL('notes/first.md', board.files))).status, 200);
 });

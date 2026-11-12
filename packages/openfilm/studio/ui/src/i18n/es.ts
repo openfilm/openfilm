@@ -83,6 +83,8 @@ export const es: Words = {
     turnOff: 'Desactivar {name}',
     skillOff: 'Desactivada. Ningún agente la usará hasta que la vuelvas a activar.',
     skillOffPlugin: "Desactivada con el plugin {plugin}.",
+    pluginWrites: "Permitir que cambie archivos del proyecto",
+    pluginWritesNote: "Desactivado, su página solo lee el proyecto. Activado, también puede escribir archivos en el proyecto que tengas abierto, como tu agente. Actívalo solo para un plugin en el que confíes.",
     mine: 'Tuya',
     project: 'Este proyecto',
     cat: { launch: 'Lanzamientos', explainer: 'Explicaciones', slides: 'Diapositivas a vídeo', captions: 'Subtítulos y títulos', ads: 'Anuncios', commerce: 'Puntos de venta', music: 'Música' },

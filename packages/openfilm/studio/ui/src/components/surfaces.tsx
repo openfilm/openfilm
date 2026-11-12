@@ -6,9 +6,10 @@
  *
  * The edit and the canvas are held by ProjectView itself. Every other workbench of OpenFilm's own is listed here by its
  * name (`workbench` in its plugin's openfilm.json, src/plugins.mjs) and loaded when first shown. One someone made is
- * a web page (its skill's `index.html`, lib/project-plugins), shown in a frame on the film's origin, as a film's pages
- * are: it is told where the project's files are (`?project=`, their address there) and reads them from there; it
- * cannot reach the editor. ProjectView shows the one picked without knowing which there are.
+ * a web page (its skill's `index.html`, lib/project-plugins), shown in a frame on the plugins' own origin
+ * (studio/server/plugin-pages.mjs): it is told where the project's files are (`?project=`, their address there), reads
+ * them from there, and writes them (PUT) once the person lets it; it cannot reach the editor. ProjectView shows the
+ * one picked without knowing which there are.
  */
 import React from 'react';
 import { useT } from '@/i18n';
@@ -28,9 +29,9 @@ export const SURFACES: Record<string, React.LazyExoticComponent<React.ComponentT
 export const OWN_SURFACES: readonly string[] = ['edit', 'canvas', 'motion'];
 
 /** A plugin's surface by its workbench's name, or the page of one someone made; one this build has no surface for says so. */
-export function PluginSurface({ id, page, title, ...props }: SurfaceProps & { id: string; page?: string; title?: string }) {
+export function PluginSurface({ id, page, files, title, ...props }: SurfaceProps & { id: string; page?: string; files?: string; title?: string }) {
   const t = useT();
-  if (page) return <iframe key={page} src={`${page}?project=${encodeURIComponent(props.film)}`} title={title ?? id} allow="autoplay" className="min-h-0 min-w-0 flex-1 border-0 bg-[var(--bg-panel)]" />;
+  if (page) return <iframe key={page} src={`${page}${files ? `?project=${encodeURIComponent(files)}` : ''}`} title={title ?? id} allow="autoplay" className="min-h-0 min-w-0 flex-1 border-0 bg-[var(--bg-panel)]" />;
   const Surface = SURFACES[id];
   if (!Surface) return <p className="m-auto max-w-[360px] px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.surfaceMissing')}</p>;
   return <React.Suspense fallback={null}><Surface {...props} /></React.Suspense>;

@@ -147,6 +147,17 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       </div>
       {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', inLanguage(plugins.find((p) => p.id === skill.plugin)?.title, lang) ?? skill.plugin) : t('gallery.skillOff')}</p> : null}
       {skill.retired ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
+      {/* a plugin someone made (a skill with a surface): its page reads the project; whether it may change it is the person's to say */}
+      {skill.surface && installed ? (
+        <div className="mt-3 rounded-[10px] border border-[var(--border)] px-3 py-2.5">
+          <div className="flex items-center gap-3">
+            <span className="min-w-0 flex-1 text-[12.5px] font-medium text-[var(--text)]">{t('gallery.pluginWrites')}</span>
+            <SettingsSwitch checked={Boolean(skill.writes)} label={t('gallery.pluginWrites')}
+              onChange={(on) => { patch((k) => { const { writes: _was, ...rest } = k; return on ? { ...rest, writes: true as const } : rest; }); void sourcesApi.setPluginWrites(skill.uid, on, projectId).catch(reload); }} />
+          </div>
+          <p className="mt-1 text-[11.5px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginWritesNote')}</p>
+        </div>
+      ) : null}
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
         {/* the community's: whose it is, their account a link; OpenFilm's own: its kind */}
         {communityOf(skill) ? (

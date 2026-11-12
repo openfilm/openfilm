@@ -63,8 +63,9 @@ export type SkillEntry = {
   kind?: 'workflow' | 'style'; order?: number; icon?: string;
   /** addresses of its cover picture and preview video, when it has them */
   cover?: string; preview?: string;
-  /** it has a surface (a page of its own), which makes it a plugin (lib/project-plugins): the page's address */
-  surface?: string;
+  /** it has a surface (a page of its own), which makes it a plugin (lib/project-plugins): the page's address; listed
+   *  for a project, where that project's files are for the page; and whether the person lets it change them */
+  surface?: string; files?: string; writes?: true;
   /** where its source can be read (a repository's address) */
   repository?: string;
   /** what it needs beyond OpenFilm, by language; the computers it runs on (none: every one), and whether this one is not among them */
@@ -188,6 +189,11 @@ export const sourcesApi = {
       const { off: _was, plugin: _plugin, ...rest } = skill;
       return on ? rest : { ...rest, off: true as const };
     }));
+    window.dispatchEvent(new Event(SKILLS_CHANGED));
+  },
+  /** a plugin someone made let change projects' files, or no longer (one a project brings: in that project); whoever lists skills reads them again */
+  setPluginWrites: async (uid: string, on: boolean, projectId?: string | null): Promise<void> => {
+    await call<{ writes: boolean }>(`skills/${encodeURIComponent(uid)}/writes${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'PUT', { on });
     window.dispatchEvent(new Event(SKILLS_CHANGED));
   },
   /** one of Discover's installed (downloaded, at the version it shows) or uninstalled; whoever lists skills reads them again */

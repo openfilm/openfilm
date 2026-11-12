@@ -84,6 +84,8 @@ export const en = {
     turnOff: 'Turn off {name}',
     skillOff: 'Off. Agents aren\'t offered it until you turn it on again.',
     skillOffPlugin: "Off with the {plugin} plugin.",
+    pluginWrites: "Allow it to change project files",
+    pluginWritesNote: "Off, its page only reads the project. On, it can also write files in the project you have open, as your agent can. Turn it on only for a plugin you trust.",
     mine: 'Yours',
     project: 'This project',
     cat: { launch: 'Product launches', explainer: 'Explainers', slides: 'Slides to video', captions: 'Captions and titles', ads: 'Ads', commerce: 'Selling points', music: 'Music' },

@@ -53,9 +53,40 @@ export const SKILL_FILE = 'SKILL.md';
  * A skill's surface: a web page at its folder's root. A skill that has one is a plugin of someone's own making: what
  * it teaches an agent, and a workbench of its own in Studio where the person sees and adjusts the same thing (the
  * library's Plugins tab lists it, and its switch is the skill's). Studio shows the page beside the library and the
- * chat, served as a film's pages are: it reads the project's files and nothing of the editor.
+ * chat, on an origin of the plugins' own (studio/server/plugin-pages.mjs): it reads the project's files, writes them
+ * once the person lets it (pluginWrites), and reaches nothing of the editor.
  */
 export const SKILL_PAGE = 'index.html';
+
+/**
+ * What the person's leave to change projects is kept by, for a plugin someone made: its uid; one a project brings is
+ * let in that project alone (every project's `project/<name>` is another plugin).
+ * @param {{ uid: string, source: string }} plugin @param {{ id: string } | null} [project]
+ */
+export const writesKey = (plugin, project) => (plugin.source === 'project' ? (project ? `${plugin.uid}@${project.id}` : null) : plugin.uid);
+
+/**
+ * Whether the person lets this plugin change the project's files (the shared prefs.json, `pluginWrites`): off until
+ * they say.
+ * @param {{ uid: string, source: string }} plugin @param {{ id: string } | null} [project] @param {string} [home]
+ */
+export function pluginWrites(plugin, project, home) {
+  const key = writesKey(plugin, project), kept = sharedPref('pluginWrites', home);
+  return key != null && Array.isArray(kept) && kept.includes(key);
+}
+
+/**
+ * The person lets a plugin change projects, or no longer. Throws for a project's own plugin named without its project.
+ * @param {{ uid: string, source: string }} plugin @param {{ id: string } | null} project @param {boolean} on @param {string} [home]
+ */
+export function setPluginWrites(plugin, project, on, home) {
+  const key = writesKey(plugin, project);
+  if (key == null) throw new Error('A plugin a project brings is allowed in that project: name the project.');
+  const kept = sharedPref('pluginWrites', home);
+  const keys = new Set(Array.isArray(kept) ? kept.filter((k) => typeof k === 'string') : []);
+  if (on) keys.add(key); else keys.delete(key);
+  setSharedPref('pluginWrites', [...keys].sort(), home);
+}
 /** The project's own skills, beside film.html. */
 export const PROJECT_SKILLS = 'skills';
 /** The places skills are looked for, the first winning a name. */
