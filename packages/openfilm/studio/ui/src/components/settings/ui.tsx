@@ -1,11 +1,10 @@
 /**
  * The parts every section of Settings is made of. A page reads like a document: titled groups with room between them,
  * and in each a list of rows parted by hairlines, each its title and what it does on the left, its control on the
- * right; a row that opens a page of its own ends in a chevron (SettingsNavRow). Controls are quiet until pointed at: a
- * choice of two or three is a segmented control, on/off a switch, a longer list a select.
+ * right. Controls are quiet until pointed at: a choice of two or three is a segmented control, on/off a switch, a
+ * longer list a select.
  */
 import React from 'react';
-import { ChevronRight } from 'lucide-react';
 
 /** A section's body: an optional note, then its groups. */
 export function SettingsPage({ note, children }: { note?: React.ReactNode; children: React.ReactNode }) {
@@ -25,19 +24,6 @@ export function SettingsGroup({ title, footnote, children }: { title?: React.Rea
       <div className="flex flex-col divide-y divide-[var(--border)]">{children}</div>
       {footnote ? <p className="pt-2 text-[13.5px] leading-relaxed text-[var(--text-faint)]">{footnote}</p> : null}
     </section>
-  );
-}
-
-/** A row that opens a page of its own: its mark, its name, what is set there (or how much), a chevron. */
-export function SettingsNavRow({ mark, title, value, onClick }: { mark?: React.ReactNode; title: React.ReactNode; value?: React.ReactNode; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick}
-      className="group -mx-3 flex min-h-[60px] items-center gap-3.5 rounded-[8px] px-3 py-3 text-left transition hover:bg-[var(--bg-hover)]">
-      {mark}
-      <span className="min-w-0 flex-1 truncate text-[15px] text-[var(--text)]">{title}</span>
-      {value != null ? <span className="shrink-0 text-[14px] tabular-nums text-[var(--text-muted)]">{value}</span> : null}
-      <ChevronRight size={17} strokeWidth={1.75} className="shrink-0 text-[var(--text-faint)] transition group-hover:text-[var(--text-muted)]" aria-hidden />
-    </button>
   );
 }
 

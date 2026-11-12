@@ -39,14 +39,7 @@ export type ProjectSettings = { fps?: number; trackNames?: { name: string; index
 export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: string; size: number; mtime: number }[]; links?: Record<string, { to: string; missing?: boolean }> };
 /** Media a project is missing (studio/server/media-reconnect.mjs): a link that leads nowhere (`linked`), or a file its clips name that is gone; `was`: where it was. */
 /** What the listed projects take on disk, the biggest first, in bytes: `clearable` is the cache that is made again when needed. */
-export type StorageUsage = {
-  projects: { id: string; name: string; path: string; total: number; media: number; cache: number; clearable: number; history: number; talk: number }[];
-  total: number;
-  clearable: number;
-  /** what OpenFilm keeps beside the projects: Mine, the skills, what was fetched of the library, the local models, the rest of its home */
-  places?: StoragePlace[];
-};
-export type StoragePlace = { id: 'saved' | 'skills' | 'library' | 'models' | 'other'; paths: string[]; bytes: number };
+export type StorageUsage = { projects: { id: string; name: string; path: string; total: number; clearable: number }[]; total: number; clearable: number };
 export type MissingMedia = { path: string; name: string; folder: boolean; linked: boolean; was: string };
 /**
  * How a media file was made (studio/server/media-made.mjs): the words it was asked with, who made it with which model,
@@ -165,10 +158,7 @@ export const api = {
   locations: () => call<StudioLocations>('locations'),
   /** the room every project takes and what of it is cache that can be cleared (studio/server/storage.mjs); cleared, the bytes that came back */
   storage: () => call<StorageUsage>('storage'),
-  /** every project's cache, or one project's (`id`) */
-  clearStorage: (id?: string) => call<StorageUsage & { freed: number }>('storage/clear', { method: 'POST', json: id ? { id } : {} }),
-  /** one of the places beside the projects in the system's file manager */
-  openStoragePlace: (place: StoragePlace['id']) => call<{ ok: true }>('storage/open', { method: 'POST', json: { place } }),
+  clearStorage: () => call<StorageUsage & { freed: number }>('storage/clear', { method: 'POST', json: {} }),
   /** move the library to `path` (null: the default); with `move`, its projects go too (those that could not are in `failed`) */
   /** `failed`: projects that stay where they were; `left`: moved across disks, their old folder left there (the trash would not take it) */
   moveLibrary: (path: string | null, move: boolean) => call<{ moved: number; failed: { name: string; error: string }[]; left: { name: string; path: string; error: string }[]; locations: StudioLocations }>('locations/projects', { method: 'PUT', json: { path, move } }).then((done) => {

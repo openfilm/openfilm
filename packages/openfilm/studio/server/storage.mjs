@@ -13,11 +13,8 @@
  * Media kept elsewhere and linked (src/media-links.mjs) takes no room in the project: a link is not followed.
  */
 import { lstat, readdir, rm, stat } from 'node:fs/promises';
-import { basename, join, resolve, sep } from 'node:path';
+import { basename, join } from 'node:path';
 import { TOOL_DIR, listProjects } from './projects.mjs';
-import { savedRoot, sharedHome, studioHomeDir } from '../../src/locations.mjs';
-import { discoverDir, mySkillsDir, officialSkillsDir } from '../../src/skills.mjs';
-import { libraryCache } from './library.mjs';
 
 /** The cache's folders that hold only what can be made again. */
 const CLEARABLE = new Set(['audio', 'frames', 'look', 'pageframes', 'posters', 'preview', 'probe', 'render', 'seek', 'waves', 'proxies', 'playable', 'commits', 'export']);
@@ -85,44 +82,6 @@ export async function clearProjectCache(root, { busy = false, now = Date.now() }
     await rm(join(cache, name), { recursive: true, force: true }).catch(() => {});
   }
   return Math.max(0, before - (await projectUsage(root)).clearable);
-}
-
-/** The bytes under each of `dirs`, links not followed. */
-async function bytesIn(/** @type {string[]} */ dirs) {
-  let bytes = 0;
-  for (const dir of dirs) await walk(dir, [], (_, b) => { bytes += b; });
-  return bytes;
-}
-
-/**
- * What OpenFilm keeps beside the projects, each kind with its folders and the bytes in them: Mine (saved.mjs), the
- * skills (the person's own, the installed ones, Discover's copies), what was fetched of the
- * library, the models that run on this computer (local-models.mjs, vision-assets.mjs), and the rest of Studio's
- * home (its settings, indexes and logs). A folder counted under one kind is left out of the rest. Exports are not
- * counted: they land in a folder of the person's (the Desktop) among their other files.
- * @returns {Promise<{ id: 'saved' | 'skills' | 'library' | 'models' | 'other', paths: string[], bytes: number }[]>}
- */
-export async function places() {
-  const homes = [...new Set([studioHomeDir(), sharedHome()].map((h) => resolve(h)))];
-  const models = [join(libraryCache(), 'models'), join(studioHomeDir(), 'cache', 'vision')];
-  const kinds = /** @type {const} */ ([
-    ['saved', [savedRoot()]],
-    ['skills', [mySkillsDir(), officialSkillsDir(), discoverDir()]],
-    ['library', [libraryCache()]],
-    ['models', models],
-  ]);
-  const out = [];
-  for (const [id, dirs] of kinds) {
-    let bytes = await bytesIn([...new Set(dirs.map((d) => resolve(d)))]);
-    if (id === 'library') bytes -= await bytesIn([join(libraryCache(), 'models')]);
-    out.push({ id, paths: dirs.map((d) => resolve(d)), bytes: Math.max(0, bytes) });
-  }
-  /* the homes, less the folders above that are inside them */
-  const counted = out.flatMap((p) => p.paths).filter((d) => homes.some((h) => d.startsWith(h + sep)));
-  const nested = counted.filter((d) => !counted.some((o) => o !== d && d.startsWith(o + sep)));
-  const other = Math.max(0, await bytesIn(homes) - await bytesIn(nested));
-  out.push({ id: 'other', paths: homes, bytes: other });
-  return /** @type {any} */ (out);
 }
 
 /**

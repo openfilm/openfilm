@@ -1,27 +1,17 @@
 /**
- * Settings, opened from the app menu at the top left, sorted as a computer's system settings sorts its own: on the
- * left a search, the account (OpenFilm is used here without one; signing in to OpenFilm's account is for its own
- * services), a line when an update waits, then the sections in three groups: what OpenFilm works with (Agents, in an
- * app with a chat; Services; Plugins), how it is set up (General, Appearance, Notifications in an app that offers
- * them, Playback), and Keyboard shortcuts and Developer. On the right the page, under Back and Forward; a row with a
- * chevron opens a page of its own in place, and Back goes up again, as in a browser. The search finds a section by any
- * phrase on it or its pages.
- *
- * General: About (the version, what is new, where OpenFilm lives), Software update, Asset management (everything
- * OpenFilm keeps on this computer, StoragePages), Language, and versions saved on their own. Appearance: the theme and
- * the library's categories. Playback: how the preview plays.
+ * Settings, opened from the app menu at the top left: a search and the sections in groups on the left, the section on the
+ * right as a page of titled groups. General (the theme and the language), Agents (in an app with a chat: the agents
+ * it can use), Services (which model makes each kind of media, and the services connected for it), the keyboard
+ * shortcuts, Advanced and Developer; the search finds a section by any phrase on it. At the
+ * foot of the nav, quietly, where OpenFilm lives: its code, the examples and the website.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import {
-  X, Settings, Keyboard, Boxes, Bot, Search, SquareTerminal, Loader2, Puzzle, ChevronLeft, ChevronRight, Contrast, Info,
-  RefreshCw, Globe, Bell, HardDrive, History, Play, UserRound, ExternalLink,
-} from 'lucide-react';
+import { X, Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, Search, SquareTerminal, Loader2, SlidersHorizontal, Puzzle } from 'lucide-react';
 import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type LanguageChoice } from '@/i18n';
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
 import { showWhatsNew } from '@/lib/whats-new';
 import { usePreviewPrefs, writePreviewPref } from '@/lib/preview-prefs';
-import { useProviders } from '@/lib/providers';
 import { hasNotes } from '../WhatsNew';
 import { useWebUpdate } from '../UpdateButton';
 import { api, type StudioPrefs, type StudioVersion } from '@/api';
@@ -30,57 +20,49 @@ import { DiagnosticsGroup } from './DiagnosticsGroup';
 import { ModelsSection } from './ModelsSection';
 import { SettingsSelect } from './SettingsSelect';
 import { ShortcutsSection } from './ShortcutsSection';
-import { SettingsButton, SettingsGroup, SettingsItem, SettingsLinkButton, SettingsNavRow, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
+import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
 import { useThemeMode, type ThemeMode } from './theme';
+import { StorageGroup } from './StorageGroup';
 import { PluginsSection } from './PluginsSection';
 import { LARGE_DIALOG_SIZE } from '../dialog-chrome';
 import { LibraryCategoriesGroup } from './LibraryCategoriesGroup';
-import { STORAGE_KINDS, StorageKindPage, StorageOverview, type StorageKind } from './StoragePages';
 
-export type SettingsSection = 'account' | 'agents' | 'models' | 'plugins' | 'general' | 'appearance' | 'notifications' | 'playback' | 'shortcuts' | 'developer';
+export type SettingsSection = 'general' | 'agents' | 'models' | 'plugins' | 'developer' | 'shortcuts' | 'advanced';
 
-/** A page: a section, or a page inside one (its section first, then its own name). */
-type PageId = SettingsSection
-  | 'general/about' | 'general/update' | 'general/storage' | 'general/language' | 'general/versions'
-  | `general/storage/${StorageKind}`;
-
-const sectionOf = (page: PageId) => page.split('/')[0] as SettingsSection;
-
-/* the nav, in groups: what OpenFilm works with, how it is set up, and the rest (Agents only inside an app with a chat,
-   Notifications only inside an app that offers them: lib/host.ts `agents`, `notifications`) */
-const NAV: SettingsSection[][] = [
-  [...(studioHost?.agents ? ['agents' as const] : []), 'models', 'plugins'],
-  ['general', 'appearance', ...(studioHost?.notifications ? ['notifications' as const] : []), 'playback'],
-  ['shortcuts', 'developer'],
+/* the nav, in groups: what OpenFilm does and is made of (its plugins), then help (Agents only inside an app with a chat: lib/host.ts `agents`;
+   Advanced for what is already set for the best experience; Developer always, for its diagnostics) */
+const NAV: Array<{ group: 'settings' | 'help'; sections: SettingsSection[] }> = [
+  { group: 'settings', sections: ['general', ...(studioHost?.agents ? ['agents' as const] : []), 'models', 'plugins'] },
+  { group: 'help', sections: ['shortcuts', 'advanced', 'developer'] },
 ];
 
-/** where OpenFilm lives, on About */
+/** where OpenFilm lives, linked at the foot of the nav */
 const LINKS = [
   { label: 'settings.links.github', href: 'https://github.com/openfilm/openfilm' },
   { label: 'settings.links.examples', href: 'https://github.com/openfilm/examples' },
   { label: 'settings.links.site', href: 'https://openfilm.dev' },
 ];
 
-type Glyph = React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
-const SECTION_ICON: Record<Exclude<SettingsSection, 'account'>, Glyph> = {
-  agents: Bot, models: Boxes, plugins: Puzzle, general: Settings, appearance: Contrast, notifications: Bell, playback: Play,
-  shortcuts: Keyboard, developer: SquareTerminal,
+const SECTION_ICON: Record<SettingsSection, React.ReactNode> = {
+  general: <Settings2 size={18} strokeWidth={1.75} />,
+  agents: <Bot size={18} strokeWidth={1.75} />,
+  models: <Boxes size={18} strokeWidth={1.75} />,
+  plugins: <Puzzle size={18} strokeWidth={1.75} />,
+  developer: <SquareTerminal size={18} strokeWidth={1.75} />,
+  shortcuts: <Keyboard size={18} strokeWidth={1.75} />,
+  advanced: <SlidersHorizontal size={18} strokeWidth={1.75} />,
 };
-/** a row's mark: its glyph, quiet */
-const mark = (Icon: Glyph) => <Icon size={18} strokeWidth={1.75} className="shrink-0 text-[var(--text-muted)]" />;
 
-/** what a search through each section reads: its name and every phrase on it and its pages */
+/** what a search through each section reads: its name and every phrase it shows (Notifications only where it shows:
+    inside an app that offers them, lib/host.ts `notifications`) */
 const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
-  account: 'settings.account',
+  general: ['settings.appearance', 'settings.storage'],
   agents: 'settings.agents',
   models: ['settings.models', 'settings.providers'],
   plugins: 'settings.plugins',
-  general: ['settings.general', 'settings.about', 'settings.links', 'settings.storage', 'settings.versions', 'settings.appearance.language', 'settings.appearance.languageHint'],
-  appearance: ['settings.appearance.group', 'settings.appearance.theme', 'settings.appearance.themeHint', 'settings.libraryCategories'],
-  notifications: 'settings.notifications',
-  playback: ['settings.playback', 'settings.advanced'],
-  shortcuts: 'settings.shortcuts',
   developer: ['settings.developer', 'settings.report'],
+  shortcuts: 'settings.shortcuts',
+  advanced: ['settings.advanced', ...(studioHost?.notifications ? ['settings.notifications'] : []), 'settings.versions', 'settings.playback', 'settings.libraryCategories'],
 };
 
 export interface SettingsModalProps {
@@ -94,8 +76,7 @@ export interface SettingsModalProps {
 export function SettingsModal({ open, onClose, section: opening }: SettingsModalProps) {
   const t = useT();
   const language = useLanguage();
-  /* the pages gone through, as a browser's history: Back and Forward move along it, a page opened cuts what was ahead */
-  const [trail, setTrail] = React.useState<{ pages: PageId[]; at: number }>({ pages: ['general'], at: 0 });
+  const [section, setSection] = React.useState<SettingsSection>('general');
   const [query, setQuery] = React.useState('');
   const dialog = React.useRef<HTMLDivElement>(null);
   const search = React.useRef<HTMLInputElement>(null);
@@ -104,23 +85,17 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
   const close = React.useRef(onClose);
   close.current = onClose;
 
-  React.useEffect(() => { if (open) { setTrail({ pages: [opening ?? 'general'], at: 0 }); setQuery(''); } }, [open, opening]);
-
-  const go = React.useCallback((page: PageId) => setTrail(({ pages, at }) => (
-    pages[at] === page ? { pages, at } : { pages: [...pages.slice(0, at + 1), page], at: at + 1 }
-  )), []);
-  const back = () => setTrail((was) => ({ ...was, at: Math.max(0, was.at - 1) }));
-  const forward = () => setTrail((was) => ({ ...was, at: Math.min(was.pages.length - 1, was.at + 1) }));
+  React.useEffect(() => { if (open) { setSection(opening ?? 'general'); setQuery(''); } }, [open, opening]);
 
   /* the sections a search finds: by their names and by every phrase on them */
   const words = React.useMemo(() => Object.fromEntries((Object.keys(SECTION_WORDS) as SettingsSection[]).map((id) => [
     id, [t(`settings.sections.${id}`), ...[SECTION_WORDS[id]].flat().flatMap((under) => phrasesUnder(under, language))].join('\n').toLowerCase(),
   ])) as Record<SettingsSection, string>, [t, language]);
   const needle = query.trim().toLowerCase();
-  const nav = NAV.map((group) => group.filter((id) => !needle || words[id].includes(needle))).filter((group) => group.length > 0);
-  const found: SettingsSection[] = [...(!needle || words.account.includes(needle) ? ['account' as const] : []), ...nav.flat()];
-  const page = trail.pages[trail.at]!;
-  const showing: PageId | null = found.includes(sectionOf(page)) ? page : found[0] ?? null;
+  const nav = NAV.map((group) => ({ ...group, sections: group.sections.filter((id) => !needle || words[id].includes(needle)) }))
+    .filter((group) => group.sections.length > 0);
+  const found = nav.flatMap((group) => group.sections);
+  const showing: SettingsSection | null = found.includes(section) ? section : found[0] ?? null;
 
   React.useEffect(() => {
     if (!open) return;
@@ -128,11 +103,6 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
       if (e.key === 'Escape') close.current();
-      /* ⌘[ and ⌘] go back and forward, as in a browser */
-      if ((e.metaKey || e.ctrlKey) && (e.key === '[' || e.key === ']') && dialog.current?.contains(document.activeElement)) {
-        e.preventDefault();
-        setTrail((was) => ({ ...was, at: Math.max(0, Math.min(was.pages.length - 1, was.at + (e.key === '[' ? -1 : 1))) }));
-      }
       if (e.key !== 'Tab' || !dialog.current?.contains(document.activeElement)) return;
       const focusable = Array.from(dialog.current.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [tabindex="0"]'))
         .filter((element) => element.getClientRects().length > 0);
@@ -156,10 +126,6 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
 
   if (!open) return null;
 
-  const title = showing ? pageTitle(showing, t) : t('settings.title');
-  const shownSection = showing ? sectionOf(showing) : null;
-  const navButton = 'flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-35';
-
   return createPortal(
     <div
       className="fixed inset-0 z-[10050] grid place-items-center p-6"
@@ -170,10 +136,10 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
         ref={dialog}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-labelledby="settings-title"
         className={`relative flex ${LARGE_DIALOG_SIZE} overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-topbar-popover)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5),0_4px_16px_rgba(0,0,0,0.14)]`}
       >
-        <nav aria-label={t('settings.title')} className="flex w-[264px] shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] px-3 pb-4 pt-3">
+        <nav aria-label={t('settings.title')} className="flex w-[264px] shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] bg-[var(--settings-nav)] px-3 pb-4 pt-3">
           <label className="mb-3 flex h-10 shrink-0 items-center gap-2.5 rounded-[9px] border border-[var(--border)] px-3 text-[var(--text-muted)] transition focus-within:border-[var(--text-muted)]">
             <Search size={17} strokeWidth={1.75} className="shrink-0" aria-hidden />
             <input
@@ -185,24 +151,22 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
               className="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
             />
           </label>
-          {found.includes('account') ? <AccountCard active={shownSection === 'account'} onOpen={() => go('account')} /> : null}
-          <UpdateWaiting onOpen={() => go('general/update')} />
-          {nav.map((group, i) => (
-            <div key={i} className="mt-2 flex flex-col gap-0.5 border-t border-[var(--border)] pt-2">
-              {group.map((id) => {
-                const active = shownSection === id;
-                const Icon = SECTION_ICON[id as Exclude<SettingsSection, 'account'>];
+          {nav.map((group) => (
+            <div key={group.group} className="mt-3 flex flex-col gap-0.5">
+              <div className="px-2.5 pb-1.5 text-[13px] text-[var(--text-faint)]">{t(group.group === 'help' ? 'settings.groups.help' : 'settings.title')}</div>
+              {group.sections.map((id) => {
+                const active = showing === id;
                 return (
                   <button
                     key={id}
                     type="button"
                     aria-current={active ? 'page' : undefined}
-                    onClick={() => go(id)}
+                    onClick={() => setSection(id)}
                     className={`flex h-10 min-w-0 items-center gap-3 rounded-[8px] px-2.5 text-left text-[15px] transition ${
                       active ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
                     }`}
                   >
-                    <Icon size={18} strokeWidth={1.75} className={`shrink-0 ${active ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} />
+                    <span className={`shrink-0 ${active ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{SECTION_ICON[id]}</span>
                     <span className="min-w-0 truncate">{t(`settings.sections.${id}`)}</span>
                   </button>
                 );
@@ -210,26 +174,29 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
             </div>
           ))}
           {found.length === 0 ? <p className="px-2.5 pt-4 text-[14px] text-[var(--text-faint)]">{t('settings.noResults')}</p> : null}
+          <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 px-2.5 pt-6 text-[13px] text-[var(--text-faint)]">
+            {LINKS.map((link) => (
+              <a key={link.href} href={link.href} target="_blank" rel="noreferrer" className="rounded-[4px] transition hover:text-[var(--text)]">{t(link.label)}</a>
+            ))}
+          </div>
         </nav>
 
         <div className="relative flex min-w-0 flex-1 flex-col">
-          <div className="flex shrink-0 items-center gap-1 px-4 pt-4">
-            <button type="button" onClick={back} disabled={trail.at === 0} aria-label={t('settings.back')} title={t('settings.back')} className={navButton}>
-              <ChevronLeft size={19} strokeWidth={1.75} />
-            </button>
-            <button type="button" onClick={forward} disabled={trail.at >= trail.pages.length - 1} aria-label={t('settings.forward')} title={t('settings.forward')} className={navButton}>
-              <ChevronRight size={19} strokeWidth={1.75} />
-            </button>
-            <span className="flex-1" />
-            <button type="button" onClick={onClose} aria-label={t('settings.done')} className={navButton}>
-              <X size={19} strokeWidth={1.75} />
-            </button>
-          </div>
+          <button type="button" onClick={onClose} aria-label={t('settings.done')}
+            className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+            <X size={19} strokeWidth={1.75} />
+          </button>
           {/* one column in the middle of whatever room the window gives */}
-          <div key={showing ?? 'none'} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-3">
+          <div key={showing ?? 'none'} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-9">
             <div className="mx-auto w-full max-w-[920px]">
-              {showing ? <h2 id="settings-title" className="mb-7 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{title}</h2> : null}
-              {showing ? <SettingsPageFor page={showing} go={go} /> : null}
+            {showing ? <h2 id="settings-title" className="mb-7 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{t(`settings.sections.${showing}`)}</h2> : null}
+            {showing === 'general' && <GeneralSection />}
+            {showing === 'agents' && <AgentsSection />}
+            {showing === 'models' && <ModelsSection />}
+            {showing === 'developer' && <DeveloperSection />}
+            {showing === 'shortcuts' && <ShortcutsSection />}
+            {showing === 'plugins' && <PluginsSection />}
+            {showing === 'advanced' && <AdvancedSection />}
             </div>
           </div>
         </div>
@@ -239,198 +206,35 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
   );
 }
 
-/** A page's name. */
-function pageTitle(page: PageId, t: (key: string) => string): string {
-  if (page.startsWith('general/storage/')) return t(`settings.storage.kinds.${page.split('/')[2]}`);
-  switch (page) {
-    case 'general/about': return t('settings.about.title');
-    case 'general/update': return t('settings.about.update');
-    case 'general/storage': return t('settings.storage.title');
-    case 'general/language': return t('settings.appearance.language');
-    case 'general/versions': return t('settings.versions.group');
-    case 'account': return t('settings.sections.account');
-    default: return t(`settings.sections.${page}`);
-  }
-}
-
-function SettingsPageFor({ page, go }: { page: PageId; go: (page: PageId) => void }) {
-  if (page.startsWith('general/storage/')) {
-    const kind = page.split('/')[2] as StorageKind;
-    return STORAGE_KINDS.includes(kind) ? <StorageKindPage kind={kind} /> : null;
-  }
-  switch (page) {
-    case 'account': return <AccountSection go={go} />;
-    case 'agents': return <AgentsSection />;
-    case 'models': return <ModelsSection />;
-    case 'plugins': return <PluginsSection />;
-    case 'general': return <GeneralSection go={go} />;
-    case 'general/about': return <AboutPage />;
-    case 'general/update': return <SettingsPage>{studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}</SettingsPage>;
-    case 'general/storage': return <StorageOverview onOpen={(kind) => go(`general/storage/${kind}`)} />;
-    case 'general/language': return <LanguagePage />;
-    case 'general/versions': return <SettingsPage><VersionsGroup /></SettingsPage>;
-    case 'appearance': return <AppearanceSection />;
-    case 'notifications': return <SettingsPage><NotificationsGroup /></SettingsPage>;
-    case 'playback': return <SettingsPage><PlaybackGroup /></SettingsPage>;
-    case 'shortcuts': return <ShortcutsSection />;
-    case 'developer': return <DeveloperSection />;
-    default: return null;
-  }
-}
-
-/** OpenFilm's account, signed in to or not: the person's own account at OpenFilm's service (Services' OpenFilm). */
-function useAccount() {
-  const hook = useProviders();
-  const openfilm = hook.state?.providers.find((p) => p.id === 'openfilm') ?? null;
-  return { hook, openfilm, signedIn: Boolean(openfilm?.source), waiting: hook.state?.signingIn?.provider === 'openfilm' };
-}
-
-/** A round mark for the account: the first letter of its email, or a person's outline while there is none. */
-function Avatar({ email, size }: { email: string | null; size: number }) {
-  return (
-    <span aria-hidden className="grid shrink-0 place-items-center rounded-full bg-[var(--bg-pressed)] font-medium text-[var(--text)]"
-      style={{ width: size, height: size, fontSize: size * 0.4 }}>
-      {email ? email.slice(0, 1).toUpperCase() : <UserRound size={Math.round(size * 0.52)} strokeWidth={1.75} className="text-[var(--text-muted)]" />}
-    </span>
-  );
-}
-
-/** At the top of the nav: who is signed in, or that OpenFilm is used here without an account. */
-function AccountCard({ active, onOpen }: { active: boolean; onOpen: () => void }) {
+function GeneralSection() {
   const t = useT();
-  const { openfilm, signedIn } = useAccount();
-  const email = signedIn ? openfilm?.account ?? null : null;
-  return (
-    <button type="button" onClick={onOpen} aria-current={active ? 'page' : undefined} data-settings-account=""
-      className={`flex min-w-0 items-center gap-3 rounded-[8px] px-2 py-2 text-left transition ${active ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'}`}>
-      <Avatar email={email} size={36} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14.5px] text-[var(--text)]">{email ?? (signedIn ? t('settings.account.signedIn') : t('settings.account.local'))}</span>
-        <span className="block truncate text-[12.5px] text-[var(--text-faint)]">{signedIn ? t('settings.account.signedInSub') : t('settings.account.localSub')}</span>
-      </span>
-    </button>
-  );
-}
-
-/** Under the account, while a newer OpenFilm waits (the app's update, or a newer openfilm on npm): opens Software update. */
-function UpdateWaiting({ onOpen }: { onOpen: () => void }) {
-  const t = useT();
-  const update = studioHost?.update;
-  const [waiting, setWaiting] = React.useState(false);
-  React.useEffect(() => {
-    if (update?.onState) return update.onState((s) => setWaiting(['available', 'downloading', 'staging', 'ready'].includes(s.status)));
-    let live = true;
-    void api.version().then((v) => { if (live) setWaiting(Boolean(v.newer) && !v.source); }, () => {});
-    return () => { live = false; };
-  }, [update]);
-  if (!waiting) return null;
-  return (
-    <button type="button" onClick={onOpen} className="mt-0.5 flex h-9 items-center gap-3 rounded-[8px] px-2.5 text-left text-[14px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]">
-      <RefreshCw size={16} strokeWidth={1.75} className="shrink-0 text-[var(--text-muted)]" />
-      <span className="min-w-0 flex-1 truncate">{t('settings.updateWaiting')}</span>
-      <span className="h-2 w-2 rounded-full bg-[var(--accent)]" aria-hidden />
-    </button>
-  );
-}
-
-/**
- * The account: OpenFilm is used on this computer without one, its projects and media kept here; signed in (in the
- * browser, Services' OpenFilm), OpenFilm's own services make media, paid from the account's balance.
- */
-function AccountSection({ go }: { go: (page: PageId) => void }) {
-  const t = useT();
-  const { hook, openfilm, signedIn, waiting } = useAccount();
-  const email = signedIn ? openfilm?.account ?? null : null;
-  const busy = hook.busy === 'openfilm';
-  const problem = (hook.problemFor === 'openfilm' ? hook.problem : null) ?? (hook.state?.signingIn?.errorFor === 'openfilm' ? hook.state.signingIn.error : null) ?? openfilm?.connectionError ?? null;
-  return (
-    <SettingsPage>
-      <div className="mb-10 flex items-center gap-4">
-        <Avatar email={email} size={56} />
-        <div className="min-w-0">
-          <div className="truncate text-[17px] font-semibold text-[var(--text)]">{email ?? (signedIn ? t('settings.account.signedIn') : t('settings.account.local'))}</div>
-          <p className="mt-1 text-[14px] leading-relaxed text-[var(--text-muted)]">{signedIn ? t('settings.account.signedInDesc') : t('settings.account.localDesc')}</p>
-        </div>
-      </div>
-      <SettingsGroup title={t('settings.account.openfilm')} footnote={problem ? <span className="text-[var(--err)]" role="alert">{problem}</span> : null}>
-        {signedIn ? (
-          <SettingsItem title={email ?? t('settings.account.signedIn')} description={openfilm?.source === 'env' ? t('settings.account.envNote') : t('settings.account.signedInSub')}
-            control={(
-              <>
-                {openfilm?.keysUrl ? <SettingsLinkButton href={openfilm.keysUrl}>{t('settings.account.page')}<ExternalLink size={12} /></SettingsLinkButton> : null}
-                {openfilm?.source !== 'env' ? <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.removeKey('openfilm')}>{t('settings.account.signOut')}</SettingsButton> : null}
-              </>
-            )} />
-        ) : (
-          <SettingsItem title={t('settings.account.localSub')} description={waiting ? t('settings.providers.signingIn') : t('settings.account.signInHint')}
-            control={waiting
-              ? <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.cancelSignIn('openfilm')}>{t('settings.providers.cancel')}</SettingsButton>
-              : <SettingsButton variant="primary" disabled={busy || !openfilm} onClick={() => void hook.signIn('openfilm')}>{t('settings.account.signIn')}</SettingsButton>} />
-        )}
-      </SettingsGroup>
-      <SettingsGroup title={t('settings.account.thisComputer')}>
-        <SettingsNavRow mark={mark(HardDrive)} title={t('settings.storage.title')} onClick={() => go('general/storage')} />
-        <SettingsNavRow mark={mark(Boxes)} title={t('settings.sections.models')} onClick={() => go('models')} />
-      </SettingsGroup>
-    </SettingsPage>
-  );
-}
-
-/** General: a list of its pages. */
-function GeneralSection({ go }: { go: (page: PageId) => void }) {
-  const t = useT();
-  const [language] = useLanguageChoice();
-  const [version, setVersion] = React.useState<string | null>(null);
-  React.useEffect(() => { void api.version().then((v) => setVersion(v.version), () => {}); }, []);
-  const languageName = language === 'system' ? t('settings.appearance.languageSystem') : LANGUAGES.find((l) => l.code === language)?.name ?? '';
-  return (
-    <SettingsPage note={t('settings.general.desc')}>
-      <SettingsGroup>
-        <SettingsNavRow mark={mark(Info)} title={t('settings.about.title')} value={version} onClick={() => go('general/about')} />
-        <SettingsNavRow mark={mark(RefreshCw)} title={t('settings.about.update')} onClick={() => go('general/update')} />
-        <SettingsNavRow mark={mark(HardDrive)} title={t('settings.storage.title')} onClick={() => go('general/storage')} />
-      </SettingsGroup>
-      <SettingsGroup>
-        <SettingsNavRow mark={mark(Globe)} title={t('settings.appearance.language')} value={languageName} onClick={() => go('general/language')} />
-        <SettingsNavRow mark={mark(History)} title={t('settings.versions.group')} onClick={() => go('general/versions')} />
-      </SettingsGroup>
-    </SettingsPage>
-  );
-}
-
-/** About: OpenFilm, its version, what is new in it, and where it lives. */
-function AboutPage() {
-  const t = useT();
-  const [version, setVersion] = React.useState<string | null>(null);
-  React.useEffect(() => { void api.version().then((v) => setVersion(v.version), () => {}); }, []);
-  return (
-    <SettingsPage>
-      <SettingsGroup>
-        <SettingsItem title="OpenFilm" description={version ? t('settings.about.version').replace('{version}', version) : null}>
-          {hasNotes(version ?? undefined) ? <WhatsNewLink /> : null}
-        </SettingsItem>
-      </SettingsGroup>
-      <SettingsGroup title={t('settings.about.links')}>
-        {LINKS.map((link) => (
-          <SettingsItem key={link.href} title={t(link.label)}
-            control={<SettingsLinkButton href={link.href}>{link.href.replace(/^https:\/\//, '')}<ExternalLink size={12} /></SettingsLinkButton>} />
-        ))}
-      </SettingsGroup>
-    </SettingsPage>
-  );
-}
-
-/** The language OpenFilm shows itself in: each named in itself, so a person who cannot read the one shown still finds theirs. */
-function LanguagePage() {
-  const t = useT();
+  const [mode, setMode] = useThemeMode();
   const [language, setLanguage] = useLanguageChoice();
+
   return (
     <SettingsPage>
-      <SettingsGroup>
+      <SettingsGroup title={t('settings.appearance.group')}>
+        <SettingsItem
+          title={t('settings.appearance.theme')}
+          description={t('settings.appearance.themeHint')}
+          control={(
+            <SettingsSegmented<ThemeMode>
+              label={t('settings.appearance.theme')}
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: 'system', label: t('settings.appearance.system'), icon: <Monitor size={15} /> },
+                { value: 'light', label: t('settings.appearance.light'), icon: <Sun size={15} /> },
+                { value: 'dark', label: t('settings.appearance.dark'), icon: <Moon size={15} /> },
+              ]}
+            />
+          )}
+        />
         <SettingsItem
           title={t('settings.appearance.language')}
           description={t('settings.appearance.languageHint')}
           control={(
+            /* each language named in itself, so a person who cannot read the one shown still finds theirs */
             <SettingsSelect<LanguageChoice>
               label={t('settings.appearance.language')}
               value={language}
@@ -443,59 +247,8 @@ function LanguagePage() {
           )}
         />
       </SettingsGroup>
-    </SettingsPage>
-  );
-}
-
-/** A little window in a theme's colors, as the theme picker shows each (System: light and dark, half each). */
-function ThemePicture({ mode }: { mode: ThemeMode }) {
-  const pane = (dark: boolean) => (
-    <span className="absolute inset-0 flex flex-col gap-1 p-2" style={{ background: dark ? '#1e1e20' : '#f2f2f4' }}>
-      <span className="h-1.5 w-8 rounded-full" style={{ background: dark ? '#3a3a3e' : '#d6d6da' }} />
-      <span className="flex flex-1 gap-1">
-        <span className="w-4 rounded-[3px]" style={{ background: dark ? '#2b2b2e' : '#e3e3e7' }} />
-        <span className="flex-1 rounded-[3px]" style={{ background: dark ? '#2b2b2e' : '#ffffff' }} />
-      </span>
-    </span>
-  );
-  return (
-    <span className="relative block h-[66px] w-[100px] overflow-hidden rounded-[8px] ring-1 ring-[var(--border)]">
-      {mode === 'dark' ? pane(true) : pane(false)}
-      {mode === 'system' ? <span className="absolute inset-0" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}>{pane(true)}</span> : null}
-    </span>
-  );
-}
-
-/** Appearance: the theme, each choice a picture of it; and the library's categories, in their order. */
-function AppearanceSection() {
-  const t = useT();
-  const [mode, setMode] = useThemeMode();
-  const options: Array<{ value: ThemeMode; label: string }> = [
-    { value: 'system', label: t('settings.appearance.system') },
-    { value: 'light', label: t('settings.appearance.light') },
-    { value: 'dark', label: t('settings.appearance.dark') },
-  ];
-  return (
-    <SettingsPage>
-      <SettingsGroup>
-        <SettingsItem title={t('settings.appearance.theme')} description={t('settings.appearance.themeHint')}>
-          <div role="radiogroup" aria-label={t('settings.appearance.theme')} className="flex flex-wrap gap-5 pb-1">
-            {options.map((option) => {
-              const on = option.value === mode;
-              return (
-                <button key={option.value} type="button" role="radio" aria-checked={on} aria-label={option.label} onClick={() => { if (!on) setMode(option.value); }}
-                  className="flex flex-col items-center gap-2 rounded-[10px] text-[13.5px]">
-                  <span className={`rounded-[10px] p-[3px] ring-2 transition ${on ? 'ring-[var(--text-muted)]' : 'ring-transparent hover:ring-[var(--border-strong)]'}`}>
-                    <ThemePicture mode={option.value} />
-                  </span>
-                  <span aria-hidden className={`${on ? 'font-medium text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{option.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </SettingsItem>
-      </SettingsGroup>
-      <LibraryCategoriesGroup />
+      <StorageGroup />
+      {studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}
     </SettingsPage>
   );
 }
@@ -593,6 +346,20 @@ function VersionsGroup() {
         control={<SettingsSwitch checked={prefs.autoVersions === true} onChange={(on) => change({ autoVersions: on })} label={t('settings.versions.auto')} />}
       />
     </SettingsGroup>
+  );
+}
+
+/** What is already set for the best experience, for whoever wants it otherwise: versions saved on their own
+ * (VersionsGroup), how the preview plays (PlaybackGroup), the library's categories (LibraryCategoriesGroup). */
+function AdvancedSection() {
+  const t = useT();
+  return (
+    <SettingsPage note={t('settings.advanced.intro')}>
+      {studioHost?.notifications ? <NotificationsGroup /> : null}
+      <VersionsGroup />
+      <PlaybackGroup />
+      <LibraryCategoriesGroup />
+    </SettingsPage>
   );
 }
 
