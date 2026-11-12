@@ -257,7 +257,7 @@ export const api = {
   ),
   /** a thing of Saved (its `saved/` path) used in the project: a file imported (its place), or a bundle's files brought in
       and the clip, a group's clips or the page to put on the timeline */
-  takeSaved: (id: string, path: string) => call<{ clip: Record<string, unknown> & { src: string } } | { clips: SavedGroupClip[] } | { path: string }>(
+  takeSaved: (id: string, path: string) => call<{ clip: Record<string, unknown> & { src: string }; keyframes?: Record<string, string> } | { clips: SavedGroupClip[]; keyframes?: Record<string, string> } | { path: string }>(
     `${p(id)}/saved/take`, { method: 'POST', json: { path } },
   ),
   /** a page of the project as text, with its rev (studio/server/page-text.mjs) */

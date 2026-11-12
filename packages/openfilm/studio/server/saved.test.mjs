@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { makeFolder, moveFile } from './files.mjs';
-import { bringClip, libraryRel, listLibrary, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { bringClip, libraryRel, listLibrary, saveClip, saveFile, saveGroup, takeSaved, fittedKeyframes } from './saved.mjs';
 
 let saved;
 let before;
@@ -177,4 +177,66 @@ test('a filter of OpenFilm\'s library is taken as its layer page under the filte
   assert.ok(existsSync(join(root, 'saved/openfilm/filters-bw/layer.html')));
   /* the layer itself, and a folder of the filters' pictures, are what they are */
   await assert.rejects(takeSaved(root, 'openfilm/filters/nothing-here/deeper'));
+});
+
+/** A project whose clips move by @keyframes in film.html's style. */
+function moving(extra = '') {
+  const root = mkdtempSync(join(tmpdir(), 'of-saved-moving-'));
+  writeFileSync(join(root, 'a.jpg'), 'jpg');
+  writeFileSync(join(root, 'film.html'), `<meta name="viewport" content="width=1920, height=1080">
+<style>
+@keyframes pop { from { scale: 2; } to { scale: 1; } }
+@keyframes unused { from { opacity: 0; } to { opacity: 1; } }
+${extra}
+</style>
+<section>
+  <img id="one" src="a.jpg#t=0,2" style="animation: pop .5s ease-out both">
+  <img id="two" src="a.jpg#t=0,2" at="2">
+</section>
+`);
+  return root;
+}
+
+test('saved clips keep the @keyframes they play, and only those', async () => {
+  const root = moving();
+  const group = await saveGroup(root, ['one', 'two'], { name: 'Moving' });
+  const about = JSON.parse(readFileSync(join(saved, 'Moving', 'saved.json'), 'utf8'));
+  assert.deepEqual(Object.keys(about.keyframes), ['pop']);
+  await saveClip(root, 'one', { name: 'One' });
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(saved, 'One', 'saved.json'), 'utf8')).keyframes), ['pop']);
+  await saveClip(root, 'two', { name: 'Two' });
+  assert.equal(JSON.parse(readFileSync(join(saved, 'Two', 'saved.json'), 'utf8')).keyframes, undefined);
+
+  const taken = await takeSaved(moving(), group);
+  assert.deepEqual(Object.keys(taken.keyframes), ['pop']);
+  assert.match(taken.clips[0].clip.style, /animation: pop /);
+});
+
+test('a saved clip\'s @keyframes never change what the film\'s own clips play', async () => {
+  const group = await saveGroup(moving(), ['one'], { name: 'Moving' });
+  /* a film with another `pop`: the bundle's takes a name of its own, its clip with it */
+  const root = moving();
+  writeFileSync(join(root, 'film.html'), readFileSync(join(root, 'film.html'), 'utf8').replace('scale: 2;', 'scale: 3;'));
+  const taken = await takeSaved(root, group);
+  assert.deepEqual(Object.keys(taken.keyframes), ['pop-2']);
+  assert.match(taken.clips[0].clip.style, /animation: pop-2 /);
+  assert.match(taken.keyframes['pop-2'], /scale: 2/);
+  /* the same `pop` already there: nothing new */
+  const same = await takeSaved(moving(), group);
+  assert.deepEqual(Object.keys(same.keyframes), ['pop']);
+});
+
+test('a renamed @keyframes changes only the name an animation plays, not a property or a url that reads the same', () => {
+  const { keyframes, named } = fittedKeyframes({ rotate: 'to { rotate: 1turn; }' }, { rotate: 'to { rotate: -1turn; }' });
+  assert.deepEqual(Object.keys(keyframes), ['rotate-2']);
+  const clip = named({ src: 'a.jpg', style: 'rotate: 10deg; background: url(rotate.png); animation: rotate 1s both' });
+  assert.match(clip.style, /rotate: 10deg/);
+  assert.match(clip.style, /url\(rotate\.png\)/);
+  assert.match(clip.style, /animation: rotate-2 1s both/);
+});
+
+test('a clip\'s own motion keyframes keep their shape when renamed, so they are still read as a clip\'s own', () => {
+  const { keyframes, named } = fittedKeyframes({ 'x--scale': 'from { scale: 2; } to { scale: 1; }' }, { 'x--scale': 'from { scale: 3; } to { scale: 1; }' });
+  assert.deepEqual(Object.keys(keyframes), ['x-2--scale']);
+  assert.match(named({ src: 'a.jpg', style: 'animation: x--scale 1s both' }).style, /animation: x-2--scale 1s both/);
 });

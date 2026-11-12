@@ -29,3 +29,12 @@ it('a group dropped on a track goes in above it; on a new track, there; anywhere
   assert.equal(groupInsertAt({ insert: 4 }), 4);
   assert.equal(groupInsertAt(undefined), 0);
 });
+
+it('a group\'s @keyframes go in before its clips, and nothing is added when it plays none', () => {
+  const group: SavedGroupClip[] = [{ track: 0, at: 0, clip: { src: 's/a.jpg', style: 'animation: pop 1s both' } }];
+  const ops = groupInsertOps(group, 0, 0, [] as unknown as EditModel, { pop: 'from { scale: 2 } to { scale: 1 }' });
+  assert.deepEqual(ops[0], { op: 'keyframes', set: { pop: 'from { scale: 2 } to { scale: 1 }' } });
+  assert.equal(ops[1]?.op, 'insert');
+  assert.equal(groupInsertOps(group, 0, 0, [] as unknown as EditModel).length, 1);
+  assert.equal(groupInsertOps(group, 0, 0, [] as unknown as EditModel, {}).length, 1);
+});

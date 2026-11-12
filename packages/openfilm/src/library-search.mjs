@@ -457,6 +457,7 @@ async function takeOne(verb, asked) {
   if ('clips' in taken) {
     const lines = [`In film.html, on ${new Set(taken.clips.map((c) => c.track)).size} tracks of their own, top first, from the second it starts (add it to each \`at\`):`];
     for (const c of taken.clips) lines.push(`  track ${c.track + 1}: ${clipTag(/** @type {any} */ ({ ...c.clip, at: c.at }))}`);
+    for (const [name, body] of Object.entries(taken.keyframes ?? {})) lines.push(`In film.html's <style>: @keyframes ${name} { ${body} }`);
     if (item.slots) lines.push(`Its ${item.slots} clips with data-slot are places for pictures, each its example: put the film's own there.`);
     return { code: 0, lines };
   }

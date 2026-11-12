@@ -154,7 +154,7 @@ import type { PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
 import { SAVED, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { batchMap } from '@/lib/batch-map';
-import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
+import { groupInsertAt, groupInsertOps, keyframesOps } from '@/lib/saved-insert';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
 import type { MaskSession } from '@/lib/stage-mask';
 import type { MaskShape } from '@/lib/clip-mask';
@@ -1686,7 +1686,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     /* its clips named from a folder under parts/ (any: they are all as deep) */
     const clips = (await templateClips(`${BUILT_IN}/${item.id}`, taken.clips, false))
       .map((c) => ({ ...c, clip: { ...c.clip, src: srcInto(String(c.clip.src), `${PARTS}/${name}`) } }));
-    const film = applyOps({ stage: { ...(stageRef.current ?? { w: 1920, h: 1080 }) }, tracks: [] } as unknown as FilmValue, groupInsertOps(clips, 0, 0, []) as never) as FilmValue;
+    const film = applyOps({ stage: { ...(stageRef.current ?? { w: 1920, h: 1080 }) }, tracks: [] } as unknown as FilmValue, groupInsertOps(clips, 0, 0, [], taken.keyframes) as never) as FilmValue;
     return { film, name, length: filmLength(film.tracks as never) };
   }, [projectId, templateClips, toast]);
   const insertTemplate = React.useCallback(async (item: LibraryItem, at: number, track: Parameters<typeof groupInsertAt>[0]) => {
@@ -1718,7 +1718,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       let taken: Awaited<ReturnType<typeof api.takeSaved>>;
       try { taken = await api.takeSaved(projectId, from); } catch (e) { return e instanceof Error ? e.message : String(e); }
       /* a group: its tracks new ones, where it was dropped */
-      if ('clips' in taken) return edit(groupInsertOps(await templateClips(file.saved, taken.clips), plan.at, groupInsertAt(plan.track), editModel()), 'history.stepDrop');
+      if ('clips' in taken) return edit(groupInsertOps(await templateClips(file.saved, taken.clips), plan.at, groupInsertAt(plan.track), editModel(), taken.keyframes), 'history.stepDrop');
       if ('path' in taken) {
         const { saved: _from, ...rest } = file;
         return dropAssetRef.current({ ...rest, path: taken.path }, target, atMs);
@@ -1809,7 +1809,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     }
     /* a group: on new tracks at the top, from the playhead */
     if ('clips' in taken) {
-      const failed = await edit(groupInsertOps(taken.clips, snapToFrame(timeRef.current) / 1000, 0, editModel()), 'history.stepDrop');
+      const failed = await edit(groupInsertOps(taken.clips, snapToFrame(timeRef.current) / 1000, 0, editModel(), taken.keyframes), 'history.stepDrop');
       if (failed) toast.show(failed);
       return;
     }
@@ -1817,7 +1817,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const plan = placeMedia(editModel(), { file, range: null, target, at: snapToFrame(timeRef.current), ...switchesOf(readTimelinePrefs()), stage: stageRef.current });
     if ('error' in plan) { toast.show(plan.error === 'locked' ? t('timeline.trackLocked') : t('timeline.dropNotClip')); return; }
     const clip = taken.clip;
-    const failed = await edit(plan.ops.map((op) => (op.op === 'insert' ? { ...op, clip: clip as never } : op)), 'history.stepDrop');
+    const failed = await edit([...keyframesOps(taken.keyframes), ...plan.ops.map((op) => (op.op === 'insert' ? { ...op, clip: clip as never } : op))], 'history.stepDrop');
     if (failed) toast.show(failed);
   }, [projectId, editModel, edit, addMedia, t, toast]);
   const placeFromSource = React.useCallback((mode: EditMode, range: SourceRange | null) => {
@@ -1991,7 +1991,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       }
       /* a template: its tracks new ones at the top, from the playhead, laid out for this picture */
       if ('clips' in taken) {
-        const failed = await edit(groupInsertOps(await templateClips(`${BUILT_IN}/${item.id}`, taken.clips), at, groupInsertAt(track), editModel()), 'history.stepDrop');
+        const failed = await edit(groupInsertOps(await templateClips(`${BUILT_IN}/${item.id}`, taken.clips), at, groupInsertAt(track), editModel(), taken.keyframes), 'history.stepDrop');
         if (failed) { toast.show(failed); return; }
         toast.show(t('assetDrawer.added').replace('{name}', name));
         pickAdded(before);
