@@ -512,12 +512,13 @@ async function captionFileCues(root, src, withLook = false) {
   if (text == null) return null;
   const vtt = readVtt(text);
   const base = new Map();
+  let render = vtt.regions.length > 0;
   /** @type {Map<string, Map<string, string>>} */
   const overrides = new Map();
   if (withLook) for (const { prelude, block } of cssRules(vtt.styles.join('\n'))) {
     const selector = prelude.trim();
     const id = /^::cue\(\s*#((?:\\.|[^\\\s)])+)\s*\)$/.exec(selector)?.[1]?.replace(/\\(.)/g, '$1');
-    if (selector !== '::cue' && !id) continue;
+    if (selector !== '::cue' && !id) { render = true; continue; }
     const rule = id ? overrides.get(id) ?? new Map() : base;
     for (const [key, value] of declarations(block)) rule.set(key, value);
     if (id) overrides.set(id, rule);
@@ -525,6 +526,7 @@ async function captionFileCues(root, src, withLook = false) {
   return vtt.cues.map((c) => {
     const own = overrides.get(c.id);
     return { startMs: Math.round(c.start * 1000), durMs: Math.round((c.end - c.start) * 1000), text: cuePlain(c.text).trim(),
-      ...(withLook ? { draftLook: { css: Object.fromEntries([...base, ...(own ?? [])]), align: cueSettings(c.settings).align } } : {}) };
+      ...(withLook ? { draftLook: { css: Object.fromEntries([...base, ...(own ?? [])]), align: cueSettings(c.settings).align,
+        settings: c.settings, ...(render || /<(?!\/)/.test(c.text) ? { render: true } : {}) } } : {}) };
   });
 }

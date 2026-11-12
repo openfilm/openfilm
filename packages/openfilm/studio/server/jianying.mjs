@@ -31,7 +31,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { filmSubtitleLanguageOf } from './film-subtitle.mjs';
 import { declarations } from '../../src/film-doc.mjs';
-import { jianyingCaptionStyle } from './jianying-captions.mjs';
+import { captionPosition, jianyingCaptionStyle } from './jianying-captions.mjs';
 
 /**
  * @typedef {import('./nle.mjs').NleTimeline} NleTimeline
@@ -162,7 +162,7 @@ const round6 = (/** @type {number} */ n) => { const r = Math.round(n * 1e6) / 1e
  * folder `root`.
  * @param {NleTimeline} timeline
  * @param {{ app?: DraftApp, name: string, folder: string, root: string, cues?: readonly JianyingCue[], language?: string | null,
- *   fonts?: ReadonlyMap<string, import('./jianying-captions.mjs').DraftFont>, now?: number }} opts
+ *   fonts?: ReadonlyMap<string, import('./jianying-captions.mjs').DraftFont>, captionBackup?: boolean, now?: number }} opts
  */
 export function jianyingDraft(timeline, opts) {
   const platform = PLATFORM[opts.app ?? 'jianying'];
@@ -363,7 +363,8 @@ export function jianyingDraft(timeline, opts) {
     const index = renderIndex++;
     const frame = (/** @type {number} */ ms) => Math.round((ms / 1000) * fps);
     tracks.push({
-      attribute: 0, flag: 1, id: hex(), is_default_name: false, name: 'Subtitles', type: 'text',
+      attribute: opts.captionBackup ? 1 : 0, flag: 1, id: hex(), is_default_name: false,
+      name: opts.captionBackup ? 'Subtitles (editable backup)' : 'Subtitles', type: 'text',
       segments: cues.map((cue) => {
         const id = hex();
         const text = cue.text.trim();
@@ -379,9 +380,11 @@ export function jianyingDraft(timeline, opts) {
           }),
         });
         const from = frame(cue.startMs), to = Math.max(from + 1, frame(cue.startMs + cue.durMs));
+        const position = captionPosition(cue.draftLook, timeline);
         return segment({
           material_id: id, target_timerange: span(from, to), source_timerange: null, extra_material_refs: [],
-          clip: clipSettings(1, 0, -0.8), uniform_scale: { on: true, value: 1 }, render_index: index,
+          clip: clipSettings(1, position.x, position.y), visible: !opts.captionBackup,
+          uniform_scale: { on: true, value: 1 }, render_index: index,
         });
       }),
     });

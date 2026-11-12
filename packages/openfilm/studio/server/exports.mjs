@@ -85,7 +85,7 @@ import { fcpxmlDocument } from './fcpxml.mjs';
 import { markHevcStraightAlpha } from './hevc-alpha.mjs';
 import { frameSpan, NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
 import { draftsRoot, jianyingClipLook, jianyingDraft } from './jianying.mjs';
-import { jianyingCaptionFonts } from './jianying-captions.mjs';
+import { captionNeedsRendering, jianyingCaptionFonts } from './jianying-captions.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
 import { subtitlesForExport } from './captions.mjs';
 import { burned, even, frameBox, frameRatio, stageOf } from '../../src/burn.mjs';
@@ -559,8 +559,26 @@ async function filmElsewhere(root, dir, value) {
   const own = existsSync(join(root, FILM_FILE)) ? readFileSync(join(root, FILM_FILE), 'utf8') : '';
   /* the head's addresses: a stylesheet's href, and url() in its styles (and in a clip's own) */
   const head = urls(own.replace(/(<link\b[^>]*\bhref\s*=\s*)(["'])([^"']*)\2/gi, (_, a, q, /** @type {string} */ path) => `${a}${q}${back(path)}${q}`));
-  const moved = { ...value, tracks: value.tracks.map((t) => ({ ...t, clips: t.clips.map((c) => ({ ...c, src: back(c.src), ...(typeof c.style === 'string' ? { style: urls(c.style) } : {}) })) })) };
+  const moved = { ...value, tracks: value.tracks.map((t) => ({ ...t,
+    ...(t.captions ? { captions: { ...t.captions, src: back(t.captions.src) } } : {}),
+    clips: t.clips.map((c) => ({ ...c, src: back(c.src), ...(typeof c.style === 'string' ? { style: urls(c.style) } : {}) })) })) };
   await writeFile(join(dir, FILM_FILE), filmHtml(moved, head));
+}
+
+/** The original caption tracks over a transparent clock, preserving their CSS, markup and project-relative fonts.
+ * @param {string} root @param {import('../../src/film-doc.mjs').FilmDoc} doc @param {number} duration */
+async function captionFilm(root, doc, duration) {
+  const dir = join(root, '.film', 'cache', 'export', `clip-${process.pid}-${randomBytes(4).toString('hex')}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    const clock = join(dir, 'clock.html');
+    await writeFile(clock, `<!doctype html><style>html,body{margin:0;background:transparent}</style><script>window.film={width:${doc.stage.w},height:${doc.stage.h},duration:${duration},frame(){}}</script>`);
+    await filmElsewhere(root, dir, { stage: doc.stage, tracks: [
+      ...doc.tracks.filter((track) => track.captions && !track.hidden).map((track) => ({ clips: [], captions: track.captions })),
+      { clips: [{ id: 'clock', src: '/' + relative(root, clock).split(sep).join('/'), time: [0, duration] }] },
+    ] });
+    return { dir, remove: () => tidy(dir) };
+  } catch (error) { await tidy(dir); throw error; }
 }
 
 /**
@@ -1269,6 +1287,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       if (fcp) throw error;
       return { cues: [], style: null };
     });
+    const fonts = app ? await jianyingCaptionFonts(cues) : new Map();
+    const captionBackup = Boolean(app && cues.some((cue) => captionNeedsRendering(cue.draftLook, fonts)));
+    const captionId = `captions-${randomBytes(4).toString('hex')}`;
     const scratch = join(root, '.film', 'cache', 'export', `nle-${process.pid}-${randomBytes(4).toString('hex')}`);
     const final = freeFile(dir, baseName(job.name, ask), '');
     const staging = join(dir, `.${basename(final)}.partial-${process.pid}-${job.id}`);
@@ -1366,6 +1387,13 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       }
       if (!pictures.length && !sounds.length) throw new ExportError('the film is empty');
 
+      /* The browser remains the authority for caption layouts, project fonts and effects a native text cannot draw.
+         Keep the words as a disabled native track, alongside the separate transparent appearance layer. */
+      if (captionBackup) {
+        pictures.push({ id: captionId, kind: 'page', src: 'captions', path: join(scratch, 'captions.html'),
+          at: 0, end: duration, from: 0, speed: 1, track: -1, hidden: false, facts: null });
+      }
+
       await mkdir(join(staging, 'media'), { recursive: true });
       /* stems: each role's sound mixed (what is heard: muted tracks and silenced clips out) */
       /** @type {Map<import('./nle.mjs').SoundRole, string>} */
@@ -1456,7 +1484,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         });
         let clear = true;
         try {
-          const one = fullSource ? await sourceClipFilm(root, p, native, doc)
+          const one = id === captionId ? await captionFilm(root, doc, duration)
+            : fullSource ? await sourceClipFilm(root, p, native, doc)
             : await clipFilm(root, id, { change: { time, disabled: undefined }, doc });
           try {
             /** @param {Record<string, unknown>} how */
@@ -1561,6 +1590,13 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       }
 
       update(job, { phase: 'finishing', progress: 0.98 });
+      if (captionBackup) await writeFile(join(staging, 'Caption appearance.txt'), [
+        'Subtitle appearance and editable text', '',
+        'The captions video layer preserves the original subtitle positions, project fonts and effects with transparency.',
+        'The hidden "Subtitles (editable backup)" text track retains the words and timing.',
+        'To edit the text in this editor, hide the captions video layer and enable the text backup, then choose its font and style.',
+        'Editing the backup does not update the rendered appearance layer. Re-export from the original project to keep its exact style.', '',
+      ].join('\n'), 'utf8');
       if (ask.footage === 'source') await writeFile(join(staging, 'Original media.txt'), [
         'Original-media editing project', '',
         ask.media === 'link' ? 'Original media is referenced at its existing paths. Keep those files available; relink them if moved.'
@@ -1572,8 +1608,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       if (app) {
         /* the app on Windows reads draft_content.json, on a Mac draft_info.json: the same draft in both */
         /* the subtitles' language: a translation shown alone is in its own; else told from the words (jianying.mjs) */
-        const fonts = await jianyingCaptionFonts(cues);
-        const draft = jianyingDraft(timeline, { app, name: basename(final), folder: final, root: dir, cues, fonts, language: shown?.bilingual ? null : shown?.language });
+        const draft = jianyingDraft(timeline, { app, name: basename(final), folder: final, root: dir, cues, fonts, captionBackup,
+          language: shown?.bilingual ? null : shown?.language });
         const info = JSON.stringify(draft.info);
         await writeFile(join(staging, 'draft_info.json'), info, 'utf8');
         await writeFile(join(staging, 'draft_content.json'), info, 'utf8');
