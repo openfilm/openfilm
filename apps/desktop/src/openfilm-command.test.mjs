@@ -38,3 +38,30 @@ test('a script run after as-node.mjs is the main module, with its arguments, and
     assert.deepEqual(out, { main: true, argv: [script, '--flag', 'x'], runAsNode: null });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('a Windows command doubles % and leaves & alone in env, ffmpeg and the node and CLI paths', () => {
+  const cmd = commandScriptWindows('C:\\R&D%\\node.exe', 'C:\\R&D%\\openfilm.mjs', {
+    ffmpeg: 'C:\\R&D\\ffmpeg',
+    env: { PLAYWRIGHT_BROWSERS_PATH: 'C:\\OpenFilm\\R&D%\\pw' },
+  });
+  assert.match(cmd, /set "PLAYWRIGHT_BROWSERS_PATH=C:\\OpenFilm\\R&D%%\\pw"\r\n/);
+  assert.match(cmd, /set "PATH=C:\\R&D\\ffmpeg;%PATH%"\r\n/, 'the appended %PATH% stays one expansion');
+  assert.match(cmd, /"C:\\R&D%%\\node\.exe" "C:\\R&D%%\\openfilm\.mjs" %\*\r\n$/, 'the node and CLI come from the same folder');
+});
+
+test('the generated .cmd keeps % and & literal when cmd.exe runs it', { skip: process.platform !== 'win32' }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'openfilm-cmd-'));
+  try {
+    /* stands in for the app's Node: prints back what the command set for it */
+    const show = join(dir, 'show.cmd');
+    writeFileSync(show, '@echo off\r\nset PLAYWRIGHT_BROWSERS_PATH\r\nset PATH\r\n');
+    const script = join(dir, 'openfilm.cmd');
+    writeFileSync(script, commandScriptWindows(show, join(dir, 'openfilm.mjs'), {
+      ffmpeg: 'C:\\R&D\\ffmpeg',
+      env: { PLAYWRIGHT_BROWSERS_PATH: 'C:\\OpenFilm\\R&D%\\pw' },
+    }));
+    const out = execFileSync('cmd', ['/c', script], { encoding: 'utf8' });
+    assert.match(out, /PLAYWRIGHT_BROWSERS_PATH=C:\\OpenFilm\\R&D%\\pw/);
+    assert.match(out, /^Path=C:\\R&D\\ffmpeg;/im, 'cmd prints the variable as Path');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
