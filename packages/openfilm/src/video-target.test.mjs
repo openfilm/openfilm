@@ -4,10 +4,11 @@ import { targetBitrate, targetBytes, validTarget } from './video-target.mjs';
 
 test('a size budget reserves audio and mux overhead, using the selected duration', () => {
   assert.equal(targetBitrate({ kind: 'bitrate', value: 3 }, 20, 192000), 3000000);
-  assert.equal(targetBitrate({ kind: 'size', value: 10.1 }, 20, 192000), 3808000);
-  assert.equal(targetBitrate({ kind: 'size', value: 10.1 }, 10, 0), 8000000);
+  assert.equal(targetBitrate({ kind: 'size', value: 10.1 }, 20, 192000), 4002304);
+  assert.equal(targetBitrate({ kind: 'size', value: 10.1 }, 10, 0), 8388608);
   assert.equal(targetBytes({ kind: 'bitrate', value: 3 }, 20, 192000), 8059800);
-  assert.equal(targetBytes({ kind: 'size', value: 10.1 }, 20, 192000), 10100000);
+  // MB are 1024 × 1024 bytes, as the finished export shows its size: 10.1 MB reads back as 10.1 MB.
+  assert.equal(targetBytes({ kind: 'size', value: 10.1 }, 20, 192000), Math.round(10.1 * 1024 * 1024));
 });
 
 test('bad targets and sizes too small for the sound are refused, never clamped silently', () => {

@@ -132,5 +132,5 @@ test('a delivery bitrate estimate includes sound and follows the exported durati
   const spec = { codec: 'h264' as const, size: { w: 1920, h: 1080 }, fps: 30, quality: 'high' as const, durationMs: 20000, audio: true, target: { kind: 'bitrate' as const, value: 3 } };
   assert.deepEqual(exportEstimateBytes(spec), [8059800, 8059800]);
   assert.deepEqual(exportEstimateBytes({ ...spec, audio: false }), [7575000, 7575000]);
-  assert.deepEqual(exportEstimateBytes({ ...spec, target: { kind: 'size', value: 10.1 } }), [10100000, 10100000]);
+  assert.deepEqual(exportEstimateBytes({ ...spec, target: { kind: 'size', value: 10.1 } }), [10590618, 10590618], '10.1 MB of 1024 × 1024 bytes');
 });

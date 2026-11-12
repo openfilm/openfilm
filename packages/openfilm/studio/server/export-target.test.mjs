@@ -62,8 +62,8 @@ window.film={width:320,height:180,duration:24,frame(t){let n=Math.floor(t*15)+1;
     const size = await run({ codec: 'h264', target: { kind: 'size', value: 1.01 }, ranges: [[20, 99], [0, 8]] });
     assert.equal(Number(size.video.nb_frames), 180);
     assert.ok(size.meta.streams.some((s) => s.codec_type === 'audio'));
-    assert.ok(Math.abs(statSync(size.job.out).size / 1010000 - 1) < .3, String(statSync(size.job.out).size));
-    t.diagnostic(`Size target 1010000 bytes: measured ${statSync(size.job.out).size} bytes over 12 seconds with sound`);
+    assert.ok(Math.abs(statSync(size.job.out).size / (1.01 * 1024 * 1024) - 1) < .3, String(statSync(size.job.out).size));
+    t.diagnostic(`Size target ${Math.round(1.01 * 1024 * 1024)} bytes: measured ${statSync(size.job.out).size} bytes over 12 seconds with sound`);
     const batch = queue.startAll(project, { folder: root, jobs: [0.2, 0.6].map((value) => ({
       kind: 'video', codec: 'h264', fps: 15, range: [0, 4], audio: false, target: { kind: 'bitrate', value },
     })) });

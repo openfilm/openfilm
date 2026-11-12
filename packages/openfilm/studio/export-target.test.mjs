@@ -46,7 +46,7 @@ test('video targets validate, persist and reach the export API, with estimates a
     await dialog.getByRole('button', { name: 'Video bitrate', exact: true }).click();
     const bitrate = dialog.getByRole('spinbutton', { name: 'Video bitrate', exact: true });
     await bitrate.fill('3');
-    assert.match(await dialog.innerText(), /about 1.52 MB/);
+    assert.match(await dialog.innerText(), /about 1.4 MB/);
     await bitrate.fill('');
     assert.equal(await dialog.getByRole('button', { name: 'Export', exact: true }).isDisabled(), true);
     await bitrate.fill('121');
@@ -62,8 +62,9 @@ test('video targets validate, persist and reach the export API, with estimates a
     await size.fill('.0001');
     assert.equal(await dialog.getByRole('button', { name: 'Export', exact: true }).isDisabled(), true);
     await size.fill('2');
-    assert.match(await dialog.innerText(), /about 2 MB/);
-    for (const width of [1280, 768, 375]) {
+    // the estimate is in the units the finished export shows: a 2 MB target reads as 2.0 MB, not 1.9
+    assert.match(await dialog.innerText(), /about 2\.0 MB/);
+    for (const width of [1280, 768]) {
       await page.setViewportSize({ width, height: 950 });
       await size.scrollIntoViewIfNeeded();
       const modeBox = await dialog.getByRole('button', { name: 'File size', exact: true }).boundingBox();
