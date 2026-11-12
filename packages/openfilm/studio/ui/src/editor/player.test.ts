@@ -93,6 +93,7 @@ test('a sound longer than LONG_SOUND is streamed by a media element, not decoded
   assert.equal(decodes(3), true);
   assert.equal(decodes(LONG_SOUND), true);
   assert.equal(decodes(LONG_SOUND + 1), false);
+  assert.equal(decodes(20 * 60), true, 'a 20-minute talking head is still decoded, sample for sample in sync');
   assert.equal(decodes(13436), false, 'a 3 h 43 min recording: some 5 GB decoded');
   assert.equal(decodes(null), true, 'not told: decoded, as before');
   assert.equal(decodes(Number.NaN), true);

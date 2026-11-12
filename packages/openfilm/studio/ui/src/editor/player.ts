@@ -42,9 +42,11 @@ const DRIFT = 0.12;
 const SETTLE_MS = 1000;
 /**
  * Sounds longer than this (s) are not decoded: a media element plays them as they stream (see voice). Decoded, a
- * sound is held whole at the context's rate, 32-bit, each channel: a 3-hour recording would be some 5 GB.
+ * sound is held whole at the context's rate, 32-bit, each channel: a 3-hour recording would be some 5 GB. Up to
+ * 30 minutes (about 690 MB in stereo at 48 kHz) it is still decoded, so a talking head of that length stays in sync
+ * sample for sample.
  */
-export const LONG_SOUND = 10 * 60;
+export const LONG_SOUND = 30 * 60;
 /** The header the film's origin tells a sound's length in (s), see studio/server/pages.mjs SOUND_LENGTH. */
 const SOUND_LENGTH = 'x-film-sound-length';
 
