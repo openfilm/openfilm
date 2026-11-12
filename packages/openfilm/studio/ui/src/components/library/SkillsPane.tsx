@@ -5,8 +5,9 @@
  * Installed, each skill is a line: its mark (its cover, else its icon), its title, what it is for under it, and its
  * switch: on, agents take it up when it fits; off, no agent gets it. A click opens its page (SkillPage), which has its
  * uid. They are in parts, each headed with its count: the person's own first (theirs, and this project's), OpenFilm's
- * system skills (how a film is made, its media, its canvas, in the order agents are given them), the community's
- * installed, then each agent's own under that agent's name (off until let in). The person's own and the community's
+ * and the community's installed, then each agent's own under that agent's name (off until let in). OpenFilm's own
+ * system skills (how a film is made, its media, its canvas) are not here: each is with the plugin it goes with
+ * (PluginsPane). The person's own and the community's
  * are there with none too, as an invitation: Import, and Browse community (Discover). Import is beside the search too
  * (LibraryDrawer). Each part folds under its head (kept while Studio is open). Discover is a gallery of tiles to
  * browse: cover, title, what it is for; under the pointer a star and a "+", which names it in the chat's message (its
@@ -88,12 +89,11 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
   const agents = useAgentSkills(installed);
   const q = query.trim().toLowerCase();
   const found = skills
+    .filter((k) => !k.core)
     .filter((k) => !q || [words(k).title, words(k).summary, k.name, k.uid].some((w) => w?.toLowerCase().includes(q)))
     .sort(byOrder);
-  /* OpenFilm's own in the order agents are given them, as the API lists them */
-  const system = installed ? skills.filter((k) => k.core && found.includes(k)) : [];
   /* Discover's installed: OpenFilm's own, then the community's (each made by someone else, under their name) */
-  const listed = installed ? found.filter((k) => !k.core && k.source === 'official' && installedOf(k)) : [];
+  const listed = installed ? found.filter((k) => k.source === 'official' && installedOf(k)) : [];
   const official = listed.filter((k) => !communityOf(k));
   const community = listed.filter(communityOf);
   const mine = installed ? found.filter((k) => k.source !== 'official') : [];
@@ -180,7 +180,6 @@ export function SkillsPane({ line, query, projectId, opened, onOpen, onDiscover 
         text={t(importSkill ? 'assetDrawer.mineEmpty' : 'assetDrawer.mineEmptyCli')}
         {...(importSkill ? { action: { label: t('assetDrawer.mineImport'), run: importSkill } } : {})} />,
     }) },
-    { key: 'system', title: t('assetDrawer.skillsSystem'), lines: system.map(lineOf) },
     { key: 'official', title: t('assetDrawer.skillsOfficial'), lines: official.map(lineOf) },
     { key: 'community', title: t('assetDrawer.skillsCommunity'), lines: community.map(lineOf), ...(q || official.length ? {} : {
       empty: <Invitation icon={<Compass size={16} strokeWidth={1.75} />} title={t('assetDrawer.communityEmptyTitle')}

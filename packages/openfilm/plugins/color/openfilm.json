@@ -1,0 +1,21 @@
+{
+  "order": 7,
+  "icon": "palette",
+  "title": {
+    "en": "Color",
+    "zh-CN": "调色台",
+    "ja": "カラー",
+    "ko": "컬러",
+    "es": "Color"
+  },
+  "summary": {
+    "en": "Grading by hand: scopes, wheels, curves and LUTs.",
+    "zh-CN": "亲手调色：示波器、色轮、曲线和 LUT。",
+    "ja": "手で行うカラーグレーディング：スコープ、ホイール、カーブ、LUT。",
+    "ko": "손으로 하는 색보정: 스코프, 휠, 커브, LUT.",
+    "es": "Gradación a mano: scopes, ruedas, curvas y LUT."
+  },
+  "about": "grading the film's color by hand",
+  "soon": true,
+  "skills": []
+}

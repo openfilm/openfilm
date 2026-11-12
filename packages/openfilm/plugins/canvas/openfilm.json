@@ -1,0 +1,24 @@
+{
+  "order": 2,
+  "icon": "workflow",
+  "title": {
+    "en": "Canvas",
+    "zh-CN": "画布",
+    "ja": "キャンバス",
+    "ko": "캔버스",
+    "es": "Lienzo"
+  },
+  "summary": {
+    "en": "Making material: ideas, references and shots laid out and generated on a board.",
+    "zh-CN": "做素材：在画布上摆开想法、参考和镜头，并生成。",
+    "ja": "素材を作る：アイデア、参考、ショットをボードに並べて生成します。",
+    "ko": "소재 만들기: 아이디어, 참고 자료, 장면을 보드에 펼치고 생성합니다.",
+    "es": "Crear material: ideas, referencias y planos dispuestos y generados en un tablero."
+  },
+  "about": "the board beside the edit, where material is made and laid out",
+  "workbench": "canvas",
+  "on": true,
+  "skills": [
+    "canvas"
+  ]
+}

@@ -24,6 +24,7 @@ import { ADD_COLOR, AudioArtwork, FOOT_ROOM, HereButton, MiniPlayer, MusicCard, 
 import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
 import { CategoryIcon, Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane, type VoiceSample } from './VoicesPane';
+import { PluginsPane } from './PluginsPane';
 import { ImportButton, SkillsPane, type SkillsLine } from './SkillsPane';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 import { TextStyleSample } from './TextStyleSample';
@@ -33,10 +34,10 @@ import { PLAIN } from './OnPicture';
 import { isClipMotion } from '@/lib/clip-presets';
 import { useLibraryArrangement } from './arrangement';
 
-type Category = 'media' | 'skill' | 'voice' | 'captions' | LibraryCategory;
+type Category = 'media' | 'skill' | 'plugin' | 'voice' | 'captions' | LibraryCategory;
 /* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, the skills, then the
    templates, the most a film is made with at once */
-export const CATEGORIES: Category[] = ['media', 'skill', 'template', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
+export const CATEGORIES: Category[] = ['media', 'skill', 'plugin', 'template', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
 
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
 const FAVORITES = STARRED;
@@ -490,6 +491,11 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 {stickerSection(LIVE, t('assetDrawer.stickersLive'))}
                 {stickerSection(STILL, t('assetDrawer.stickersStill'))}
               </>
+            ) : cat === 'plugin' ? (
+              <>
+                {/* what OpenFilm is made of (PluginsPane) */}
+                <SideBox on onClick={() => pickGroup('')}>{t('assetDrawer.skillsInstalled')}</SideBox>
+              </>
             ) : cat === 'captions' ? (
               <>
                 {/* caption tracks made here; their look is the caption inspector's */}
@@ -515,7 +521,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
           </nav>
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
-          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane actions={captions} /> : (
+          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane actions={captions} /> : cat === 'plugin' ? <PluginsPane projectId={projectId} /> : (
             <>
               {/* a skill's page has its own way back instead */}
               <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>

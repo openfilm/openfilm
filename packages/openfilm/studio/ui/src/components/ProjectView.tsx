@@ -119,6 +119,9 @@ import { WorkspaceLibraryPane } from './WorkspaceLibraryPane';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 import { useWorkModes } from '@/lib/work-modes';
+import { usePlugins } from '@/lib/plugins';
+import { ModeSwitcher } from './ModeSwitcher';
+import { OWN_SURFACES, PluginSurface } from './surfaces';
 import { MotionPanel } from './MotionPanel';
 import { ProjectTitle } from './ProjectTitle';
 import { ProjectTabs } from './ProjectTabs';
@@ -534,8 +537,26 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [setCanvasOpen, keepMotionOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   /* the ways of working turned on (Settings → Advanced): one turned off while in use gives way to the first still on */
   const workModes = useWorkModes();
+  /* every plugin off: no workbench is shown, only the library (and the app's chat), which opens */
+  const noBench = workModes.length === 0;
+  React.useEffect(() => { if (noBench) updateWorkspaceRef.current({ assets: true }); }, [noBench]);
+  /* a plugin's own surface shown in the panes' place (components/surfaces), by its workbench's name; none: the edit
+     or the canvas, which are held here */
+  const [surface, setSurface] = React.useState<string | null>(null);
+  const showWorkbench = React.useCallback((mode: string) => {
+    if (mode === 'canvas' || mode === 'edit' || mode === 'motion') { setSurface(null); setWorkMode(mode); } else setSurface(mode);
+  }, [setWorkMode]);
+  /* the edit and the canvas are not shown: no workbench is on, or a plugin's surface is in their place */
+  const away = noBench || surface != null;
+  /* the workbenches to pick from on the top bar (Motion is picked in the edit's timeline); the edit and the canvas
+     alone are one button that goes from one to the other */
+  const benchPlugins = usePlugins().filter((p) => p.on && p.workbench && p.workbench !== 'motion');
+  const pickBench = benchPlugins.length > 1 && benchPlugins.some((p) => !OWN_SURFACES.includes(p.workbench!));
   const canToggleCanvas = workModes.includes('canvas') && workModes.length > 1;
-  React.useEffect(() => { if (!workModes.includes(workMode)) setWorkMode(workModes[0]!); }, [workModes, workMode, setWorkMode]);
+  React.useEffect(() => {
+    if (surface != null) { if (!workModes.includes(surface)) setSurface(null); return; }
+    if (workModes.length && !workModes.includes(workMode)) showWorkbench(workModes[0]!);
+  }, [workModes, workMode, surface, showWorkbench]);
   /* what an agent lays out on the canvas (`openfilm canvas apply`) is shown: the canvas opens on it */
   React.useEffect(() => projectEvents(projectId, (event) => { if (event.type === 'canvas') setCanvasOpen(true); }), [projectId, setCanvasOpen]);
   /* warmed in place, then kept hidden under the edit: opening it never reloads or refits the same board */
@@ -563,7 +584,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [canvasProject, canvasKept]);
   /* the edit or the canvas, from either (keymap `work-mode`, ⌘E): not while typing, nor over a dialog */
   const workModeRef = React.useRef(() => {});
-  workModeRef.current = () => { if (canToggleCanvas) setCanvasOpen(!canvasOpen); };
+  workModeRef.current = () => { if (surface != null) setSurface(null); else if (canToggleCanvas) setCanvasOpen(!canvasOpen); };
   React.useEffect(() => {
     const press = (event: KeyboardEvent) => {
       const el = event.target as HTMLElement | null;
@@ -5629,7 +5650,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               <ProjectLayoutMenu className={TOP_BTN}
                 value={workspaceLayout} onChange={applyWorkspace} onReset={resetWorkspace}
                 hasChat={Boolean(hostPanel)} viewport={workspaceViewport} timelineFitHeight={fitTimelineHeight.current} inspectorIdle={inspectorIdle} onEdit={beginLayoutEdit} layoutEditing={Boolean(layoutDraft.draft)} storageFailed={workspaceStorageFailed} />
-              {canvasOpen ? null : (<>
+              {canvasOpen || away ? null : (<>
               <ProjectHistoryButton open={historyOpen} onClick={openHistory} className={TOP_BTN} />
               <Tooltip label={t('projectMenu.export')} side="bottom">
                 <button type="button" aria-label={t('projectMenu.export')} aria-haspopup="dialog" aria-expanded={exportOpen} className={TOP_BTN}
@@ -5644,7 +5665,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </>)}
               <ExportTray ref={exportTrayRef} projectId={projectId} onError={toast.showError} />
               {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
-              {canToggleCanvas ? <Tooltip label={[t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas'), keyHint('work-mode')].filter(Boolean).join(' · ')} side="bottom">
+              {pickBench ? <ModeSwitcher now={surface ?? (canvasOpen ? 'canvas' : 'edit')} plugins={benchPlugins} onPick={showWorkbench} disabled={Boolean(layoutDraft.draft)} />
+                : canToggleCanvas ? <Tooltip label={[t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas'), keyHint('work-mode')].filter(Boolean).join(' · ')} side="bottom">
                 <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} disabled={Boolean(layoutDraft.draft)} onClick={() => setCanvasOpen(!canvasOpen)}
                   className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
                   {canvasOpen ? <Workflow size={14} /> : <Scissors size={14} />}
@@ -5657,7 +5679,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
           {/* the panes, edge to edge on the board of lines (--dock-line): a line under the top bar, and one beside the
               app's own panel (lib/host.ts `panel`), which sits left of this, under the top bar: room left for it */}
-          <section ref={dockColRef} inert={canvasOpen} aria-hidden={canvasOpen} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
+          <section ref={dockColRef} inert={canvasOpen || away} aria-hidden={canvasOpen || away} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
             style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(editFree ? null : insetStyle(editDock)), ...(canvasOpen ? { visibility: 'hidden', opacity: 0 } : null) }}>
             <div ref={viewerRowRef} className="relative flex min-h-0 min-w-0 flex-1 flex-row" style={{ order: editPrefs.timelineEdge === 'top' ? 2 : 0 }}>
               {layersShown ? (
@@ -6110,12 +6132,28 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </div>
             ) : null}
           </section>
+          {/* a plugin's own surface in the panes' place, as the canvas is: they stay laid out as they were, hidden under it */}
+          {surface != null ? (
+            <div data-workspace-surface={surface} className="relative z-[3] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
+              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(freeGeometry ? null : insetStyle(dockGeometry)) }}>
+              <div className="relative flex min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
+                <PluginSurface id={surface} projectId={projectId} folder={loaded?.project.path ?? ''} />
+              </div>
+            </div>
+          ) : null}
+          {/* no workbench on: where one would be says so, over the panes (and the canvas), which stay as they were */}
+          {noBench ? (
+            <div data-workspace-empty className="relative z-[3] flex min-h-0 min-w-0 items-center justify-center bg-[var(--bg-panel)] px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]"
+              style={{ gridArea: 'main', ...(freeGeometry ? null : insetStyle(dockGeometry)) }}>
+              <p className="max-w-[360px]">{t('assetDrawer.noPluginsOn')}</p>
+            </div>
+          ) : null}
           {/* the canvas in the panes' place: they stay laid out as they were, hidden under it; the gaps round it are the
               panes' lines (the one under the top bar, the one by the chat) */}
           {canvasKept || canvasOpen ? (
             /* hidden with opacity too: the canvas's library writes `visibility: visible` on each of its nodes */
-            <div data-workspace-canvas className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]" aria-hidden={!canvasOpen} inert={!canvasOpen}
-              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(canvasFree ? null : insetStyle(canvasDock)), ...freeStyle('canvas'), ...(canvasOpen ? null : { visibility: 'hidden', opacity: 0, zIndex: 0 }) }}>
+            <div data-workspace-canvas className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]" aria-hidden={!canvasOpen || away} inert={!canvasOpen || away}
+              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(canvasFree ? null : insetStyle(canvasDock)), ...freeStyle('canvas'), ...(canvasOpen && !away ? null : { visibility: 'hidden', opacity: 0, zIndex: 0 }) }}>
               <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
                 <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
                   <React.Suspense fallback={<CanvasLoading />}>

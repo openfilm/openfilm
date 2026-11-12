@@ -57,7 +57,7 @@ import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCov
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
-import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
+import { pluginOfSkill, pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
@@ -502,7 +502,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       return json(res, 200, { freed, ...await storage() });
     }
     /* OpenFilm's plugins (src/plugins.mjs): each with whether it is on; one turned on or off (PUT plugins/:id { on }),
-       answered with them all. 409 for the last workbench on */
+       answered with them all. 409 for one not made yet */
     if (parts[0] === 'plugins' && parts.length === 1 && req.method === 'GET') return json(res, 200, { plugins: pluginStates() });
     if (parts[0] === 'plugins' && parts.length === 2 && req.method === 'PUT') {
       const { on } = /** @type {{ on?: unknown }} */ (await readJson(req) ?? {});
@@ -600,7 +600,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           installed: k.installed,
           ...(k.installed && k.source === 'official' && !k.core ? standing.get(k.uid) ?? {} : {}),
           /* turned off: offered to no agent until it is turned on again */
-          ...(k.installed && keeps(off, k) ? { off: true } : {}),
+          ...(k.installed && !k.core && keeps(off, k) ? { off: true } : {}),
           /* one of OpenFilm's own that goes with a plugin now off (src/plugins.mjs): off with it, and on again with it */
           ...(k.core && withPlugin.has(k.name) ? { off: true, plugin: withPlugin.get(k.name) } : {}),
         })),
@@ -656,11 +656,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
       const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
       if (!skill) throw new HttpError(404, 'no such skill');
-      setSkillOn(skill.uid, on);
-      /* one of OpenFilm's own that goes with a plugin now off: turned on, its plugin is too (it is given to no agent
-         otherwise, src/plugins.mjs) */
-      const plugin = on ? skillsOfPluginsOff().get(skill.name) : undefined;
-      if (plugin && coreSkills().some((k) => k.uid === skill.uid)) setPluginOn(plugin, true);
+      /* one of OpenFilm's own has no switch of its own: it is on while its plugin is (src/plugins.mjs), so turning it
+         turns the plugin; one that goes with no plugin (the media's) is what every project stands on, always given */
+      const core = coreSkills().some((k) => k.uid === skill.uid);
+      const plugin = core ? pluginOfSkill(skill.name) : undefined;
+      if (core && !plugin) throw new HttpError(409, 'This skill is part of OpenFilm itself: it has no switch.');
+      if (plugin) {
+        try { setPluginOn(plugin, on); } catch (e) { throw new HttpError(409, /** @type {Error} */ (e).message); }
+      } else setSkillOn(skill.uid, on);
       return json(res, 200, { on, ...(plugin ? { plugin } : {}) });
     }
     /* Only the person's own skill can be changed; a project override must not edit a hidden personal skill. */

@@ -1,22 +1,30 @@
 /**
- * OpenFilm's plugins as Studio shows them (src/plugins.mjs): which are on, kept by Studio in the shared prefs so the
- * desktop app, Studio in a browser and the agents' CLI agree. Read once and again when the window comes back (another
+ * OpenFilm's plugins as Studio shows them (src/plugins.mjs; the library's Plugins tab): which are on, kept by Studio in
+ * the shared prefs so the desktop app, Studio in a browser and the agents' CLI agree. Read once and again when the window comes back (another
  * window may have changed them); a change here is told to every part of the page at once.
  *
  * The workbenches on are needed before the first paint (the top bar's switch, the ways of working a project offers),
  * so the last answer is kept in this browser and used until Studio answers. A choice made before plugins were kept by
- * Studio (the ways of working of Settings → Advanced, kept in this browser) is carried over once.
+ * Studio (the ways of working, kept in this browser) is carried over once.
  */
 import { useSyncExternalStore } from 'react';
 
-export type Workbench = 'edit' | 'canvas' | 'motion';
-export interface Plugin { id: string; workbench?: Workbench; skills: string[]; on: boolean; beta?: boolean; last: boolean }
+/** A workbench's name: `edit`, `canvas`, `motion`, or a plugin's own for the surface it brings (components/surfaces). */
+export type Workbench = string;
+/**
+ * A plugin: its words by language (`title`, `summary`), its mark's name, the workbench and the skills it brings, whether
+ * it is on, and whether it is still being made good (`beta`) or not made yet (`soon`: no switch).
+ */
+export interface Plugin {
+  id: string; title?: Record<string, string>; summary?: Record<string, string>; icon?: string;
+  workbench?: Workbench; skills: string[]; on: boolean; beta?: boolean; soon?: boolean;
+}
 
-/** As a new install has them, until Studio answers. */
+/** The plugins there are to turn as a new install has them, until Studio answers with every plugin. */
 const DEFAULT: readonly Plugin[] = [
-  { id: 'edit', workbench: 'edit', skills: [], on: true, last: false },
-  { id: 'canvas', workbench: 'canvas', skills: ['canvas'], on: true, last: false },
-  { id: 'motion', workbench: 'motion', skills: [], on: false, beta: true, last: false },
+  { id: 'edit', workbench: 'edit', skills: ['edit'], on: true },
+  { id: 'canvas', workbench: 'canvas', skills: ['canvas'], on: true },
+  { id: 'motion', workbench: 'motion', skills: ['motion'], on: false, beta: true },
 ];
 const KEPT = 'openfilm.plugins';
 /** The ways of working as they were kept in this browser before (`edit,canvas`). */
@@ -49,7 +57,7 @@ async function read(): Promise<void> {
   const body = await fetch('/api/plugins', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null), () => null) as { plugins?: unknown } | null;
   if (!valid(body?.plugins)) return;
   let plugins = body.plugins;
-  /* the choice this browser kept before: told to Studio once, the plugins turned on first so one workbench is always on */
+  /* the choice this browser kept before: told to Studio once */
   let before: string | null = null;
   try { before = localStorage.getItem(BEFORE); } catch { /* none */ }
   if (before != null) {
@@ -82,13 +90,11 @@ export function readPlugins(): readonly Plugin[] {
   return current;
 }
 
-/** Turn a plugin on or off. Rejects with what Studio said (the last workbench stays on). */
+/** Turn a plugin on or off. Rejects with what Studio said (one not made yet has no switch). */
 export async function setPluginOn(id: string, on: boolean): Promise<void> {
   /* shown at once, as a switch flips; what Studio answers is what stays */
   const was = readPlugins();
-  const flipped = was.map((p) => (p.id === id ? { ...p, on } : p));
-  const benches = flipped.filter((p) => p.workbench && p.on);
-  take(flipped.map((p) => ({ ...p, last: benches.length === 1 && benches[0]!.id === p.id })));
+  take(was.map((p) => (p.id === id ? { ...p, on } : p)));
   const res = await put(id, on).catch(() => null);
   const body = await res?.json().catch(() => ({})) as { plugins?: unknown; error?: string } | undefined;
   if (!res?.ok || !valid(body?.plugins)) { take(was); throw new Error(body?.error ?? 'failed'); }

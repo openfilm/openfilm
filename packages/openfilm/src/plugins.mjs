@@ -1,75 +1,123 @@
 // @ts-check
 /**
- * Plugins: what OpenFilm is made of beyond its core, each turned on or off by the person (Settings → Plugins).
+ * Plugins: what OpenFilm can do, each a folder in `plugins/` of this package, listed in the library's Plugins tab.
+ * What every project stands on is no plugin and has no switch: the conversation, the project's folder, and its media
+ * (the library, and `openfilm get` with the `media` skill that says how it is used).
  *
- * A plugin brings any of: a workbench (a whole way of working in Studio: the edit, the canvas, Motion), skills (what
- * teaches an agent that part of film making; OpenFilm's own, in `manual/`), and later what it can do and what it comes
- * with (commands, effects, models, presets). What every film needs stays in the core and is no plugin: the film and
- * its format, the preview and the render, the chat and what the person points at, and the skills that say how a film
- * is made (`edit`, `media`).
+ * A plugin's folder holds an `openfilm.json`, as a skill's does: how people see it (`title` and `summary` by language,
+ * an `icon`, its `order` in the list), what an agent reads of it while it is off (`about`, a few English words), and
+ * what it brings: a `workbench` (a whole surface of its own in Studio, named: the edit, the canvas, and any other,
+ * which Studio shows in their place when picked; Motion, a view of the edit's timeline) and `skills` (OpenFilm's own,
+ * in `manual/`, by name: what teaches an agent that part of film making).
  *
- * Turned off, a plugin's workbench is not shown and its skills are offered to no agent, so a person who only cuts
- * films has nothing else in the way, and an agent reads nothing it has no use for. It never changes what a film is:
+ *   `on`      whether it is on until the person says (the edit and the canvas are, Motion is not)
+ *   `beta`    still being made good
+ *   `soon`    listed so the whole of OpenFilm is in sight, but not made yet: never on, with no switch, and no agent is
+ *             told of it
+ *
+ * A plugin is one thing OpenFilm can do, in its two halves: what an agent knows of it (its skills) and where the
+ * person sees and adjusts it (its workbench, its part of the library), under one switch. No plugin is on for good, as
+ * no skill of an agent's is. Turned off, a plugin's workbench is not shown and its skills are offered to no agent, so
+ * a person who only cuts films has nothing else in the way, and an agent reads nothing it has no use for. It never changes what a film is:
  * one made with a plugin plays and renders the same with the plugin off.
  *
  * The choice is kept in the shared prefs.json (`plugins`: id → on), so the desktop app, Studio in a browser and the
- * CLI agree; only what the person chose is kept, so a plugin's default can change in a later version. At least one
- * workbench stays on.
- *
- * These are OpenFilm's own. Each is an entry here for now; they are to share one manifest with plugins others write,
- * once the places a plugin plugs into have been proven by more of our own.
+ * CLI agree; only what the person chose is kept, so a plugin's default can change in a later version. Every plugin
+ * can be off at once: no workbench is shown then, and an agent is given none of the skills that go with one.
  */
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { setSharedPref, sharedPref } from './locations.mjs';
 
+/** The plugins that come with OpenFilm, each a folder. */
+export const pluginsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins');
+
+/** A workbench's name: Studio's own (`edit`, `canvas`, `motion`), or a plugin's for the surface it brings. */
+const WORKBENCH = /^[a-z][a-z0-9-]{0,31}$/;
+
 /**
- * @typedef {{ id: string, workbench?: 'edit' | 'canvas' | 'motion', skills: readonly string[], on: boolean, beta?: boolean, about: string }} Plugin
- *   `workbench`: the way of working it shows; `skills`: OpenFilm's own skills (by name) that go with it; `on`: whether
- *   it is on until the person says; `about`: what it is for, in a few words an agent reads when it is off
+ * @typedef {{
+ *   id: string, title: Record<string, string>, summary: Record<string, string>, icon?: string, about: string,
+ *   workbench?: string, skills: readonly string[], on: boolean, beta?: true, soon?: true,
+ * }} Plugin
+ *   `id`: its folder's name; `workbench`: the way of working it shows; `skills`: OpenFilm's own skills (by name) that
+ *   go with it; `on`: whether it is on until the person says
  */
 
+/** The words of a field by language (`en`, `zh-CN`…); anything else is none. */
+const byLanguage = (/** @type {unknown} */ v) => (v && typeof v === 'object'
+  ? Object.fromEntries(Object.entries(v).filter(([k, w]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(k) && typeof w === 'string' && w.trim()).map(([k, w]) => [k, String(w).trim().slice(0, 300)])) : {});
+
+/** The plugin in one folder of `dir`, or null when it has no openfilm.json with a title. @param {string} dir @param {string} id */
+function readPlugin(dir, id) {
+  let raw;
+  try { raw = JSON.parse(readFileSync(join(dir, id, 'openfilm.json'), 'utf8')); } catch { return null; }
+  const title = byLanguage(raw?.title);
+  if (!/^[a-z][a-z0-9-]{0,31}$/.test(id) || !Object.keys(title).length) return null;
+  const soon = raw.soon === true;
+  /** @type {Plugin & { order: number }} */
+  const plugin = {
+    id, title, summary: byLanguage(raw.summary), about: typeof raw.about === 'string' ? raw.about.trim().slice(0, 200) : '',
+    skills: Array.isArray(raw.skills) ? raw.skills.filter((/** @type {unknown} */ s) => typeof s === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(s)) : [],
+    on: !soon && raw.on === true, order: Number.isFinite(raw.order) ? raw.order : 1000,
+  };
+  if (typeof raw.icon === 'string' && /^[a-z][a-z0-9-]{0,23}$/.test(raw.icon)) plugin.icon = raw.icon;
+  if (typeof raw.workbench === 'string' && WORKBENCH.test(raw.workbench) && !soon) plugin.workbench = raw.workbench;
+  if (raw.beta === true) plugin.beta = true;
+  if (soon) plugin.soon = true;
+  return plugin;
+}
+
+/** The plugins in a folder of them, in their order. @param {string} [dir] @returns {readonly Plugin[]} */
+export function readPlugins(dir = pluginsDir()) {
+  /** @type {string[]} */
+  let names = [];
+  try { names = readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { /* no folder: none */ }
+  return Object.freeze(names.map((id) => readPlugin(dir, id)).filter((p) => p != null)
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)).map(({ order: _order, ...p }) => Object.freeze(p)));
+}
+
 /** OpenFilm's own plugins, in the order they are listed. */
-export const PLUGINS = /** @type {readonly Plugin[]} */ (Object.freeze([
-  { id: 'edit', workbench: 'edit', skills: [], on: true, about: 'the timeline: cutting the film by hand' },
-  { id: 'canvas', workbench: 'canvas', skills: ['canvas'], on: true, about: 'the board beside the edit, where material is made and laid out' },
-  { id: 'motion', workbench: 'motion', skills: ['motion'], on: false, beta: true, about: 'a clip\'s layers and keyframes, adjusted by hand' },
-]));
+export const PLUGINS = readPlugins();
 
 const known = (/** @type {string} */ id) => PLUGINS.find((p) => p.id === id);
+/** One the person turns on and off: it is made. */
+const chosenBy = (/** @type {Plugin} */ p) => !p.soon;
 
-/** What the person chose, by id (only plugins there are, only true or false). @param {string} [home] @returns {Record<string, boolean>} */
+/** What the person chose, by id (only plugins they can turn, only true or false). @param {string} [home] @returns {Record<string, boolean>} */
 function chosen(home) {
   const raw = sharedPref('plugins', home);
   /** @type {Record<string, boolean>} */
   const out = {};
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    for (const [id, on] of Object.entries(raw)) if (known(id) && typeof on === 'boolean') out[id] = on;
+    for (const [id, on] of Object.entries(raw)) { const p = known(id); if (p && chosenBy(p) && typeof on === 'boolean') out[id] = on; }
   }
   return out;
 }
 
 /**
- * Every plugin with whether it is on, and whether it is the last workbench on (`last`: it cannot be turned off). A
- * choice that would leave no workbench (a prefs.json written by hand) is not followed: the edit is on then.
- * @param {string} [home] @returns {(Plugin & { on: boolean, last: boolean })[]}
+ * Every plugin with whether it is on.
+ * @param {string} [home] @returns {(Plugin & { on: boolean })[]}
  */
 export function pluginStates(home) {
   const said = chosen(home);
-  const on = new Map(PLUGINS.map((p) => [p.id, said[p.id] ?? p.on]));
-  if (!PLUGINS.some((p) => p.workbench && on.get(p.id))) on.set('edit', true);
-  const benches = PLUGINS.filter((p) => p.workbench && on.get(p.id));
-  return PLUGINS.map((p) => ({ ...p, on: Boolean(on.get(p.id)), last: benches.length === 1 && benches[0].id === p.id }));
+  return PLUGINS.map((p) => ({ ...p, on: chosenBy(p) ? said[p.id] ?? p.on : false }));
 }
 
 /**
- * Turn a plugin on or off. Throws for one there is not, and for the last workbench on.
+ * Turn a plugin on or off. Throws for one there is not, and for one not made yet.
  * @param {string} id @param {boolean} on @param {string} [home]
  */
 export function setPluginOn(id, on, home) {
   const state = pluginStates(home).find((p) => p.id === id);
   if (!state) throw new Error(`There is no plugin "${id}".`);
-  if (!on && state.last) throw new Error('One workbench stays on.');
+  if (state.soon) throw new Error(`The ${id} plugin is not made yet.`);
   setSharedPref('plugins', { ...chosen(home), [id]: on }, home);
 }
+
+/** The plugin one of OpenFilm's own skills goes with (its id), or undefined. @param {string} skill its name */
+export const pluginOfSkill = (skill) => PLUGINS.find((p) => p.skills.includes(skill))?.id;
 
 /** The workbenches on, in their order. @param {string} [home] */
 export const workbenchesOn = (home) => pluginStates(home).flatMap((p) => (p.workbench && p.on ? [p.workbench] : []));
@@ -81,12 +129,12 @@ export function skillsOfPluginsOff(home) {
 
 /**
  * The line the manual ends with when plugins are off: which, and what each is for, so an agent can say what turning
- * one on would give instead of working around it. Null when all are on.
+ * one on would give instead of working around it. Null when all there are to turn on are on.
  * @param {string} [home]
  */
 export function pluginsOffLine(home) {
-  const off = pluginStates(home).filter((p) => !p.on);
+  const off = pluginStates(home).filter((p) => !p.on && !p.soon);
   if (!off.length) return null;
-  return `Plugins the person has turned off (Settings → Plugins turns one on): ${off.map((p) => `${p.id} (${p.about})`).join('; ')}. `
+  return `Plugins the person has turned off (the library's Plugins tab turns one on): ${off.map((p) => `${p.id} (${p.about})`).join('; ')}. `
     + 'Their workbenches are not shown, so do not send the person to one; when a task would be better done there, say so in a line.';
 }

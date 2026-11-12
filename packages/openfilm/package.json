@@ -45,6 +45,7 @@
     "TRADEMARK.md",
     "bin",
     "manual",
+    "plugins",
     "library",
     "!library/voices",
     "!library/audio",

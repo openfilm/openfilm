@@ -18,8 +18,8 @@
  *              `.source.json`. Every OpenFilm on this computer has the same ones.
  *
  * OpenFilm's own (coreSkills: `manual/` in this package) are how a film is made, its media and its canvas, which the
- * manual names: in every agent's hands unless the person turns one off (skillsOff), never installed or removed, so the
- * manual stays a page.
+ * manual names: in every agent's hands while the plugin each goes with is on (src/plugins.mjs), never installed or
+ * removed, so the manual stays a page.
  *
  * Nothing here deletes a skill outright: one replaced or removed goes to the system's trash.
  *
@@ -441,7 +441,7 @@ export function agentNames(skills) {
 
 /**
  * OpenFilm's skills as agents are offered them, each with the name it is given by (agentNames), in this order: its own
- * not turned off, nor going with a plugin that is off (src/plugins.mjs) (`core`), those installed and on (`usable`),
+ * whose plugin is on (src/plugins.mjs; one of them has no switch of its own) (`core`), those installed and on (`usable`),
  * then the rest of the library but those off, which a
  * message can still name (Try now). `given`: the first two, what a session has.
  * @param {Parameters<typeof usableSkills>[0]} [where]
@@ -449,7 +449,7 @@ export function agentNames(skills) {
 export function offeredSkills({ home, ...where } = {}) {
   const off = new Set(skillsOff(home));
   const withPlugin = skillsOfPluginsOff(home);
-  const core = coreSkills().filter((s) => !keeps(off, s) && !withPlugin.has(s.name));
+  const core = coreSkills().filter((s) => !withPlugin.has(s.name));
   const known = (/** @type {Skill[]} */ list, /** @type {Skill} */ s) => list.some((k) => k.uid === s.uid);
   const usable = usableSkills({ home, ...where }).filter((s) => !known(core, s));
   /* the rest a person may name in a conversation: those of a project or theirs turned off elsewhere, and Discover's not
@@ -462,14 +462,13 @@ export function offeredSkills({ home, ...where } = {}) {
 }
 
 /**
- * The manual as this computer's agents read it: its lines for OpenFilm's own skills that are off, or go with a plugin
- * that is off, left out (an agent is not told to read what it is not given), and when plugins are off, a last line
+ * The manual as this computer's agents read it: its lines for OpenFilm's own skills that go with a plugin that is
+ * off left out (an agent is not told to read what it is not given), and when plugins are off, a last line
  * saying which (src/plugins.mjs).
  * @param {string} manual MANUAL.md @param {string} [home]
  */
 export function manualFor(manual, home) {
-  const off = new Set(skillsOff(home));
-  const gone = new Set([...coreSkills().filter((s) => keeps(off, s)).map((s) => s.name), ...skillsOfPluginsOff(home).keys()]);
+  const gone = new Set(skillsOfPluginsOff(home).keys());
   const lines = manual.split('\n').filter((line) => { const m = /^- `([a-z0-9-]+)`:/.exec(line); return !(m && gone.has(m[1])); });
   const said = pluginsOffLine(home);
   return said ? `${lines.join('\n').trimEnd()}\n\n${said}\n` : lines.join('\n');

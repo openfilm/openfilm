@@ -89,6 +89,10 @@ const DRAWN: Record<string, Draw> = {
   skill: ({ fill }) => (
     <path d="M13.4 3 5.6 13.2h5.6L10.4 21l8-10.4h-5.6Z" {...fill} />
   ),
+  /* a plugin: a piece that fits into the rest */
+  plugin: ({ fill }) => (
+    <path d="M9.2 4.6h2a2 2 0 1 1 3.6 0h3.4a1.6 1.6 0 0 1 1.6 1.6v3.4a2 2 0 1 0 0 3.6v5.2a1.6 1.6 0 0 1-1.6 1.6h-4a2 2 0 1 0-3.6 0H5.8a1.6 1.6 0 0 1-1.6-1.6v-4a2 2 0 1 1 0-3.6V6.2a1.6 1.6 0 0 1 1.6-1.6Z" {...fill} />
+  ),
   /* a template: a picture laid out, one big place and two small */
   template: ({ fill, ink }) => (
     <>

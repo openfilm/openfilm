@@ -132,14 +132,14 @@ test('expired session cleanup unlinks skills without removing their real folders
   assert.ok(existsSync(join(second.piSkills.paths[0], 'project-brand', 'SKILL.md')), 'the next session has the same skill again');
 });
 
-test("a skill the person turned off, OpenFilm's own too, is given to no session", async () => {
+test("a skill the person turned off, and OpenFilm's own whose plugin is off, is given to no session", async () => {
   const w = world();
   mkdirSync(w.openfilmHome, { recursive: true });
-  /* by uid, and by name as kept before uids */
-  writeFileSync(join(w.openfilmHome, 'prefs.json'), JSON.stringify({ skillsOff: ['brand', 'openfilm/canvas'] }));
+  /* by name as kept before uids; one of OpenFilm's own has no switch of its own, it goes with its plugin */
+  writeFileSync(join(w.openfilmHome, 'prefs.json'), JSON.stringify({ skillsOff: ['brand', 'openfilm/media'], plugins: { canvas: false } }));
   const pi = await sessionSkills('byok', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome });
   assert.ok(!pi.piSkills.names.includes('project-brand'));
-  assert.deepEqual(pi.piSkills.names.slice(0, 2), ['openfilm-edit', 'openfilm-media'], 'one of OpenFilm\'s own, too');
+  assert.deepEqual(pi.piSkills.names.slice(0, 2), ['openfilm-edit', 'openfilm-media'], 'OpenFilm\'s own while their plugins are on');
   assert.ok(!pi.piSkills.names.includes('openfilm-canvas'));
   assert.ok(pi.piSkills.names.includes('local-lyric-pv'));
   assert.ok(!existsSync(join(pi.piSkills.paths[0], 'project-brand')), 'not in the folder the agent reads');

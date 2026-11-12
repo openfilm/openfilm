@@ -1,0 +1,21 @@
+{
+  "order": 8,
+  "icon": "layers",
+  "title": {
+    "en": "Compositing",
+    "zh-CN": "合成台",
+    "ja": "合成",
+    "ko": "합성",
+    "es": "Composición"
+  },
+  "summary": {
+    "en": "Picture work by hand: stabilizing, cutouts, masks, tracking and speed.",
+    "zh-CN": "亲手处理画面：稳定、抠像、遮罩、跟踪和变速。",
+    "ja": "手で行う映像処理：手ぶれ補正、切り抜き、マスク、トラッキング、速度。",
+    "ko": "손으로 하는 화면 처리: 안정화, 누끼, 마스크, 트래킹, 속도.",
+    "es": "Trabajo de imagen a mano: estabilización, recortes, máscaras, seguimiento y velocidad."
+  },
+  "about": "picture work by hand: stabilizing, cutouts, masks, tracking",
+  "soon": true,
+  "skills": []
+}

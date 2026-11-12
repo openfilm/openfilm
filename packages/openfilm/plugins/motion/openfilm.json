@@ -1,0 +1,25 @@
+{
+  "order": 3,
+  "icon": "clapperboard",
+  "title": {
+    "en": "Motion",
+    "zh-CN": "动效台",
+    "ja": "モーション",
+    "ko": "모션",
+    "es": "Movimiento"
+  },
+  "summary": {
+    "en": "Layers and keyframes: animation adjusted by hand.",
+    "zh-CN": "图层和关键帧：亲手精细地调动效。",
+    "ja": "レイヤーとキーフレーム：アニメーションを手で細かく調整します。",
+    "ko": "레이어와 키프레임: 애니메이션을 손으로 세밀하게 조정합니다.",
+    "es": "Capas y fotogramas clave: animación ajustada a mano."
+  },
+  "about": "a clip's layers and keyframes, adjusted by hand",
+  "workbench": "motion",
+  "on": false,
+  "beta": true,
+  "skills": [
+    "motion"
+  ]
+}

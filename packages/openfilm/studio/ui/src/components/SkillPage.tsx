@@ -13,6 +13,7 @@ import {
   PictureInPicture2, Plus, Presentation, RefreshCw, Scissors, Shapes, Sparkles, Trash2, Wand2, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
+import { usePlugins } from '@/lib/plugins';
 import { communityOf, makerOf, sourcesApi, type SkillEntry } from '@/lib/project-sources';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SettingsSwitch } from './settings/ui';
@@ -50,6 +51,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
 }) {
   const t = useT();
   const lang = useLanguage();
+  const plugins = usePlugins();
   const words = useSkillWords()(skill);
   const details = inLanguage(skill.shown?.details, lang);
   const needs = inLanguage(skill.needs, lang);
@@ -140,9 +142,10 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       {error ? <p role="alert" className="mt-2 text-[12px] text-[var(--warn)]">{error}</p> : null}
       <div className="mt-4 flex items-start gap-3">
         <h2 className="min-w-0 flex-1 text-[17px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{words.title}</h2>
-        {installed ? <SettingsSwitch checked={!skill.off} onChange={turn} label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words.title)} /> : null}
+        {/* one of OpenFilm's own has no switch of its own: it is on while its plugin is (library/PluginsPane) */}
+        {installed && !skill.core ? <SettingsSwitch checked={!skill.off} onChange={turn} label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words.title)} /> : null}
       </div>
-      {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', t(`settings.plugins.names.${skill.plugin}`)) : t('gallery.skillOff')}</p> : null}
+      {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', inLanguage(plugins.find((p) => p.id === skill.plugin)?.title, lang) ?? skill.plugin) : t('gallery.skillOff')}</p> : null}
       {skill.retired ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
         {/* the community's: whose it is, their account a link; OpenFilm's own: its kind */}

@@ -1,0 +1,24 @@
+{
+  "order": 1,
+  "icon": "film",
+  "title": {
+    "en": "Edit",
+    "zh-CN": "剪辑台",
+    "ja": "編集",
+    "ko": "편집",
+    "es": "Edición"
+  },
+  "summary": {
+    "en": "Making and cutting the film: the picture, the timeline and export.",
+    "zh-CN": "做片子、剪片子：画面、时间线和导出。",
+    "ja": "映像を作って切る：画面、タイムライン、書き出し。",
+    "ko": "영상을 만들고 자르기: 화면, 타임라인, 내보내기.",
+    "es": "Crear y cortar el vídeo: la imagen, la línea de tiempo y la exportación."
+  },
+  "about": "the film itself and its timeline: making and cutting the film",
+  "workbench": "edit",
+  "on": true,
+  "skills": [
+    "edit"
+  ]
+}
