@@ -2565,6 +2565,8 @@ export const ja: Words = {
       site: 'ウェブサイト',
     },
     sections: {
+      notifications: "通知",
+      playback: "再生",
       account: "アカウント",
       appearance: "外観",
       agents: 'エージェント',
@@ -2573,7 +2575,6 @@ export const ja: Words = {
       developer: '開発者',
       general: '一般',
       shortcuts: 'キーボードショートカット',
-      advanced: '詳細設定',
     },
     account: {
       local: "ローカルで使用中",
@@ -2583,7 +2584,6 @@ export const ja: Words = {
       localDesc: "OpenFilm はアカウントなしでこのコンピュータで使えます。プロジェクトと素材はこのコンピュータに保存されます。",
       signedInDesc: "OpenFilm アカウントにサインインしています。OpenFilm 自身のサービスは残高から支払われます。プロジェクトと素材はこのコンピュータに保存されたままです。",
       openfilm: "OpenFilm アカウント",
-      signInTitle: "OpenFilm アカウント",
       signInHint: "サインインすると、OpenFilm 自身のナレーション・音楽・画像・動画の生成サービスを残高から使えます。サインインしなくても、ほかのサービスとこのコンピュータでの機能はすべて使えます。",
       signIn: "サインイン…",
       page: "アカウントページ",
@@ -2592,7 +2592,7 @@ export const ja: Words = {
       thisComputer: "このコンピュータ",
     },
     general: {
-      desc: "OpenFilm について、ソフトウェアアップデート、言語、通知。",
+      desc: "OpenFilm について、ソフトウェアアップデート、リソース管理、言語、自動保存のバージョン。",
     },
     notifications: {
       group: '通知',
@@ -2690,7 +2690,6 @@ export const ja: Words = {
       skills: { canvas: "キャンバス" },
     },
     advanced: {
-      desc: "リソース管理と、バージョン・再生・ライブラリのカテゴリなど最適に設定済みの項目。",
       fitPages: "Web ページをビューアのサイズで描画",
       fitPagesHint: "Web ページの Canvas と 3D を、ビューアに表示されるサイズで描画します。見た目は同じで、より滑らかに再生できます。オフにすると作品のフルサイズで描画します。書き出しは常にフルサイズです。",
       renders: "遅れる区間をレンダリング",

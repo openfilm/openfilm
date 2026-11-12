@@ -1,5 +1,5 @@
 /**
- * Settings → Advanced → Asset management: everything OpenFilm keeps on this computer, as a computer's storage page
+ * Settings → General → Asset management: everything OpenFilm keeps on this computer, as a computer's storage page
  * shows a disk. On top, how much it takes in all, as one bar parted by kind, and the free space left on the disk of
  * the projects; then what can be given back (the cache, made again when needed); then each kind, a page of its own:
  *
@@ -17,14 +17,15 @@ import { useT } from '@/i18n';
 import { api, type StoragePlace, type StorageUsage, type StudioLocation, type StudioLocations } from '@/api';
 import { studioHost } from '@/lib/host';
 import { ConfirmDialog } from '../ConfirmDialog';
-import { SettingsButton, SettingsField, SettingsGroup, SettingsItem, SettingsNavRow, SettingsPage, SettingsTile, settingsError } from './ui';
+import { SettingsButton, SettingsField, SettingsGroup, SettingsItem, SettingsNavRow, SettingsPage, settingsError } from './ui';
 
 export const STORAGE_KINDS = ['projects', 'saved', 'history', 'talk', 'cache', 'library', 'models', 'skills', 'other'] as const;
 export type StorageKind = typeof STORAGE_KINDS[number];
 
+/** each kind's part of the bar: the accent for the projects' work, quiet tones for the rest */
 const KIND_COLOR: Record<StorageKind, string> = {
-  projects: '#0a84ff', saved: '#30b158', history: '#ff9f0a', talk: '#bf5af2', cache: '#8e8e93',
-  library: '#32ade6', models: '#ff375f', skills: '#e3b505', other: '#636366',
+  projects: 'var(--accent)', saved: '#7b9cc0', history: '#c4a46c', talk: '#a28fc2', cache: '#8b8b92',
+  library: '#78afc2', models: '#c48c8c', skills: '#98ad7a', other: '#5d5d63',
 };
 const KIND_ICON: Record<StorageKind, React.ComponentType<{ size?: number; strokeWidth?: number }>> = {
   projects: Clapperboard, saved: FolderHeart, history: History, talk: MessageSquare, cache: RefreshCcw,
@@ -33,9 +34,10 @@ const KIND_ICON: Record<StorageKind, React.ComponentType<{ size?: number; stroke
 /** The kinds that are parts of the projects' folders, each project by its share. */
 const PROJECT_KINDS = new Set<StorageKind>(['projects', 'history', 'talk', 'cache']);
 
-export function storageTile(kind: StorageKind, size = 28) {
+/** a kind's mark: its glyph, quiet */
+function kindMark(kind: StorageKind) {
   const Icon = KIND_ICON[kind];
-  return <SettingsTile color={KIND_COLOR[kind]} size={size}><Icon size={Math.round(size * 0.56)} strokeWidth={2} /></SettingsTile>;
+  return <span className="shrink-0 text-[var(--text-muted)]"><Icon size={18} strokeWidth={1.75} /></span>;
 }
 
 /** Bytes as the person reads a disk's free space: GB, or MB below one. */
@@ -90,7 +92,7 @@ export function StorageOverview({ onOpen }: { onOpen: (kind: StorageKind) => voi
   const shown = by ? STORAGE_KINDS.filter((k) => by[k] > 0) : [];
   return (
     <SettingsPage note={t('settings.storage.desc')}>
-      <section className="mb-6 rounded-[12px] bg-[var(--settings-card)] px-4 pb-4 pt-3.5">
+      <section className="mb-10">
         <div className="flex items-baseline justify-between gap-4">
           <span className="text-[15px] font-semibold text-[var(--text)]">OpenFilm</span>
           <span className="text-[14px] tabular-nums text-[var(--text-muted)]">
@@ -100,7 +102,7 @@ export function StorageOverview({ onOpen }: { onOpen: (kind: StorageKind) => voi
         <div data-storage-bar="" className="mt-3 flex h-[22px] overflow-hidden rounded-[6px] bg-[var(--bg-field)]">
           {by && total > 0 ? shown.map((k) => (
             <span key={k} title={`${t(`settings.storage.kinds.${k}`)} · ${amount(by[k])}`}
-              style={{ width: `${Math.max(0.6, (by[k] / total) * 100)}%`, background: KIND_COLOR[k] }} className="h-full border-r border-[var(--settings-card)] last:border-r-0" />
+              style={{ width: `${Math.max(0.6, (by[k] / total) * 100)}%`, background: KIND_COLOR[k] }} className="h-full border-r-2 border-[var(--bg-topbar-popover)] last:border-r-0" />
           )) : null}
         </div>
         <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-[var(--text-muted)]">
@@ -117,7 +119,7 @@ export function StorageOverview({ onOpen }: { onOpen: (kind: StorageKind) => voi
       {usage && usage.clearable >= 1e6 ? <ClearGroup usage={usage} /> : null}
       <SettingsGroup>
         {STORAGE_KINDS.map((k) => (
-          <SettingsNavRow key={k} tile={storageTile(k)} title={t(`settings.storage.kinds.${k}`)}
+          <SettingsNavRow key={k} mark={kindMark(k)} title={t(`settings.storage.kinds.${k}`)}
             value={by ? amount(by[k]) : '…'} onClick={() => onOpen(k)} />
         ))}
       </SettingsGroup>
@@ -136,7 +138,7 @@ function ClearGroup({ usage }: { usage: StorageUsage }) {
   };
   return (
     <SettingsGroup title={t('settings.storage.suggest')}>
-      <SettingsItem mark={storageTile('cache', 36)} title={t('settings.storage.clear')}
+      <SettingsItem mark={<RefreshCcw size={16} />} title={t('settings.storage.clear')}
         description={(
           <>
             {t('settings.storage.clearDesc').replace('{size}', amount(usage.clearable))}
@@ -155,15 +157,9 @@ export function StorageKindPage({ kind }: { kind: StorageKind }) {
   const total = usage ? kindBytes(usage)[kind] : null;
   return (
     <SettingsPage>
-      <div className="mb-6 flex items-center gap-4 rounded-[12px] bg-[var(--settings-card)] px-4 py-4">
-        {storageTile(kind, 44)}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-[17px] font-semibold text-[var(--text)]">{t(`settings.storage.kinds.${kind}`)}</h2>
-            <span className="shrink-0 text-[15px] tabular-nums text-[var(--text-muted)]">{total == null ? t('settings.storage.usageLoading') : amount(total)}</span>
-          </div>
-          <p className="mt-1 text-[13.5px] leading-relaxed text-[var(--text-muted)]">{t(`settings.storage.about.${kind}`)}</p>
-        </div>
+      <div className="mb-8 flex items-start justify-between gap-6">
+        <p className="min-w-0 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t(`settings.storage.about.${kind}`)}</p>
+        <span className="shrink-0 text-[17px] font-semibold tabular-nums text-[var(--text)]">{total == null ? t('settings.storage.usageLoading') : amount(total)}</span>
       </div>
       {kind === 'projects' ? <ProjectsLocationGroup /> : null}
       {kind === 'cache' && usage && usage.clearable >= 1e6 ? <ClearGroup usage={usage} /> : null}

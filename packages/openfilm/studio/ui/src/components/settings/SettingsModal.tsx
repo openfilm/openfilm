@@ -1,21 +1,21 @@
 /**
- * Settings, opened from the app menu at the top left, laid out as a computer's system settings: on the left a search,
- * the account (OpenFilm is used here without one; signing in to OpenFilm's account is for its services), a note when
- * an update waits, and the sections in groups, each with its colored mark; on the right the page shown, under a bar
- * with Back and Forward and its name. A section is a page of cards, or a list of pages of its own (General, Advanced),
- * each a row with a chevron, opened in place: Back goes up again, as in a browser. The search finds a section by any
+ * Settings, opened from the app menu at the top left, sorted as a computer's system settings sorts its own: on the
+ * left a search, the account (OpenFilm is used here without one; signing in to OpenFilm's account is for its own
+ * services), a line when an update waits, then the sections in three groups: what OpenFilm works with (Agents, in an
+ * app with a chat; Services; Plugins), how it is set up (General, Appearance, Notifications in an app that offers
+ * them, Playback), and Keyboard shortcuts and Developer. On the right the page, under Back and Forward; a row with a
+ * chevron opens a page of its own in place, and Back goes up again, as in a browser. The search finds a section by any
  * phrase on it or its pages.
  *
- * General: About (the version, what is new, where OpenFilm lives), Software update, Language, Notifications (in an app
- * that offers them). Appearance: the theme. Agents (in an app with a chat), Services, Plugins, Keyboard shortcuts.
- * Advanced: Asset management (everything OpenFilm keeps on this computer, StoragePages), versions saved on their own,
- * how the preview plays, the library's categories. Developer: diagnostics.
+ * General: About (the version, what is new, where OpenFilm lives), Software update, Asset management (everything
+ * OpenFilm keeps on this computer, StoragePages), Language, and versions saved on their own. Appearance: the theme and
+ * the library's categories. Playback: how the preview plays.
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
 import {
-  X, Settings, Keyboard, Boxes, Bot, Search, SquareTerminal, Loader2, SlidersHorizontal, Puzzle, ChevronLeft,
-  ChevronRight, Contrast, Info, RefreshCw, Globe, Bell, HardDrive, History, Play, LayoutGrid, UserRound, ExternalLink,
+  X, Settings, Keyboard, Boxes, Bot, Search, SquareTerminal, Loader2, Puzzle, ChevronLeft, ChevronRight, Contrast, Info,
+  RefreshCw, Globe, Bell, HardDrive, History, Play, UserRound, ExternalLink,
 } from 'lucide-react';
 import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type LanguageChoice } from '@/i18n';
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
@@ -23,7 +23,6 @@ import { showWhatsNew } from '@/lib/whats-new';
 import { usePreviewPrefs, writePreviewPref } from '@/lib/preview-prefs';
 import { useProviders } from '@/lib/providers';
 import { hasNotes } from '../WhatsNew';
-import { BrandLogo } from '../BrandLogo';
 import { useWebUpdate } from '../UpdateButton';
 import { api, type StudioPrefs, type StudioVersion } from '@/api';
 import { AgentsSection } from './AgentsSection';
@@ -31,30 +30,28 @@ import { DiagnosticsGroup } from './DiagnosticsGroup';
 import { ModelsSection } from './ModelsSection';
 import { SettingsSelect } from './SettingsSelect';
 import { ShortcutsSection } from './ShortcutsSection';
-import {
-  SettingsButton, SettingsGroup, SettingsHero, SettingsItem, SettingsLinkButton, SettingsNavRow, SettingsPage, SettingsSegmented, SettingsSwitch, SettingsTile,
-} from './ui';
+import { SettingsButton, SettingsGroup, SettingsItem, SettingsLinkButton, SettingsNavRow, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
 import { useThemeMode, type ThemeMode } from './theme';
 import { PluginsSection } from './PluginsSection';
+import { LARGE_DIALOG_SIZE } from '../dialog-chrome';
 import { LibraryCategoriesGroup } from './LibraryCategoriesGroup';
 import { STORAGE_KINDS, StorageKindPage, StorageOverview, type StorageKind } from './StoragePages';
 
-export type SettingsSection = 'account' | 'general' | 'appearance' | 'agents' | 'models' | 'plugins' | 'shortcuts' | 'advanced' | 'developer';
+export type SettingsSection = 'account' | 'agents' | 'models' | 'plugins' | 'general' | 'appearance' | 'notifications' | 'playback' | 'shortcuts' | 'developer';
 
 /** A page: a section, or a page inside one (its section first, then its own name). */
 type PageId = SettingsSection
-  | 'general/about' | 'general/update' | 'general/language' | 'general/notifications'
-  | 'advanced/storage' | 'advanced/versions' | 'advanced/playback' | 'advanced/library'
-  | `advanced/storage/${StorageKind}`;
+  | 'general/about' | 'general/update' | 'general/storage' | 'general/language' | 'general/versions'
+  | `general/storage/${StorageKind}`;
 
 const sectionOf = (page: PageId) => page.split('/')[0] as SettingsSection;
 
-/* the nav, in groups: OpenFilm itself, what it works with, and the rest (Agents only inside an app with a chat:
-   lib/host.ts `agents`) */
+/* the nav, in groups: what OpenFilm works with, how it is set up, and the rest (Agents only inside an app with a chat,
+   Notifications only inside an app that offers them: lib/host.ts `agents`, `notifications`) */
 const NAV: SettingsSection[][] = [
-  ['general', 'appearance'],
   [...(studioHost?.agents ? ['agents' as const] : []), 'models', 'plugins'],
-  ['shortcuts', 'advanced', 'developer'],
+  ['general', 'appearance', ...(studioHost?.notifications ? ['notifications' as const] : []), 'playback'],
+  ['shortcuts', 'developer'],
 ];
 
 /** where OpenFilm lives, on About */
@@ -64,36 +61,26 @@ const LINKS = [
   { label: 'settings.links.site', href: 'https://openfilm.dev' },
 ];
 
-const ICON = { size: 16, strokeWidth: 2 } as const;
-/** each section's mark: its glyph on its color */
-const SECTION_TILE: Record<Exclude<SettingsSection, 'account'>, { color: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }> }> = {
-  general: { color: '#8e8e93', icon: Settings },
-  appearance: { color: '#2c2c2e', icon: Contrast },
-  agents: { color: '#7d5bf0', icon: Bot },
-  models: { color: '#0a84ff', icon: Boxes },
-  plugins: { color: '#34a853', icon: Puzzle },
-  shortcuts: { color: '#636366', icon: Keyboard },
-  advanced: { color: '#5e6ad2', icon: SlidersHorizontal },
-  developer: { color: '#4b5563', icon: SquareTerminal },
+type Glyph = React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
+const SECTION_ICON: Record<Exclude<SettingsSection, 'account'>, Glyph> = {
+  agents: Bot, models: Boxes, plugins: Puzzle, general: Settings, appearance: Contrast, notifications: Bell, playback: Play,
+  shortcuts: Keyboard, developer: SquareTerminal,
 };
-const sectionTile = (id: Exclude<SettingsSection, 'account'>, size = 26) => {
-  const { color, icon: Icon } = SECTION_TILE[id];
-  return <SettingsTile color={color} size={size}><Icon size={Math.round(size * 0.6)} strokeWidth={2} /></SettingsTile>;
-};
-const tile = (color: string, Icon: React.ComponentType<{ size?: number; strokeWidth?: number }>) => <SettingsTile color={color}><Icon {...ICON} /></SettingsTile>;
+/** a row's mark: its glyph, quiet */
+const mark = (Icon: Glyph) => <Icon size={18} strokeWidth={1.75} className="shrink-0 text-[var(--text-muted)]" />;
 
-/** what a search through each section reads: its name and every phrase on it and its pages (Notifications only where
-    it shows: inside an app that offers them, lib/host.ts `notifications`) */
+/** what a search through each section reads: its name and every phrase on it and its pages */
 const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
   account: 'settings.account',
-  general: ['settings.general', 'settings.about', 'settings.links', 'settings.appearance.language', 'settings.appearance.languageHint', ...(studioHost?.notifications ? ['settings.notifications'] : [])],
-  appearance: 'settings.appearance',
   agents: 'settings.agents',
   models: ['settings.models', 'settings.providers'],
   plugins: 'settings.plugins',
-  developer: ['settings.developer', 'settings.report'],
+  general: ['settings.general', 'settings.about', 'settings.links', 'settings.storage', 'settings.versions', 'settings.appearance.language', 'settings.appearance.languageHint'],
+  appearance: ['settings.appearance.group', 'settings.appearance.theme', 'settings.appearance.themeHint', 'settings.libraryCategories'],
+  notifications: 'settings.notifications',
+  playback: ['settings.playback', 'settings.advanced'],
   shortcuts: 'settings.shortcuts',
-  advanced: ['settings.advanced', 'settings.storage', 'settings.versions', 'settings.playback', 'settings.libraryCategories'],
+  developer: ['settings.developer', 'settings.report'],
 };
 
 export interface SettingsModalProps {
@@ -170,9 +157,8 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
   if (!open) return null;
 
   const title = showing ? pageTitle(showing, t) : t('settings.title');
-  /* a section that opens on its own card names itself there; any other page is named in the bar */
-  const hero = showing === 'general' || showing === 'advanced' || showing === 'account';
   const shownSection = showing ? sectionOf(showing) : null;
+  const navButton = 'flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:pointer-events-none disabled:opacity-35';
 
   return createPortal(
     <div
@@ -185,37 +171,38 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative flex h-[86dvh] max-h-[900px] w-[92vw] max-w-[1120px] overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--settings-pane)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5),0_4px_16px_rgba(0,0,0,0.14)]"
+        className={`relative flex ${LARGE_DIALOG_SIZE} overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-topbar-popover)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5),0_4px_16px_rgba(0,0,0,0.14)]`}
       >
-        <nav aria-label={t('settings.title')} className="flex w-[264px] shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] bg-[var(--settings-side)] px-2.5 pb-4 pt-3">
-          <label className="mb-3 flex h-9 shrink-0 items-center gap-2 rounded-[8px] bg-[var(--bg-field)] px-2.5 text-[var(--text-muted)] transition focus-within:ring-2 focus-within:ring-[var(--accent)]/40">
-            <Search size={15} strokeWidth={2} className="shrink-0" aria-hidden />
+        <nav aria-label={t('settings.title')} className="flex w-[264px] shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] px-3 pb-4 pt-3">
+          <label className="mb-3 flex h-10 shrink-0 items-center gap-2.5 rounded-[9px] border border-[var(--border)] px-3 text-[var(--text-muted)] transition focus-within:border-[var(--text-muted)]">
+            <Search size={17} strokeWidth={1.75} className="shrink-0" aria-hidden />
             <input
               ref={search}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t('settings.search')}
               aria-label={t('settings.search')}
-              className="min-w-0 flex-1 bg-transparent text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
+              className="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
             />
           </label>
           {found.includes('account') ? <AccountCard active={shownSection === 'account'} onOpen={() => go('account')} /> : null}
           <UpdateWaiting onOpen={() => go('general/update')} />
           {nav.map((group, i) => (
-            <div key={i} className="mt-3 flex flex-col gap-px">
+            <div key={i} className="mt-2 flex flex-col gap-0.5 border-t border-[var(--border)] pt-2">
               {group.map((id) => {
                 const active = shownSection === id;
+                const Icon = SECTION_ICON[id as Exclude<SettingsSection, 'account'>];
                 return (
                   <button
                     key={id}
                     type="button"
                     aria-current={active ? 'page' : undefined}
                     onClick={() => go(id)}
-                    className={`flex h-9 min-w-0 items-center gap-2.5 rounded-[7px] px-2 text-left text-[14.5px] transition ${
-                      active ? 'bg-[var(--accent)] text-white' : 'text-[var(--text)] hover:bg-[var(--bg-hover)]'
+                    className={`flex h-10 min-w-0 items-center gap-3 rounded-[8px] px-2.5 text-left text-[15px] transition ${
+                      active ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
                     }`}
                   >
-                    {sectionTile(id as Exclude<SettingsSection, 'account'>, 22)}
+                    <Icon size={18} strokeWidth={1.75} className={`shrink-0 ${active ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} />
                     <span className="min-w-0 truncate">{t(`settings.sections.${id}`)}</span>
                   </button>
                 );
@@ -226,26 +213,22 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
         </nav>
 
         <div className="relative flex min-w-0 flex-1 flex-col">
-          <div className="flex h-[52px] shrink-0 items-center gap-3 px-4">
-            <div className="flex h-8 items-center rounded-[8px] bg-[var(--bg-field)]">
-              <button type="button" onClick={back} disabled={trail.at === 0} aria-label={t('settings.back')} title={t('settings.back')}
-                className="grid h-8 w-8 place-items-center rounded-l-[8px] text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:text-[var(--text-faint)] disabled:hover:bg-transparent">
-                <ChevronLeft size={17} strokeWidth={2} />
-              </button>
-              <span aria-hidden className="h-4 w-px bg-[var(--border)]" />
-              <button type="button" onClick={forward} disabled={trail.at >= trail.pages.length - 1} aria-label={t('settings.forward')} title={t('settings.forward')}
-                className="grid h-8 w-8 place-items-center rounded-r-[8px] text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:text-[var(--text-faint)] disabled:hover:bg-transparent">
-                <ChevronRight size={17} strokeWidth={2} />
-              </button>
-            </div>
-            <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-[var(--text)]">{showing && !hero ? title : ''}</h2>
-            <button type="button" onClick={onClose} aria-label={t('settings.done')}
-              className="grid h-8 w-8 place-items-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-              <X size={18} strokeWidth={1.75} />
+          <div className="flex shrink-0 items-center gap-1 px-4 pt-4">
+            <button type="button" onClick={back} disabled={trail.at === 0} aria-label={t('settings.back')} title={t('settings.back')} className={navButton}>
+              <ChevronLeft size={19} strokeWidth={1.75} />
+            </button>
+            <button type="button" onClick={forward} disabled={trail.at >= trail.pages.length - 1} aria-label={t('settings.forward')} title={t('settings.forward')} className={navButton}>
+              <ChevronRight size={19} strokeWidth={1.75} />
+            </button>
+            <span className="flex-1" />
+            <button type="button" onClick={onClose} aria-label={t('settings.done')} className={navButton}>
+              <X size={19} strokeWidth={1.75} />
             </button>
           </div>
-          <div key={showing ?? 'none'} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-8 pb-12 pt-2">
-            <div className="mx-auto w-full max-w-[760px]">
+          {/* one column in the middle of whatever room the window gives */}
+          <div key={showing ?? 'none'} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-3">
+            <div className="mx-auto w-full max-w-[920px]">
+              {showing ? <h2 id="settings-title" className="mb-7 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{title}</h2> : null}
               {showing ? <SettingsPageFor page={showing} go={go} /> : null}
             </div>
           </div>
@@ -256,44 +239,40 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
   );
 }
 
-/** A page's name, in the bar. */
+/** A page's name. */
 function pageTitle(page: PageId, t: (key: string) => string): string {
-  if (page.startsWith('advanced/storage/')) return t(`settings.storage.kinds.${page.split('/')[2]}`);
+  if (page.startsWith('general/storage/')) return t(`settings.storage.kinds.${page.split('/')[2]}`);
   switch (page) {
     case 'general/about': return t('settings.about.title');
     case 'general/update': return t('settings.about.update');
+    case 'general/storage': return t('settings.storage.title');
     case 'general/language': return t('settings.appearance.language');
-    case 'general/notifications': return t('settings.notifications.group');
-    case 'advanced/storage': return t('settings.storage.title');
-    case 'advanced/versions': return t('settings.versions.group');
-    case 'advanced/playback': return t('settings.playback.group');
-    case 'advanced/library': return t('settings.libraryCategories.group');
+    case 'general/versions': return t('settings.versions.group');
+    case 'account': return t('settings.sections.account');
     default: return t(`settings.sections.${page}`);
   }
 }
 
 function SettingsPageFor({ page, go }: { page: PageId; go: (page: PageId) => void }) {
-  if (page.startsWith('advanced/storage/')) {
+  if (page.startsWith('general/storage/')) {
     const kind = page.split('/')[2] as StorageKind;
     return STORAGE_KINDS.includes(kind) ? <StorageKindPage kind={kind} /> : null;
   }
   switch (page) {
     case 'account': return <AccountSection go={go} />;
-    case 'general': return <GeneralSection go={go} />;
-    case 'general/about': return <AboutPage />;
-    case 'general/update': return <SettingsPage>{studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}</SettingsPage>;
-    case 'general/language': return <LanguagePage />;
-    case 'general/notifications': return <SettingsPage><NotificationsGroup /></SettingsPage>;
-    case 'appearance': return <AppearanceSection />;
     case 'agents': return <AgentsSection />;
     case 'models': return <ModelsSection />;
     case 'plugins': return <PluginsSection />;
+    case 'general': return <GeneralSection go={go} />;
+    case 'general/about': return <AboutPage />;
+    case 'general/update': return <SettingsPage>{studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}</SettingsPage>;
+    case 'general/storage': return <StorageOverview onOpen={(kind) => go(`general/storage/${kind}`)} />;
+    case 'general/language': return <LanguagePage />;
+    case 'general/versions': return <SettingsPage><VersionsGroup /></SettingsPage>;
+    case 'appearance': return <AppearanceSection />;
+    case 'notifications': return <SettingsPage><NotificationsGroup /></SettingsPage>;
+    case 'playback': return <SettingsPage><PlaybackGroup /></SettingsPage>;
     case 'shortcuts': return <ShortcutsSection />;
-    case 'advanced': return <AdvancedSection go={go} />;
-    case 'advanced/storage': return <StorageOverview onOpen={(kind) => go(`advanced/storage/${kind}`)} />;
-    case 'advanced/versions': return <SettingsPage><VersionsGroup /></SettingsPage>;
-    case 'advanced/playback': return <SettingsPage><PlaybackGroup /></SettingsPage>;
-    case 'advanced/library': return <SettingsPage><LibraryCategoriesGroup /></SettingsPage>;
     case 'developer': return <DeveloperSection />;
     default: return null;
   }
@@ -306,12 +285,12 @@ function useAccount() {
   return { hook, openfilm, signedIn: Boolean(openfilm?.source), waiting: hook.state?.signingIn?.provider === 'openfilm' };
 }
 
-/** A round picture for the account: the first letter of its email, or a person's outline while there is none. */
+/** A round mark for the account: the first letter of its email, or a person's outline while there is none. */
 function Avatar({ email, size }: { email: string | null; size: number }) {
   return (
-    <span aria-hidden className="grid shrink-0 place-items-center rounded-full font-semibold text-white"
-      style={{ width: size, height: size, fontSize: size * 0.42, background: email ? 'linear-gradient(160deg, #3fc3cc, #0a7f88)' : 'linear-gradient(160deg, #a1a1a8, #6b6b72)' }}>
-      {email ? email.slice(0, 1).toUpperCase() : <UserRound size={Math.round(size * 0.56)} strokeWidth={1.75} />}
+    <span aria-hidden className="grid shrink-0 place-items-center rounded-full bg-[var(--bg-pressed)] font-medium text-[var(--text)]"
+      style={{ width: size, height: size, fontSize: size * 0.4 }}>
+      {email ? email.slice(0, 1).toUpperCase() : <UserRound size={Math.round(size * 0.52)} strokeWidth={1.75} className="text-[var(--text-muted)]" />}
     </span>
   );
 }
@@ -323,11 +302,11 @@ function AccountCard({ active, onOpen }: { active: boolean; onOpen: () => void }
   const email = signedIn ? openfilm?.account ?? null : null;
   return (
     <button type="button" onClick={onOpen} aria-current={active ? 'page' : undefined} data-settings-account=""
-      className={`flex min-w-0 items-center gap-3 rounded-[9px] px-2 py-2 text-left transition ${active ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'}`}>
-      <Avatar email={email} size={40} />
+      className={`flex min-w-0 items-center gap-3 rounded-[8px] px-2 py-2 text-left transition ${active ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'}`}>
+      <Avatar email={email} size={36} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14.5px] font-semibold text-[var(--text)]">{email ?? (signedIn ? t('settings.account.signedIn') : t('settings.account.local'))}</span>
-        <span className="block truncate text-[12.5px] text-[var(--text-muted)]">{signedIn ? t('settings.account.signedInSub') : t('settings.account.localSub')}</span>
+        <span className="block truncate text-[14.5px] text-[var(--text)]">{email ?? (signedIn ? t('settings.account.signedIn') : t('settings.account.local'))}</span>
+        <span className="block truncate text-[12.5px] text-[var(--text-faint)]">{signedIn ? t('settings.account.signedInSub') : t('settings.account.localSub')}</span>
       </span>
     </button>
   );
@@ -346,9 +325,10 @@ function UpdateWaiting({ onOpen }: { onOpen: () => void }) {
   }, [update]);
   if (!waiting) return null;
   return (
-    <button type="button" onClick={onOpen} className="mt-1 flex items-center gap-3 rounded-[7px] px-2 py-1.5 text-left text-[14px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]">
+    <button type="button" onClick={onOpen} className="mt-0.5 flex h-9 items-center gap-3 rounded-[8px] px-2.5 text-left text-[14px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]">
+      <RefreshCw size={16} strokeWidth={1.75} className="shrink-0 text-[var(--text-muted)]" />
       <span className="min-w-0 flex-1 truncate">{t('settings.updateWaiting')}</span>
-      <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#ff453a] px-1.5 text-[12px] font-semibold text-white">1</span>
+      <span className="h-2 w-2 rounded-full bg-[var(--accent)]" aria-hidden />
     </button>
   );
 }
@@ -365,9 +345,13 @@ function AccountSection({ go }: { go: (page: PageId) => void }) {
   const problem = (hook.problemFor === 'openfilm' ? hook.problem : null) ?? (hook.state?.signingIn?.errorFor === 'openfilm' ? hook.state.signingIn.error : null) ?? openfilm?.connectionError ?? null;
   return (
     <SettingsPage>
-      <SettingsHero tile={<Avatar email={email} size={72} />}
-        title={email ?? (signedIn ? t('settings.account.signedIn') : t('settings.account.local'))}
-        description={signedIn ? t('settings.account.signedInDesc') : t('settings.account.localDesc')} />
+      <div className="mb-10 flex items-center gap-4">
+        <Avatar email={email} size={56} />
+        <div className="min-w-0">
+          <div className="truncate text-[17px] font-semibold text-[var(--text)]">{email ?? (signedIn ? t('settings.account.signedIn') : t('settings.account.local'))}</div>
+          <p className="mt-1 text-[14px] leading-relaxed text-[var(--text-muted)]">{signedIn ? t('settings.account.signedInDesc') : t('settings.account.localDesc')}</p>
+        </div>
+      </div>
       <SettingsGroup title={t('settings.account.openfilm')} footnote={problem ? <span className="text-[var(--err)]" role="alert">{problem}</span> : null}>
         {signedIn ? (
           <SettingsItem title={email ?? t('settings.account.signedIn')} description={openfilm?.source === 'env' ? t('settings.account.envNote') : t('settings.account.signedInSub')}
@@ -378,15 +362,15 @@ function AccountSection({ go }: { go: (page: PageId) => void }) {
               </>
             )} />
         ) : (
-          <SettingsItem title={t('settings.account.signInTitle')} description={waiting ? t('settings.providers.signingIn') : t('settings.account.signInHint')}
+          <SettingsItem title={t('settings.account.localSub')} description={waiting ? t('settings.providers.signingIn') : t('settings.account.signInHint')}
             control={waiting
               ? <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.cancelSignIn('openfilm')}>{t('settings.providers.cancel')}</SettingsButton>
               : <SettingsButton variant="primary" disabled={busy || !openfilm} onClick={() => void hook.signIn('openfilm')}>{t('settings.account.signIn')}</SettingsButton>} />
         )}
       </SettingsGroup>
       <SettingsGroup title={t('settings.account.thisComputer')}>
-        <SettingsNavRow tile={tile('#5e6ad2', HardDrive)} title={t('settings.storage.title')} onClick={() => go('advanced/storage')} />
-        <SettingsNavRow tile={sectionTile('models', 28)} title={t('settings.sections.models')} onClick={() => go('models')} />
+        <SettingsNavRow mark={mark(HardDrive)} title={t('settings.storage.title')} onClick={() => go('general/storage')} />
+        <SettingsNavRow mark={mark(Boxes)} title={t('settings.sections.models')} onClick={() => go('models')} />
       </SettingsGroup>
     </SettingsPage>
   );
@@ -400,15 +384,15 @@ function GeneralSection({ go }: { go: (page: PageId) => void }) {
   React.useEffect(() => { void api.version().then((v) => setVersion(v.version), () => {}); }, []);
   const languageName = language === 'system' ? t('settings.appearance.languageSystem') : LANGUAGES.find((l) => l.code === language)?.name ?? '';
   return (
-    <SettingsPage>
-      <SettingsHero tile={sectionTile('general', 64)} title={t('settings.sections.general')} description={t('settings.general.desc')} />
+    <SettingsPage note={t('settings.general.desc')}>
       <SettingsGroup>
-        <SettingsNavRow tile={tile('#8e8e93', Info)} title={t('settings.about.title')} value={version} onClick={() => go('general/about')} />
-        <SettingsNavRow tile={tile('#8e8e93', RefreshCw)} title={t('settings.about.update')} onClick={() => go('general/update')} />
+        <SettingsNavRow mark={mark(Info)} title={t('settings.about.title')} value={version} onClick={() => go('general/about')} />
+        <SettingsNavRow mark={mark(RefreshCw)} title={t('settings.about.update')} onClick={() => go('general/update')} />
+        <SettingsNavRow mark={mark(HardDrive)} title={t('settings.storage.title')} onClick={() => go('general/storage')} />
       </SettingsGroup>
       <SettingsGroup>
-        <SettingsNavRow tile={tile('#0a84ff', Globe)} title={t('settings.appearance.language')} value={languageName} onClick={() => go('general/language')} />
-        {studioHost?.notifications ? <SettingsNavRow tile={tile('#ff3b30', Bell)} title={t('settings.notifications.group')} onClick={() => go('general/notifications')} /> : null}
+        <SettingsNavRow mark={mark(Globe)} title={t('settings.appearance.language')} value={languageName} onClick={() => go('general/language')} />
+        <SettingsNavRow mark={mark(History)} title={t('settings.versions.group')} onClick={() => go('general/versions')} />
       </SettingsGroup>
     </SettingsPage>
   );
@@ -421,21 +405,15 @@ function AboutPage() {
   React.useEffect(() => { void api.version().then((v) => setVersion(v.version), () => {}); }, []);
   return (
     <SettingsPage>
-      <SettingsHero tile={<span className="grid h-16 w-16 place-items-center rounded-[15px] bg-[var(--bg-panel)] text-[var(--text)] shadow-[inset_0_0_0_1px_var(--border)]"><BrandLogo size={36} /></span>}
-        title="OpenFilm" description={(
-          <>
-            {version ? t('settings.about.version').replace('{version}', version) : null}
-            {hasNotes(version ?? undefined) ? <span className="mt-2 block"><WhatsNewLink /></span> : null}
-          </>
-        )} />
+      <SettingsGroup>
+        <SettingsItem title="OpenFilm" description={version ? t('settings.about.version').replace('{version}', version) : null}>
+          {hasNotes(version ?? undefined) ? <WhatsNewLink /> : null}
+        </SettingsItem>
+      </SettingsGroup>
       <SettingsGroup title={t('settings.about.links')}>
         {LINKS.map((link) => (
-          <a key={link.href} href={link.href} target="_blank" rel="noreferrer"
-            className="-mx-4 flex min-h-[48px] items-center gap-3 px-4 py-2.5 text-[15px] text-[var(--text)] transition first:rounded-t-[12px] last:rounded-b-[12px] hover:bg-[var(--bg-hover)]">
-            <span className="min-w-0 flex-1">{t(link.label)}</span>
-            <span className="text-[13.5px] text-[var(--text-faint)]">{link.href.replace(/^https:\/\//, '')}</span>
-            <ExternalLink size={14} className="shrink-0 text-[var(--text-faint)]" aria-hidden />
-          </a>
+          <SettingsItem key={link.href} title={t(link.label)}
+            control={<SettingsLinkButton href={link.href}>{link.href.replace(/^https:\/\//, '')}<ExternalLink size={12} /></SettingsLinkButton>} />
         ))}
       </SettingsGroup>
     </SettingsPage>
@@ -481,14 +459,14 @@ function ThemePicture({ mode }: { mode: ThemeMode }) {
     </span>
   );
   return (
-    <span className="relative block h-[66px] w-[100px] overflow-hidden rounded-[8px]">
+    <span className="relative block h-[66px] w-[100px] overflow-hidden rounded-[8px] ring-1 ring-[var(--border)]">
       {mode === 'dark' ? pane(true) : pane(false)}
       {mode === 'system' ? <span className="absolute inset-0" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}>{pane(true)}</span> : null}
     </span>
   );
 }
 
-/** Appearance: the theme, each choice a picture of it. */
+/** Appearance: the theme, each choice a picture of it; and the library's categories, in their order. */
 function AppearanceSection() {
   const t = useT();
   const [mode, setMode] = useThemeMode();
@@ -507,7 +485,7 @@ function AppearanceSection() {
               return (
                 <button key={option.value} type="button" role="radio" aria-checked={on} aria-label={option.label} onClick={() => { if (!on) setMode(option.value); }}
                   className="flex flex-col items-center gap-2 rounded-[10px] text-[13.5px]">
-                  <span className={`rounded-[10px] p-[3px] ring-2 transition ${on ? 'ring-[var(--accent)]' : 'ring-transparent hover:ring-[var(--border-strong)]'}`}>
+                  <span className={`rounded-[10px] p-[3px] ring-2 transition ${on ? 'ring-[var(--text-muted)]' : 'ring-transparent hover:ring-[var(--border-strong)]'}`}>
                     <ThemePicture mode={option.value} />
                   </span>
                   <span aria-hidden className={`${on ? 'font-medium text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{option.label}</span>
@@ -517,6 +495,7 @@ function AppearanceSection() {
           </div>
         </SettingsItem>
       </SettingsGroup>
+      <LibraryCategoriesGroup />
     </SettingsPage>
   );
 }
@@ -614,28 +593,6 @@ function VersionsGroup() {
         control={<SettingsSwitch checked={prefs.autoVersions === true} onChange={(on) => change({ autoVersions: on })} label={t('settings.versions.auto')} />}
       />
     </SettingsGroup>
-  );
-}
-
-/**
- * Advanced, a list of its pages: Asset management (StoragePages), versions saved on their own (VersionsGroup), how the
- * preview plays (PlaybackGroup), the library's categories (LibraryCategoriesGroup). All but the first are already
- * set for the best experience.
- */
-function AdvancedSection({ go }: { go: (page: PageId) => void }) {
-  const t = useT();
-  return (
-    <SettingsPage>
-      <SettingsHero tile={sectionTile('advanced', 64)} title={t('settings.sections.advanced')} description={t('settings.advanced.desc')} />
-      <SettingsGroup>
-        <SettingsNavRow tile={tile('#5e6ad2', HardDrive)} title={t('settings.storage.title')} onClick={() => go('advanced/storage')} />
-      </SettingsGroup>
-      <SettingsGroup>
-        <SettingsNavRow tile={tile('#ff9f0a', History)} title={t('settings.versions.group')} onClick={() => go('advanced/versions')} />
-        <SettingsNavRow tile={tile('#34a853', Play)} title={t('settings.playback.group')} onClick={() => go('advanced/playback')} />
-        <SettingsNavRow tile={tile('#32ade6', LayoutGrid)} title={t('settings.libraryCategories.group')} onClick={() => go('advanced/library')} />
-      </SettingsGroup>
-    </SettingsPage>
   );
 }
 

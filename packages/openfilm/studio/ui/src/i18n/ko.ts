@@ -2561,6 +2561,8 @@ export const ko: Words = {
       site: '웹사이트',
     },
     sections: {
+      notifications: "알림",
+      playback: "재생",
       account: "계정",
       appearance: "모양",
       agents: '에이전트',
@@ -2569,7 +2571,6 @@ export const ko: Words = {
       developer: '개발자',
       general: '일반',
       shortcuts: '키보드 단축키',
-      advanced: '고급',
     },
     account: {
       local: "로컬에서 사용 중",
@@ -2579,7 +2580,6 @@ export const ko: Words = {
       localDesc: "OpenFilm은 계정 없이 이 컴퓨터에서 사용할 수 있습니다. 프로젝트와 미디어는 이 컴퓨터에 저장됩니다.",
       signedInDesc: "OpenFilm 계정에 로그인했습니다. OpenFilm 자체 서비스는 잔액에서 결제되며, 프로젝트와 미디어는 계속 이 컴퓨터에 저장됩니다.",
       openfilm: "OpenFilm 계정",
-      signInTitle: "OpenFilm 계정",
       signInHint: "로그인하면 OpenFilm 자체의 음성, 음악, 이미지, 동영상 생성 서비스를 잔액으로 사용할 수 있습니다. 로그인하지 않아도 다른 서비스와 이 컴퓨터의 모든 기능은 그대로 사용할 수 있습니다.",
       signIn: "로그인…",
       page: "계정 페이지",
@@ -2588,7 +2588,7 @@ export const ko: Words = {
       thisComputer: "이 컴퓨터",
     },
     general: {
-      desc: "OpenFilm 정보, 소프트웨어 업데이트, 언어, 알림.",
+      desc: "OpenFilm 정보, 소프트웨어 업데이트, 리소스 관리, 언어, 자동 저장 버전.",
     },
     notifications: {
       group: '알림',
@@ -2686,7 +2686,6 @@ export const ko: Words = {
       skills: { canvas: "캔버스" },
     },
     advanced: {
-      desc: "리소스 관리, 그리고 버전·재생·라이브러리 카테고리처럼 이미 최적으로 맞춘 설정.",
       fitPages: "웹 페이지를 뷰어 크기로 그리기",
       fitPagesHint: "웹 페이지의 Canvas와 3D를 뷰어에 보이는 크기로 그립니다. 보기에는 같고 더 부드럽게 재생됩니다. 끄면 영상의 전체 크기로 그립니다. 내보내기는 항상 전체 크기입니다.",
       renders: "느리게 재생되는 구간 렌더링",

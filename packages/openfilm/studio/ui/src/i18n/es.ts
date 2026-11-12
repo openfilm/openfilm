@@ -2565,6 +2565,8 @@ export const es: Words = {
       site: 'Sitio web',
     },
     sections: {
+      notifications: "Notificaciones",
+      playback: "Reproducción",
       account: "Cuenta",
       appearance: "Apariencia",
       agents: 'Agentes',
@@ -2573,7 +2575,6 @@ export const es: Words = {
       developer: 'Desarrollador',
       general: 'General',
       shortcuts: 'Atajos de teclado',
-      advanced: 'Avanzado',
     },
     account: {
       local: "Uso local",
@@ -2583,7 +2584,6 @@ export const es: Words = {
       localDesc: "OpenFilm funciona en este ordenador sin cuenta. Tus proyectos y medios se quedan en este ordenador.",
       signedInDesc: "Has iniciado sesión en tu cuenta de OpenFilm. Los servicios propios de OpenFilm se pagan con su saldo; tus proyectos y medios se quedan en este ordenador.",
       openfilm: "Cuenta de OpenFilm",
-      signInTitle: "Cuenta de OpenFilm",
       signInHint: "Inicia sesión para usar los servicios propios de OpenFilm de voces, música, imágenes y vídeo, pagados con tu saldo. Sin ella, los demás servicios y todo lo de este ordenador siguen funcionando.",
       signIn: "Iniciar sesión…",
       page: "Página de la cuenta",
@@ -2592,7 +2592,7 @@ export const es: Words = {
       thisComputer: "En este ordenador",
     },
     general: {
-      desc: "Acerca de OpenFilm y sus actualizaciones, su idioma y sus notificaciones.",
+      desc: "Acerca de OpenFilm y actualizaciones, gestión de recursos, idioma y versiones guardadas solas.",
     },
     notifications: {
       group: 'Notificaciones',
@@ -2690,7 +2690,6 @@ export const es: Words = {
       skills: { canvas: "Lienzo" },
     },
     advanced: {
-      desc: "Gestión de recursos, y ajustes ya hechos para la mejor experiencia: versiones, reproducción y categorías de la biblioteca.",
       fitPages: "Dibujar las páginas al tamaño del visor",
       fitPagesHint: "El canvas y el 3D de las páginas web se dibujan al tamaño con que los muestra el visor: se ven igual y se reproducen con más fluidez. Desactivado: al tamaño completo de la película. Las exportaciones siempre se dibujan a tamaño completo.",
       renders: "Renderizar lo que se reproduce con retraso",

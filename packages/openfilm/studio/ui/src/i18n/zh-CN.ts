@@ -2566,6 +2566,8 @@ export const zhCN: Words = {
       site: '官网',
     },
     sections: {
+      notifications: "通知",
+      playback: "播放",
       account: "账号",
       appearance: "外观",
       agents: '智能体',
@@ -2574,7 +2576,6 @@ export const zhCN: Words = {
       developer: '开发者',
       general: '通用',
       shortcuts: '键盘快捷键',
-      advanced: '高级',
     },
     account: {
       local: "本地使用",
@@ -2584,7 +2585,6 @@ export const zhCN: Words = {
       localDesc: "OpenFilm 在这台电脑上使用，不需要账号。项目和素材都保存在这台电脑上。",
       signedInDesc: "已登录 OpenFilm 账号。OpenFilm 自己的生成服务从账号余额扣费；项目和素材仍保存在这台电脑上。",
       openfilm: "OpenFilm 账号",
-      signInTitle: "OpenFilm 账号",
       signInHint: "登录后可以使用 OpenFilm 自己的配音、音乐、图片和视频生成服务，从余额扣费。不登录也能使用其他服务和这台电脑上的所有功能。",
       signIn: "登录…",
       page: "账号页面",
@@ -2593,7 +2593,7 @@ export const zhCN: Words = {
       thisComputer: "这台电脑",
     },
     general: {
-      desc: "关于 OpenFilm、软件更新、语言和通知。",
+      desc: "关于 OpenFilm、软件更新、资源管理、语言和自动保存的版本。",
     },
     notifications: {
       group: '通知',
@@ -2691,7 +2691,6 @@ export const zhCN: Words = {
       skills: { canvas: "画布" },
     },
     advanced: {
-      desc: "资源管理，以及版本、播放、素材库类别等已调到最佳的设置。",
       fitPages: "按查看器尺寸绘制网页",
       fitPagesHint: "网页里的 Canvas 和 3D 按查看器实际显示的尺寸绘制，看起来一样，播放更流畅。关闭后按影片完整尺寸绘制。导出始终按完整尺寸。",
       renders: "渲染播放卡顿的片段",

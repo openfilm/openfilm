@@ -2566,6 +2566,8 @@ export const en = {
       site: 'Website',
     },
     sections: {
+      notifications: "Notifications",
+      playback: "Playback",
       account: "Account",
       appearance: "Appearance",
       agents: 'Agents',
@@ -2574,7 +2576,6 @@ export const en = {
       developer: 'Developer',
       general: 'General',
       shortcuts: 'Keyboard shortcuts',
-      advanced: 'Advanced',
     },
     account: {
       local: "Used locally",
@@ -2584,7 +2585,6 @@ export const en = {
       localDesc: "OpenFilm works on this computer without an account. Your projects and media stay on this computer.",
       signedInDesc: "You're signed in to your OpenFilm account. OpenFilm's own services are paid from its balance; your projects and media stay on this computer.",
       openfilm: "OpenFilm account",
-      signInTitle: "OpenFilm account",
       signInHint: "Sign in to use OpenFilm's own services for voices, music, pictures and video, paid from your balance. Without it, every other service and everything on this computer still works.",
       signIn: "Sign in…",
       page: "Account page",
@@ -2593,7 +2593,7 @@ export const en = {
       thisComputer: "On this computer",
     },
     general: {
-      desc: "About OpenFilm and its updates, its language and its notifications.",
+      desc: "About OpenFilm and software updates, asset management, language, and versions saved on their own.",
     },
     notifications: {
       group: 'Notifications',
@@ -2691,7 +2691,6 @@ export const en = {
       skills: { canvas: "Canvas" },
     },
     advanced: {
-      desc: "Asset management, and settings already made for the best experience: versions, playback, the library's categories.",
       fitPages: "Draw pages at the viewer’s size",
       fitPagesHint: "Canvas and 3D in web pages are drawn at the size the viewer shows them, which plays more smoothly and looks the same. Off: at the film’s full size. Exports always draw at full size.",
       renders: "Render what plays late",

@@ -2,14 +2,14 @@
 "openfilm": minor
 ---
 
-Settings is laid out as a computer's system settings. On the left: a search, your account (OpenFilm is used on this
-computer without one; signing in to your OpenFilm account is for OpenFilm's own services), a note when an update is
-waiting, and the sections, each with its own colored icon. On the right: the page, under a bar with Back and Forward
-(⌘[ and ⌘]). General and Advanced open on a card that says what they are, then a list of their pages: About, Software
-update, Language and Notifications; Asset management, Versions, Playback and Library categories. Appearance is a
-section of its own, each theme shown as a picture of it.
+Settings is sorted as a computer's system settings sorts its own. On the left: a search, your account (OpenFilm is
+used on this computer without one; signing in to your OpenFilm account is for OpenFilm's own services), a line when an
+update is waiting, then the sections in three groups: Agents, Services and Plugins; General, Appearance, Notifications
+and Playback; Keyboard shortcuts and Developer. On the right: the page, under Back and Forward (⌘[ and ⌘]). A row with
+a chevron opens a page of its own: General lists About, Software update, Asset management, Language and Versions.
+Appearance shows each theme as a picture of it, with the library's categories below.
 
-Asset management, in Advanced, shows everything OpenFilm keeps on this computer: how much it takes in all as one bar
+Asset management, in General, shows everything OpenFilm keeps on this computer: how much it takes in all as one bar
 parted by kind, the free space left, the cache to clear, then each kind on a page of its own: projects (where they are
 kept, each project's share, shown in the file manager), Mine, versions, conversations and logs, cache (cleared all at
 once or one project at a time), library downloads, local models, skills, and settings and other.
