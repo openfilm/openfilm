@@ -4,6 +4,7 @@ import { Clapperboard, FolderOpen, Image, Pencil, Plus, X } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import { useT } from '@/i18n';
 import { studioHost, type HostTab } from '@/lib/host';
+import { LIBRARY_TAB } from '@/lib/library-page';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { useHostTabs } from './ProjectCard';
 import { Toast, useToast } from './Toast';
@@ -26,6 +27,8 @@ export function ProjectTabs({ current, onProjects, onRenameCurrent, onCoverCurre
   const finished = React.useRef(false);
   const list = React.useRef<HTMLDivElement>(null);
   const beginRename = (tab: HostTab) => {
+    /* the library's tab is no project's: nothing to rename */
+    if (tab.projectId === LIBRARY_TAB) return;
     if (tab.id === self && onRenameCurrent) onRenameCurrent();
     else setEditing({ tab, name: tab.title || t('project.untitled') });
   };
@@ -46,7 +49,7 @@ export function ProjectTabs({ current, onProjects, onRenameCurrent, onCoverCurre
     }
   };
   const target = tabs.find(tab => tab.id === context?.id);
-  const entries: ContextMenuEntry[] = target && host ? [
+  const entries: ContextMenuEntry[] = target && host && target.projectId !== LIBRARY_TAB ? [
     { id: 'rename', icon: <Pencil size={14} />, label: t('projectMenu.rename'), onSelect: () => beginRename(target) },
     { id: 'cover', icon: <Image size={14} />, label: t('switcher.cover'), disabled: target.id !== self || !onCoverCurrent, hint: t('projectTabs.coverCurrent'), onSelect: onCoverCurrent },
     { id: 'reveal', icon: <FolderOpen size={14} />, label: t('switcher.reveal'), onSelect: () => { void api.revealProject(target.projectId).catch(() => toast.showError(t('projectTabs.revealFailed'))); } },
@@ -80,7 +83,7 @@ export function ProjectTabs({ current, onProjects, onRenameCurrent, onCoverCurre
       </div>
       <button type="button" className={styles.add} aria-label={t('projectTabs.new')} onClick={onProjects}><Plus size={16} /></button>
     </div>
-    {context && target ? <ContextMenu x={context.x} y={context.y} items={entries} onClose={() => setContext(null)} /> : null}
+    {context && target && entries.length ? <ContextMenu x={context.x} y={context.y} items={entries} onClose={() => setContext(null)} /> : null}
     <Toast toast={toast.current} />
   </>;
 }

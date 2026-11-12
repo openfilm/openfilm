@@ -340,7 +340,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     await highlighted.waitFor();
     await highlighted.waitFor({ state: 'hidden' });
     assert.equal(await page.locator('[data-work-mode="canvas"]').count(), 1);
-    await library.getByRole('button', { name: 'Favorites', exact: true }).click();
+    await library.getByRole('button', { name: 'Mine', exact: true }).click();
     await library.getByRole('button', { name: 'Effects', exact: true }).click();
     await reveal.click();
     await highlighted.waitFor();

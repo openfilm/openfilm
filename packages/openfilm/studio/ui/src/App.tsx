@@ -15,6 +15,8 @@ import { ProjectView } from './components/ProjectView';
 import { BrandLoadingScreen } from './components/BrandLoadingScreen';
 import { ProjectsPopover } from './components/ProjectsLibrary';
 import { Launcher } from './components/Launcher';
+import { LibraryPage } from './components/LibraryPage';
+import { LIBRARY_PATH } from './lib/library-page';
 import { studioHost } from './lib/host';
 import { WhatsNew } from './components/WhatsNew';
 import { sourcesApi } from './lib/project-sources';
@@ -71,7 +73,7 @@ export function App() {
      tabs, the projects (no tab is open) */
   const [none, setNone] = useState(false);
   useEffect(() => {
-    if (id || tabs) return;
+    if (id || tabs || path === LIBRARY_PATH) return;
     let alive = true;
     /* the list not read (refused, or no answer in time): the Projects window, which says so and tries again */
     void within(api.projects(), LIST_WAIT_MS).then((projects) => {
@@ -81,9 +83,11 @@ export function App() {
       else setNone(true);
     }, () => { if (alive) setNone(true); });
     return () => { alive = false; setNone(false); };
-  }, [id]);
+  }, [id, path]);
 
-  const page = id ? <ProjectView key={id} projectId={id} onProject={open} onLeave={leave} />
+  /* the library page: what is the person's beyond any one project (with tabs, a tab of its own) */
+  const page = path === LIBRARY_PATH ? <LibraryPage />
+    : id ? <ProjectView key={id} projectId={id} onProject={open} onLeave={leave} />
     : tabs ? <Launcher onOpen={open} />
     : !none ? <BrandLoadingScreen labelKey="projects.opening" />
       : (

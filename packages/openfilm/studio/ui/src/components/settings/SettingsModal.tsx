@@ -23,6 +23,7 @@ import { ShortcutsSection } from './ShortcutsSection';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
 import { useThemeMode, type ThemeMode } from './theme';
 import { StorageGroup } from './StorageGroup';
+import { openLibraryPage } from '@/lib/library-page';
 import { PluginsSection } from './PluginsSection';
 import { LARGE_DIALOG_SIZE } from '../dialog-chrome';
 import { LibraryCategoriesGroup } from './LibraryCategoriesGroup';
@@ -190,7 +191,7 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
           <div key={showing ?? 'none'} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-9">
             <div className="mx-auto w-full max-w-[920px]">
             {showing ? <h2 id="settings-title" className="mb-7 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{t(`settings.sections.${showing}`)}</h2> : null}
-            {showing === 'general' && <GeneralSection />}
+            {showing === 'general' && <GeneralSection onClose={onClose} />}
             {showing === 'agents' && <AgentsSection />}
             {showing === 'models' && <ModelsSection />}
             {showing === 'developer' && <DeveloperSection />}
@@ -206,7 +207,7 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
   );
 }
 
-function GeneralSection() {
+function GeneralSection({ onClose }: { onClose: () => void }) {
   const t = useT();
   const [mode, setMode] = useThemeMode();
   const [language, setLanguage] = useLanguageChoice();
@@ -247,7 +248,7 @@ function GeneralSection() {
           )}
         />
       </SettingsGroup>
-      <StorageGroup />
+      <StorageGroup onManage={() => { onClose(); openLibraryPage(); }} />
       {studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}
     </SettingsPage>
   );

@@ -1,12 +1,12 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fingerprint } from '../../src/media-fingerprint.mjs';
 import { bringIn } from './files.mjs';
 import { scanProject } from './media-index.mjs';
-import { moveFile, placeOf, savedFiles, searchLibrary, takeByFingerprint } from './media-library.mjs';
+import { placeOf, savedFiles, searchLibrary, takeByFingerprint } from './media-library.mjs';
 import { noteMade } from './media-made.mjs';
 import { createProject } from './projects.mjs';
 
@@ -40,17 +40,15 @@ function keptClip(dir) {
   media(join(dir, 'files', 'a.png'), 9, 30_000);
 }
 
-test('a place is Saved or one of its folders, never a clip kept there, nor anything outside it', async () => {
+test('the one place is Saved itself; nothing else is read', async () => {
   assert.equal((await placeOf('saved')).root, lib);
-  assert.equal((await placeOf('saved:Favorites')).root, join(lib, 'Favorites'));
-  keptClip(join(lib, 'Favorites', 'A clip'));
-  for (const not of ['saved:Nope', 'saved:../x', 'saved:', 'saved:Favorites/A clip', 'folder:/tmp', 'project:x', 7, null]) assert.equal(await placeOf(not), null, String(not));
+  for (const not of ['saved:Brand', 'folder:/tmp', 'project:x', 7, null]) assert.equal(await placeOf(not), null, String(not));
 });
 
 test('Mine is found by name and folder, through what is linked into it, the words a file was made with too', async () => {
-  media(join(lib, 'Favorites', 'logo.png'), 1, 30_000);
+  media(join(lib, 'logo.png'), 1, 30_000);
   media(join(lib, 'Brand', 'intro.mp4'), 2, 90_000);
-  keptClip(join(lib, 'Favorites', 'A clip'));
+  keptClip(join(lib, 'A clip'));
   const away = elsewhere();
   media(join(away, 'Shoot', 'beach', 'waves.mov'), 3, 70_000);
   await bringIn(lib, 'Brand', [join(away, 'Shoot')], 'link', { anywhere: true });
@@ -58,9 +56,9 @@ test('Mine is found by name and folder, through what is linked into it, the word
   const film = await createProject('Film');
   const fox = media(join(film.path, 'assets', 'fox.png'), 4, 40_000);
   await noteMade(film.path, { verb: 'image', args: { out: 'fox', prompt: 'a red fox at dawn' }, paths: [], via: 'fal', by: 'fal.ai', files: ['assets/fox.png'] });
-  copyFileSync(fox, join(lib, 'Favorites', 'fox.png'));
+  copyFileSync(fox, join(lib, 'fox.png'));
 
-  assert.deepEqual((await savedFiles()).map((f) => f.path).sort(), ['Brand/Shoot/beach/waves.mov', 'Brand/intro.mp4', 'Favorites/fox.png', 'Favorites/logo.png']);
+  assert.deepEqual((await savedFiles()).map((f) => f.path).sort(), ['Brand/Shoot/beach/waves.mov', 'Brand/intro.mp4', 'fox.png', 'logo.png']);
   const names = async (asked) => (await searchLibrary(asked)).files.map((f) => f.name);
   assert.deepEqual(await names({ q: 'beach' }), ['waves.mov']);
   assert.deepEqual(await names({ q: 'brand shoot' }), ['waves.mov']);
@@ -74,30 +72,11 @@ test('Mine is found by name and folder, through what is linked into it, the word
   assert.deepEqual([some.files.length, some.total], [2, 4]);
 });
 
-test('a file moves between folders of Mine, keeping its name or taking a number, never a clip kept there', async () => {
-  media(join(lib, 'Favorites', 'a.mp4'), 1);
-  mkdirSync(join(lib, 'Brand'));
-  const saved = await placeOf('saved');
-  const favorites = await placeOf('saved:Favorites');
-  const brand = await placeOf('saved:Brand');
-  assert.deepEqual(await moveFile(favorites, 'a.mp4', brand), { place: 'saved:Brand', path: 'a.mp4' });
-  assert.ok(existsSync(join(lib, 'Brand', 'a.mp4')) && !existsSync(join(lib, 'Favorites', 'a.mp4')));
-  /* named from Saved's top too */
-  media(join(lib, 'Favorites', 'a.mp4'), 2);
-  assert.deepEqual(await moveFile(saved, 'Brand/a.mp4', favorites), { place: 'saved:Favorites', path: 'a 2.mp4' });
-  /* already there: stays */
-  assert.deepEqual(await moveFile(favorites, 'a.mp4', favorites), { place: 'saved:Favorites', path: 'a.mp4' });
-  keptClip(join(lib, 'Favorites', 'A clip'));
-  await assert.rejects(moveFile(favorites, 'A clip', brand), /not there/);
-  await assert.rejects(moveFile(favorites, 'nope.mp4', brand), /not there/);
-  await assert.rejects(moveFile(favorites, '../x.mp4', brand), /not there/);
-});
-
 test('a file of Mine used in a project comes in once, by its fingerprint; the project\'s own is itself', async () => {
   const away = elsewhere();
   media(join(away, 'Shoot', 'waves.mp4'), 1);
   await bringIn(lib, '', [join(away, 'Shoot')], 'link', { anywhere: true });
-  const logo = media(join(lib, 'Favorites', 'logo.png'), 2, 30_000);
+  const logo = media(join(lib, 'logo.png'), 2, 30_000);
   const into = await createProject('Into');
   const fp = await fingerprint(join(away, 'Shoot', 'waves.mp4'));
   assert.equal(await takeByFingerprint(fp, into.path), 'assets/waves.mp4');

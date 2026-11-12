@@ -176,18 +176,11 @@ export interface MediaPoolProps {
   /** Files kept to use again in any project (lib/saved): the file menu's "Add to Saved". */
   onSave?: (files: WorkspaceResource[]) => void;
   /**
-   * Places beyond the pane a file may be moved to (in Saved: the person's own folders), listed in Move to under the
-   * pane's own folders. Only media files go there, never what Saved keeps as a folder of its own (a clip, a page).
-   */
-  moveOut?: { targets: readonly { id: string; label: string }[]; onMove: (files: WorkspaceResource[], to: string) => void };
-  /**
    * Which library the pane shows, the project's media or Saved (the person's own, for every project), and the button
    * beside Upload that switches between them. Both are the same pane: upload, folders, views, filters, sort, rename,
    * move, delete, drag onto the timeline.
    */
   scope?: 'project' | 'saved';
-  /** What its top folder is called (default: Saved's name, or All for a project's media); in Saved, a folder of it other than Favorites. */
-  title?: string;
   onScope?: (next: 'project' | 'saved') => void;
   /** The words a service was asked for a file with (studio/server/media-made.mjs): a search finds it by them too. */
   wordsOf?: (file: WorkspaceResource) => string | undefined;
@@ -245,9 +238,7 @@ export function MediaPool({
   missing = 0,
   onFindMissing,
   onSave,
-  moveOut,
   scope = 'project',
-  title,
   onScope,
   wordsOf,
   versionsOf,
@@ -283,7 +274,7 @@ export function MediaPool({
   const inSaved = scope === 'saved';
   React.useEffect(() => { setQuery(''); }, [scope]);
   /* the top folder: All of the project's media, or Saved */
-  const topName = title ?? (inSaved ? t('saved.title') : t('media.filter_all'));
+  const topName = inSaved ? t('saved.title') : t('media.filter_all');
 
   React.useEffect(() => { setView(loadView(projectId)); setAtState(OPEN_FOLDER.get(projectId) ?? ''); setPicked([]); }, [projectId]);
   /* the file the viewer shows is the host's: the one clicked last, when it is a file. One shown from elsewhere (a click
@@ -623,22 +614,16 @@ export function MediaPool({
   const moveEntry = (keys: readonly string[]): ContextMenuEntry => {
     const heres = new Set(keys.map(hereOf));
     const moving = keys.filter((key) => itemByKey.get(key)?.type === 'folder').map(assetRel);
-    /* beyond the pane (moveOut): media files only */
-    const files = keys.flatMap((key) => { const item = itemByKey.get(key); return item?.type === 'file' && !item.file.bundle ? [item.file] : []; });
-    const out = moveOut && files.length === keys.length ? moveOut.targets : [];
     return {
       id: 'move-to', label: t('media.moveTo'), icon: <FolderInput size={14} />,
-      submenu: [
-        ...moveTargets(folders, moving).map((rel) => {
-          const here = heres.size === 1 && heres.has(rel);
-          return {
-            id: `move:${rel}`, label: rel ? rel.split('/').join(' / ') : topName, checked: here, disabled: here,
-            ...(here ? { hint: t('media.moveHere') } : {}),
-            onSelect: () => { void moveAll(keys, rel); },
-          };
-        }),
-        ...(out.length ? [{ id: 'move-out-sep', separator: true } as const, ...out.map((o) => ({ id: `move-out:${o.id}`, label: o.label, onSelect: () => moveOut?.onMove(files, o.id) }))] : []),
-      ],
+      submenu: moveTargets(folders, moving).map((rel) => {
+        const here = heres.size === 1 && heres.has(rel);
+        return {
+          id: `move:${rel}`, label: rel ? rel.split('/').join(' / ') : topName, checked: here, disabled: here,
+          ...(here ? { hint: t('media.moveHere') } : {}),
+          onSelect: () => { void moveAll(keys, rel); },
+        };
+      }),
     };
   };
   const fileMenu = (file: WorkspaceResource): ContextMenuEntry[] => [
@@ -1046,9 +1031,8 @@ export function MediaPool({
           flat ? <p className="px-1 pt-6 text-center text-[12px] text-[var(--text-muted)]">{t('media.noMatch')}</p> : (
             <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
               <Clapperboard size={22} className="text-[var(--text-faint)]" />
-              {/* a folder of Saved other than its Favorites (one named by `title`) is a folder like any other */}
-              <div className="text-[13px] font-medium text-[var(--text)]">{t(at || (inSaved && title) ? 'media.emptyFolder' : inSaved ? 'saved.emptyTitle' : 'media.emptyTitle')}</div>
-              {at || (inSaved && title) ? null : <p className="max-w-[30ch] text-[12px] leading-relaxed text-[var(--text-muted)]">{t(inSaved ? 'saved.emptyBody' : 'media.emptyBody')}</p>}
+              <div className="text-[13px] font-medium text-[var(--text)]">{t(at ? 'media.emptyFolder' : inSaved ? 'saved.emptyTitle' : 'media.emptyTitle')}</div>
+              {at ? null : <p className="max-w-[30ch] text-[12px] leading-relaxed text-[var(--text-muted)]">{t(inSaved ? 'saved.emptyBody' : 'media.emptyBody')}</p>}
               <button type="button" onClick={() => (onPick && onBring ? void bringFrom('auto', false) : inputRef.current?.click())}
                 className="mt-1 inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)]">
                 <Plus size={13} />{t('media.import')}

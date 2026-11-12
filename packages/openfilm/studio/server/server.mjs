@@ -57,7 +57,6 @@ import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCov
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
-import { LibraryError, moveFile as moveLibraryFile, placeOf } from './media-library.mjs';
 import { pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
@@ -513,17 +512,6 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* the person's media in numbers (media-index.mjs): places, files, the room they take and the room copies take */
     if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
-    /* Mine (media-library.mjs): a file moved from one of its folders to another (POST move { place, path, to } →
-       { place, path }) */
-    if (parts[0] === 'media-library' && parts[1] === 'move' && parts.length === 2 && req.method === 'POST') {
-      const body = /** @type {{ place?: unknown, path?: unknown, to?: unknown }} */ (await readJson(req) ?? {});
-      const [at, to] = [await placeOf(body.place), await placeOf(body.to)];
-      if (!at || !to) throw new HttpError(404, 'That place is not in Mine.');
-      try { return json(res, 200, await moveLibraryFile(at, body.path, to)); } catch (e) {
-        if (e instanceof LibraryError) throw new HttpError(e.status, e.message);
-        throw e;
-      }
-    }
     /* the library moved (projects.mjs moveLibrary): { path } (null: the default), and with `move` its projects go too */
     if (parts[0] === 'locations' && parts[1] === 'projects' && parts.length === 2 && req.method === 'PUT') {
       const { path: asked, move } = /** @type {{ path?: unknown, move?: unknown }} */ (await readJson(req) ?? {});

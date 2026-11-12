@@ -4,8 +4,8 @@
  * each says (its project's title, an agent working in it, an export, a question waiting); main.mjs gives each a page.
  * Reads no Electron module, so `node --test` can use it.
  *
- * Rules: a project is in one tab at most; a tab is always a project's (a project is picked first, in the projects
- * window, and its tab opens); with none open, the window shows the projects; a tab closed can be opened again, last
+ * Rules: a project is in one tab at most; a tab is a project's (a project is picked first, in the projects window,
+ * and its tab opens), or the library's (`LIBRARY_TAB`, Studio's page of what is the person's beyond any one project); with none open, the window shows the projects; a tab closed can be opened again, last
  * closed first. A project gone (deleted, its folder gone) takes its tabs with it at once, all of them together, and
  * none of them can be opened again (`closeProjects`). A project missing only its film.html is not gone (`projectGone`).
  */
@@ -29,6 +29,11 @@ export function projectGone(projects, projectId) {
  */
 
 const REOPEN_KEPT = 20;
+
+/** The library's tab, named as a project's would be by an id no project has (Studio's lib/library-page.ts). */
+export const LIBRARY_TAB = '@library';
+/** Its page in Studio. */
+export const LIBRARY_PATH = '/library';
 
 /**
  * @param {{ saved?: SavedTabs | null, now?: () => number, newId?: () => string }} [opts]

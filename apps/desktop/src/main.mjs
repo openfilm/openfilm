@@ -38,7 +38,7 @@ import { stepAside } from './update-launch.mjs';
 import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegIn, ffmpegOnPath } from './ffmpeg-runtime.mjs';
 import { PATH_SEP } from './environment.mjs';
 import { firstWindowsApps } from './windows-apps.mjs';
-import { createTabs, projectGone } from './tabs.mjs';
+import { LIBRARY_PATH, LIBRARY_TAB, createTabs, projectGone } from './tabs.mjs';
 import { turnNotice } from './turn-notices.mjs';
 import { restartDelay } from './studio-restart.mjs';
 
@@ -199,8 +199,8 @@ function makeView(tabId) {
 
 /** The page shown when no tab is open: Studio's projects (`/` with tabs). */
 const HOME = 'home';
-/** Where a tab's page opens: its project (no tab: the projects). */
-const pageAddress = (tab, path = null) => `${studio.origin}/open?key=${studio.key}&to=${encodeURIComponent(path ?? (tab ? `/projects/${encodeURIComponent(tab.projectId)}` : '/'))}`;
+/** Where a tab's page opens: its project, or the library's page (no tab: the projects). */
+const pageAddress = (tab, path = null) => `${studio.origin}/open?key=${studio.key}&to=${encodeURIComponent(path ?? (!tab ? '/' : tab.projectId === LIBRARY_TAB ? LIBRARY_PATH : `/projects/${encodeURIComponent(tab.projectId)}`))}`;
 
 /** Every page told of the tabs as they are now; kept for next time. */
 function tellTabs() {
@@ -370,7 +370,7 @@ function openInTabs(to) {
   if (!tabs || typeof to !== 'string') return;
   if (to === lastOpen.to && Date.now() - lastOpen.at < 2000) return;
   lastOpen = { to, at: Date.now() };
-  const projectId = /^\/projects\/([\w-]+)/.exec(to)?.[1] ?? null;
+  const projectId = to.split('?')[0] === LIBRARY_PATH ? LIBRARY_TAB : /^\/projects\/([\w-]+)/.exec(to)?.[1] ?? null;
   if (projectId) newTab(projectId);
 }
 
@@ -383,7 +383,7 @@ async function openTabs() {
   const projects = listed.filter((p) => !projectGone(listed, p.id));
   tabs = createTabs({ saved: state.tabs ?? null });
   /* a tab of a project no longer there is left out, and not kept to open again */
-  const known = new Set(projects.map((p) => p.id));
+  const known = new Set([...projects.map((p) => p.id), LIBRARY_TAB]);
   tabs.closeProjects(tabs.list().map((t) => t.projectId).filter((id) => !known.has(id)));
   if (!tabs.list().length && !state.tabs && projects[0]) tabs.open({ projectId: projects[0].id, title: projects[0].name });
   const front = tabs.activeId();

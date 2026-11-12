@@ -10,7 +10,7 @@ import * as React from 'react';
 import { afterPaintIdle } from '@/lib/after-paint-idle';
 import { loadCanvas } from './canvas/load';
 import { CanvasLoading } from './canvas/CanvasLoading';
-import { BookmarkPlus, ChartSpline, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Diamond, Eye, EyeOff, FolderOpen, Layers, Lock, LockOpen, MessageSquarePlus, MonitorDown, Pencil, Plus, Scissors, Settings2, Spline, Trash2, TriangleAlert, Upload, Workflow, X } from 'lucide-react';
+import { BookmarkPlus, ChartSpline, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Diamond, Eye, EyeOff, FolderOpen, Layers, Lock, LockOpen, MessageSquarePlus, MonitorDown, Plus, Scissors, Settings2, Spline, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, withAnimations, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
@@ -96,7 +96,6 @@ import { SettingsModal } from './settings/SettingsModal';
 import { useSettings } from './settings/use-settings';
 import { DesktopDialog } from './DesktopDialog';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
-import { ConfirmDialog } from './ConfirmDialog';
 import { readCanvasDoc, type CanvasDoc } from '../lib/canvas';
 import { HOST_PANEL_WIDTH, studioHost, useHostPanel, type HostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
 import { clipRef, fileRef, layerRef, markRange, momentRef, rangeRef, regionRef, stillUrl, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
@@ -168,8 +167,7 @@ import { idsIn, pastedElsewhere, pastedPage, withoutPaste, withPaste, type Paste
 import { pasteTargets, targetById } from '@/lib/layer-paste-target';
 import { PropertiesSection, type PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
-import { FAVORITES, SAVED, refreshSaved, savedActions, savedFolderListing, savedFolders, savedSources, useSavedListing } from '@/lib/saved';
-import { libraryApi } from '@/lib/media-library';
+import { SAVED, importIntoSaved, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { deliveryGainDb, deliveryLoudness, onDeliveryLoudness } from '@/lib/delivery-loudness';
 import { batchMap } from '@/lib/batch-map';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
@@ -192,8 +190,6 @@ const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator
 /** Which the media pane shows, the project's media, the media library or Saved: kept while Studio is open, across projects. */
 type MediaScope = 'project' | 'saved';
 const MEDIA_SCOPE: { current: MediaScope } = { current: 'project' };
-/** The folder of My media shown (`saved:<name>`), kept while Studio is open. */
-const MY_FOLDER: { current: string } = { current: 'saved:Favorites' };
 /** where the app's panel starts: under Studio's top bar (its h-8) */
 const HOST_PANEL_TOP = 32;
 
@@ -3224,79 +3220,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* the media pane shows the project's media, or Saved (lib/saved): the same pane, the button beside Upload switches */
   const [mediaScope, setMediaScope] = React.useState<MediaScope>(() => MEDIA_SCOPE.current);
   const switchMedia = React.useCallback((next: MediaScope) => { MEDIA_SCOPE.current = next; setMediaScope(next); }, []);
-  /* My media, in the drawer's side bar: the person's own library, Favorites and the folders they make beside it (one
-     linked where it is kept shows so). One is shown at a time, as the media pane on that folder; a folder is named
-     `saved:<name>`. */
-  const savedAll = useSavedListing(true);
-  const madeFolders = React.useMemo(() => savedFolders(savedAll), [savedAll]);
-  const [myFolder, setMyFolder] = React.useState<string>(() => MY_FOLDER.current);
-  const showMyFolder = React.useCallback((id: string) => { MY_FOLDER.current = id; setMyFolder(id); switchMedia('saved'); }, [switchMedia]);
-  const savedFolder = myFolder.startsWith('saved:') && madeFolders.includes(myFolder.slice(6)) ? myFolder.slice(6) : FAVORITES;
-  const [namingFolder, setNamingFolder] = React.useState<string | null>(null);
-  const [droppingFolder, setDroppingFolder] = React.useState<string | null>(null);
-  const myMediaFolders: { id: string; name: string; linked?: boolean; missing?: boolean }[] = [
-    { id: `saved:${FAVORITES}`, name: t('saved.title') },
-    ...madeFolders.map((name) => {
-      const link = savedAll?.linkedDirs?.[name];
-      return { id: `saved:${name}`, name, ...(link ? { linked: true, ...(link.missing ? { missing: true } : {}) } : {}) };
-    }),
-  ];
-  const myMedia = {
-    folders: myMediaFolders,
-    shown: mediaScope === 'saved' ? `saved:${savedFolder}` : null,
-    onPick: showMyFolder,
-    menuOf: (id: string): ContextMenuEntry[] => {
-      const name = id.slice(6);
-      const linked = Boolean(savedAll?.linkedDirs?.[name]);
-      return [
-        { id: 'reveal', label: t('projects.revealFolder'), icon: <FolderOpen size={14} />, onSelect: () => savedActions.reveal(`${SAVED}/${name}`) },
-        /* Favorites keeps its name and place: what the person saves goes there */
-        ...(name === FAVORITES ? [] : [
-          { id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setNamingFolder(id) },
-          /* a linked one is only the link: taken away, the folder where it is kept stays as it is */
-          linked
-            ? { id: 'unlink', label: t('mediaLibrary.remove').replace('{name}', name), note: t('mediaLibrary.removeNote'), icon: <X size={14} />, onSelect: () => { if (savedFolder === name) showMyFolder(`saved:${FAVORITES}`); void savedActions.remove(`${SAVED}/${name}`); } }
-            : { id: 'delete', label: t('assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setDroppingFolder(name) },
-        ]),
-      ];
-    },
-    onNew: () => {
-      const base = t('mediaLibrary.newFolder');
-      let name = base;
-      for (let n = 2; madeFolders.includes(name) || name === FAVORITES; n++) name = `${base} ${n}`;
-      void savedActions.newFolder(`${SAVED}/${name}`).then((done) => {
-        if (done !== 'ok') { toast.showError(t('mediaLibrary.newFolderFailed')); return; }
-        showMyFolder(`saved:${name}`);
-        setNamingFolder(`saved:${name}`);
-      });
-    },
-    naming: namingFolder,
-    onName: (id: string, given: string | null) => {
-      setNamingFolder(null);
-      const was = id.slice(6);
-      const name = (given ?? '').trim();
-      if (!name || name === was) return;
-      if (name.includes('/') || name.startsWith('.') || name === FAVORITES) { toast.showError(t('mediaLibrary.folderNameBad')); return; }
-      void savedActions.move(`${SAVED}/${was}`, `${SAVED}/${name}`).then((done) => {
-        if (done === 'ok') showMyFolder(`saved:${name}`);
-        else toast.showError(t(done === 'taken' ? 'assets.renameTaken' : 'mediaLibrary.renameFailed'));
-      });
-    },
-  };
-  /* a file of My media moved to another of its folders (the file picked, if it was one of them, no longer is: read
-     when the move is done, as the menu was made in the click that picked it) */
-  const pickedSavedPath = React.useRef<string | null>(null);
-  pickedSavedPath.current = pickedSaved ? pickedMedia?.path ?? null : null;
-  const savedMoveOut = {
-    targets: myMediaFolders.filter((f) => !f.missing && f.id !== `saved:${savedFolder}`).map((f) => ({ id: f.id, label: f.name })),
-    onMove: (files: WorkspaceResource[], to: string) => {
-      if (files.some((f) => f.path === pickedSavedPath.current)) { pickMedia(null); setPickedSaved(false); }
-      void Promise.all(files.map((f) => libraryApi.move('saved', f.path.slice(SAVED.length + 1), to))).then((moved) => {
-        refreshSaved();
-        if (moved.some((m) => !m)) toast.showError(t('mediaLibrary.moveFailed'));
-      });
-    },
-  };
   const [revealMedia, setRevealMedia] = React.useState<{ path: string; seq: number; highlight: boolean; done?: boolean } | null>(null);
   const mediaRevealed = React.useCallback((seq: number) => {
     setRevealMedia((request) => request?.seq === seq && !request.done ? { ...request, done: true } : request);
@@ -3312,13 +3235,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     const keep = (f: { path: string }) => f.path === revealMedia?.path || !fromLibrary(f.path, libraryIndex?.items ?? null);
     return { ...listing, files: listing.files.filter(keep), pages: listing.pages.filter(keep) };
   }, [listing, mediaScope, libraryIndex, revealMedia?.path]);
-  const savedListing = React.useMemo(() => savedFolderListing(savedAll, savedFolder), [savedAll, savedFolder]);
-  const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => {
-    /* in the app a dropped file's path is known: copied on this computer, not sent through the page */
-    const paths = files.map((file) => studioHost?.folders?.pathOf(file) ?? '');
-    if (paths.length && paths.every(Boolean)) return savedActions.bring(paths, into);
-    return savedActions.upload(files, into, onProgress, t('assets.uploadFailed'));
-  }, [t]);
+  const savedListing = useSavedListing(mediaScope === 'saved');
+  const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => importIntoSaved(files, into, onProgress, t('assets.uploadFailed')), [t]);
   /* `inDrawer`: in the assets drawer, whose side bar switches between the project's media and Saved */
   const requestCanvasFiles = async (path: string, saved = false) => {
     try {
@@ -3330,39 +3248,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       setCanvasAddFiles({ paths: [...new Set(paths)], n: performance.now() });
     } catch (error) { toast.showError(error instanceof Error ? error.message : String(error)); }
   };
-  /* a category's own files in the drawer (sounds, music, stickers: its Imported): Mine's Favorites, of that kind only;
-     what is uploaded there goes into Favorites */
-  const mineFiles = (cat: 'sound' | 'music' | 'sticker') => {
-    const kind = cat === 'sticker' ? 'image' : 'audio';
-    const favorites = savedFolderListing(savedAll, FAVORITES);
-    const listing = favorites ? { ...favorites, files: favorites.files.filter((f) => f.kind === kind) } : null;
-    return (
-      <MediaPool
-        key={`mine:${cat}`}
-        title={t('assetDrawer.mineImported')}
-        projectId={SAVED}
-        listing={listing}
-        sources={savedSources}
-        selectedPath={pickedSaved ? pickedMedia?.path ?? null : null}
-        onSelectFile={(file) => { pickMedia(file); setPickedSaved(Boolean(file)); }}
-        onImport={savedImport}
-        onMove={savedActions.move}
-        onDelete={savedActions.remove}
-        onNewFolder={savedActions.newFolder}
-        onReveal={savedActions.reveal}
-        onPick={onPick}
-        onBring={(paths, into, mode) => savedActions.bring(paths, into, mode)}
-        {...(studioHost?.refer ? { onReferFile: (file: WorkspaceResource) => void referOutside(file) } : {})}
-        moveOut={savedMoveOut}
-        scope="saved"
-        onAdd={(file) => { if (canvasOpen) void requestCanvasFiles(file.path, true); else void placeSaved(file, { atPlayhead: true }); }}
-      />
-    );
-  };
   const mediaPool = (inDrawer = false) => (mediaScope === 'saved' ? (
     <MediaPool
-      key={`saved:${savedFolder}`}
-      {...(savedFolder === FAVORITES ? {} : { title: savedFolder })}
+      key="saved"
       projectId={SAVED}
       listing={savedListing}
       sources={savedSources}
@@ -3376,7 +3264,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onPick={onPick}
       onBring={(paths, into, mode) => savedActions.bring(paths, into, mode)}
       {...(studioHost?.refer ? { onReferFile: (file: WorkspaceResource) => void referOutside(file) } : {})}
-      moveOut={savedMoveOut}
       scope="saved"
       onScope={inDrawer ? undefined : switchMedia}
       onAdd={(file) => { if (canvasOpen) void requestCanvasFiles(file.path, true); else void placeSaved(file, { atPlayhead: true }); }}
@@ -6280,7 +6167,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         rect={independentLibrary ? freeGeometry?.panels.library ?? dockGeometry.library : chatLibraryRect}
         free={Boolean(freeGeometry)}
         onResize={updateWorkspace}>
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} myMedia={myMedia} mineFiles={mineFiles} mediaRequest={revealMedia?.seq} actions={canvasOpen ? { ...library.actions, add: item => { if (['page', 'sound', 'group'].includes(item.kind)) void requestCanvasFiles(`${BUILT_IN}/${item.id}`, true); else { setCanvasOpen(false); library.actions.add(item); } }, tryOut: () => {} } : library.actions}
+          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} mediaRequest={revealMedia?.seq} actions={canvasOpen ? { ...library.actions, add: item => { if (['page', 'sound', 'group'].includes(item.kind)) void requestCanvasFiles(`${BUILT_IN}/${item.id}`, true); else { setCanvasOpen(false); library.actions.add(item); } }, tryOut: () => {} } : library.actions}
             tried={libraryTrial?.id ?? null} templateStatus={templateStatus} previewBar={canvasOpen ? null : libraryPreviewBar} previewPicture={canvasOpen || fullscreen ? null : libraryPreviewPicture} dismissRef={dismissLibraryPreview}
             onPreviewStart={canvasOpen ? pause : beginLibraryPreview} onDownloadFailed={onLibraryDownloadFailed} shown={libraryOpen} under={!independentLibrary ? hostAssets?.bottom ?? 0 : 0}
             captions={{
@@ -6299,23 +6186,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         onDone={finishLayoutEdit} onCancel={cancelLayoutEdit} onUndo={layoutDraft.undo} onRedo={layoutDraft.redo} canUndo={layoutDraft.canUndo} canRedo={layoutDraft.canRedo}
         onReset={() => { const next=defaultWorkspace(workspaceMode); layoutDraft.change({ ...next, tree:defaultDockTree(next,fitTimelineHeight.current) }); }} /> : null}
       <DesktopDialog open={desktopOpen} onClose={() => setDesktopOpen(false)} />
-      {/* a folder the person made in My media, to the Trash with what is in it */}
-      <ConfirmDialog
-        open={droppingFolder !== null}
-        title={t('mediaLibrary.deleteFolderTitle').replace('{name}', droppingFolder ?? '')}
-        description={t('mediaLibrary.deleteFolderBody')}
-        confirmLabel={t('assets.delete')}
-        cancelLabel={t('confirm.cancel')}
-        danger
-        onCancel={() => setDroppingFolder(null)}
-        onConfirm={() => {
-          const name = droppingFolder;
-          setDroppingFolder(null);
-          if (!name) return;
-          if (savedFolder === name) showMyFolder(`saved:${FAVORITES}`);
-          void savedActions.remove(`${SAVED}/${name}`).then((done) => { if (done !== 'ok') toast.showError(t('mediaLibrary.deleteFolderFailed')); });
-        }}
-      />
       <ExportCenter
         open={exportOpen}
         onClose={() => { setExportOpen(false); setExportClipId(null); }}

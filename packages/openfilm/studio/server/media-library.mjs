@@ -1,18 +1,17 @@
 // @ts-check
 /**
- * Mine, the person's own media (saved.mjs): what an agent finds there (media-library-get.mjs), a file moved from one
- * of its folders to another, and a file brought into a project by its fingerprint.
+ * Mine, the person's own media (saved.mjs), for an agent (media-library-get.mjs): what is found there, and a file of
+ * it brought into a project by its fingerprint.
  *
- * Mine is the Saved folder: Favorites and the folders the person made beside it, with what they linked into them from
- * this computer (a NAS, another disk), followed to where it is kept (src/media-links.mjs). It is read straight from
- * the disk: it is the person's to keep small, and a linked folder is read no further than `SAVED_FILES` files.
+ * Mine is the Saved folder and the folders the person made in it, with what they linked into them from this computer
+ * (a NAS, another disk), followed to where it is kept (src/media-links.mjs). It is read straight from the disk: it is
+ * the person's to keep small, and a linked folder is read no further than `SAVED_FILES` files.
  *
- * A place is named `saved` (Saved itself, from its top: `Favorites/logo.png`) or `saved:<folder>` (one of its folders,
- * to move a file to). Nothing outside a place is ever read.
+ * Its place is named `saved`, a file of it by its path from its top (`Brand/logo.png`). Nothing outside it is read.
  */
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
-import { basename, dirname, join, parse, sep } from 'node:path';
+import { readdir, stat } from 'node:fs/promises';
+import { basename, join, sep } from 'node:path';
 import { fingerprint } from '../../src/media-fingerprint.mjs';
 import { readableLink } from '../../src/media-links.mjs';
 import { bringIn, kindOf, readable } from './files.mjs';
@@ -40,14 +39,7 @@ const SAVED_FILES = 5000;
 
 /** The place a name stands for, or null when there is none. @param {unknown} place @returns {Promise<Place | null>} */
 export async function placeOf(place) {
-  if (typeof place !== 'string') return null;
-  const lib = await savedRoot();
-  if (place === 'saved') return { place, root: lib, name: 'Saved' };
-  if (!place.startsWith('saved:')) return null;
-  /* a folder of Saved (Favorites, or one the person made), never a clip, group or page kept there as a folder */
-  const root = inPlace(lib, place.slice(6));
-  if (!root || root === lib || !(await stat(root).catch(() => null))?.isDirectory() || existsSync(join(root, 'saved.json'))) return null;
-  return { place, root, name: basename(root) };
+  return place === 'saved' ? { place, root: await savedRoot(), name: 'Saved' } : null;
 }
 
 /** A path inside `root` as the disk has it, or null for one that leaves it. @param {string} root @param {unknown} path '' for its top */
@@ -117,35 +109,6 @@ export async function searchLibrary({ q = '', kind = null, sort = 'date', limit 
     ? (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
     : sort === 'size' ? (a, b) => b.size - a.size : (a, b) => b.mtime - a.mtime || a.name.localeCompare(b.name));
   return { files: found.slice(0, Math.max(1, Math.min(2000, limit))), total: found.length };
-}
-
-/** Why a file was not moved. */
-export class LibraryError extends Error {
-  /** @param {string} message @param {number} status */
-  constructor(message, status = 400) { super(message); this.status = status; }
-}
-
-/**
- * Move a file to the top of another folder of Mine, keeping its name, or the name with a number when one is taken
- * there; across disks it is copied, then taken away. Only a media file moves: what Saved keeps as a folder of its own
- * (a clip, a group, a page) stays. Resolves with where it is now.
- * @param {Place} at @param {unknown} path @param {Place} to
- */
-export async function moveFile(at, path, to) {
-  const file = fileIn(at, path);
-  if (!file || !(await stat(file.abs).catch(() => null))?.isFile()) throw new LibraryError('That file is not there.', 404);
-  const name = basename(file.abs);
-  if (dirname(file.abs) === to.root) return { place: to.place, path: name };
-  await mkdir(to.root, { recursive: true });
-  const { name: stem, ext } = parse(name);
-  let dest = join(to.root, name);
-  for (let n = 2; existsSync(dest); n++) dest = join(to.root, `${stem} ${n}${ext}`);
-  try { await rename(file.abs, dest); } catch (e) {
-    if (/** @type {{ code?: string }} */ (e).code !== 'EXDEV') throw e;
-    await copyFile(file.abs, dest);
-    await rm(file.abs);
-  }
-  return { place: to.place, path: basename(dest) };
 }
 
 /**

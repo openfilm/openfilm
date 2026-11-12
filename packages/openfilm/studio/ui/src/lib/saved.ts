@@ -6,6 +6,7 @@
  */
 import React from 'react';
 import type { ImportProgress } from '@/components/MediaPool';
+import { studioHost } from './host';
 import { mediaFetch } from './media-queue';
 import {
   factsOfProbe, mediaListingOf, type FilesListing, type MediaFacts, type MediaListing, type MediaResult, type MediaSources,
@@ -89,31 +90,6 @@ export function useSavedListing(on: boolean): MediaListing | null {
   ) : null), [raw, facts]);
 }
 
-/** Favorites: the folder of the library where what the person saves goes (studio/server/saved.mjs FAVORITES). */
-export const FAVORITES = 'Favorites';
-
-/**
- * One top folder of the library (Favorites, or one the person made) as a pane of its own: its files and folders, named
- * from it, as the media pane lists a project's media from assets/.
- */
-export function savedFolderListing(listing: MediaListing | null, folder: string): MediaListing | null {
-  if (!listing) return null;
-  const top = `${folder}/`;
-  const inner = (d: string) => (d.startsWith(top) ? [d.slice(top.length)] : []);
-  return {
-    ...listing,
-    dir: `${SAVED}/${folder}`,
-    files: listing.files.filter((f) => f.path.startsWith(`${SAVED}/${top}`)).map((f) => ({ ...f, dir: f.dir === folder ? '' : f.dir.slice(top.length) })),
-    dirs: listing.dirs.flatMap(inner),
-    ...(listing.made ? { made: listing.made.flatMap(inner) } : {}),
-    ...(listing.linkedDirs ? { linkedDirs: Object.fromEntries(Object.entries(listing.linkedDirs).flatMap(([d, l]) => inner(d).map((r) => [r, l] as const))) } : {}),
-    pages: [],
-  };
-}
-
-/** The folders at the library's top that the person made (Favorites is not one of them), by name. */
-export const savedFolders = (listing: MediaListing | null): string[] => (listing?.dirs ?? []).filter((d) => !d.includes('/') && d !== FAVORITES);
-
 const result = async (res: Response): Promise<MediaResult> => (res.ok ? 'ok' : res.status === 409 ? recycleRefusalOf(await res.json().catch(() => null)) ?? 'taken' : 'failed');
 const send = (method: string, url: string, body: unknown) => fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
@@ -153,3 +129,23 @@ export const savedActions = {
     return landed;
   },
 };
+
+/**
+ * Files dropped or picked into Mine, into `into`: in the app a dropped file's path is known, so it is brought in on
+ * this computer (each card giving way to it as it lands); in a browser it is sent through the page.
+ */
+export function importIntoSaved(files: File[], into: string, onProgress: ImportProgress, failed: string): Promise<string[]> {
+  const paths = files.map((file) => studioHost?.folders?.pathOf(file) ?? '');
+  if (paths.length && paths.every(Boolean)) return savedActions.bring(paths, into).then((landed) => { landed.forEach((path, i) => onProgress(i, 1, path)); return landed; });
+  return savedActions.upload(files, into, onProgress, failed);
+}
+
+/** Media of this computer picked in the system's dialog (a folder by the app's own, where there is one): its paths. */
+export async function pickFromComputer(title: string, folder: boolean): Promise<string[] | 'no-dialog'> {
+  if (folder && studioHost?.folders?.pick) { const path = await studioHost.folders.pick({ title }); return path ? [path] : []; }
+  const res = await send('POST', folder ? '/api/pick-folder' : '/api/pick-files', { title });
+  if (res.status === 501) return 'no-dialog';
+  const answer = await res.json().catch(() => ({})) as { path?: unknown; paths?: unknown };
+  if (!res.ok) return [];
+  return folder ? (typeof answer.path === 'string' ? [answer.path] : []) : Array.isArray(answer.paths) ? answer.paths.map(String) : [];
+}

@@ -20,10 +20,10 @@
  * properties (its `data-props`, lib/component-props) is a component: every clip taken from it offers them.
  */
 import { existsSync, createReadStream, realpathSync } from 'node:fs';
-import { copyFile, lstat, mkdir, readFile, readdir, readlink, rename, stat, writeFile } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, readFile, readdir, readlink, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, posix, sep } from 'node:path';
 import { FILM_FILE, clipKind, filmHtml } from '../../src/film-doc.mjs';
-import { savedRoot, setSharedPref, sharedPref } from '../../src/locations.mjs';
+import { savedRoot } from '../../src/locations.mjs';
 import { readableLink } from '../../src/media-links.mjs';
 import { STUDIO_STATE, filmClosure, folderView } from './closure.mjs';
 import { readProjectFilm } from './film.mjs';
@@ -55,38 +55,12 @@ export const LIBRARY = 'saved';
 const BUNDLE = 'saved.json';
 
 /**
- * The person's own media (My media) is the library: Favorites, where what they save goes (a clip from the timeline, a
- * file kept), and the folders they make beside it. Favorites is shown in the person's language (收藏).
- */
-export const FAVORITES = 'Favorites';
-
-/**
- * The library's folder, made when it is not there yet, with its Favorites. What lies at its top that is no folder of
- * the person's (a file, a clip or page kept there before Favorites was, or put there from the file manager) is moved
- * into Favorites, keeping its name or numbered.
+ * The library's folder, made when it is not there yet. It is the person's own media (Mine): what they save comes to its
+ * top, and they make their folders in it.
  */
 export async function libraryRoot() {
   const root = savedRoot();
-  const favorites = join(root, FAVORITES);
-  await mkdir(favorites, { recursive: true });
-  for (const entry of await readdir(root, { withFileTypes: true }).catch(() => [])) {
-    if (entry.name.startsWith('.') || entry.name === FAVORITES || entry.isSymbolicLink()) continue;
-    if (entry.isDirectory() && !existsSync(join(root, entry.name, BUNDLE))) continue;
-    if (!entry.isDirectory() && !entry.isFile()) continue;
-    const dot = entry.isFile() ? entry.name.lastIndexOf('.') : -1;
-    const [stem, ext] = dot > 0 ? [entry.name.slice(0, dot), entry.name.slice(dot)] : [entry.name, ''];
-    let to = join(favorites, entry.name);
-    for (let n = 2; existsSync(to); n++) to = join(favorites, `${stem} ${n}${ext}`);
-    await rename(join(root, entry.name), to).catch(() => {});
-  }
-  /* folders of this computer the person added to their media before they were linked from inside it (the shared pref
-     `mediaFolders`): a link each at its top, where they are, and the pref emptied */
-  const added = sharedPref('mediaFolders');
-  if (Array.isArray(added) && added.length) {
-    setSharedPref('mediaFolders', []);
-    const there = added.filter((f) => typeof f === 'string' && isAbsolute(f) && existsSync(f));
-    if (there.length) await bringIn(root, '', there, 'link', { anywhere: true }).catch(() => {});
-  }
+  await mkdir(root, { recursive: true });
   return root;
 }
 
@@ -287,7 +261,7 @@ export async function saveClip(root, clipId, o = {}) {
   const files = await clipFiles(root, clip);
   if (!files.includes(clip.src)) throw new SavedError('That clip’s file is not in the project.', 409);
   const name = o.name?.trim() || clip.src.split('/').pop()?.replace(/\.[^.]+$/, '') || clipId;
-  return keep(root, files, { kind: 'clip', clip, ...sizes(o) }, name, libraryRel(o.into ?? `${LIBRARY}/${FAVORITES}`), o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(clip) : null);
+  return keep(root, files, { kind: 'clip', clip, ...sizes(o) }, name, libraryRel(o.into ?? LIBRARY), o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(clip) : null);
 }
 
 /**
@@ -324,7 +298,7 @@ export async function saveGroup(root, clipIds, o = {}) {
   }
   const top = clips.find(({ clip }) => clipKind(clip.src) !== 'sound' && clip.sound !== true)?.clip ?? null;
   const name = o.name?.trim() || `${clips.length} clips`;
-  return keep(root, [...files], { kind: 'group', clips, ...sizes(o) }, name, libraryRel(o.into ?? `${LIBRARY}/${FAVORITES}`), top && o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(top) : null);
+  return keep(root, [...files], { kind: 'group', clips, ...sizes(o) }, name, libraryRel(o.into ?? LIBRARY), top && o.poster ? () => /** @type {NonNullable<typeof o.poster>} */ (o.poster)(top) : null);
 }
 
 /**
@@ -336,7 +310,7 @@ export async function saveFile(root, rel, o = {}) {
   if (typeof rel !== 'string' || !rel || rel.startsWith('/') || rel.split('/').includes('..')) throw new SavedError('a file of the project, please', 400);
   const source = inProject(root, rel);
   if (!source || !(await stat(source).catch(() => null))?.isFile()) throw new SavedError('That file is not in the project any more.', 404);
-  const into = libraryRel(o.into ?? `${LIBRARY}/${FAVORITES}`);
+  const into = libraryRel(o.into ?? LIBRARY);
   if (clipKind(rel) === 'page') {
     const files = await clipFiles(root, { src: rel });
     if (!files.includes(rel)) files.unshift(rel);
