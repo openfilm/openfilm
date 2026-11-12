@@ -30,7 +30,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { filmSubtitleLanguageOf } from './film-subtitle.mjs';
-import { declarations } from '../../src/film-doc.mjs';
+import { ownLook } from './nle.mjs';
 import { jianyingCaptionStyle } from './jianying-captions.mjs';
 
 /**
@@ -125,7 +125,7 @@ const nativeProperties = new Set(['opacity', 'mask-image', 'mask-composite']);
  * @returns {DraftClipLook | undefined}
  */
 export function jianyingClipLook(style, css, rotation, maskFits) {
-  if (!css?.simple || declarations(style).some(([key]) => !nativeProperties.has(key))) return;
+  if (!css?.simple || ownLook(style).some(([key]) => !nativeProperties.has(key))) return;
   const { opacity, maskImage, maskComposite } = css;
   if (maskImage === 'none') return { opacity, rotation };
   // A draft mask is relative to the actual picture. CSS masks may be relative to a letterboxed clip box.

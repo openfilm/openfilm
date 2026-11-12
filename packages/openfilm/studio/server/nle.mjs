@@ -12,9 +12,11 @@
  *     are spread over several (an editor's track shows one clip a frame).
  *   · A web page (a motion graphic) is always rendered: a full-frame MOV with alpha (`alpha`: ProRes 4444 or PNG;
  *     footage with alpha that has to be converted is written the same way), its placement in the
- *     picture. Footage and stills come as they are, placed with Basic Motion (uniform scale and a move); what Basic
- *     Motion can't say (a rotation, a speed change, an unknown size) is rendered too: rather less to adjust than a
- *     picture in the wrong place.
+ *     picture. Footage and stills come as they are, placed with Basic Motion (uniform scale and a move), fitted in
+ *     their box or filling it (`object-fit` contain or cover, where `object-position` puts them); what Basic Motion
+ *     can't say (a rotation, a speed change, an unknown size, a fill its box cuts inside the frame) is rendered too:
+ *     rather less to adjust than a picture in the wrong place. A style that only says what CSS does anyway
+ *     (`object-fit: contain`, `opacity: 1`) is no look of its own.
  *   · Sound comes as clips (each its own, with its level, footage's sound linked to its picture) on footage, voice,
  *     sound-effect and music tracks, or as those four mixed stems. FCPXML clips instead retain their source rows.
  *   · A hidden track's clips and a muted track's sounds are not dropped: they come disabled, one click from back on.
@@ -27,7 +29,7 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { clipKind, pictureRect, soundRole } from '../../src/film-doc.mjs';
+import { clipKind, declarations, pictureRect, soundRole } from '../../src/film-doc.mjs';
 import { exactRate } from '../../src/rate.mjs';
 
 /**
@@ -37,9 +39,11 @@ import { exactRate } from '../../src/rate.mjs';
  * @typedef {{ opacity: number, rotation: number, rectangle?: { left: number, top: number, right: number, bottom: number } }} DraftClipLook
  * @typedef {{ id: string, kind: 'page' | 'video' | 'still', src: string, path: string, at: number, end: number,
  *   from: number, speed: number, box?: FilmBox, track: number, hidden: boolean, styled?: boolean, faded?: boolean,
- *   facts: SourceFacts | null, draftLook?: DraftClipLook, animationTiming?: { durations: number[], delays: number[] } }} NlePicture
+ *   facts: SourceFacts | null, draftLook?: DraftClipLook, animationTiming?: { durations: number[], delays: number[] },
+ *   fit?: string, position?: string }} NlePicture
  *   A picture clip: its film seconds [at, end), its source from `from` at `speed`; `facts` its file's (w × h as the
- *   browser shows it), null for a page
+ *   browser shows it), null for a page; `fit` and `position` its `object-fit` and `object-position` as the browser
+ *   computes them (contain, centered, when not said)
  * @typedef {'voice' | 'music' | 'sfx' | 'footage'} SoundRole
  *   A sound's stem (see soundStem)
  * @typedef {{ id: string, src: string, path: string, at: number, from: number, to: number, speed: number, volume: number,
@@ -126,23 +130,83 @@ export function allocateLanes(items) {
 
 const round6 = (/** @type {number} */ n) => { const r = Math.round(n * 1e6) / 1e6; return Object.is(r, -0) ? 0 : r; };
 
+/** A tenth of a pixel: an edge this near the frame's is on it. */
+const EDGE_PX = 0.1;
+
 /**
- * A footage or still clip's place (fitted whole inside its `box`, or the stage, and centered: a picture with no CSS of
- * its own; `r` turns it about its center) as Basic Motion: the source's own pixels × scale %, its center moved from the
- * frame's by a share of the frame's width and height. A rotation or no size known → `bake`.
+ * Where `object-position` puts a picture in its box: px from the box's left and top, given the room left over on each
+ * axis (negative when the picture spills past). A share of that room, or a length; null for anything else (calc()).
+ * @param {string | undefined} position @param {number} roomX @param {number} roomY
+ */
+function objectOffset(position, roomX, roomY) {
+  const [x = '50%', y = '50%', ...more] = String(position ?? '').trim().split(/\s+/).filter(Boolean);
+  if (more.length) return null;
+  const along = (/** @type {string} */ v, /** @type {number} */ room) => {
+    const m = /^(-?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(%|px)?$/i.exec(v);
+    if (!m || (!m[2] && Number(m[1]) !== 0)) return null;
+    return m[2] === '%' ? (room * Number(m[1])) / 100 : Number(m[1]);
+  };
+  const dx = along(x, roomX), dy = along(y, roomY);
+  return dx == null || dy == null ? null : { x: dx, y: dy };
+}
+
+/**
+ * A footage or still clip's place (fitted whole inside its `box`, or the stage, or filling it: `fit` contain or cover;
+ * where in it `position` says, centered when not said; `r` turns it about its center) as Basic Motion: the source's own
+ * pixels × scale %, its center moved from the frame's by a share of the frame's width and height. A fill is cut at its
+ * box, which Basic Motion can't do: only a box over the whole frame, which cuts nothing the frame does not, comes as a
+ * move. A rotation, no size known, another fit or a position it can't read → `bake`.
  * @param {{ w?: number, h?: number }} natural @param {{ w: number, h: number }} stage @param {FilmBox} [box]
+ * @param {{ fit?: string, position?: string }} [look]
  * @returns {{ kind: 'none' } | { kind: 'motion', motion: { scale: number, center: { h: number, v: number } } } | { kind: 'bake' }}
  */
-export function containMotion(natural, stage, box) {
+export function containMotion(natural, stage, box, look = {}) {
   const nw = natural.w ?? 0, nh = natural.h ?? 0;
-  if (!(nw > 0 && nh > 0) || Math.abs(box?.r ?? 0) > 1e-6) return { kind: 'bake' };
+  const fit = look.fit ?? 'contain';
+  if (!(nw > 0 && nh > 0) || Math.abs(box?.r ?? 0) > 1e-6 || (fit !== 'contain' && fit !== 'cover')) return { kind: 'bake' };
   const rect = pictureRect('video', { w: nw, h: nh }, stage, box);
-  const cx = rect.x + rect.w / 2;
-  const cy = rect.y + rect.h / 2;
-  const scale = round6((Math.min(rect.w / nw, rect.h / nh)) * 100);
+  const k = (fit === 'cover' ? Math.max : Math.min)(rect.w / nw, rect.h / nh);
+  const pw = nw * k, ph = nh * k;
+  const offset = objectOffset(look.position, rect.w - pw, rect.h - ph);
+  if (!offset) return { kind: 'bake' };
+  const spills = pw > rect.w + EDGE_PX || ph > rect.h + EDGE_PX;
+  const overFrame = rect.x <= EDGE_PX && rect.y <= EDGE_PX && rect.x + rect.w >= stage.w - EDGE_PX && rect.y + rect.h >= stage.h - EDGE_PX;
+  if (spills && !overFrame) return { kind: 'bake' };
+  const cx = rect.x + offset.x + pw / 2;
+  const cy = rect.y + offset.y + ph / 2;
+  const scale = round6(k * 100);
   const center = { h: round6((cx - stage.w / 2) / stage.w), v: round6((cy - stage.h / 2) / stage.h) };
   if (Math.abs(scale - 100) < 1e-4 && center.h === 0 && center.v === 0) return { kind: 'none' };
   return { kind: 'motion', motion: { scale, center } };
+}
+
+/** What a picture's own style says as CSS does anyway: the values that change nothing. */
+const NEUTRAL = /** @type {Record<string, (value: string) => boolean>} */ ({
+  opacity: (v) => v === '100%' || Number(v) === 1,
+  filter: (v) => v === 'none',
+  'backdrop-filter': (v) => v === 'none',
+  'clip-path': (v) => v === 'none',
+  'mask-image': (v) => v === 'none',
+  'mix-blend-mode': (v) => v === 'normal',
+  'box-shadow': (v) => v === 'none',
+  'border-radius': (v) => /^0(?:px|%)?$/.test(v),
+  border: (v) => v === 'none' || /^0(?:px)?$/.test(v),
+  outline: (v) => v === 'none',
+});
+/** Where a picture sits in its box: Basic Motion says it (containMotion), from the values the browser computes. */
+const PLACED = new Set(['object-fit', 'object-position']);
+
+/**
+ * The declarations of a picture's `style` that make a look of its own: past where it sits in its box, and past what
+ * says only what CSS does anyway.
+ * @param {string} style @returns {[string, string][]}
+ */
+export function ownLook(style) {
+  return declarations(style).filter(([key, value]) => {
+    if (PLACED.has(key)) return false;
+    const v = value.replace(/\s*!important$/i, '').trim().toLowerCase();
+    return !NEUTRAL[key]?.(v);
+  });
 }
 
 /**
@@ -291,7 +355,7 @@ export function planNleTimeline(film, opts) {
     };
     /* a clip with a look of its own (the film's CSS: a crop, round corners) is drawn as the film draws it */
     if (p.kind === 'page' || (p.styled && !p.draftLook) || p.faded || !p.facts || (!editable && p.kind === 'video' && Math.abs(p.speed - 1) > 1e-6)) { bake(); continue; }
-    const placement = containMotion(p.facts, stage, p.draftLook && p.box ? { ...p.box, r: 0 } : p.box);
+    const placement = containMotion(p.facts, stage, p.draftLook && p.box ? { ...p.box, r: 0 } : p.box, { fit: p.fit, position: p.position });
     if (placement.kind === 'bake') { bake(); continue; }
     const inFrame = p.kind === 'still' ? 0 : toFrame(p.from, rate);
     const speed = editable && p.kind === 'video' ? p.speed : 1;

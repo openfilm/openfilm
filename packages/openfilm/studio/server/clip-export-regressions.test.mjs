@@ -172,6 +172,27 @@ test('Jianying exports native controls for opacity, rotation and a hard rectangl
   assert.ok(!soft.extra_material_refs.includes(mask.id));
 });
 
+test('a talking head filling a vertical frame, or styled as CSS does anyway, stays one Jianying clip with its sound', ffmpeg, async () => {
+  const root = join(scratch, 'talking-head'); mkdirSync(root);
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=144x320:rate=30:duration=2',
+    '-f', 'lavfi', '-i', 'sine=frequency=220:duration=2', '-shortest', '-pix_fmt', 'yuv420p', join(root, 'talk.mp4')]);
+  writeFileSync(join(root, 'film.html'), filmHtml({ stage: { w: 180, h: 320 }, tracks: [{ clips: [
+    { id: 'filled', src: 'talk.mp4', time: [0, 1], style: 'object-fit: cover; object-position: 50% 30%' },
+    { id: 'fitted', src: 'talk.mp4', at: 1, time: [1, 2], style: 'object-fit: contain; opacity: 1' },
+  ] }] }));
+  const folder = dirname(await exported(root, { kind: 'nle', format: 'jianying', fps: 30, subtitles: false, media: 'link' }));
+  const info = JSON.parse(readFileSync(join(folder, 'draft_info.json'), 'utf8'));
+  assert.deepEqual(info.tracks.map((t) => t.type), ['video'], 'no sound split off its picture');
+  const [filled, fitted] = info.tracks[0].segments;
+  for (const s of [filled, fitted]) {
+    assert.equal(info.materials.videos.find((m) => m.id === s.material_id).path, join(root, 'talk.mp4'));
+    assert.equal(s.volume, 1);
+  }
+  assert.equal(filled.clip.scale.x, 1.25);
+  assert.equal(filled.clip.transform.y, -0.1, '30% of the 80 px it spills goes above: 16 px down of a half-frame of 160');
+  assert.equal(fitted.clip.scale.x, 1);
+});
+
 test('transparent resizing weights bright pixels by their opacity', ffmpeg, () => {
   const pixels = Buffer.alloc(16 * 16 * 4);
   for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {

@@ -42,3 +42,18 @@ test('a processed video has full-length handles and its untouched original in th
   assert.equal(meta.draft_materials[0].value.length, timeline.files.length);
   assert.ok(info.materials.videos.some((m) => m.path.endsWith('shot.mp4') && m.duration === 12_000_000));
 });
+
+test('a talking head filling the frame stays one clip with its own sound', () => {
+  const head = { w: 144, h: 320, duration: 4, fps: 30, hasVideo: true, hasAudio: true, channels: 2, sampleRate: 48000 };
+  const timeline = planNleTimeline({ stage: { w: 180, h: 320 }, duration: 4,
+    pictures: [{ ...picture, src: 'talk.mp4', path: '/p/talk.mp4', at: 0, end: 4, from: 0, speed: 1, facts: head, fit: 'cover', position: '50% 50%' }],
+    sounds: [{ ...sound, src: 'talk.mp4', path: '/p/talk.mp4', at: 0, from: 0, to: 4, speed: 1, volume: 1, facts: head }],
+  }, { title: 'Head', fps: 30, audio: 'clips', media: 'copy', mediaDir: '/draft/media', editable: true, footage: 'auto' });
+  assert.ok(!timeline.files.some((f) => f.job.kind === 'render'));
+  const { info } = jianyingDraft(timeline, { name: 'Head', folder: '/draft', root: '/' });
+  assert.deepEqual(info.tracks.map((t) => t.type), ['video']);
+  const [segment] = info.tracks[0].segments;
+  assert.equal(segment.volume, 1);
+  /* 剪映 fits it whole first (320 px high), then fills: 180 / 144 */
+  assert.equal(segment.clip.scale.x, 1.25);
+});
