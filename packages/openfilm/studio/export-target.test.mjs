@@ -34,7 +34,7 @@ test('video targets validate, persist and reach the export API, with estimates a
         return route.fulfill({ json: { ...await response.json(), drafts: { jianying: false, capcut: false } } });
       }
       queued.push(route.request().postDataJSON().jobs[0]);
-      /* UI contract only: actual file generation is covered by server/nle-source.test.mjs. */
+      /* UI contract only: actual file generation is covered by server/export-target.test.mjs. */
       await route.fulfill({ json: { exports: [] } });
     });
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
