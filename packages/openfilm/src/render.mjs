@@ -475,8 +475,9 @@ function alphaWatch() {
 async function encode({ film, a, b, file }, { fps, rate, samples, shutter, alpha, duration, first = a, format, onFrame, still, opaque, signal, sourceFrame = (frame) => frame }) {
   /* a 4:2:0 picture wants even dimensions. A --scale between two pixels (1920 x .667) makes the browser's surface
      1281 wide: the file was written, and every strict H.264 encoder after it said `width not divisible by 2`.
-     Round the picture down to even on the way in, which leaves an even scale alone. */
-  const even = 'scale=trunc(iw/2)*2:trunc(ih/2)*2,';
+     Crop the odd last column or row on the way in: scaling 1281 to 1280 would resample the whole frame, a crop keeps
+     every pixel as drawn. An even size is left alone. */
+  const even = 'crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0,';
   const blur = samples > 1 ? `tmix=frames=${samples},select='eq(mod(n\\,${samples})\\,${samples - 1})',setpts=N/((${ffmpegRate(rate)})*TB),` : '';
   /* Chromium omits PNG's alpha plane for an entirely opaque frame. Reinitializing on that format change resets
      tmix and select's frame index, losing samples or even every frame of a short transparent export. */
