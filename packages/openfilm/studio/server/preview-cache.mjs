@@ -18,6 +18,7 @@ import { setPriority } from 'node:os';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_STAGE, FILM_FILE, readFilmFile } from '../../src/film-doc.mjs';
+import { mediaReferences, referenceSource } from '../../src/media-links.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { TOOL_DIR } from './projects.mjs';
 
@@ -59,6 +60,15 @@ export function projectPrint(root) {
     }
   };
   walk(root, '');
+  for (const ref of mediaReferences(root)) {
+    if (SOUNDS.has(extname(ref.name).toLowerCase())) continue;
+    const source = referenceSource(root, join(root, ref.name));
+    if (!source) continue;
+    try {
+      const s = statSync(source, { bigint: true });
+      hash.update(`${ref.name}\0${source}\0${s.size}\0${s.mtimeNs}\0${s.ino}\0${s.ctimeNs}\n`);
+    } catch { /* the share went away */ }
+  }
   return hash.digest('hex');
 }
 

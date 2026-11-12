@@ -143,6 +143,8 @@ export const ja: Words = {
     agentPermissionTitle: '{name} が次の操作を求めています',
     agentSection: 'エージェント',
     agentSetUp: '設定',
+    modelUnavailable: "サービス更新待ち",
+    modelUnavailableInfo: "このモデルは表示がオンですが、接続中のサービスではまだ提供されていません。サービス更新後に利用できます。スイッチを入れ直す必要はありません。",
     agentWaiting: 'サインイン中…',
     agentWas: 'この会話は {name} を使っていましたが、今は使えません。次のメッセージは下で選んだエージェントに送られます。',
     effort: '思考レベル',

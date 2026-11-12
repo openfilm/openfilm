@@ -27,8 +27,22 @@ export interface MenuAt {
   /** `at` is where what is added has its top left corner (beside a node), not its middle */
   corner?: boolean;
   from?: { node: string; side: 'source' | 'target' };
+  /** a wire was dropped on the canvas and still leads to the menu */
+  wire?: boolean;
   /** opened on the templates (the toolbar's button) */
   view?: 'templates';
+}
+
+const MENU_WIDTH = 220;
+
+function addMenuPlacement(menu: MenuAt) {
+  const screen = menu.screen;
+  const roomOnRight = window.innerWidth - screen.x >= MENU_WIDTH + 8;
+  const roomOnLeft = screen.x >= MENU_WIDTH + 8;
+  const leftOfPointer = menu.wire && (menu.from?.side === 'target' ? roomOnLeft || !roomOnRight : !roomOnRight && roomOnLeft);
+  const left = Math.max(8, Math.min(screen.x - (leftOfPointer ? MENU_WIDTH : 0), window.innerWidth - MENU_WIDTH - 8));
+  const top = Math.max(8, Math.min(screen.y, window.innerHeight - (menu.wire ? 210 : 440)));
+  return { left, top };
 }
 
 type Row = { key: string; label: string; icon: React.ReactNode; run: () => void; more?: boolean; remove?: () => void; badge?: string };
@@ -93,15 +107,15 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
     return () => window.removeEventListener('pointerdown', away, true);
   }, [onClose]);
   /* kept on the screen */
-  const left = Math.min(menu.screen.x, window.innerWidth - 236);
+  const { left, top } = addMenuPlacement(menu);
   const place: React.CSSProperties = menu.above
     ? { left, bottom: Math.max(8, window.innerHeight - menu.screen.y + 10) }
-    : { left, top: Math.min(menu.screen.y, window.innerHeight - 440) };
+    : { left, top };
   let n = -1;
   /* the first part's title heads the menu, and typed into searches */
   const head = sections[0]?.title ?? t('canvas.menu.nodes');
   return (
-    <div ref={ref} className="cv-pop fixed z-[200] w-[220px] overflow-hidden rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]" style={place}>
+    <div ref={ref} className="cv-pop fixed z-[200] overflow-hidden rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]" style={{ ...place, width: MENU_WIDTH }}>
       <label className="flex h-7 items-center gap-1.5 px-2">
         {view === 'kinds' ? null : (
           <button type="button" aria-label={t('canvas.menu.back')} onClick={() => { setView('kinds'); setActive(0); }}
@@ -124,7 +138,7 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
         />
         <Search size={13} className="shrink-0 text-[var(--cv-ink-3)]" />
       </label>
-      <div className="max-h-[380px] overflow-y-auto">
+      <div className="overflow-y-auto" style={{ maxHeight: menu.wire ? Math.min(380, window.innerHeight - top - 44) : 380 }}>
         {sections.filter((sec) => sec.rows.length).map((section, si) => (
           <div key={section.title} className={si ? 'mt-1 border-t !border-[var(--cv-float-line)] pt-1' : ''}>
             {si ? <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-3)]">{section.title}</div> : null}

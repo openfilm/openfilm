@@ -14,11 +14,12 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { AudioWaveform, Captions, ChevronRight, Clapperboard, createLucideIcon, ExternalLink, Globe, Image, Mic, Music, Plus, ScanSearch, Scissors, X } from 'lucide-react';
+import { AudioWaveform, Captions, ChevronRight, Clapperboard, createLucideIcon, ExternalLink, Globe, Image, Mic, Music, Plus, ScanSearch, Scissors } from 'lucide-react';
 import { useT } from '@/i18n';
 import { AZURE_SERVICES, PROVIDER_SITES, SERVICE_VERBS, azureKey, providerOrder, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { customProblem } from './CustomServices';
 import { ProviderMark } from './ProviderMark';
+import { DialogClose, DialogIdentity } from './DialogIdentity';
 import { SettingsButton, SettingsField, SettingsLinkButton, settingsError, settingsLink } from './ui';
 
 /** Where a new built-in provider is proposed, and what it needs. */
@@ -103,11 +104,8 @@ export function Card({ label, onClose, children }: { label: string; onClose: () 
   return createPortal(
     <div className="fixed inset-0 z-[10070] grid place-items-center bg-black/45 p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-label={label}
-        className="relative flex max-h-[86dvh] w-[640px] max-w-full flex-col overflow-y-auto rounded-[16px] border border-[var(--border)] bg-[var(--bg-panel)] p-7 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
-        <button type="button" onClick={onClose} aria-label={t('settings.done')}
-          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-          <X size={16} />
-        </button>
+        className="relative flex max-h-[86dvh] w-[640px] max-w-full flex-col overflow-y-auto rounded-[16px] border border-[var(--border)] bg-[var(--bg-raised)] p-7 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
+        <DialogClose label={t('settings.done')} onClose={onClose} />
         {children}
       </div>
     </div>,
@@ -144,19 +142,8 @@ export function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvi
     <Card label={provider.name} onClose={onClose}>
       <Connection provider={provider} hook={hook} header={(status, action) => (
         /* the status line runs on under the buttons, which are no taller than the name and website */
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 pr-8">
-          <span className="row-span-2 flex h-12 w-12 items-center justify-center rounded-[12px] bg-[var(--bg-field)] text-[var(--text)]"><ProviderMark id={provider.id} size={24} /></span>
-          <div className="min-w-0">
-            <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{provider.name}</h2>
-            {site ? (
-              <a href={`https://${site}`} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[13.5px] text-[var(--text-faint)] transition hover:text-[var(--text)]">
-                {site}<ExternalLink size={11} />
-              </a>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-1 pt-1">{action}</div>
-          {status ? <div className="col-span-2 col-start-2 mt-1 flex min-w-0 text-[13.5px]">{status}</div> : null}
-        </div>
+        <DialogIdentity name={provider.name} mark={<ProviderMark id={provider.id} size={24} />}
+          website={site ? { href: `https://${site}`, label: site } : undefined} actions={action} status={status} />
       )} />
       <p className="mt-5 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t(`settings.providers.about.${provider.id}`)}</p>
       <h3 className="mb-1 mt-7 text-[13px] font-medium text-[var(--text-faint)]">{t('settings.providers.makes')}</h3>
@@ -207,7 +194,7 @@ function Connection({ provider, hook, header }: {
   const key = azure ? azureKey(region, draft) : draft.trim() ? draft : null;
   const close = () => { setAdding(false); setDraft(''); setRegion(''); };
   const save = async () => { if (key && !busy && await hook.saveKey(provider.id, key)) close(); };
-  const problem = (hook.problemFor === provider.id ? hook.problem : null) ?? (signing?.errorFor === provider.id ? signing.error : null);
+  const problem = (hook.problemFor === provider.id ? hook.problem : null) ?? (signing?.errorFor === provider.id ? signing.error : null) ?? provider.connectionError;
   const pasteLabel = azure ? t('settings.providers.key') : t('settings.providers.pasteKey').replaceAll('{name}', provider.name);
   const escape = (e: React.KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
 

@@ -29,6 +29,7 @@ export const ACTIONS = [
   { id: 'select-right', tab: 'timeline', keys: [']'] },
   { id: 'nudge-back', tab: 'timeline', keys: ['alt+ArrowLeft'] },
   { id: 'nudge-forward', tab: 'timeline', keys: ['alt+ArrowRight'] },
+  { id: 'overwrite-track-down', tab: 'timeline', keys: ['alt+ArrowDown'] },
   { id: 'toggle-magnet', tab: 'timeline', keys: ['p', 'shift+n'] },
   { id: 'toggle-snap', tab: 'timeline', keys: ['n'] },
   { id: 'toggle-linkage', tab: 'timeline', keys: ['`', 'shift+`'] },
@@ -41,6 +42,7 @@ export const ACTIONS = [
   { id: 'prev-marker', tab: 'timeline', keys: ['alt+m', 'alt+shift+m'] },
   { id: 'speed', tab: 'timeline', keys: ['mod+r'] },
   { id: 'detach-audio', tab: 'timeline', keys: ['ctrl+shift+s'] },
+  { id: 'toggle-clip', tab: 'timeline', keys: ['shift+e'] },
   { id: 'compound', tab: 'timeline', keys: ['alt+g'] },
   { id: 'uncompound', tab: 'timeline', keys: ['alt+shift+g'] },
   /* the player */

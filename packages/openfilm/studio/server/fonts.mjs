@@ -28,20 +28,41 @@ const FONT_FILES = new Set(['.ttf', '.otf', '.ttc', '.otc']);
 
 /** @type {Promise<FontOption[]> | null} */
 let listing = null;
+/** @type {Promise<(Face & { file: string })[]> | null} */
+let faces = null;
 
 /** The installed fonts, by family, sorted by name (hidden system families — names starting with "." — left out). */
 export function installedFonts() {
-  listing ??= scan().catch(() => []);
+  listing ??= installedFaces().then(familiesOf);
   return listing;
 }
 
+function installedFaces() {
+  faces ??= scan().catch(() => []);
+  return faces;
+}
+
+/** The installed file for the first named family the destination editor can open. @param {readonly string[]} families */
+export async function installedFontFile(families) {
+  if (!families.length) return;
+  const found = await installedFaces();
+  for (const family of families) {
+    const name = family.toLowerCase();
+    const matches = found.filter((face) => [face.family, ...face.aliases].some((alias) => alias.toLowerCase() === name));
+    const face = matches.find((face) => !face.italic && face.weight === 400) ?? matches[0];
+    if (face) return { name: face.family, path: face.file };
+  }
+}
+
 async function scan() {
-  /** @type {Face[]} */
+  /** @type {(Face & { file: string })[]} */
   const faces = [];
   for (const folder of FOLDERS) {
-    for (const file of await fontFiles(folder, 3)) faces.push(...await facesOf(file).catch(() => []));
+    for (const file of await fontFiles(folder, 3)) {
+      for (const face of await facesOf(file).catch(() => [])) faces.push({ ...face, file });
+    }
   }
-  return familiesOf(faces);
+  return faces;
 }
 
 /** The weights CSS names (Thin … Black): a variable font offers those in its range. */

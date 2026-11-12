@@ -358,6 +358,8 @@ export interface TimelineBlock {
   kind: TimelineBlockKind;
   /** Turned off (or on a hidden track): drawn see-through. */
   off?: boolean;
+  /** This clip alone is disabled; a hidden track is represented separately by `off`. */
+  disabled?: boolean;
   /**
    * Where the clip is written in film.html (`film.html#track.clip`). Without it the clip can be selected but not
    * edited: there is nowhere to write a change.
@@ -401,7 +403,7 @@ export interface TimelineBlock {
   duck?: boolean;
   /** Video: without its own sound. */
   silent?: boolean;
-  /** A video with sound of its own: its audio band shows the sound's waveform. */
+  /** A video or compound clip with sound: its audio band shows the waveform. */
   ownAudio?: boolean;
   /** The clip's id in film.html. */
   clipId?: string;
@@ -493,6 +495,7 @@ export interface TimelineFilm {
     z?: number;
     silent?: boolean;
     volume?: number;
+    ownAudio?: boolean;
   }[];
   sounds: readonly {
     key: string; kind: 'voice' | 'music' | 'sfx'; src: string; startMs: number; durMs: number;
@@ -832,6 +835,8 @@ function videoBlockOf(
  */
 export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
   const film = withDocTimes(evaluated);
+  const disabled = new Set(docTracksOf(film.doc).flatMap((tr) => (Array.isArray(tr.clips) ? tr.clips : [])
+    .filter((c) => c && typeof c === 'object' && c.disabled).map((c) => c.id)));
   const tracks: TimelineTrack[] = [];
   interface DocRow {
     name: string; kind: string; blocks: Block[];
@@ -903,6 +908,8 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
          thing of the library's is pulled out as far as there is room: it lengthens (film-shape: as a still) */
       ...(filmSrcIsLibrary(s.src) ? {} : { room: { headMs: Math.max(0, s.inMs ?? 0) } }),
       ...visualExtras(s),
+      ...(s.ownAudio ? { ownAudio: true } : {}),
+      ...audioExtras(s),
       ...metaFields(s.meta),
     });
   }
@@ -1023,7 +1030,7 @@ export function layoutTracks(evaluated: TimelineFilm): TimelineTrack[] {
     const locked = Boolean(flags?.locked);
     const painted = (hidden ? blocks.map((b) => ({ ...b, off: true as const })) : blocks).map((b) => {
       const nextMs = trimFence(b, blocks.filter((o) => o.id !== b.id)).endMs;
-      return nextMs != null ? { ...b, nextMs } : b;
+      return { ...b, ...(nextMs != null ? { nextMs } : {}), ...(b.clipId && disabled.has(b.clipId) ? { disabled: true, off: true } : {}) };
     });
     const layers = layered(painted);
     /* an empty track still takes a row: rows split on overlap, no clips is not no track */

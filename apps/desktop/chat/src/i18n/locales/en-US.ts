@@ -143,6 +143,8 @@ export const enUS = {
     agentPermissionTitle: '{name} wants to do this',
     agentSection: 'Agent',
     agentSetUp: 'Set up',
+    modelUnavailable: "Awaiting update",
+    modelUnavailableInfo: "This model is enabled for display, but the connected service does not offer it yet. It will be usable after the service update; you do not need to toggle it again.",
     agentWaiting: 'Signing in…',
     agentWas: 'This conversation used {name}, which isn’t available now. The next message goes to the agent below.',
     effort: 'Effort',

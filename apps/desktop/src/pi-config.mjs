@@ -106,7 +106,7 @@ export function contextLength(/** @type {unknown} */ value) {
  * One of the person's own models as the agent runs it: `id` (the app's, never shown), `name` (the menu's), Pi's `api`,
  * the service's `baseUrl`, the variable its key is in (`keyEnv`), the `model` asked for there, its efforts and its
  * `context` length in tokens (128K when none).
- * @typedef {{ id: string, name: string, api: string, baseUrl: string, keyEnv: string, model: string, levels: string[], effort: string, context?: number }} OwnModel
+ * @typedef {{ id: string, name: string, api: string, baseUrl: string, keyEnv: string, model: string, levels: string[], effort: string, context?: number, compat?: Record<string, unknown> }} OwnModel
  */
 
 /** Pi's provider for one of the person's own models: each its own service. */
@@ -134,6 +134,7 @@ export function modelsJson(models) {
       contextWindow: context,
       maxTokens: Math.min(Math.floor(context / 4), MAX_OUTPUT),
       reasoning: Boolean(levels),
+      ...(m.compat ? { compat: m.compat } : {}),
       ...(levels ? { thinkingLevelMap: Object.fromEntries(EFFORTS.slice(1).map((l) => [l, levels.includes(l) ? wire(m.api, l) : null])) } : {}),
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     };
@@ -243,6 +244,7 @@ export function contextUsed(message, model) {
 
 /** Where each service the person's own key may be for is topped up, by its address. */
 const BILLING = [
+  { host: /(^|\.)openfilm\.dev$/, name: 'OpenFilm', url: 'https://openfilm.dev/account' },
   { host: /(^|\.)openai\.com$/, name: 'OpenAI', url: 'https://platform.openai.com/settings/organization/billing' },
   { host: /(^|\.)anthropic\.com$/, name: 'Anthropic', url: 'https://console.anthropic.com/settings/billing' },
   { host: /(^|\.)openrouter\.ai$/, name: 'OpenRouter', url: 'https://openrouter.ai/settings/credits' },

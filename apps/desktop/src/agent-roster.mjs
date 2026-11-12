@@ -1,6 +1,9 @@
 /**
  * The agents the chat can use, as Settings → Agents shows them, and the person's choices about them:
  *
+ *   · openfilm — the app's own agent (Pi), using the same OpenFilm account as Settings → Services. The cloud offers
+ *     its model menu and relays requests to OpenRouter; signing out or switching accounts applies to both places.
+ *
  *   · codex, claude, copilot, cursor, opencode, codebuddy, qwen, kimi, minimax, deepseek, antigravity — the person's own agents
  *     (agents.mjs): Codex, Claude Code, GitHub Copilot, Cursor, OpenCode, CodeBuddy, Qwen Code, Kimi, MiniMax Code,
  *     DeepSeek Harness and Google Antigravity. Each uses the account its own program is signed in to: connecting opens Terminal for its own
@@ -56,7 +59,7 @@ export const BYOK_FORMATS = Object.freeze({
 });
 
 /* the person's other agents: not shown until connected or switched on */
-const DEFAULT_SHOWN = { codex: true, claude: true, byok: false };
+const DEFAULT_SHOWN = { openfilm: true, codex: true, claude: true, byok: false };
 /* Codex is used as it is signed in on the computer from the start; Claude Code only once the person connects it, which
    signs in to their Claude subscription the first time */
 const DEFAULT_DISCONNECTED = Object.freeze(['claude']);
@@ -226,6 +229,7 @@ export async function probeModel({ format, baseUrl, key, model, fetch: fetchImpl
  *   resetAgent?: (id: string) => void,
  *   seal: (text: string) => Buffer, unseal: (data: Buffer) => string,
  *   onChange: (list: any[]) => void,
+ *   openfilm?: ReturnType<typeof import('./openfilm-agent.mjs').createOpenFilmAgent>,
  *   fetch?: typeof fetch,
  *   signInWait?: { ms: number, pollMs: number },
  * }} deps
@@ -264,6 +268,10 @@ export function createRoster(deps) {
   const enabled = (id) => Boolean(choices.shown[id]) && !choices.disconnected.includes(id);
 
   function stateOf(id) {
+    if (id === 'openfilm') return {
+      ...(deps.openfilm?.state() ?? { status: 'unavailable' }),
+      ...(choices.disconnected.includes(id) ? { status: 'off' } : {}),
+    };
     if (isOwn(id)) {
       const found = local?.find((a) => a.id === id);
       if (!found) return { status: 'checking' };
@@ -300,6 +308,7 @@ export function createRoster(deps) {
   const save = (next) => { choices = next; writeChoices(dataDir, choices); changed(); };
 
   async function refresh({ fresh = false, only = null } = {}) {
+    const account = deps.openfilm?.refresh({ fresh });
     // Focus after signing in should not wait for every other agent to finish its own status command. Only the agent
     // being signed in is asked fresh; the others keep their cached answers in the full scan.
     if (deps.localAgent) {
@@ -333,11 +342,13 @@ export function createRoster(deps) {
       })().finally(() => { if (refreshing === pending) refreshing = null; });
       refreshing = pending;
     }
-    return refreshing;
+    await Promise.all([refreshing, account]);
+    return list();
   }
 
   /** Re-read settings after an external configuration change; idle sessions and model menus are renewed. */
   async function recheck(id) {
+    if (id === 'openfilm') { await deps.openfilm?.refresh({ fresh: true }); return list(); }
     if (id != null && !isOwn(id)) return list();
     for (const target of id ? [id] : OWN_AGENT_IDS) {
       revision.set(target, (revision.get(target) ?? 0) + 1);
@@ -407,6 +418,7 @@ export function createRoster(deps) {
   const waitForSignIn = (id, isOpen) => waitFor(id, 'waiting', (a) => a?.signedIn !== false, isOpen);
 
   function cancelSignIn(id) {
+    if (id === 'openfilm') return deps.openfilm?.cancelSignIn();
     if (!isOwn(id)) return;
     live.waiting[id]?.abort();
     delete live.waiting[id];
@@ -439,6 +451,7 @@ export function createRoster(deps) {
       const wasDisconnected = choices.disconnected.includes(id);
       /* connecting one is choosing it: it is shown in the chat (and among the person's agents in Settings) */
       save({ ...choices, shown: { ...choices.shown, [id]: true }, disconnected: choices.disconnected.filter((a) => a !== id) });
+      if (id === 'openfilm') return deps.openfilm?.connect() ?? { ok: false, error: 'The OpenFilm agent is unavailable.' };
       try {
         if (isOwn(id)) {
           deps.closeSessions(id);
@@ -469,6 +482,7 @@ export function createRoster(deps) {
      * that fails leaves it as it was, with what it said.
      */
     async switchAccount(id) {
+      if (id === 'openfilm') return deps.openfilm?.switchAccount() ?? { ok: false, error: 'The OpenFilm agent is unavailable.' };
       if (!isOwn(id) || !deps.signOut) return { ok: false, error: `No agent ${id}` };
       delete live.errors[id];
       cancelSignIn(id);
@@ -489,6 +503,7 @@ export function createRoster(deps) {
     /** Disconnect here only: its sessions close; its own sign-in stays as it is (connecting again uses it as it is then). */
     disconnect(id) {
       if (!isAgentId(id)) return;
+      if (id === 'openfilm') return deps.openfilm?.disconnect();
       cancelSignIn(id);
       deps.closeSessions(id);
       save({ ...choices, disconnected: [...new Set([...choices.disconnected, id])] });
@@ -556,7 +571,8 @@ export function createRoster(deps) {
       if (!isAgentId(id)) return;
       revision.set(id, (revision.get(id) ?? 0) + 1);
       save({ ...choices, shown: { ...choices.shown, [id]: shown === true } });
-      if (shown && enabled(id) && deps.localAgent) void lookAgain(id, () => enabled(id));
+      if (id === 'openfilm') { if (shown) void deps.openfilm?.refresh(); }
+      else if (shown && enabled(id) && deps.localAgent) void lookAgain(id, () => enabled(id));
     },
 
     /**
@@ -615,6 +631,7 @@ export function createRoster(deps) {
      * the keys themselves (`env`).
      */
     harness(id) {
+      if (id === 'openfilm') return deps.openfilm?.harness() ?? null;
       if (id !== 'byok') return null;
       const models = keyed();
       if (!models.length) return null;

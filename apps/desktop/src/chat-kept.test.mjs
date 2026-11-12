@@ -26,3 +26,13 @@ test('nothing kept: the record is as this launch made it, and the last conversat
   joinKept(chat, { sessions: [{ id: 'a' }], last: 'a', turns: [] });
   assert.equal(chat.last, 'a');
 });
+
+test('a record that repeats an id inside itself does not show the conversation twice', () => {
+  const chat = { sessions: [], last: null, turns: [] };
+  joinKept(chat, {
+    sessions: [{ id: 'a', title: 'A' }, { id: 'a', title: 'A again' }],
+    turns: [{ turn: { id: 't1' }, items: [] }, { turn: { id: 't1' }, items: ['later'] }],
+  });
+  assert.deepEqual(chat.sessions.map((s) => s.id), ['a']);
+  assert.deepEqual(chat.turns.map((t) => t.turn.id), ['t1']);
+});

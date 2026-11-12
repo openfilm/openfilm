@@ -25,16 +25,19 @@ import { mkdir, rename } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { HOST_FLAG, folderFiles, listenLocal } from '../../src/host.mjs';
-import { readableLink } from '../../src/media-links.mjs';
+import { readableLink, referenceSource } from '../../src/media-links.mjs';
 import { clipKind } from '../../src/film-doc.mjs';
 import { readPrefs } from './prefs.mjs';
 import { readyProxy, undecodable } from './proxies.mjs';
 import { madeCopy } from '../../src/seekable.mjs';
 import { isPreviewKey, previewDir } from './preview-cache.mjs';
-import { soundOf } from './derived.mjs';
+import { probe, soundOf } from './derived.mjs';
 import { compoundOuter } from './parts.mjs';
 
 const BRIDGE = readFileSync(new URL('./bridge.js', import.meta.url), 'utf8');
+
+/** The header a file's sound (`?film-sound`) tells its length in (s): the editor's mixer decodes only short ones. */
+export const SOUND_LENGTH = 'x-film-sound-length';
 
 /* sounds a browser cannot play (AIFF, which macOS's `say` writes): the preview gets a WAV of each, made once */
 const UNPLAYABLE = /\.(aif|aiff|aifc)$/i;
@@ -48,12 +51,14 @@ const making = new Map();
  * @param {string} root @param {string} rel
  */
 async function playableCopy(root, rel) {
-  const file = normalize(join(root, rel));
-  if (!file.startsWith(root + sep)) return null;
+  const asked = normalize(join(root, rel));
+  if (!asked.startsWith(root + sep)) return null;
+  const linked = referenceSource(root, asked);
+  const file = linked ?? asked;
   let info;
   try {
     info = statSync(file);
-    if (!realpathSync(file).startsWith(realpathSync(root) + sep) && !readableLink(root, file)) return null;
+    if (!linked && !realpathSync(file).startsWith(realpathSync(root) + sep) && !readableLink(root, file)) return null;
   } catch { return null; }
   const name = `${createHash('sha1').update(`${rel}\0${info.size}\0${info.mtimeMs}`).digest('hex').slice(0, 20)}.wav`;
   const out = join(root, PLAYABLE_DIR, name);
@@ -100,7 +105,7 @@ export function ownHost(req, port) {
  * src/media-links.mjs) and not hidden by its real name either (on Windows `ENV~1` is the short name of `.env`).
  * @param {string} root @param {string} plain
  */
-function servable(root, plain) {
+export function servable(root, plain) {
   const parts = plain.split(/[\\/]+/).filter(Boolean);
   if (parts.some((part) => part.startsWith('.') || part.includes(':'))) return false;
   let real;
@@ -140,7 +145,7 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
       if (clipKind(file) !== 'video') return null;
       const { proxies } = readPrefs();
       const rel = relative(root, file).split(sep).join('/');
-      return (proxies.on || undecodable(root, rel) ? readyProxy(root, rel, proxies.height) : null) ?? madeCopy(file, root);
+      return (proxies.on || undecodable(root, rel) ? readyProxy(root, rel, proxies.height) : null) ?? madeCopy(referenceSource(root, file) ?? file, root);
     },
   });
 
@@ -193,7 +198,11 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
       const file = await soundOf(entry.root, plain.replace(/^\/+/, '')).catch((/** @type {any} */ e) => (e?.status === 404 ? undefined : null));
       if (file === undefined) { res.writeHead(404, headers).end('not found'); return; }
       if (!file) { res.writeHead(204, headers).end(); return; }
-      if (!folderFiles(dirname(file), { headers: policy() })(req, res, `/${basename(file)}`, url.searchParams)) res.writeHead(403, headers).end();
+      /* its length (s), known from the file's probe: a long one is played as it streams, never decoded whole */
+      const length = (await probe(entry.root, plain.replace(/^\/+/, '')).catch(() => null))?.duration;
+      /** @type {Record<string, string>} */
+      const told = Number.isFinite(length) ? { [SOUND_LENGTH]: String(length), 'access-control-expose-headers': SOUND_LENGTH } : {};
+      if (!folderFiles(dirname(file), { headers: { ...policy(), ...told } })(req, res, `/${basename(file)}`, url.searchParams)) res.writeHead(403, headers).end();
       return;
     }
     /* a stretch of the film rendered for the preview to play in its place (preview-cache.mjs): its cache, not the

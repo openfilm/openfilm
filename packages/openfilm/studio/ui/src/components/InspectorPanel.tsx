@@ -18,7 +18,7 @@ export function InspectorPanel({ title, width, onClose, tabs, tab, onTab, childr
 }) {
   const t = useT();
   return (
-    <aside aria-label={title} data-inspector-panel data-film-inspector className="relative flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden bg-[var(--bg-panel)] text-[var(--text)]" style={{ width }} onKeyDown={event => {
+    <aside aria-label={title} data-inspector-panel data-film-inspector className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--bg-panel)] text-[var(--text)]" style={{ width }} onKeyDown={event => {
       /* typing is the field's, Space and Enter a button's, the arrows a slider's; every other key is the editor's (⌘Z
          undoes the change a button or slider just made) */
       const el = event.target as Element;

@@ -85,3 +85,26 @@ test('a page\'s pictures go before its facts', async () => {
   await answer(p('probe', 2));
   await Promise.all(got);
 });
+
+test('visible cards go before timeline thumbnails and background scans', async () => {
+  asked.length = 0;
+  const got = [
+    mediaFetch('scan-running-1', undefined, 'background'),
+    mediaFetch('scan-running-2', undefined, 'background'),
+    mediaFetch('scan-waiting', undefined, 'background'),
+    mediaImage('timeline-frame'),
+    mediaImage('visible-card', undefined, 'visible'),
+  ];
+  await tick();
+  assert.deepEqual(asked, ['scan-running-1', 'scan-running-2']);
+  await answer('scan-running-1');
+  assert.equal(asked.at(-1), 'visible-card');
+  await answer('scan-running-2');
+  assert.equal(asked.at(-1), 'timeline-frame');
+  await answer('visible-card');
+  assert.equal(asked.at(-1), 'scan-waiting');
+  await answer('timeline-frame');
+  await answer('scan-waiting');
+  await Promise.all(got);
+  assert.equal(most, MEDIA_IN_FLIGHT);
+});

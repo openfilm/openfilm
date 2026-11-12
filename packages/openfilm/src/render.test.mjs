@@ -402,3 +402,30 @@ test('--loudness brings the sound to the target with true peaks under -1 dBTP, t
   const mute = await render([dir], { ...quiet, loudness: -16, out: join(dir, 'mute.mp4') });
   assert.ok(!mute.lines.some((l) => /loudness/.test(l)), 'a silent render (no sound asked) says nothing of it');
 });
+
+test('a render at a scale between two pixels writes an even picture, and says the size it wrote', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-even-'));
+  try {
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><body style="margin:0"><div style="width:320px;height:180px"></div><script>window.film = { duration: 0.2, width: 320, height: 180, frame() {} };</script>');
+    const quiet = { workers: 1, silent: true, onProgress() {} };
+    const sizeOf = (/** @type {string} */ file) => JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', file], { encoding: 'utf8' })).streams[0];
+    /* 320 x .667 is 213.4 and 320 x .333 is 106.6: the browser's surface came out odd, the file could not be
+       re-encoded by anything strict, and the summary named a size the file did not have */
+    for (const scale of [0.667, 0.333]) {
+      const out = join(dir, `even-${scale}.mp4`);
+      const made = await render([dir], { ...quiet, out, scale, fps: 10 });
+      const size = sizeOf(out);
+      assert.equal(size.width % 2, 0, `scale ${scale}: an even width, got ${size.width}`);
+      assert.equal(size.height % 2, 0, `scale ${scale}: an even height, got ${size.height}`);
+      assert.ok(made.lines[1].includes(` · ${size.width}×${size.height} · `), `the summary names the size that was written: ${made.lines[1]}`);
+      execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', out, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(dir, `again-${scale}.mp4`)], { stdio: 'pipe' });
+    }
+    /* a scale that already lands even is left exactly as it was */
+    const whole = await render([dir], { ...quiet, out: join(dir, 'even-1.mp4'), scale: 1, fps: 10 });
+    const same = sizeOf(whole.out);
+    assert.equal(same.width, 320, 'a scale that lands even is not resized');
+    assert.equal(same.height, 180);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

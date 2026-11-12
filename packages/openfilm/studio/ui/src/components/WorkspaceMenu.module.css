@@ -1,5 +1,6 @@
-.menu { display:flex; flex-direction:column; width:360px; max-width:calc(100vw - 24px); max-height:var(--popover-max-h, 80vh); overflow:hidden; color:var(--text); background:var(--bg-raised); border:1px solid var(--border-strong); border-radius:9px; box-shadow:0 10px 28px rgb(0 0 0 / .24),0 2px 6px rgb(0 0 0 / .12); font-size:12px; }
-.summary { display:flex; align-items:center; gap:12px; padding:14px 14px 12px; }
+.menu { composes:surface from './ToolbarSurface.module.css'; display:flex; flex-direction:column; width:344px; max-width:calc(100vw - 24px); max-height:var(--popover-max-h,80vh); overflow:hidden; }
+.topbar { background:var(--bg-raised); }
+.summary { display:flex; align-items:center; gap:10px; padding:12px 12px 10px; }
 .thumbnail { display:grid; place-items:center; flex-shrink:0; overflow:hidden; border:1px solid var(--border); border-radius:6px; color:var(--text-faint); background:var(--bg-hover); }
 .thumbnail img { width:100%; height:100%; object-fit:contain; }
 .summaryText { flex:1; min-width:0; }
@@ -8,10 +9,9 @@
 .metadata span { white-space:nowrap; }
 .separator { color:var(--text-faint); }
 .path { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; color:var(--text-faint); font-size:10.5px; line-height:16px; }
-.actions { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); margin:0 12px 12px; overflow:hidden; border:1px solid var(--border); border-radius:6px; background:var(--bg-field); }
-.projectActions { grid-template-columns:minmax(0,.8fr) minmax(0,1.6fr) minmax(0,1fr); }
-.action { display:flex; align-items:center; justify-content:center; gap:4px; min-width:0; height:30px; padding:0 4px; border-left:1px solid var(--border); color:var(--text-muted); font-size:11px; outline:none; }
-.action:first-child { border-left:0; }
+.actions { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:4px; margin:0 10px 10px; }
+.projectActions { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.action { display:flex; align-items:center; justify-content:center; gap:4px; min-width:0; height:28px; padding:0 5px; border-radius:5px; background:var(--bg-field); color:var(--text-muted); font-size:11px; outline:none; }
 .action svg { flex-shrink:0; }
 .action span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .action:hover { color:var(--text); background:var(--bg-hover); }
@@ -19,7 +19,7 @@
 .action:disabled,.iconButton:disabled { pointer-events:none; opacity:.4; }
 .projectList { min-height:0; max-height:280px; overflow-y:auto; overscroll-behavior:contain; padding:4px 6px 6px; border-top:1px solid var(--border); scrollbar-width:none; }
 .section { display:flex; align-items:center; justify-content:space-between; padding:8px 8px 4px; color:var(--text-faint); font-size:10.5px; font-weight:500; line-height:18px; }
-.row { display:flex; align-items:center; gap:8px; width:100%; min-width:0; height:32px; padding:0 8px; border-radius:5px; color:var(--text-muted); background:transparent; text-align:left; outline:none; }
+.row { display:flex; align-items:center; gap:8px; width:100%; min-width:0; height:31px; padding:0 8px; border-radius:5px; color:var(--text-muted); background:transparent; text-align:left; outline:none; }
 .row:hover { color:var(--text); background:var(--bg-hover); }
 .primary { display:flex; align-items:center; gap:8px; flex:1; min-width:0; height:100%; border-radius:3px; text-align:left; outline:none; }
 .rowName { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -29,7 +29,7 @@
 .close { opacity:0; pointer-events:none; }
 .row:hover .close,.row:focus-within .close { opacity:1; pointer-events:auto; }
 .footer { flex-shrink:0; padding:6px; border-top:1px solid var(--border); }
-.all { height:34px; color:var(--text); font-weight:500; }
+.all { height:31px; color:var(--text); font-weight:500; }
 .history > .row { flex-shrink:0; }
 .archivedToggle { color:var(--text-faint); font-size:11.5px; }
 .empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; min-height:68px; padding:12px; color:var(--text-faint); font-size:11.5px; }

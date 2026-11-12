@@ -7,6 +7,7 @@ import React from 'react';
 import { app as desktop } from '../app-bridge';
 
 const STEP = 24;
+const direction = (el: Element) => el.closest('#of-chat')?.getAttribute('data-side') === 'right' ? -1 : 1;
 
 /** the chat's column: its width is what the seam changes */
 const columnWidth = (el: Element) => (el.closest('[data-studio-host-panel]') ?? el.parentElement ?? el).getBoundingClientRect().width;
@@ -19,7 +20,7 @@ export function Divider() {
       aria-orientation="vertical"
       aria-label="Resize the chat"
       tabIndex={0}
-      className="absolute -right-[5px] bottom-0 top-0 z-20 w-[10px] cursor-col-resize outline-none focus-visible:bg-[var(--border-strong)]"
+      className="workspace-chat-divider workspace-resize-handle absolute bottom-0 top-0 z-20 w-[9px] cursor-col-resize outline-none"
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -28,11 +29,11 @@ export function Divider() {
       }}
       onPointerMove={(event) => {
         if (!drag.current) return;
-        desktop.setChatWidth(drag.current.width + (event.clientX - drag.current.x));
+        desktop.setChatWidth(drag.current.width + (event.clientX - drag.current.x) * direction(event.currentTarget));
       }}
       onPointerUp={(event) => {
         if (!drag.current) return;
-        desktop.setChatWidth(drag.current.width + (event.clientX - drag.current.x), true);
+        desktop.setChatWidth(drag.current.width + (event.clientX - drag.current.x) * direction(event.currentTarget), true);
         drag.current = null;
         document.body.style.cursor = '';
       }}
@@ -40,7 +41,7 @@ export function Divider() {
       onKeyDown={(event) => {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
         event.preventDefault();
-        desktop.setChatWidth(columnWidth(event.currentTarget) + (event.key === 'ArrowRight' ? STEP : -STEP), true);
+        desktop.setChatWidth(columnWidth(event.currentTarget) + (event.key === 'ArrowRight' ? STEP : -STEP) * direction(event.currentTarget), true);
       }}
     />
   );

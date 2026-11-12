@@ -182,6 +182,6 @@ jobs:
           if gh release view "$TAG" > /dev/null 2>&1; then
             gh release upload "$TAG" upload/* --clobber
           else
-            gh release create "$TAG" upload/* --draft --verify-tag --title "OpenFilm $VERSION" --notes-file notes.md
+            gh release create "$TAG" upload/* --draft --verify-tag --title "$TAG" --notes-file notes.md
           fi
 

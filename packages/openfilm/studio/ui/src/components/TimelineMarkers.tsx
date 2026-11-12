@@ -100,7 +100,7 @@ function MarkerCard({ placed, x, y, focusName, actions, onClose }: {
         if ((e.key === 'Delete' || e.key === 'Backspace') && e.target === box.current) { e.preventDefault(); actions.onRemove(marker.id); onClose(); }
       }}
       className="fixed z-[10001] flex flex-col gap-2 rounded-[8px] border p-2 shadow-[var(--shadow-lg)] outline-none"
-      style={{ left: Math.max(8, Math.min(x - W / 2, window.innerWidth - W - 8)), top: y + 6, width: W, background: 'var(--bg-panel)', borderColor: 'var(--border)' }}
+      style={{ left: Math.max(8, Math.min(x - W / 2, window.innerWidth - W - 8)), top: y + 6, width: W, background: 'var(--bg-raised)', borderColor: 'var(--border)' }}
     >
       <div className="flex items-center gap-1.5">
         <span className="shrink-0"><MarkerGlyph size={13} fill={MARKER_PAINT[marker.color]} /></span>

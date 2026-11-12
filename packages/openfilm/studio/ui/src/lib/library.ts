@@ -290,10 +290,10 @@ export function useLibraryFavorites(): readonly string[] {
 /* ── what of the library is here: a sound, a piece of music, a template's music are fetched before they go in ── */
 
 /** Whether a thing may need fetching before it goes in (a published part of the library, or a template's music). */
-export const mayNeedFetch = (item: Pick<LibraryItem, 'id' | 'music'>): boolean => item.id.startsWith('audio/') || item.id.startsWith('community/') || Boolean(item.music);
+export const mayNeedFetch = (item: Pick<LibraryItem, 'id' | 'music'>): boolean => item.id.startsWith('audio/') || item.id.startsWith('stickers/emoji/') || item.id.startsWith('community/') || Boolean(item.music);
 const asked = new Set<string>();
 /** asked, not answered yet: shown as to be fetched, never as one to put in that is not here */
-const asking = new Set<string>();
+const asking = new Map<string, Promise<void>>();
 const missing = new Set<string>();
 const fetching = new Set<string>();
 const failed = new Set<string>();
@@ -305,49 +305,97 @@ const tellHere = () => { hereTick += 1; for (const fn of hereSeen) fn(); };
 export function askHere(ids: readonly string[]): void {
   const fresh = ids.filter((id) => !asked.has(id));
   if (!fresh.length) return;
-  for (const id of fresh) { asked.add(id); asking.add(id); }
-  void fetch('/api/library/missing', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: fresh }) })
-    .then((r) => (r.ok ? r.json() : null))
+  const check = fetch('/api/library/missing', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: fresh }), signal: AbortSignal.timeout(3000),
+  })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null)
     .then((body: { ids?: string[] } | null) => {
-      for (const id of fresh) asking.delete(id);
-      if (!body) { for (const id of fresh) asked.delete(id); tellHere(); return; }
-      for (const id of body.ids ?? []) missing.add(id);
+      const absent = new Set(body?.ids ?? []);
+      for (const id of fresh) {
+        /* A preview may already have fetched it while this older availability lookup was in flight. */
+        if (!asking.delete(id)) continue;
+        if (!body) asked.delete(id);
+        else if (absent.has(id)) missing.add(id);
+      }
       tellHere();
     });
+  for (const id of fresh) { asked.add(id); asking.set(id, check); }
+  tellHere();
 }
 
-/** Fetch what a thing needs (its sound, a template's music); whether it is here now. */
-export async function fetchLibraryItem(id: string): Promise<boolean> {
-  fetching.add(id);
-  failed.delete(id);
-  tellHere();
-  try {
-    const r = await fetch('/api/library/fetch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
-    const ok = r.ok && Boolean(((await r.json()) as { ok?: boolean }).ok);
-    if (ok) missing.delete(id); else failed.add(id);
-    return ok;
-  } catch {
-    failed.add(id);
-    return false;
-  } finally {
-    fetching.delete(id);
+const fetchJobs = new Map<string, Promise<boolean>>();
+
+/** Preview and insertion share the same download. */
+export function fetchLibraryItem(id: string): Promise<boolean> {
+  const pending = fetchJobs.get(id);
+  if (pending) return pending;
+  const job = (async () => {
+    fetching.add(id);
+    failed.delete(id);
     tellHere();
-  }
+    try {
+      const r = await fetch('/api/library/fetch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
+      const ok = r.ok && Boolean(((await r.json()) as { ok?: boolean }).ok);
+      if (ok) heardHere(id); else failed.add(id);
+      return ok;
+    } catch {
+      failed.add(id);
+      return false;
+    } finally {
+      fetchJobs.delete(id);
+      fetching.delete(id);
+      tellHere();
+    }
+  })();
+  fetchJobs.set(id, job);
+  return job;
+}
+
+/** Check local availability before showing download activity for an item. */
+export async function prepareLibraryItem(id: string): Promise<boolean> {
+  askHere([id]);
+  await asking.get(id);
+  return isLibraryItemReady(id) || fetchLibraryItem(id);
+}
+
+/** A template's full example, shared by the card and the viewer, with the bundled preview as a fallback. */
+export const templateExamplePath = (item: LibraryItem): string => `examples/${item.id}.mp4`;
+export const templatePreviewUrl = (item: LibraryItem): string => {
+  const path = templateExamplePath(item);
+  return failed.has(path) ? previewUrl(item) : libraryUrl(path);
+};
+export function prepareTemplatePreview(item: LibraryItem): Promise<boolean> {
+  const path = templateExamplePath(item);
+  return failed.has(path) ? Promise.resolve(false) : prepareLibraryItem(path);
 }
 
 /** A thing heard in full (a sound played): here now. */
 export function heardHere(id: string): void {
-  const was = missing.delete(id);
-  if (failed.delete(id) || was) tellHere();
+  const was = missing.delete(id), pending = asking.delete(id), hadFailed = failed.delete(id);
+  asked.add(id);
+  if (hadFailed || was || pending) tellHere();
 }
 
 /** Where a thing is: here, to be fetched, being fetched, or its fetch failed. */
 export type HereState = 'here' | 'missing' | 'fetching' | 'failed';
 
-/** What of the library is here, kept current as things are fetched. */
-export function useLibraryHere(): (id: string) => HereState {
+/** A positive cache result; an item that has not been checked still needs preparing on click. */
+export function isLibraryItemReady(id: string): boolean {
+  return asked.has(id) && !asking.has(id) && !missing.has(id) && !fetching.has(id) && !failed.has(id);
+}
+
+/** Keep a failed direct media download retryable after its player has been dismissed. */
+export function failedHere(id: string): void {
+  asking.delete(id);
+  asked.add(id);
+  failed.add(id);
+  tellHere();
+}
+
+/** What of the library is here. For download indicators, require a confirmed cache miss. */
+export function useLibraryHere(): (id: string, confirmed?: boolean) => HereState {
   React.useSyncExternalStore((fn) => { hereSeen.add(fn); return () => { hereSeen.delete(fn); }; }, () => hereTick, () => hereTick);
-  return (id) => (fetching.has(id) ? 'fetching' : failed.has(id) ? 'failed' : missing.has(id) || asking.has(id) ? 'missing' : 'here');
+  return (id: string, confirmed = false) => (fetching.has(id) ? 'fetching' : failed.has(id) ? 'failed' : missing.has(id) || (!confirmed && asking.has(id)) ? 'missing' : 'here');
 }
 
 /** Star a thing, or take its star away: shown at once, then kept. */
