@@ -123,9 +123,10 @@ export const savedActions = {
   remove: async (path: string) => { const r = await result(await fetch(`/api/saved/files?path=${enc(path)}`, { method: 'DELETE' })); refreshSaved(); return r; },
   newFolder: async (path: string) => { const r = await result(await send('POST', '/api/saved/folders', { path })); refreshSaved(); return r; },
   reveal: (path: string) => { void send('POST', '/api/saved/reveal', { path }); },
-  /** Files of this computer (their paths) copied in. Resolves with where each landed. */
-  bring: async (paths: string[], into: string): Promise<string[]> => {
-    const r = await send('POST', '/api/saved/files/bring', { paths, into });
+  /** Files or folders of this computer (their paths) brought in, taking no room where the disk allows (`auto`), or
+   linked where they are kept (`link`). Resolves with where each landed. */
+  bring: async (paths: string[], into: string, mode: 'auto' | 'link' = 'auto'): Promise<string[]> => {
+    const r = await send('POST', '/api/saved/files/bring', { paths, into, mode });
     const body = await r.json().catch(() => ({})) as { landed?: string[]; error?: string };
     refreshSaved();
     if (!r.ok) throw new Error(body.error ?? 'failed');

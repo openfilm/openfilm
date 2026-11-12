@@ -415,13 +415,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const { path: folder } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
         return json(res, 200, { path: libraryPath(await makeFolder(lib, rel(folder))) });
       }
-      /* files or folders of this computer copied in: the paths given, else the person's pick. { landed } */
+      /* files or folders of this computer copied in, or (`mode: link`) linked where they are kept: the paths given,
+         else the person's pick. { landed } */
       if (sub === 'files/bring' && req.method === 'POST') {
-        const { into, paths, folder, title } = /** @type {{ into?: unknown, paths?: unknown, folder?: unknown, title?: unknown }} */ (await readJson(req) ?? {});
+        const { into, paths, folder, title, mode } = /** @type {{ into?: unknown, paths?: unknown, folder?: unknown, title?: unknown, mode?: unknown }} */ (await readJson(req) ?? {});
         const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
         const picked = Array.isArray(paths) ? paths.map(String)
           : await (folder === true ? pickFolder(ask).then((p) => (p ? [p] : [])) : pickFiles(ask)).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); });
-        return json(res, 200, { landed: (await bringIn(lib, rel(into ?? 'saved'), picked, 'copy', { anywhere: true })).map(libraryPath) });
+        return json(res, 200, { landed: (await bringIn(lib, rel(into ?? 'saved'), picked, mode === 'link' ? 'link' : mode === 'auto' ? 'auto' : 'copy', { anywhere: true })).map(libraryPath) });
       }
       if (sub === 'reveal' && req.method === 'POST') {
         const { path: shown } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
@@ -429,7 +430,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (where) reveal(inside(lib, where)); else openFile(lib);
         return json(res, 200, {});
       }
-      if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, inside(lib, rel(at)));
+      if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, readable(lib, rel(at)));
       if (sub === 'poster' && req.method === 'GET') return sendMedia(req, res, await savedCall(() => bundlePoster(at)));
       if (sub === 'media' && req.method === 'GET') {
         const what = url.searchParams.get('what');

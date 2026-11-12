@@ -10,7 +10,8 @@
 import { lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { savedRoot } from './locations.mjs';
 
 /** Studio's home: OPENFILM_HOME, else ~/.openfilm (studio/server/projects.mjs studioHome). */
 const home = () => process.env.OPENFILM_HOME || join(homedir(), '.openfilm');
@@ -58,13 +59,14 @@ export function linkAllowed(real) {
 }
 
 /**
- * Whether a project path that leads out of the project may be read: it is in the project's assets/ folder, and where
- * it really leads is a place the person linked. `abs` is the path as written; the project is `root`.
+ * Whether a project path that leads out of the project may be read: it is in the project's assets/ folder (or anywhere
+ * in Saved, the person's own library, which is all media), and where it really leads is a place the person linked.
+ * `abs` is the path as written; the project, or Saved, is `root`.
  * @param {string} root @param {string} abs
  */
 export function readableLink(root, abs) {
   const back = relative(root, abs);
-  if (back.split(sep)[0] !== 'assets' || back.startsWith('..') || isAbsolute(back)) return false;
+  if ((back.split(sep)[0] !== 'assets' && resolve(root) !== resolve(savedRoot())) || !back || back.startsWith('..') || isAbsolute(back)) return false;
   try { return linkAllowed(realpathSync.native(abs)); } catch { return false; }
 }
 

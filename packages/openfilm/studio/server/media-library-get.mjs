@@ -21,8 +21,8 @@ export const MY_MEDIA = 'my-media';
 /** The verb as `openfilm get` lists it, with OpenFilm's own library's. */
 export const myMediaVerb = () => ({
   verb: MY_MEDIA,
-  help: 'Free and offline: the person\'s own media, what they kept in Saved to use in every film and the footage, pictures and sound in the folders of this computer they added. Look here first, before OpenFilm\'s library and before making anything. '
-    + 'Words find a file by its name, its folders, or the prompt a generated one was made with; without words, the newest. What is kept in Saved comes first. '
+  help: 'Free and offline: the person\'s own media (Mine), what they keep to use in every film and the footage, pictures and sound they linked into it from this computer. Look here first, before OpenFilm\'s library and before making anything. '
+    + 'Words find a file by its name, its folders, or the prompt a generated one was made with; without words, the newest. '
     + 'Each match says its id, what it is, where it is and which projects use it. --take <id> brings it into the project and says its path.',
   options: {
     prompt: { value: 'text' }, kind: { value: 'kind', choices: ['video', 'image', 'audio'] },

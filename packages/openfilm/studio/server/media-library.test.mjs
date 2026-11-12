@@ -138,13 +138,13 @@ test('a file is found in the added folders by its name or its folders; a project
   assert.deepEqual(await names({ sort: 'name' }), ['A cam.mp4', 'cover.png', 'Sunrise 01.mp4', 'waves.mov']);
   const some = await searchLibrary({ limit: 2 });
   assert.deepEqual([some.files.length, some.total], [2, 4]);
-  /* with Saved: the plain files kept there come first, not the clips kept there */
+  /* with Saved: the plain files kept there, not the clips kept there; a folder added before is now linked in it */
   const saved = await placeOf('saved');
   media(join(saved.root, 'brand', 'logo.png'), 6, 30_000);
   mkdirSync(join(saved.root, 'a clip', 'files'), { recursive: true });
   writeFileSync(join(saved.root, 'a clip', 'saved.json'), JSON.stringify({ kind: 'clip', clip: { src: 'a.png' } }));
   media(join(saved.root, 'a clip', 'files', 'a.png'), 7, 30_000);
-  assert.deepEqual((await searchLibrary({ kind: 'image', saved: true })).files.map((f) => [f.place, f.path, f.where]), [['saved', 'brand/logo.png', 'Saved / brand'], [place, 'cover.png', name]]);
+  assert.deepEqual((await searchLibrary({ kind: 'image', saved: true })).files.map((f) => [f.place, f.path, f.where]), [['saved', 'brand/logo.png', 'Saved / brand'], ['saved', `${name}/cover.png`, `Saved / ${name}`]]);
   assert.deepEqual(await names({ q: 'brand', saved: true }), ['logo.png']);
   assert.deepEqual(await names({ q: 'brand' }), []);
 });

@@ -30,6 +30,7 @@ import { copyFile, mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, parse, resolve, sep } from 'node:path';
 import { fingerprint } from '../../src/media-fingerprint.mjs';
+import { readableLink } from '../../src/media-links.mjs';
 import { setSharedPref, sharedHome } from '../../src/locations.mjs';
 import { bringIn, cleanName, kindOf, readable } from './files.mjs';
 import { libraryRoot as savedRoot } from './saved.mjs';
@@ -220,7 +221,13 @@ const SAVED_DEPTH = 6;
 
 /** @typedef {{ path: string, abs: string, kind: 'video' | 'image' | 'audio', size: number, mtime: number }} SavedFile */
 
-/** The plain files kept in Saved (not the clips, groups and pages kept there), read from the disk: it is small. @returns {Promise<SavedFile[]>} */
+/** Files of Saved looked at at most: a folder linked into it may hold a whole shoot. */
+const SAVED_FILES = 5000;
+
+/**
+ * The plain files kept in Saved (not the clips, groups and pages kept there), read from the disk, through the links the
+ * person made in it to media kept elsewhere (src/media-links.mjs). @returns {Promise<SavedFile[]>}
+ */
 export async function savedFiles() {
   const root = await savedRoot();
   /** @type {SavedFile[]} */
@@ -228,12 +235,15 @@ export async function savedFiles() {
   async function walk(/** @type {string} */ dir, /** @type {string} */ rel, /** @type {number} */ depth) {
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
     for (const e of entries) {
-      if (!shown(e.name) || e.isSymbolicLink()) continue;
+      if (out.length >= SAVED_FILES) return;
+      if (!shown(e.name)) continue;
       const abs = join(dir, e.name);
       const path = rel ? `${rel}/${e.name}` : e.name;
-      if (e.isDirectory()) { if (depth < SAVED_DEPTH && !existsSync(join(abs, 'saved.json'))) await walk(abs, path, depth + 1); continue; }
+      const linked = e.isSymbolicLink() ? (readableLink(root, abs) ? await stat(abs).catch(() => null) : null) : undefined;
+      if (linked === null) continue;
+      if (linked ? linked.isDirectory() : e.isDirectory()) { if (depth < SAVED_DEPTH && !existsSync(join(abs, 'saved.json'))) await walk(abs, path, depth + 1); continue; }
       const kind = kindOf(e.name);
-      const info = e.isFile() && KINDS.has(kind) ? await stat(abs).catch(() => null) : null;
+      const info = (linked ? linked.isFile() : e.isFile()) && KINDS.has(kind) ? await stat(abs).catch(() => null) : null;
       if (info) out.push({ path, abs, kind: /** @type {'video' | 'image' | 'audio'} */ (kind), size: info.size, mtime: Math.round(info.mtimeMs) });
     }
   }

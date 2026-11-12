@@ -96,12 +96,12 @@ export type SkillsRequest = { name?: string; n: number };
 
 export function LibraryDrawer({ media, mediaScope, onMediaScope, myMedia, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, showSkills, under = 0, shown: isShown = true }: {
   media: React.ReactNode;
-  /** the project's own media; or My media: Saved, or (`all`) a folder of the person's (`myMedia.folder`) */
-  mediaScope: 'project' | 'saved' | 'all';
-  onMediaScope: (next: 'project' | 'saved' | 'all') => void;
+  /** the project's own media, or My media (the person's own library, one folder of it at a time) */
+  mediaScope: 'project' | 'saved';
+  onMediaScope: (next: 'project' | 'saved') => void;
   /**
-   * My media's folders in the side bar: Favorites first, then the person's own (made in the library, or linked where
-   * they are kept); the one shown; one picked; its menu; a new one made or linked (the "+"); one being named.
+   * My media's folders in the side bar: Favorites first, then the person's own (one linked where it is kept says so);
+   * the one shown; one picked; its menu; a new one made; one being named.
    */
   myMedia?: {
     folders: readonly { id: string; name: string; linked?: boolean; missing?: boolean }[];
@@ -109,7 +109,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, myMedia, mediaR
     onPick: (id: string) => void;
     menuOf: (id: string) => ContextMenuEntry[];
     onNew: () => void;
-    onLink: () => void;
     naming: string | null;
     onName: (id: string, name: string | null) => void;
   };
@@ -489,12 +488,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, myMedia, mediaR
           <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[calc(var(--drawer-under,0px)+10px)] pt-2.5">
             {cat === 'media' ? (
               <>
-                {/* this project's media; My media, everything of the person's beyond this film: Saved (what they
-                    keep to use in every film, where a clip is kept), then the folders of this computer they added */}
+                {/* this project's media; My media, everything of the person's beyond this film: Favorites (where a clip
+                    or file they add to Favorites goes), then the folders they make */}
                 <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
                 <SideBox on={mine && !mineOpen} holds={mine && mineOpen} open={mineOpen}
                   onClick={() => { if (mine) setMineOpen((o) => !o); else { setMineOpen(true); onMediaScope('saved'); } }}>
-                  {t('assetDrawer.mediaMine')}
+                  {t('assetDrawer.mine')}
                 </SideBox>
                 {mineOpen && myMedia ? (
                   <div className="flex flex-col pb-1" data-my-media="">
@@ -510,14 +509,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, myMedia, mediaR
                         {f.missing ? <Unplug size={11} className="mr-1 inline align-[-1px]" /> : f.linked ? <Link2 size={11} className="mr-1 inline align-[-1px]" /> : null}{f.name}
                       </SideLine>
                     )))}
-                    {/* a folder of their own: made here, or one of this computer linked where it is */}
+                    {/* a folder of their own; in it, files are uploaded, or linked where they are kept */}
                     <button type="button" onClick={myMedia.onNew} data-my-media-new=""
                       className="flex items-center gap-1 truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] font-medium text-[var(--text-muted)] hover:text-[var(--accent)]">
                       <Plus size={12} className="shrink-0" />{t('mediaLibrary.newFolder')}
-                    </button>
-                    <button type="button" onClick={myMedia.onLink} data-my-media-link="" title={`${t('mediaLibrary.linkFolder')}\n${t('mediaLibrary.linkFolderNote')}`}
-                      className="flex items-center gap-1 truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] font-medium text-[var(--text-muted)] hover:text-[var(--accent)]">
-                      <Link2 size={12} className="shrink-0" />{t('mediaLibrary.linkFolderShort')}
                     </button>
                   </div>
                 ) : null}

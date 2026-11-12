@@ -4,8 +4,9 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fingerprint } from '../../src/media-fingerprint.mjs';
-import { scanFolder, scanProject } from './media-index.mjs';
-import { placeOf, setMediaFolder } from './media-library.mjs';
+import { scanProject } from './media-index.mjs';
+import { placeOf } from './media-library.mjs';
+import { bringIn } from './files.mjs';
 import { myMediaGet, myMediaVerb } from './media-library-get.mjs';
 import { noteMade } from './media-made.mjs';
 import { createProject } from './projects.mjs';
@@ -35,8 +36,9 @@ test('an agent finds the person\'s own media by words, sees what each is, and br
   const folder = realpathSync(mkdtempSync(join(tmpdir(), 'of-my-media-folder-')));
   media(join(folder, 'beach', 'Sunrise 01.mp4'), 1);
   media(join(folder, 'beach', 'waves.mov'), 2);
-  await setMediaFolder(folder, true);
-  await scanFolder(folder);
+  /* a folder of this computer linked into Saved, where it is kept */
+  const lib = (await placeOf('saved')).root;
+  await bringIn(lib, '', [folder], 'link', { anywhere: true });
   /* a project's own media is the project's: not found */
   const other = await createProject('Seaside');
   media(join(other.path, 'assets', 'image', 'fox.png'), 3);
@@ -54,7 +56,7 @@ test('an agent finds the person\'s own media by words, sees what each is, and br
   const id = (await fingerprint(join(folder, 'beach', 'Sunrise 01.mp4'))).slice(3);
   assert.deepEqual(sunrise.lines.slice(2, 6), [
     ` 1. Sunrise 01.mp4   video · 80 KB · ${new Date().toISOString().slice(0, 10)}`,
-    `    id ${id}`, `    in ${folder.split('/').pop()} / beach`, '    not used in any project yet',
+    `    id ${id}`, `    in Saved / ${folder.split('/').pop()} / beach, kept by the person to use in every film`, '    not used in any project yet',
   ]);
   assert.match((await myMediaGet({ prompt: 'dawn' }, film.path)).lines[0], /^Nothing in the person's media library for “dawn”/);
   assert.match((await myMediaGet({ kind: 'video', n: '1' }, film.path)).lines[0], /^1 of 2 in the person's media library \(video\)/);

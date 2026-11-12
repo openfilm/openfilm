@@ -12,10 +12,11 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants, createReadStream, createWriteStream, existsSync, lstatSync, realpathSync, statSync } from 'node:fs';
 import { copyFile, cp, link, lstat, mkdir, readFile, readdir, readlink, rename, rm, stat, statfs, symlink, unlink, utimes, writeFile } from 'node:fs/promises';
-import { basename, dirname, extname, isAbsolute, join, normalize, relative, sep } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
+import { savedRoot } from '../../src/locations.mjs';
 import { addLinkedPlaces, changeMediaReferences, mediaReference, mediaReferences, readableLink, referenceSource } from '../../src/media-links.mjs';
 import { changeProjectFilm, readProjectFilm } from './film.mjs';
 import { filesWritten } from './person-edits.mjs';
@@ -85,8 +86,10 @@ export function inProject(/** @type {string} */ root, /** @type {string} */ rel)
  */
 function entryInside(root, rel) {
   const cut = typeof rel === 'string' ? rel.lastIndexOf('/') : -1;
-  if (cut > 0 && rel.startsWith(`${ASSETS}/`)) {
-    const abs = join(inside(root, rel.slice(0, cut)), rel.slice(cut + 1));
+  /* in Saved, the person's own library, a link may be anywhere, its top too */
+  const saved = typeof rel === 'string' && Boolean(rel) && resolve(root) === resolve(savedRoot());
+  if ((cut > 0 && rel.startsWith(`${ASSETS}/`)) || saved) {
+    const abs = join(cut > 0 ? inside(root, rel.slice(0, cut)) : root, rel.slice(cut + 1));
     if (lstatSync(abs, { throwIfNoEntry: false })?.isSymbolicLink() && !rel.slice(cut + 1).startsWith('.')) return abs;
   }
   return inside(root, rel);

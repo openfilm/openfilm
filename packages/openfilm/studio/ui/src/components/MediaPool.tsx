@@ -186,7 +186,7 @@ export interface MediaPoolProps {
    * move, delete, drag onto the timeline.
    */
   scope?: 'project' | 'saved';
-  /** What its top folder is called (default: Saved's name, or All for a project's media). */
+  /** What its top folder is called (default: Saved's name, or All for a project's media); in Saved, a folder of it other than Favorites. */
   title?: string;
   onScope?: (next: 'project' | 'saved') => void;
   /** The words a service was asked for a file with (studio/server/media-made.mjs): a search finds it by them too. */
@@ -691,7 +691,7 @@ export function MediaPool({
   /* what Upload offers: a copy in the project, or a link to where the media is kept (a NAS, another disk); where
      nothing is linked (Saved), Upload picks the files to copy in at once */
   const importMenu: ContextMenuEntry[] = [
-    { id: 'import', label: t('media.importFiles'), note: t('media.importFilesNote'), icon: <Upload size={14} />, onSelect: () => { void bringFrom('auto', false); } },
+    { id: 'import', label: t('media.importFiles'), note: t(inSaved ? 'media.importFilesNoteMine' : 'media.importFilesNote'), icon: <Upload size={14} />, onSelect: () => { void bringFrom('auto', false); } },
     { id: 'link', label: t('media.linkFiles'), note: t('media.linkFilesNote'), icon: <Link2 size={14} />, onSelect: () => { void bringFrom('link', false); } },
     { id: 'link-folder', label: t('media.linkFolder'), icon: <FolderSymlink size={14} />, onSelect: () => { void bringFrom('link', true); } },
   ];
@@ -1046,8 +1046,9 @@ export function MediaPool({
           flat ? <p className="px-1 pt-6 text-center text-[12px] text-[var(--text-muted)]">{t('media.noMatch')}</p> : (
             <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
               <Clapperboard size={22} className="text-[var(--text-faint)]" />
-              <div className="text-[13px] font-medium text-[var(--text)]">{t(at ? 'media.emptyFolder' : inSaved ? 'saved.emptyTitle' : 'media.emptyTitle')}</div>
-              {at ? null : <p className="max-w-[30ch] text-[12px] leading-relaxed text-[var(--text-muted)]">{t(inSaved ? 'saved.emptyBody' : 'media.emptyBody')}</p>}
+              {/* a folder of Saved other than its Favorites (one named by `title`) is a folder like any other */}
+              <div className="text-[13px] font-medium text-[var(--text)]">{t(at || (inSaved && title) ? 'media.emptyFolder' : inSaved ? 'saved.emptyTitle' : 'media.emptyTitle')}</div>
+              {at || (inSaved && title) ? null : <p className="max-w-[30ch] text-[12px] leading-relaxed text-[var(--text-muted)]">{t(inSaved ? 'saved.emptyBody' : 'media.emptyBody')}</p>}
               <button type="button" onClick={() => (onPick && onBring ? void bringFrom('auto', false) : inputRef.current?.click())}
                 className="mt-1 inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)]">
                 <Plus size={13} />{t('media.import')}

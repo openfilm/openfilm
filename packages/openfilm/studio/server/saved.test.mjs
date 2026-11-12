@@ -1,20 +1,27 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { makeFolder, moveFile } from './files.mjs';
+import { bringIn, makeFolder, moveFile, readable, trashFile } from './files.mjs';
+import { setSharedPref, sharedPref } from '../../src/locations.mjs';
 import { bringClip, libraryRel, libraryRoot, listLibrary, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
 
 let saved;
 let before;
+let beforeHome;
 beforeEach(() => {
   before = process.env.OPENFILM_SAVED;
-  saved = join(mkdtempSync(join(tmpdir(), 'of-saved-')), 'Saved');
+  beforeHome = process.env.OPENFILM_HOME;
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'of-saved-')));
+  saved = join(base, 'Saved');
   process.env.OPENFILM_SAVED = saved;
+  /* the places the person linked are kept in Studio's home */
+  process.env.OPENFILM_HOME = join(base, 'home');
 });
 afterEach(() => {
   if (before === undefined) delete process.env.OPENFILM_SAVED; else process.env.OPENFILM_SAVED = before;
+  if (beforeHome === undefined) delete process.env.OPENFILM_HOME; else process.env.OPENFILM_HOME = beforeHome;
 });
 
 /** A project with a title page that loads its own CSS, a picture and a page in a frame, beside another clip's page. */
@@ -150,6 +157,46 @@ test('what lay at the top of the library goes into Favorites; the person\'s own 
   assert.deepEqual(readdirSync(saved).filter((n) => !n.startsWith('.')).sort(), ['Brand', 'Favorites']);
   assert.deepEqual(readdirSync(join(saved, 'Favorites')).sort(), ['A clip', 'intro 2.mp4', 'intro.mp4']);
   assert.equal(readFileSync(join(saved, 'Favorites', 'intro 2.mp4'), 'utf8'), 'b');
+});
+
+test('a file or folder linked into the library is listed and read where it is kept; one taken comes in without a copy of its bytes where it can', async () => {
+  const away = realpathSync(mkdtempSync(join(tmpdir(), 'of-saved-away-')));
+  mkdirSync(join(away, 'Footage', 'day 1'), { recursive: true });
+  writeFileSync(join(away, 'Footage', 'day 1', 'a.mp4'), 'mp4');
+  writeFileSync(join(away, 'cover.png'), 'png');
+  const lib = await libraryRoot();
+  mkdirSync(join(lib, 'Shoots'));
+  assert.deepEqual(await bringIn(lib, 'Shoots', [join(away, 'Footage'), join(away, 'cover.png')], 'link', { anywhere: true }), ['Shoots/Footage', 'Shoots/cover.png']);
+  const { files, folders, links } = await listLibrary();
+  assert.deepEqual(folders, ['saved/Favorites', 'saved/Shoots', 'saved/Shoots/Footage', 'saved/Shoots/Footage/day 1']);
+  assert.deepEqual(files.map((f) => [f.path, f.size]), [['saved/Shoots/cover.png', 3], ['saved/Shoots/Footage/day 1/a.mp4', 3]]);
+  assert.deepEqual(Object.keys(links).sort(), ['saved/Shoots/Footage', 'saved/Shoots/cover.png']);
+  assert.equal(readFileSync(readable(lib, 'Shoots/Footage/day 1/a.mp4'), 'utf8'), 'mp4');
+  /* a link the person did not make leads nowhere it may be read */
+  symlinkSync(tmpdir(), join(lib, 'Shoots', 'stray'));
+  assert.equal((await listLibrary()).links['saved/Shoots/stray'].missing, true);
+  assert.throws(() => readable(lib, 'Shoots/stray'));
+  const other = mkdtempSync(join(tmpdir(), 'of-saved-other-'));
+  const taken = await takeSaved(other, 'saved/Shoots/Footage/day 1/a.mp4');
+  assert.equal(taken.path, 'assets/a.mp4');
+  assert.equal(readFileSync(join(other, 'assets', 'a.mp4'), 'utf8'), 'mp4');
+  /* a link taken away is the link, the file where it is kept stays */
+  await trashFile(lib, 'Shoots/cover.png');
+  assert.ok(existsSync(join(away, 'cover.png')) && !existsSync(join(lib, 'Shoots', 'cover.png')));
+});
+
+test('a folder of this computer added to the media before is linked at the top of the library, once', async () => {
+  const away = realpathSync(mkdtempSync(join(tmpdir(), 'of-saved-away-')));
+  mkdirSync(join(away, 'Shoot'));
+  writeFileSync(join(away, 'Shoot', 'a.mp4'), 'mp4');
+  process.env.OPENFILM_SHARED_HOME = join(saved, '..', 'shared');
+  try {
+    setSharedPref('mediaFolders', [join(away, 'Shoot'), join(away, 'gone')]);
+    await libraryRoot();
+    assert.deepEqual(sharedPref('mediaFolders'), []);
+    assert.equal(readFileSync(readable(saved, 'Shoot/a.mp4'), 'utf8'), 'mp4');
+    assert.deepEqual(Object.keys((await listLibrary()).links), ['saved/Shoot']);
+  } finally { delete process.env.OPENFILM_SHARED_HOME; }
 });
 
 test('a place in the library is named from saved/', () => {
