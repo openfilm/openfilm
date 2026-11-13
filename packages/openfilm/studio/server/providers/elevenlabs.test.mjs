@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import elevenlabs from './elevenlabs.mjs';
+import elevenlabs, { withSilence } from './elevenlabs.mjs';
 
 const KEY = 'xi-test-key-0123456789';
 /** A fake ElevenLabs on 127.0.0.1: `reply` answers each request; `seen` keeps them. */
@@ -74,7 +74,7 @@ test('sound effects and music: the length asked, within what the service takes',
   reply = () => [200, Buffer.alloc(32000)];
   const sfx = await elevenlabs.run('sfx', { out: 'ding', prompt: 'a glass chime', sec: 40 }, ctx());
   assert.equal(seen.at(-1).url.pathname, '/v1/sound-generation');
-  assert.deepEqual(JSON.parse(seen.at(-1).body), { text: 'a glass chime', model_id: 'eleven_text_to_sound_v2', duration_seconds: 30 });
+  assert.deepEqual(JSON.parse(seen.at(-1).body), { text: 'a glass chime', model_id: 'eleven_text_to_sound_v3', duration_seconds: 30 });
   assert.equal(sfx.files[0].path, 'assets/audio/sfx/ding.mp3');
   assert.equal(sfx.index[0].dur, 2);
   const music = await elevenlabs.run('music', { out: 'bed', prompt: 'calm pad', sec: 30 }, ctx());
@@ -91,12 +91,27 @@ test('transcription: the speech uploaded as what it is, words kept and spacing d
   const wavBytes = Buffer.concat([Buffer.from('RIFF\0\0\0\0WAVE'), Buffer.alloc(40)]);
   const result = await elevenlabs.run('asr', { src: 'assets/upload/talk.mp4' }, ctx({ 'assets/upload/talk.mp4': new Uint8Array(wavBytes) }));
   const sent = await form(seen.at(-1));
-  assert.equal(sent.get('model_id'), 'scribe_v2');
+  assert.equal(sent.get('model_id'), 'scribe_v3');
   assert.equal(sent.get('timestamps_granularity'), 'word');
+  assert.equal(sent.get('temperature'), '0');
   assert.equal(sent.get('file').name, 'talk.wav');
   assert.deepEqual(result.index, [{ src: 'assets/upload/talk.mp4', text: 'Hi there', transcribed: true,
     words: [{ token: 'Hi', start: 0.1, end: 0.3 }, { token: 'there', start: 0.35, end: 0.7 }] }]);
   assert.equal(result.files.length, 0);
+});
+
+test('speech MP3 as OpenFilm sends it gets a second of silence after it; any other file goes as it is', async () => {
+  const header = [0xff, 0xf3, 0x48, 0xc0];
+  const speech = new Uint8Array([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 2, 0, 0, ...header, ...new Array(140).fill(0)]);
+  const padded = withSilence(speech);
+  assert.equal(padded.length, speech.length + 28 * 144);
+  assert.deepEqual([...padded.subarray(speech.length, speech.length + 4)], header);
+  const other = new Uint8Array([0xff, 0xfb, 0x90, 0x64, 0, 0]);
+  assert.equal(withSilence(other), other, 'a 44.1 kHz stereo MP3 is left alone');
+  reply = () => [200, { text: '', words: [] }];
+  await elevenlabs.run('asr', { src: 'talk.mp3' }, ctx({ 'talk.mp3': speech }));
+  assert.equal((await form(seen.at(-1))).get('file').size, padded.length);
+  assert.equal(elevenlabs.speechFormat, 'mp3');
 });
 
 test('a refused key says so without the service\'s words; an echoed key is blanked out', async () => {

@@ -24,7 +24,7 @@ const MODELS = {
 };
 
 const RATIOS = ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'];
-const SEEDANCE_20 = /** @type {const} */ ({ seconds: [4, 15], refs: 9, clips: 3, voice: 3, voiceNeedsVisual: true, maxClipSeconds: 15 });
+const SEEDANCE_20 = { seconds: /** @type {[number, number]} */ ([4, 15]), refs: 9, clips: 3, voice: 3, voiceNeedsVisual: /** @type {const} */ (true), maxClipSeconds: 15 };
 
 /**
  * Each model's lengths, the most reference pictures, clips and recordings it takes, and its sizes. Seedance 2.0 takes

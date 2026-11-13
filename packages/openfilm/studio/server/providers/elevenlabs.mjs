@@ -15,9 +15,9 @@ const MODELS = {
     { id: 'eleven_v4', name: 'Eleven v4' },
     { id: 'eleven_v4_turbo', name: 'Eleven v4 Turbo' },
   ],
-  sfx: [{ id: 'eleven_text_to_sound_v2', name: 'Sound Effects v2' }],
+  sfx: [{ id: 'eleven_text_to_sound_v3', name: 'Sound Effects v3' }],
   music: [{ id: 'music_v2_5', name: 'Music v2.5' }, { id: 'music_v2', name: 'Music v2' }],
-  asr: [{ id: 'scribe_v2', name: 'Scribe v2' }],
+  asr: [{ id: 'scribe_v3', name: 'Scribe v3' }, { id: 'scribe_v2', name: 'Scribe v2' }],
 };
 const FORMAT = 'mp3_44100_128';
 
@@ -31,6 +31,7 @@ export default {
   pricingUrl: 'https://elevenlabs.io/pricing/api',
   verbs: ['voice', 'tts', 'sfx', 'music', 'asr'],
   models: MODELS,
+  speechFormat: 'mp3',
   async run(verb, args, ctx) {
     const base = serviceUrl('ELEVENLABS', 'https://api.elevenlabs.io');
     const send = (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) =>
@@ -80,9 +81,10 @@ export default {
       const model = modelOf(MODELS, 'asr', ctx);
       const form = new FormData();
       form.set('model_id', model);
-      form.set('file', upload.blob, upload.name);
+      form.set('file', upload.name.endsWith('.mp3') ? new Blob([/** @type {Uint8Array<ArrayBuffer>} */ (withSilence(new Uint8Array(await upload.blob.arrayBuffer())))], { type: upload.blob.type }) : upload.blob, upload.name);
       form.set('timestamps_granularity', 'word');
       form.set('tag_audio_events', 'false');
+      form.set('temperature', '0');
       const body = await (await send('/v1/speech-to-text', { method: 'POST', body: form })).json();
       const words = (Array.isArray(body?.words) ? body.words : [])
         .filter((/** @type {any} */ w) => w?.type === 'word' && Number.isFinite(w.start) && text(w.text))
@@ -98,6 +100,25 @@ export default {
     throw new Error(`${NAME} does not do ${verb}.`);
   },
 };
+
+/**
+ * Speech as OpenFilm sends it (MP3, MPEG-2 layer III at 16 kHz mono) with a second of silence after it: Scribe v3 at
+ * times drops the last words of a recording that stops right after them, never with a second of silence after
+ * (measured 2026-11-13). 28 frames of 576 samples at 32 kbps, each its header and nothing to play. Any other MP3 as it is.
+ * @param {Uint8Array} mp3
+ */
+export function withSilence(mp3) {
+  let at = 0;
+  if (mp3[0] === 0x49 && mp3[1] === 0x44 && mp3[2] === 0x33) at = 10 + ((mp3[6] << 21) | (mp3[7] << 14) | (mp3[8] << 7) | mp3[9]);
+  const speech = mp3[at] === 0xff && (mp3[at + 1] & 0xfe) === 0xf2 && ((mp3[at + 2] >> 2) & 3) === 2 && (mp3[at + 3] >> 6) === 3;
+  if (!speech) return mp3;
+  const frame = new Uint8Array(144);
+  frame.set([0xff, 0xf3, 0x48, 0xc0]);
+  const out = new Uint8Array(mp3.length + 28 * frame.length);
+  out.set(mp3);
+  for (let i = 0; i < 28; i++) out.set(frame, mp3.length + i * frame.length);
+  return out;
+}
 
 /**
  * The account's voices (its own and the premade ones), searched by the prompt, then by language and gender. Each as

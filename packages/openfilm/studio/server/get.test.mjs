@@ -216,9 +216,9 @@ test('the model: the person\'s choice for each kind of media, the provider\'s fi
   };
   assert.equal(await modelOf('tts', { out: 'intro', text: SAID, voice: 'v-1' }), 'eleven_v4_turbo');
   assert.equal(await modelOf('music', { out: 'bed', prompt: 'calm pad' }), 'music_v2');
-  assert.equal(await modelOf('sfx', { out: 'ding', prompt: 'a chime' }), 'eleven_text_to_sound_v2', 'the first');
+  assert.equal(await modelOf('sfx', { out: 'ding', prompt: 'a chime' }), 'eleven_text_to_sound_v3', 'the first');
   assert.equal(await modelOf('music', { out: 'bed', prompt: 'calm pad' }, { model: 'music_v2_5' }), 'music_v2_5');
-  await assert.rejects(runGet(root, 'sfx', { out: 'ding', prompt: 'a chime' }, { model: 'seedance-2.0' }), (e) => e.code === 2 && /--model is one of eleven_text_to_sound_v2 with ElevenLabs/.test(e.message));
+  await assert.rejects(runGet(root, 'sfx', { out: 'ding', prompt: 'a chime' }, { model: 'seedance-2.0' }), (e) => e.code === 2 && /--model is one of eleven_text_to_sound_v3 with ElevenLabs/.test(e.message));
 });
 
 test('video: the person confirms what will be made first, without amounts; no page means ask them and run again with --yes', async () => {
@@ -286,9 +286,11 @@ test('asr: the speech alone is sent, its transcript lands beside the recording, 
   assert.match(readFileSync(join(root, 'assets/upload/talk.vtt'), 'utf8'), /^WEBVTT\n\n00:00:00\.100 --> .*\nOne <00:00:00\.500>two\./);
   const file = (await formOf(calls[0])).get('file');
   const proxy = Buffer.from(await file.arrayBuffer());
-  assert.equal(file.name, 'talk.wav');
-  assert.equal(proxy.readUInt16LE(22), 1, 'mono');
-  assert.equal(proxy.readUInt32LE(24), 16000, '16 kHz');
+  assert.equal(file.name, 'talk.mp3', 'ElevenLabs takes its speech as MP3');
+  const at = proxy.toString('ascii', 0, 3) === 'ID3' ? 10 + ((proxy[6] << 21) | (proxy[7] << 14) | (proxy[8] << 7) | proxy[9]) : 0;
+  assert.equal(proxy[at + 1] & 0xfe, 0xf2, 'MPEG-2 layer III');
+  assert.equal((proxy[at + 2] >> 2) & 3, 2, '16 kHz');
+  assert.equal(proxy[at + 3] >> 6, 3, 'mono');
 
   const again = JSON.parse(await runGet(root, 'asr', { src: 'assets/upload/talk.wav' }));
   assert.equal(again.skip, true);
