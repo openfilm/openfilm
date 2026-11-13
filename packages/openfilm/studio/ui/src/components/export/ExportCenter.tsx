@@ -36,6 +36,12 @@ import {
   exportGifEstimateBytes,
   exportPreset,
   rangeMarks,
+  sizeTargetBitrate,
+  sizeTargetLeast,
+  TARGET_CODECS,
+  TARGET_MBPS,
+  targetAudioBps,
+  targetEstimateBytes,
   type ExportQuality,
   type ExportVideoCodec,
 } from '@/lib/export-spec';
@@ -395,6 +401,9 @@ export function ExportCenter(props: ExportCenterProps) {
   const outMs = dest === 'alpha' && alphaBlock ? alphaBlock.durMs : rangeMs;
   const selectedVideoPreset = exportPreset(s.video.preset);
   const videoCodec: ExportVideoCodec = codecAvailable(s.video.codec, can) && VIDEO_CODECS.includes(s.video.codec) ? s.video.codec : 'h264';
+  /* a delivery's bitrate or size, for the codecs held to one on the processor (HEVC's needs libx265) */
+  const targetable = TARGET_CODECS.includes(videoCodec) && (videoCodec !== 'hevc' || !can || can.hevcBitrate !== false);
+  const videoTarget = targetable ? s.video.target : null;
   const alphaCodec: ExportVideoCodec = EXPORT_ALPHA_CODECS.includes(s.alpha.codec) && codecAvailable(s.alpha.codec, can) ? s.alpha.codec : 'prores4444';
   const audioFormat = s.audio.format === 'mp3' && can && !can.mp3 ? 'wav' : s.audio.format;
   /* the same draft is 剪映's or CapCut's: the one on this computer, else (both or neither) 剪映 in Chinese and CapCut in
@@ -429,7 +438,8 @@ export function ExportCenter(props: ExportCenterProps) {
         const v = s.video;
         return [{
           kind: 'video', codec: videoCodec, frame: resolveFrame(v.frame), fill: v.fill, shortEdge: v.shortEdge, fps: fpsFor(v.fps),
-          quality: v.quality, audio: v.audio, label: selectedVideoPreset?.name ?? codecName(videoCodec), ...burn(v.burn),
+          ...(videoTarget === 'bitrate' ? { bitrate: Math.round(v.targetMbps * 1e6) } : videoTarget === 'size' ? {} : { quality: v.quality }),
+          audio: v.audio, label: selectedVideoPreset?.name ?? codecName(videoCodec), ...burn(v.burn),
           ...(selectedVideoPreset ? { preset: selectedVideoPreset.name } : {}),
           ...(captions > 0 && v.sidecar !== 'none' && videoCodec !== 'png' ? { sidecar: v.sidecar } : {}),
           ...(v.audio && v.loudness != null && videoCodec !== 'png' ? { loudness: v.loudness } : {}),
@@ -473,9 +483,19 @@ export function ExportCenter(props: ExportCenterProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, captionTracks, projectParts, moments]);
 
-  const requests = React.useMemo(() => canRange && range && parsedRanges
-    ? applyRangeDelivery(baseRequests, parsedRanges, rangeDelivery) : baseRequests,
-  [baseRequests, canRange, range, parsedRanges, rangeDelivery]);
+  /* the sound a video's size target leaves room for: none when the film is known to have none */
+  const targetAudio = (r: ExportRequest) => (r.kind === 'video' && r.audio && !knownSilent ? targetAudioBps(r.codec) : 0);
+  const requests = React.useMemo(() => {
+    const asked = canRange && range && parsedRanges ? applyRangeDelivery(baseRequests, parsedRanges, rangeDelivery) : baseRequests;
+    if (dest !== 'video' || videoTarget !== 'size') return asked;
+    /* a size is a bitrate for each file, from its own length, its peaks held to it: the file never comes out over */
+    return asked.map((r) => {
+      if (r.kind !== 'video') return r;
+      const bitrate = Math.min(TARGET_MBPS[1] * 1e6, sizeTargetBitrate(r.codec, s.video.targetMB * 1e6, requestDurationMs(r, totalMs), targetAudio(r)));
+      return { ...r, bitrate, maxrate: bitrate };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseRequests, canRange, range, parsedRanges, rangeDelivery, dest, videoTarget, s.video.targetMB, totalMs, knownSilent]);
 
   /* a range, not a size: what is in the picture decides a video's or a GIF's size (export-spec.ts); sound is exact */
   const estBytes = React.useMemo(() => requests.reduce<[number, number]>(([low, high], r) => {
@@ -483,10 +503,15 @@ export function ExportCenter(props: ExportCenterProps) {
     if (r.kind === 'video') {
       /* one block's size depends on the block: not guessed */
       if (r.clip) return [low, high];
+      /* held to a bitrate: about that, a still picture less */
+      if (r.bitrate) {
+        const bytes = targetEstimateBytes(r.bitrate, requestDurationMs(r, totalMs), targetAudio(r));
+        return add([bytes, bytes]);
+      }
       const frame = r.frame ?? 'native', fill = r.fill ?? 'contain';
       const size = exportFramedDims(stage, frame, fill, r.shortEdge ?? Math.min(stage.w, stage.h));
       return add(exportEstimateBytes({
-        codec: r.codec, size, filmPixels: exportFilmPixels(stage, frame, fill, size), fps: r.fps, quality: r.quality, durationMs: requestDurationMs(r, totalMs),
+        codec: r.codec, size, filmPixels: exportFilmPixels(stage, frame, fill, size), fps: r.fps, quality: r.quality ?? 'high', durationMs: requestDurationMs(r, totalMs),
         audio: r.audio && r.codec !== 'png' && !knownSilent, proresKs: !can?.proresChip,
       }));
     }
@@ -510,6 +535,8 @@ export function ExportCenter(props: ExportCenterProps) {
   }, [0, 0]), [requests, stage, totalMs, soundKinds, knownSilent, projectSizes, can]);
   /* "about 0.8 MB–8 MB"; one size when both ends read the same */
   const estText = estBytes[1] > 0 ? [...new Set(estBytes.map((b) => formatBytes(b)))].join('–') : '';
+  /* a size asked is what the file stays under, said in its own words (formatBytes counts in 1024s) */
+  const sizeCap = dest === 'video' && videoTarget === 'size' && requests.length === 1 ? `≤ ${Number(s.video.targetMB.toFixed(2))} MB` : '';
 
   const folder = s.folder || defaultFolder;
 
@@ -530,6 +557,14 @@ export function ExportCenter(props: ExportCenterProps) {
     if (missingReason) return missingReason;
     if (!totalMs && dest !== 'project') return t('exportCenter.emptyFilm');
     if (rangeInvalid) return rangeError;
+    if (dest === 'video' && videoTarget) {
+      const mbps = videoTarget === 'bitrate' ? s.video.targetMbps : Math.min(...requests.map((r) => (r.kind === 'video' ? r.bitrate ?? 0 : Infinity))) / 1e6;
+      if (videoTarget === 'bitrate' && !(mbps >= TARGET_MBPS[0] && mbps <= TARGET_MBPS[1])) return t('exportCenter.targetRange');
+      if (videoTarget === 'size' && !(mbps >= TARGET_MBPS[0])) {
+        const least = Math.max(...requests.map((r) => (r.kind === 'video' ? sizeTargetLeast(r.codec, requestDurationMs(r, totalMs), targetAudio(r)) : 0)));
+        return t('exportCenter.targetTooSmall').replace('{min}', `${Math.ceil(least / 1e5) / 10} MB`);
+      }
+    }
     if (dest === 'images' && moments.length === 0) return t('exportCenter.pickMoments');
     if (dest === 'images' && imageDocument && moments.length > MOMENTS_MAX.slides) return t('exportCenter.imagePageLimit').replace('{n}', String(MOMENTS_MAX.slides));
     if (dest === 'subtitles' && captionCount != null && captions === 0) return t('exportCenter.noCaptions');
@@ -735,7 +770,28 @@ export function ExportCenter(props: ExportCenterProps) {
                     </Field>
                     {!(videoCodec.startsWith('prores') || videoCodec === 'png') && (
                       <Field label={t('exportCenter.quality')}>
-                        <QualityPicker value={s.video.quality} onChange={(quality) => patch('video', { quality })} t={t} />
+                        <QualityPicker
+                          value={videoTarget ?? s.video.quality}
+                          targets={targetable}
+                          onChange={(q) => patch('video', q === 'bitrate' || q === 'size' ? { target: q } : { quality: q, target: null })}
+                          t={t}
+                        />
+                        {videoTarget && (
+                          <div className="mt-1 flex max-w-[360px] flex-col gap-1.5">
+                            <TargetInput
+                              key={videoTarget}
+                              value={videoTarget === 'bitrate' ? s.video.targetMbps : s.video.targetMB}
+                              unit={videoTarget === 'bitrate' ? 'Mb/s' : 'MB'}
+                              label={t(videoTarget === 'bitrate' ? 'exportCenter.qBitrate' : 'exportCenter.qSize')}
+                              onChange={(n) => patch('video', videoTarget === 'bitrate' ? { targetMbps: n } : { targetMB: n })}
+                            />
+                            <span className="text-[11px] leading-snug text-[var(--text-faint)]">
+                              {videoTarget === 'bitrate'
+                                ? t('exportCenter.targetBitrateHint')
+                                : t('exportCenter.targetSizeHint').replace('{rate}', formatMbps(Math.min(...requests.map((r) => (r.kind === 'video' ? r.bitrate ?? 0 : Infinity)))))}
+                            </span>
+                          </div>
+                        )}
                       </Field>
                     )}
                   </div>
@@ -1219,7 +1275,8 @@ export function ExportCenter(props: ExportCenterProps) {
                         {t('exportCenter.summary').replace('{n}', String(fileCount)).replace('{dur}', formatFilmTime(outMs))}
                       </span>
                     ) : null}
-                    {estText ? <span className="block text-[11px] text-[var(--text-faint)] tabular-nums">{`${t('exportCenter.approx')} ${estText}`}</span> : null}
+                    {sizeCap ? <span className="block text-[11px] text-[var(--text-faint)] tabular-nums">{sizeCap}</span>
+                      : estText ? <span className="block text-[11px] text-[var(--text-faint)] tabular-nums">{`${t('exportCenter.approx')} ${estText}`}</span> : null}
                   </>
                 )}
               </div>
@@ -1416,17 +1473,44 @@ function PartToggle({ checked, onChange, label, hint, size, disabled, locked }: 
   );
 }
 
-function QualityPicker({ value, onChange, t }: { value: ExportQuality; onChange: (q: ExportQuality) => void; t: (k: string) => string }) {
+/** A quality, or (`targets`: a codec held to one) a delivery's bitrate or file size in its place. */
+function QualityPicker<Q extends ExportQuality | 'bitrate' | 'size'>({ value, onChange, targets = false, t }: {
+  value: Q; onChange: (q: Q) => void; targets?: boolean; t: (k: string) => string;
+}) {
+  const options = [
+    { value: 'standard', label: t('exportCenter.qStandard') },
+    { value: 'high', label: t('exportCenter.qHigh') },
+    { value: 'master', label: t('exportCenter.qMaster') },
+    ...(targets ? [{ value: 'bitrate', label: t('exportCenter.qBitrate') }, { value: 'size', label: t('exportCenter.qSize') }] : []),
+  ] as { value: Q; label: string }[];
+  return <Segmented value={value} options={options} onChange={onChange} />;
+}
+
+/** A bitrate in Mb/s, as the dialog says it. @param bits a second */
+const formatMbps = (bits: number) => `${Number((bits / 1e6).toFixed(bits < 1e8 ? 1 : 0))} Mb/s`;
+
+/** A target's number and its unit: what is typed is kept while it is no number yet, and the last number stands. */
+function TargetInput({ value, unit, label, onChange }: { value: number; unit: string; label: string; onChange: (n: number) => void }) {
+  const [draft, setDraft] = React.useState(String(value));
+  const n = Number(draft.trim());
+  const valid = draft.trim() !== '' && Number.isFinite(n) && n > 0;
   return (
-    <Segmented
-      value={value}
-      options={[
-        { value: 'standard', label: t('exportCenter.qStandard') },
-        { value: 'high', label: t('exportCenter.qHigh') },
-        { value: 'master', label: t('exportCenter.qMaster') },
-      ]}
-      onChange={onChange}
-    />
+    <label className={`flex h-8 w-[160px] items-center gap-1.5 rounded-lg border bg-[var(--bg-panel)] px-2.5 text-[12.5px] focus-within:border-[var(--text-faint)] ${valid ? 'border-[var(--border)]' : 'border-[var(--warn)]'}`}>
+      <input
+        value={draft}
+        inputMode="decimal"
+        spellCheck={false}
+        aria-label={`${label} (${unit})`}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          const next = Number(e.target.value.trim());
+          if (e.target.value.trim() !== '' && Number.isFinite(next) && next > 0) onChange(next);
+        }}
+        onBlur={() => { if (!valid) setDraft(String(value)); }}
+        className="min-w-0 flex-1 bg-transparent font-mono tabular-nums text-[var(--text)] outline-none"
+      />
+      <span className="shrink-0 text-[var(--text-muted)]">{unit}</span>
+    </label>
   );
 }
 

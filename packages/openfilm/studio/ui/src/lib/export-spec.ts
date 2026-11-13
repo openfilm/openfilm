@@ -214,6 +214,39 @@ export function exportEstimateBytes(spec: {
   return [at(spread[0]), at(spread[1])];
 }
 
+/* ── a delivery's target ───────────────────────────────────────────────── */
+
+/** The codecs a delivery's bitrate or file size can be asked of, in place of a quality (exports.mjs targetEncoding). */
+export const TARGET_CODECS: readonly ExportVideoCodec[] = ['h264', 'hevc', 'vp9'];
+/** The picture's bitrates that can be asked, in Mb/s (exports.mjs BITRATE_RANGE). */
+export const TARGET_MBPS: readonly [number, number] = [0.1, 200];
+/** The sound beside a picture held to a target, in bits a second: AAC 192k in an MP4, Opus 160k in a WebM (render.mjs). */
+export const targetAudioBps = (codec: ExportVideoCodec): number => (codec === 'vp9' ? 160_000 : 192_000);
+/* What a file size leaves the picture: the container takes about half a percent, and an encoder's peaks are held to
+   the rate, with a second's buffer that can still put a part a little over it (measured: up to 1%), so the picture is
+   asked a twentieth less. libvpx holds no peaks and can go no coarser than its last quantizer: a tenth less for VP9
+   (a busy picture came out 7% over the rate) */
+const CONTAINER_SHARE = 0.995;
+const RATE_ROOM = (codec: ExportVideoCodec) => (codec === 'vp9' ? 0.9 : 0.95);
+
+/** The picture's bitrate (bits a second) that keeps a file of `durationMs` under `bytes`, its sound (`audioBps`) included; 0 when nothing is left for it. */
+export function sizeTargetBitrate(codec: ExportVideoCodec, bytes: number, durationMs: number, audioBps: number): number {
+  const sec = durationMs / 1000;
+  if (!(sec > 0) || !(bytes > 0)) return 0;
+  return Math.max(0, Math.floor(((bytes * 8 * CONTAINER_SHARE) / sec - audioBps) * RATE_ROOM(codec)));
+}
+
+/** The smallest file (bytes) a size target can ask for `durationMs`: the picture at the lowest bitrate, with its sound. */
+export function sizeTargetLeast(codec: ExportVideoCodec, durationMs: number, audioBps: number): number {
+  const sec = Math.max(0, durationMs) / 1000;
+  return Math.ceil(((TARGET_MBPS[0] * 1e6) / RATE_ROOM(codec) + audioBps) * sec / 8 / CONTAINER_SHARE);
+}
+
+/** A video's size at a bitrate asked, in bytes: the picture at that rate on average, and the sound. */
+export function targetEstimateBytes(bitrate: number, durationMs: number, audioBps: number): number {
+  return Math.round((bitrate + audioBps) / 8 * Math.max(0, durationMs) / 1000);
+}
+
 /** A typical film's GIF, 640 × 360 at 15 fps, and how far a film's strays from it. */
 const TYPICAL_GIF = { w: 640, h: 360, fps: 15, bytes: 300_000 };
 const GIF_SPREAD: readonly [number, number] = [0.4, 3];

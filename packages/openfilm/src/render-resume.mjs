@@ -32,13 +32,17 @@ const held = new Set();
  * Frames [f0, f1) in chunks of a second to `CHUNK_SECONDS`, the last one shorter. A chunk is a whole number of seconds
  * (`round(fps)` frames each: 30 at 29.97, 24 at 23.976), so its length is whole milliseconds and the seams between
  * chunks stay on the frame grid: a chunk of 38 frames at 30 fps (1.2667 s) would lose up to a millisecond at each.
- * @param {number} f0 @param {number} f1 @param {number} fps
+ * `least`: seconds a chunk is at least (an encode held to a bitrate settles in a few), the last one joining the one
+ * before it when it would be shorter.
+ * @param {number} f0 @param {number} f1 @param {number} fps @param {number} [least]
  */
-export function chunksOf(f0, f1, fps) {
+export function chunksOf(f0, f1, fps, least = 1) {
   const second = Math.max(1, Math.round(fps));
-  const size = Math.min(CHUNK_SECONDS * second, Math.max(second, Math.ceil((f1 - f0) / CHUNKS / second) * second));
+  const size = Math.min(Math.max(CHUNK_SECONDS, least) * second, Math.max(least * second, Math.ceil((f1 - f0) / CHUNKS / second) * second));
   const chunks = [];
   for (let a = f0; a < f1; a += size) chunks.push({ a, b: Math.min(f1, a + size) });
+  const last = chunks.at(-1);
+  if (least > 1 && chunks.length > 1 && last && last.b - last.a < least * second) chunks[chunks.length - 2].b = /** @type {{ b: number }} */ (chunks.pop()).b;
   return chunks;
 }
 
