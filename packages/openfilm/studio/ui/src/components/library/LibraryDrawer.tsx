@@ -466,7 +466,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
       {/* a plugin's tab: its surface, the whole of the drawer under the categories */}
       {tab ? (
         <div className="flex min-h-0 flex-1" data-library-tab={tab.id}>
-          {projectId ? <PluginSurface id={tab.id} page={tab.page} files={tab.files} program={tab.program} runs={tab.runs} inApp={tab.inApp} element={tab.element} projectId={projectId} folder={folder} /> : null}
+          {projectId ? <PluginSurface id={tab.id} page={tab.page} files={tab.files} program={tab.program} runs={tab.runs} inApp={tab.inApp} element={tab.element} projectId={projectId} folder={folder} keep /> : null}
         </div>
       ) : (
       <div className="flex min-h-0 flex-1">

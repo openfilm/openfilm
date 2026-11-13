@@ -72,9 +72,13 @@ export default class CanvasWorkbench extends HTMLElement {
   }
 
   disconnectedCallback(): void {
-    const root = this.#root;
-    this.#root = null;
-    /* after the render that took the element out: a root is not unmounted while another is rendering */
-    if (root) queueMicrotask(() => root.unmount());
+    /* after the render that took the element out (a root is not unmounted while another is rendering), and only if it
+       was not put back meanwhile: an element moved keeps what it holds */
+    queueMicrotask(() => {
+      if (this.isConnected || !this.#root) return;
+      const root = this.#root;
+      this.#root = null;
+      root.unmount();
+    });
   }
 }
