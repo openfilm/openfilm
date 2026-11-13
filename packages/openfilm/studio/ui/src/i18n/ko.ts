@@ -1942,7 +1942,7 @@ export const ko: Words = {
     titles: {
       tts: '오디오 노드 {n}',
       note: '텍스트 {n}',
-      image: '이미지 노드 {n}',
+      image: '이미지 {n}',
       video: '영상 노드 {n}',
       sfx: '오디오 노드 {n}',
       music: '오디오 노드 {n}',
@@ -2041,11 +2041,9 @@ export const ko: Words = {
     },
     try: {
       title: '시도해 보기',
-      fromPicture: '이미지로 생성',
       firstLast: '첫·끝 프레임으로 영상',
       firstFrame: '첫 프레임으로 영상',
       upload: {
-        image: '이미지 업로드',
         video: '동영상 업로드',
         audio: '오디오 업로드',
       },
@@ -2093,6 +2091,8 @@ export const ko: Words = {
       followSettings: '설정 따르기',
       expand: '크게',
       collapse: '작게',
+      add: '참조 추가',
+      tools: { title: '도구', characters: '캐릭터' },
       models: {
         search: '모델 검색',
         mine: '내 서비스',
@@ -2104,7 +2104,7 @@ export const ko: Words = {
       pictures: '연결한 이미지 사용 방식',
       placeholder: {
         tts: '말할 대사를 적으세요. 예: 이 등대는 백 년 동안 이곳을 지켜 왔다.',
-        image: '화면을 설명하거나 참조 이미지를 연결하세요. 예: 새벽 바닷가의 등대, 안개, 영화 같은',
+        image: '참조 이미지를 올리거나 만들고 싶은 이미지를 설명하세요',
         video: '카메라 움직임과 일어나는 일을 설명하세요. 예: 천천히 다가가며 등대 불빛이 바다를 비춤',
         sfx: '소리를 설명하세요. 예: 바위에 부딪히는 파도, 멀리 갈매기',
         music: '음악을 설명하세요. 예: 잔잔한 피아노, 약간 슬프게, 60 BPM',

@@ -1946,7 +1946,7 @@ export const en = {
     titles: {
       tts: 'Audio node {n}',
       note: 'Text {n}',
-      image: 'Picture node {n}',
+      image: 'Picture {n}',
       video: 'Video node {n}',
       sfx: 'Audio node {n}',
       music: 'Audio node {n}',
@@ -2045,11 +2045,9 @@ export const en = {
     },
     try: {
       title: 'Try',
-      fromPicture: 'From a picture',
       firstLast: 'Video from first & last frames',
       firstFrame: 'Video from a first frame',
       upload: {
-        image: 'Upload a picture',
         video: 'Upload a video',
         audio: 'Upload a sound',
       },
@@ -2097,6 +2095,8 @@ export const en = {
       followSettings: 'As in Settings',
       expand: 'Bigger',
       collapse: 'Smaller',
+      add: 'Add a reference',
+      tools: { title: 'Tools', characters: 'Character' },
       models: {
         search: 'Search models',
         mine: 'Your services',
@@ -2108,7 +2108,7 @@ export const en = {
       pictures: 'Pictures wired in are',
       placeholder: {
         tts: 'The line to speak, e.g. The lighthouse has kept watch here for a hundred years.',
-        image: 'Describe the picture, or wire in a reference to make one from it, e.g. a lighthouse by the sea at dawn, mist, cinematic',
+        image: 'Upload a reference or type to describe the picture you want',
         video: 'Describe how the camera moves and what happens, e.g. a slow push in as the lighthouse beam sweeps the sea',
         sfx: 'Describe the sound, e.g. waves on rocks, gulls far off',
         music: 'Describe the music, e.g. gentle piano, a little sad, 60 BPM',

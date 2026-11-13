@@ -1946,7 +1946,7 @@ export const zhCN: Words = {
     titles: {
       tts: '音频节点 {n}',
       note: '文本 {n}',
-      image: '图片节点 {n}',
+      image: '图片 {n}',
       video: '视频节点 {n}',
       sfx: '音频节点 {n}',
       music: '音频节点 {n}',
@@ -2045,11 +2045,9 @@ export const zhCN: Words = {
     },
     try: {
       title: '试试',
-      fromPicture: '图生图',
       firstLast: '首尾帧生成视频',
       firstFrame: '首帧生成视频',
       upload: {
-        image: '上传图片',
         video: '上传视频',
         audio: '上传音频',
       },
@@ -2097,6 +2095,8 @@ export const zhCN: Words = {
       followSettings: '跟随设置',
       expand: '展开',
       collapse: '收起',
+      add: '添加参考',
+      tools: { title: '工具', characters: '角色' },
       models: {
         search: '搜索模型',
         mine: '你的服务',
@@ -2108,7 +2108,7 @@ export const zhCN: Words = {
       pictures: '连入的图片用作',
       placeholder: {
         tts: '写下要说的台词，如：这座灯塔，已经在这里守了一百年。',
-        image: '描述画面，或连入参考图做图生图，如：清晨海边的灯塔，薄雾，电影感',
+        image: '上传参考图、输入文字，描述你想生成的图片',
         video: '描述镜头怎么动、画面里发生什么，如：镜头缓缓推近，灯塔的光扫过海面',
         sfx: '描述声音，如：海浪拍打礁石，远处有海鸥',
         music: '描述音乐，如：舒缓的钢琴，带一点忧伤，60 BPM',

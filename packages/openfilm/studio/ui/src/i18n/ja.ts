@@ -1945,7 +1945,7 @@ export const ja: Words = {
     titles: {
       tts: 'オーディオノード {n}',
       note: 'テキスト {n}',
-      image: '画像ノード {n}',
+      image: '画像 {n}',
       video: '動画ノード {n}',
       sfx: 'オーディオノード {n}',
       music: 'オーディオノード {n}',
@@ -2044,11 +2044,9 @@ export const ja: Words = {
     },
     try: {
       title: '試してみる',
-      fromPicture: '画像から生成',
       firstLast: '最初と最後のフレームから動画',
       firstFrame: '最初のフレームから動画',
       upload: {
-        image: '画像をアップロード',
         video: '動画をアップロード',
         audio: '音声をアップロード',
       },
@@ -2096,6 +2094,8 @@ export const ja: Words = {
       followSettings: '設定に従う',
       expand: '広げる',
       collapse: '縮める',
+      add: '参照を追加',
+      tools: { title: 'ツール', characters: 'キャラクター' },
       models: {
         search: 'モデルを検索',
         mine: 'あなたのサービス',
@@ -2107,7 +2107,7 @@ export const ja: Words = {
       pictures: 'つないだ画像の使い方',
       placeholder: {
         tts: '話すセリフを書く（例：この灯台は百年ここを見守ってきた。）',
-        image: '画面を説明するか、参照画像をつないでください。例：夜明けの海辺の灯台、霧、映画的',
+        image: '参照画像をアップロードするか、作りたい画像を説明してください',
         video: 'カメラの動きと起きることを説明してください。例：ゆっくり寄っていき、灯台の光が海を照らす',
         sfx: '音を説明してください。例：岩に打ち寄せる波、遠くのカモメ',
         music: '音楽を説明してください。例：穏やかなピアノ、少し切なく、60 BPM',

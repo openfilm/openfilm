@@ -617,7 +617,7 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
   const versions = data.versions ?? [];
   const file = data.path ? board.fileOf(data.path) : null;
   const uploading = board.uploading?.(id);
-  const rename = media === 'video' && !board.readOnly ? (name: string) => {
+  const rename = media !== 'audio' && !board.readOnly ? (name: string) => {
     board.willChange();
     board.setData(id, { title: name || undefined });
   } : undefined;
@@ -634,12 +634,12 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
         <div className="relative h-full w-full">
           {file ? <Shown id={id} file={file} selected={selected} words={data.make === 'tts' ? data.prompt : undefined} />
               : (
-                <Empty icon={Icon} tries={fed || run ? undefined : media === 'image' ? (
-                  <>
-                    <TryLine icon={ImageIcon} label={t('canvas.try.fromPicture')} onClick={() => board.upload(id, 'input')} />
-                    <TryLine icon={Upload} label={t('canvas.try.upload.image')} onClick={() => board.upload(id, 'version')} />
-                  </>
-                ) : media === 'video' ? (
+                /* an empty picture: its mark on a soft light, everything to start with is in its composer */
+                media === 'image' ? (
+                  <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--cv-ink)_7%,var(--cv-card)),var(--cv-card)_70%)] text-[var(--cv-ghost)]">
+                    <ImageIcon size={40} strokeWidth={1.4} />
+                  </div>
+                ) : <Empty icon={Icon} tries={fed || run ? undefined : media === 'video' ? (
                   <>
                     <TryLine icon={Layers} label={t('canvas.try.firstLast')} onClick={() => { board.willChange(); board.setData(id, { opts: { ...data.opts, mode: 'firstLast' } }); }} />
                     <TryLine icon={ImageIcon} label={t('canvas.try.firstFrame')} onClick={() => { board.willChange(); board.setData(id, { opts: { ...data.opts, mode: 'first' } }); }} />

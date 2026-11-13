@@ -1945,7 +1945,7 @@ export const es: Words = {
     titles: {
       tts: 'Nodo de audio {n}',
       note: 'Texto {n}',
-      image: 'Nodo de imagen {n}',
+      image: 'Imagen {n}',
       video: 'Nodo de vídeo {n}',
       sfx: 'Nodo de audio {n}',
       music: 'Nodo de audio {n}',
@@ -2044,11 +2044,9 @@ export const es: Words = {
     },
     try: {
       title: 'Prueba',
-      fromPicture: 'A partir de una imagen',
       firstLast: 'Vídeo desde primer y último fotograma',
       firstFrame: 'Vídeo desde un primer fotograma',
       upload: {
-        image: 'Subir una imagen',
         video: 'Subir un vídeo',
         audio: 'Subir un sonido',
       },
@@ -2096,6 +2094,8 @@ export const es: Words = {
       followSettings: 'Como en Ajustes',
       expand: 'Más grande',
       collapse: 'Más pequeño',
+      add: 'Añadir una referencia',
+      tools: { title: 'Herramientas', characters: 'Personaje' },
       models: {
         search: 'Buscar modelos',
         mine: 'Tus servicios',
@@ -2107,7 +2107,7 @@ export const es: Words = {
       pictures: 'Las imágenes conectadas son',
       placeholder: {
         tts: 'Escribe la frase que se dirá, p. ej.: Este faro lleva cien años vigilando aquí.',
-        image: 'Describe la imagen, o conecta una referencia para crearla a partir de ella, p. ej. un faro junto al mar al amanecer, niebla, cinematográfico',
+        image: 'Sube una referencia o describe la imagen que quieres',
         video: 'Describe cómo se mueve la cámara y qué pasa, p. ej. un acercamiento lento mientras el haz del faro barre el mar',
         sfx: 'Describe el sonido, p. ej. olas contra las rocas, gaviotas a lo lejos',
         music: 'Describe la música, p. ej. piano suave, algo triste, 60 BPM',

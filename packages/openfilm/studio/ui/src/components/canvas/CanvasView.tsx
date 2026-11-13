@@ -471,7 +471,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     } else if (kind === 'cut') {
       place({ id, type: 'cut', position: topLeft(placement, w, CARD_H), width: w, height: CARD_H, data: {} }, placement.from, placement.wire);
     } else {
-      const ratio = kind === 'video' ? lastVideoRatio.current : undefined;
+      /* a new picture is square, and made square until another shape is asked */
+      const ratio = kind === 'video' ? lastVideoRatio.current : kind === 'image' ? '1:1' : undefined;
       const size = makeSize(kind, ratio);
       place({ id, type: 'make', position: topLeft(placement, size.w, size.h), width: size.w, height: size.h, data: { make: kind, prompt: '', ...(ratio ? { opts: { ratio } } : {}) } }, placement.from, placement.wire);
     }

@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  AlignLeft, ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote,
+  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -19,6 +19,7 @@ import { Tooltip } from '../Tooltip';
 import { modelTime, timeLabel, useBoard, type Choice, type MakeData } from './board';
 import { splitGrid } from './pixels';
 import { ProviderMark } from '../settings/ProviderMark';
+import { vendorOf } from '@/lib/provider-marks';
 import { useDraft } from './words';
 import { DocSheet } from './doc';
 import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
@@ -29,41 +30,74 @@ const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) 
 /** the lengths offered for each kind, in seconds */
 const MAKE_LENGTHS: Partial<Record<MakeData['make'], number[]>> = { video: [4, 5, 6, 8, 10, 15], sfx: [1, 2, 3, 5, 10], music: [15, 30, 60, 120] };
 const CARD = 'cv-pop rounded-[12px] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
-const CHIP = 'flex h-6 items-center gap-1 rounded-[8px] bg-[var(--cv-chip)] px-2 text-[12px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
 /** a choice in a settings popover: a soft cell, the one in use lit with a hairline round it */
 const OPTION = 'rounded-[8px] text-[12px] transition';
 const OPTION_ON = 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)] ring-1 ring-inset ring-[color-mix(in_srgb,var(--cv-ink)_28%,transparent)]';
 const OPTION_OFF = 'bg-[var(--cv-chip)] text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
 const OPTION_TITLE = 'mb-1.5 text-[11.5px] text-[var(--cv-ink-3)]';
-const PICK = 'flex h-8 min-w-0 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+const PICK = 'flex h-9 min-w-0 items-center gap-1.5 rounded-[10px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
 /** the panel under a selected node: wider and rounder than the menus, a hairline round it */
 const PANEL = 'cv-bar-bottom relative rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
-const PROMPT = 'mt-2.5 block max-h-[42vh] w-full resize-none bg-transparent px-1 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]';
-const COMPOSER_FOOTER = 'mt-1 flex min-w-0 items-center gap-0.5';
-const SEND = 'flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]';
+const PROMPT = 'mt-3 block max-h-[42vh] w-full resize-none bg-transparent px-1 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]';
+const COMPOSER_FOOTER = 'mt-2 flex min-w-0 items-center gap-1';
+const SEND = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]';
 
-function Composer({ id, shown, expanded, setExpanded, children }: {
-  id: string; shown: boolean; expanded: boolean; setExpanded: (expanded: boolean) => void; children: React.ReactNode;
+/** A corner button of a composer: its tools, its words larger. */
+const CORNER = 'flex h-8 w-8 items-center justify-center rounded-[9px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
+
+/**
+ * A node's composer, under it: what goes in, its words, how it is made. `above`, when shown, is a row over it (the
+ * tools), the rest then set in a box of its own; `corner` sits by the expand button.
+ */
+function Composer({ id, shown, expanded, setExpanded, corner, above, children }: {
+  id: string; shown: boolean; expanded: boolean; setExpanded: (expanded: boolean) => void; corner?: React.ReactNode; above?: React.ReactNode; children: React.ReactNode;
 }) {
   const t = useT();
   const board = useBoard();
   const label = t(expanded ? 'canvas.panel.collapse' : 'canvas.panel.expand');
   return (
     <NodeToolbar nodeId={id} isVisible={shown} position={Position.Bottom} offset={14}>
-      <div data-canvas-composer="" className={`nodrag nopan nowheel w-[min(660px,86vw)] px-3 pb-2 pt-3 ${PANEL}`} onKeyDown={(event) => event.stopPropagation()}>
-        <Tooltip label={label}>
-          <button type="button" aria-label={label} aria-expanded={expanded} onClick={() => {
-            setExpanded(!expanded);
-            if (!expanded) board.showComposer?.(id);
-          }} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
-            {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-          </button>
-        </Tooltip>
-        {children}
+      <div data-canvas-composer="" className={`nodrag nopan nowheel w-[min(680px,88vw)] ${above ? 'p-2' : ''} ${PANEL}`} onKeyDown={(event) => event.stopPropagation()}>
+        {above}
+        <div className={`relative px-4 pb-3 pt-4 ${above ? 'mt-2 rounded-[16px] bg-[color-mix(in_srgb,var(--cv-ink)_4%,transparent)]' : ''}`}>
+          <div className="absolute right-3 top-3 flex items-center gap-0.5">
+            {corner}
+            <Tooltip label={label}>
+              <button type="button" aria-label={label} aria-expanded={expanded} onClick={() => {
+                setExpanded(!expanded);
+                if (!expanded) board.showComposer?.(id);
+              }} className={CORNER}>
+                {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+              </button>
+            </Tooltip>
+          </div>
+          {children}
+        </div>
       </div>
     </NodeToolbar>
   );
 }
+
+/** A tool over a composer: its mark on a colored square, its name. */
+function ToolTile({ label, tone, icon: Icon, on, onClick }: { label: string; tone: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; on?: boolean; onClick?: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`cv-tool flex h-12 w-full min-w-0 items-center gap-2.5 rounded-[14px] px-2.5 text-[14px] text-[var(--cv-ink)] transition ${on ? 'bg-[var(--cv-float-hover)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_4%,transparent)] hover:bg-[var(--cv-float-hover)]'}`}>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-white shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.25)]" style={{ background: tone }}>
+        <Icon size={17} strokeWidth={2} />
+      </span>
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+const TONES = {
+  characters: 'linear-gradient(140deg, #f7a65e, #e0544c)',
+  styles: 'linear-gradient(140deg, #b69cff, #6c5cf5)',
+  presets: 'linear-gradient(140deg, #63c7ff, #3176f0)',
+  effects: 'linear-gradient(140deg, #4fdcaa, #10a39b)',
+};
+/* the tools row stays as it was left, for every node, while the app is open */
+let toolsShown = false;
 
 /** A shape as a little frame of it (16:9 wide, 9:16 tall). */
 function RatioIcon({ ratio, size = 16 }: { ratio: string; size?: number }) {
@@ -253,7 +287,7 @@ function ModelPicker({ choices, picked, fallback, onPick, onConnect }: {
     return (
       <button key={`${c.via}|${c.model ?? ''}`} type="button" onClick={() => (c.connected ? onPick(c) : onConnect())}
         className={`flex w-full min-w-0 items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-[var(--cv-float-hover)] ${on ? 'bg-[var(--cv-float-hover)]' : ''} ${c.connected ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] bg-[var(--cv-chip)]"><ProviderMark id={c.via} size={13} /></span>
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] bg-[var(--cv-chip)]"><ProviderMark id={vendorOf(c.model, c.name) ?? c.via} size={13} /></span>
         <span className="min-w-0 flex-1 truncate leading-5">{c.name}</span>
         {took !== null ? <span className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-ink-2)]" title={t('canvas.panel.models.took')}>{timeLabel(took)}</span> : null}
         {on ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" />
@@ -362,11 +396,76 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const assetRows = board.files.filter((f) => (f.kind === 'image' || (data.make === 'video' && f.kind === 'video') || (acceptsAudio && f.kind === 'audio'))
     && !inputs.some((i) => i.path === f.path))
     .map((f) => { const src = thumb(f); return { key: f.path, value: f.path, label: f.name, note: f.dir || undefined, icon: src ? <img src={src} alt="" className="h-8 w-11 rounded object-cover" /> : <Images size={15} /> }; });
+  /* the tools over the composer, by kind: a picture takes a character, a style, a preset; a clip a character, an effect */
+  const [showTools, setShowTools] = React.useState(toolsShown);
+  const toggleTools = (on: boolean) => { toolsShown = on; setShowTools(on); if (!on && open === 'presets') setOpen(null); };
+  const tools: Array<{ key: keyof typeof TONES; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; pick?: () => void }> = data.make === 'image' ? [
+    { key: 'characters', label: t('canvas.panel.tools.characters'), icon: UserRound, pick: () => board.openLibrary('characters', id) },
+    { key: 'styles', label: t('canvas.library.styleChip'), icon: Palette, pick: () => board.openLibrary('styles', id) },
+    { key: 'presets', label: t('canvas.presets.title'), icon: LayoutDashboard },
+  ] : data.make === 'video' ? [
+    { key: 'characters', label: t('canvas.panel.tools.characters'), icon: UserRound, pick: () => board.openLibrary('characters', id) },
+    { key: 'effects', label: t('canvas.library.effectChip'), icon: Clapperboard, pick: () => board.openLibrary('effects', id) },
+  ] : [];
+  const addMenu = (
+    <div className={`w-[176px] p-1 ${CARD}`}>
+      <button type="button" className={`${PICK} w-full`} onClick={() => { setOpen(null); board.upload(id, 'input'); }}><Plus size={15} />{t('canvas.panel.upload')}</button>
+      <button type="button" className={`${PICK} w-full`} onClick={() => { setOpen(null); board.pick(id); }}><LayoutGrid size={15} />{t('canvas.panel.fromBoard')}</button>
+      <button type="button" className={`${PICK} w-full`} onClick={() => setOpen('assets')}><Images size={15} />{t('canvas.panel.fromAssets')}</button>
+    </div>
+  );
+  const presetMenu = (
+    <div className={`grid w-[520px] grid-cols-2 gap-x-3 p-3 ${CARD}`}>
+      {[PRESET_GROUPS.slice(0, 2), PRESET_GROUPS.slice(2)].map((column, ci) => (
+        <div key={ci}>
+          {column.map((group) => (
+            <div key={group} className="mb-2">
+              <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-2)]">{t(`canvas.presets.groups.${group}`)}</div>
+              {PRESETS.filter((p) => p.group === group).map((p) => {
+                const off = p.fromPicture && !hasPicture;
+                return (
+                  <button key={p.id} type="button" disabled={off} onClick={() => usePreset(p)} title={off ? t('canvas.presets.needsPicture') : undefined}
+                    className={`flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-left text-[13px] transition ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]'} ${preset?.id === p.id ? 'bg-[var(--cv-float-hover)]' : ''}`}>
+                      <LayoutDashboard size={14} className="shrink-0 opacity-70" />{t(`canvas.presets.names.${p.id}`)}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
   return (
-    <Composer id={id} shown={shown} expanded={expanded} setExpanded={setExpanded}>
+    <Composer id={id} shown={shown} expanded={expanded} setExpanded={setExpanded}
+      corner={tools.length ? (
+        <Tooltip label={t('canvas.panel.tools.title')}>
+          <button type="button" aria-label={t('canvas.panel.tools.title')} aria-pressed={showTools} onClick={() => toggleTools(!showTools)}
+            className={`${CORNER} ${showTools ? 'bg-[var(--cv-float-hover)] !text-[var(--cv-ink)]' : ''}`}><Shapes size={16} /></button>
+        </Tooltip>
+      ) : null}
+      above={showTools && tools.length ? (
+        /* the tools: a character, a style or an effect from the libraries, a preset */
+        <div className="cv-bar-bottom flex items-center gap-2">
+          {tools.map((tool) => (
+            <div key={tool.key} className="min-w-0 flex-1">
+              {tool.key === 'presets' ? (
+                <Popover open={open === 'presets'} onOpenChange={(v) => setOpen(v ? 'presets' : null)} placement="top" align="center" block
+                  trigger={<ToolTile label={tool.label} tone={TONES.presets} icon={LayoutDashboard} on={open === 'presets' || Boolean(preset)} onClick={() => setOpen(open === 'presets' ? null : 'presets')} />}>
+                  {presetMenu}
+                </Popover>
+              ) : <ToolTile label={tool.label} tone={TONES[tool.key]} icon={tool.icon} onClick={tool.pick} />}
+            </div>
+          ))}
+          <Tooltip label={t('canvas.panel.collapse')}>
+            <button type="button" aria-label={t('canvas.panel.collapse')} onClick={() => toggleTools(false)}
+              className="flex h-12 w-10 shrink-0 items-center justify-center rounded-[14px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><ChevronUp size={16} /></button>
+          </Tooltip>
+        </div>
+      ) : null}>
         {!takesPictures ? (
           /* a sound is a voice-over, music or a sound effect: each made by its own models */
-          <div className="flex items-center gap-1 pr-9">
+          <div className="flex items-center gap-1 pr-20">
             <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--cv-chip)] p-0.5">
               {(['tts', 'music', 'sfx'] as const).map((k) => (
                 <button key={k} type="button" onClick={() => { if (k !== data.make) set({ make: k, via: undefined, model: undefined }); }}
@@ -376,48 +475,28 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
               ))}
             </div>
           </div>
-        ) : null}
-        {takesPictures ? (
-          <div className="flex items-center gap-1 pr-9">
-            <button type="button" className={CHIP} onClick={() => board.upload(id, 'input')}><Plus size={13} />{t('canvas.panel.upload')}</button>
-            <button type="button" className={CHIP} onClick={() => board.pick(id)}><LayoutGrid size={13} />{t('canvas.panel.fromBoard')}</button>
-            <Popover open={open === 'assets'} onOpenChange={(v) => setOpen(v ? 'assets' : null)} placement="auto"
-              trigger={<button type="button" className={CHIP} onClick={() => setOpen(open === 'assets' ? null : 'assets')}><Images size={13} />{t('canvas.panel.fromAssets')}</button>}>
-              <Listing rows={assetRows} empty={t('canvas.panel.nothingInAssets')} onPick={(path) => { board.wireIn(id, { path }); setOpen(null); }} />
-            </Popover>
-            {/* the libraries, for this node: a character's portrait, a style (a picture), an effect (a clip) */}
-            <button type="button" className={CHIP} onClick={() => board.openLibrary('characters', id)}><UserRound size={13} />{t('canvas.characters.chip')}</button>
-            {data.make === 'image' ? <button type="button" className={CHIP} onClick={() => board.openLibrary('styles', id)}><Palette size={13} />{t('canvas.library.styleChip')}</button> : null}
-            {data.make === 'video' ? <button type="button" className={CHIP} onClick={() => board.openLibrary('effects', id)}><Clapperboard size={13} />{t('canvas.library.effectChip')}</button> : null}
-          </div>
-        ) : null}
-        {inputs.length || slots.length ? (
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {/* the frames a clip is made between, each a slot: filled by what is wired in, in order, or empty to fill */}
+        ) : (
+          /* what it is made from, each a tile left of the +: the frames' slots, then what is wired in, numbered */
+          <div className="flex min-h-12 flex-wrap items-center gap-2 pr-20">
             {slots.map((slot, i) => {
               const input = slot.input;
               const file = input?.path ? board.fileOf(input.path) : null;
               const src = thumb(file);
               return input ? (
-                <div key={input.edge} className="group/input relative h-12 w-12 overflow-hidden rounded-[8px] bg-[var(--cv-chip)] ring-1 ring-[var(--cv-float-line)]" title={file?.name ?? input.path}>
-                  {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-[var(--cv-label)]"><Images size={16} /></span>}
-                  <span className="absolute inset-x-0 top-0 bg-black/60 py-px text-center text-[10px] font-medium text-white">{t(`canvas.slots.${slot.label}`)}</span>
-                  <button type="button" aria-label={t('canvas.removeWire')} onClick={() => board.unwire(input.edge)}
-                    className="absolute bottom-0.5 right-0.5 hidden h-4 w-4 items-center justify-center rounded bg-black/70 text-white group-hover/input:flex"><X size={10} /></button>
-                </div>
+                <Tile key={input.edge} label={`${t(`canvas.slots.${slot.label}`)} · ${file?.name ?? input.path ?? ''}`} onOpen={input.path ? () => board.view(input.path!) : undefined}
+                  onRemove={() => board.unwire(input.edge)} removeLabel={t('canvas.removeWire')}>
+                  {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center bg-[var(--cv-chip)] text-[var(--cv-label)]"><Images size={17} /></span>}
+                  <span className="absolute inset-x-0 bottom-0 bg-black/60 py-px text-center text-[10px] font-medium text-white">{t(`canvas.slots.${slot.label}`)}</span>
+                </Tile>
               ) : (
                 <Popover key={`slot-${i}`} open={open === `slot-${i}`} onOpenChange={(v) => setOpen(v ? `slot-${i}` : null)} placement="auto"
                   trigger={(
                     <button type="button" onClick={() => setOpen(open === `slot-${i}` ? null : `slot-${i}`)}
-                      className="flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-[8px] border border-dashed !border-[var(--cv-line)] text-[var(--cv-ink-2)] transition hover:!border-[var(--cv-ring)] hover:text-[var(--cv-ink)]">
+                      className="flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-[10px] border border-dashed !border-[var(--cv-line)] text-[var(--cv-ink-2)] transition hover:!border-[var(--cv-ring)] hover:text-[var(--cv-ink)]">
                       <Plus size={14} /><span className="text-[10px] leading-none">{t(`canvas.slots.${slot.label}`)}</span>
                     </button>
                   )}>
-                  <div className={`w-[176px] p-1 ${CARD}`}>
-                    <button type="button" className={`${PICK} w-full`} onClick={() => { setOpen(null); board.upload(id, 'input'); }}><Plus size={14} />{t('canvas.panel.upload')}</button>
-                    <button type="button" className={`${PICK} w-full`} onClick={() => { setOpen(null); board.pick(id); }}><LayoutGrid size={14} />{t('canvas.panel.fromBoard')}</button>
-                    <button type="button" className={`${PICK} w-full`} onClick={() => setOpen('assets')}><Images size={14} />{t('canvas.panel.fromAssets')}</button>
-                  </div>
+                  {addMenu}
                 </Popover>
               );
             })}
@@ -425,20 +504,33 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
               const i = inputs.indexOf(input);
               const file = input.path ? board.fileOf(input.path) : null;
               const src = thumb(file);
+              const name = input.text != null ? (input.text || t('canvas.kinds.note')).slice(0, 80) : file?.name ?? input.path ?? '';
               return (
-                <div key={input.edge} className="group/input relative h-10 w-10 overflow-hidden rounded-[8px] bg-[var(--cv-chip)] ring-1 ring-[var(--cv-float-line)]"
-                  title={input.text ?? file?.name ?? input.path}>
+                <Tile key={input.edge} label={input.text != null ? `${t('canvas.write.locate')} · ${name}` : `${t('canvas.write.preview')} · ${name}`}
+                  onOpen={input.text != null ? (board.locate ? () => board.locate?.(input.from) : undefined) : input.path ? () => board.view(input.path!) : undefined}
+                  onRemove={() => board.unwire(input.edge)} removeLabel={t('canvas.removeWire')}>
                   {src ? <img src={src} alt="" className="h-full w-full object-cover" />
-                    : input.text != null ? <span className="flex h-full w-full items-center justify-center text-[var(--cv-ink-2)]"><AlignLeft size={16} /></span>
-                      : <span className="flex h-full w-full items-center justify-center text-[var(--cv-label)]">{file?.kind === 'audio' ? <Music size={16} /> : <Video size={16} />}</span>}
-                  <span className="absolute left-0.5 top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-black/75 px-1 text-[9.5px] font-medium text-white">{i + 1}</span>
-                  <button type="button" aria-label={t('canvas.removeWire')} onClick={() => board.unwire(input.edge)}
-                    className="absolute right-0.5 top-0.5 hidden h-4 w-4 items-center justify-center rounded bg-black/70 text-white group-hover/input:flex"><X size={10} /></button>
-                </div>
+                    : <span className="flex h-full w-full items-center justify-center bg-[var(--cv-chip)] text-[var(--cv-ink)]">
+                      {input.text != null ? <TypeIcon size={20} strokeWidth={1.75} /> : file?.kind === 'audio' ? <Music size={18} /> : <Video size={18} />}
+                    </span>}
+                  <span className="absolute left-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-black/70 px-1 text-[10px] font-medium text-white">{i + 1}</span>
+                </Tile>
               );
             })}
+            {/* + : a picture from the computer, a node on the board, one from the Assets */}
+            <Popover open={open === 'add' || open === 'assets'} onOpenChange={(v) => setOpen(v ? 'add' : null)} placement="auto"
+              trigger={(
+                <Tooltip label={t('canvas.panel.add')}>
+                  <button type="button" aria-label={t('canvas.panel.add')} onClick={() => setOpen(open === 'add' || open === 'assets' ? null : 'add')}
+                    className="cv-tool flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-chip)] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
+                    <Plus size={20} strokeWidth={1.75} />
+                  </button>
+                </Tooltip>
+              )}>
+              {open === 'assets' ? <Listing rows={assetRows} empty={t('canvas.panel.nothingInAssets')} onPick={(path) => { board.wireIn(id, { path }); setOpen(null); }} /> : addMenu}
+            </Popover>
           </div>
-        ) : null}
+        )}
         {data.make === 'image' && (data.opts?.mask || data.opts?.markup) ? (
           <div className="mt-2.5 flex items-center gap-1">
             {/* what of the first picture is redrawn: a mask or the changes drawn on it, kept with the node */}
@@ -475,7 +567,8 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             <Popover open={open === 'model'} onOpenChange={(v) => setOpen(v ? 'model' : null)} placement="auto"
               trigger={(
                 <button type="button" className={`${PICK} ${choices.length ? '' : 'text-amber-500 hover:text-amber-400'}`} onClick={() => setOpen(open === 'model' ? null : 'model')}>
-                  <Sparkles size={14} /><span className="max-w-[180px] truncate">{(picked ?? fallback)?.name ?? t('canvas.panel.connect')}</span><ChevronDown size={13} />
+                  {picked ?? fallback ? <ProviderMark id={vendorOf((picked ?? fallback)!.model, (picked ?? fallback)!.name) ?? (picked ?? fallback)!.via} size={16} /> : <Sparkles size={15} />}
+                  <span className="max-w-[200px] truncate">{(picked ?? fallback)?.name ?? t('canvas.panel.connect')}</span><ChevronDown size={14} className="shrink-0 text-[var(--cv-ink-2)]" />
                 </button>
               )}>
               <ModelPicker choices={every} picked={picked} fallback={fallback}
@@ -530,11 +623,12 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
           ) : null}
           {spec ? (
             <>
-              <span className="mx-0.5 h-4 w-px bg-[var(--cv-float-line)]" />
               <Popover open={open === 'spec'} onOpenChange={(v) => setOpen(v ? 'spec' : null)} placement="top" align="center"
                 trigger={(
                   <button type="button" className={PICK} onClick={() => setOpen(open === 'spec' ? null : 'spec')}>
-                    {ratios ? <RatioIcon ratio={ratio} /> : null}<span className="truncate">{spec}</span><ChevronDown size={13} />
+                    {ratios ? <RatioIcon ratio={ratio} /> : null}
+                    <span className="truncate">{spec.split(' · ').map((part, i) => <React.Fragment key={i}>{i ? <span className="px-1 text-[var(--cv-ink-3)]">·</span> : null}{part}</React.Fragment>)}</span>
+                    <ChevronDown size={14} className="shrink-0 text-[var(--cv-ink-2)]" />
                   </button>
                 )}>
                 {/* as the node canvases people know lay it out: each part titled, its choices in a row */}
@@ -605,36 +699,6 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                 </div>
               </Popover>
             </>
-          ) : null}
-          {data.make === 'image' ? (
-            <Popover open={open === 'presets'} onOpenChange={(v) => setOpen(v ? 'presets' : null)} placement="top" align="center"
-              trigger={(
-                <Tooltip label={t('canvas.presets.title')}>
-                  <button type="button" aria-label={t('canvas.presets.title')} onClick={() => setOpen(open === 'presets' ? null : 'presets')}
-                    className={`flex h-8 w-8 items-center justify-center rounded-[8px] transition hover:bg-[var(--cv-float-hover)] ${preset ? 'text-[var(--cv-edge-lit)]' : 'text-[var(--cv-ink)]'}`}><LayoutDashboard size={16} /></button>
-                </Tooltip>
-              )}>
-              <div className={`grid w-[520px] grid-cols-2 gap-x-3 p-3 ${CARD}`}>
-                {[PRESET_GROUPS.slice(0, 2), PRESET_GROUPS.slice(2)].map((column, ci) => (
-                  <div key={ci}>
-                    {column.map((group) => (
-                      <div key={group} className="mb-2">
-                        <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-2)]">{t(`canvas.presets.groups.${group}`)}</div>
-                        {PRESETS.filter((p) => p.group === group).map((p) => {
-                          const off = p.fromPicture && !hasPicture;
-                          return (
-                            <button key={p.id} type="button" disabled={off} onClick={() => usePreset(p)} title={off ? t('canvas.presets.needsPicture') : undefined}
-                              className={`flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-left text-[13px] transition ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]'} ${preset?.id === p.id ? 'bg-[var(--cv-float-hover)]' : ''}`}>
-                                <LayoutDashboard size={14} className="shrink-0 opacity-70" />{t(`canvas.presets.names.${p.id}`)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </Popover>
           ) : null}
           <span className="flex-1" />
           {unused ? <span className="mr-1 truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.make.unused').replace('{n}', String(unused))}</span> : null}
