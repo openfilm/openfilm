@@ -343,6 +343,7 @@ export async function launch({ headed = false, channel = headed ? 'chromium' : n
   const browser = extra.some((a) => a.startsWith('--use-angle')) ? await open([])
     : process.platform === 'darwin' ? await open(['--use-angle=metal'])
     : process.platform === 'win32' ? await onWindows(open)
+    : process.platform === 'linux' ? await onLinux(open)
     : await open([]);
   LIVE.add(browser);
   browser.on('disconnected', () => LIVE.delete(browser));
@@ -435,8 +436,9 @@ const deviceOf = (/** @type {string} */ renderer) => {
  * when it shows them. When none does, the default.
  * @param {(browser: import('playwright-core').Browser) => Promise<string>} [renderer]
  * @param {(browser: import('playwright-core').Browser) => Promise<boolean>} [presents]
+ * @param {string[]} [fallback] what a browser is opened with when no Vulkan GPU is found (Chromium's default, none)
  */
-export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
+export function vulkanFirst(renderer = rendererOf, presents = presentsVideo, fallback = []) {
   /** @type {Promise<string[]> | null} what every browser after the first is opened with */
   let chosen = null;
   /* false once a film's videos were never seen in Vulkan's browsers (videoNotShown): its check is not trusted again */
@@ -454,8 +456,8 @@ export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
     const gpu = browser ? await read(browser) : 'none';
     if (!browser || gpu === 'none' || SOFTWARE_GL.test(gpu)) {
       await browser?.close().catch(() => {});
-      choose([]);
-      return open([]);
+      choose(fallback);
+      return open(fallback);
     }
     if (vulkanVideo && await shows(browser)) {
       choose(vulkan);
@@ -488,8 +490,8 @@ export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
       return direct;
     }
     await direct?.close().catch(() => {});
-    choose([]);
-    return open([]);
+    choose(fallback);
+    return open(fallback);
   };
   /**
    * A film's video frames were never seen in browsers opened with Vulkan, though its check passed (footage it does
@@ -505,6 +507,16 @@ export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
   return pick;
 }
 const onWindows = vulkanFirst();
+
+/*
+ * Linux: Chromium's default GPU setup can fail at start (on an NVIDIA GPU with a Vulkan driver, headless: the GPU
+ * process logs "Creation of StagingBuffer's SharedImage failed"). Every WebGL context made in the first second is then
+ * lost, and comes back a second later on SwiftShader, or never when the page does not handle the event: `look` shows
+ * white canvases and a render has white frames. So Vulkan is tried first, as on Windows, and SwiftShader is asked for
+ * by name when there is no GPU (a sandbox with no device nodes, a machine with no Vulkan driver). Videos are not
+ * checked as on Windows: nothing there has shown they are not presented.
+ */
+const onLinux = vulkanFirst(rendererOf, async () => true, ['--use-angle=swiftshader']);
 
 /** A film's video frames were never seen (FilmPage.seek): on Windows, browsers opened from now on show video another way. */
 export const videoNotShown = () => (process.platform === 'win32' ? onWindows.videoNotShown() : Promise.resolve(false));
