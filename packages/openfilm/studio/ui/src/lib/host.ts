@@ -456,10 +456,16 @@ export type StudioCommand =
  */
 export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string } | { kind: 'discover' } | { kind: 'examples' };
 
-export const studioHost: StudioHost | null = (globalThis as { openfilmHost?: StudioHost }).openfilmHost ?? null;
+const hostOfPage = (): StudioHost | null => (globalThis as { openfilmHost?: StudioHost }).openfilmHost ?? null;
+/**
+ * The app Studio is embedded in, read as Studio's modules start and again as its page starts (applyStudioHost): a page
+ * that builds Studio in sets it in a module of its own, which a build split into several files may run after this one.
+ */
+export let studioHost: StudioHost | null = hostOfPage();
 
 /** Make room for the host window's controls, and let Studio's top bars drag the window (see `titlebar`). */
 export function applyStudioHost(root: HTMLElement = document.documentElement) {
+  studioHost = hostOfPage();
   const titlebar = studioHost?.titlebar;
   if (!titlebar) return;
   const set = (inset: unknown) => {

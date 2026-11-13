@@ -24,10 +24,10 @@ import { afterPaintIdle } from './lib/after-paint-idle';
 import { loadCanvas } from './components/canvas/load';
 
 const projectIn = (path: string) => /^\/projects\/([\w-]+)/.exec(path)?.[1] ?? null;
-/** the app's tabs, when Studio is a tab of an app's window */
-const tabs = studioHost?.tabs ?? null;
 
 export function App() {
+  /* the app's tabs, when Studio is a tab of an app's window */
+  const tabs = studioHost?.tabs ?? null;
   /* the address is told by `popstate`, the browser's own and lib/navigate's `go` */
   const [path, setPath] = useState(location.pathname);
 
