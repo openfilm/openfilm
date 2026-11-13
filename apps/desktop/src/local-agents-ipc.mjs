@@ -500,17 +500,23 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     /**
      * One question answered by `agent`'s own model, with no chat: Studio's own work that needs a model (translating
      * subtitles). A session of its own in an empty folder, where the agent may do nothing but answer (`answerOnly`: every
-     * permission refused; every question skipped); its words, whole. `signal` stops it.
+     * permission refused; every question skipped); its words, whole, and each piece as it comes to `onText`. `signal`
+     * stops it.
      * @param {string} agent @param {string} text @param {AbortSignal} [signal]
      * @param {Record<string, string | number | boolean>} [options]
-     * @param {import('./studio.mjs').WritingImage[]} [images] @returns {Promise<string>}
+     * @param {import('./studio.mjs').WritingImage[]} [images] @param {(piece: string) => void} [onText]
+     * @returns {Promise<string>}
      */
-    ask: async (agent, text, signal, options = {}, images = []) => {
+    ask: async (agent, text, signal, options = {}, images = [], onText) => {
       if (!isChatAgent(agent)) throw new Error(`Unknown agent: ${String(agent)}`);
       let said = '';
       const session = new AgentSession({
         agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent), answerOnly: true,
-        onUpdate: (update) => { if (update?.sessionUpdate === 'agent_message_chunk' && update.content?.type === 'text') said += update.content.text ?? ''; },
+        onUpdate: (update) => {
+          if (update?.sessionUpdate !== 'agent_message_chunk' || update.content?.type !== 'text' || !update.content.text) return;
+          said += update.content.text;
+          onText?.(update.content.text);
+        },
         onQuestion: async () => null,
       });
       const stop = () => { void session.cancel().catch(() => {}); session.close(); };

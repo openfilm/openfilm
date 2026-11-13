@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  AlignLeft, ArrowUp, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X,
+  AlignLeft, ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -645,6 +645,17 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   );
 }
 
+/** What a note is written from, in its panel: a rounded square of it, its name on hover, a × to take it out. */
+function Tile({ label, children, onRemove, removeLabel, disabled }: { label: string; children: React.ReactNode; onRemove: () => void; removeLabel: string; disabled?: boolean }) {
+  return (
+    <div title={label} className="group/tile relative h-12 w-12 shrink-0 overflow-hidden rounded-[10px] ring-1 ring-inset ring-[var(--cv-float-line)]">
+      {children}
+      <button type="button" aria-label={removeLabel} disabled={disabled} onClick={onRemove}
+        className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-black/70 text-white group-hover/tile:flex disabled:hidden"><X size={10} /></button>
+    </div>
+  );
+}
+
 /**
  * A text node's panel (in the app with a chat): what to write, written into it by the person's own agent from that and
  * the words wired in. Its words are theirs to change after.
@@ -663,9 +674,11 @@ export function NotePanel({ id }: { id: string }) {
   const write = board.write;
   const upload = board.uploadWritingFiles;
   const Picker = studioHost?.canvasWriting?.Picker;
+  const thumb = useThumb();
   if (!write) return null;
   const shown = board.single === id && !board.readOnly;
-  const wired = shown ? board.inputs(id).filter((i) => i.text != null).length : 0;
+  const texts = shown ? board.inputs(id).filter((i) => i.text != null) : [];
+  const wired = texts.length;
   const canSend = !busy && !uploading && Boolean(ask.trim() || wired || attachments.length);
   const attach = async (files: File[]) => {
     if (!upload || !files.length || uploading || busy) return;
@@ -699,8 +712,28 @@ export function NotePanel({ id }: { id: string }) {
   };
   return (
     <Composer id={id} shown={shown} expanded={expanded} setExpanded={setExpanded}>
-        <div className="flex min-h-12 items-center gap-2 pr-9">
-          {/* references to write from: a square to add them, as the picture nodes' slots are */}
+        {/* what it is written from, each a tile left of the +: the words wired in, then the files added here */}
+        <div className="flex min-h-12 flex-wrap items-center gap-2 pr-9">
+          {texts.map((input) => (
+            <Tile key={input.edge} label={input.text || t('canvas.kinds.note')} onRemove={() => board.unwire(input.edge)} removeLabel={t('canvas.removeWire')}>
+              <span className="flex h-full w-full items-center justify-center bg-[linear-gradient(140deg,#8ea4c8,#5b6f94)] text-white"><AlignLeft size={20} strokeWidth={2} /></span>
+            </Tile>
+          ))}
+          {attachments.map((path) => {
+            const name = path.split('/').pop() ?? path;
+            const src = thumb(board.fileOf(path));
+            const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toUpperCase().slice(0, 4) : '';
+            return (
+              <Tile key={path} label={name} disabled={busy || uploading} removeLabel={`${t('canvas.remove')} ${name}`}
+                onRemove={() => setAttachments((current) => current.filter((item) => item !== path))}>
+                {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : (
+                  <span className="flex h-full w-full flex-col items-center justify-center gap-0.5 bg-[var(--cv-chip)] text-[var(--cv-ink-2)]">
+                    <FileText size={17} strokeWidth={1.75} />{ext ? <span className="text-[9.5px] font-medium leading-none tracking-wide">{ext}</span> : null}
+                  </span>
+                )}
+              </Tile>
+            );
+          })}
           {upload ? <label className={`cv-tool relative flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-chip)] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] focus-within:outline ${busy || uploading ? 'opacity-60' : 'cursor-pointer'}`} title={t('canvas.write.add')}>
             <input type="file" multiple accept={WRITING_ATTACHMENT_ACCEPT} disabled={busy || uploading} aria-label={t('canvas.write.attach')}
               className="absolute inset-0 size-full cursor-pointer opacity-0 disabled:cursor-default" onChange={(event) => {
@@ -708,21 +741,9 @@ export function NotePanel({ id }: { id: string }) {
                 event.currentTarget.value = '';
                 void attach(files);
               }} />
-            <Plus size={20} strokeWidth={1.75} />
+            {uploading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Plus size={20} strokeWidth={1.75} />}
           </label> : null}
-          {uploading ? <span role="status" className="truncate text-xs text-[var(--cv-label)]">{t('canvas.importUploading')}</span> : null}
         </div>
-        {attachments.length ? <div className="mt-2.5 flex max-h-24 flex-wrap gap-1 overflow-y-auto">
-          {attachments.map((path) => {
-            const name = path.split('/').pop() ?? path;
-            return <span key={path} className="inline-flex max-w-full items-center gap-1 rounded-md bg-[var(--cv-chip)] px-2 py-1 text-xs text-[var(--cv-ink-2)]">
-              <span className="truncate" title={name}>{name}</span>
-              <button type="button" disabled={busy || uploading} aria-label={`${t('canvas.remove')} ${name}`} onClick={() => setAttachments((current) => current.filter((item) => item !== path))}>
-                <X size={12} />
-              </button>
-            </span>;
-          })}
-        </div> : null}
         <textarea
           value={ask}
           rows={expanded ? 14 : 3}
@@ -741,7 +762,6 @@ export function NotePanel({ id }: { id: string }) {
             <Sparkles size={14} className="shrink-0" /><span className="truncate">{t('canvas.write.by')}</span>
           </span>}
           <span className="flex-1" />
-          {wired ? <span className="mr-1 truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.write.wired').replace('{n}', String(wired))}</span> : null}
           <Tooltip label={`${t('canvas.write.run')} · ${MOD}↵`}>
             <button type="button" aria-label={t('canvas.write.run')} disabled={!canSend} onClick={send}
               className={SEND}>

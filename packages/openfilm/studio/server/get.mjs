@@ -609,7 +609,7 @@ export async function catalog(only, { web = false } = {}) {
  * its words, whole. Throws `code: 'no-agent'` when no agent is ready.
  * @typedef {{ agent: string, options: Record<string, string | number | boolean> }} WritingModel
  * @typedef {{ mimeType: string, data: string }} WritingImage
- * @typedef {(text: string, signal?: AbortSignal, model?: WritingModel, images?: WritingImage[]) => Promise<string>} AskAgent
+ * @typedef {(text: string, signal?: AbortSignal, model?: WritingModel, images?: WritingImage[], onText?: (piece: string) => void) => Promise<string>} AskAgent
  */
 
 /** The JSON in an agent's answer: all of it, or from its first `{` to its last `}` when the agent wrapped it in words. */

@@ -316,14 +316,15 @@ async function writingReferences(root, paths) {
 
 /**
  * A text node's words written by the person's own agent (an app with a chat, `askAgent`): POST `canvas-write`
- * { prompt, inputs: [the words wired in], model?, attachments?: [project paths] } → { text }.
+ * { prompt, inputs: [the words wired in], model?, attachments?: [project paths], stream? } → { text }; with `stream`, a
+ * line of JSON for each piece as it comes, then the whole.
  * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string} rest
  * @param {import('./get.mjs').AskAgent | undefined} askAgent
  * @param {string} [root]
  */
 export async function canvasWriteRoute(req, res, rest, askAgent, root = '') {
   if (rest !== 'canvas-write' || req.method !== 'POST') return false;
-  const body = /** @type {{ prompt?: unknown, inputs?: unknown, model?: unknown, attachments?: unknown }} */ (await readJson(req));
+  const body = /** @type {{ prompt?: unknown, inputs?: unknown, model?: unknown, attachments?: unknown, stream?: unknown }} */ (await readJson(req));
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim().slice(0, TEXT_MAX) : '';
   const inputs = (Array.isArray(body.inputs) ? body.inputs : []).filter((i) => typeof i === 'string' && i.trim()).slice(0, 20).map((i) => /** @type {string} */ (i).slice(0, TEXT_MAX));
   const paths = body.attachments ?? [];
@@ -341,8 +342,26 @@ export async function canvasWriteRoute(req, res, rest, askAgent, root = '') {
     ...(inputs.length ? ['', 'What is wired into it:', ...inputs.map((i, n) => `[${n + 1}] ${i}`)] : []),
     ...(references.length ? ['', 'Reference attachments (image numbers are in the order supplied):', ...references] : []),
     '', 'What they ask:', prompt || 'Write it from the provided references.'].join('\n');
+  const writingModel = /** @type {import('./get.mjs').WritingModel | undefined} */ (model);
+  if (body.stream === true) {
+    /* as it comes: a line of JSON for each piece ({ delta }), then the whole ({ text }) or why not ({ error, code? });
+       stopped when the person goes (the request closed) */
+    const stop = new AbortController();
+    res.on('close', () => { if (!res.writableFinished) stop.abort(); });
+    res.writeHead(200, { 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-store' });
+    const line = (/** @type {Record<string, unknown>} */ value) => { if (!res.writableEnded) res.write(`${JSON.stringify(value)}\n`); };
+    try {
+      const text = await askAgent(ask, stop.signal, writingModel, images, (delta) => line({ delta }));
+      line({ text: text.trim() });
+    } catch (e) {
+      const code = /** @type {{ code?: unknown }} */ (e)?.code;
+      if (!stop.signal.aborted) line({ error: e instanceof Error ? e.message : String(e), ...(code ? { code: String(code) } : {}) });
+    }
+    res.end();
+    return true;
+  }
   try {
-    json(res, 200, { text: (await askAgent(ask, undefined, /** @type {import('./get.mjs').WritingModel | undefined} */ (model), images)).trim() });
+    json(res, 200, { text: (await askAgent(ask, undefined, writingModel, images)).trim() });
   } catch (e) {
     if (/** @type {{ code?: unknown }} */ (e)?.code === 'no-agent') throw new HttpError(409, e instanceof Error ? e.message : String(e), { code: 'no-agent' });
     throw e;

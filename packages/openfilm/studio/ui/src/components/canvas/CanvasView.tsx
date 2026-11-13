@@ -754,10 +754,21 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     try {
       const model = studioHost?.canvasWriting?.selection();
       if (model === null) return t('canvas.write.noAgent');
-      const { text } = await api.canvasWrite(projectId, ask, mine ? [...inputs, `(the node's words now, to rework) ${mine}`] : inputs, model, attachments);
-      if (!text) return null;
+      /* the words onto the card as the agent writes them, in place of what it said before; one undo takes them all back */
+      const put = (text: string) => setNodes((all) => all.map((n) => (n.id === id && n.type === 'note' ? { ...n, data: { ...n.data, text } } : n)));
+      let said = '';
       willChange();
-      setNodes((all) => all.map((n) => (n.id === id && n.type === 'note' ? { ...n, data: { ...n.data, text } } : n)));
+      try {
+        const { text } = await api.canvasWriteStream(projectId, ask, mine ? [...inputs, `(the node's words now, to rework) ${mine}`] : inputs, model, attachments, (delta) => {
+          said += delta;
+          put(said.replace(/^\s+/, ''));
+        });
+        put(text || mine);
+      } catch (error) {
+        /* not written after all: its words as they were */
+        if (said) put(own?.type === 'note' ? own.data.text : '');
+        throw error;
+      }
       return null;
     } catch (error) {
       if (error instanceof ApiError && error.body.code === 'no-agent') return t('canvas.write.noAgent');

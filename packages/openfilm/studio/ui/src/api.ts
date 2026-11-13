@@ -238,6 +238,33 @@ export const api = {
   /** a text node's words written by the person's own agent (studio/server/canvas.mjs canvasWriteRoute); 409 without one */
   canvasWrite: (id: string, prompt: string, inputs: string[], model?: HostWritingModel, attachments: string[] = []) =>
     call<{ text: string }>(`${p(id)}/canvas-write`, { method: 'POST', json: { prompt, inputs, model, attachments } }),
+  /** the same, each piece of the words to `onDelta` as the agent writes it; the whole at the end */
+  canvasWriteStream: async (id: string, prompt: string, inputs: string[], model: HostWritingModel | undefined, attachments: string[], onDelta: (delta: string) => void): Promise<{ text: string }> => {
+    const res = await fetch(`/api/${p(id)}/canvas-write`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, inputs, model, attachments, stream: true }),
+    });
+    if (res.status === 401) markLocked();
+    if (!res.ok || !res.body) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(String(body.error ?? `Studio answered ${res.status}`), res.status, body);
+    }
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let rest = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      rest += value ?? '';
+      const lines = done ? [rest] : rest.split('\n');
+      rest = done ? '' : lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const said = JSON.parse(line) as { delta?: string; text?: string; error?: string; code?: string };
+        if (typeof said.delta === 'string') onDelta(said.delta);
+        else if (typeof said.text === 'string') return { text: said.text };
+        else if (said.error) throw new ApiError(said.error, 200, { error: said.error, ...(said.code ? { code: said.code } : {}) });
+      }
+      if (done) throw new ApiError('The agent stopped without an answer.', 200, {});
+    }
+  },
   /** the person's canvas templates (studio/server/canvas-templates.mjs): listed, kept from a project's board, laid down on one, removed */
   canvasTemplates: () => call<{ templates: Array<{ id: string; name: string; nodes: number; created: number }> }>('canvas-templates').then((r) => r.templates),
   saveCanvasTemplate: (id: string, name: string, board: { nodes: unknown[]; edges: unknown[] }) =>

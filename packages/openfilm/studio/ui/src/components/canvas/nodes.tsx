@@ -358,15 +358,8 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
     return () => { editor.off('blur', blur); };
   }, [editor, editing]);
   const title = data.title ?? t('canvas.titles.note').replace('{n}', String(n));
-  /* written by the agent: the card at it until the words come, which then fade in */
+  /* written by the agent: its card at it while the words come in */
   const busy = Boolean(board.writing?.(id));
-  const [arrived, setArrived] = React.useState(false);
-  const wasBusy = React.useRef(busy);
-  React.useEffect(() => {
-    if (wasBusy.current && !busy) { setArrived(true); const done = setTimeout(() => setArrived(false), 400); wasBusy.current = busy; return () => clearTimeout(done); }
-    wasBusy.current = busy;
-    return undefined;
-  }, [busy]);
   /* named as the person calls it; an empty name goes back to its number */
   const rename = board.readOnly ? undefined : (name: string) => { board.willChange(); board.setData(id, { title: name || undefined }); };
   const open = () => { board.edit(null); setSheet(true); };
@@ -393,7 +386,7 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
             <span className="cv-skeleton w-[72%]" /><span className="cv-skeleton w-[90%]" /><span className="cv-skeleton w-[56%]" />
           </div>
         ) : null}
-        <DocView editor={editor} className={`h-full w-full px-5 py-4 ${busy && !data.text.trim() ? 'hidden' : ''} ${arrived ? 'cv-fade' : ''} ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : selected ? 'nowheel overflow-y-auto' : 'overflow-hidden'}`} />
+        <DocView editor={editor} className={`h-full w-full px-5 py-4 ${busy && !data.text.trim() ? 'hidden' : ''} ${busy ? 'cv-streaming' : ''} ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : selected ? 'nowheel overflow-y-auto' : 'overflow-hidden'}`} />
       </Frame>
       {sheet ? <DocSheet name={title} text={data.text} onChange={write} onRename={rename} onClose={() => setSheet(false)} /> : null}
     </div>

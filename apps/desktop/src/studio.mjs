@@ -120,10 +120,11 @@ function fork({ port, env, onOpen, onBrowser, onAsk, log }) {
 
 /**
  * A question Studio asks the person's agent (`{ type: 'ask', id, text }`, or `{ type: 'ask-cancel', id }` to stop
- * it), and how its answer goes back: `{ type: 'answer', id, text }` or `{ type: 'answer', id, error, code? }`.
+ * it), and how its answer goes back: `{ type: 'answer', id, text }` or `{ type: 'answer', id, error, code? }`; asked
+ * with `stream`, each piece first as it comes, `{ type: 'answer-part', id, delta }`.
  * @typedef {{ agent: string, options: Record<string, string | number | boolean> }} WritingModel
  * @typedef {{ mimeType: string, data: string }} WritingImage
- * @typedef {(message: { type: 'ask' | 'ask-cancel', id: string, text?: string, model?: WritingModel, images?: WritingImage[] }, reply: (answer: Record<string, unknown>) => void) => void} AskHandler
+ * @typedef {(message: { type: 'ask' | 'ask-cancel', id: string, text?: string, model?: WritingModel, images?: WritingImage[], stream?: boolean }, reply: (answer: Record<string, unknown>) => void) => void} AskHandler
  */
 
 /**
