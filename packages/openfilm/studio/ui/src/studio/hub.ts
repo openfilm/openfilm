@@ -36,6 +36,17 @@ export interface Workbench {
   add?: (paths: readonly string[], options: { show: boolean }) => void;
   /** A command meant for it alone. */
   command?: (command: WorkbenchCommand) => void;
+  /**
+   * The project's version history is opened, or is about to save a version or put the project's files back: stop
+   * what plays, and write what is still waiting to be written. The history waits for the promise before it saves or
+   * puts files back.
+   */
+  settle?: () => Promise<unknown> | void;
+  /**
+   * The project's files were put back as a version had them, here or in another window: forget what was kept of them
+   * before (undo steps), and read them again.
+   */
+  restored?: () => void;
 }
 
 type Ask = { add: readonly string[]; show: boolean } | { command: WorkbenchCommand };
@@ -76,6 +87,14 @@ export const commandTo = (name: string, command: WorkbenchCommand): void => ask(
 
 /** The shell's: another project is shown, and nothing asked of a workbench for the last one is given to it. */
 export const forgetAsked = (): void => waiting.clear();
+
+/** The shell's: every workbench there settled (its `settle`) before the version history saves or puts files back. */
+export const settleWorkbenches = async (): Promise<void> => {
+  await Promise.all([...provided.values()].map((workbench) => workbench.settle?.()));
+};
+
+/** The shell's: every workbench there told that the project's files were put back as a version had them. */
+export const tellRestored = (): void => { for (const workbench of [...provided.values()]) workbench.restored?.(); };
 
 /* ── the top bar's buttons of the workbenches ── */
 
