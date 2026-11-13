@@ -14,8 +14,7 @@
  * brings an element (its package.json's `browser`: a module whose default export is a custom element) is not in a
  * frame at all: the module is loaded into this page and the element put where the workbench is, so it does all a
  * workbench of OpenFilm's own does (menus over the library, drags from it, the editor's API), again once the person
- * lets it run. The shell shows the one picked without knowing which there are,
- * and keeps it, hidden, while another workbench is shown.
+ * lets it run. The shell shows the one picked without knowing which there are.
  */
 import React from 'react';
 import { useT } from '@/i18n';
@@ -28,12 +27,12 @@ export interface SurfaceProps {
 }
 
 /**
- * A plugin's surface by its workbench's name: the page of one someone made, what its program serves, or its element
- * (`hidden`: kept while another workbench is shown); one this build has nothing to show for says so.
+ * A plugin's surface by its workbench's name: the page of one someone made, what its program serves, or its element;
+ * one this build has nothing to show for says so.
  */
-export function PluginSurface({ id, page, files, title, program, runs, inApp, element, hidden = false, ...props }: SurfaceProps & { id: string; page?: string; files?: string; title?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string; hidden?: boolean }) {
+export function PluginSurface({ id, page, files, title, program, runs, inApp, element, ...props }: SurfaceProps & { id: string; page?: string; files?: string; title?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string }) {
   const t = useT();
-  if (inApp) return element ? <ElementSurface key={element} url={element} files={files} projectId={props.projectId} folder={props.folder} hidden={hidden} /> : <p className={NOTE}>{t('assetDrawer.surfaceNotAllowed')}</p>;
+  if (inApp) return element ? <ElementSurface key={element} url={element} files={files} projectId={props.projectId} folder={props.folder} /> : <p className={NOTE}>{t('assetDrawer.surfaceNotAllowed')}</p>;
   if (program) return <ProgramSurface key={`${id}:${props.projectId}:${runs ? 1 : 0}`} uid={id} projectId={props.projectId} title={title ?? id} />;
   if (page) return <iframe key={page} src={`${page}${files ? `?project=${encodeURIComponent(files)}` : ''}`} title={title ?? id} allow="autoplay" className="min-h-0 min-w-0 flex-1 border-0 bg-[var(--bg-panel)]" />;
   return <p className="m-auto max-w-[360px] px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.surfaceMissing')}</p>;
@@ -62,7 +61,10 @@ function ProgramSurface({ uid, projectId, title }: { uid: string; projectId: str
 /* a module's address → the name its element is defined under: a module is loaded, and its class defined, once. Names
    are counted as classes are defined, not as modules are asked for: several may load at once */
 const elementTags = new Map<string, Promise<string>>();
+const tagsDefined = new Map<string, string>();
 let defined = 0;
+/** The name a module's element is defined under, if its module was loaded already (none: not yet). */
+export const elementTagNow = (url: string): string | undefined => tagsDefined.get(url);
 export function elementTag(url: string): Promise<string> {
   let tag = elementTags.get(url);
   if (!tag) {
@@ -78,7 +80,7 @@ export function elementTag(url: string): Promise<string> {
       return name;
     });
     elementTags.set(url, tag);
-    tag.catch(() => { elementTags.delete(url); });
+    tag.then((name) => { tagsDefined.set(url, name); }, () => { elementTags.delete(url); });
   }
   return tag;
 }
@@ -86,16 +88,12 @@ export function elementTag(url: string): Promise<string> {
 /**
  * The surface of a plugin that brings an element: its module loaded into this page, and one element of it put here.
  * It is told the project by attributes: `project-id` (for the editor's API), `project` (where the project's files are
- * read and written, as a plugin's page is told) and `folder` (the project's folder on this computer). While another
- * workbench is shown (`hidden`) the element has the `inert` attribute, which it can observe.
+ * read and written, as a plugin's page is told) and `folder` (the project's folder on this computer).
  */
-function ElementSurface({ url, files, projectId, folder, hidden }: { url: string; files?: string | undefined; projectId: string; folder: string; hidden: boolean }) {
+function ElementSurface({ url, files, projectId, folder }: { url: string; files?: string | undefined; projectId: string; folder: string }) {
   const t = useT();
   const host = React.useRef<HTMLDivElement>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const made = React.useRef<HTMLElement | null>(null);
-  const hiddenNow = React.useRef(hidden);
-  hiddenNow.current = hidden;
   React.useEffect(() => {
     let live = true, element: HTMLElement | null = null;
     elementTag(url).then((tag) => {
@@ -104,14 +102,11 @@ function ElementSurface({ url, files, projectId, folder, hidden }: { url: string
       element.setAttribute('project-id', projectId);
       if (files) element.setAttribute('project', files);
       if (folder) element.setAttribute('folder', folder);
-      if (hiddenNow.current) element.setAttribute('inert', '');
       Object.assign(element.style, { display: 'block', flex: '1 1 0', minWidth: '0', minHeight: '0' });
       host.current.append(element);
-      made.current = element;
     }, (e) => { if (live) setError(e instanceof Error ? e.message : String(e)); });
-    return () => { live = false; element?.remove(); made.current = null; };
+    return () => { live = false; element?.remove(); };
   }, [url, files, projectId, folder]);
-  React.useEffect(() => { made.current?.toggleAttribute('inert', hidden); }, [hidden]);
   if (error) return <p className={NOTE}>{`${t('assetDrawer.surfaceFailed')}\n\n${error}`}</p>;
   return <div ref={host} className="flex min-h-0 min-w-0 flex-1" />;
 }
