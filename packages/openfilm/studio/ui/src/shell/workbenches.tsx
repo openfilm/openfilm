@@ -268,7 +268,7 @@ function PluginElement({ url, projectId, plugin, ready, loading, failed }: {
 }
 
 /**
- * The element laid out among the page's panels (the edit's: lib/workspaces arrangementOf), where the panes are: put
+ * The elements laid out among the page's panels (the edit's, and a plugin's with blocks of its own: lib/blocks), where the panes are: put
  * in the page as soon as a plugin laid out there is on and Studio has said where its module is, and taken out when
  * none is on. One that cannot be loaded, or that this build has nothing of, says so in the panes' place.
  */

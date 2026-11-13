@@ -10,7 +10,7 @@
  *   GET  /api/skills?project=<id>   → { skills } (the project's, the person's own, the official ones)
  *   POST /api/projects/:id/locate { path } → { project }
  */
-import { refreshPlugins } from './plugins.ts';
+import { refreshPlugins, type PluginTab } from './plugins.ts';
 
 export type BrowseFolder = { name: string; path: string; film: boolean };
 export type BrowseListing = {
@@ -72,6 +72,8 @@ export type SkillEntry = {
   program?: true; runs?: true;
   /** it brings an element put in the editor's own page (`inApp`); `element`: where its module is, once the person lets it run */
   inApp?: true; element?: string;
+  /** its surface is a tab of the library instead of a workbench: its name and mark, its own where left out */
+  tab?: PluginTab;
   /** where its source can be read (a repository's address) */
   repository?: string;
   /** what it needs beyond OpenFilm, by language; the computers it runs on (none: every one), and whether this one is not among them */

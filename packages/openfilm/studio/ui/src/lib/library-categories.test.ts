@@ -18,3 +18,16 @@ test('a saved order naming a category twice still shows it once', () => {
   assert.equal(new Set(ids).size, ids.length);
   assert.equal(ids.filter((id) => id === 'sticker').length, 1);
 });
+
+test('an arrangement kept when the skills and the plugins were two tabs names the one Plugins tab now', () => {
+  const all = ['media', 'plugin', 'template', 'text'] as const;
+  /* in the skills' place, as the first of the two named */
+  assert.deepEqual(arrangedCategories(all, { order: ['text', 'skill', 'template', 'plugin'], off: [] }).map((c) => c.id), ['media', 'text', 'plugin', 'template']);
+  /* off only when both were */
+  assert.equal(arrangedCategories(all, { order: ['skill', 'plugin', 'text'], off: ['plugin'] }).find((c) => c.id === 'plugin')?.on, true);
+  assert.equal(arrangedCategories(all, { order: ['skill', 'plugin', 'text'], off: ['skill'] }).find((c) => c.id === 'plugin')?.on, true);
+  assert.equal(arrangedCategories(all, { order: ['skill', 'plugin', 'text'], off: ['skill', 'plugin'] }).find((c) => c.id === 'plugin')?.on, false);
+  assert.equal(arrangedCategories(all, { order: ['skill', 'text'], off: ['skill'] }).find((c) => c.id === 'plugin')?.on, false);
+  /* a list that still has the skills keeps them as they are */
+  assert.deepEqual(arrangedCategories(['media', 'skill', 'plugin'], { order: ['plugin', 'skill'], off: ['skill'] }), [{ id: 'media', on: true }, { id: 'plugin', on: true }, { id: 'skill', on: false }]);
+});
