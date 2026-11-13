@@ -11,14 +11,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePlugins, type Plugin } from './plugins.ts';
 import { seenSkills, watchSkills, type SkillEntry } from './project-sources.ts';
 
-/** A skill that is a plugin, as one: with a surface, its workbench is named by its uid. */
-export const pluginOfSkill = (skill: SkillEntry): Plugin => ({
-  id: skill.uid, title: skill.shown?.title ?? { en: skill.name }, summary: skill.shown?.summary ?? { en: skill.description },
-  ...(skill.icon ? { icon: skill.icon } : {}), skills: [skill.name], on: !skill.off, skill: skill.uid,
-  ...(skill.surface ? { workbench: skill.uid, page: skill.surface } : {}), ...(skill.files ? { files: skill.files } : {}),
-  ...(skill.program ? { workbench: skill.uid, program: true, runs: Boolean(skill.runs) } : {}),
-  ...(skill.inApp ? { workbench: skill.uid, inApp: true, runs: Boolean(skill.runs), ...(skill.element ? { element: skill.element } : {}) } : {}),
-});
+/**
+ * A skill that is a plugin, as one: with a surface, its workbench is named by its uid; one whose openfilm.json asks for
+ * a tab of the library shows its surface there instead, and has no workbench.
+ */
+export const pluginOfSkill = (skill: SkillEntry): Plugin => {
+  const surface = skill.tab ? {} : { workbench: skill.uid };
+  return {
+    id: skill.uid, title: skill.shown?.title ?? { en: skill.name }, summary: skill.shown?.summary ?? { en: skill.description },
+    ...(skill.icon ? { icon: skill.icon } : {}), skills: [skill.name], on: !skill.off, skill: skill.uid,
+    ...(skill.commands?.length ? { commands: skill.commands } : {}), ...(skill.tab ? { tab: skill.tab } : {}),
+    ...(skill.surface ? { ...surface, page: skill.surface } : {}), ...(skill.files ? { files: skill.files } : {}),
+    ...(skill.program ? { ...surface, program: true, runs: Boolean(skill.runs) } : {}),
+    ...(skill.inApp ? { ...surface, inApp: true, runs: Boolean(skill.runs), ...(skill.element ? { element: skill.element } : {}) } : {}),
+  };
+};
 
 /** Whether a skill is a plugin: it shows outside the conversation (openfilm/src/skills.mjs isPlugin). */
 export const isPlugin = (skill: SkillEntry): boolean => Boolean(skill.surface || skill.program || skill.inApp);

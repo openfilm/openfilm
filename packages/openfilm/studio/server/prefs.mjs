@@ -58,7 +58,8 @@ export function keysOf(raw) {
   return { scheme: k.scheme, custom };
 }
 
-const CATEGORY = /^[a-z]{1,20}$/;
+/* a category's name: the library's own (`text`), or the id of a plugin that brings a tab (`captions`, `owner/name`) */
+const CATEGORY = /^[a-z0-9][a-z0-9-]{0,63}(\/[a-z0-9][a-z0-9-]{0,63})?$/;
 /**
  * The library's categories as arranged, in shape: names only, each once, at most 40; null when there is no order.
  * @param {unknown} raw @returns {LibraryCategories | null}

@@ -69,4 +69,6 @@ test('the library\'s categories are kept in shape: names once each, nothing else
   assert.equal(prefsOf({}).libraryCategories, null);
   assert.deepEqual(libraryCategoriesOf({ order: ['text', 'text', 'Bad Name', 3, 'sticker'], off: 'skill' }), { order: ['text', 'sticker'], off: [] });
   assert.equal(libraryCategoriesOf(['text']), null);
+  /* a plugin's tab is named by the plugin's id: OpenFilm's own, or one someone made (owner/name) */
+  assert.deepEqual(libraryCategoriesOf({ order: ['captions', 'river/notes', 'a/b/c', '../x'], off: ['river/notes'] }), { order: ['captions', 'river/notes'], off: ['river/notes'] });
 });
