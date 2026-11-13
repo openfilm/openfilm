@@ -4,7 +4,7 @@
  * `openfilm/studio` instead.
  */
 import * as React from 'react';
-import { onCommand, project, provide, topBar, type Command, type ProjectState, type TopBarTool, type Workbench } from './index';
+import { blocks, onCommand, project, provide, topBar, type Command, type ProjectState, type TopBarTool, type Workbench } from './index';
 
 /** The project `id` as it is now, drawn again each time it changes; null until Studio has read it. */
 export function useProject(id: string): ProjectState | null {
@@ -40,4 +40,14 @@ export function useCommand(listener: (command: Command) => void): void {
 export function useTopBar(owner: string, tools: readonly TopBarTool[]): void {
   React.useEffect(() => { topBar.set(owner, { tools }); }, [owner, tools]);
   React.useEffect(() => () => topBar.set(owner, null), [owner]);
+}
+
+/**
+ * The block `id` of the workbench `owner`, drawn by this component while it is there: the place to draw it in (a
+ * portal's container: `createPortal(content, slot)`), and whether it is shown now.
+ */
+export function useBlock(owner: string, id: string): { slot: HTMLElement; shown: boolean } {
+  React.useLayoutEffect(() => blocks.draw(owner, id), [owner, id]);
+  const shown = React.useSyncExternalStore(blocks.subscribe, () => blocks.shown(owner, id));
+  return { slot: blocks.slot(owner, id), shown };
 }

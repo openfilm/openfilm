@@ -58,7 +58,7 @@ async function withWorkspace(run, {hasChat=true, clips=[]}={}) {
     await page.locator('[data-work-mode="edit"]').waitFor();
     try { await run(page); assert.deepEqual(errors, []); }
     catch (error) {
-      console.error('Workspace failure:', await page.evaluate(() => ({ text: document.body.innerText.slice(-2200), profile: localStorage.getItem('openfilm.workspace.current.v2') })), errors);
+      console.error('Workspace failure:', await page.evaluate(() => ({ text: document.body.innerText.slice(-2200), profile: localStorage.getItem('openfilm.workspace.current.v3') })), errors);
       if (output) await page.screenshot({ path: join(output, 'workspace-failure.png') });
       throw error;
     }
@@ -75,12 +75,12 @@ async function closeLayout(page) { if (await menu(page).count()) await page.keyb
 async function rect(locator) { const value = await locator.boundingBox(); assert.ok(value); return value; }
 async function profile(page, mode = 'edit', { hasTree, libraryDock, changedFrom } = {}) {
   await page.waitForFunction(({ mode, hasTree, libraryDock, changedFrom }) => {
-    const value = JSON.parse(localStorage.getItem('openfilm.workspace.current.v2') ?? 'null')?.[mode];
+    const value = JSON.parse(localStorage.getItem('openfilm.workspace.current.v3') ?? 'null')?.arrangements?.[mode];
     return value && (hasTree === undefined || Boolean(value.tree) === hasTree)
       && (libraryDock === undefined || value.libraryDock === libraryDock)
       && (changedFrom === undefined || JSON.stringify(value) !== changedFrom);
   }, { mode, hasTree, libraryDock, changedFrom });
-  return page.evaluate(mode => JSON.parse(localStorage.getItem('openfilm.workspace.current.v2'))[mode], mode);
+  return page.evaluate(mode => JSON.parse(localStorage.getItem('openfilm.workspace.current.v3')).arrangements[mode], mode);
 }
 async function shot(page, name) { if (output) await page.screenshot({ path: join(output,name) }); }
 
@@ -116,7 +116,7 @@ test('dragging the chat edge with its library open keeps the library and active 
       if (mode === 'canvas') await page.locator('[data-work-mode="edit"]').click();
       await page.evaluate(() => window.openfilmHost.panel.setAssetsOpen(true));
       await library(page).waitFor();
-      await page.waitForFunction(mode => JSON.parse(localStorage.getItem('openfilm.workspace.current.v2'))?.[mode]?.assets, mode);
+      await page.waitForFunction(mode => JSON.parse(localStorage.getItem('openfilm.workspace.current.v3'))?.arrangements?.[mode]?.assets, mode);
       const chat = page.locator('#test-chat');
       const start = await rect(chat);
       const seam = await rect(page.getByRole('separator', { name: 'Chat', exact: true }));
@@ -134,7 +134,7 @@ test('dragging the chat edge with its library open keeps the library and active 
       await aligned();
       await page.mouse.up();
       await aligned();
-      await page.waitForFunction(({ mode, width }) => JSON.parse(localStorage.getItem('openfilm.workspace.current.v2'))?.[mode]?.chatWidth === width, { mode, width: start.width + delta });
+      await page.waitForFunction(({ mode, width }) => JSON.parse(localStorage.getItem('openfilm.workspace.current.v3'))?.arrangements?.[mode]?.chatWidth === width, { mode, width: start.width + delta });
     }
     await page.locator('[data-work-mode="canvas"]').click();
     await page.waitForFunction(() => document.querySelector('#test-chat').getBoundingClientRect().width === 540

@@ -9,7 +9,8 @@
  * commands (`onCommand`); files put into another plugin's workbench (`addTo`) and what one's own takes (`provide`);
  * the person sent to a thing of the project by its link (`open`: `film.html#<clip>`, `film.html#t=12.5`, a file), shown
  * by the workbench that claims its file (`provide`'s `opens` and `show`);
- * buttons on the top bar (`topBar`); a plugin's own server routes and events (`pluginApi`, lib/plugin-api).
+ * buttons on the top bar (`topBar`); the blocks its workbench is laid out in, drawn where Studio places them (`blocks`);
+ * a plugin's own server routes and events (`pluginApi`, lib/plugin-api).
  *
  * It is read from the shell's frame (shell/frame) and kept apart from it: the frame and the wiring stay OpenFilm's own
  * (studio/internal), and may change with any version; this changes only with `version`.
@@ -22,6 +23,7 @@ import type { SettingsSection } from '@/components/settings/SettingsModal';
 import { pluginApi, type PluginApi } from '@/lib/plugin-api';
 import { frameStore } from '@/shell/frame';
 import { addTo, onCommand, open, provide, topBarTools, type TopBarTool, type Workbench, type WorkbenchCommand } from './hub';
+import { blockKey, drawing, mountOf, shownBlocks } from './blocks';
 
 /** The version of this interface: a change that breaks a plugin written for it comes with a new one. */
 export const version = 1;
@@ -182,6 +184,27 @@ export const chat: {
 /** Buttons on the top bar, drawn before the workbench switch: `owner`'s (a plugin's id) in place of those it put there before; null takes them off. */
 export const topBar = {
   set(owner: string, bar: { tools: readonly TopBarTool[] } | null): void { topBarTools.set(owner, bar?.tools ?? null); },
+};
+
+/**
+ * The blocks a workbench is laid out in (its plugin's openfilm.json `blocks`): Studio arranges them with the page's own
+ * (the chat, the library) and those of other workbenches, and the workbench draws each into its place. `owner` is the
+ * workbench that declares the block (its element's `plugin`), `id` the block's.
+ * - `slot(owner, id)`: the place to draw the block in, an element that is the same one for the page's life. Studio puts
+ *   it wherever the block is in the arrangement shown (and takes it out while the block is not in it); what is drawn
+ *   in it stays drawn.
+ * - `draw(owner, id)`: say the block is drawn; returns the way to say it no longer is. Studio lays out a slot for a
+ *   block only while it is drawn.
+ * - `shown(owner, id)`: whether it is in the arrangement shown now, and visible; `subscribe(listener)` is told when that
+ *   changes (returns the way to stop).
+ * - `open(owner, id, open)`: show or hide it in the arrangement shown, as the person does from the layout's menu.
+ */
+export const blocks = {
+  slot(owner: string, id: string): HTMLElement { return mountOf(owner, id); },
+  draw(owner: string, id: string): () => void { return drawing(owner, id); },
+  shown(owner: string, id: string): boolean { return shownBlocks.get().has(blockKey(owner, id)); },
+  subscribe(listener: () => void): () => void { return shownBlocks.subscribe(listener); },
+  open(owner: string, id: string, open: boolean): void { frameStore.get()?.openBlock(owner, id, open); },
 };
 
 /**

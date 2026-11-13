@@ -10,7 +10,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { arrangementOf } from './src/lib/workspaces.ts';
+import { readBlocks } from '../../src/plugin-blocks.mjs';
+import { arrangementOf } from './src/lib/blocks.ts';
 
 const at = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
@@ -40,11 +41,16 @@ const readJson = (path: string): Record<string, unknown> | null => {
  * Name → its source, and whether it is put in the page with it (`withPage`) or loaded later. A plugin whose `browser`
  * module names `openfilm/workbench/<name>` brings it, built from `src/plugins/<name>/index.tsx`; several may name one
  * (Motion's names the edit's). In the plugins' order (openfilm.json `order`, then the folder's name), as Studio lists
- * them. `withPage`: one the shell lays out among the page's panels (lib/workspaces arrangementOf of the plugin's
+ * them. `withPage`: one the shell lays out among the page's panels in the edit's arrangement (lib/blocks arrangementOf of the plugin's
  * `workbench`: the edit, and Motion with it) is put in the page with it; any other (the canvas, warmed once the page
  * is drawn or when first shown; one that takes the panes' place) is loaded when it is wanted.
  */
 function workbenches(): Map<string, { src: string; withPage: boolean }> {
+  /* each plugin's workbench and the blocks it is laid out in, to know which are laid out in the edit's arrangement */
+  const laidOut = readdirSync(PLUGINS, { withFileTypes: true }).filter((e) => e.isDirectory()).flatMap((e) => {
+    const manifest = readJson(join(PLUGINS, e.name, 'openfilm.json'));
+    return typeof manifest?.workbench === 'string' ? [{ workbench: manifest.workbench, blocks: readBlocks(manifest.blocks) }] : [];
+  });
   const named = readdirSync(PLUGINS, { withFileTypes: true }).filter((e) => e.isDirectory()).flatMap((e) => {
     const browser = readJson(join(PLUGINS, e.name, 'package.json'))?.browser;
     if (typeof browser !== 'string') return [];
@@ -54,7 +60,7 @@ function workbenches(): Map<string, { src: string; withPage: boolean }> {
     if (!name) return [];
     const manifest = readJson(join(PLUGINS, e.name, 'openfilm.json'));
     const order = typeof manifest?.order === 'number' && Number.isFinite(manifest.order) ? manifest.order : 1000;
-    const amongPanels = typeof manifest?.workbench === 'string' && arrangementOf(manifest.workbench) === 'edit';
+    const amongPanels = typeof manifest?.workbench === 'string' && arrangementOf(manifest.workbench, laidOut) === 'edit';
     return [{ id: e.name, browser, name, order, amongPanels }];
   }).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
   const out = new Map<string, { src: string; withPage: boolean }>();

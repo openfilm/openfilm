@@ -1,37 +1,60 @@
-/** A workspace is a tree of splits. Hidden leaves keep their place, so reopening never loses a position. */
-import type { WorkspaceLayout, WorkspaceMode } from './workspaces';
+/**
+ * A workspace is a tree of splits over the page's own blocks (`chat`, `library`) and the workbench's (by key,
+ * lib/workspaces BlockSpec). Hidden leaves keep their place, so reopening never loses a position.
+ */
+import { centerOf, type ArrangementSpec, type BlockSpec, type WorkspaceLayout } from './workspaces.ts';
 
-export type DockPanel = 'viewer' | 'canvas' | 'chat' | 'library' | 'layers' | 'inspector' | 'timeline';
+export type DockPanel = string;
 export type DockEdge = 'left' | 'right' | 'top' | 'bottom' | 'center';
 export type DockNode = { panel: DockPanel } | { axis: 'x' | 'y'; ratio: number; first: DockNode; second: DockNode; size?: number; anchor?: 'first' | 'second' };
 export type DockRect = { left: number; top: number; width: number; height: number };
 export type DockSeam = { path: string; axis: 'x' | 'y'; rect: DockRect; parent: DockRect; ratio: number; min: number; max: number };
-export const dockPanels = (mode: WorkspaceMode): DockPanel[] => mode === 'canvas' ? ['canvas','chat','library'] : ['viewer','chat','library','layers','inspector','timeline'];
-export const panelFlag = (panel: DockPanel): 'assets' | 'chat' | 'layers' | 'inspector' | 'timeline' | null => panel === 'library' ? 'assets' : panel === 'viewer' || panel === 'canvas' ? null : panel;
+/** The page's own blocks, which every arrangement has. */
+export const PAGE_BLOCKS = ['chat', 'library'] as const;
+const isPage = (panel: DockPanel) => panel === 'chat' || panel === 'library';
+/** An arrangement's panels: its main block, the page's own, then the workbench's other blocks as declared. */
+export const dockPanels = (spec: ArrangementSpec): DockPanel[] => {
+  const center = centerOf(spec)?.key;
+  return [...(center ? [center] : []), ...PAGE_BLOCKS, ...spec.blocks.map((b) => b.key).filter((k) => k !== center)];
+};
+/** Whether a panel is shown in `layout` (the main block always is). */
+export const panelShown = (layout: WorkspaceLayout, panel: DockPanel, spec: ArrangementSpec): boolean =>
+  panel === 'library' ? layout.assets : panel === 'chat' ? layout.chat : panel === centerOf(spec)?.key || Boolean(layout.blocks[panel]?.open);
+/** Whether a panel can be hidden: any but the main block. */
+export const panelHides = (panel: DockPanel, spec: ArrangementSpec): boolean => isPage(panel) || (panel !== centerOf(spec)?.key && spec.blocks.some((b) => b.key === panel));
 const leaf = (panel: DockPanel): DockNode => ({ panel });
 const split = (axis: 'x'|'y', first: DockNode, second: DockNode, size: number, anchor: 'first'|'second'): DockNode => ({ axis, first, second, ratio: .5, size, anchor });
 
-export function defaultDockTree(layout: WorkspaceLayout, timelineHeight = 200): DockNode {
-  let node = leaf(layout.mode === 'canvas' ? 'canvas' : 'viewer');
-  if (layout.mode === 'edit') {
-    if (layout.inspectorSide === 'left') node = split('x',leaf('inspector'),node,layout.inspectorWidth,'first');
-    if (layout.layersSide === 'left') node = split('x',leaf('layers'),node,layout.layersWidth,'first');
-    if (layout.layersSide === 'right') node = split('x',node,leaf('layers'),layout.layersWidth,'second');
-    if (layout.inspectorSide === 'right') node = split('x',node,leaf('inspector'),layout.inspectorWidth,'second');
-    node = layout.timelineEdge === 'top' ? split('y',leaf('timeline'),node,layout.timelineHeight ?? timelineHeight,'first') : split('y',node,leaf('timeline'),layout.timelineHeight ?? timelineHeight,'second');
-  }
+/**
+ * The tree an arrangement's docked form comes to: the main block, its blocks beside it and above or below it (inner
+ * first), the library, then the chat. A block's size: for one beside the main block as `drawn` says (as drawn now),
+ * else as kept; for one above or below, as kept, else as drawn (`drawn`: by key; none: 240 wide, 200 tall).
+ */
+export function defaultDockTree(layout: WorkspaceLayout, spec: ArrangementSpec, drawn: Readonly<Record<string, number>> = {}): DockNode {
+  const center = centerOf(spec);
+  let node = leaf(center?.key ?? 'main');
+  const edgeOf = (b: BlockSpec) => layout.blocks[b.key]?.edge ?? b.edge;
+  const others = spec.blocks.filter((b) => b !== center);
+  const side = (b: BlockSpec) => drawn[b.key] ?? layout.blocks[b.key]?.size ?? b.size ?? 240;
+  const tall = (b: BlockSpec) => layout.blocks[b.key]?.size ?? drawn[b.key] ?? b.size ?? 200;
+  for (const b of others.filter((b) => edgeOf(b) === 'left').reverse()) node = split('x', leaf(b.key), node, side(b), 'first');
+  for (const b of others.filter((b) => edgeOf(b) === 'right')) node = split('x', node, leaf(b.key), side(b), 'second');
+  for (const b of others.filter((b) => edgeOf(b) === 'top').reverse()) node = split('y', leaf(b.key), node, tall(b), 'first');
+  for (const b of others.filter((b) => edgeOf(b) === 'bottom')) node = split('y', node, leaf(b.key), tall(b), 'second');
   node = layout.libraryDock === 'bottom' ? split('y',node,leaf('library'),layout.libraryHeight,'second') : layout.libraryDock === 'right' ? split('x',node,leaf('library'),layout.assetsWidth,'second') : split('x',leaf('library'),node,layout.assetsWidth,'first');
   return layout.chatSide === 'left' ? split('x',leaf('chat'),node,layout.chatWidth,'first') : split('x',node,leaf('chat'),layout.chatWidth,'second');
 }
 
-export function readDockTree(value: unknown, mode: WorkspaceMode): DockNode | null {
-  const allowed = new Set(dockPanels(mode)), seen = new Set<DockPanel>();
+const KEY = /^(?:[a-z][a-z0-9-]{0,31}:)?[a-z][a-z0-9-]{0,31}$/;
+/** A tree of splits as kept: each panel once, named as a block is; `keys`, when given, the panels it must have, all of them. */
+export function readDockTree(value: unknown, keys?: readonly DockPanel[]): DockNode | null {
+  const seen = new Set<DockPanel>();
   const read = (value: unknown, depth: number): DockNode | null => {
     if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 12) return null;
     const node = value as Record<string, unknown>;
     if ('panel' in node) {
-      if (!allowed.has(node.panel as DockPanel) || seen.has(node.panel as DockPanel)) return null;
-      seen.add(node.panel as DockPanel); return leaf(node.panel as DockPanel);
+      if (typeof node.panel !== 'string' || !KEY.test(node.panel) || seen.has(node.panel) || (keys && !keys.includes(node.panel)) || seen.size >= 40) return null;
+      seen.add(node.panel); return leaf(node.panel);
     }
     if (!['x','y'].includes(node.axis as string) || typeof node.ratio !== 'number' || !Number.isFinite(node.ratio) || node.ratio < .02 || node.ratio > .98) return null;
     if (node.size !== undefined && (typeof node.size !== 'number' || !Number.isFinite(node.size) || node.size < 1 || node.size > 4000 || !['first','second'].includes(node.anchor as string))) return null;
@@ -39,22 +62,28 @@ export function readDockTree(value: unknown, mode: WorkspaceMode): DockNode | nu
     return first && second ? { axis: node.axis as 'x'|'y', ratio: node.ratio, first, second, ...(node.size !== undefined ? { size: node.size as number, anchor: node.anchor as 'first'|'second' } : {}) } : null;
   };
   const node = read(value,0);
-  return node && seen.size === allowed.size ? node : null;
+  return node && (!keys || seen.size === keys.length) ? node : null;
 }
 
-export function visibleDockPanels(layout: WorkspaceLayout, hasChat: boolean): Set<DockPanel> {
-  return new Set(dockPanels(layout.mode).filter(panel => {
+/**
+ * The panels drawn: the chat and the library as the page has them, and the blocks the arrangement shows of those
+ * `drawn` says can be (a block whose workbench is not in the page is not).
+ */
+export function visibleDockPanels(layout: WorkspaceLayout, hasChat: boolean, spec: ArrangementSpec, drawn: (key: string) => boolean = () => true): Set<DockPanel> {
+  return new Set(dockPanels(spec).filter(panel => {
     if (panel === 'chat') return hasChat && layout.chat;
     if (panel === 'library') return layout.assets && (layout.libraryDock !== 'chat' || !hasChat);
-    const flag = panelFlag(panel); return !flag || layout[flag];
+    return drawn(panel) && panelShown(layout, panel, spec);
   }));
 }
 
-const MIN: Record<DockPanel, [number,number]> = { viewer:[240,220], canvas:[240,220], chat:[280,180], library:[200,140], layers:[160,120], inspector:[240,180], timeline:[240,104] };
-export function dockFrames(tree: DockNode, viewport: { width: number; height: number }, visible: ReadonlySet<DockPanel>) {
+/** The smallest a panel is drawn where panels float (width, height): the page's own, and each block as declared. */
+export const panelMinimum = (spec: ArrangementSpec) => (panel: DockPanel): readonly [number, number] =>
+  panel === 'chat' ? [280,180] : panel === 'library' ? [200,140] : spec.blocks.find((b) => b.key === panel)?.min ?? [240,180];
+export function dockFrames(tree: DockNode, viewport: { width: number; height: number }, visible: ReadonlySet<DockPanel>, minimumOf: (panel: DockPanel) => readonly [number, number]) {
   const panels: Partial<Record<DockPanel,DockRect>> = {}, seams: DockSeam[] = [];
-  const minimum = (node: DockNode): [number,number] | null => {
-    if ('panel' in node) return visible.has(node.panel) ? MIN[node.panel] : null;
+  const minimum = (node: DockNode): readonly [number,number] | null => {
+    if ('panel' in node) return visible.has(node.panel) ? minimumOf(node.panel) : null;
     const a = minimum(node.first), b = minimum(node.second);
     if (!a) return b; if (!b) return a;
     return node.axis === 'x' ? [a[0]+b[0]+1,Math.max(a[1],b[1])] : [Math.max(a[0],b[0]),a[1]+b[1]+1];
@@ -119,10 +148,13 @@ export function dockDropAt(panels: Partial<Record<DockPanel,DockRect>>, root: Do
   return null;
 }
 
-/** Visibility does not change docking. A visible child in chat requires its parent to be visible. */
-export function setDockPanelVisible(layout: WorkspaceLayout, panel: DockPanel, show: boolean): WorkspaceLayout {
-  const flag=panelFlag(panel); if(!flag)return layout;
-  return { ...layout,[flag]:show,...(panel==='library'&&show&&layout.libraryDock==='chat'?{chat:true}:{}),...(panel==='chat'&&!show&&layout.libraryDock==='chat'?{assets:false}:{}) };
+/** Visibility does not change docking. A visible child in chat requires its parent to be visible. The main block is always shown. */
+export function setDockPanelVisible(layout: WorkspaceLayout, panel: DockPanel, show: boolean, spec: ArrangementSpec): WorkspaceLayout {
+  if (!panelHides(panel, spec)) return layout;
+  if (panel === 'library') return { ...layout, assets: show, ...(show && layout.libraryDock === 'chat' ? { chat: true } : {}) };
+  if (panel === 'chat') return { ...layout, chat: show, ...(!show && layout.libraryDock === 'chat' ? { assets: false } : {}) };
+  const place = layout.blocks[panel];
+  return place ? { ...layout, blocks: { ...layout.blocks, [panel]: { ...place, open: show } } } : layout;
 }
 export function setLibraryInsideChat(layout: WorkspaceLayout, inside: boolean, outside: 'left'|'right'|'bottom' = 'left'): WorkspaceLayout {
   return { ...layout,libraryDock:inside?'chat':outside,...(inside&&layout.assets?{chat:true}:{}) };

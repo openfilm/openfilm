@@ -101,8 +101,10 @@ import { addCue, cueRule, placeCues, setCueRule, shifted, withIds } from '@/lib/
 import { cueClipId, cueEditOf, cueOf, cueStandIn, isCueClip, withCueBlocks, type KeptCue } from '@/lib/caption-blocks';
 
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
-import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider } from './PaneDivider';
-import type { WorkspaceLayout } from '@/lib/workspaces';
+import { DEFAULT_INSPECTOR, DOCK_GAP, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER } from './PaneDivider';
+import type { BlockPlace } from '@/lib/workspaces';
+import type { DockRect } from '@/lib/workspace-dock';
+import type { BlockRoom, BlockSizer } from '@/lib/workspace-preview';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 import { MotionPanel } from './MotionPanel';
@@ -152,8 +154,8 @@ import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { isTextField, isTypingTarget } from './typing-target';
 /* Studio's public interface for what it offers (the app's chat, its commands, the edit's `add`, Settings), and the
    shell's frame and wiring, OpenFilm-internal, for the rest */
-import { chat, onCommand, openSettings, provide } from '@/studio';
-import { TOP_BTN, useFrame, usePublishWiring, useSteady } from '@/studio/internal';
+import { blocks, chat, onCommand, openSettings, provide } from '@/studio';
+import { attachedBlocks, blockKey, TOP_BTN, useFrame, usePublishWiring, useSteady } from '@/studio/internal';
 
 /** How far a caption track's translation sits above it (% of the frame): about a line. */
 const TRANSLATION_LIFT_PCT = 7;
@@ -236,7 +238,7 @@ export function ProjectView({ projectId, onProject }: {
     canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, away,
     libraryIndex, setRevealMedia, showFile, saveThings, onLibraryDownloadFailed,
     title,
-    editPrefs, updateWorkspace, editFree, freeStyle, editDock, insetStyle,
+    arrangement, openBlock,
   } = useFrame(projectId);
   const keyHint = useKeyHint();
   /** film.html is missing from the folder (an agent writing it again, or it lost): said on the picture until it is back */
@@ -334,8 +336,8 @@ export function ProjectView({ projectId, onProject }: {
   const pauseRef = React.useRef<() => void>(() => {});
   /* layers the motion panel just put something on, twirled open on the motion timeline */
   const [motionReveal, setMotionReveal] = React.useState<{ ids: readonly string[]; n: number } | null>(null);
-  /* the workspace's own setter, the shell's (shell/layout): the motion view opens the timeline and inspector with it */
-  const updateWorkspaceRef = React.useRef<(patch: Partial<WorkspaceLayout>) => void>(() => {});
+  /* the shell's way to show or hide a block of the edit's (shell/layout): the motion view opens the timeline and inspector with it */
+  const openBlockRef = React.useRef<(id: string, open: boolean) => void>(() => {});
 
   /* ── transport: the sound is the clock; the picture follows it, drawn in the preview from the player's line ── */
   const player = React.useRef(new Player());
@@ -644,53 +646,36 @@ export function ProjectView({ projectId, onProject }: {
   }, []);
 
   /* ── layout ── */
-  const dockColRef = React.useRef<HTMLDivElement | null>(null);
-  const viewerRowRef = React.useRef<HTMLDivElement | null>(null);
-  /* how the window is laid out is the shell's (shell/layout): the edit's own arrangement (`editPrefs`), where its
-     panes float (`editFree`, `freeStyle`) and the room kept round them (`editDock`) come from the frame, and a pane
-     sized or shown here is told with `updateWorkspace` */
-  updateWorkspaceRef.current = updateWorkspace;
-  const storedTimelineHeight = editPrefs.timelineHeight;
-  const timelineHeightSaved = storedTimelineHeight !== null;
-  const inspectorWidth = editPrefs.inspectorWidth;
-  const layersPaneOpen = editPrefs.layers;
-  const layersWidth = editPrefs.layersWidth;
-  const timelineOpen = editPrefs.timeline;
-  const inspectorOpen = editPrefs.inspector;
-  const commitTimelineHeight = React.useCallback((value: number) => updateWorkspace({ timelineHeight: value }), [updateWorkspace]);
-  const commitInspectorWidth = React.useCallback((value: number) => updateWorkspace({ inspectorWidth: value }), [updateWorkspace]);
-  const setLayersWidth = React.useCallback((value: number) => updateWorkspace({ layersWidth: value }), [updateWorkspace]);
-  const setLayersPaneOpen = React.useCallback((value: boolean) => updateWorkspace({ layers: value }), [updateWorkspace]);
-  const setInspectorOpen = React.useCallback((value: boolean) => updateWorkspace({ inspector: value }), [updateWorkspace]);
+  /* how the window is laid out is the shell's (shell/layout, shell/arrangement): it lays out the edit's blocks (the
+     viewer, the layers, the inspector, the timeline) wherever the arrangement shown puts them, and the edit draws each
+     into its place (InBlock). What the edit reads of where they are (`arrangement`): their places by id, the room they
+     share where the panels are docked, and their boxes where they float. How each is drawn there (the timeline fitted
+     to its tracks, the inspector left out of a narrow window while idle) is the edit's (editSizes below), told to the
+     shell through the wiring (`blocks`). A block shown or hidden here is told with `openBlock` */
+  openBlockRef.current = (id, open) => openBlock('edit', id, open);
+  const own = React.useMemo(() => {
+    const places: Record<string, BlockPlace> = {}, free: Record<string, DockRect> = {};
+    for (const block of arrangement.spec.blocks) {
+      if (block.owner !== 'edit') continue;
+      const place = arrangement.layout.blocks[block.key], box = arrangement.free?.[block.key];
+      if (place) places[block.id] = place;
+      if (box) free[block.id] = box;
+    }
+    return { places, free: arrangement.free ? free : null };
+  }, [arrangement]);
+  const timelineOpen = Boolean(own.places.timeline?.open);
+  const inspectorOpen = Boolean(own.places.inspector?.open);
+  const setLayersPaneOpen = React.useCallback((value: boolean) => openBlock('edit', 'layers', value), [openBlock]);
+  const setInspectorOpen = React.useCallback((value: boolean) => openBlock('edit', 'inspector', value), [openBlock]);
   const layersPaneRef = React.useRef<HTMLDivElement | null>(null);
   const closeInspector = React.useCallback(() => setInspectorOpen(false), [setInspectorOpen]);
-  const [rowWidth, setRowWidth] = React.useState(0);
-  const [colHeight, setColHeight] = React.useState(0);
-  React.useEffect(() => {
-    const row = viewerRowRef.current;
-    const col = dockColRef.current;
-    if (!row || !col) return undefined;
-    const ro = new ResizeObserver(([e]) => setRowWidth(Math.round(e?.contentRect.width ?? 0)));
-    const co = new ResizeObserver(([e]) => setColHeight(Math.round(e?.contentRect.height ?? 0)));
-    ro.observe(row);
-    co.observe(col);
-    return () => { ro.disconnect(); co.disconnect(); };
-  }, [loaded]);
   /* the timeline fits its tracks (not taller than they need, up to 45% of the window) unless the person dragged it */
   const fitTimelineHeight = React.useRef<number>(TIMELINE_H);
   if (!pendingDrops.length) {
     const cap = Math.round(window.innerHeight * 0.45);
     fitTimelineHeight.current = Math.max(TIMELINE_H, Math.min(timelineFitHeight(timelineTracks), cap));
   }
-  /* a height the person dragged is theirs, as tall as the picture's minimum allows; until then the tracks' fit (not
-     taller than they need, nor than 45% of the column) */
-  const timelineHeight = storedTimelineHeight ?? fitTimelineHeight.current;
-  const timelineTallest = colHeight ? Math.max(MIN_DOCK_H, colHeight - MIN_STAGE_H - DOCK_GAP) : Infinity;
-  const timelineShownHeight = timelineHeightSaved
-    ? Math.min(timelineHeight ?? TIMELINE_H, timelineTallest)
-    : colHeight
-      ? Math.min(timelineHeight, timelineTallest, fitTimelineHeight.current + TIMELINE_SPARE, Math.max(MIN_DOCK_H, Math.round(colHeight * TIMELINE_SHARE)))
-      : Math.min(timelineHeight ?? TIMELINE_H, fitTimelineHeight.current + TIMELINE_SPARE);
+  const timelineFit = fitTimelineHeight.current;
 
   /* what is selected in the picture: a layer of a page, or a clip in hand */
   const [stageElement, setStageElement] = React.useState<StageElement | null>(null);
@@ -774,11 +759,39 @@ export function ProjectView({ projectId, onProject }: {
       return next.length === keys.length && next.every((k, i) => k === keys[i]) ? keys : next;
     });
   }, [cuePick]);
-  const rowNarrow = rowWidth > 0 && rowWidth < MIN_VIEWER + DEFAULT_INSPECTOR + 240;
   const inspectorIdle = inspectorContent === 'selection' && !stageElement && !selectedBlocks.length;
-  const inspectorShown = inspectorOpen && (Boolean(editFree) || !(rowNarrow && inspectorIdle));
-  const inspectorWanted = inspectorWidth ?? DEFAULT_INSPECTOR;
-  const inspectorShownWidth = editFree?.panels.inspector?.width ?? (rowWidth && inspectorShown ? Math.max(200, Math.min(inspectorWanted, rowWidth - MIN_VIEWER - 8)) : inspectorWanted);
+  const filmRead = Boolean(film.film);
+  /**
+   * How the edit's blocks are drawn where the panels are docked, in `room` (the row's width beside the viewer, the
+   * column's height; 0: not measured yet), with their places (by id) and, where the panels float, their boxes.
+   */
+  const editSizes = React.useCallback((room: BlockRoom, places: Readonly<Record<string, BlockPlace>>, free: Readonly<Partial<Record<string, DockRect>>> | null) => {
+    const { width: rowWidth, height: colHeight } = room;
+    /* a height the person dragged is theirs, as tall as the picture's minimum allows; until then the tracks' fit (not
+       taller than they need, nor than 45% of the column) */
+    const storedTimelineHeight = places.timeline?.size ?? null;
+    const timelineHeight = storedTimelineHeight ?? timelineFit;
+    const timelineTallest = colHeight ? Math.max(MIN_DOCK_H, colHeight - MIN_STAGE_H - DOCK_GAP) : Infinity;
+    const timelineShownHeight = storedTimelineHeight !== null
+      ? Math.min(timelineHeight ?? TIMELINE_H, timelineTallest)
+      : colHeight
+        ? Math.min(timelineHeight, timelineTallest, timelineFit + TIMELINE_SPARE, Math.max(MIN_DOCK_H, Math.round(colHeight * TIMELINE_SHARE)))
+        : Math.min(timelineHeight ?? TIMELINE_H, timelineFit + TIMELINE_SPARE);
+    const rowNarrow = rowWidth > 0 && rowWidth < MIN_VIEWER + DEFAULT_INSPECTOR + 240;
+    const inspectorShown = Boolean(places.inspector?.open) && (Boolean(free) || !(rowNarrow && inspectorIdle));
+    const inspectorWanted = places.inspector?.size ?? DEFAULT_INSPECTOR;
+    const inspectorShownWidth = free?.inspector?.width ?? (rowWidth && inspectorShown ? Math.max(200, Math.min(inspectorWanted, rowWidth - MIN_VIEWER - 8)) : inspectorWanted);
+    const layersWidth = places.layers?.size ?? 240;
+    const layersRoom = rowWidth - (inspectorShown ? inspectorShownWidth : 0) - MIN_VIEWER - 16;
+    const layersShownWidth = free?.layers?.width ?? (rowWidth ? Math.min(layersWidth, layersRoom) : layersWidth);
+    const layersFit = Boolean(free) || !rowWidth || layersShownWidth >= 180;
+    const layersShown = Boolean(places.layers?.open) && layersFit;
+    return {
+      timelineShownHeight, timelineShown: Boolean(places.timeline?.open) && filmRead, inspectorShown, inspectorShownWidth,
+      layersWidth, layersShownWidth, layersFit, layersShown,
+    };
+  }, [timelineFit, inspectorIdle, filmRead]);
+  const { inspectorShown, inspectorShownWidth, layersShownWidth, layersFit, layersShown } = editSizes(arrangement.room, own.places, own.free);
 
   /* ── edits: the timeline's and the inspector's, turned into the server's operations by clip id ── */
   /* the picture's controls, set by FilmStageSelect (declared here: every edit asks it to write its arrow keys' first) */
@@ -2846,10 +2859,6 @@ export function ProjectView({ projectId, onProject }: {
   }, [setSelectedLocs, showCaptionLook]);
 
   /* ── the app Studio is embedded in (lib/host.ts): what the person points at, handed to it; what it asks to be shown ── */
-  const layersRoom = rowWidth - (inspectorShown ? inspectorShownWidth : 0) - MIN_VIEWER - 16;
-  const layersShownWidth = editFree?.panels.layers?.width ?? (rowWidth ? Math.min(layersWidth, layersRoom) : layersWidth);
-  const layersFit = Boolean(editFree) || !rowWidth || layersShownWidth >= 180;
-  const layersShown = layersPaneOpen && layersFit;
   /* the library's templates, for one to take another's place (TemplateSection) */
   const templateItemsRef = React.useRef<LibraryItem[]>([]);
   templateItemsRef.current = (libraryIndex?.items ?? []).filter((i) => i.cat === 'template' && i.kind === 'group');
@@ -4952,13 +4961,18 @@ export function ProjectView({ projectId, onProject }: {
     restored: () => forHistory.current.restored(),
   }), []);
   React.useEffect(() => onCommand((command) => hostCommands.current(command)), []);
-  /* the window is laid out by the shell (shell/layout); what it reads of the edit's panes is given here: how tall the
-     timeline's tracks are and whether the inspector has anything to show (the layout's menu draws the arrangements
-     with them), and the panes' sizes as they are drawn now, which rearranging begins from */
-  const shellPanes = useSteady({
-    timelineFit: fitTimelineHeight.current, inspectorIdle,
-    sizes: () => ({ timeline: timelineShownHeight, inspector: inspectorShownWidth, layers: layersShown ? layersShownWidth : layersWidth }),
-  });
+  /* the window is laid out by the shell (shell/layout); how the edit's blocks are drawn there is given here, for
+     wherever they are and for the layout's menu, which draws each arrangement with it: each shown or not, its size
+     (the layers' kept width while hidden, which rearranging begins from), its seam, and the timeline's fit */
+  const blockSizer = React.useCallback<BlockSizer>((room, places, free) => {
+    const drawn = editSizes(room, places, free);
+    return {
+      viewer: { shown: true, size: 0 },
+      layers: { shown: drawn.layersShown, size: drawn.layersShown ? drawn.layersShownWidth : drawn.layersWidth, seam: { min: 180, minRest: MIN_VIEWER, label: t('layers.resize') } },
+      inspector: { shown: drawn.inspectorShown, size: drawn.inspectorShownWidth, seam: { min: MIN_INSPECTOR, minRest: MIN_VIEWER, label: t('inspector.resize') } },
+      timeline: { shown: drawn.timelineShown, size: drawn.timelineShownHeight, seam: { min: MIN_DOCK_H, minRest: MIN_STAGE_H, label: t('timeline.resize') }, fit: timelineFit },
+    };
+  }, [editSizes, timelineFit, t]);
   /* the library is the shell's (shell/library); what it does in the edit is given here: a file of the media pane put in
      the film at the playhead or taken in hand (shown in the viewer and the inspector), the library's things added or
      tried over the picture, the captions, the voices. Each the same one until it changes (useSteady) */
@@ -5018,11 +5032,11 @@ export function ProjectView({ projectId, onProject }: {
     reloadPicture: () => preview.current?.reload?.(),
     srcsInUse: () => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])),
     pause: () => pauseRef.current(),
-    motionShown: () => updateWorkspaceRef.current({ timeline: true, inspector: true }),
-    panes: shellPanes,
+    motionShown: () => { openBlockRef.current('timeline', true); openBlockRef.current('inspector', true); },
+    blocks: blockSizer,
     library: shellLibrary,
     topBar: shellTopBar,
-  }), [shellPanes, shellLibrary, shellTopBar]));
+  }), [blockSizer, shellLibrary, shellTopBar]));
 
   /* The page is the shell's (shell/ProjectFrame), and so is its top bar (shell/top-bar). In the edit's own element are
      only the edit's panes; the edit's own dialogs, which lie over the page, are put into the shell's places from here. */
@@ -5033,14 +5047,13 @@ export function ProjectView({ projectId, onProject }: {
   const viewerReady = Boolean(info);
   return (
     <>
-          {/* the panes, edge to edge on the board of lines (--dock-line): a line under the top bar, and one beside the
-              app's own panel (lib/host.ts `panel`), which sits left of this, under the top bar: room left for it */}
-          <section ref={dockColRef} inert={canvasOpen || away} aria-hidden={canvasOpen || away} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
-            style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(editFree ? null : insetStyle(editDock)), ...(canvasOpen ? { visibility: 'hidden', opacity: 0 } : null) }}>
-            <div ref={viewerRowRef} className="relative flex min-h-0 min-w-0 flex-1 flex-row" style={{ order: editPrefs.timelineEdge === 'top' ? 2 : 0 }}>
+          {/* the panes, each drawn into its block's place, which the shell lays out among the page's panels
+              (shell/arrangement) with the seams between them */}
+          <>
+            <>
               {layersShown ? (
-                <>
-                  <div ref={layersPaneRef} className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-layers style={{ width: layersShownWidth, order: editPrefs.layersSide === 'left' ? 10 : 70, ...freeStyle('layers') }}>
+                <InBlock id="layers">
+                  <div ref={layersPaneRef} className={`${PANE} flex-1 bg-[var(--bg-panel)]`} data-workspace-layers>
                     <LayersPanel
                       ask={askStage}
                       timeMs={timeMs}
@@ -5061,15 +5074,14 @@ export function ProjectView({ projectId, onProject }: {
                       onClose={() => { setPointedLayer(null); setLayersPaneOpen(false); }}
                     />
                   </div>
-                  {/* the divider measures from the row's left edge: the assets left of this pane are taken off */}
-                  {!editFree ? <PaneDivider width={layersShownWidth} containerRef={viewerRowRef} label={t('layers.resize')} min={180} minRest={MIN_VIEWER}
-                    relative side={editPrefs.layersSide === 'left' ? 'start' : 'end'}
-                    style={{ order: editPrefs.layersSide === 'left' ? 11 : 69 }} onResize={setLayersWidth} /> : null}
-                </>
+                </InBlock>
               ) : null}
 
-              <div className={`${PANE} min-w-0 flex-1 bg-[var(--bg-viewer)]`} data-viewer-pane="" style={{ order: 50, ...freeStyle('viewer') }}>
+              <InBlock id="viewer">
+              <div className={`${PANE} min-w-0 flex-1 bg-[var(--bg-viewer)]`} data-viewer-pane="">
                 <div className={PANE_BAR}>
+                  {/* the layers and the inspector shown or hidden, where the arrangement shown has them */}
+                  {own.places.layers ? (
                   <Tooltip label={t(layersShown ? 'layers.hidePane' : 'layers.showPane')} side="bottom">
                     <button type="button"
                       onClick={() => {
@@ -5083,7 +5095,9 @@ export function ProjectView({ projectId, onProject }: {
                       <Layers size={PANE_TOGGLE_ICON} />
                     </button>
                   </Tooltip>
+                  ) : null}
                   <span className="min-w-0 flex-1" />
+                  {own.places.inspector ? (
                   <Tooltip label={t(inspectorOpen ? 'inspector.hide' : 'inspector.show')} side="bottom">
                     <button type="button" onClick={() => setInspectorOpen(!inspectorOpen)}
                       aria-label={t(inspectorOpen ? 'inspector.hide' : 'inspector.show')}
@@ -5091,6 +5105,7 @@ export function ProjectView({ projectId, onProject }: {
                       <Settings2 size={PANE_TOGGLE_ICON} />
                     </button>
                   </Tooltip>
+                  ) : null}
                 </div>
                 <input ref={relinkInputRef} type="file" accept="video/*,image/*,audio/*" className="hidden"
                   onChange={(e) => {
@@ -5284,11 +5299,11 @@ export function ProjectView({ projectId, onProject }: {
                   />
                 </div>
               </div>
+              </InBlock>
 
               {inspectorShown ? (
-                <>
-                  {!editFree ? <PaneDivider width={inspectorShownWidth} onResize={commitInspectorWidth} containerRef={viewerRowRef} label={t('inspector.resize')} min={MIN_INSPECTOR} minRest={MIN_VIEWER} relative side={editPrefs.inspectorSide === 'left' ? 'start' : 'end'} style={{ order: editPrefs.inspectorSide === 'left' ? 21 : 79 }} /> : null}
-                  <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-inspector style={{ width: inspectorShownWidth, order: editPrefs.inspectorSide === 'left' ? 20 : 80, ...freeStyle('inspector') }}>
+                <InBlock id="inspector">
+                  <div className={`${PANE} flex-1 bg-[var(--bg-panel)]`} data-workspace-inspector>
                   {typeof inspectorContent === 'object' ? (
                     <ResourceInspector file={inspectorContent} url={(pickedSaved && inspectorContent === pickedMedia ? savedSources : mediaSources).file(inspectorContent)} made={madeFor(inspectorContent)} width={inspectorShownWidth} onClose={closeInspector} />
                   ) : inspectorContent === 'captions' ? (
@@ -5380,13 +5395,13 @@ export function ProjectView({ projectId, onProject }: {
                     </FontScopeContext.Provider>
                   )}
                   </div>
-                </>
+                </InBlock>
               ) : null}
-            </div>
+            </>
 
-            {timelineOpen && !editFree ? <DockPaneDivider height={timelineShownHeight} onResize={commitTimelineHeight} containerRef={dockColRef} label={t('timeline.resize')} edge={editPrefs.timelineEdge} style={{ order: 1 }} /> : null}
             {timelineOpen && value ? (
-              <div className={`${PANE} shrink-0 bg-[var(--bg-panel)]`} data-workspace-timeline style={{ height: timelineShownHeight, order: editPrefs.timelineEdge === 'top' ? 0 : 2, ...freeStyle('timeline') }}
+              <InBlock id="timeline">
+              <div className={`${PANE} flex-1 bg-[var(--bg-panel)]`} data-workspace-timeline
                 onPointerDownCapture={() => { dismissLibraryPreview.current(); if (pickedMedia) pickMedia(null); }}>
                 <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main" style={{ right: METERS_W }}>
                   {motionOpen && compBlock && compTracks ? (
@@ -5486,8 +5501,9 @@ export function ProjectView({ projectId, onProject }: {
                 {/* the audio meters, beside the timeline */}
                 <div className="absolute inset-y-0 right-0"><AudioMeters levels={tools.levels} playing={playing} /></div>
               </div>
+              </InBlock>
             ) : null}
-          </section>
+          </>
 
       {ReactDOM.createPortal(<>
       {templateAsk ? (
@@ -5529,6 +5545,18 @@ export function ProjectView({ projectId, onProject }: {
       </>, slots.overLibrary)}
     </>
   );
+}
+
+/**
+ * A pane of the edit's, drawn into the place of its block (`id`, plugins/edit openfilm.json `blocks`) while it is
+ * here: the shell lays out a slot for it and puts the place in it, and the pane is drawn there from then on (so what
+ * it measures as it first draws is where it is shown).
+ */
+function InBlock({ id, children }: { id: string; children: React.ReactNode }) {
+  React.useLayoutEffect(() => blocks.draw('edit', id), [id]);
+  const key = blockKey('edit', id);
+  const there = React.useSyncExternalStore(attachedBlocks.subscribe, () => attachedBlocks.get().has(key));
+  return there ? ReactDOM.createPortal(children, blocks.slot('edit', id)) : null;
 }
 
 interface GeometryStore {

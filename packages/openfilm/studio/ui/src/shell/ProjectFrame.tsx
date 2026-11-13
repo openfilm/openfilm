@@ -28,6 +28,7 @@ import { Toast, useToast } from '@/components/Toast';
 import { BrandLoadingScreen } from '@/components/BrandLoadingScreen';
 import { forgetAsked, setOpener, showIn, tellCommand, workbenchOpens } from '@/studio/hub';
 import { usePublishFrame, wiringStore } from './frame';
+import { Arrangement } from './arrangement';
 import { LayoutOver, useLayout } from './layout';
 import { LibraryPlace, useLibraryShown } from './library';
 import { useProjectRead } from './project-read';
@@ -295,7 +296,7 @@ export function useProjectFrame(projectId: string) {
   const shown = useWorkbenchShown(projectId, loaded?.project.id, toast.showError, rearranging);
 
   /* ── how the window is laid out: the app's panel, the library, the canvas and the workbench's panes (shell/layout) ── */
-  const layout = useLayout({ canvasOpen: shown.canvasOpen, noBench: shown.noBench, rearranging });
+  const layout = useLayout({ canvasOpen: shown.canvasOpen, noBench: shown.noBench, among: shown.among, specs: shown.specs, inPage: shown.inPage, rearranging });
 
   /* ── the library: what its pane shows of the project, whichever workbench is shown (shell/library) ── */
   const library = useLibraryShown(projectId, { listing, mediaSources, mediaMade, toast, canvasOpen: shown.canvasOpen, openLibrary: layout.openLibrary });
@@ -370,7 +371,8 @@ const PLACE = { display: 'contents' } as const;
 
 /**
  * The project's page: its frame told, and the page itself, which is the shell's. The top bar is drawn first
- * (shell/top-bar); the element laid out among the page's panels (the edit's) goes where the panes are, and after it what
+ * (shell/top-bar); the arrangement among the page's panels, its blocks' slots laid out (shell/arrangement), and the
+ * elements that draw into them (the edit's, a plugin's: shell/workbenches) go where the panes are, and after them what
  * takes their place: a plugin's surface, the canvas (shell/workbenches); the page's own windows, the library's pane
  * (shell/library) and the layout's seams and editor (shell/layout) are drawn over the page; the other places are
  * filled by the workbench for now (see `slots`), each until it is the shell's own. Nothing of a workbench is drawn
@@ -400,7 +402,7 @@ export function ProjectFrame({ projectId }: { projectId: string }) {
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="relative z-10 grid min-h-0 min-w-0 flex-1 bg-[var(--dock-line)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
             <TopBar frame={state} />
-            {told && slots ? <AmongPanes frame={state} /> : null}
+            {told && slots ? <><Arrangement frame={state} /><AmongPanes frame={state} /></> : null}
             <InPanesPlace frame={state} />
           </div>
         </div>

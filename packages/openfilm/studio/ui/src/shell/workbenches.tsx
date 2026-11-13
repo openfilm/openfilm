@@ -1,9 +1,10 @@
 /**
  * Which workbench the project's page shows, and the workbenches themselves: the element each plugin on brings
- * (components/surfaces elementTag), put where the layout says it goes (lib/workspaces arrangementOf). One laid out
- * among the page's panels (the edit's, which draws Motion too) is put in the page with it; the canvas is put in its
- * box once warmed or shown, and kept there. Both stay for the project, hidden, while their plugins are off. Any other
- * plugin's surface takes the panes' place while it is picked. Each is hidden under whatever else is shown. The notice that no workbench is on is here too. The shell holds
+ * (components/surfaces elementTag), put where its arrangement says (lib/blocks arrangementOf). The edit's (which draws
+ * Motion too) is put in the page with it, and draws its blocks where the layout puts them (shell/arrangement); the
+ * canvas is put in its box once warmed or shown, and kept there. Both stay for the project, hidden, while their plugins
+ * are off. Another plugin's workbench with blocks of its own is laid out among the panels the same way while it is
+ * picked (its element put in the page then, and kept for the project); one without takes the panes' place whole. Each is hidden under whatever else is shown. The notice that no workbench is on is here too. The shell holds
  * the choice (the edit or the canvas, by project as left; Motion, a view of the edit; a plugin's surface picked on the
  * top bar), tells it in the frame (shell/ProjectFrame), and tells which is shown to the wiring (shell/frame), so it
  * reaches that workbench's first.
@@ -19,7 +20,7 @@ import { keyAction } from '@/lib/keymap-store';
 import { useStudioPlugins } from '@/lib/plugins';
 import { usePluginsOf } from '@/lib/project-plugins';
 import { useWorkModes } from '@/lib/work-modes';
-import { arrangementOf, type WorkspaceMode } from '@/lib/workspaces';
+import { arrangementOf, arrangementSpecs } from '@/lib/blocks';
 import { CanvasLoading } from '@/components/canvas/CanvasLoading';
 import { LoadBoundary } from '@/components/canvas/LoadBoundary';
 import { DOCK_GAP } from '@/components/PaneDivider';
@@ -43,6 +44,8 @@ function useKeptFlag(key: string, initial = true): [boolean, (open: boolean) => 
   }, [key]);
   return [open, keep, setOpen];
 }
+/** The workbenches whose showing the shell holds itself: the edit, Motion (a view of the edit) and the canvas. */
+const HELD_HERE: readonly string[] = ['edit', 'motion', 'canvas'];
 /** whether a project shows its canvas, kept on this computer by project */
 const CANVAS_KEY = 'openfilm.canvas.open';
 const canvasShown = (projectId: string) => { try { return localStorage.getItem(`${CANVAS_KEY}:${projectId}`) === '1'; } catch { return false; } };
@@ -89,16 +92,24 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     try { if (next) localStorage.setItem(`${SURFACE_KEY}:${projectId}`, next); else localStorage.removeItem(`${SURFACE_KEY}:${projectId}`); } catch { /* for this launch only */ }
   }, [projectId]);
   const surface = pickedSurface != null && workModes.includes(pickedSurface) ? pickedSurface : null;
+  /* the plugins of the project, and the arrangements their workbenches are laid out in (lib/blocks) */
+  const plugins = usePluginsOf(projectId);
+  const specs = arrangementSpecs(plugins);
+  /* the edit (and Motion, a view of it) and the canvas are held here; any other workbench is a plugin's, picked */
+  const heldHere = React.useCallback((workbench: string) => HELD_HERE.includes(workbench), []);
   const showWorkbench = React.useCallback((mode: string) => {
-    if (arrangementOf(mode) != null) { setSurface(null); setWorkMode(mode as 'canvas' | 'edit' | 'motion'); } else setSurface(mode);
-  }, [setWorkMode, setSurface]);
+    if (heldHere(mode)) { setSurface(null); setWorkMode(mode as 'canvas' | 'edit' | 'motion'); } else setSurface(mode);
+  }, [setWorkMode, setSurface, heldHere]);
+  /* the arrangement laid out among the page's panels: the plugin's picked, when it has one of its own; else the edit's,
+     under the canvas and any other plugin's surface too */
+  const surfaceArrangement = surface != null ? arrangementOf(surface, plugins) : null;
+  const among = surfaceArrangement != null && !heldHere(surface!) ? surfaceArrangement : 'edit';
   /* the edit and the canvas are not shown: no workbench is on, or a plugin's surface is in their place */
   const away = noBench || surface != null;
   /* the workbenches to pick from on the top bar (Motion is picked in the edit's timeline); the edit and the canvas
      alone are one button that goes from one to the other */
-  const plugins = usePluginsOf(projectId);
   const benchPlugins = React.useMemo(() => plugins.filter((p) => p.on && p.workbench && p.workbench !== 'motion'), [plugins]);
-  const pickBench = benchPlugins.length > 1 && benchPlugins.some((p) => arrangementOf(p.workbench!) == null);
+  const pickBench = benchPlugins.length > 1 && benchPlugins.some((p) => !heldHere(p.workbench!));
   const canToggleCanvas = workModes.includes('canvas') && workModes.length > 1;
   /* one turned off while in use gives way to the first still on */
   React.useEffect(() => {
@@ -113,12 +124,21 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
    */
   const pluginsRead = useStudioPlugins() !== null;
   const arranged = React.useMemo(() => {
-    const of = (arrangement: WorkspaceMode) => {
-      const there = plugins.filter((p) => p.on && p.workbench && arrangementOf(p.workbench) === arrangement);
+    const of = (arrangement: string) => {
+      const there = plugins.filter((p) => p.on && p.workbench && (arrangement === 'canvas' ? p.workbench === 'canvas' : p.workbench === 'edit' || p.workbench === 'motion'));
       return { on: there.length > 0, element: (pluginsRead ? there.find((p) => p.element)?.element : null) ?? null };
     };
     return { edit: of('edit'), canvas: of('canvas') };
   }, [plugins, pluginsRead]);
+  /* the elements of other plugins laid out among the page's panels (an arrangement of their own): put in the page once
+     shown, and kept there for the project while their plugins are on, drawing their blocks where the layout puts them */
+  const [shownAmong, setShownAmong] = React.useState<{ of: string; names: readonly string[] }>({ of: projectId, names: [] });
+  const amongNames = shownAmong.of === projectId ? shownAmong.names : [];
+  if (surface != null && surfaceArrangement === among && among !== 'edit' && !amongNames.includes(surface)) setShownAmong({ of: projectId, names: [...amongNames, surface] });
+  const amongElements = React.useMemo(() => (pluginsRead ? amongNames.flatMap((name) => {
+    const plugin = plugins.find((p) => p.on && p.workbench === name && p.element);
+    return plugin ? [{ name, element: plugin.element! }] : [];
+  }) : []), [amongNames, plugins, pluginsRead]);
   /* an element put in the page stays there for this project, hidden, when its plugin is turned off: turned on again,
      it is as it was left (what is in hand, the playhead, the steps to undo), and what it has on the top bar stays */
   const [placed, setPlaced] = React.useState<{ of: string; edit: string | null; canvas: string | null }>({ of: projectId, edit: null, canvas: null });
@@ -136,8 +156,8 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
    * project has opened and the page has painted, while it is visible: the canvas is then put in its box, hidden. A
    * plugin someone made is loaded only when first shown. Each: its module, and whether it is the canvas's.
    */
-  const toWarm = JSON.stringify((pluginsRead ? plugins : []).filter((p) => !p.skill && p.on && p.workbench && p.element && arrangementOf(p.workbench) !== 'edit'
-    && (arrangementOf(p.workbench) === 'canvas' ? !canvasKept : p.workbench !== surface)).map((p) => [p.element, arrangementOf(p.workbench!) === 'canvas']));
+  const toWarm = JSON.stringify((pluginsRead ? plugins : []).filter((p) => !p.skill && p.on && p.workbench && p.element && p.workbench !== 'edit' && p.workbench !== 'motion'
+    && (p.workbench === 'canvas' ? !canvasKept : p.workbench !== surface)).map((p) => [p.element, p.workbench === 'canvas']));
   React.useEffect(() => {
     if (!canvasProject || toWarm === '[]') return;
     let live = true;
@@ -185,10 +205,14 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     } catch (error) { showError(error instanceof Error ? error.message : String(error)); }
   }, [projectId, showError]);
 
+  /* whether a workbench draws its blocks in the page now: its element is there */
+  const inPage = React.useCallback((workbench: string) => (workbench === 'edit' ? Boolean(arranged.edit.element ?? placedNext.edit)
+    : workbench === 'canvas' ? Boolean(arranged.canvas.element ?? placedNext.canvas) : amongElements.some((e) => e.name === workbench)), [arranged, placedNext.edit, placedNext.canvas, amongElements]);
+
   return {
     canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, noBench, surface, showWorkbench, away,
     benchPlugins, pickBench, canToggleCanvas, pluginsRead, arranged, placed: placedNext,
-    canvasKept, requestCanvasFiles,
+    canvasKept, requestCanvasFiles, specs, among, amongElements, inPage, surfaceArrangement,
   };
 }
 
@@ -210,8 +234,8 @@ function Thrown({ error }: { error: string }): never {
  * element has the same tag (two plugins that bring one workbench, as the edit's and Motion's do) keeps the element
  * there; it is taken out when this is.
  */
-function PluginElement({ url, projectId, ready, loading, failed }: {
-  url: string; projectId: string; ready: boolean; loading: React.ReactNode; failed: (error: string) => React.ReactNode;
+function PluginElement({ url, projectId, plugin, ready, loading, failed }: {
+  url: string; projectId: string; plugin?: string; ready: boolean; loading: React.ReactNode; failed: (error: string) => React.ReactNode;
 }) {
   const host = React.useRef<HTMLDivElement>(null);
   const put = React.useRef<{ tag: string; projectId: string; element: HTMLElement } | null>(null);
@@ -226,13 +250,14 @@ function PluginElement({ url, projectId, ready, loading, failed }: {
         put.current?.element.remove();
         const element = document.createElement(tag);
         element.setAttribute('project-id', projectId);
+        if (plugin) element.setAttribute('plugin', plugin);
         host.current.append(element);
         put.current = { tag, projectId, element };
       }
       setState('shown');
     }, (e) => { if (live) setState({ error: e instanceof Error ? e.message : String(e) }); });
     return () => { live = false; };
-  }, [url, projectId, ready]);
+  }, [url, projectId, plugin, ready]);
   React.useEffect(() => () => { put.current?.element.remove(); put.current = null; }, []);
   return (
     <>
@@ -249,13 +274,19 @@ function PluginElement({ url, projectId, ready, loading, failed }: {
  */
 export function AmongPanes({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
   const t = useT();
-  const { projectId, arranged, pluginsRead, placed } = frame;
+  const { projectId, arranged, pluginsRead, placed, amongElements } = frame;
   /* one put in the page before stays while its plugin is off (hidden under what is shown: the panes know) */
   const element = arranged.edit.element ?? placed.edit;
-  if (!arranged.edit.on && !element) return null;
-  if (!element) return pluginsRead ? <p className={NOTE} style={{ gridArea: 'main' }}>{t('assetDrawer.surfaceMissing')}</p> : null;
-  return <PluginElement url={element} projectId={projectId} ready loading={null}
-    failed={(error) => <p className={NOTE} style={{ gridArea: 'main' }}>{`${t('assetDrawer.surfaceFailed')}\n\n${error}`}</p>} />;
+  const failed = (error: string) => <p className={NOTE} style={{ gridArea: 'main' }}>{`${t('assetDrawer.surfaceFailed')}\n\n${error}`}</p>;
+  return (
+    <>
+      {!arranged.edit.on && !element ? null
+        : !element ? (pluginsRead ? <p className={NOTE} style={{ gridArea: 'main' }}>{t('assetDrawer.surfaceMissing')}</p> : null)
+          : <PluginElement url={element} projectId={projectId} ready loading={null} failed={failed} />}
+      {/* the elements of other plugins laid out among the panels: each draws its blocks into their slots */}
+      {amongElements.map(({ name, element: url }) => <PluginElement key={name} url={url} projectId={projectId} plugin={name} ready loading={null} failed={failed} />)}
+    </>
+  );
 }
 
 /**
@@ -269,21 +300,20 @@ export function InPanesPlace({ frame }: { frame: ReturnType<typeof useProjectFra
   const t = useT();
   const {
     projectId, loaded, failure, slots,
-    surface, benchPlugins, noBench, away, canvasOpen, canvasKept, arranged, placed, pluginsRead,
-    editFree, canvasFree, editDock, canvasDock, insetStyle, freeStyle,
+    surface, surfaceArrangement, benchPlugins, noBench, away, canvasOpen, canvasKept, arranged, placed, pluginsRead,
+    places,
   } = frame;
-  /* how the window is laid out round these: the room kept round the panes with the edit shown and with the canvas
-     shown (none where the panels float), and the canvas's own frame where they float */
-  const places = React.useMemo(() => ({ edit: editFree ? {} : insetStyle(editDock), canvas: canvasFree ? {} : insetStyle(canvasDock), canvasFrame: freeStyle('canvas') }), [editFree, canvasFree, editDock, canvasDock, insetStyle, freeStyle]);
   /* the plugin's surface shown: one left is let go (a page hidden could go on playing), and loaded again when shown */
   const surfacePlugin = surface != null ? benchPlugins.find((p) => p.workbench === surface) : undefined;
   if (!loaded || failure) return null;
-  /* the room the layout keeps round the panes, with the edit shown or the canvas: the same round these */
-  const room = canvasOpen ? places.canvas : places.edit;
+  /* how the window is laid out round these: the room the layout keeps round the panes with the arrangement among them
+     shown, or the canvas (none where the panels float), and the canvas's own frame where they float */
+  const room = canvasOpen ? places.canvas : places.among;
   return (
     <>
-      {/* a plugin's own surface in the panes' place, as the canvas is: they stay laid out as they were, hidden under it */}
-      {surface != null ? (
+      {/* a plugin's own surface in the panes' place, as the canvas is: they stay laid out as they were, hidden under it.
+          One with an arrangement of its own is laid out among the panels instead (shell/arrangement) */}
+      {surface != null && surfaceArrangement == null ? (
         <div key={surface} data-workspace-surface={surface} className="relative z-[3] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
           style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...room }}>
           <div className="relative flex min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
