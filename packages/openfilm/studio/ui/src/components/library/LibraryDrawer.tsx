@@ -1,9 +1,10 @@
 /**
  * The assets drawer's library (in the app's panel, over the chat, its composer under it), laid out as an editor's
  * library is: the categories along the top — the media (the project's and Saved, the media pane as it was), the
- * skills an agent takes up (SkillsPane), the voices to speak a voice-over in, then OpenFilm's own sounds, music, text,
- * the captions a caption track is made with (CaptionsPane), stickers, filters, effects and transitions (lib/library) — and down the left the starred ones and the library's own,
- * its groups under it. What is shown is in
+ * plugins and skills (PluginsPane), the voices to speak a voice-over in, then OpenFilm's own sounds, music, text,
+ * the captions a caption track is made with (CaptionsPane), stickers, filters, effects and transitions (lib/library),
+ * then the tabs plugins bring (plugin-tabs) — and down the left the starred ones and the library's own,
+ * its groups under it (a plugin's tab is its own, whole). What is shown is in
  * the accent color; a category's icon fills faintly too.
  *
  * A click picks a thing and tries it in the viewer. Hovering previews inside the library.
@@ -22,10 +23,12 @@ import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resou
 import { useLibraryVoices, type LibraryVoice, type VoiceAccess } from '@/lib/library-voices';
 import { ADD_COLOR, AudioArtwork, FOOT_ROOM, HereButton, MiniPlayer, MusicCard, ROUND, SoundRow, usePlayer, type LibraryHover } from './AudioList';
 import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
-import { CategoryIcon, Empty } from './icons';
+import { Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane, type VoiceSample } from './VoicesPane';
-import { PluginsPane } from './PluginsPane';
-import { ImportButton, SkillsPane, type SkillsLine } from './SkillsPane';
+import { ImportButton, PluginsPane, type SkillsLine } from './PluginsPane';
+import { CategoryMark, useCategoryName, usePluginTabs, withTabs } from './plugin-tabs';
+import { PluginSurface } from '../surfaces';
+import type { Plugin } from '@/lib/plugins';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 import { TextStyleSample } from './TextStyleSample';
 import { useSavedLooks } from '../CaptionPresets';
@@ -34,10 +37,12 @@ import { PLAIN } from './OnPicture';
 import { isClipMotion } from '@/lib/clip-presets';
 import { useLibraryArrangement } from './arrangement';
 
-type Category = 'media' | 'skill' | 'plugin' | 'voice' | 'captions' | LibraryCategory;
-/* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, the skills, then the
-   templates, the most a film is made with at once */
-export const CATEGORIES: Category[] = ['media', 'skill', 'plugin', 'template', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
+type OwnCategory = 'media' | 'plugin' | 'voice' | 'captions' | LibraryCategory;
+/** One of OpenFilm's own categories, or a plugin's tab (by its plugin's id). */
+type Category = OwnCategory | (string & {});
+/* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, the plugins (with the
+   skills), then the templates, the most a film is made with at once; the plugins' tabs come after these */
+export const CATEGORIES: OwnCategory[] = ['media', 'plugin', 'template', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
 
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
 const FAVORITES = STARRED;
@@ -94,7 +99,7 @@ export interface LibraryActions {
 /** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
 export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, showSkills, under = 0, shown: isShown = true }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, folder = '', showSkills, onWorkbenchOn, under = 0, shown: isShown = true }: {
   media: React.ReactNode;
   /** the project's own media, or Mine (the person's own, for every film) */
   mediaScope: 'project' | 'saved';
@@ -116,7 +121,11 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   onServices: () => void;
   /** the project shown, for its own skills */
   projectId?: string | null;
+  /** its folder on this computer, told to a plugin's tab */
+  folder?: string;
   showSkills?: SkillsRequest | null;
+  /** a plugin with a workbench was turned on in the Plugins tab */
+  onWorkbenchOn?: (plugin: Plugin) => void;
   /** how much of its foot the app's composer floats over: the lists run on under it, their ends scrolled clear of it
       (--drawer-under) */
   under?: number;
@@ -127,12 +136,16 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   const index = useLibraryIndex(true);
   const favorites = useLibraryFavorites();
   const voices = useLibraryVoices();
-  /* the categories shown, in the person's order */
+  /* the categories shown, in the person's order, the tabs of the plugins on among them */
   const arranged = useLibraryArrangement();
-  const categories = arrangedCategories(CATEGORIES, arranged).filter((c) => c.on && (c.id !== 'captions' || captions)).map((c) => c.id);
+  const tabs = usePluginTabs(projectId);
+  const categoryName = useCategoryName(tabs);
+  const categories = arrangedCategories(withTabs(CATEGORIES, tabs), arranged).filter((c) => c.on && (c.id !== 'captions' || captions)).map((c) => c.id);
   const [shownCat, setCat] = React.useState<Category>(SHOWN.cat);
   /* one turned off while it was shown: the media in its place */
   const cat: Category = categories.includes(shownCat) ? shownCat : 'media';
+  /* the plugin whose tab is shown */
+  const tab = tabs.find((p) => p.id === cat);
   const [group, setGroup] = React.useState<string>(firstLine(SHOWN.cat));
   const [textOpen, setTextOpen] = React.useState(SHOWN.textOpen);
   const [starredText, setStarredText] = React.useState(SHOWN.starredText);
@@ -140,7 +153,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   const [presets, , dropPreset] = useSavedLooks();
   const [folded, setFolded] = React.useState(SHOWN.folded);
   const [query, setQuery] = React.useState('');
-  /* the skill whose page is shown in place of the skills' tiles */
+  /* the page shown in place of the plugins' list: a skill's, or one of OpenFilm's own plugins' (PluginsPane) */
   const [skillOpen, setSkillOpen] = React.useState<string | null>(null);
   /* the source the list is narrowed to (SourceChips), all of them by default */
   const [source, setSource] = React.useState<Source | ''>('');
@@ -214,12 +227,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
     setStickerOpen(SHOWN.stickerOpen);
     if (open && stickerSectionOf(group) !== section) pickGroup(section);
   };
-  /* a request from outside: the skills, on Discover or on one's page (followed once, by its `n`) */
+  /* a request from outside: the plugins, on Discover or on a skill's page (followed once, by its `n`) */
   React.useEffect(() => {
     if (!showSkills || showSkills.n === SHOWN.request) return;
     SHOWN.request = showSkills.n;
-    if (cat !== 'skill') show('skill');
-    if (!showSkills.name) { SHOWN.group.skill = 'discover'; setGroup('discover'); }
+    if (cat !== 'plugin') show('plugin');
+    if (!showSkills.name) { SHOWN.group.plugin = 'discover'; setGroup('discover'); }
     setSkillOpen(showSkills.name ?? null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSkills?.n]);
@@ -437,8 +450,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
               className={`relative my-1 flex min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap rounded-md px-2 text-[10.5px] leading-[13px] ${cat === id ? 'font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text)] hover:text-[var(--accent)]'}`}
             >
               {/* the one shown: its icon and name in the accent, nothing else */}
-              <CategoryIcon id={id} on={cat === id} size={18} />
-              {t(`assetDrawer.cat_${id}`)}
+              <CategoryMark id={id} tabs={tabs} on={cat === id} size={18} />
+              {categoryName(id)}
             </button>
           ))}
         </nav>
@@ -450,6 +463,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
           </button>
         ) : null}
       </div>
+      {/* a plugin's tab: its surface, the whole of the drawer under the categories */}
+      {tab ? (
+        <div className="flex min-h-0 flex-1" data-library-tab={tab.id}>
+          {projectId ? <PluginSurface id={tab.id} page={tab.page} files={tab.files} program={tab.program} runs={tab.runs} inApp={tab.inApp} element={tab.element} projectId={projectId} folder={folder} /> : null}
+        </div>
+      ) : (
       <div className="flex min-h-0 flex-1">
         {/* as wide as the person dragged its edge (RAIL), kept for next time */}
         <div className="relative flex shrink-0" style={{ width: rail }}>
@@ -461,9 +480,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
                 <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mine')}</SideBox>
               </>
-            ) : cat === 'skill' ? (
+            ) : cat === 'plugin' ? (
               <>
-                {/* Installed first opened, in parts by whose they are (SkillsPane); the starred; Discover, OpenFilm's to take up */}
+                {/* Installed first opened, in parts by whose they are (PluginsPane); the starred; Discover, OpenFilm's to take up */}
                 <SideBox on={skillLine === 'installed'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
                 <SideBox on={skillLine === 'favorites'} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
                 <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
@@ -491,11 +510,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 {stickerSection(LIVE, t('assetDrawer.stickersLive'))}
                 {stickerSection(STILL, t('assetDrawer.stickersStill'))}
               </>
-            ) : cat === 'plugin' ? (
-              <>
-                {/* what OpenFilm is made of (PluginsPane) */}
-                <SideBox on onClick={() => pickGroup('')}>{t('assetDrawer.skillsInstalled')}</SideBox>
-              </>
             ) : cat === 'captions' ? (
               <>
                 {/* caption tracks made here; their look is the caption inspector's */}
@@ -521,23 +535,23 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
           </nav>
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
-          {cat === 'media' ? media : cat === 'captions' && captions ? <CaptionsPane actions={captions} /> : cat === 'plugin' ? <PluginsPane projectId={projectId} /> : (
+          {cat === 'media' ? media : cat === 'captions' && captions ? <CaptionsPane actions={captions} /> : (
             <>
-              {/* a skill's page has its own way back instead */}
-              <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>
+              {/* a page has its own way back instead */}
+              <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'plugin' && skillOpen != null}>
                 <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-[var(--bg-field)] px-2.5 text-[var(--text-faint)] focus-within:ring-1 focus-within:ring-[var(--accent)]">
                   <Search size={14} />
                   <input
                     value={query}
                     onChange={(e) => { stopHover(); setQuery(e.target.value); }}
-                    placeholder={t('assetDrawer.search').replace('{what}', t(`assetDrawer.cat_${cat}`))}
+                    placeholder={t('assetDrawer.search').replace('{what}', categoryName(cat))}
                     className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
                   />
                 </label>
                 {/* the person's own skills come in here, the app's way (a link or a folder) */}
-                {cat === 'skill' && skillLine === 'installed' && studioHost?.skills?.add ? <ImportButton onClick={studioHost.skills.add} /> : null}
+                {cat === 'plugin' && skillLine === 'installed' && studioHost?.skills?.add ? <ImportButton onClick={studioHost.skills.add} /> : null}
               </div>
-              {cat !== 'skill' && cat !== 'voice' && !(cat === 'text' && (group === NEW_TEXT || group === PRESETS)) ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
+              {cat !== 'plugin' && cat !== 'voice' && !(cat === 'text' && (group === NEW_TEXT || group === PRESETS)) ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
               {/* the starred things of the text category: its looks, or its templates */}
               {cat === 'text' && group === FAVORITES && !q ? (
                 <div className="flex gap-1.5 px-3 pb-2">
@@ -549,7 +563,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                   ))}
                 </div>
               ) : null}
-              {cat === 'skill' ? <SkillsPane line={skillLine} query={query} projectId={projectId} opened={skillOpen} onOpen={setSkillOpen} onDiscover={() => pickGroup('discover')} />
+              {cat === 'plugin' ? <PluginsPane line={skillLine} query={query} projectId={projectId} opened={skillOpen} onOpen={setSkillOpen} onDiscover={() => pickGroup('discover')} {...(onWorkbenchOn ? { onWorkbenchOn } : {})} />
                 : cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} speak={speak}
                   player={voicePlayer} previewBar={previewBar} picked={picked} onPick={(id) => { setPicked(id); onPreviewStart(); }} onClosePreview={closePreview} /> : (
               <>
@@ -611,6 +625,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
