@@ -46,12 +46,13 @@
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
+import { Worker } from 'node:worker_threads';
 import { recordProblem, problemsFile } from 'openfilm/problems';
 import { LOG_SETTLE_MS } from './agent-logs.mjs';
-import { RECORDED_AGENTS, agentRecordCalls, compactCalls, recordedModel } from './agent-records.mjs';
+import { RECORDED_AGENTS, recordedModel } from './agent-records.mjs';
 import { skillStore } from './agent-skills.mjs';
 import { AGENTS, AgentSession, HARNESS_AGENTS, isAgentId, isChatAgent, listAgents, openAgentSignIn, optionsForModel, probeFolder } from './agents.mjs';
-import { loggedBlocks, logsDir, openLog, writeModelLog } from './chat-store.mjs';
+import { loggedBlocks, logsDir, openLog } from './chat-store.mjs';
 import { loginShellVariables } from './environment.mjs';
 import { turnOutcome } from './turn-notices.mjs';
 
@@ -72,18 +73,26 @@ const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 /** how long after a turn the agent's own record is read: its last lines may still be on their way to the file */
 const RECORD_SETTLE_MS = 800;
+/** where a record is read (agent-record-worker.mjs), and the most memory that may take */
+const RECORD_WORKER = new URL('./agent-record-worker.mjs', import.meta.url);
+const RECORD_WORKER_MB = 2048;
 
 /**
  * The agent's requests to its model from `from` to `to` (ms), read from its own record (or `agentLog`, the log it was
- * started with) into the turn's model log. Never throws: a record that cannot be read leaves the turn without one.
+ * started with) into the turn's model log, in a worker thread, so a long record never holds up the window. Never
+ * throws: a record that cannot be read leaves the turn without one, and the reason is logged.
  */
-export async function keepAgentRecord({ agent, sessionId, cwd, turnId, from, to, agentLog = null, log = () => {}, settleMs = LOG_SETTLE_MS[agent] ?? RECORD_SETTLE_MS }) {
+export async function keepAgentRecord({ agent, sessionId, cwd, turnId, from, to, agentLog = null, log = () => {}, settleMs = LOG_SETTLE_MS[agent] ?? RECORD_SETTLE_MS, env = null }) {
   if (!RECORDED_AGENTS.includes(agent) || !sessionId || !turnId) return;
   try {
     await new Promise((done) => setTimeout(done, settleMs));
-    const env = await loginShellVariables({ staleOk: true });
-    const found = agentRecordCalls({ agent, sessionId, cwd, from, to, env, log: agentLog });
-    if (found?.calls.length) writeModelLog(cwd, turnId, compactCalls(found.calls));
+    const workerData = { agent, sessionId, cwd, turnId, from, to, env: env ?? await loginShellVariables({ staleOk: true }), agentLog };
+    await new Promise((done, fail) => {
+      const worker = new Worker(RECORD_WORKER, { workerData, resourceLimits: { maxOldGenerationSizeMb: RECORD_WORKER_MB } });
+      worker.once('message', (m) => (m?.error ? fail(new Error(m.error)) : done(undefined)));
+      worker.once('error', fail);
+      worker.once('exit', (code) => (code ? fail(new Error(`the record's reader stopped (${code})`)) : done(undefined)));
+    });
   } catch (e) {
     log(`agent record ${turnId}: ${e instanceof Error ? e.message : String(e)}\n`);
   }

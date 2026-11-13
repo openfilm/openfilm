@@ -40,7 +40,7 @@ const encode = (file, input, ...out) => {
   return file;
 };
 
-test('high-bit-depth media sheets embed thumbnails; single frames keep their full resolution', { timeout: 60_000 }, async (t) => {
+test('high-bit-depth media sheets embed thumbnails; a single frame is a JPEG of its size', { timeout: 60_000 }, async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'of-look-media-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const file = encode(join(dir, 'camera.mkv'), 'testsrc2=s=640x480:r=12:d=1', '-pix_fmt', 'yuv420p10le', '-c:v', 'ffv1');
@@ -53,10 +53,40 @@ test('high-bit-depth media sheets embed thumbnails; single frames keep their ful
   assert.equal(cells.length, 16);
   for (const cell of cells) assert.deepEqual(cell, { width: 480, height: 360, depth: 8, alpha: false });
   const single = await look([file, '0']);
-  const png = readFileSync(single.files[0]);
-  assert.equal(png.readUInt32BE(16), 640);
-  assert.equal(png.readUInt32BE(20), 480);
-  assert.equal(png[24], 16);
+  assert.match(single.files[0], /camera-0s\.jpg$/);
+  assert.deepEqual(jpegSize(readFileSync(single.files[0])), { width: 640, height: 480 });
+});
+
+/** A JPEG's width and height, from its first start-of-frame marker. */
+function jpegSize(jpg) {
+  assert.equal(jpg.readUInt16BE(0), 0xffd8, 'a JPEG');
+  for (let i = 2; i < jpg.length;) {
+    const marker = jpg.readUInt16BE(i);
+    if (marker >= 0xffc0 && marker <= 0xffc3) return { width: jpg.readUInt16BE(i + 7), height: jpg.readUInt16BE(i + 5) };
+    i += 2 + jpg.readUInt16BE(i + 2);
+  }
+  throw new Error('no frame size in this JPEG');
+}
+
+test("a single frame of a large stage is a JPEG at most 1568 px long, light enough to keep several in a conversation; one with alpha stays a PNG", { timeout: 90_000 }, async (t) => {
+  const { writeFileSync } = await import('node:fs');
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-frame-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'a.html'), '<!doctype html><body style="margin:0;background:#123"><script>window.film = { duration: 2, width: 3840, height: 2160, frame(t) { document.body.style.opacity = String(0.5 + t / 4); } };</script>');
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 3840, h: 2160 }, tracks: [{ clips: [{ src: 'a.html' }] }] }));
+  const r = await look([dir, '1'], {});
+  assert.notEqual(r.ok, false, r.lines.join('\n'));
+  assert.match(r.files[0], /1s\.jpg$/);
+  const jpg = readFileSync(r.files[0]);
+  assert.deepEqual(jpegSize(jpg), { width: 1568, height: 882 });
+  assert.ok(jpg.length < 1_000_000, `${jpg.length} bytes`);
+  /* a layer that lets the ground through: its alpha kept */
+  writeFileSync(join(dir, 'b.html'), '<!doctype html><body style="margin:0"><div style="width:200px;height:100px;background:red"></div><script>window.film = { duration: 2, width: 640, height: 360, frame() {} };</script>');
+  const layer = await look([join(dir, 'b.html'), '1'], {});
+  assert.notEqual(layer.ok, false, layer.lines.join('\n'));
+  assert.match(layer.files[0], /\.png$/);
+  const png = readFileSync(layer.files[0]);
+  assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20), png[25]], [640, 360, 6]);
 });
 
 test('a transparent clip keeps its alpha in a media sheet, so its cells show the checkerboard behind it', { timeout: 60_000 }, async (t) => {
