@@ -412,6 +412,9 @@ test('a video clip graded by a LUT is drawn through a copy graded at its own bit
     /* the colour, as the LUT says: red and blue swapped */
     const [r, g, b] = rgbAt(done.out, 0.25, w, h)(w / 2, h / 2);
     assert.ok(Math.abs(r - 0xc0) < 12 && Math.abs(g - 0x60) < 12 && Math.abs(b - 0x20) < 12, `the graded colour: ${r},${g},${b}`);
+    /* and as look shows it */
+    const seen = rgbAt((await look([dir, '0.25'])).files[0], 0, w, h)(w / 2, h / 2);
+    assert.ok(Math.abs(seen[0] - 0xc0) < 12 && Math.abs(seen[1] - 0x60) < 12 && Math.abs(seen[2] - 0x20) < 12, `look's colour: ${seen}`);
     /* the gradient: as fine as graded at 10 bits (ffmpeg, in 16-bit RGB, cut to 8 once), far finer than graded after
        the 8-bit copy a browser plays today */
     const lut = (/** @type {string} */ f) => `scale=in_color_matrix=bt709,format=gbrp16le,lut3d=file=${relative(dirname(f), join(dir, 'looks', 'push.cube')).split(sep).join('/')}:interp=tetrahedral,`;

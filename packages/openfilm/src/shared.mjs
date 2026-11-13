@@ -96,8 +96,10 @@ export async function open(target, opts = {}) {
       keyOf = gradeKey;
       const files = Array.isArray(opts.playable) ? opts.playable : loc.isFilm ? filmVideos(loc.root, loc.entry) : [];
       for (const [file, copy] of await browserCopies(browser, site.url, loc.root, files, { signal: opts.signal })) copies.set(file, copy);
-      /* the film's videos graded by LUTs, as the preview and an export show them */
-      if (!Array.isArray(opts.playable) && loc.isFilm) for (const [key, copy] of await gradedCopies(filmGrades(loc.root, loc.entry), loc.root, { signal: opts.signal })) graded.set(key, copy);
+      /* the film's videos graded by LUTs, as the preview and an export show them (the project's film, for a page drawn
+         around it, as a render's) */
+      const film = loc.isFilm ? loc.entry : opts.root ? FILM_FILE : null;
+      if (film) for (const [key, copy] of await gradedCopies(filmGrades(loc.root, film), loc.root, { signal: opts.signal })) graded.set(key, copy);
     } catch { /* the footage as it is */ }
   }
   /** @type {FilmPage} */
