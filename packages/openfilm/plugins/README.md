@@ -41,6 +41,11 @@ both if it wants both: its `workbench` and its `tab` show the same element, the 
 (`export { default } from 'openfilm/workbench/<name>'`, built from `studio/ui/src/plugins/<name>/index.tsx`); a tab named
 by a plugin's id that is also one of the library's own takes that one's place.
 
+A tab's element is made once for the project and kept for as long as the page is open: while another tab is shown, or the
+drawer is closed, it is moved out of sight, and moved back when the tab is shown again. A move calls `disconnectedCallback`
+and then `connectedCallback`; keep what the element holds across one (let it go only if `isConnected` is still false a
+moment after `disconnectedCallback`, as OpenFilm's own elements do).
+
 `bin` gives commands: `"bin": { "look": "look.mjs" }` is `openfilm my-plugin look`, for an agent and for other plugins alike.
 A `bin` that is one file is one command, `openfilm my-plugin`.
 
