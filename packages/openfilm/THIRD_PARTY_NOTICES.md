@@ -11,6 +11,11 @@ Studio's editor (`studio/ui/dist`) bundles:
   © Paul Henschel), **classcat** (MIT License, © Jorge Bucaran) and the **d3** modules it uses (d3-drag, d3-selection,
   d3-zoom, d3-transition, d3-interpolate, d3-dispatch, d3-color, d3-ease, d3-timer: ISC License, © Mike Bostock; the
   easing of d3-ease also BSD 3-Clause License, © Robert Penner).
+- **Tiptap** (`@tiptap/*`), the editor of the canvas's text: MIT License, © Tiptap GmbH; with **ProseMirror**
+  (`prosemirror-*`), **orderedmap**, **rope-sequence** and **w3c-keyname** (MIT License, © Marijn Haverbeke and others),
+  **marked** (MIT License, © MarkedJS, © Christopher Jeffrey), **linkifyjs** (MIT License, © Nick Frasser),
+  **fast-deep-equal** (MIT License, © Evgeny Poberezkin) and **use-sync-external-store** (MIT License, © Meta Platforms,
+  Inc. and affiliates).
 
 The CLI depends on **playwright-core** (Apache License 2.0), which downloads a headless Chromium on first use.
 

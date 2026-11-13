@@ -697,15 +697,16 @@ export function NotePanel({ id }: { id: string }) {
   };
   return (
     <Composer id={id} shown={shown} expanded={expanded} setExpanded={setExpanded}>
-        <div className="flex h-6 items-center gap-1 pr-9">
-          {upload ? <label className={`relative focus-within:outline ${CHIP} ${busy || uploading ? 'opacity-60' : 'cursor-pointer'}`} title={t('canvas.write.attach')}>
+        <div className="flex min-h-12 items-center gap-2 pr-9">
+          {/* references to write from: a square to add them, as the picture nodes' slots are */}
+          {upload ? <label className={`cv-tool relative flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-chip)] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] focus-within:outline ${busy || uploading ? 'opacity-60' : 'cursor-pointer'}`} title={t('canvas.write.add')}>
             <input type="file" multiple accept={WRITING_ATTACHMENT_ACCEPT} disabled={busy || uploading} aria-label={t('canvas.write.attach')}
               className="absolute inset-0 size-full cursor-pointer opacity-0 disabled:cursor-default" onChange={(event) => {
                 const files = Array.from(event.currentTarget.files ?? []);
                 event.currentTarget.value = '';
                 void attach(files);
               }} />
-            <Plus size={13} />{t('canvas.panel.upload')}
+            <Plus size={20} strokeWidth={1.75} />
           </label> : null}
           {uploading ? <span role="status" className="truncate text-xs text-[var(--cv-label)]">{t('canvas.importUploading')}</span> : null}
         </div>

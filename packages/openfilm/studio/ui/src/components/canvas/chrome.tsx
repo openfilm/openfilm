@@ -17,6 +17,7 @@ import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
 import type { BoardNode, MakeData, SpawnKind } from './board';
 import { KIND_ICON, MAKE_ICON } from './nodes';
+import { MENU, MENU_ICON, MENU_ROW, MENU_TITLE } from './menu-style';
 
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 const OPT = MOD === '⌘' ? '⌥' : 'Alt+';
@@ -133,12 +134,12 @@ export function BottomToolbar({ onKind, onUpload, onTemplates, onLibrary, onChar
               <button type="button" aria-label={t('canvas.library.title')} onClick={() => setLibrary((v) => !v)} className={`${BAR} ${library ? ON : ''}`}><Shapes {...ICON} /></button>
             </Tooltip>
           )}>
-          <div className="cv-pop w-[154px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
-            <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-3)]">{t('canvas.library.title')}</div>
+          <div className={`${MENU} w-[180px]`}>
+            <div className={MENU_TITLE}>{t('canvas.library.title')}</div>
             {(['styles', 'effects'] as const).map((which) => (
               <button key={which} type="button" onClick={() => { setLibrary(false); onLibrary(which); }}
-                className="flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]">
-                {which === 'styles' ? <Palette size={15} /> : <Clapperboard size={15} />}{t(`canvas.library.${which}`)}
+                className={MENU_ROW}>
+                {which === 'styles' ? <Palette size={MENU_ICON} /> : <Clapperboard size={MENU_ICON} />}{t(`canvas.library.${which}`)}
               </button>
             ))}
           </div>
@@ -161,7 +162,7 @@ export function BottomToolbar({ onKind, onUpload, onTemplates, onLibrary, onChar
 }
 
 /**
- * The bar at the board's bottom left: the keys, and one button for the tool in use, select (V) or the hand (H), lit
+ * The bar at the board's bottom left: the keys, and one button for the tool in use, select (V) or the hand (H),
  * while it is the hand; a click takes the other.
  */
 export function ToolCorner({ tool, onTool }: { tool: 'select' | 'hand'; onTool: (tool: 'select' | 'hand') => void }) {
@@ -226,7 +227,7 @@ export function ToolCorner({ tool, onTool }: { tool: 'select' | 'hand'; onTool: 
         <span className="mx-0.5 h-4 w-px shrink-0 bg-[var(--cv-bar-line)]" />
         {/* one button: it shows the tool in use, and a click takes the other */}
         <Tooltip label={t(`canvas.keys.${other}`)} shortcut={other === 'select' ? 'V' : 'H'} side="top">
-          <button type="button" aria-label={t(`canvas.keys.${tool}`)} aria-pressed={tool === 'hand'} onClick={() => onTool(other)} className={`${SMALL} ${tool === 'hand' ? ON : ''}`}>
+          <button type="button" aria-label={t(`canvas.keys.${tool}`)} onClick={() => onTool(other)} className={`${SMALL} ${ON}`}>
             <span key={tool} className="cv-swap flex">{tool === 'select' ? <MousePointer2 {...SMALL_ICON} /> : <Hand {...SMALL_ICON} />}</span>
           </button>
         </Tooltip>
@@ -249,7 +250,7 @@ export function CornerBar({ outline, onOutline, map, onMap, wires, onWires, snap
   const flow = useReactFlow();
   const zoom = useStore((s) => s.transform[2]);
   const [open, setOpen] = React.useState(false);
-  const row = 'flex h-8 w-full items-center justify-between rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]';
+  const row = `${MENU_ROW} justify-between`;
   const act = (run: () => void) => () => { run(); setOpen(false); };
   return (
     <div className={`${CORNER} right-2`}>
@@ -271,7 +272,7 @@ export function CornerBar({ outline, onOutline, map, onMap, wires, onWires, snap
             {Math.round(zoom * 100)}%
           </button>
         )}>
-        <div className="w-[200px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
+        <div className={`${MENU} w-[220px]`}>
           <button type="button" className={row} onClick={act(() => { void flow.zoomIn({ duration: 150 }); })}>{t('canvas.zoom.in')}<kbd className="font-sans text-[11px] text-[var(--cv-ink-3)]">{MOD}+</kbd></button>
           <button type="button" className={row} onClick={act(() => { void flow.zoomOut({ duration: 150 }); })}>{t('canvas.zoom.out')}<kbd className="font-sans text-[11px] text-[var(--cv-ink-3)]">{MOD}−</kbd></button>
           <button type="button" className={row} onClick={act(() => { void flow.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }); })}>{t('canvas.fit')}<kbd className="font-sans text-[11px] text-[var(--cv-ink-3)]">{MOD}0</kbd></button>

@@ -10,16 +10,17 @@
 import React from 'react';
 import { Handle, NodeResizeControl, NodeResizer, NodeToolbar, Position, useStore, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
-  AlignLeft, AudioLines, BookmarkPlus, Bot, Clapperboard, FileQuestion, Film, Image as ImageIcon, Layers, LayoutGrid, Loader2, Mic, Music, PenLine, Play, Plus, Scissors,
+  AudioLines, BookmarkPlus, Bot, Clapperboard, Download, FileQuestion, Image as ImageIcon, Layers, LayoutGrid, Loader2, Maximize2, Mic, Music, Play, Plus, Scissors,
   Square, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { CARD_H, MAKE_MEDIA, NOTE_H, NOTE_W, type CanvasNode, type GroupColor } from '@/lib/canvas';
+import { CARD_H, MAKE_MEDIA, type CanvasNode, type GroupColor } from '@/lib/canvas';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Tooltip } from '../Tooltip';
 import { fileCardWidth, useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode, type UploadStatus } from './board';
 import { ActionBar, CutPanel, MakePanel, NotePanel } from './panels';
-import { Words, WritingBar, useDraft } from './words';
+import { DocSheet, DocView, FormatBar, saveText, useDoc } from './doc';
+import { MENU } from './menu-style';
 import { SoundCard } from './sound';
 import { CanvasVideo } from './video';
 
@@ -138,9 +139,11 @@ function useNumber(id: string): number {
 }
 
 /** What every node is drawn in: its name row above, its card, its sides. */
-function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card', onRename, pending }: {
+function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card', fill, onRename, pending }: {
   id: string; selected: boolean; icon: React.ComponentType<{ size?: number; className?: string }>; title: string; meta?: string | null;
   by?: CanvasNode['by']; note?: React.ReactNode; stack?: number; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
+  /** a tint over the card (a note's color) */
+  fill?: string;
   onRename?: (title: string) => void; pending?: boolean;
 }) {
   const board = useBoard();
@@ -203,7 +206,7 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
           <div className={`absolute inset-0 translate-x-[6px] -translate-y-[5px] rotate-[1.75deg] rounded-[var(--cv-card-radius)] border bg-[var(--cv-card-2)] ${stackBorder}`} />
         </>
       ) : null}
-      <div data-canvas-card="" className={card}>{children}</div>
+      <div data-canvas-card="" className={card} style={fill ? { backgroundImage: `linear-gradient(${fill}, ${fill})` } : undefined}>{children}</div>
       {!pending ? <Sides id={id} selected={selected} ins={ins} outs={outs} /> : null}
       {!pending && !board.readOnly && (board.single === id || board.editing === id) ? (
         <NodeResizeControl position="bottom-right" minWidth={160} minHeight={100} maxWidth={1600} maxHeight={1200}
@@ -315,14 +318,16 @@ export function FileNodeView({ id, data, selected }: NodeProps<FileNode>) {
 }
 
 /**
- * Words on the board ("Text"). New, it is square and offers what to start with: writing in it, or a picture, a clip,
- * music made from it. Written in, it is a box of words; a double click writes in it, clicking away is done.
+ * Words on the board ("Text"): a document, empty until written in. A double click writes in it, with the bar over it
+ * that sets the words; clicking away or Escape is done. Selected, a bar over it: its color, the note opened large, its
+ * words saved as a file.
  */
-export function NoteNodeView({ id, data, selected, width, height }: NodeProps<NoteNode>) {
+export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
   const t = useT();
   const board = useBoard();
   const n = useNumber(id);
-  const editing = board.editing === id;
+  const editing = board.editing === id && !board.readOnly;
+  const [sheet, setSheet] = React.useState(false);
   /* empty, it says what to write for what it is wired into (a picture, a clip, a sound) */
   const feeds = useStore((s) => {
     for (const e of s.edges) {
@@ -332,59 +337,82 @@ export function NoteNodeView({ id, data, selected, width, height }: NodeProps<No
     }
     return null;
   });
-  const hint = feeds ? t(`canvas.noteFor.${feeds}`) : t('canvas.notePlaceholder');
-  /* to write in: a box of words (a new, square one shrinks to it) */
-  const write = () => {
-    if (board.readOnly) return;
-    if (width === NOTE_W && height === CARD_H) board.resize(id, { w: NOTE_W, h: NOTE_H });
-    board.edit(id);
-  };
-  const fresh = !data.text && !editing && !feeds;
-  const area = React.useRef<HTMLTextAreaElement>(null);
-  /* the bar over it pressed: the words stay open to write in */
-  const barPressed = React.useRef(false);
-  const words = useDraft(data.text, (text) => board.setData(id, { text }));
+  const placeholder = feeds ? t(`canvas.noteFor.${feeds}`) : editing ? t('canvas.words.placeholder') : t('canvas.noteEmpty');
+  const write = (text: string) => board.setData(id, { text });
+  const editor = useDoc({ text: data.text, editable: editing, placeholder, onChange: write });
+  /* written in: the caret where the words end; done when the focus goes anywhere but the bar over it */
+  const stop = React.useRef(() => board.edit(null));
+  stop.current = () => board.edit(null);
+  React.useEffect(() => {
+    if (!editor || !editing) return undefined;
+    editor.commands.focus('end');
+    const blur = ({ event }: { event: FocusEvent }) => {
+      if ((event.relatedTarget as HTMLElement | null)?.closest?.('[data-writing-bar]')) return;
+      stop.current();
+    };
+    editor.on('blur', blur);
+    return () => { editor.off('blur', blur); };
+  }, [editor, editing]);
+  const title = t('canvas.titles.note').replace('{n}', String(n));
+  const open = () => { board.edit(null); setSheet(true); };
   return (
-    <div className="h-full w-full" onDoubleClick={write}>
+    <div className="h-full w-full" onDoubleClick={() => { if (!board.readOnly && !editing) board.edit(id); }}
+      onKeyDown={(event) => { if (editing && event.key === 'Escape' && !event.nativeEvent.isComposing) { event.stopPropagation(); editor?.commands.blur(); board.edit(null); } }}>
       <NotePanel id={id} />
-      {editing && !board.readOnly ? (
+      {editing && editor ? (
         <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={32}>
-          <div data-writing-bar onPointerDownCapture={() => { barPressed.current = true; }}>
-            <WritingBar area={area} onChange={words.set} onLarger={() => board.resize(id, { w: 720, h: 520 })} />
+          <div className="nodrag nopan rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+            <FormatBar editor={editor} onExpand={open} />
           </div>
         </NodeToolbar>
+      ) : selected && !board.readOnly && board.single === id ? (
+        <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={32}>
+          <NoteBar id={id} color={data.color} text={data.text} name={title} onExpand={open} />
+        </NodeToolbar>
       ) : null}
-      <Frame id={id} selected={selected} icon={TypeIcon} title={t('canvas.titles.note').replace('{n}', String(n))} by={data.by}
-        tone={editing || data.text ? 'quiet' : 'card'}>
-        {editing ? (
-          <textarea
-            ref={area}
-            autoFocus
-            /* written on where it ends */
-            onFocus={(event) => { const end = event.currentTarget.value.length; event.currentTarget.setSelectionRange(end, end); }}
-            {...words.props}
-            /* done when the focus goes elsewhere: not to the bar over it, which hands it back */
-            onBlur={() => { setTimeout(() => { if (document.activeElement !== area.current && !document.activeElement?.closest('[data-writing-bar]') && !barPressed.current) board.edit(null); barPressed.current = false; }, 0); }}
-            onKeyDown={(event) => { if (event.key === 'Escape' && !event.nativeEvent.isComposing) { barPressed.current = false; board.edit(null); } }}
-            placeholder={hint}
-            className="nodrag nowheel h-full w-full resize-none bg-transparent px-4 py-3.5 text-[14px] leading-[1.65] text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]"
-          />
-        ) : fresh ? (
-          <Empty icon={AlignLeft} tries={(
-            <>
-              <TryLine icon={PenLine} label={t('canvas.try.write')} onClick={write} />
-              <TryLine icon={ImageIcon} label={t('canvas.try.toImage')} onClick={() => board.spawn(id, 'image')} />
-              <TryLine icon={Music} label={t('canvas.try.toMusic')} onClick={() => board.spawn(id, 'music')} />
-              <TryLine icon={Film} label={t('canvas.try.toVideo')} onClick={() => board.spawn(id, 'video')} />
-            </>
-          )} />
-        ) : (
-          /* its words as they read: the card is held and moved anywhere on them; a double click, Enter or typing writes in it */
-          <div className={`h-full w-full overflow-hidden break-words px-4 py-3.5 text-[14px] leading-[1.65] ${data.text ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
-            {data.text ? <Words text={data.text} /> : hint}
-          </div>
-        )}
+      <Frame id={id} selected={selected} icon={TypeIcon} title={title} by={data.by}
+        tone={editing || data.text ? 'quiet' : 'card'} fill={data.color ? FRAME_COLOR[data.color].fill : undefined}>
+        {/* its words as they read: held and moved anywhere on them; written in, they take the pointer */}
+        <DocView editor={editor} className={`h-full w-full px-5 py-4 ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : 'overflow-hidden'}`} />
       </Frame>
+      {sheet ? <DocSheet name={title} text={data.text} onChange={write} onClose={() => setSheet(false)} /> : null}
+    </div>
+  );
+}
+
+/** The bar over a selected note: its color (none: the card's own), the note opened large, its words saved as a Markdown file. */
+function NoteBar({ id, color, text, name, onExpand }: { id: string; color?: GroupColor; text: string; name: string; onExpand: () => void }) {
+  const t = useT();
+  const board = useBoard();
+  const [colors, setColors] = React.useState(false);
+  const icon = 'cv-tool flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] disabled:opacity-40';
+  const paint = (c: GroupColor | undefined) => { board.willChange(); board.setData(id, { color: c }); setColors(false); };
+  return (
+    <div className="nodrag nopan flex items-center gap-0.5 rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+      <span className="relative">
+        <button type="button" aria-expanded={colors} onClick={() => setColors((v) => !v)}
+          className="cv-tool flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
+          <span className="h-[18px] w-[18px] rounded-[5px] border border-white/20" style={{ background: color ? FRAME_COLOR[color].dot : 'var(--cv-card)' }} />
+          {t('canvas.noteBar.fill')}
+        </button>
+        {colors ? (
+          <span className={`${MENU} absolute left-0 top-11 z-10 flex gap-1.5 !p-2`}>
+            <button type="button" aria-label={t('canvas.noteBar.none')} title={t('canvas.noteBar.none')} onClick={() => paint(undefined)}
+              className={`h-5 w-5 rounded-[5px] border bg-[var(--cv-card)] ${color ? 'border-white/20' : 'border-white'}`} />
+            {(Object.keys(FRAME_COLOR) as GroupColor[]).filter((c) => c !== 'gray').map((c) => (
+              <button key={c} type="button" aria-label={c} onClick={() => paint(c)}
+                className={`h-5 w-5 rounded-[5px] border ${c === color ? 'border-white' : 'border-white/20'}`} style={{ background: FRAME_COLOR[c].dot }} />
+            ))}
+          </span>
+        ) : null}
+      </span>
+      <span className="mx-1 h-4 w-px bg-[var(--cv-float-line)]" />
+      <Tooltip label={t('canvas.words.expand')}>
+        <button type="button" aria-label={t('canvas.words.expand')} onClick={onExpand} className={icon}><Maximize2 size={17} /></button>
+      </Tooltip>
+      <Tooltip label={t('canvas.actions.download')}>
+        <button type="button" aria-label={t('canvas.actions.download')} disabled={!text} onClick={() => saveText(name, text)} className={icon}><Download size={17} /></button>
+      </Tooltip>
     </div>
   );
 }

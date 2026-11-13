@@ -34,6 +34,21 @@ test('a canvas keeps notes and project files as nodes, and edges between nodes i
   assert.deepEqual(parseCanvas([]), { nodes: [], edges: [] });
 });
 
+test('a note keeps its color, and none for gray or one it does not know', () => {
+  assert.deepEqual(parseCanvas({
+    nodes: [
+      { id: 'a', x: 0, y: 0, text: 'tinted', color: 'blue' },
+      { id: 'b', x: 0, y: 0, text: 'plain', color: 'gray' },
+      { id: 'c', x: 0, y: 0, text: 'odd', color: 'teal' },
+    ],
+    edges: [],
+  }).nodes, [
+    { id: 'a', x: 0, y: 0, text: 'tinted', color: 'blue' },
+    { id: 'b', x: 0, y: 0, text: 'plain' },
+    { id: 'c', x: 0, y: 0, text: 'odd' },
+  ]);
+});
+
 test('a group has a name and a color of the board\'s; a node is in a group only when that group is there', () => {
   assert.deepEqual(parseCanvas({
     nodes: [

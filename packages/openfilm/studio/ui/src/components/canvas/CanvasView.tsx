@@ -123,6 +123,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   const [editing, setEditing] = React.useState<string | null>(null);
   const [menu, setMenu] = React.useState<MenuAt | null>(null);
   const [context, setContext] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
+  /** the board's last press, for a double click on it */
+  const boardPress = React.useRef<{ at: number; x: number; y: number } | null>(null);
   const [tool, setTool] = React.useState<'select' | 'hand'>('select');
   /* the nodes just added, which come in with a small pop (or, wired as they come, a fade, so the wire meets them where
      they stay), and the rings where the board was double-clicked */
@@ -1314,15 +1316,26 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         aria-busy={!fitted}
         tabIndex={-1}
         className="relative h-full w-full outline-none"
-        onPointerDown={(event) => { if (!(event.target as HTMLElement).closest('input, textarea, [data-canvas-video-controls]')) rootRef.current?.focus({ preventScroll: true }); }}
+        onPointerDown={(event) => { if (!(event.target as HTMLElement).closest('input, textarea, [contenteditable="true"], [data-writing-bar], [data-canvas-video-controls]')) rootRef.current?.focus({ preventScroll: true }); }}
         onDragOver={(event) => {
           if (!event.dataTransfer.types.includes(RESOURCE_DRAG_TYPE) && !isComputerFileDrag(event.dataTransfer)) return;
           event.preventDefault();
           event.dataTransfer.dropEffect = 'copy';
         }}
         onDrop={onDrop}
-        onDoubleClick={(event) => {
-          if (!(event.target as Element).classList?.contains('react-flow__pane')) return;
+        /*
+         * a double click on the board opens the add menu: two presses close in time and place, counted here, as the
+         * browser's own double click is lost when the first press starts a selection or lands on what lies on the board
+         */
+        onPointerDownCapture={(event) => {
+          if (event.button !== 0) return;
+          const target = event.target as Element;
+          const onBoard = target.closest('.react-flow__pane')
+            && !target.closest('.react-flow__node, .react-flow__edge, .react-flow__nodesselection, .react-flow__panel, .react-flow__handle, button, input, textarea, [contenteditable="true"]');
+          const last = boardPress.current;
+          boardPress.current = onBoard ? { at: event.timeStamp, x: event.clientX, y: event.clientY } : null;
+          if (!onBoard || !last || event.timeStamp - last.at > DOUBLE_MS || Math.hypot(event.clientX - last.x, event.clientY - last.y) > DOUBLE_PX) return;
+          boardPress.current = null;
           const box = event.currentTarget.getBoundingClientRect();
           setTaps((list) => [...list, { id: event.timeStamp, x: event.clientX - box.left, y: event.clientY - box.top }]);
           openMenu(event.clientX, event.clientY);
@@ -1637,6 +1650,10 @@ export function CanvasPreview(props: { doc: CanvasDoc; fileUrl: (path: string) =
     </ReactFlowProvider>
   );
 }
+
+/** two presses on the board this close in time (ms) and place (px) are a double click */
+const DOUBLE_MS = 400;
+const DOUBLE_PX = 8;
 
 export default function CanvasView(props: CanvasViewProps) {
   return (

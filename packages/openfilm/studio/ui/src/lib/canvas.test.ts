@@ -50,6 +50,21 @@ test('a board as sent is read node by node: notes and files, and edges between n
   assert.deepEqual(readCanvasDoc(null), { nodes: [], edges: [] });
 });
 
+test('a note is read with its color, and with none for gray or one there is not', () => {
+  assert.deepEqual(readCanvasDoc({
+    nodes: [
+      { id: 'a', x: 0, y: 0, text: 'tinted', color: 'green' },
+      { id: 'b', x: 0, y: 0, text: 'plain', color: 'gray' },
+      { id: 'c', x: 0, y: 0, text: 'odd', color: 'teal' },
+    ],
+    edges: [],
+  }).nodes, [
+    { id: 'a', x: 0, y: 0, text: 'tinted', color: 'green' },
+    { id: 'b', x: 0, y: 0, text: 'plain' },
+    { id: 'c', x: 0, y: 0, text: 'odd' },
+  ]);
+});
+
 test('two boards that say the same have one key; ids are new each time', () => {
   const doc = { nodes: [{ id: 'a', x: 0, y: 0, text: '' }], edges: [] };
   assert.equal(canvasKey(doc), canvasKey(structuredClone(doc)));
