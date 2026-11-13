@@ -32,8 +32,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setSharedPref, sharedPref } from './locations.mjs';
 
-/** The plugins that come with OpenFilm, each a folder. */
-export const pluginsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins');
+/** The plugins that come with OpenFilm, each a folder (OPENFILM_PLUGINS: another folder of them, which a test makes). */
+export const pluginsDir = () => process.env.OPENFILM_PLUGINS || join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins');
 
 /** Where one of a plugin's skills is: `skills/<name>/` in its folder. @param {string} id @param {string} skill its name @param {string} [dir] */
 export const pluginSkillDir = (id, skill, dir = pluginsDir()) => join(dir, id, 'skills', skill);

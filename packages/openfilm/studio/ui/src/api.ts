@@ -91,7 +91,8 @@ export class ApiError extends Error {
 /** Writes on their way (edits, renames…): a reload for a new Studio waits for them (studioVersion). */
 let writing = 0;
 
-async function call<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
+/** `/api/<path>`, its JSON answer; an ApiError when Studio refuses (lib/plugin-api calls a plugin's routes this way). */
+export async function call<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, ...rest } = init;
   const write = (rest.method ?? 'GET') !== 'GET';
   if (write) writing += 1;
@@ -350,7 +351,9 @@ export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths
      says so, until a `film` event says it is back */
   | { type: 'film-missing' }
   /* the project was deleted, or its folder is missing: its pages leave it */
-  | { type: 'gone' };
+  | { type: 'gone' }
+  /* what one of OpenFilm's own plugins told the pages, from its server code (lib/plugin-api `events`) */
+  | { type: 'plugin'; plugin: string; data: unknown };
 
 /**
  * Listen to a stream of events (a WebSocket: a browser's six HTTP connections to Studio stay free for the page's
