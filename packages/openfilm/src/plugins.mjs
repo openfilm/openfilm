@@ -8,7 +8,9 @@
  * an `icon`, its `order` in the list), what an agent reads of it while it is off (`about`, a few English words), and
  * what it brings: a `workbench` (a whole surface of its own in Studio, named: the edit, the canvas, and any other,
  * which Studio shows in their place when picked; Motion, a view of the edit's timeline) and `skills` (OpenFilm's own,
- * in `manual/`, by name: what teaches an agent that part of film making).
+ * by name: what teaches an agent that part of film making, each in the plugin's folder at `skills/<name>/`, the Agent
+ * Skills layout: pluginSkillDir). Its commands are its package.json's `bin` (src/plugin-commands.mjs), so a plugin is
+ * one package: its folder holds all of it.
  *
  *   `on`      whether it is on until the person says (the edit and the canvas are, Motion is not)
  *   `beta`    still being made good
@@ -32,6 +34,9 @@ import { setSharedPref, sharedPref } from './locations.mjs';
 
 /** The plugins that come with OpenFilm, each a folder. */
 export const pluginsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins');
+
+/** Where one of a plugin's skills is: `skills/<name>/` in its folder. @param {string} id @param {string} skill its name @param {string} [dir] */
+export const pluginSkillDir = (id, skill, dir = pluginsDir()) => join(dir, id, 'skills', skill);
 
 /** A workbench's name: Studio's own (`edit`, `canvas`, `motion`), or a plugin's for the surface it brings. */
 const WORKBENCH = /^[a-z][a-z0-9-]{0,31}$/;

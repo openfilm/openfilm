@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PLUGINS, pluginOfSkill, pluginStates, pluginsOffLine, readPlugins, setPluginOn, skillsOfPluginsOff, workbenchesOn } from './plugins.mjs';
+import { PLUGINS, pluginOfSkill, pluginSkillDir, pluginStates, pluginsDir, pluginsOffLine, readPlugins, setPluginOn, skillsOfPluginsOff, workbenchesOn } from './plugins.mjs';
 import { offeredSkills, promptSkills, setSkillOn } from './skills.mjs';
 
 const home = () => mkdtempSync(join(tmpdir(), 'of-plugins-'));
@@ -116,6 +116,24 @@ test('a plugin is a folder with an openfilm.json that has a title; they are list
   assert.deepEqual(read[0], { id: 'early', title: { en: 'Early', 'zh-CN': '早' }, summary: { en: 'First.' }, about: 'comes first', skills: [], on: false, soon: true });
   assert.deepEqual(read[3], { id: 'late', title: { en: 'Late' }, summary: {}, about: '', skills: ['canvas'], on: true, workbench: 'canvas', beta: true });
   assert.deepEqual(readPlugins(join(dir, 'none')), []);
+});
+
+test('an official plugin is one folder: each skill it names is in its skills/<name>/, and the edit, canvas and Motion\'s are nowhere else', async () => {
+  const { coreSkills, coreSkillsDir } = await import('./skills.mjs');
+  for (const p of PLUGINS) {
+    let folders = [];
+    try { folders = readdirSync(join(pluginsDir(), p.id, 'skills')); } catch { /* none */ }
+    assert.deepEqual(folders.sort(), [...p.skills].sort(), p.id);
+    for (const skill of p.skills) assert.ok(existsSync(join(pluginSkillDir(p.id, skill), 'SKILL.md')), `${p.id}: ${skill}`);
+  }
+  /* what goes with no plugin stays beside the system prompt */
+  assert.deepEqual(readdirSync(coreSkillsDir()), ['media']);
+  assert.deepEqual(coreSkills().map((s) => [s.name, s.uid, s.folder]), [
+    ['edit', 'openfilm/edit', pluginSkillDir('edit', 'edit')], ['media', 'openfilm/media', join(coreSkillsDir(), 'media')],
+    ['canvas', 'openfilm/canvas', pluginSkillDir('canvas', 'canvas')], ['motion', 'openfilm/motion', pluginSkillDir('motion', 'motion')],
+  ]);
+  /* a skill is no plugin of its own: the plugin's element and commands are the plugin's, not its skill's */
+  for (const s of coreSkills()) assert.deepEqual([s.element, s.commands, s.scripts], [undefined, undefined, []], s.name);
 });
 
 test('every plugin says what it is for, and names skills there are', async () => {

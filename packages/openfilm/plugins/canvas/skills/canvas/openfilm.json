@@ -1,5 +1,5 @@
 {
-  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/manual/canvas",
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/plugins/canvas/skills/canvas",
   "order": 3,
   "icon": "layers",
   "title": {

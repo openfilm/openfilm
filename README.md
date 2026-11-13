@@ -153,7 +153,7 @@ shuffled orders, and names any that changed, along with page errors, fonts that 
 and text cut off by the frame.
 
 [SYSTEM_PROMPT.md](packages/openfilm/SYSTEM_PROMPT.md) is what `openfilm` prints for an agent, and
-[packages/openfilm/manual](packages/openfilm/manual) holds OpenFilm's own skills; [SPEC.md](packages/openfilm/SPEC.md)
+[packages/openfilm/manual](packages/openfilm/manual) and [packages/openfilm/plugins](packages/openfilm/plugins) hold OpenFilm's own skills; [SPEC.md](packages/openfilm/SPEC.md)
 is for anyone building a player, renderer or editor.
 
 ## From source

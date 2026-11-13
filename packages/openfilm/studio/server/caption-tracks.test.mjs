@@ -151,7 +151,7 @@ test('the captions of what is said: put on top once something is said, written a
 });
 
 test('the editing manual says Studio adds the caption track of what is said by itself, unasked', () => {
-  const manual = readFileSync(new URL('../../manual/edit/SKILL.md', import.meta.url), 'utf8');
+  const manual = readFileSync(new URL('../../plugins/edit/skills/edit/SKILL.md', import.meta.url), 'utf8');
   assert.match(manual, /Studio adds a caption track of them to film\.html by itself/);
   assert.doesNotMatch(manual, /When the person asks for captions/);
 });

@@ -17,8 +17,8 @@
  *              (studio/server/skill-catalog.mjs), each the commit it was installed at, with where it came from in its
  *              `.source.json`. Every OpenFilm on this computer has the same ones.
  *
- * OpenFilm's own (coreSkills: `manual/` in this package) are how a film is made, its media and its canvas, which the
- * system prompt lists (promptSkills): in every agent's hands while the plugin each goes with is on (src/plugins.mjs), never installed or
+ * OpenFilm's own (coreSkills: `manual/` in this package, and its plugins' in their folders) are how a film is made,
+ * its media and its canvas, which the system prompt lists (promptSkills): in every agent's hands while the plugin each goes with is on (src/plugins.mjs), never installed or
  * removed.
  *
  * Nothing here deletes a skill outright: one replaced or removed goes to the system's trash.
@@ -36,7 +36,7 @@ import { moveToTrash } from '../studio/server/trash.mjs';
 import { pictureType } from '../studio/server/cover.mjs';
 import { parseRepoUrl } from '../studio/server/fetch-repo.mjs';
 import { libraryDefault, setSharedPref, sharedHome, sharedPref } from './locations.mjs';
-import { pluginsOffLine, skillsOfPluginsOff } from './plugins.mjs';
+import { PLUGINS, pluginSkillDir, pluginsOffLine, skillsOfPluginsOff } from './plugins.mjs';
 
 const mkdirSyncSafe = (/** @type {string} */ dir) => mkdirSync(dir, { recursive: true });
 /** a folder moved to another place: renamed, else (another disk) copied and then removed */
@@ -211,7 +211,7 @@ export function discoverSkills() {
     return skill ? [skill] : [];
   });
 }
-/** OpenFilm's own skills, released with this package beside the system prompt. */
+/** OpenFilm's own skills that go with no plugin, released with this package beside the system prompt. */
 export const coreSkillsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'manual');
 /**
  * The person's own skills: OPENFILM_SKILLS, else `Skills/` beside the default projects library (OPENFILM_LIBRARY, else
@@ -505,10 +505,15 @@ export function usableSkills({ home, ...where } = {}) {
 /** OpenFilm's own skills by name, in the order agents are given them: how a film is made, its media, its canvas. */
 export const CORE_SKILLS = Object.freeze(['edit', 'media', 'canvas', 'motion']);
 
-/** OpenFilm's own skills (coreSkillsDir), which every agent has unless turned off, in CORE_SKILLS's order. @returns {Skill[]} */
+/**
+ * OpenFilm's own skills, which every agent has unless turned off, in CORE_SKILLS's order: those in coreSkillsDir, and
+ * those OpenFilm's plugins bring, each in its plugin's folder (src/plugins.mjs pluginSkillDir).
+ * @returns {Skill[]}
+ */
 export function coreSkills() {
   const rank = (/** @type {Skill} */ s) => (CORE_SKILLS.includes(s.name) ? CORE_SKILLS.indexOf(s.name) : CORE_SKILLS.length);
-  return skillsIn(coreSkillsDir(), 'official').sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  const ofPlugins = PLUGINS.flatMap((p) => p.skills.flatMap((name) => readSkill(pluginSkillDir(p.id, name), 'official') ?? []));
+  return [...skillsIn(coreSkillsDir(), 'official'), ...ofPlugins].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
 
 /**

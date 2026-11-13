@@ -1,5 +1,5 @@
 {
-  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/manual/edit",
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/plugins/edit/skills/edit",
   "order": 1,
   "icon": "scissors",
   "title": {

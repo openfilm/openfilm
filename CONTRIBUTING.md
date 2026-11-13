@@ -38,7 +38,8 @@ From the root:
 packages/openfilm/   npm `openfilm`: the format, the CLI and Studio
   SPEC.md              the film format
   SYSTEM_PROMPT.md     what `openfilm` prints for agents: where they are and how to work with the person
-  manual/              OpenFilm's own skills, listed after it: how a film is made, its media, its canvas
+  manual/              OpenFilm's own skill that goes with no plugin, listed after it: the media
+  plugins/             OpenFilm's own plugins, each a folder: its workbench, its skills (skills/<name>/), its commands
   bin/                 the `openfilm` command
   src/                 reading film.html, the host that draws frames in a headless browser, look and render
   studio/server/       Studio's server: projects, edits, history, exports, media providers
@@ -144,9 +145,10 @@ that you are taking it, and open one before starting a large change, so nobody d
 - **The system prompt** ([SYSTEM_PROMPT.md](packages/openfilm/SYSTEM_PROMPT.md)), what `openfilm` prints for agents,
   is a few lines: where the agent is, how to be with the person, and that skills say how each kind of work is done.
   It holds nothing of any one kind of work, not what a film is nor any command: OpenFilm's own skills
-  ([manual/](packages/openfilm/manual)) hold that, each with the commands it uses: how a film is made and seen (the
-  one rule: the picture depends only on t), its media, its canvas. A new part of OpenFilm an agent works with gets a
-  skill of its own there, never more words in the system prompt. No style advice or methods. If an agent gets
+  ([manual/](packages/openfilm/manual), and each plugin's in [plugins/](packages/openfilm/plugins)) hold that, each
+  with the commands it uses: how a film is made and seen (the one rule: the picture depends only on t), its media, its
+  canvas. A new part of OpenFilm an agent works with gets a skill of its own there, never more words in the system
+  prompt. No style advice or methods. If an agent gets
   something wrong, a word is added only when a skill was ambiguous; if a tool behaved oddly, the tool is fixed.
 - **The format** ([SPEC.md](packages/openfilm/SPEC.md)): a new attribute of `film.html` is read in one place,
   [src/film-doc.mjs](packages/openfilm/src/film-doc.mjs), and described in the spec in the same pull request.
