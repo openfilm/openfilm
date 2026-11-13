@@ -130,5 +130,11 @@ test('a clip\'s chain runs on its sound before its volume and fades, in the expo
   /* the same sound but for rounding: the chain halves it, as half the volume does */
   assert.ok(most < 1e-6, `differs by ${most}`);
   assert.ok(peak([a[0].subarray(RATE, 2 * RATE)]) > 0.3, 'it is there');
+  /* through the bus too, the clip going on past the film's end */
+  await mix([other, { ...clip, at: 2, chain: [{ name: 'test-half' }] }], 3, join(dir, 'late.wav'), F32, { limit: true });
+  await mix([other, { ...clip, at: 2, volume: 0.4 }], 3, join(dir, 'late-halved.wav'), F32, { limit: true });
+  const c = samples(join(dir, 'late.wav')), d = samples(join(dir, 'late-halved.wav'));
+  assert.equal(c[0].length, 3 * RATE);
+  assert.ok(c[0].every((v, i) => Math.abs(v - d[0][i]) < 1e-6), 'the same but for rounding');
   await assert.rejects(mix([{ ...clip, chain: [{ name: 'test-none' }] }], 3, join(dir, 'none.wav'), F32), /no sound processor named "test-none"/);
 });

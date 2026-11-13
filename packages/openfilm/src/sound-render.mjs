@@ -30,6 +30,8 @@ function ffmpeg(args, pipe) {
   done.catch(() => {});
   const stop = () => {
     stopped = true;
+    /* what it wrote and was not read is let go of: until then the process does not close */
+    proc.stdout?.destroy();
     if (proc.exitCode === null && proc.signalCode === null) {
       if (process.platform === 'win32' && proc.pid) spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }).on('error', () => proc.kill());
       else proc.kill('SIGKILL');
@@ -124,7 +126,7 @@ export async function renderSound({ source, clips = [], bus, frames, out, codec,
       inR.fill(0, got);
       const end = Math.min(at + BLOCK, length);
       for (const clip of clips) {
-        if (clip.start >= end) continue;
+        if (clip.start >= end || at >= end) continue;
         let c = open.get(clip);
         if (!c) {
           const run = ffmpeg([...clip.args, ...RAW, 'pipe:1'], 'out');
