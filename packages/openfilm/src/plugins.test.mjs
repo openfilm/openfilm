@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PLUGINS, pluginOfSkill, pluginSkillDir, pluginStates, pluginsDir, pluginsOffLine, readPlugins, setPluginOn, skillsOfPluginsOff, workbenchesOn } from './plugins.mjs';
 import { offeredSkills, promptSkills, setSkillOn } from './skills.mjs';
+import { readBlocks } from './plugin-blocks.mjs';
 
 const home = () => mkdtempSync(join(tmpdir(), 'of-plugins-'));
 const where = (h) => ({ home: h, mine: join(h, 'mine'), official: join(h, 'official') });
@@ -144,4 +145,20 @@ test('every plugin says what it is for, and names skills there are', async () =>
     for (const lang of ['en', 'zh-CN', 'ja', 'ko', 'es']) assert.ok(p.title[lang] && p.summary[lang], `${p.id}: ${lang}`);
     for (const skill of p.skills) assert.ok(own.has(skill), `${p.id}: ${skill}`);
   }
+});
+
+test('a plugin declares the blocks its workbench is laid out in, each checked; Motion is laid out as the edit is', () => {
+  const edit = PLUGINS.find((p) => p.id === 'edit');
+  assert.deepEqual(edit?.blocks?.map((b) => (typeof b === 'string' ? b : [b.id, b.edge])), [['layers', 'left'], ['viewer', 'center'], ['inspector', 'right'], ['timeline', 'bottom']]);
+  assert.deepEqual(PLUGINS.find((p) => p.id === 'canvas')?.blocks?.map((b) => (typeof b === 'string' ? b : b.id)), ['canvas']);
+  assert.equal(PLUGINS.find((p) => p.id === 'motion')?.blocks, 'edit');
+  assert.deepEqual(readBlocks([
+    { id: 'scopes', edge: 'left', size: 300, title: { en: 'Scopes', xx: 1 }, min: [200, 120], range: [10, 5] },
+    { id: 'wheels' }, { id: 'curves', edge: 'center' }, { id: 'scopes' }, { id: 'Bad' }, 'edit:viewer', 'edit:viewer', 'nope', { id: 'tall', size: 1e9, open: false },
+  ]), [
+    { id: 'scopes', edge: 'left', title: { en: 'Scopes' }, size: 300, min: [200, 120] },
+    { id: 'wheels', edge: 'center' }, { id: 'curves', edge: 'right' }, 'edit:viewer', { id: 'tall', edge: 'right', open: false },
+  ]);
+  assert.equal(readBlocks('edit'), 'edit');
+  for (const none of [undefined, [], 'Bad Name', [{ id: '' }], 3]) assert.equal(readBlocks(none), undefined);
 });

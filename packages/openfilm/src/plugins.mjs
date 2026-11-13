@@ -31,6 +31,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setSharedPref, sharedPref } from './locations.mjs';
+import { readBlocks } from './plugin-blocks.mjs';
 
 /** The plugins that come with OpenFilm, each a folder (OPENFILM_PLUGINS: another folder of them, which a test makes). */
 export const pluginsDir = () => process.env.OPENFILM_PLUGINS || join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins');
@@ -44,10 +45,11 @@ const WORKBENCH = /^[a-z][a-z0-9-]{0,31}$/;
 /**
  * @typedef {{
  *   id: string, title: Record<string, string>, summary: Record<string, string>, icon?: string, about: string,
- *   workbench?: string, skills: readonly string[], on: boolean, beta?: true, soon?: true,
+ *   workbench?: string, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], skills: readonly string[], on: boolean, beta?: true, soon?: true,
  * }} Plugin
- *   `id`: its folder's name; `workbench`: the way of working it shows; `skills`: OpenFilm's own skills (by name) that
- *   go with it; `on`: whether it is on until the person says
+ *   `id`: its folder's name; `workbench`: the way of working it shows; `blocks`: the blocks its workbench is laid out in
+ *   (src/plugin-blocks.mjs); `skills`: OpenFilm's own skills (by name) that go with it; `on`: whether it is on until the
+ *   person says
  */
 
 /** The words of a field by language (`en`, `zh-CN`…); anything else is none. */
@@ -69,6 +71,8 @@ function readPlugin(dir, id) {
   };
   if (typeof raw.icon === 'string' && /^[a-z][a-z0-9-]{0,23}$/.test(raw.icon)) plugin.icon = raw.icon;
   if (typeof raw.workbench === 'string' && WORKBENCH.test(raw.workbench) && !soon) plugin.workbench = raw.workbench;
+  const blocks = plugin.workbench ? readBlocks(raw.blocks) : undefined;
+  if (blocks) plugin.blocks = blocks;
   if (raw.beta === true) plugin.beta = true;
   if (soon) plugin.soon = true;
   return plugin;

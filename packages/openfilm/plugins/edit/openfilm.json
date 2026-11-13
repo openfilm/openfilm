@@ -17,6 +17,83 @@
   },
   "about": "the film itself and its timeline: making and cutting the film",
   "workbench": "edit",
+  "blocks": [
+    {
+      "id": "layers",
+      "title": {
+        "en": "Layers",
+        "zh-CN": "图层",
+        "ja": "レイヤー",
+        "ko": "레이어",
+        "es": "Capas"
+      },
+      "edge": "left",
+      "size": 240,
+      "open": false,
+      "min": [
+        160,
+        120
+      ],
+      "range": [
+        180,
+        600
+      ]
+    },
+    {
+      "id": "viewer",
+      "title": {
+        "en": "Viewer",
+        "zh-CN": "预览",
+        "ja": "プレビュー",
+        "ko": "미리보기",
+        "es": "Visor"
+      },
+      "edge": "center",
+      "min": [
+        240,
+        220
+      ]
+    },
+    {
+      "id": "inspector",
+      "title": {
+        "en": "Inspector",
+        "zh-CN": "检查器",
+        "ja": "インスペクター",
+        "ko": "인스펙터",
+        "es": "Inspector"
+      },
+      "edge": "right",
+      "size": 360,
+      "min": [
+        240,
+        180
+      ],
+      "range": [
+        280,
+        800
+      ]
+    },
+    {
+      "id": "timeline",
+      "title": {
+        "en": "Timeline",
+        "zh-CN": "时间轴",
+        "ja": "タイムライン",
+        "ko": "타임라인",
+        "es": "Línea de tiempo"
+      },
+      "edge": "bottom",
+      "min": [
+        240,
+        104
+      ],
+      "range": [
+        104,
+        1600
+      ]
+    }
+  ],
   "on": true,
   "skills": [
     "edit"

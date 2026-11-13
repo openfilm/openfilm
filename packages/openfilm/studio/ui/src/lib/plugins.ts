@@ -8,18 +8,19 @@
  * Studio (the ways of working, kept in this browser) is carried over once.
  */
 import { useSyncExternalStore } from 'react';
+import type { BlockDecl } from '../../../../src/plugin-blocks.mjs';
 
 /** A workbench's name: `edit`, `canvas`, `motion`, or a plugin's own for the surface it brings (components/surfaces). */
 export type Workbench = string;
 /**
  * A plugin: its words by language (`title`, `summary`), its mark's name, the workbench and the skills it brings, whether
- * it is on, and whether it is still being made good (`beta`) or not made yet (`soon`: no switch). One someone made is
+ * it is on, the blocks its workbench is laid out in (lib/blocks), and whether it is still being made good (`beta`) or not made yet (`soon`: no switch). One someone made is
  * a skill with a surface (lib/project-plugins): `skill` its uid, by which it is turned, `page` its surface's address,
  * and `files` where the project's files are for that page.
  */
 export interface Plugin {
   id: string; title?: Record<string, string>; summary?: Record<string, string>; icon?: string;
-  workbench?: Workbench; skills: string[]; on: boolean; beta?: boolean; soon?: boolean; skill?: string; page?: string; files?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string;
+  workbench?: Workbench; blocks?: string | readonly (BlockDecl | string)[]; skills: string[]; on: boolean; beta?: boolean; soon?: boolean; skill?: string; page?: string; files?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string;
 }
 
 /** The plugins there are to turn as a new install has them, until Studio answers with every plugin. */

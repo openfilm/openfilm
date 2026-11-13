@@ -17,6 +17,7 @@
   },
   "about": "a clip's layers and keyframes, adjusted by hand",
   "workbench": "motion",
+  "blocks": "edit",
   "on": false,
   "beta": true,
   "skills": [
