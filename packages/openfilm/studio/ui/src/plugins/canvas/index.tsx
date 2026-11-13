@@ -1,6 +1,6 @@
 /**
  * The canvas, as the element its plugin brings (plugins/canvas: its package.json's `browser`): Studio's shell puts one
- * in the canvas's box (shell/workbenches) once it is warmed or shown, and what is drawn in it is the canvas's own. It
+ * in the canvas's box once it is warmed or shown, and what is drawn in it is the canvas's own. It
  * is told the project by its `project-id`, and reaches Studio only through its public interface (`openfilm/studio`,
  * studio/index), as a plugin someone made does: what it shows of the project, the files it brings in, the toast,
  * Settings, the app's chat; files put in the film are the edit's `add`, and what is asked of the canvas (files put
