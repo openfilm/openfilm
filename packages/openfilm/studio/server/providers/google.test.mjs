@@ -108,6 +108,7 @@ test('a video: asked through the Interactions API, its file asked after until re
   const result = await google.run('video', { out: 'shot', prompt: 'a slow push in', duration: 5, 'first-frame': 'assets/image/first.png' }, ctx({ 'assets/image/first.png': new Uint8Array(first) }));
   const sent = JSON.parse(seen.findLast((c) => c.url.pathname === '/v1beta/interactions').body);
   assert.equal(sent.model, 'gemini-omni-1.2-flash');
+  assert.equal(sent.background, true);
   assert.deepEqual(sent.input.map((/** @type {any} */ p) => p.type), ['image', 'text']);
   assert.equal(sent.input[0].mime_type, 'image/png');
   assert.equal(sent.input[1].text, 'a slow push in');
@@ -156,7 +157,9 @@ test('a video\'s lengths, sizes and pictures: 3 to 15 s, 10 between two frames; 
 
 test('a video that is not made says why; a file that fails says so; a cancelled run stops asking', async () => {
   reply = () => [200, { status: 'failed', steps: [] }];
-  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /Gemini Omni made no clip \(failed\)/);
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /Gemini Omni could not make the clip \(failed\)/);
+  reply = () => [200, { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: 'I can not make that.' }] }] }];
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /Gemini Omni made no clip: I can not make that\./);
   reply = () => [400, { error: { message: 'prompt was blocked' } }];
   await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /400: prompt was blocked/);
   const made = { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'video', uri: `${base}/v1beta/files/clip2:download?alt=media` }] }] };
@@ -174,6 +177,67 @@ test('a video that is not made says why; a file that fails says so; a cancelled 
   const after = asks;
   await new Promise((done) => setTimeout(done, 60));
   assert.equal(asks, after);
+});
+
+test('a video run in the background: asked after until done, then deleted; one that fails says why; a stopped run cancels it', async () => {
+  const at = '/v1beta/interactions/v1_bg';
+  const isStart = (call) => call.method === 'POST' && call.url.pathname === '/v1beta/interactions';
+  let asks = 0, deleted = 0;
+  reply = (call) => {
+    if (isStart(call)) return [200, { id: 'v1_bg', status: 'in_progress' }];
+    if (call.url.pathname !== at) return [404, {}];
+    if (call.method === 'DELETE') { deleted += 1; return [200, {}]; }
+    asks += 1;
+    return [200, asks < 3 ? { id: 'v1_bg', status: 'in_progress' }
+      : { id: 'v1_bg', status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'video', data: Buffer.from('inline mp4').toString('base64') }] }] }];
+  };
+  const result = await google.run('video', { out: 'x', prompt: 'y' }, ctx());
+  assert.equal(Buffer.from(result.files[0].bytes).toString(), 'inline mp4');
+  assert.equal(asks, 3);
+  assert.equal(deleted, 1, 'the finished interaction is deleted');
+  assert.equal(seen.findLast((c) => c.method === 'DELETE').headers['x-goog-api-key'], KEY);
+
+  deleted = 0;
+  reply = (call) => {
+    if (isStart(call)) return [200, { id: 'v1_bg', status: 'in_progress' }];
+    if (call.method === 'DELETE') { deleted += 1; return [200, {}]; }
+    return [200, { id: 'v1_bg', status: 'failed', error: { message: 'prompt was blocked' } }];
+  };
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /could not make the clip: prompt was blocked/);
+  assert.equal(deleted, 1, 'a failed interaction is deleted too');
+
+  reply = () => [200, { id: '../files/x', status: 'in_progress' }];
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /did not start the video/);
+
+  asks = 0;
+  reply = (call) => {
+    if (isStart(call)) return [200, { id: 'v1_bg', status: 'in_progress' }];
+    if (call.method === 'DELETE') return [200, {}];
+    asks += 1;
+    return [200, { id: 'v1_bg' }];
+  };
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /Gemini Omni made no clip\./);
+  assert.equal(asks, 1, 'an answer with no status is not asked after again');
+
+  asks = 0;
+  let cancelled = 0;
+  reply = (call) => {
+    if (isStart(call)) return [200, { id: 'v1_bg', status: 'in_progress' }];
+    if (call.url.pathname === `${at}/cancel`) { cancelled += 1; return [200, {}]; }
+    asks += 1;
+    return [200, { id: 'v1_bg', status: 'in_progress' }];
+  };
+  const stop = new AbortController();
+  const run = google.run('video', { out: 'x', prompt: 'y' }, ctx({}, stop.signal));
+  await new Promise((done) => setTimeout(done, 40));
+  stop.abort();
+  await assert.rejects(run);
+  await new Promise((done) => setTimeout(done, 20));
+  const after = asks;
+  await new Promise((done) => setTimeout(done, 60));
+  assert.equal(asks, after, 'no polls after the stop');
+  assert.equal(cancelled, 1);
+  assert.equal(seen.findLast((c) => c.url.pathname === `${at}/cancel`).headers['x-goog-api-key'], KEY);
 });
 
 test('translation: JSON asked for, the lines back in order', async () => {

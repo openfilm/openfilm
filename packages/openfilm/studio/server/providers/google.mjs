@@ -59,8 +59,9 @@ export default {
   models: MODELS,
   async run(verb, args, ctx) {
     const base = serviceUrl('GOOGLE', 'https://generativelanguage.googleapis.com');
-    const send = (/** @type {string} */ url, /** @type {RequestInit} */ init = {}) =>
-      call(NAME, url, { ...init, headers: { 'x-goog-api-key': ctx.key, 'content-type': 'application/json', ...init.headers } }, ctx);
+    /* `signal` is the run's own, but for a request that has to go out after the run was stopped */
+    const send = (/** @type {string} */ url, /** @type {RequestInit} */ init = {}, /** @type {AbortSignal} */ signal = ctx.signal) =>
+      call(NAME, url, { ...init, headers: { 'x-goog-api-key': ctx.key, 'content-type': 'application/json', ...init.headers } }, signal === ctx.signal ? ctx : { ...ctx, signal });
     const generate = async (/** @type {string} */ model, /** @type {unknown} */ body) =>
       /** @type {any} */ (await (await send(`${base}/v1beta/models/${model}:generateContent`, { method: 'POST', body: JSON.stringify(body) })).json());
 
@@ -246,11 +247,12 @@ function inline(/** @type {any} */ body, /** @type {string} */ what) {
 /**
  * A Gemini Omni clip with its own sound: 3 to 15 seconds (10 at most between a first and a last frame), 16:9 or 9:16,
  * 360p to 4K. Made from the prompt, from a first (and last) frame, or from up to 6 reference pictures; or from a clip
- * (`--video`), edited or continued as the prompt says. Asked through the Interactions API with the clip sent back as a
- * file address, since an answer carries 4 MB at most inline; the file is asked after until it is ready, then
- * downloaded with the key.
+ * (`--video`), edited or continued as the prompt says. Asked through the Interactions API in the background, asked
+ * after until it is done; a stopped run cancels it, and a finished one is deleted. The clip comes back as a file
+ * address, since an answer carries 4 MB at most inline; the file is asked after until it is ready, then downloaded
+ * with the key.
  * @param {Record<string, unknown>} args @param {RunContext} ctx @param {string} base
- * @param {(url: string, init?: RequestInit) => Promise<Response>} send
+ * @param {(url: string, init?: RequestInit, signal?: AbortSignal) => Promise<Response>} send
  */
 async function video(args, ctx, base, send) {
   const prompt = needed(args, 'prompt');
@@ -289,6 +291,8 @@ async function video(args, ctx, base, send) {
   const picture = async (/** @type {string} */ file) => ({ type: 'image', data: Buffer.from(await ctx.read(file)).toString('base64'), mime_type: mimeOf(file) });
   const pictures = await Promise.all([first, last, ...refs].filter(Boolean).map(picture));
   const given = clip ? await omniUpload(clip, ctx, base, send) : null;
+  /** @type {string} the interaction's address, once it has started */
+  let at = '';
   try {
     /* the role of a single first frame, and of reference pictures, is set; two frames are read as a start and an end;
        whether a clip is edited or continued, the prompt says */
@@ -300,9 +304,26 @@ async function video(args, ctx, base, send) {
       response_format: { type: 'video', delivery: 'uri', ...(aspect ? { aspect_ratio: aspect } : {}), resolution, ...(seconds !== null ? { duration: `${seconds}s` } : {}) },
       ...(task ? { generation_config: { video_config: { task } } } : {}),
     };
-    const answer = /** @type {any} */ (await (await send(`${base}/v1beta/interactions`, { method: 'POST', body: JSON.stringify(body) })).json());
+    /* run in the background, so a long clip does not wait on one open request, and a stopped run can cancel it */
+    let answer = /** @type {any} */ (await (await send(`${base}/v1beta/interactions`, { method: 'POST', body: JSON.stringify({ ...body, background: true }) })).json());
+    const id = text(answer?.id);
+    if (id && !/^[\w-]+$/.test(id)) throw new Error(`${NAME} did not start the video.`);
+    if (id) at = `${base}/v1beta/interactions/${id}`;
+    try {
+      /* only a running interaction is asked after: an answer with no status is read as it is */
+      while (at && answer?.status === 'in_progress') {
+        await sleep(polling.ms, ctx.signal);
+        answer = await (await send(at)).json();
+      }
+    } catch (e) {
+      /* the run was stopped: Google stops making it too (the run's own signal is spent, so this goes with its own) */
+      if (ctx.signal?.aborted) send(`${at}/cancel`, { method: 'POST' }, AbortSignal.timeout(30_000)).catch(() => {});
+      throw e;
+    }
+    const why = text(answer?.error?.message) || interactionText(answer);
+    if (text(answer?.status) && answer.status !== 'completed') throw new Error(`Gemini Omni could not make the clip${why ? `: ${why}` : ` (${answer.status})`}.`);
     const made = interactionContents(answer).find((/** @type {any} */ c) => c?.type === 'video' && (typeof c.data === 'string' || typeof c.uri === 'string'));
-    if (!made) throw new Error(`Gemini Omni made no clip${text(answer?.status) && answer.status !== 'completed' ? ` (${answer.status})` : ''}.`);
+    if (!made) throw new Error(`Gemini Omni made no clip${why ? `: ${why}` : ''}.`);
     const bytes = typeof made.data === 'string' ? new Uint8Array(Buffer.from(made.data, 'base64')) : await omniFile(made.uri, ctx, base, send);
     /* its length and size as made; when the file does not say, as asked */
     const facts = mp4Facts(bytes);
@@ -319,6 +340,8 @@ async function video(args, ctx, base, send) {
       cost: billedBy(NAME),
     };
   } finally {
+    /* a finished interaction is deleted, as Google otherwise keeps it with the clip in it (a cancelled one is left to the cancel) */
+    if (at && !ctx.signal?.aborted) await send(at, { method: 'DELETE' }).catch(() => {});
     /* an uploaded clip otherwise stays in the person's Gemini project for up to 48 hours */
     if (given) await send(`${base}/v1beta/${given.name}`, { method: 'DELETE' }).catch(() => {});
   }
