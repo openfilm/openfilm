@@ -90,6 +90,7 @@ import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { studioHost, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
 import { clipRef, layerRef, markRange, momentRef, rangeRef, regionRef, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
+import { filmCommandOf, FILM, parseLink } from '@/lib/links';
 import { usePageChanges } from './use-page-changes';
 import { CaptionInspector, type CaptionTrackInfo } from './CaptionInspector';
 import { CaptionStage } from './CaptionStage';
@@ -4952,9 +4953,15 @@ export function ProjectView({ projectId, onProject }: {
      edit's own functions are called as the latest render made them */
   const forShell = React.useRef({ addFromCanvas, sendFromCanvas, listing });
   forShell.current = { addFromCanvas, sendFromCanvas, listing };
-  /* what others put in the film (openfilm/studio addTo: the canvas's file, or its cut, then the film shown), by path,
-     and the app's commands that are the edit's (openfilm/studio onCommand) */
+  /* what others put in the film (openfilm/studio addTo: the canvas's file, or its cut, then the film shown), by path;
+     the links to the film it shows (lib/links: a clip, a moment, a stretch, as the app's commands they stand for); and
+     the app's commands that are the edit's (openfilm/studio onCommand) */
   React.useEffect(() => provide('edit', {
+    opens: [FILM],
+    show: (link) => {
+      const command = filmCommandOf(parseLink(link)?.fragment ?? null);
+      if (command) hostCommands.current(command);
+    },
     add: (paths, { show }) => {
       const { listing: listed } = forShell.current;
       const all = listed ? [...listed.files, ...listed.pages] : [];

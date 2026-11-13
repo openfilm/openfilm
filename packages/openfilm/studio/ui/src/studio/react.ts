@@ -12,14 +12,19 @@ export function useProject(id: string): ProjectState | null {
   return React.useSyncExternalStore(of.subscribe, of.get);
 }
 
-/** What the workbench `name` takes from others (`provide`), while the component is there; its functions as the latest render gave them. */
+/**
+ * What the workbench `name` takes from others (`provide`), while the component is there; its functions as the latest
+ * render gave them, and the files it shows (`opens`) as the render gave them.
+ */
 export function useProvide(name: string, workbench: Workbench): void {
   const latest = React.useRef(workbench);
   latest.current = workbench;
+  const opens = workbench.opens?.join('\n');
   React.useEffect(() => provide(name, {
     add: (paths, options) => latest.current.add?.(paths, options),
     command: (command) => latest.current.command?.(command),
-  }), [name]);
+    ...(opens != null ? { opens: opens ? opens.split('\n') : [], show: (link: string) => latest.current.show?.(link) } : {}),
+  }), [name, opens]);
 }
 
 /** Listen to the app's commands that are not the page's own while the component is there, with the latest `listener`. */

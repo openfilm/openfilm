@@ -7,6 +7,8 @@
  * What it gives: the project shown, as a value that is told when it changes (`project`), with its film read and written
  * as the edit does; the toast; Settings opened; the app's chat pointed at (`chat`, in the desktop app); the app's
  * commands (`onCommand`); files put into another plugin's workbench (`addTo`) and what one's own takes (`provide`);
+ * the person sent to a thing of the project by its link (`open`: `film.html#<clip>`, `film.html#t=12.5`, a file), shown
+ * by the workbench that claims its file (`provide`'s `opens` and `show`);
  * buttons on the top bar (`topBar`); a plugin's own server routes and events (`pluginApi`, lib/plugin-api).
  *
  * It is read from the shell's frame (shell/frame) and kept apart from it: the frame and the wiring stay OpenFilm's own
@@ -19,7 +21,7 @@ import type { ImportProgress } from '@/components/MediaPool';
 import type { SettingsSection } from '@/components/settings/SettingsModal';
 import { pluginApi, type PluginApi } from '@/lib/plugin-api';
 import { frameStore } from '@/shell/frame';
-import { addTo, onCommand, provide, topBarTools, type TopBarTool, type Workbench, type WorkbenchCommand } from './hub';
+import { addTo, onCommand, open, provide, topBarTools, type TopBarTool, type Workbench, type WorkbenchCommand } from './hub';
 
 /** The version of this interface: a change that breaks a plugin written for it comes with a new one. */
 export const version = 1;
@@ -187,4 +189,4 @@ export const topBar = {
  * Studio's own requests are (`get`, `post`, `put`, `patch`, `delete`, each with the route's path), and what its server
  * code tells the project's pages (`events(projectId, listener)`).
  */
-export { addTo, onCommand, pluginApi, provide };
+export { addTo, onCommand, open, pluginApi, provide };

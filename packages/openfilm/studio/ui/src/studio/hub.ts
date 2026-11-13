@@ -1,10 +1,12 @@
 /**
  * What Studio's public module (studio/index, `openfilm/studio`) holds for the page outside the project's frame: the
- * app's commands and those who listen to them, what each workbench takes from others (its `add`, its commands) with
- * what was asked of it before it was there, and the buttons workbenches put on the top bar. The shell reads and
+ * app's commands and those who listen to them, what each workbench takes from others (its `add`, its commands, the
+ * links it shows) with what was asked of it before it was there, the links opened, and the buttons workbenches put on
+ * the top bar. The shell reads and
  * writes these too (shell/ProjectFrame, shell/top-bar), as the one page module they share.
  */
 import type { StudioCommand } from '@/lib/host';
+import { CANVAS_FILES, FILM } from '@/lib/links';
 
 /** Several told of a change, each until it stops listening. */
 function listeners<T>() {
@@ -25,8 +27,8 @@ export const tellCommand = (command: StudioCommand): void => commands.tell(comma
 /* ── what a workbench takes from others ── */
 
 /**
- * What the shell asks of one workbench alone: an app command that names a thing of it (`show-node`, a node of the
- * canvas), or a board to lay down (`lay-board`: an example's, copied into the project).
+ * What the shell asks of one workbench alone: a board to lay down (`lay-board`: an example's, copied into the
+ * project). A thing of it to show is a link (`show`).
  */
 export type WorkbenchCommand = StudioCommand | { type: 'lay-board'; board: unknown };
 
@@ -36,15 +38,24 @@ export interface Workbench {
   add?: (paths: readonly string[], options: { show: boolean }) => void;
   /** A command meant for it alone. */
   command?: (command: WorkbenchCommand) => void;
+  /**
+   * The files it shows, as patterns of paths in the project (lib/links matchesPattern: `film.html`, `.film/canvas.json`,
+   * `**` + `/*.cube`): a link to one of them opens it (`open`). Remembered once said, so a link opens it while it is
+   * not in the page.
+   */
+  opens?: readonly string[];
+  /** Show what a link to one of its files names (`film.html#t=12.5`, `.film/canvas.json#<node>`); it is shown already. */
+  show?: (link: string) => void;
 }
 
-type Ask = { add: readonly string[]; show: boolean } | { command: WorkbenchCommand };
+type Ask = { add: readonly string[]; show: boolean } | { command: WorkbenchCommand } | { link: string };
 const provided = new Map<string, Workbench>();
 /** What was asked of a workbench not there yet, in order: given to it once it is. */
 const waiting = new Map<string, Ask[]>();
 
 function give(workbench: Workbench, ask: Ask): void {
   if ('add' in ask) workbench.add?.(ask.add, { show: ask.show });
+  else if ('link' in ask) workbench.show?.(ask.link);
   else workbench.command?.(ask.command);
 }
 
@@ -60,6 +71,7 @@ function ask(name: string, what: Ask): void {
  */
 export function provide(name: string, workbench: Workbench): () => void {
   provided.set(name, workbench);
+  if (workbench.opens) claim(name, workbench.opens);
   const asked = waiting.get(name) ?? [];
   waiting.delete(name);
   for (const what of asked) give(workbench, what);
@@ -75,7 +87,61 @@ export function addTo(name: string, paths: readonly string[], options: { show?: 
 export const commandTo = (name: string, command: WorkbenchCommand): void => ask(name, { command });
 
 /** The shell's: another project is shown, and nothing asked of a workbench for the last one is given to it. */
-export const forgetAsked = (): void => waiting.clear();
+export const forgetAsked = (): void => { waiting.clear(); toOpen.length = 0; };
+
+/* ── links (lib/links): the files each workbench shows, and the links opened ── */
+
+/** Where the files each workbench shows are kept in this browser, so a link opens one before it is in the page. */
+const OPENS_KEY = 'openfilm.opens';
+/** What OpenFilm's own workbenches show, until they have said (a new install, before they were first in the page). */
+const OPENS_DEFAULT: ReadonlyArray<readonly [string, readonly string[]]> = [['edit', [FILM]], ['canvas', CANVAS_FILES]];
+
+function keptOpens(): Map<string, readonly string[]> {
+  const map = new Map(OPENS_DEFAULT);
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(OPENS_KEY) ?? 'null');
+    if (raw && typeof raw === 'object') {
+      for (const [name, patterns] of Object.entries(raw)) {
+        if (Array.isArray(patterns) && patterns.every((p) => typeof p === 'string')) map.set(name, patterns as string[]);
+      }
+    }
+  } catch { /* none kept, or no localStorage */ }
+  return map;
+}
+
+let opens: ReadonlyMap<string, readonly string[]> | null = null;
+/** The files each workbench shows, by its name, in the order they were first said (OpenFilm's own first). */
+export const workbenchOpens = (): ReadonlyMap<string, readonly string[]> => (opens ??= keptOpens());
+
+function claim(name: string, patterns: readonly string[]): void {
+  const now = workbenchOpens();
+  const was = now.get(name);
+  if (was && was.length === patterns.length && was.every((p, i) => p === patterns[i])) return;
+  opens = new Map(now).set(name, [...patterns]);
+  try { localStorage.setItem(OPENS_KEY, JSON.stringify(Object.fromEntries(opens))); } catch { /* for this page only */ }
+}
+
+/** The shell's: show the link `link` in the workbench `name` (its `show`); kept until it is there. */
+export const showIn = (name: string, link: string): void => ask(name, { link });
+
+let opener: ((link: string) => void) | null = null;
+/** Links opened while no project was shown: opened once one is. */
+const toOpen: string[] = [];
+
+/**
+ * Send the person to what a link names: the workbench that shows its file is shown and shows it (`film.html#<clip>`
+ * the clip selected, `film.html#t=12.5` the moment); a file no workbench shows is pointed out in the library.
+ */
+export function open(link: string): void {
+  if (opener) opener(link); else toOpen.push(link);
+}
+
+/** The shell's: how links are opened while a project is shown; returns the way to stop. */
+export function setOpener(next: (link: string) => void): () => void {
+  opener = next;
+  for (const link of toOpen.splice(0)) next(link);
+  return () => { if (opener === next) opener = null; };
+}
 
 /* ── the top bar's buttons of the workbenches ── */
 

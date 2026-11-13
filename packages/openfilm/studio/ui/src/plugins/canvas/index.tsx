@@ -11,6 +11,7 @@ import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useT } from '../../i18n';
 import type { CanvasDoc } from '../../lib/canvas';
+import { CANVAS_FILES, parseLink } from '../../lib/links';
 import CanvasView from '../../components/canvas/CanvasView';
 import { CanvasLoading } from '../../components/canvas/CanvasLoading';
 import { LoadBoundary } from '../../components/canvas/LoadBoundary';
@@ -25,15 +26,20 @@ const notice = (message: string) => toast(message);
 function Canvas({ projectId }: { projectId: string }) {
   const t = useT();
   const state = useProject(projectId);
-  /* what is asked of the canvas, each time anew (`n`): files put on it, a node to show, a board to lay down */
+  /* what is asked of the canvas, each time anew (`n`): files put on it, a node to show (a link to its board,
+     `.film/canvas.json#<node>`), a board to lay down */
   const [addFiles, setAddFiles] = React.useState<{ paths: string[]; n: number } | null>(null);
   const [focus, setFocus] = React.useState<{ id: string; n: number } | null>(null);
   const [insert, setInsert] = React.useState<{ doc: CanvasDoc; n: number } | null>(null);
   useProvide('canvas', {
     add: (paths) => setAddFiles({ paths: [...paths], n: performance.now() }),
     command: (command) => {
-      if (command.type === 'show-node') setFocus({ id: command.id, n: Date.now() });
-      else if (command.type === 'lay-board') setInsert({ doc: command.board as CanvasDoc, n: Date.now() });
+      if (command.type === 'lay-board') setInsert({ doc: command.board as CanvasDoc, n: Date.now() });
+    },
+    opens: CANVAS_FILES,
+    show: (link) => {
+      const id = parseLink(link)?.fragment;
+      if (id) setFocus({ id, n: Date.now() });
     },
   });
   if (!state) return <CanvasLoading />;

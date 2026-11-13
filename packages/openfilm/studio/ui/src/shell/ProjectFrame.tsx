@@ -18,6 +18,7 @@ import { useT } from '@/i18n';
 import { batchMap } from '@/lib/batch-map';
 import { decodes, type PlayCheck } from '@/lib/decodes';
 import { studioHost, type StudioCommand } from '@/lib/host';
+import { linkOfCommand, routeLink } from '@/lib/links';
 import { mediaFetch } from '@/lib/media-queue';
 import { leaveProject } from '@/lib/navigate';
 import { recycleRefusalOf } from '@/lib/recycle';
@@ -25,7 +26,7 @@ import { factsOfProbe, mediaListingOf, srcHitsAsset, warmProjectMedia, type Medi
 import type { ImportProgress } from '@/components/MediaPool';
 import { Toast, useToast } from '@/components/Toast';
 import { BrandLoadingScreen } from '@/components/BrandLoadingScreen';
-import { commandTo, forgetAsked, tellCommand } from '@/studio/hub';
+import { forgetAsked, setOpener, showIn, tellCommand, workbenchOpens } from '@/studio/hub';
 import { usePublishFrame, wiringStore } from './frame';
 import { LayoutOver, useLayout } from './layout';
 import { LibraryPlace, useLibraryShown } from './library';
@@ -302,10 +303,31 @@ export function useProjectFrame(projectId: string) {
   /* ── the page's own windows (the projects, Settings, the desktop app's dialog), and the project's name (shell/top-bar) ── */
   const windows = usePageWindows(loaded);
 
-  /* ── the app's commands (lib/host.ts StudioCommand): what the page shows is done here; a canvas node is the canvas's
-     (studio/hub commandTo), and the rest are told to whoever listens (openfilm/studio onCommand: the edit) ── */
+  /* ── links (lib/links): the workbench that shows the link's file (studio/hub workbenchOpens: what each said it shows,
+     `provide`'s `opens`) is shown, unless it is, and told to show it (`show`, kept until it is in the page); a file no
+     workbench on shows is pointed out in the library ── */
+  const openLink = React.useRef<(link: string) => void>(() => {});
+  openLink.current = (link) => {
+    const route = routeLink(link, workbenchOpens(), shown.workModes);
+    if (!route) return;
+    if ('file' in route) { library.showFile(route.file); return; }
+    const showing = shown.noBench ? null : shown.surface ?? (shown.canvasOpen ? 'canvas' : 'edit');
+    /* the edit as it was left: in Motion's view when that is how it was (Motion is a view of the edit) */
+    const motion = route.workbench === 'edit' && shown.motionOpen && shown.workModes.includes('motion');
+    if (showing !== route.workbench) shown.showWorkbench(motion ? 'motion' : route.workbench);
+    showIn(route.workbench, route.link);
+  };
+  /* openfilm/studio `open`, from any plugin's element */
+  React.useEffect(() => setOpener((link) => openLink.current(link)), []);
+
+  /* ── the app's commands (lib/host.ts StudioCommand): what the page shows is done here; one that names a thing a link
+     names (a clip, a moment, a stretch, a canvas's node, a file) is opened as that link, and the rest are told to
+     whoever listens (openfilm/studio onCommand: the edit) ── */
   const appCommand = React.useRef<(command: StudioCommand) => void>(() => {});
   appCommand.current = (command) => {
+    if (command.type === 'open') { if (typeof command.link === 'string') openLink.current(command.link); return; }
+    const link = linkOfCommand(command);
+    if (link) { openLink.current(link); return; }
     if (command.type === 'settings') { windows.setSettingsOpen(command.section === 'providers' ? 'models' : command.section ?? 'agents'); return; }
     if (command.type === 'show-examples') {
       /* a skill: the library's skills, on Discover or on its page; an example: the projects window's examples */
@@ -316,8 +338,6 @@ export function useProjectFrame(projectId: string) {
       } else windows.setProjectsOpen({ example: open?.kind === 'example' ? open.id : undefined });
       return;
     }
-    if (command.type === 'show-node' && typeof command.id === 'string') { shown.setCanvasOpen(true); commandTo('canvas', command); return; }
-    if (command.type === 'show-file') { library.showFile(command.path); return; }
     tellCommand(command);
   };
   React.useEffect(() => { studioHost?.onCommand?.((command) => appCommand.current(command)); }, []);

@@ -425,7 +425,7 @@ export interface StudioSelection {
 /**
  * What an app can ask Studio to show: a clip selected (by its film.html id, or its place), a moment, a range briefly lit,
  * a box on the picture shown at its moment, a track, a file of the media pane, a subtitle line (its span marked, the
- * subtitle panel open on it).
+ * subtitle panel open on it), whatever a link names (`open`).
  *
  * And what a chat points at, without moving the playhead or changing the selection: `highlight`, the thing a pill the
  * person hovers stands for, lit until the next one (null: none); `draft-refs`, the things the message being written
@@ -441,6 +441,9 @@ export type StudioCommand =
   | { type: 'show-file'; path: string }
   /* a node of the canvas: the canvas opened, the node selected and in view */
   | { type: 'show-node'; id: string }
+  /* a link to a thing of the project (lib/links: `film.html#<clip>`, `film.html#t=12.5`, a file): the workbench that
+     shows its file shown, and showing it */
+  | { type: 'open'; link: string }
   | { type: 'show-subtitle'; start: number; end: number }
   | { type: 'highlight'; ref: StudioRef | null }
   | { type: 'draft-refs'; refs: StudioRef[] }

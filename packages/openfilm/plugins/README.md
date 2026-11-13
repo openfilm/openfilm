@@ -36,6 +36,56 @@ A `bin` that is one file is one command, `openfilm my-plugin`.
 A film never depends on a plugin. What a plugin writes into `film.html` is standard HTML and CSS and files of the project,
 so the film plays and renders with the plugin off.
 
+### `look`: what an agent sees of your dimension
+
+A workbench plugin lets an agent check its work without the interface: a `look` command that tells the film as your
+workbench sees it, in numbers and pictures, as `openfilm look` tells the picture and the sound (`openfilm edit look` is
+that one).
+
+```
+openfilm my-plugin look [what] [t | a-b] [--json]
+```
+
+- `what`: what of yours to look at (a clip's id, a file of the project); none, the whole film. `t` one moment in seconds
+  (`12.5`), `a-b` a stretch (`3-6`); neither, the whole length.
+- It prints plain text, a line each: what it looked at first, then what it found, every number with its unit
+  (`-14.2 LUFS`, `6500 K`, `12 %`, `3.5 s`), what is wrong (`✗ …`), what to watch (`! …`), what is right (`✓ …`), and last
+  the path of each picture it saved (`→ …`). Pictures go under the project's `.film/look/<plugin>/`.
+- `--json` prints one JSON object instead, for a program: `{ "ok": true, "files": [ … ], … }` with your numbers.
+- Its exit status is `openfilm look`'s: 0 done, 1 the film or the look failed (the output says why), 2 not a project or
+  a wrong command.
+
+`openfilm edit look` is `openfilm look` as it is, with its options (`--count`, `--full`, `--loudness`) and no `--json` yet.
+
+A plugin of OpenFilm's own does the convention's part with `runLook` (`src/plugin-look.mjs`), and only looks:
+
+```js
+import { join } from 'node:path';
+import { runLook } from '../../src/plugin-look.mjs';
+
+process.exitCode = await runLook(async ({ project, what, at, range, dir, shown }) => {
+  const picture = join(dir(), 'a.png'); // measured and drawn from the project's files
+  return { lines: ['clip a · 0–4 s', 'white balance  6500 K', `→ ${shown(picture)}`], files: [picture], data: { kelvin: 6500 } };
+}, { plugin: 'my-plugin', usage: 'openfilm my-plugin look [what] [t | a-b]' });
+```
+
+## Links
+
+A link names a thing of the project: a path in its folder and, after `#`, what in that file.
+
+| Link | What it names |
+|---|---|
+| `film.html#<clip-id>` | a clip of the film, by its id |
+| `film.html#t=12.5` | a moment of the film, in seconds |
+| `film.html#t=3,6` | a stretch of it |
+| `assets/a.mp4` | a file of the project |
+| `.film/canvas.json#<node-id>` | a thing in a plugin's own file, by its id |
+
+The same link is written by an agent in its reply, printed by a command (`openfilm edit add` prints each new clip's), and
+opened by a plugin (`open`, below). Opening one shows the workbench that shows its file (the edit for `film.html`, the
+canvas for its boards, a plugin's for the files it claims), which shows the thing; a file no workbench claims is pointed
+out in the library.
+
 ## An element: `openfilm/studio`
 
 The module named by `browser` default-exports a custom element (a class that extends `HTMLElement`). Studio defines it,
@@ -120,11 +170,18 @@ being written; `chat.select(selection)` says what is selected and where the play
 
 - `addTo(name, paths, { show })`: put files of the project, by path, into the workbench `name` (`addTo('edit', [path])` puts
   them at the end of the film; `show: true` shows that workbench after). Kept until that workbench is there to take them.
-- `provide(name, { add, command })`: what your own workbench takes while it is there; returns the way to take it back.
-  `add(paths, { show })` is called for `addTo`; `command(command)` for a command meant for it alone. What was asked of it
-  before it was there is given to it now. `name` is its `plugin` attribute.
-- `onCommand(listener)`: the app's commands that are not the page's own (`{ type: 'seek', time }`, `{ type: 'select-clip', id }`,
-  `{ type: 'highlight', ref }`…); returns the way to stop.
+- `open(link)`: send the person to what a link names (Links, above): `open('film.html#' + id)` after putting a clip in
+  the film shows the edit with it selected.
+- `provide(name, { add, command, opens, show })`: what your own workbench takes while it is there; returns the way to take
+  it back. `add(paths, { show })` is called for `addTo`; `command(command)` for a command meant for it alone. `opens`: the
+  files it shows, as patterns of paths in the project (`film.html`, `.film/canvas.json`, `looks/*.cube`, `**/*.cube`:
+  `*` in a name, `**` across folders, matched against the whole path); a link to one of them shows your workbench and
+  calls `show(link)` with it. The pattern that names a path most closely wins. Studio remembers what a workbench said it
+  opens, so once it has been in the page a link shows it again while it is not. What was asked of it before it was there is given to it now. `name`
+  is its `plugin` attribute.
+- `onCommand(listener)`: the app's commands that are not the page's own and not a link (`{ type: 'highlight', ref }`,
+  `{ type: 'show-box', time, box }`, `{ type: 'show-track', track }`…); returns the way to stop. A clip, a moment, a
+  stretch, a node or a file the app asks to show is a link, given to the workbench that shows it.
 
 **A plugin's own server code.** A plugin of OpenFilm's own (`plugins/<id>/`) may bring a `server.mjs` whose routes Studio
 answers under `/api/plugins/<id>/…` while the plugin is on (`studio/server/plugin-servers.mjs` says how to write one).
