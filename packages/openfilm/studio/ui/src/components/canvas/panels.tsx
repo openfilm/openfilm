@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, ChevronRight, AtSign, Upload, Image as ImageIcon, SunMedium, Wrench, Expand, ShoppingBag, Ratio, Layers, Repeat, Package, Wand2, PenLine, Crop, SlidersHorizontal, Combine, ScanFace, Smile, Globe, MessageSquareText, Lightbulb,
+  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -20,7 +20,7 @@ import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { studioHost } from '@/lib/host';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
-import { keepLastModel, useBoard, type Choice, type MakeData } from './board';
+import { keepLastModel, lastModel, useBoard, type Choice, type MakeData } from './board';
 import { ProviderMark } from '../settings/ProviderMark';
 import { useDraft } from './words';
 import { DocSheet } from './doc';
@@ -153,7 +153,7 @@ export function SelectionToolbar({ ids, onGroup, onUngroup, onDuplicate, onRemov
 export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceResource | null; empty?: 'image' | 'video' }) {
   const t = useT();
   const board = useBoard();
-  const [open, setOpen] = React.useState<'presets' | 'marketing' | 'tools' | 'assist' | null>(null);
+  const [open, setOpen] = React.useState<'create' | 'edit' | 'video' | 'agent' | null>(null);
   if (board.readOnly || board.single !== id || (!file && !empty)) return null;
   const btn = 'cv-tool nodrag flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
   const icon = 'cv-tool nodrag flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
@@ -186,54 +186,66 @@ export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceReso
     setOpen(null);
     return board.spawn(id, 'image', { preset: p.id, opts: { ratio: p.fromPicture && p.id !== 'panoramaFrom' ? shape ?? p.ratio : p.ratio } });
   };
+  /* what the connected models can do: a tool only shows when one of them does it */
+  const pictures = board.choices('image');
+  const can = { mask: pictures.some((c) => c.spec?.mask), markup: pictures.some((c) => c.spec?.markup), video: board.choices('video').length > 0, agent: Boolean(board.write) };
+  /* the model a new picture node makes with (the last picked, else Settings'), for its largest size */
+  const last = lastModel('image');
+  const maker = pictures.find((c) => last && c.via === last.via && c.model === last.model) ?? board.fallback('image');
+  const largest = [...(maker?.spec?.sizes ?? [])].sort((a, b) => parseFloat(b) - parseFloat(a))[0];
+  const tools: CardTools = {
+    expression: (words) => { const made = from(presetOf('expression')!); board.setData(made, { prompt: words }); },
+    sizes: (ratios) => { setOpen(null); board.sizes(id, ratios); },
+    set: (parts) => { setOpen(null); board.productSet(id, parts); },
+    swap: () => board.pick(from(presetOf('productSwap')!)),
+    blend: () => board.pick(from(presetOf('blend')!)),
+    upscale: () => {
+      setOpen(null);
+      board.spawn(id, 'image', { preset: 'upscale', opts: { ...(shape ? { ratio: shape } : {}), ...(largest ? { size: largest } : {}), ...(maker?.spec?.qualities?.includes('high') ? { quality: 'high' } : {}) } });
+    },
+  };
+  /* a clip made from the picture as its first frame: moving on its own, from words, to a last frame picked, with a camera move */
+  const clip = (data: Partial<MakeData>) => { setOpen(null); return board.spawn(id, 'video', { ...data, opts: { mode: 'first', ...(shape ? { ratio: shape } : {}), ...data.opts } }); };
   const actions = (
       <div className={`${bar} ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
         {refer}
         {file.kind === 'image' ? (
-          /* what can be made from the picture, each a new node wired from it (or a window to make it in): changed in
-             part, widened, its background out, as a preset, from more angles, lit anew; for selling it; tools; the agent */
+          /* the picture changed in place (smart edit, widened, its background out, lit anew), made into more (the
+             create cards), edited on this computer, made into a clip, or read by the agent; a tool only when a
+             connected model does it */
           <>
-            <button type="button" className={btn} onClick={() => board.redraw(id, file.path)}><Brush size={16} />{t('canvas.actions.redraw')}</button>
-            <button type="button" className={btn} onClick={() => board.openTool(id, file.path, 'expand')}><Expand size={16} />{t('canvas.expand.title')}</button>
-            <button type="button" className={btn} onClick={() => board.cutout(id, file.path)}><Eraser size={16} />{t('canvas.actions.cutout')}</button>
-            <Popover open={open === 'presets'} onOpenChange={(v) => setOpen(v ? 'presets' : null)} placement="bottom" align="start"
-              trigger={<button type="button" className={btn} onClick={() => setOpen(open === 'presets' ? null : 'presets')}><LayoutDashboard size={16} />{t('canvas.presets.title')}<ChevronDown size={13} /></button>}>
-              <PresetPicker hasPicture onPick={from} />
-            </Popover>
-            <button type="button" className={btn} onClick={() => board.spawn(id, 'image', { preset: 'cameras9', opts: { ratio: '1:1' } })}><Orbit size={16} />{t('canvas.actions.angles')}</button>
+            {can.mask || can.markup ? <button type="button" className={btn} onClick={() => board.redraw(id, file.path)}><Wand2 size={16} />{t('canvas.actions.redraw')}</button> : null}
+            {can.mask ? <button type="button" className={btn} onClick={() => board.openTool(id, file.path, 'expand')}><Expand size={16} />{t('canvas.expand.title')}</button> : null}
+            <button type="button" className={btn} onClick={() => board.cutout(id, file.path)}><Scissors size={16} />{t('canvas.actions.cutout')}</button>
             <button type="button" className={btn} onClick={() => board.openTool(id, file.path, 'light')}><SunMedium size={16} />{t('canvas.actions.light')}</button>
-            <ActionMenu label={t('canvas.marketing.title')} icon={ShoppingBag} open={open === 'marketing'} onOpen={(v) => setOpen(v ? 'marketing' : null)} described rows={[
-              { key: 'sizes', icon: Ratio, label: t('canvas.marketing.sizes'), about: t('canvas.marketing.sizesAbout'), sub: <SizesPicker onMake={(ratios) => { setOpen(null); board.sizes(id, ratios); }} /> },
-              { key: 'layers', icon: Layers, label: t('canvas.marketing.layers'), about: t('canvas.marketing.layersAbout'), run: () => board.layers(id, file.path) },
-              { key: 'text', icon: TypeIcon, label: t('canvas.marketing.editText'), about: t('canvas.marketing.editTextAbout'), run: () => board.assist(id, file.path, 'text') },
-              { key: 'swap', icon: Repeat, label: t('canvas.marketing.swap'), about: t('canvas.marketing.swapAbout'), run: () => { const made = from(presetOf('productSwap')!); board.pick(made); } },
-              { key: 'set', icon: LayoutGrid, label: t('canvas.marketing.set'), about: t('canvas.marketing.setAbout'), run: () => board.productSet(id) },
-              { key: 'motion', icon: Clapperboard, label: t('canvas.marketing.motion'), about: t('canvas.marketing.motionAbout'), run: () => board.spawn(id, 'video', { prompt: MOTION_WORDS, opts: { mode: 'first', ...(shape ? { ratio: shape } : {}) } }) },
-              { key: 'main', icon: Package, label: t('canvas.marketing.main'), about: t('canvas.marketing.mainAbout'), run: () => from(presetOf('whiteShot')!) },
-            ]} />
-            <ActionMenu label={t('canvas.actions.tools')} icon={Wrench} open={open === 'tools'} onOpen={(v) => setOpen(v ? 'tools' : null)} rows={[
-              { key: 'eraser', icon: Wand2, label: t('canvas.tools.eraser'), run: () => board.redraw(id, file.path, 'remove') },
-              { key: 'markup', icon: PenLine, label: t('canvas.tools.markup'), run: () => board.redraw(id, file.path, 'markup') },
-              { key: 'crop', icon: Crop, label: t('canvas.tools.crop'), run: () => board.openTool(id, file.path, 'crop') },
-              { key: 'adjust', icon: SlidersHorizontal, label: t('canvas.tools.adjust'), run: () => board.openTool(id, file.path, 'adjust') },
-              { key: 'split', icon: Grid2x2, label: t('canvas.actions.split'), sub: <GridPicker onPick={(rows, cols) => { setOpen(null); board.split(id, file.path, rows, cols); }} /> },
-              { key: 'blend', icon: Combine, label: t('canvas.tools.blend'), run: () => { const made = from(presetOf('blend')!); board.pick(made); } },
-              { key: 'skin', icon: ScanFace, label: t('canvas.tools.skin'), run: () => from(presetOf('skin')!) },
-              { key: 'expression', icon: Smile, label: t('canvas.tools.expression'), sub: (
-                <div className={`w-[180px] p-1 ${CARD}`}>
-                  {EXPRESSIONS.map(([key, words]) => (
-                    <button key={key} type="button" className={`${PICK} w-full`} onClick={() => { const made = from(presetOf('expression')!); board.setData(made, { prompt: words }); }}>{t(`canvas.expressions.${key}`)}</button>
-                  ))}
-                </div>
-              ) },
-              { key: 'panorama', icon: Globe, label: t('canvas.tools.panorama'), run: () => from(presetOf('panoramaFrom')!) },
-              { key: 'upscale', icon: Sparkles, label: t('canvas.tools.upscale'), run: () => from(presetOf('upscale')!) },
-            ]} />
-            <ActionMenu label={t('canvas.assist.title')} icon={MessageSquareText} open={open === 'assist'} onOpen={(v) => setOpen(v ? 'assist' : null)} described rows={[
-              { key: 'shots', icon: Clapperboard, label: t('canvas.assist.shots'), about: t('canvas.assist.shotsAbout'), run: () => board.assist(id, file.path, 'shots') },
-              { key: 'prompt', icon: FileText, label: t('canvas.assist.prompt'), about: t('canvas.assist.promptAbout'), run: () => board.assist(id, file.path, 'prompt') },
-              { key: 'ideas', icon: Lightbulb, label: t('canvas.assist.ideas'), about: t('canvas.assist.ideasAbout'), run: () => board.assist(id, file.path, 'ideas') },
-            ]} />
+            {line}
+            <Popover open={open === 'create'} onOpenChange={(v) => setOpen(v ? 'create' : null)} placement="bottom" align="start"
+              trigger={<button type="button" className={`${btn} ${open === 'create' ? 'bg-[var(--cv-float-hover)]' : ''}`} onClick={() => setOpen(open === 'create' ? null : 'create')}><LayoutDashboard size={16} />{t('canvas.create.title')}<ChevronDown size={13} className={`transition-transform duration-200 ${open === 'create' ? 'rotate-180' : ''}`} /></button>}>
+              <PresetPicker hasPicture onPick={from} tools={tools} />
+            </Popover>
+            <ToolMenu label={t('canvas.create.edit')} icon={SlidersHorizontal} open={open === 'edit'} onOpen={(v) => setOpen(v ? 'edit' : null)} sections={[{ items: [
+              { key: 'crop', icon: Crop, label: t('canvas.tools.crop'), about: t('canvas.create.about.crop'), run: () => board.openTool(id, file.path, 'crop') },
+              { key: 'adjust', icon: Palette, label: t('canvas.tools.adjust'), about: t('canvas.create.about.adjust'), run: () => board.openTool(id, file.path, 'adjust') },
+              { key: 'split', icon: Grid2x2, label: t('canvas.actions.split'), about: t('canvas.create.about.split'), more: <GridPicker onPick={(rows, cols) => { setOpen(null); board.split(id, file.path, rows, cols); }} /> },
+              ...(can.mask ? [{ key: 'layers', icon: Layers, label: t('canvas.marketing.layers'), about: t('canvas.marketing.layersAbout'), run: () => board.layers(id, file.path) }] : []),
+            ] }]} />
+            {can.video ? (
+              <ToolMenu label={t('canvas.create.video')} icon={Clapperboard} open={open === 'video'} onOpen={(v) => setOpen(v ? 'video' : null)} sections={[{ items: [
+                { key: 'motion', icon: Sparkles, label: t('canvas.marketing.motion'), about: t('canvas.marketing.motionAbout'), run: () => clip({ prompt: MOTION_WORDS }) },
+                { key: 'first', icon: Film, label: t('canvas.create.first'), about: t('canvas.create.about.first'), run: () => clip({}) },
+                { key: 'firstLast', icon: Repeat, label: t('canvas.create.firstLast'), about: t('canvas.create.about.firstLast'), run: () => board.pick(clip({ opts: { mode: 'firstLast' } })) },
+                { key: 'effect', icon: Orbit, label: t('canvas.create.effect'), about: t('canvas.create.about.effect'), run: () => board.openLibrary('effects', clip({})) },
+              ] }]} />
+            ) : null}
+            {can.agent ? (
+              <ToolMenu label={t('canvas.assist.title')} icon={MessageSquareText} open={open === 'agent'} onOpen={(v) => setOpen(v ? 'agent' : null)} sections={[{ items: [
+                { key: 'shots', icon: Clapperboard, label: t('canvas.assist.shots'), about: t('canvas.assist.shotsAbout'), run: () => board.assist(id, file.path, 'shots') },
+                { key: 'prompt', icon: FileText, label: t('canvas.assist.prompt'), about: t('canvas.assist.promptAbout'), run: () => board.assist(id, file.path, 'prompt') },
+                { key: 'ideas', icon: Lightbulb, label: t('canvas.assist.ideas'), about: t('canvas.assist.ideasAbout'), run: () => board.assist(id, file.path, 'ideas') },
+                { key: 'text', icon: TypeIcon, label: t('canvas.marketing.editText'), about: t('canvas.marketing.editTextAbout'), run: () => board.assist(id, file.path, 'text') },
+              ] }]} />
+            ) : null}
+            {line}
           </>
         ) : null}
         {file.kind !== 'other' ? <button type="button" className={btn} onClick={() => board.addToFilm(file)}><Clapperboard size={16} />{t('canvas.addToFilm')}</button> : null}
@@ -378,48 +390,137 @@ function ModelPicker({ choices, picked, fallback, onPick, onConnect }: {
   );
 }
 
-/** The presets as pictures of what each makes, a kind at a time; one that needs a picture is off without one. */
-function PresetPicker({ picked, hasPicture, onPick }: { picked?: string; hasPicture: boolean; onPick: (preset: CanvasPreset) => void }) {
+/** what a picture can be made into beyond the presets, as cards in their kind's tab: each run, or with choices first */
+export interface CardTools {
+  expression: (words: string) => void;
+  sizes: (ratios: string[]) => void;
+  set: (presets: string[]) => void;
+  swap: () => void;
+  blend: () => void;
+  upscale: () => void;
+}
+/** those cards, by tab */
+const TOOL_CARDS: Partial<Record<PresetGroup, Array<keyof CardTools>>> = { role: ['expression'], product: ['swap', 'set'], design: ['sizes'], edit: ['upscale', 'blend'] };
+/** a tool card's picture and name */
+const TOOL_CARD: Record<keyof CardTools, { picture: string; name: string }> = {
+  expression: { picture: 'expression', name: 'canvas.presets.names.expression' }, sizes: { picture: 'multiSize', name: 'canvas.marketing.sizes' },
+  set: { picture: 'productSet', name: 'canvas.marketing.set' }, swap: { picture: 'productSwap', name: 'canvas.presets.names.productSwap' },
+  blend: { picture: 'blend', name: 'canvas.presets.names.blend' }, upscale: { picture: 'upscale', name: 'canvas.presets.names.upscale' },
+};
+/** the cards that ask something first: their choices open under the cards */
+const ASKS_FIRST = new Set<keyof CardTools>(['expression', 'sizes', 'set']);
+/** the pictures of a product set, each one of its presets */
+const SET_PARTS: Array<[string, string]> = [['whiteShot', 'main'], ['productDetail', 'detail'], ['productLife', 'life'], ['adShot', 'ad'], ['productFeatures', 'features']];
+
+/**
+ * The presets as pictures of what each makes, a kind at a time; one that needs a picture is off without one. Opened
+ * from a picture (`tools`), each tab also holds what that picture can be made into (expressions, other sizes, a
+ * product set, a product swapped, pictures blended, upscaled); one that asks something first shows its choices under
+ * the cards, not in a menu beside them.
+ */
+function PresetPicker({ picked, hasPicture, onPick, tools }: { picked?: string; hasPicture: boolean; onPick: (preset: CanvasPreset) => void; tools?: CardTools }) {
   const t = useT();
   const [tab, setTab] = React.useState<PresetGroup>(() => {
     const group = presetOf(picked)?.group;
     return group && PRESET_GROUPS.includes(group) ? group : PRESET_GROUPS[0]!;
   });
+  const [asking, setAsking] = React.useState<keyof CardTools | null>(null);
+  const cards: Card[] = [
+    ...PRESETS.filter((p) => p.group === tab).map((p) => ({ id: p.id, picture: p.id, name: t(`canvas.presets.names.${p.id}`), needsPicture: p.fromPicture })),
+    ...(tools ? TOOL_CARDS[tab] ?? [] : []).map((k) => ({ id: `tool:${k}`, picture: TOOL_CARD[k].picture, name: t(TOOL_CARD[k].name), needsPicture: true })),
+  ];
+  const pick = (id: string) => {
+    if (!id.startsWith('tool:')) { onPick(presetOf(id)!); return; }
+    const k = id.slice(5) as keyof CardTools;
+    if (ASKS_FIRST.has(k)) setAsking(asking === k ? null : k);
+    else if (k === 'swap' || k === 'blend' || k === 'upscale') tools?.[k]();
+  };
   return (
     <div className={`w-[560px] p-3 ${CARD}`}>
       <div className="mb-3 flex flex-wrap gap-1">
         {PRESET_GROUPS.map((group) => (
-          <button key={group} type="button" onClick={() => setTab(group)}
+          <button key={group} type="button" onClick={() => { setTab(group); setAsking(null); }}
             className={`h-7 rounded-[8px] px-2.5 text-[13px] transition ${group === tab ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
             {t(`canvas.presets.groups.${group}`)}
           </button>
         ))}
       </div>
-      <PictureCards presets={PRESETS.filter((p) => p.group === tab)} picked={picked} hasPicture={hasPicture} onPick={onPick} />
+      <PictureCards cards={cards} picked={asking ? `tool:${asking}` : picked} hasPicture={hasPicture} onPick={pick} />
+      {asking && tools ? <Asking which={asking} tools={tools} onBack={() => setAsking(null)} /> : null}
     </div>
   );
 }
 
-/** Presets as cards: each its picture, its name under it, "needs a picture" on one made from a picture. */
-function PictureCards({ presets, picked, hasPicture, onPick }: { presets: CanvasPreset[]; picked?: string; hasPicture: boolean; onPick: (preset: CanvasPreset) => void }) {
+/** A tool card's choices, under the cards: the expression to make, the sizes to make it at, the pictures of a set. */
+function Asking({ which, tools, onBack }: { which: keyof CardTools; tools: CardTools; onBack: () => void }) {
+  const t = useT();
+  const [sizes, setSizes] = React.useState<string[]>(['1:1', '3:4', '9:16', '16:9']);
+  const [parts, setParts] = React.useState<string[]>(SET_PARTS.map(([id]) => id));
+  const chip = (on: boolean) => `flex h-8 items-center gap-1.5 rounded-[9px] px-2.5 text-[13px] transition ${on ? 'bg-[color-mix(in_srgb,var(--cv-edge-lit)_20%,transparent)] text-[var(--cv-ink)] ring-1 ring-inset ring-[var(--cv-edge-lit)]' : 'bg-[var(--cv-chip)] text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]'}`;
+  const go = 'ml-auto flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] bg-[var(--cv-invert)] px-3 text-[13px] font-medium text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:opacity-40';
+  return (
+    <div className="cv-fade mt-3 border-t !border-[var(--cv-float-line)] pt-3">
+      <div className="mb-2.5 flex items-center gap-2">
+        <span className="text-[13px] font-medium text-[var(--cv-ink)]">{t(TOOL_CARD[which].name)}</span>
+        <span className="text-[12px] text-[var(--cv-ink-3)]">{t(`canvas.create.ask.${which}`)}</span>
+        <button type="button" aria-label={t('canvas.panel.collapse')} onClick={onBack} className="ml-auto flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--cv-ink-3)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><X size={13} /></button>
+      </div>
+      {which === 'expression' ? (
+        <div className="grid grid-cols-5 gap-1.5">
+          {EXPRESSIONS.map(([key, mark, words]) => (
+            <button key={key} type="button" onClick={() => tools.expression(words)} className={`${chip(false)} justify-center`}><span className="text-[15px] leading-none">{mark}</span>{t(`canvas.expressions.${key}`)}</button>
+          ))}
+        </div>
+      ) : which === 'sizes' ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {SIZES.map(([ratio, use]) => {
+            const on = sizes.includes(ratio);
+            return (
+              <button key={ratio} type="button" title={t(`canvas.marketing.shapes.${use}`)} onClick={() => setSizes((list) => (on ? list.filter((r) => r !== ratio) : [...list, ratio]))} className={chip(on)}>
+                <RatioIcon ratio={ratio} size={14} /><span className="tabular-nums">{ratio}</span><span className="text-[11.5px] text-[var(--cv-ink-3)]">{t(`canvas.marketing.shapes.${use}`)}</span>
+              </button>
+            );
+          })}
+          <button type="button" disabled={!sizes.length} onClick={() => tools.sizes(SIZES.map(([r]) => r).filter((r) => sizes.includes(r)))} className={go}>
+            <Sparkles size={14} />{t('canvas.marketing.makeSizes').replace('{n}', String(sizes.length))}
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {SET_PARTS.map(([id, part]) => {
+            const on = parts.includes(id);
+            return <button key={id} type="button" onClick={() => setParts((list) => (on ? list.filter((x) => x !== id) : [...list, id]))} className={chip(on)}>{on ? <Check size={13} /> : null}{t(`canvas.create.set.${part}`)}</button>;
+          })}
+          <button type="button" disabled={!parts.length} onClick={() => tools.set(SET_PARTS.map(([id]) => id).filter((id) => parts.includes(id)))} className={go}>
+            <Sparkles size={14} />{t('canvas.create.makeN').replace('{n}', String(parts.length))}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type Card = { id: string; picture: string; name: string; needsPicture?: boolean };
+/** Cards: each its picture, its name under it, "needs a picture" on one made from a picture when there is none. */
+function PictureCards({ cards, picked, hasPicture, onPick }: { cards: Card[]; picked?: string; hasPicture: boolean; onPick: (id: string) => void }) {
   const t = useT();
   return (
     <div className="grid max-h-[400px] grid-cols-3 gap-x-2.5 gap-y-3 overflow-y-auto">
-      {presets.map((p) => {
-        const off = p.fromPicture && !hasPicture;
+      {cards.map((c) => {
+        const off = c.needsPicture && !hasPicture;
         return (
-          <button key={p.id} type="button" disabled={off} onClick={() => onPick(p)} title={off ? t('canvas.presets.needsPicture') : undefined}
+          <button key={c.id} type="button" disabled={off} onClick={() => onPick(c.id)} title={off ? t('canvas.presets.needsPicture') : undefined}
             className="group/preset min-w-0 text-left disabled:cursor-not-allowed">
-            <span className={`relative block aspect-[3/2] overflow-hidden rounded-[10px] bg-[var(--cv-chip)] ${picked === p.id ? 'ring-2 ring-[var(--cv-ring)]' : 'ring-1 ring-inset ring-[var(--cv-float-line)]'}`}>
-              {PRESET_PICTURES[p.id] ? <img src={PRESET_PICTURES[p.id]} alt="" draggable={false} loading="lazy"
+            <span className={`relative block aspect-[3/2] overflow-hidden rounded-[10px] bg-[var(--cv-chip)] ${picked === c.id ? 'ring-2 ring-[var(--cv-ring)]' : 'ring-1 ring-inset ring-[var(--cv-float-line)]'}`}>
+              {PRESET_PICTURES[c.picture] ? <img src={PRESET_PICTURES[c.picture]} alt="" draggable={false} loading="lazy"
                 className={`h-full w-full object-cover transition duration-300 ${off ? 'opacity-40' : 'group-hover/preset:scale-[1.04]'}`} /> : null}
-              {p.fromPicture && !hasPicture ? (
+              {off ? (
                 <span className="absolute left-1.5 top-1.5 flex h-5 items-center gap-1 rounded-[6px] bg-black/60 px-1.5 text-[10.5px] text-white backdrop-blur-sm">
                   <ImageIcon size={11} />{t('canvas.presets.fromPicture')}
                 </span>
               ) : null}
             </span>
-            <span className={`mt-1.5 block truncate px-0.5 text-[13px] ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)]'}`}>{t(`canvas.presets.names.${p.id}`)}</span>
+            <span className={`mt-1.5 block truncate px-0.5 text-[13px] ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)]'}`}>{c.name}</span>
           </button>
         );
       })}
@@ -427,75 +528,63 @@ function PictureCards({ presets, picked, hasPicture, onPick }: { presets: Canvas
   );
 }
 
-/** what makes a poster move, in words for a clip model: its layout and words kept still */
+/** what makes a picture move, in words for a clip model: its layout and words kept still */
 const MOTION_WORDS = 'Bring this picture to life with subtle, elegant motion: gentle movement in the background, light and particles drifting, a slow camera push-in; keep the layout, every word and the product perfectly still, sharp and legible.';
-/** the expressions offered, each as words for the model */
-const EXPRESSIONS: Array<[string, string]> = [
-  ['smile', 'a gentle, natural smile'], ['laugh', 'a big, open laugh'], ['surprised', 'surprised: eyebrows raised, mouth slightly open'],
-  ['sad', 'sad: eyes and the corners of the mouth turned down'], ['angry', 'angry: brows drawn together, a hard look'],
-  ['shy', 'shy: a small smile, a slight blush, eyes looking down'], ['wink', 'a playful wink with one eye'],
-  ['eyesClosed', 'calm, both eyes gently closed'], ['thinking', 'thoughtful: a slight frown, looking off to the side'], ['confident', 'cool and confident: a slight smirk'],
+/** the expressions offered: each its mark and its words for the model */
+const EXPRESSIONS: Array<[string, string, string]> = [
+  ['smile', '🙂', 'a gentle, natural smile'], ['laugh', '😄', 'a big, open laugh'], ['surprised', '😮', 'surprised: eyebrows raised, mouth slightly open'],
+  ['sad', '😢', 'sad: eyes and the corners of the mouth turned down'], ['angry', '😠', 'angry: brows drawn together, a hard look'],
+  ['shy', '☺️', 'shy: a small smile, a slight blush, eyes looking down'], ['wink', '😉', 'a playful wink with one eye'],
+  ['eyesClosed', '😌', 'calm, both eyes gently closed'], ['thinking', '🤔', 'thoughtful: a slight frown, looking off to the side'], ['confident', '😎', 'cool and confident: a slight smirk'],
 ];
-/** the shapes a picture is made again at for selling it, each with where it is used */
+/** the shapes a picture is made again at, each with where it is used */
 const SIZES: Array<[string, string]> = [['1:1', 'square'], ['3:4', 'portrait'], ['9:16', 'story'], ['16:9', 'wide'], ['4:3', 'landscape'], ['2:3', 'poster'], ['21:9', 'banner']];
 
-/** The shapes to make a picture again at: each picked or not, then made all at once. */
-function SizesPicker({ onMake }: { onMake: (ratios: string[]) => void }) {
-  const t = useT();
-  const [picked, setPicked] = React.useState<string[]>(['1:1', '3:4', '9:16', '16:9']);
-  return (
-    <div className={`w-[260px] p-2 ${CARD}`}>
-      {SIZES.map(([ratio, use]) => {
-        const on = picked.includes(ratio);
-        return (
-          <button key={ratio} type="button" onClick={() => setPicked((list) => (on ? list.filter((r) => r !== ratio) : [...list, ratio]))}
-            className={`${PICK} w-full`}>
-            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border ${on ? 'border-[var(--cv-edge-lit)] bg-[var(--cv-edge-lit)] text-white' : 'border-[var(--cv-float-line)]'}`}>{on ? <Check size={11} strokeWidth={3} /> : null}</span>
-            <RatioIcon ratio={ratio} /><span className="w-10 tabular-nums">{ratio}</span><span className="truncate text-[var(--cv-ink-2)]">{t(`canvas.marketing.shapes.${use}`)}</span>
-          </button>
-        );
-      })}
-      <button type="button" disabled={!picked.length} onClick={() => onMake(SIZES.map(([r]) => r).filter((r) => picked.includes(r)))}
-        className="mt-1.5 flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--cv-invert)] text-[13px] font-medium text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:opacity-40">
-        <Sparkles size={14} />{t('canvas.marketing.makeSizes').replace('{n}', String(picked.length))}
-      </button>
-    </div>
-  );
-}
-
+type MenuItem = { key: string; icon: React.ComponentType<{ size?: number }>; label: string; about: string; run?: () => void; more?: React.ReactNode };
 /**
- * A menu in a picture's bar: its rows, each run when pressed, or with more beside it (a submenu shown while it is
- * pointed at); `described`, each row says under its name what it does.
+ * A menu of a picture's bar: its sections, each item its mark on a soft square, its name and what it does; one that
+ * asks something first opens its choices in place, under it (never a menu beside the menu).
  */
-function ActionMenu({ label, icon: Icon, open, onOpen, rows, described }: {
-  label: string; icon: React.ComponentType<{ size?: number }>; open: boolean; onOpen: (open: boolean) => void; described?: boolean;
-  rows: Array<{ key: string; icon: React.ComponentType<{ size?: number }>; label: string; about?: string; run?: () => void; sub?: React.ReactNode }>;
+function ToolMenu({ label, icon: Icon, open, onOpen, sections }: {
+  label: string; icon: React.ComponentType<{ size?: number }>; open: boolean; onOpen: (open: boolean) => void;
+  sections: Array<{ title?: string; items: MenuItem[] }>;
 }) {
-  const [sub, setSub] = React.useState<string | null>(null);
-  React.useEffect(() => { if (!open) setSub(null); }, [open]);
+  const [more, setMore] = React.useState<string | null>(null);
+  React.useEffect(() => { if (!open) setMore(null); }, [open]);
   const btn = 'cv-tool nodrag flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+  const shown = sections.filter((section) => section.items.length);
+  if (!shown.length) return null;
   return (
     <Popover open={open} onOpenChange={onOpen} placement="bottom" align="start"
-      trigger={<button type="button" className={`${btn} ${open ? 'bg-[var(--cv-float-hover)]' : ''}`} onClick={() => onOpen(!open)}><Icon size={16} />{label}<ChevronDown size={13} /></button>}>
-      <div className={`relative p-1 ${described ? 'w-[300px]' : 'w-[200px]'} ${CARD}`}>
-        {described ? <div className="flex h-7 items-center px-2.5 text-[12px] text-[var(--cv-ink-3)]">{label}</div> : null}
-        {rows.map((row) => {
-          const RowIcon = row.icon;
-          return (
-            <div key={row.key} className="relative" onMouseEnter={() => setSub(row.sub ? row.key : null)}>
-              <button type="button" onClick={() => { if (row.sub) setSub(sub === row.key ? null : row.key); else { onOpen(false); row.run?.(); } }}
-                className={`flex w-full items-start gap-2.5 rounded-[8px] px-2.5 text-left text-[13.5px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] ${described ? 'py-2' : 'h-9 items-center'} ${sub === row.key ? 'bg-[var(--cv-float-hover)]' : ''}`}>
-                <span className={described ? 'mt-0.5' : ''}><RowIcon size={15} /></span>
-                <span className="min-w-0 flex-1">
-                  <span className="block leading-5">{row.label}</span>
-                  {described && row.about ? <span className="block text-[12px] leading-snug text-[var(--cv-ink-3)]">{row.about}</span> : null}
-                </span>
-                {row.sub ? <ChevronRight size={14} className={`shrink-0 text-[var(--cv-ink-2)] ${described ? 'mt-0.5' : ''}`} /> : null}
-              </button>
-              {row.sub && sub === row.key ? <div className="absolute left-full top-0 z-10 pl-1.5">{row.sub}</div> : null}
-            </div>
-          );
-        })}
+      trigger={<button type="button" className={`${btn} ${open ? 'bg-[var(--cv-float-hover)]' : ''}`} onClick={() => onOpen(!open)}><Icon size={16} />{label}<ChevronDown size={13} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} /></button>}>
+      <div className={`max-h-[min(70vh,620px)] w-[320px] overflow-y-auto p-1.5 ${CARD}`}>
+        {shown.map((section, si) => (
+          <div key={section.title ?? si} className={si ? 'mt-1 border-t !border-[var(--cv-float-line)] pt-1' : ''}>
+            {section.title ? <div className="px-2.5 pb-1 pt-1.5 text-[11.5px] font-medium text-[var(--cv-ink-3)]">{section.title}</div> : null}
+            {section.items.map((item) => {
+              const ItemIcon = item.icon;
+              const opened = more === item.key;
+              return (
+                <div key={item.key}>
+                  <button type="button" onClick={() => { if (item.more) setMore(opened ? null : item.key); else { onOpen(false); item.run?.(); } }}
+                    className={`flex w-full items-center gap-3 rounded-[10px] px-2 py-1.5 text-left transition hover:bg-[var(--cv-float-hover)] ${opened ? 'bg-[var(--cv-float-hover)]' : ''}`}>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-[var(--cv-chip)] text-[var(--cv-ink)]"><ItemIcon size={16} /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13.5px] leading-5 text-[var(--cv-ink)]">{item.label}</span>
+                      <span className="block truncate text-[12px] leading-4 text-[var(--cv-ink-3)]">{item.about}</span>
+                    </span>
+                    {item.more ? <ChevronDown size={14} className={`shrink-0 text-[var(--cv-ink-3)] transition-transform duration-200 ${opened ? 'rotate-180' : ''}`} /> : null}
+                  </button>
+                  {item.more ? (
+                    <div className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${opened ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                      <div className="min-h-0 overflow-hidden">{opened ? <div className="px-2 pb-2 pt-1">{item.more}</div> : null}</div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </Popover>
   );
@@ -510,7 +599,7 @@ function GridPicker({ onPick }: { onPick: (rows: number, cols: number) => void }
   const [over, setOver] = React.useState<{ r: number; c: number } | null>(null);
   const cell = 'h-[18px] w-[18px] rounded-[4px] border transition-colors';
   return (
-    <div className={`w-[232px] p-2.5 ${CARD}`}>
+    <div>
       <button type="button" onClick={() => onPick(0, 0)} className={`${PICK} w-full !h-8 !text-[13px]`}><Sparkles size={14} />{t('canvas.actions.splitAuto')}</button>
       <div className="mt-1.5 grid grid-cols-4 gap-1">
         {[2, 3, 4, 5].map((n) => (

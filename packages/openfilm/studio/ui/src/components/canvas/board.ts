@@ -352,8 +352,8 @@ export interface Board {
   openTool: (id: string, path: string, tool: PictureTool) => void;
   /** a picture made again at each of these shapes, in a group beside it, made at once */
   sizes: (id: string, ratios: string[]) => void;
-  /** a product's set of pictures (main shot, detail, in use, ad, features), in a group beside it, made at once */
-  productSet: (id: string) => void;
+  /** a product's set of pictures (each a preset: main shot, detail, in use, ad, features), in a group beside it, made at once */
+  productSet: (id: string, presets: string[]) => void;
   /** a picture parted into its subject (cut out) and the background without it */
   layers: (id: string, path: string) => void;
   /** the agent reading a picture into words, on a text node beside it: its prompt, ideas, a shot list, its text to edit */

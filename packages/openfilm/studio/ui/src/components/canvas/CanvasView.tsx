@@ -1210,10 +1210,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     },
     openTool: (id, path, which) => setPictureTool({ id, path, tool: which }),
     sizes: (id, ratios) => makeGroupFrom(id, t('canvas.presets.names.multiSize'), ratios.map((ratio) => ({ preset: 'multiSize', ratio }))),
-    productSet: (id) => makeGroupFrom(id, t('canvas.marketing.set'), [
-      { preset: 'whiteShot', ratio: '1:1' }, { preset: 'productDetail', ratio: '1:1' }, { preset: 'productLife', ratio: '4:3' },
-      { preset: 'adShot', ratio: '3:4' }, { preset: 'productFeatures', ratio: '3:4' },
-    ]),
+    productSet: (id, presets) => makeGroupFrom(id, t('canvas.marketing.set'), presets.map((preset) => ({ preset, ratio: presetOf(preset)?.ratio ?? '1:1' }))),
     layers: (id, path) => { void splitLayers(id, path); },
     assist: (id, path, kind) => assist(id, path, kind),
     bring: (id, list) => {
@@ -1746,7 +1743,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           onLibrary={(which) => openLibrary(which)} onCharacters={() => openLibrary('characters')} onHistory={() => setModal('history')}
         />}
         {redraw && byPath.get(redraw.path) ? (
-          <RedrawEditor src={sources.file(byPath.get(redraw.path)!)} start={redraw.start} onClose={() => setRedraw(null)} onMake={redrawMake} />
+          <RedrawEditor src={sources.file(byPath.get(redraw.path)!)} start={redraw.start} onClose={() => setRedraw(null)} onMake={redrawMake}
+            can={{ mask: choicesFor(providers, 'image').some((c) => c.spec?.mask), markup: choicesFor(providers, 'image').some((c) => c.spec?.markup) }} />
         ) : null}
         {/* a picture's own tools: widened, cropped and turned, colored, lit anew */}
         {pictureTool && byPath.get(pictureTool.path) ? (() => {

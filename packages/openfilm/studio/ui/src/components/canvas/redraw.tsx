@@ -97,15 +97,17 @@ function paint(ctx: CanvasRenderingContext2D, way: RedrawWay, marks: readonly Ma
   ctx.globalCompositeOperation = 'source-over';
 }
 
-export function RedrawEditor({ src, start = 'mask', onClose, onMake }: {
+export function RedrawEditor({ src, start = 'mask', can, onClose, onMake }: {
   src: string;
   start?: RedrawStart;
+  /** what the connected models redraw by: a mask (brushed, and removing), drawn changes (mark-up); only those are offered */
+  can: { mask: boolean; markup: boolean };
   onClose: () => void;
   /** what was drawn (the PNG a model takes) and what it should become: made beside the picture */
   onMake: (way: RedrawWay, drawn: Blob, prompt: string) => Promise<void>;
 }) {
   const t = useT();
-  const [mode, setMode] = React.useState<RedrawStart>(start);
+  const [mode, setMode] = React.useState<RedrawStart>(() => (start === 'markup' ? (can.markup ? 'markup' : 'mask') : can.mask ? start : 'markup'));
   const way: RedrawWay = mode === 'markup' ? 'markup' : 'mask';
   const [erase, setErase] = React.useState(false);
   const [tool, setTool] = React.useState<MarkTool>('pen');
@@ -219,9 +221,9 @@ export function RedrawEditor({ src, start = 'mask', onClose, onMake }: {
         <span className="mr-2 text-[14px] font-medium">{t('canvas.redraw.title')}</span>
         {/* three ways to say what changes: where (brushed, redrawn), what goes (brushed, taken out), or how (drawn on it) */}
         <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--cv-chip)] p-0.5">
-          <button type="button" className={pill(mode === 'mask')} onClick={() => switchTo('mask')}><Brush size={14} />{t('canvas.redraw.mask')}</button>
-          <button type="button" className={pill(mode === 'remove')} onClick={() => switchTo('remove')}><Wand2 size={14} />{t('canvas.redraw.removeWay')}</button>
-          <button type="button" className={pill(mode === 'markup')} onClick={() => switchTo('markup')}><PenLine size={14} />{t('canvas.redraw.markup')}</button>
+          {can.mask ? <button type="button" className={pill(mode === 'mask')} onClick={() => switchTo('mask')}><Brush size={14} />{t('canvas.redraw.mask')}</button> : null}
+          {can.mask ? <button type="button" className={pill(mode === 'remove')} onClick={() => switchTo('remove')}><Wand2 size={14} />{t('canvas.redraw.removeWay')}</button> : null}
+          {can.markup ? <button type="button" className={pill(mode === 'markup')} onClick={() => switchTo('markup')}><PenLine size={14} />{t('canvas.redraw.markup')}</button> : null}
         </div>
         <span className="mx-1 h-4 w-px bg-[var(--cv-float-line)]" />
         {way === 'markup' ? (
