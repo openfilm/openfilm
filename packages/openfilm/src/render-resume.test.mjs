@@ -169,6 +169,12 @@ test('chunks no one resumed in two weeks, and the parts of a process that is gon
   }
 });
 
+test('targeted exports give rate control ten seconds and merge a short tail, retaining every frame', () => {
+  assert.deepEqual(chunksOf(0, 750, 30, true), [{ a: 0, b: 300 }, { a: 300, b: 750 }]);
+  assert.deepEqual(chunksOf(15, 195, 30, true), [{ a: 15, b: 195 }]);
+  assert.deepEqual(chunksOf(0, 720, 23.976, true), [{ a: 0, b: 240 }, { a: 240, b: 480 }, { a: 480, b: 720 }]);
+});
+
 /** `file` held with no sharing, as an encoder holds what it writes on Windows, for `ms`: says when it is held. */
 function heldFor(file, ms) {
   const child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', `$f = [IO.File]::Open($env:OPENFILM_TEST_HELD_PATH, 'Open', 'ReadWrite', 'None'); 'held'; Start-Sleep -Milliseconds ${ms}; $f.Close()`], {

@@ -2,6 +2,7 @@
  * Exports run on this machine, in Studio's server (studio/server/exports.mjs): the dialog queues them, the tray
  * follows them (the project's event stream says every change of a job), cancels them, and opens what they made.
  */
+import type { VideoTarget } from '../../../../src/video-target.mjs';
 import type { FilmFrameFill, FilmFrameId } from '@/lib/film-frame';
 import type { ExportQuality, ExportVideoCodec } from '@/lib/export-spec';
 
@@ -18,7 +19,7 @@ export type NleAlpha = 'auto' | 'png' | 'prores' | 'prores4444';
 
 export type ExportRequest = { range?: [number, number]; ranges?: [number, number][]; label?: string; name?: string } & (
   | (Framing & { kind: 'video'; codec: ExportVideoCodec; shortEdge?: number; fps: number; quality: ExportQuality; audio: boolean;
-    clip?: string; scale?: number; preset?: string; sidecar?: 'srt' | 'vtt'; loudness?: number })
+    clip?: string; scale?: number; preset?: string; sidecar?: 'srt' | 'vtt'; loudness?: number; target?: VideoTarget })
   | (Framing & { kind: 'gif'; width: number; fps: number })
   | { kind: 'audio'; format: 'wav' | 'm4a' | 'mp3'; mix: boolean; stems: boolean }
   | (Framing & { kind: 'stills'; as?: 'files' | 'zip'; format: 'png' | 'jpg'; shortEdge: number; at?: number[] })
@@ -87,6 +88,8 @@ export interface ExportCapabilities {
   /** ProRes encoded by the Mac's media engine, not by ffmpeg's prores_ks */
   proresChip: boolean;
   mp3: boolean;
+  /** Delivery targets require libx265; HEVC hardware alone is insufficient. */
+  hevcSoftware?: boolean;
 }
 
 const endpoint = (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}/exports`;

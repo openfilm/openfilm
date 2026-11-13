@@ -1567,7 +1567,8 @@ test('the API: where exports go and what can be made here; several at once; open
     const listed = await (await api(`/projects/${project.id}/exports`)).json();
     assert.deepEqual(listed.exports, []);
     assert.equal(listed.folder, exportsRoot());
-    assert.deepEqual(Object.keys(listed.can).sort(), ['h264', 'hevc', 'hevcAlpha', 'mp3', 'prores', 'proresChip', 'vp9']);
+    assert.deepEqual(Object.keys(listed.can).sort(), ['h264', 'hevc', 'hevcAlpha', 'hevcSoftware', 'mp3', 'prores', 'proresChip', 'vp9']);
+    assert.equal(listed.can.hevcSoftware, (await encoders()).has('libx265'), 'a HEVC delivery target needs the software encoder');
     assert.deepEqual(Object.keys(listed.drafts).sort(), ['capcut', 'jianying'], 'whether 剪映 and CapCut are here, for an editing project');
     assert.equal(listed.subtitles, 0, 'no subtitle cues in a new project');
     const bad = await api(`/projects/${project.id}/exports`, { method: 'POST', body: { jobs: [{ kind: 'audio' }, { kind: 'slides', format: 'key' }] } });

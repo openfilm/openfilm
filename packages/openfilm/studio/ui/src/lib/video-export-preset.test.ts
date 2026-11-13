@@ -47,3 +47,13 @@ test('previous video and social settings migrate without discarding the chosen e
   );
   assert.equal(legacySocialVideo('douyin', 'high', 'auto', 60).preset, 'douyin');
 });
+
+test('old presets keep automatic quality and selecting a preset clears a saved delivery target', () => {
+  const old = readVideoExport({ codec: 'hevc', quality: 'master' });
+  assert.equal(old.targetMode, 'quality');
+  const saved = readVideoExport({ targetMode: 'size', targetValue: '50' });
+  assert.equal(saved.targetMode, 'size');
+  assert.equal(saved.targetValue, '50');
+  assert.equal(patchVideoExport(saved, videoExportPreset('youtube', 30)).targetMode, 'quality');
+  assert.equal(readVideoExport({ targetMode: 'nonsense' as never }).targetMode, 'quality');
+});

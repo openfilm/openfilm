@@ -32,13 +32,18 @@ const held = new Set();
  * Frames [f0, f1) in chunks of a second to `CHUNK_SECONDS`, the last one shorter. A chunk is a whole number of seconds
  * (`round(fps)` frames each: 30 at 29.97, 24 at 23.976), so its length is whole milliseconds and the seams between
  * chunks stay on the frame grid: a chunk of 38 frames at 30 fps (1.2667 s) would lose up to a millisecond at each.
- * @param {number} f0 @param {number} f1 @param {number} fps
+ * @param {number} f0 @param {number} f1 @param {number} fps @param {boolean} [settled] average-rate encoding needs longer parts
  */
-export function chunksOf(f0, f1, fps) {
+export function chunksOf(f0, f1, fps, settled = false) {
   const second = Math.max(1, Math.round(fps));
-  const size = Math.min(CHUNK_SECONDS * second, Math.max(second, Math.ceil((f1 - f0) / CHUNKS / second) * second));
+  const size = settled ? CHUNK_SECONDS * second : Math.min(CHUNK_SECONDS * second, Math.max(second, Math.ceil((f1 - f0) / CHUNKS / second) * second));
   const chunks = [];
   for (let a = f0; a < f1; a += size) chunks.push({ a, b: Math.min(f1, a + size) });
+  /* Rate control restarts at each part: a short tail joins the preceding part instead. */
+  if (settled && chunks.length > 1 && chunks.at(-1).b - chunks.at(-1).a < size) {
+    const tail = chunks.pop();
+    chunks.at(-1).b = tail.b;
+  }
   return chunks;
 }
 
