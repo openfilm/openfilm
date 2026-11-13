@@ -2,11 +2,11 @@
  * A project's page: Studio's shell. What is worked in is a plugin's workbench, an element its plugin brings
  * (src/skills.mjs elementIn; OpenFilm's own in plugins/<id>, loaded as anyone's is), put here and told the project.
  *
- * For now the edit still reads the project: that is moved up here in its turn. What is here already is the project's
- * frame (shell/ProjectFrame): the project's files and the media pane's operations on them, the toast, which workbench
- * is shown, with what takes the panes' place when it is not the edit (the canvas, another plugin's surface), the
- * library, its pane and its drawer (shell/library), the top bar with the page's own windows (shell/top-bar), and how
- * the window is laid out (shell/layout); a workbench is given them through shell/frame.
+ * What is here is the project's frame (shell/ProjectFrame): the project and its files as read (shell/project-read),
+ * the media pane's operations on them, the app's commands, the toast, which workbench is shown, with what takes the
+ * panes' place when it is not the edit (the canvas, another plugin's surface), the library, its pane and its drawer
+ * (shell/library), the top bar with the page's own windows (shell/top-bar), and how the window is laid out
+ * (shell/layout); a workbench is given them through shell/frame.
  */
 import React from 'react';
 import { useT } from '@/i18n';

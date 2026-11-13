@@ -7,17 +7,19 @@
  * its drawer (shell/library), the top bar with the page's own windows (shell/top-bar), and how the window is laid out
  * (shell/layout).
  *
- * For now the project and its files are still read by the edit (ProjectView: the same events redraw its picture), which
- * puts them here with the setters this frame gives it. What a workbench has that an operation here needs (its picture
- * drawn again, the files its film plays) is reached through the wiring, when the operation runs.
+ * The project and its files are read here (shell/project-read), with a workbench in the page or none; the app's
+ * commands are taken here too, and those that are not the page's are the workbench's. What a workbench has that an
+ * operation here needs (its picture drawn again, the files its film plays, what an app's command asks of it) is reached
+ * through the wiring, when the operation runs.
  */
 import * as React from 'react';
-import { api, PREFS_EVENT, type Listing, type MediaMade, type MissingMedia, type ProjectFilm } from '@/api';
+import { api, PREFS_EVENT, type MediaMade, type MissingMedia } from '@/api';
 import { useT } from '@/i18n';
 import { batchMap } from '@/lib/batch-map';
 import { decodes, type PlayCheck } from '@/lib/decodes';
-import { studioHost } from '@/lib/host';
+import { studioHost, type StudioCommand } from '@/lib/host';
 import { mediaFetch } from '@/lib/media-queue';
+import { leaveProject } from '@/lib/navigate';
 import { recycleRefusalOf } from '@/lib/recycle';
 import { factsOfProbe, mediaListingOf, srcHitsAsset, warmProjectMedia, type MediaListing, type MediaProxy, type MediaResult, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import type { ImportProgress } from '@/components/MediaPool';
@@ -26,6 +28,7 @@ import { BrandLoadingScreen } from '@/components/BrandLoadingScreen';
 import { usePublishFrame, wiringStore } from './frame';
 import { LayoutOver, useLayout } from './layout';
 import { LibraryPlace, useLibraryShown } from './library';
+import { useProjectRead } from './project-read';
 import { PageAsks, PageWindows, TopBar, usePageWindows } from './top-bar';
 import { InPanesPlace, useWorkbenchShown } from './workbenches';
 
@@ -34,12 +37,9 @@ export function useProjectFrame(projectId: string) {
   const t = useT();
   const toast = useToast();
 
-  /* ── the project and its files, as the folder has them ── */
-  /* how many times the project's files changed since it opened (see the folder's events in ProjectView) */
-  const [filesTick, setFilesTick] = React.useState(0);
-  const [loaded, setLoaded] = React.useState<ProjectFilm | null>(null);
-  const [failure, setFailure] = React.useState<string | null>(null);
-  const [rawListing, setRawListing] = React.useState<Listing | null>(null);
+  /* ── the project and its files, as the folder has them (shell/project-read) ── */
+  const read = useProjectRead(projectId);
+  const { loaded, setLoaded, filesTick, rawListing, setRawListing } = read;
   const [facts, setFacts] = React.useState<Map<string, ReturnType<typeof factsOfProbe> & { audio?: boolean }>>(new Map());
 
   /* media facts (length, size, sound) of the project's videos, stills and sounds and its web pages, probed once each: a
@@ -301,19 +301,37 @@ export function useProjectFrame(projectId: string) {
   /* ── the page's own windows (the projects, Settings, the desktop app's dialog), and the project's name (shell/top-bar) ── */
   const windows = usePageWindows(loaded);
 
+  /* ── the app's commands (lib/host.ts StudioCommand): what the page shows is done here, the rest is the workbench's ── */
+  const appCommand = React.useRef<(command: StudioCommand) => void>(() => {});
+  appCommand.current = (command) => {
+    if (command.type === 'settings') { windows.setSettingsOpen(command.section === 'providers' ? 'models' : command.section ?? 'agents'); return; }
+    if (command.type === 'show-examples') {
+      /* a skill: the library's skills, on Discover or on its page; an example: the projects window's examples */
+      const open = command.open;
+      if (open?.kind === 'discover' || open?.kind === 'skill') {
+        library.setSkillsShown({ ...(open.kind === 'skill' ? { name: open.name } : {}), n: Date.now() });
+        layout.openLibrary(true);
+      } else windows.setProjectsOpen({ example: open?.kind === 'example' ? open.id : undefined });
+      return;
+    }
+    if (command.type === 'show-node' && typeof command.id === 'string') { shown.setCanvasOpen(true); shown.setCanvasFocus({ id: command.id, n: Date.now() }); return; }
+    if (command.type === 'show-file') { library.showFile(command.path); return; }
+    wiringStore.get()?.command?.(command);
+  };
+  React.useEffect(() => { studioHost?.onCommand?.((command) => appCommand.current(command)); }, []);
+
   /* ── the page's places: what a workbench draws outside its own element goes into one of them ── */
-  const [slotPage, setSlotPage] = React.useState<HTMLDivElement | null>(null);
   const [slotOver, setSlotOver] = React.useState<HTMLDivElement | null>(null);
   const [slotOverLibrary, setSlotOverLibrary] = React.useState<HTMLDivElement | null>(null);
-  /** `page`: in the page's stead (it could not be read). `over`: over the page (dialogs), before the page's own windows
-   *  and the library's pane, which the shell draws; `overLibrary`: over the page after the pane (what is laid over it). */
-  const slots = React.useMemo(() => (slotPage && slotOver && slotOverLibrary ? { page: slotPage, over: slotOver, overLibrary: slotOverLibrary } : null), [slotPage, slotOver, slotOverLibrary]);
-  const slotRefs = React.useMemo(() => ({ page: setSlotPage, over: setSlotOver, overLibrary: setSlotOverLibrary }), []);
+  /** `over`: over the page (dialogs), before the page's own windows and the library's pane, which the shell draws;
+   *  `overLibrary`: over the page after the pane (what is laid over it). */
+  const slots = React.useMemo(() => (slotOver && slotOverLibrary ? { over: slotOver, overLibrary: slotOverLibrary } : null), [slotOver, slotOverLibrary]);
+  const slotRefs = React.useMemo(() => ({ over: setSlotOver, overLibrary: setSlotOverLibrary }), []);
 
   return {
     projectId, toast, showToast, slots, slotRefs,
-    loaded, setLoaded, failure, setFailure,
-    filesTick, setFilesTick, rawListing, setRawListing, facts, proxies, onUndecoded, prefsTick, folder, mediaSources, listing,
+    loaded, setLoaded, failure: read.failure, firstRead: read.firstRead, adoptFilm: read.adoptFilm, readFilm: read.readFilm, listFiles: read.listFiles,
+    filesTick, rawListing, facts, proxies, onUndecoded, prefsTick, folder, mediaSources, listing,
     mediaMade, madeWords, madeVersions, missingMedia, setMissingMedia, findMissing,
     projectApi, onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, coverSet, onSetCover, onNewFolder, reveal,
     ...shown,
@@ -332,10 +350,11 @@ const PLACE = { display: 'contents' } as const;
  * (shell/workbenches); the page's own windows, the library's pane (shell/library) and the layout's seams and editor
  * (shell/layout) are drawn over the page; the other places are filled by the workbench for now (see `slots`), each
  * until it is the shell's own. Nothing of a workbench is drawn before the frame is told with its places, so one never reads an empty
- * frame. While the project is being read the loading screen is here (unless `covered`: the page says something else),
- * and the page is not shown. The toast is drawn over everything.
+ * frame. While the project is being read the loading screen is here, and why it could not be read once it could not
+ * (unless `covered`: the page says something else), and the page is not shown. The toast is drawn over everything.
  */
 export function ProjectFrame({ projectId, covered = false, children }: { projectId: string; covered?: boolean; children: React.ReactNode }) {
+  const t = useT();
   const state = useProjectFrame(projectId);
   usePublishFrame(state);
   const { loaded, failure, slots, slotRefs } = state;
@@ -345,7 +364,12 @@ export function ProjectFrame({ projectId, covered = false, children }: { project
   const read = Boolean(loaded) && !failure;
   return (
     <>
-      <div ref={slotRefs.page} style={PLACE} />
+      {failure && !covered ? (
+        <div data-page-ready="error" className="workspace-shell flex flex-col items-center justify-center gap-3 bg-[var(--bg-app)] text-[13px] text-[var(--text-muted)]">
+          <p>{failure}</p>
+          <button type="button" onClick={leaveProject} className="rounded-lg border border-[var(--border)] px-3 py-1.5 hover:bg-[var(--bg-hover)]">{t('nav.projects')}</button>
+        </div>
+      ) : null}
       {!loaded && !failure && !covered ? <BrandLoadingScreen labelKey="projects.opening" /> : null}
       <div className="workspace-shell flex flex-col bg-[var(--bg-app)]" style={read ? undefined : { display: 'none' }}>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">

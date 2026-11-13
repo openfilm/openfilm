@@ -6,7 +6,7 @@
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { ProjectView } from '../components/ProjectView';
-import { leaveProject, openProject } from '../lib/navigate';
+import { openProject } from '../lib/navigate';
 
 export default class EditWorkbench extends HTMLElement {
   #root: Root | null = null;
@@ -18,7 +18,7 @@ export default class EditWorkbench extends HTMLElement {
     this.style.display = 'contents';
     /* ids made in this root are told apart from the shell's (React's useId counts from the start in each root) */
     this.#root = createRoot(this, { identifierPrefix: 'edit-' });
-    this.#root.render(<StrictMode><ProjectView projectId={projectId} onProject={openProject} onLeave={leaveProject} /></StrictMode>);
+    this.#root.render(<StrictMode><ProjectView projectId={projectId} onProject={openProject} /></StrictMode>);
   }
 
   disconnectedCallback(): void {

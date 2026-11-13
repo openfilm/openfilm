@@ -3,8 +3,8 @@
  * its own (workbenches/edit.tsx, components/surfaces), so no context reaches it: the two sides share these two stores,
  * read with useSyncExternalStore.
  *
- * The frame is what the shell holds of the project for any workbench (shell/ProjectFrame: its files, how they were
- * made, the media pane's file operations, the toast, which workbench is shown, the library, the page's own windows,
+ * The frame is what the shell holds of the project for any workbench (shell/ProjectFrame: the project as read, its
+ * files, how they were made, the media pane's file operations, the toast, which workbench is shown, the library, the page's own windows,
  * how the window is laid out): the shell writes it, a workbench reads it with `useFrame`. The wiring is what the workbench shown lets the shell
  * reach of its own: that workbench writes it, and the shell reads it when it needs it (`wiringStore.get()` inside a
  * callback or an effect, `useWiring` to draw), so nothing of a workbench's is held here.
@@ -14,6 +14,7 @@
 import * as React from 'react';
 import type { CaptionsActions } from '@/components/library/CaptionsPane';
 import type { LibraryActions } from '@/components/library/LibraryDrawer';
+import type { StudioCommand } from '@/lib/host';
 import type { LibraryVoice, VoiceAccess } from '@/lib/library-voices';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import type { useProjectFrame } from './ProjectFrame';
@@ -104,6 +105,8 @@ export interface Wiring {
   addToFilm?: (file: WorkspaceResource) => void;
   /** Put a cut of the canvas in the film, its files one after the other, then show the film. */
   sendToFilm?: (files: WorkspaceResource[]) => void;
+  /** What the app asks Studio to show (lib/host.ts StudioCommand) that is not the page's own: the shell takes them all. */
+  command?: (command: StudioCommand) => void;
   /**
    * What the workbench has on the page's top bar, which the shell draws (shell/top-bar). `tools`: its own buttons, drawn
    * before the workbench switch. `menu`: a menu of its own that pops up at the pointer, kept in the bar (a right click

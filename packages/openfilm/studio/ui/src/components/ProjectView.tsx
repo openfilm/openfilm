@@ -219,34 +219,31 @@ function clipIdAt(film: Film | null, loc: string): string | null {
   return at ? film?.tracks[at.track]?.clips[at.clip]?.id ?? null : null;
 }
 
-export function ProjectView({ projectId, onProject, onLeave }: {
+export function ProjectView({ projectId, onProject }: {
   projectId: string;
   /** go to another project */
   onProject: (id: string) => void;
-  /** this project was taken off the list (or is gone): leave it */
-  onLeave: () => void;
 }) {
   const t = useT();
-  /* what the shell holds of the project (shell/ProjectFrame): its files and how they were made, the media pane's
-     operations on them, the toast. The project and its files are still read here, and put there with its setters */
+  /* what the shell holds of the project (shell/ProjectFrame): the project and its files as read there, how they were
+     made, the media pane's operations on them, the toast. What is read of the project here is put there with its
+     operations (adoptFilm, readFilm, listFiles) */
   const {
-    toast, showToast, loaded, setLoaded, failure, setFailure, filesTick, setFilesTick, rawListing, setRawListing, facts, proxies, onUndecoded, prefsTick,
+    toast, showToast, loaded, failure, firstRead, adoptFilm, readFilm, listFiles, filesTick, rawListing, facts, proxies, onUndecoded, prefsTick,
     folder, mediaSources, listing, mediaMade, setMissingMedia, findMissing,
     projectApi, onPick, onBring, onImport, coverSet,
     slots,
     canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, surface, showWorkbench, away,
-    setCanvasFocus,
-    libraryIndex, setRevealMedia, showFile, setSkillsShown, saveThings, onLibraryDownloadFailed,
-    title, setProjectsOpen, setSettingsOpen,
-    editPrefs, updateWorkspace, editFree, freeStyle, editDock, insetStyle, openLibrary,
+    libraryIndex, setRevealMedia, showFile, saveThings, onLibraryDownloadFailed,
+    title, setSettingsOpen,
+    editPrefs, updateWorkspace, editFree, freeStyle, editDock, insetStyle,
   } = useFrame(projectId);
   const keyHint = useKeyHint();
-  /* the latest onLeave, for the folder's events (subscribed once per project) */
-  const leaveRef = React.useRef(onLeave);
-  leaveRef.current = onLeave;
   /** film.html is missing from the folder (an agent writing it again, or it lost): said on the picture until it is back */
   const [filmMissing, setFilmMissing] = React.useState(false);
-  const filmReads = React.useRef(0);
+  /* what the shell's first read of the project said of film.html, taken as it is drawn (never painted before it is) */
+  const [firstReadSeen, setFirstReadSeen] = React.useState<typeof firstRead>(null);
+  if (firstRead && firstRead !== firstReadSeen) { setFirstReadSeen(firstRead); setFilmMissing(Boolean(firstRead.filmMissing)); }
   /** why the picture could not draw the film (shown on the stage; the timeline then places clips by film.html alone) */
   const [previewError, setPreviewError] = React.useState<string | null>(null);
   const previewErrorRef = React.useRef(previewError);
@@ -254,37 +251,16 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [info, setInfo] = React.useState<FilmInfo | null>(null);
   const preview = React.useRef<PreviewHandle>(null);
 
-  /* ── the project, its film and its files ── */
+  /* ── the film's picture, as the folder changes (the project and its files are read by the shell: shell/project-read) ── */
   React.useEffect(() => {
-    let live = true;
-    const first = filmReads.current;
-    /* a project the list no longer has (deleted meanwhile, a tab of it opened again): gone, so this page leaves it */
-    api.film(projectId, AbortSignal.timeout(8000)).then((l) => {
-      if (!live || first !== filmReads.current) return;
-      setLoaded(l); setFilmMissing(Boolean(l.filmMissing));
-    }, (e: Error) => {
-      if (!live || first !== filmReads.current) return;
-      if (e instanceof ApiError && (e.status === 404 || e.status === 410)) leaveRef.current(); else setFailure(e.message);
-    });
-    void api.opened(projectId).catch(() => {});
-    const loadFiles = () => api.files(projectId).then(setRawListing, () => {});
-    void loadFiles();
     const stop = projectEvents(projectId, (event) => {
       /* a picture that could not be drawn is tried again whenever the folder changes: the missing file arrived, or
          the clip that named it is gone from film.html now that the edit is written */
       if (previewErrorRef.current && (event.type === 'film' || event.type === 'files')) { preview.current?.reload?.(); }
-      /* deleted (here, in another tab, by an agent), or its folder gone: this page leaves it (with tabs, its tab closes) */
-      if (event.type === 'gone') { leaveRef.current(); return; }
       /* film.html alone gone: the project stays open (an agent at work in it goes on), and the picture says so until
          the film is back; a page opened while it was missing reads it then */
       if (event.type === 'film-missing') { setFilmMissing(true); return; }
-      /* renamed from another tab, or the projects list */
-      if (event.type === 'project') { setLoaded((l) => (l ? { ...l, project: event.project } : l)); return; }
       if (event.type !== 'files') return;
-      void loadFiles();
-      /* a page's picture depends on the files it loads (its styles, code, pictures): its thumbnails are asked again
-         (the server answers an unchanged one in a word) */
-      setFilesTick((n) => n + 1);
       /* a page, or a file pages use, changed on disk: the picture is drawn from them again. So is a media file a clip
          plays, made again in place (a render written over the last one): its element would go on playing what it
          had loaded of the old file. Other media under assets/ are loaded as they are used, and what no page loads
@@ -292,7 +268,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       const used = new Set(blocksRef.current.map((b) => b.src).filter(Boolean));
       if (changesPicture(event.paths, used)) preview.current?.reload?.();
     });
-    return () => { live = false; stop(); };
+    return () => { stop(); };
   }, [projectId]);
 
   /* the last film the folder had, to tell what an outside write left out (see droppedOverrides) */
@@ -330,10 +306,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       lastServerDoc.current = value;
     }
   }, []), (latest) => {
-    filmReads.current += 1;
-    setLoaded((current) => current?.doc ? current : latest);
+    adoptFilm(latest);
     setFilmMissing(Boolean(latest.filmMissing));
-    setFailure(null);
   });
   personSteps.current = film.steps.done;
   filmRef.current = film.film;
@@ -2962,16 +2936,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   hostCommands.current = (command) => {
     if (command.type === 'highlight') { setChatRef(command.ref ?? null); return; }
     if (command.type === 'draft-refs') { setDraftMarks(draftMarksOf(Array.isArray(command.refs) ? command.refs : [])); return; }
-    if (command.type === 'settings') { setSettingsOpen(command.section === 'providers' ? 'models' : command.section ?? 'agents'); return; }
-    if (command.type === 'show-examples') {
-      /* a skill: the library's skills, on Discover or on its page; an example: the projects window's examples */
-      const open = command.open;
-      if (open?.kind === 'discover' || open?.kind === 'skill') {
-        setSkillsShown({ ...(open.kind === 'skill' ? { name: open.name } : {}), n: Date.now() });
-        openLibrary(true);
-      } else setProjectsOpen({ example: open?.kind === 'example' ? open.id : undefined });
-      return;
-    }
     if (command.type === 'seek' && Number.isFinite(command.time)) { pause(); seek(command.time * 1000); return; }
     if ((command.type === 'show-range' || command.type === 'show-subtitle') && Number.isFinite(command.start) && Number.isFinite(command.end)) {
       /* a subtitle's span marked, the playhead at its start */
@@ -3002,8 +2966,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       setSelectedKeys(keys);
       return;
     }
-    if (command.type === 'show-node' && typeof command.id === 'string') { setCanvasOpen(true); setCanvasFocus({ id: command.id, n: Date.now() }); return; }
-    if (command.type === 'show-file') { showFile(command.path); return; }
     if (command.type !== 'select-clip') return;
     const block = blocksRef.current.find((b) => (command.id && b.clipId === command.id) || (command.loc && b.loc === command.loc));
     if (!block) return;
@@ -3011,7 +2973,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     setSelectedKeys([block.clipId ?? block.id]);
     if (command.seek) { pause(); seek(block.startMs); }
   };
-  React.useEffect(() => { studioHost?.onCommand?.((command) => hostCommands.current(command)); }, []);
   const chatPoint = React.useMemo(() => chatPointOf(chatRef), [chatRef]);
   const timelineChat = React.useMemo(() => ({
     clip: chatPoint?.clip ?? null, track: chatPoint?.track ?? null, span: chatPoint?.span ?? null, draft: draftMarks,
@@ -4269,7 +4230,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawListing, timelineTracks]);
   /* the files read again for what is awaited */
-  React.useEffect(() => { if (awaitingFiles) void api.files(projectId).then(setRawListing, () => {}); }, [awaitingFiles, rawListing, projectId]);
+  React.useEffect(() => { if (awaitingFiles) void listFiles(); }, [awaitingFiles, rawListing, listFiles]);
   /* while an agent changes the film, a file gone is on its way: its clips wait, and the viewer says nothing of it */
   const agentWorking = useAgentWorking();
   const timelineTrouble = React.useMemo(() => (agentWorking && [...mediaTrouble.values()].includes('missing')
@@ -4951,7 +4912,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
          kept: use-editor-tools, use-film-subtitles, caption-tracks) */
       if (historyMoved(e)) {
         forgetSteps.current();
-        void api.film(projectId).then((f) => { setLoaded(f); }, () => {});
+        readFilm();
         void api.settings(projectId).then(setSettings, () => {});
       }
       if (e.type === 'history') { void refreshHistory.current(); return; }
@@ -5067,21 +5028,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     panes: shellPanes,
     library: shellLibrary,
     topBar: shellTopBar,
+    command: (command: StudioCommand) => hostCommands.current(command),
   }), [shellPanes, shellLibrary, shellTopBar]));
 
   /* The page is the shell's (shell/ProjectFrame), and so is its top bar (shell/top-bar). In the edit's own element are
      only the edit's panes; the edit's own dialogs, which lie over the page, are put into the shell's places from here. */
-  if (failure) {
-    return ReactDOM.createPortal(
-      <div data-page-ready="error" className="workspace-shell flex flex-col items-center justify-center gap-3 bg-[var(--bg-app)] text-[13px] text-[var(--text-muted)]">
-        <p>{failure}</p>
-        <button type="button" onClick={onLeave} className="rounded-lg border border-[var(--border)] px-3 py-1.5 hover:bg-[var(--bg-hover)]">{t('nav.projects')}</button>
-      </div>,
-      slots.page,
-    );
-  }
-  /* the shell draws the loading screen */
-  if (!loaded) return null;
+  /* the shell draws the loading screen, and why the project could not be read */
+  if (failure || !loaded) return null;
 
   const value = film.film;
   const viewerReady = Boolean(info);
