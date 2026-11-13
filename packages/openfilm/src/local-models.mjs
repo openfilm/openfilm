@@ -8,7 +8,7 @@
  *                               several listed with each
  *
  * Beside a model's files, in the cache's models/ folder: `<id>.json` while its fetch runs (`{ pid, at }`) or after it
- * failed (`{ failed }`), `<id>.<digest>.ok` once every file checked, and `<id>.off` while it is turned off (kept, not
+ * failed (`{ failed, error }`), `<id>.<digest>.ok` once every file checked, and `<id>.off` while it is turned off (kept, not
  * used, and never fetched by itself). A fetch runs in a process of its own (`node src/local-models.mjs fetch <id>`),
  * so it outlives the request that began it.
  */
@@ -35,7 +35,7 @@ export function modelEntries() {
 export const modelEntry = (/** @type {string} */ id) => modelEntries().find((m) => m.id === id) ?? null;
 
 const marks = () => join(libraryCache(), 'models');
-/** Where what the fetching knows is kept: `{ pid, at }` while it runs, `{ failed }` after it failed. */
+/** Where what the fetching knows is kept: `{ pid, at }` while it runs, `{ failed, error }` after it failed. */
 const stateFile = (/** @type {ModelEntry} */ m) => join(marks(), `${m.id}.json`);
 /** The mark of a model whose every file was checked, named for what is listed of them. */
 const okFile = (/** @type {ModelEntry} */ m) => join(marks(), `${m.id}.${createHash('sha256').update(m.files.map((f) => f.sha256).join()).digest('hex').slice(0, 12)}.ok`);
@@ -65,7 +65,7 @@ const STALE_MS = 2 * 60 * 60_000;
 
 const alive = (/** @type {number} */ pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const stateOf = (/** @type {ModelEntry} */ m) => {
-  try { return /** @type {{ pid?: number, at?: number, failed?: number }} */ (JSON.parse(readFileSync(stateFile(m), 'utf8'))); } catch { return {}; }
+  try { return /** @type {{ pid?: number, at?: number, failed?: number, error?: string }} */ (JSON.parse(readFileSync(stateFile(m), 'utf8'))); } catch { return {}; }
 };
 
 /** Whether the model's fetch is running now (one that died, or failed, is not). */
@@ -76,6 +76,16 @@ export function modelFetching(/** @type {ModelEntry} */ m) {
 
 /** Whether the model's last fetch failed (in the last hour: it is not tried by itself again until then). */
 export const modelFailed = (/** @type {ModelEntry} */ m) => Boolean(stateOf(m).failed && Date.now() - /** @type {number} */ (stateOf(m).failed) < RETRY_MS);
+
+/** The last download's reason, when available (older failure marks only had a time). */
+export const modelError = (/** @type {ModelEntry} */ m) => stateOf(m).error;
+
+const failFetch = (/** @type {ModelEntry} */ m, /** @type {unknown} */ error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  const failed = Date.now();
+  writeFileSync(stateFile(m), JSON.stringify({ failed, error: message.slice(0, 2000) }));
+  return failed;
+};
 
 /**
  * Whether the model is coming: 'ready', 'fetching' (begun now, or still running), or 'off' (turned off, or it failed
@@ -90,7 +100,7 @@ export function modelState(m, o = {}) {
   if (modelFetching(m)) return 'fetching';
   mkdirSync(marks(), { recursive: true });
   (o.start ?? (() => startFetch(m)))();
-  return 'fetching';
+  return modelFailed(m) ? 'off' : 'fetching';
 }
 
 /** The model turned on (fetched now when it is not here) or off (kept, not used). */
@@ -131,9 +141,22 @@ export function modelBytesHere(/** @type {ModelEntry} */ m) {
 
 /** The fetch, in a process of its own that outlives what began it. */
 function startFetch(/** @type {ModelEntry} */ m) {
-  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), 'fetch', m.id], { detached: true, stdio: 'ignore', windowsHide: true });
+  /* In Studio's Electron utility process execPath is a helper executable. It must run this file as Node, rather
+     than try to start another Electron process (which exits before making any request). Plain Node ignores this. */
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), 'fetch', m.id], {
+    detached: true, stdio: 'ignore', windowsHide: true, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+  });
   /* said at once, so that what asks next finds it coming before it has begun */
   if (child.pid) writeFileSync(stateFile(m), JSON.stringify({ pid: child.pid, at: Date.now() }));
+  const failedAt = child.pid ? undefined : failFetch(m, 'Could not start the model download process');
+  const failed = (/** @type {unknown} */ error) => {
+    /* A completed worker removed its mark; a failed one wrote its own reason. Do not replace either, or a retry. */
+    const state = stateOf(m);
+    if (child.pid ? state.pid !== child.pid : state.failed !== failedAt) return;
+    try { failFetch(m, error); } catch { /* the cache may have gone away as Studio closed */ }
+  };
+  child.once('error', failed);
+  child.once('exit', (code, signal) => failed(`Model download process stopped (${signal ?? `exit ${code}`})`));
   child.unref();
 }
 
@@ -155,13 +178,13 @@ export async function fetchModel(/** @type {ModelEntry} */ m) {
       const file = await fetchLibrary(f.path);
       if (!file) throw new Error(`${f.path} could not be fetched`);
       if (file.startsWith(builtInRoot())) continue;
-      if (await sha256(file) !== f.sha256) { rmSync(file, { force: true }); throw new Error(`${f.path} is not what its list says`); }
+      if (await sha256(file) !== f.sha256) { rmSync(file, { force: true }); throw new Error(`${f.path}: SHA-256 checksum mismatch`); }
     }
     writeFileSync(okFile(m), '');
     rmSync(stateFile(m), { force: true });
     return true;
-  } catch {
-    writeFileSync(stateFile(m), JSON.stringify({ failed: Date.now() }));
+  } catch (error) {
+    failFetch(m, error);
     return false;
   }
 }

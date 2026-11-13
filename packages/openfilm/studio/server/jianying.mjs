@@ -31,7 +31,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { filmSubtitleLanguageOf } from './film-subtitle.mjs';
 import { declarations } from '../../src/film-doc.mjs';
-import { jianyingCaptionStyle } from './jianying-captions.mjs';
+import { captionPosition, jianyingCaptionStyle } from './jianying-captions.mjs';
 
 /**
  * @typedef {import('./nle.mjs').NleTimeline} NleTimeline
@@ -162,7 +162,7 @@ const round6 = (/** @type {number} */ n) => { const r = Math.round(n * 1e6) / 1e
  * folder `root`.
  * @param {NleTimeline} timeline
  * @param {{ app?: DraftApp, name: string, folder: string, root: string, cues?: readonly JianyingCue[], language?: string | null,
- *   fonts?: ReadonlyMap<string, import('./jianying-captions.mjs').DraftFont>, now?: number }} opts
+ *   fonts?: ReadonlyMap<string, import('./jianying-captions.mjs').DraftFont>, captionBackup?: boolean, now?: number }} opts
  */
 export function jianyingDraft(timeline, opts) {
   const platform = PLATFORM[opts.app ?? 'jianying'];
@@ -266,11 +266,39 @@ export function jianyingDraft(timeline, opts) {
     speed: 1, volume: 1, is_tone_modify: false, ...fields,
   });
 
-  /* footage's own sound, by the picture it belongs to: the video clip plays it at its level */
-  /** @type {Map<string, { level: number, kept: number }>} linkGroup → current and original levels */
+  const audioLevel = (/** @type {NleClip} */ c) => c.levels ? Math.max(...c.levels.map((k) => k.value)) : c.gain ?? 1;
+  /** A sound's fades use the same native material on a video segment and on an audio segment. */
+  const audioFades = (/** @type {NleClip} */ c, /** @type {string[]} */ refs) => {
+    if (!c.levels || c.levels.length < 2) return;
+    const keys = c.levels;
+    const fadeIn = keys[0].value === 0 ? keys[1].when : 0;
+    const last = keys[keys.length - 1];
+    const fadeOut = last.value === 0 ? last.when - keys[keys.length - 2].when : 0;
+    if (fadeIn > 0 || fadeOut > 0) {
+      const id = hex();
+      materials.audio_fades.push({ id, fade_in_duration: us(fadeIn), fade_out_duration: us(fadeOut), fade_type: 0, type: 'audio_fade' });
+      refs.push(id);
+    }
+  };
+
+  /* Only fold sound into a video that contains it on the same source clock. A linked external sound still needs
+     its own segment; otherwise it could be dropped or played from the wrong trim after rendering. */
+  /** @type {Map<string, NleClip[]>} */
+  const pictures = new Map();
+  for (const t of timeline.video) for (const c of t.clips) if (c.linkGroup) pictures.set(c.linkGroup, [...(pictures.get(c.linkGroup) ?? []), c]);
+  /** @type {Map<string, { clip: NleClip, level: number, kept: number }>} video clip id → original sound */
   const ownSound = new Map();
+  const embedded = new Set();
   for (const t of timeline.audio) {
-    for (const c of t.clips) if (c.linkGroup && !c.levels) ownSound.set(c.linkGroup, { level: t.enabled && c.enabled ? c.gain ?? 1 : 0, kept: c.gain ?? 1 });
+    for (const c of t.clips) {
+      if (!c.linkGroup || !files.get(c.fileId)?.audio) continue;
+      const picture = pictures.get(c.linkGroup)?.find((p) => p.fileId === c.fileId && p.start === c.start && p.end === c.end
+        && p.in === c.in && p.out === c.out && Math.abs((p.speed ?? 1) - (c.speed ?? 1)) < 1e-6);
+      if (!picture || ownSound.has(picture.id)) continue;
+      const kept = audioLevel(c);
+      ownSound.set(picture.id, { clip: c, level: t.enabled && c.enabled ? kept : 0, kept });
+      embedded.add(c);
+    }
   }
 
   /* pictures: the plan's first track is the bottom one, as 剪映's first video track (its main track) is */
@@ -285,9 +313,10 @@ export function jianyingDraft(timeline, opts) {
         const fit = Math.min(timeline.width / w, timeline.height / h);
         const scale = round6((c.motion ? c.motion.scale / 100 : 1) / fit);
         const x = round6((c.motion?.center.h ?? 0) * 2), y = round6(-(c.motion?.center.v ?? 0) * 2);
-        const sound = c.linkGroup ? ownSound.get(c.linkGroup) : undefined;
+        const sound = ownSound.get(c.id);
         const level = sound?.level ?? 0;
         const refs = [speed(c.speed)];
+        if (sound) audioFades(sound.clip, refs);
         if (c.draftLook?.rectangle) refs.push(mask(c.draftLook.rectangle));
         return segment({
           material_id: material(file, 'video'), target_timerange: span(c.start, c.end),
@@ -302,27 +331,16 @@ export function jianyingDraft(timeline, opts) {
 
   /* sounds: footage's own are already its picture's */
   for (const t of timeline.audio) {
-    const clips = t.clips.filter((c) => !(c.linkGroup && ownSound.has(c.linkGroup) && timeline.video.some((v) => v.clips.some((p) => p.linkGroup === c.linkGroup))));
+    const clips = t.clips.filter((c) => !embedded.has(c));
     if (!clips.length) continue;
     const index = renderIndex++;
     tracks.push({
       attribute: t.enabled ? 0 : 1, flag: 0, id: hex(), is_default_name: false, name: t.name, type: 'audio',
       segments: clips.map((c) => {
         const file = /** @type {NleFile} */ (files.get(c.fileId));
-        const level = c.levels ? Math.max(...c.levels.map((k) => k.value)) : c.gain ?? 1;
+        const level = audioLevel(c);
         const refs = [speed(c.speed)];
-        /* a fade: the plan's level keyframes (silent at an end) as 剪映's fade in and out */
-        if (c.levels && c.levels.length > 1) {
-          const keys = c.levels;
-          const fadeIn = keys[0].value === 0 ? keys[1].when : 0;
-          const last = keys[keys.length - 1];
-          const fadeOut = last.value === 0 ? last.when - keys[keys.length - 2].when : 0;
-          if (fadeIn > 0 || fadeOut > 0) {
-            const id = hex();
-            materials.audio_fades.push({ id, fade_in_duration: us(fadeIn), fade_out_duration: us(fadeOut), fade_type: 0, type: 'audio_fade' });
-            refs.push(id);
-          }
-        }
+        audioFades(c, refs);
         return segment({
           material_id: material(file, 'audio'), target_timerange: span(c.start, c.end), source_timerange: span(c.in, c.out),
           speed: c.speed ?? 1,
@@ -345,7 +363,8 @@ export function jianyingDraft(timeline, opts) {
     const index = renderIndex++;
     const frame = (/** @type {number} */ ms) => Math.round((ms / 1000) * fps);
     tracks.push({
-      attribute: 0, flag: 1, id: hex(), is_default_name: false, name: 'Subtitles', type: 'text',
+      attribute: opts.captionBackup ? 1 : 0, flag: 1, id: hex(), is_default_name: false,
+      name: opts.captionBackup ? 'Subtitles (editable backup)' : 'Subtitles', type: 'text',
       segments: cues.map((cue) => {
         const id = hex();
         const text = cue.text.trim();
@@ -361,9 +380,11 @@ export function jianyingDraft(timeline, opts) {
           }),
         });
         const from = frame(cue.startMs), to = Math.max(from + 1, frame(cue.startMs + cue.durMs));
+        const position = captionPosition(cue.draftLook, timeline);
         return segment({
           material_id: id, target_timerange: span(from, to), source_timerange: null, extra_material_refs: [],
-          clip: clipSettings(1, 0, -0.8), uniform_scale: { on: true, value: 1 }, render_index: index,
+          clip: clipSettings(1, position.x, position.y), visible: !opts.captionBackup,
+          uniform_scale: { on: true, value: 1 }, render_index: index,
         });
       }),
     });

@@ -3010,6 +3010,8 @@ export const ja: Words = {
       none: '未インストール',
       on: '有効',
       off: '無効',
+      failed: 'ダウンロードに失敗しました',
+      retry: '再試行',
       installing: 'ダウンロード中 {n}%',
       install: 'インストール',
       installSize: 'インストール · {size}',

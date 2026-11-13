@@ -28,6 +28,8 @@ export interface LocalModel {
   installing?: { bytes: number };
   /** its last download failed (offline, or a file that did not check): Install tries again */
   failed?: boolean;
+  /** a failed download's diagnostic, shown on its detail page */
+  error?: string;
 }
 
 async function call(path: string, method = 'GET', body?: unknown): Promise<LocalModel[]> {

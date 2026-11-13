@@ -458,7 +458,7 @@ const NOTICES_KEPT = 20;
 
 /**
  * A turn of the chat's done, stopped by an error, or waiting for the person's answer: a notification of the system's,
- * while the window is not in front and Settings › General leaves them on (turn-notices.mjs). Clicking it brings the
+ * while the window is not in front and Settings › Advanced has them on (turn-notices.mjs). Clicking it brings the
  * window back on that project's tab. The taskbar button flashes (Windows), the Dock icon bounces once (macOS).
  * @param {{ kind: 'done' | 'failed' | 'asking', agent: string, cwd: string, meta: any, error?: string }} turn
  */

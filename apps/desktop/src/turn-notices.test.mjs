@@ -36,15 +36,19 @@ test("the notifications' words are there in each of Studio's languages", () => {
   for (const language of LANGUAGES) assert.deepEqual(Object.keys(TURN_NOTICE_WORDS[language]).sort(), ['agent', 'asking', 'done', 'failed'], language);
 });
 
-test('the notifications are on until switched off in Settings, and stay as switched', async () => {
+test('turn notifications default to off and preserve an explicitly saved choice', async () => {
   const { mkdtempSync, writeFileSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   const { readPreferences } = await import('./chat-ipc.mjs');
   const dir = mkdtempSync(join(tmpdir(), 'of-prefs-'));
-  assert.equal(readPreferences(dir).notify, true, 'on before anything is kept');
+  assert.equal(readPreferences(dir).notify, false, 'off before anything is kept');
   writeFileSync(join(dir, 'preferences.json'), JSON.stringify({ developer: true }));
-  assert.equal(readPreferences(dir).notify, true, 'on when kept before it existed');
+  assert.equal(readPreferences(dir).notify, false, 'off when older preferences have no notification choice');
+  writeFileSync(join(dir, 'preferences.json'), JSON.stringify({ notify: true }));
+  assert.equal(readPreferences(dir).notify, true, 'an explicit opt-in stays enabled');
   writeFileSync(join(dir, 'preferences.json'), JSON.stringify({ notify: false }));
   assert.equal(readPreferences(dir).notify, false);
+  writeFileSync(join(dir, 'preferences.json'), JSON.stringify({ notify: 'true' }));
+  assert.equal(readPreferences(dir).notify, false, 'only a saved boolean true enables notifications');
 });

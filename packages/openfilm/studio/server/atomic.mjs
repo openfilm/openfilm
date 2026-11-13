@@ -13,10 +13,10 @@ const BUSY = new Set(['EPERM', 'EBUSY', 'EACCES']);
 /** A name beside `path` for the bytes on their way to it. */
 export const tempPath = (/** @type {string} */ path) => `${path}.${randomBytes(6).toString('hex')}.tmp`;
 
-/** Rename `from` over `to`, trying again while Windows says the file is busy. */
-export async function replaceFile(/** @type {string} */ from, /** @type {string} */ to) {
+/** A file operation retried for about five seconds while a Windows sharing violation is transient. */
+async function whenFree(/** @type {() => Promise<void>} */ operation) {
   for (let attempt = 0; ; attempt++) {
-    try { return await rename(from, to); }
+    try { return await operation(); }
     catch (e) {
       const code = /** @type {NodeJS.ErrnoException} */ (e).code ?? '';
       if (process.platform !== 'win32' || !BUSY.has(code) || attempt >= 8) throw e;
@@ -24,6 +24,12 @@ export async function replaceFile(/** @type {string} */ from, /** @type {string}
     }
   }
 }
+
+/** Rename `from` over `to`, trying again while Windows says the file is busy. */
+export const replaceFile = (/** @type {string} */ from, /** @type {string} */ to) => whenFree(() => rename(from, to));
+
+/** Remove a staging file or folder with the same bounded wait as publishing it. */
+export const removeFile = (/** @type {string} */ path, /** @type {import('node:fs').RmOptions} */ options) => whenFree(() => rm(path, options));
 
 /**
  * Write `data` to `path` atomically.

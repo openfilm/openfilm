@@ -3010,6 +3010,8 @@ export const es: Words = {
       none: 'No instalado',
       on: 'Activado',
       off: 'Desactivado',
+      failed: 'Error al descargar',
+      retry: 'Reintentar',
       installing: 'Descargando {n} %',
       install: 'Instalar',
       installSize: 'Instalar · {size}',

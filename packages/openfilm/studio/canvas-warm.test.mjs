@@ -100,6 +100,69 @@ test('an open video node picks up a service sign-in without reloading the canvas
   });
 });
 
+test('new videos keep the ratio picked while the canvas stays open, including their generation requests', { timeout: 60_000 }, async () => {
+  await withBoard([{ id: 'video', x: 0, y: 0, make: 'video', prompt: 'A camera moves toward the sea.' }], async ({ page, url, file }) => {
+    const requests = [];
+    await page.context().route('**/api/providers', (route) => route.fulfill({ json: {
+      providers: [{ id: 'openfilm', name: 'OpenFilm', verbs: ['video'], source: 'file',
+        models: { video: [{ id: 'test-video', name: 'Test video', ratios: ['16:9', '9:16', '1:1'], frames: false, refs: 0 }] } }],
+      use: { video: 'openfilm' }, model: { video: 'test-video' }, custom: [],
+      signingIn: { provider: null, error: null, errorFor: null }, librarySearch: null,
+    } }));
+    await page.context().route('**/api/get', async (route) => {
+      requests.push(route.request().postDataJSON());
+      await route.fulfill({ json: { ok: true, text: JSON.stringify({ src: 'assets/test-video.mp4' }) } });
+    });
+    await page.goto(url);
+    await page.locator('[data-work-mode="edit"]').click();
+    await page.locator('[data-studio-canvas][data-canvas-ready="1"]').waitFor();
+    await page.getByTestId('rf__node-video').click();
+    const spec = (ratio) => page.getByRole('button', { name: new RegExp(`^${ratio} ·`) });
+    const pickRatio = async (from, to) => {
+      await spec(from).click();
+      await page.getByRole('button', { name: to, exact: true }).click();
+      await spec(to).click();
+    };
+    const make = async (ratio) => {
+      await spec(ratio).waitFor();
+      const response = page.waitForResponse('**/api/get');
+      await page.getByRole('button', { name: 'Make', exact: true }).click();
+      await response;
+      await page.getByRole('button', { name: 'Make', exact: true }).waitFor();
+      assert.equal(requests.at(-1).args['aspect-ratio'], ratio);
+    };
+    const addVideo = async () => {
+      await page.getByRole('button', { name: 'Add a node', exact: true }).click();
+      await page.getByRole('button', { name: 'Video', exact: true }).click();
+      const selected = page.locator('.react-flow__node-make.selected');
+      await selected.waitFor();
+      await page.getByPlaceholder(/^Describe how the camera moves/).fill('Another shot of the sea.');
+      return selected.getAttribute('data-id');
+    };
+    await pickRatio('16:9', '9:16');
+    await make('9:16');
+    await make('9:16');
+    const second = await addVideo();
+    await make('9:16');
+    await pickRatio('9:16', '1:1');
+    const kept = page.waitForResponse((response) => {
+      const request = response.request();
+      if (!response.ok() || request.method() !== 'PUT' || !new URL(request.url()).pathname.endsWith('/canvas')) return false;
+      const videos = request.postDataJSON().nodes.filter((n) => n.make === 'video');
+      return videos.length === 3 && videos.find((n) => n.id === 'video')?.opts?.ratio === '9:16'
+        && videos.filter((n) => n.opts?.ratio === '1:1').length === 2;
+    });
+    const third = await addVideo();
+    await make('1:1');
+    await kept;
+    const doc = JSON.parse(await readFile(file, 'utf8'));
+    assert.equal(doc.nodes.find((n) => n.id === 'video').opts.ratio, '9:16', 'later picks leave earlier videos unchanged');
+    assert.equal(doc.nodes.find((n) => n.id === second).opts.ratio, '1:1');
+    assert.equal(doc.nodes.find((n) => n.id === third).opts.ratio, '1:1');
+    assert.deepEqual(requests.map((r) => r.args['aspect-ratio']), ['9:16', '9:16', '9:16', '1:1']);
+  });
+});
+
 test('the edit warms a fitted hidden canvas without writing it; the first switch reuses that board', { timeout: 60_000 }, async () => {
   /* Overlap forces the display layout to change, so warming cannot silently save that change. */
   const nodes = ['One', 'Two'].map((text, i) => ({ id: `n${i}`, x: 0, y: 0, w: 350, h: 200, text }));

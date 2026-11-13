@@ -8,7 +8,7 @@ const facts = { w: 960, h: 540, duration: 10, hasVideo: true, hasAudio: true, ch
 const sound = { duration: 20, hasVideo: false, hasAudio: true, channels: 2, sampleRate: 48000 };
 
 /** A film: a page over footage placed small, its own sound, music fading in on a muted track's neighbour, a still. */
-const plan = (/** @type {Partial<{ musicOn: boolean }>} */ o = {}) => planNleTimeline({
+const plan = (/** @type {Partial<{ musicOn: boolean, shotFade: [number, number], editable: boolean }>} */ o = {}) => planNleTimeline({
   stage: { w: 1920, h: 1080 }, duration: 6,
   pictures: [
     { id: 'title', kind: 'page', src: 'title.html', path: '/p/title.html', at: 0, end: 2, from: 0, speed: 1, track: 0, hidden: false, facts: null },
@@ -16,10 +16,10 @@ const plan = (/** @type {Partial<{ musicOn: boolean }>} */ o = {}) => planNleTim
     { id: 'still', kind: 'still', src: 'b.png', path: '/p/b.png', at: 5, end: 6, from: 0, speed: 1, track: 1, hidden: true, facts: { w: 1920, h: 1080 } },
   ],
   sounds: [
-    { id: 'shot', src: 'a.mp4', path: '/p/a.mp4', at: 1, from: 2, to: 6, speed: 1, volume: 0.5, enabled: true, role: 'footage', picture: 'shot', facts },
+    { id: 'shot', src: 'a.mp4', path: '/p/a.mp4', at: 1, from: 2, to: 6, speed: 1, volume: 0.5, enabled: true, role: 'footage', picture: 'shot', facts, ...(o.shotFade ? { fade: o.shotFade } : {}) },
     { id: 'bed', src: 'assets/audio/music/bed.wav', path: '/p/bed.wav', at: 0, from: 0, to: 6, speed: 1, volume: 0.8, enabled: o.musicOn ?? true, role: 'music', facts: sound, fade: [1, 0] },
   ],
-}, { title: 'Film', fps: 30, audio: 'clips', media: 'copy', mediaDir: '/drafts/Film/media' });
+}, { title: 'Film', fps: 30, audio: 'clips', media: 'copy', mediaDir: '/drafts/Film/media', editable: o.editable });
 
 test('a 剪映 draft: microseconds edge by edge, the plan\'s tracks, bottom first, as 剪映 stacks them', () => {
   const { info, meta } = jianyingDraft(plan(), { name: 'Film', folder: '/drafts/Film', root: '/drafts', now: 1_700_000_000_000 });
@@ -73,6 +73,30 @@ test('footage plays its own sound at its level; other sounds are audio clips wit
   assert.equal(new Set(info.materials.videos.map((m) => m.path)).size, info.materials.videos.length);
   const silent = jianyingDraft(plan({ musicOn: false }), { name: 'Film', folder: '/d/Film', root: '/d' });
   assert.equal(silent.info.tracks.find((t) => t.type === 'audio').segments[0].volume, 0, 'a sound not heard comes silent');
+});
+
+test('footage sound with fades stays on its video segment in either draft app', () => {
+  const timeline = plan({ shotFade: [0.2, 0.5], editable: true });
+  for (const app of ['jianying', 'capcut']) {
+    const { info } = jianyingDraft(timeline, { app, name: 'Film', folder: '/d/Film', root: '/d' });
+    const shot = info.tracks[0].segments[0];
+    assert.equal(shot.volume, 0.5);
+    assert.equal(info.tracks.filter((t) => t.type === 'audio').length, 1, 'only the separate music stays on an audio track');
+    const fade = info.materials.audio_fades.find((f) => shot.extra_material_refs.includes(f.id));
+    assert.equal(fade?.fade_in_duration, 200_000);
+    assert.equal(fade?.fade_out_duration, 500_000);
+  }
+});
+
+test('a linked sound on a different source remains audible on its own track', () => {
+  const timeline = plan({ editable: true });
+  const own = timeline.audio[0].clips[0];
+  const file = timeline.files.find((f) => f.id === own.fileId);
+  timeline.files.push({ ...file, id: 'external-sound', path: '/p/extracted.wav', video: undefined, job: { kind: 'link', from: '/p/extracted.wav' } });
+  own.fileId = 'external-sound';
+  const { info } = jianyingDraft(timeline, { name: 'Film', folder: '/d/Film', root: '/d' });
+  assert.equal(info.tracks[0].segments[0].volume, 0, 'the video must not play a different sound');
+  assert.equal(info.tracks.find((t) => t.name === 'Footage').segments[0].volume, 0.5, 'the external sound is retained');
 });
 
 test('subtitles: the app\'s own subtitle track over all, one subtitle a cue, white with a dark edge, low in the picture', () => {

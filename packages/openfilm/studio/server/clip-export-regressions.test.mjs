@@ -38,6 +38,32 @@ function pixel(file, seconds = 0, vp9 = false) {
   return [...raw.subarray(at, at + 4)];
 }
 
+test('draft exports keep original audio when video is only scaled, with native placement or CSS', ffmpeg, async () => {
+  const root = join(scratch, 'scaled-audio'); mkdirSync(root);
+  const source = join(root, 'source.mp4');
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=30:duration=3',
+    '-f', 'lavfi', '-i', 'sine=frequency=330:duration=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', source]);
+  writeFileSync(join(root, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [{ clips: [
+    { id: 'native-scale', src: 'source.mp4', time: [0, 1], volume: 0.6, box: { x: -40, y: -22.5, w: 240, h: 135 } },
+    { id: 'fill-frame', src: 'source.mp4', at: 1, time: [1, 2], volume: 0.5, box: { x: 0, y: 0, w: 140, h: 90 }, style: 'object-fit: cover' },
+    { id: 'class-fit', src: 'source.mp4', at: 2, time: [2, 3], volume: 0.7, class: 'fill-frame' },
+  ] }] }, '<style>.fill-frame { object-fit: cover; }</style>'));
+  for (const format of ['jianying', 'capcut']) {
+    const folder = dirname(await exported(root, { kind: 'nle', format, fps: 30, subtitles: false }));
+    const info = JSON.parse(readFileSync(join(folder, 'draft_info.json'), 'utf8'));
+    assert.equal(info.tracks.filter((t) => t.type === 'audio').length, 0, `${format}: scaling must not detach the recorded sound`);
+    const clips = info.tracks.find((t) => t.type === 'video').segments;
+    assert.deepEqual(clips.map((c) => c.volume), [0.6, 0.5, 0.7]);
+    assert.deepEqual(clips[0].clip.scale, { x: 1.5, y: 1.5 });
+    for (const c of clips) {
+      const material = info.materials.videos.find((m) => m.id === c.material_id);
+      const file = material.path.replace(JIANYING_DRAFT_PATH, folder);
+      const audio = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_streams', '-of', 'json', file], { encoding: 'utf8' }));
+      assert.equal(audio.streams.length, 1, `${material.material_name}: its original sound is in the video`);
+    }
+  }
+});
+
 test('a Jianying draft retains untouched sources, full processed video handles, native speed and disabled clips', ffmpeg, async () => {
   const root = join(scratch, 'editable'); mkdirSync(root);
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=160x90:rate=30:duration=6',
@@ -64,6 +90,11 @@ test('a Jianying draft retains untouched sources, full processed video handles, 
   const material = info.materials.videos.find((m) => m.id === processed.material_id);
   assert.equal(material.duration, 6_000_000);
   const footage = material.path.replace(JIANYING_DRAFT_PATH, folder);
+  assert.equal(processed.volume, 1, 'the rendered picture plays its own original sound');
+  const fadeSound = info.materials.audio_fades.find((f) => processed.extra_material_refs.includes(f.id));
+  assert.deepEqual([fadeSound?.fade_in_duration, fadeSound?.fade_out_duration], [200_000, 200_000]);
+  const streams = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-of', 'json', footage], { encoding: 'utf8' })).streams;
+  assert.ok(streams.some((s) => s.codec_type === 'audio'), 'the rendered media contains the original audio');
   const before = pixel(footage, 1), fade = pixel(footage, 2.1), middle = pixel(footage, 2.8), after = pixel(footage, 4.2);
   assert.ok(before[3] > 250 && middle[3] > 250 && after[3] > 250, `both source handles remain: ${before}; ${middle}; ${after}`);
   assert.ok(fade[3] > 20 && fade[3] < 120, `the original cut's fade remains at its source in point: ${fade}`);
@@ -78,6 +109,7 @@ test('a Jianying draft retains untouched sources, full processed video handles, 
   const original = info.materials.videos.find((m) => m.path.endsWith('source.mp4'));
   assert.deepEqual(readFileSync(original.path.replace(JIANYING_DRAFT_PATH, folder)), readFileSync(join(root, 'source.mp4')));
   const voice = info.materials.audios.find((m) => m.path.endsWith('voice.wav'));
+  assert.equal(info.tracks.filter((t) => t.type === 'audio').flatMap((t) => t.segments).length, 1, 'voice-over stays separate, footage sound stays with its video');
   assert.deepEqual(readFileSync(voice.path.replace(JIANYING_DRAFT_PATH, folder)), readFileSync(join(root, 'voice.wav')));
   assert.equal(voice.duration, 6_000_000);
 });
@@ -86,7 +118,7 @@ test('Jianying keeps a mask, the complete original and editable caption styles b
   const root = join(scratch, 'masked-original'); mkdirSync(root);
   const original = join(root, 'source.mp4');
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=160x90:rate=30:duration=6',
-    '-f', 'lavfi', '-i', 'sine=frequency=220:duration=6', '-shortest', '-pix_fmt', 'yuv420p', original]);
+    '-f', 'lavfi', '-i', 'aevalsrc=sin(2*PI*(220+220*floor(t/2))*t):s=48000:d=6', '-shortest', '-pix_fmt', 'yuv420p', original]);
   writeFileSync(join(root, 'caption.vtt'), `WEBVTT
 
 STYLE
@@ -130,10 +162,15 @@ Second
   assert.deepEqual(plain.source_timerange, { start: 4_000_000, duration: 2_000_000 });
   assert.deepEqual(readFileSync(untouched.path.replace(JIANYING_DRAFT_PATH, folder)), readFileSync(original));
   assert.equal(untouched.duration, 6_000_000);
-  const sound = info.tracks.find((t) => t.type === 'audio').segments[0];
-  assert.deepEqual(sound.target_timerange, mask.target_timerange);
-  assert.deepEqual(sound.source_timerange, { start: 2_000_000, duration: 2_000_000 });
-  assert.equal(sound.speed, 2);
+  assert.equal(mask.volume, 1, 'the rendered mask plays its original sound');
+  assert.equal(info.tracks.filter((t) => t.type === 'audio').length, 0, 'neither video has detached audio');
+  const pcm = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.2', '-i', rendered.path.replace(JIANYING_DRAFT_PATH, folder),
+    '-t', '0.5', '-map', '0:a:0', '-ac', '1', '-ar', '48000', '-f', 'f32le', '-']);
+  const samples = new Float32Array(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.length));
+  let crossings = 0;
+  for (let i = 1; i < samples.length; i++) if (samples[i - 1] < 0 && samples[i] >= 0) crossings++;
+  const frequency = crossings / (samples.length / 48000);
+  assert.ok(Math.abs(frequency - 440) < 8, `original seconds 2–4, at double speed without changing pitch: ${frequency} Hz`);
   const [first, second] = info.materials.texts;
   const glyphs = [first, second].map((line) => JSON.parse(line.content).styles[0]);
   assert.deepEqual(glyphs.map((s) => [s.size, s.bold, s.italic]), [[7.2, true, false], [11.52, true, true]]);
@@ -141,6 +178,46 @@ Second
   assert.equal(glyphs[0].strokes[0].content.solid.alpha, 0.84);
   assert.equal(second.alignment, 2);
   assert.deepEqual(info.tracks.find((t) => t.type === 'text').segments.map((s) => s.target_timerange.start), [1_000_000, 2_000_000]);
+});
+
+test('drafts retain positioned caption backgrounds and shadows as an alpha layer with editable text backup', ffmpeg, async () => {
+  const root = join(scratch, 'positioned-captions'); mkdirSync(root);
+  writeFileSync(join(root, 'under.html'), '<!doctype html><body style="margin:0;background:navy"><script>window.film={duration:1,width:160,height:90,frame(){}}</script>');
+  writeFileSync(join(root, 'caption.vtt'), `WEBVTT
+
+STYLE
+::cue { font-size: 12px; background: #ff0000; text-shadow: 0 2px 3px #000; }
+
+first
+00:00:00.100 --> 00:00:00.700 line:25% position:40% size:70% align:center
+Caption
+`);
+  writeFileSync(join(root, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [
+    { clips: [], captions: { src: 'caption.vtt' } },
+    { clips: [{ id: 'under', src: 'under.html', time: [0, 1] }] },
+  ] }));
+  for (const format of ['jianying', 'capcut']) {
+    const folder = dirname(await exported(root, { kind: 'nle', format, fps: 30 }));
+    const info = JSON.parse(readFileSync(join(folder, 'draft_info.json'), 'utf8'));
+    const text = info.tracks.find((t) => t.type === 'text');
+    assert.equal(text.attribute, 1, 'the text backup must not draw over the styled layer');
+    assert.equal(text.segments[0].visible, false);
+    assert.equal(JSON.parse(info.materials.texts[0].content).text, 'Caption');
+    assert.ok(Math.abs(text.segments[0].clip.transform.x + 0.2) < 0.001);
+    const layer = info.tracks.filter((t) => t.type === 'video').at(-1);
+    const material = info.materials.videos.find((m) => m.id === layer.segments[0].material_id);
+    assert.match(material.material_name, /captions/i);
+    const file = material.path.replace(JIANYING_DRAFT_PATH, folder);
+    const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vf', 'fps=30', '-ss', '0.3', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
+    const at = (x, y) => [...raw.subarray((y * 160 + x) * 4, (y * 160 + x) * 4 + 4)];
+    const visible = [];
+    for (let y = 0; y < 90; y++) for (let x = 0; x < 160; x++) if (at(x, y)[3]) visible.push([x, y]);
+    assert.ok(visible.length > 0, 'the caption layer contains the visible cue');
+    assert.ok(visible.every(([, y]) => y >= 20 && y < 45), `the cue remains at its chosen position: ${JSON.stringify(visible.slice(0, 5))}`);
+    assert.ok(visible.some(([x, y]) => { const rgba = at(x, y); return rgba[0] > 200 && rgba[1] < 20 && rgba[3] > 250; }), 'the red caption background remains');
+    assert.equal(at(80, 80)[3], 0, 'nothing is moved down to the default subtitle position');
+    assert.equal(at(5, 5)[3], 0, 'the layer leaves the picture underneath visible');
+  }
 });
 
 test('Jianying exports native controls for opacity, rotation and a hard rectangle mask', ffmpeg, async () => {

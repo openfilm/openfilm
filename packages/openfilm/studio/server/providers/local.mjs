@@ -39,7 +39,8 @@ const RUN = fileURLToPath(new URL('../../../src/local-run.mjs', import.meta.url)
 /** A model run (local-run.mjs), stopped with `signal`; what it printed, or a sentence saying why it failed. */
 function runLocal(/** @type {string[]} */ args, /** @type {AbortSignal} */ signal) {
   return new Promise((done, fail) => {
-    execFile(process.execPath, [RUN, ...args], { signal, maxBuffer: 64 << 20, windowsHide: true }, (e, stdout) => {
+    /* Studio runs in an Electron utility process: its helper executable needs Node mode for the model worker. */
+    execFile(process.execPath, [RUN, ...args], { signal, maxBuffer: 64 << 20, windowsHide: true, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }, (e, stdout) => {
       const line = String(stdout).trim().split('\n').at(-1) ?? '';
       let out = null;
       try { out = JSON.parse(line); } catch { /* it died before it said */ }

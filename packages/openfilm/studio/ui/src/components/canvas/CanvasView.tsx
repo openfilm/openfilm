@@ -113,6 +113,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   const selectionStart = React.useRef<{ x: number; y: number } | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  /** New videos share the last shape chosen here for as long as this canvas is open. */
+  const lastVideoRatio = React.useRef<string | undefined>(undefined);
   const [ready, setReady] = React.useState(false);
   /* the board is seen once it is fitted to what is on it: never first drawn close up and then pulled out to all of it */
   const [fitted, setFitted] = React.useState(false);
@@ -456,8 +458,9 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     } else if (kind === 'cut') {
       place({ id, type: 'cut', position: topLeft(placement, w, CARD_H), width: w, height: CARD_H, data: {} }, placement.from, placement.wire);
     } else {
-      const size = makeSize(kind);
-      place({ id, type: 'make', position: topLeft(placement, size.w, size.h), width: size.w, height: size.h, data: { make: kind, prompt: '' } }, placement.from, placement.wire);
+      const ratio = kind === 'video' ? lastVideoRatio.current : undefined;
+      const size = makeSize(kind, ratio);
+      place({ id, type: 'make', position: topLeft(placement, size.w, size.h), width: size.w, height: size.h, data: { make: kind, prompt: '', ...(ratio ? { opts: { ratio } } : {}) } }, placement.from, placement.wire);
     }
     return id;
   };
@@ -948,19 +951,23 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     reportError: onError,
     uploading: (id) => activeUploads.find((upload) => upload.version === id),
     addToFilm: onAddToFilm,
-    setData: (id, data) => setNodes((list) => {
-      let grew = false;
-      const next = list.map((n) => {
-        if (n.id !== id) return n;
-        /* a picture or a clip asked in another shape: its card takes that shape, as high as it was */
-        const ratio = n.type === 'make' && MAKE_MEDIA[n.data.make] !== 'audio' ? data.opts?.ratio : undefined;
-        const width = ratio && ratio !== (n.data as MakeData).opts?.ratio ? cardWidth(ratio, n.height ?? CARD_H) : null;
-        grew = width !== null && width > (n.width ?? 0);
-        return { ...n, ...(width !== null ? { width } : {}), data: { ...n.data, ...data } } as BoardNode;
+    setData: (id, data) => {
+      const node = now.current.nodes.find((n) => n.id === id);
+      if (node?.type === 'make' && (data.make ?? node.data.make) === 'video' && data.opts?.ratio) lastVideoRatio.current = data.opts.ratio;
+      setNodes((list) => {
+        let grew = false;
+        const next = list.map((n) => {
+          if (n.id !== id) return n;
+          /* a picture or a clip asked in another shape: its card takes that shape, as high as it was */
+          const ratio = n.type === 'make' && MAKE_MEDIA[n.data.make] !== 'audio' ? data.opts?.ratio : undefined;
+          const width = ratio && ratio !== (n.data as MakeData).opts?.ratio ? cardWidth(ratio, n.height ?? CARD_H) : null;
+          grew = width !== null && width > (n.width ?? 0);
+          return { ...n, ...(width !== null ? { width } : {}), data: { ...n.data, ...data } } as BoardNode;
+        });
+        /* a card grown wider moves what it now lies on out of its way */
+        return grew ? unstack(next, [id]) : next;
       });
-      /* a card grown wider moves what it now lies on out of its way */
-      return grew ? unstack(next, [id]) : next;
-    }),
+    },
     resize: (id, size) => setNodes((list) => unstack(list.map((n) => (n.id === id ? { ...n, width: size.w, height: size.h } : n)), [id])),
     spawn: (id, kind, data) => {
       const made = addKind(kind, { at: spotBeside(id, 'source', WIDE[kind]), from: { node: id, side: 'source' }, corner: true });

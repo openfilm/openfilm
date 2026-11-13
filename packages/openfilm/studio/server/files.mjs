@@ -25,6 +25,7 @@ import { moveToTrash } from './trash.mjs';
 import { linkKind, rewriteLinks } from './page-links.mjs';
 import { ffmpeg } from '../../src/shared.mjs';
 import { compoundOuter } from './parts.mjs';
+import { removeFile, replaceFile } from './atomic.mjs';
 
 export const ASSETS = 'assets';
 /** Folders that hold tools and builds, not a film's pages. */
@@ -289,6 +290,15 @@ function queuedImport(dir, job) {
   return next;
 }
 
+/** Cleanup must not replace the error that interrupted an import with another sharing violation. */
+async function discardImport(/** @type {string} */ path, /** @type {unknown} */ error = undefined) {
+  try { await removeFile(path, { recursive: true, force: true }); }
+  catch (cleanup) {
+    if (error instanceof Error && error.cause === undefined) error.cause = cleanup;
+    else if (error === undefined) console.warn('import cleanup:', cleanup);
+  }
+}
+
 /**
  * Write a file from a stream (an import from the person's computer). The bytes go to a temporary file first: a
  * cancelled import leaves nothing behind. The same file imported again (its name and its bytes) is the one already
@@ -320,15 +330,16 @@ export async function importFile(root, rel, body) {
         const candidate = n === 1 ? asked : `${asked.slice(0, asked.length - ext.length)} ${n}${ext}`;
         const abs = inside(root, candidate);
         const there = await stat(abs).catch(() => null);
-        if (!there) { await rename(tmp, abs); return { path: candidate, reused: false }; }
+        if (!there) { await replaceFile(tmp, abs); return { path: candidate, reused: false }; }
         if (there.isFile() && there.size === out.bytesWritten && spelt.has(basename(abs)) && await digestOf(abs) === digest) {
-          await rm(tmp, { force: true });
+          /* The verified existing file is usable even if a scanner still holds the redundant staging file. */
+          await discardImport(tmp);
           return { path: candidate, reused: true };
         }
       }
     });
   } catch (e) {
-    await rm(tmp, { force: true });
+    await discardImport(tmp, e);
     throw e;
   }
 }
@@ -710,7 +721,7 @@ export async function bringIn(root, into, paths, mode, { anywhere = false, platf
       if (mode === 'auto') {
         try { await clone(from, part, info.isDirectory()); free = true; }
         catch {
-          await rm(part, { recursive: true, force: true });
+          await removeFile(part, { recursive: true, force: true });
           if (!info.isDirectory()) { try { await sameFile(from, part); free = true; } catch { /* another disk, or one with no second names */ } }
         }
         if (!free && await atLeast(from, big)) {
@@ -721,7 +732,7 @@ export async function bringIn(root, into, paths, mode, { anywhere = false, platf
         }
       } else {
         /* a copy was asked for: a clone is one, where the disk makes it */
-        try { await clone(from, part, info.isDirectory()); free = true; } catch { await rm(part, { recursive: true, force: true }); }
+        try { await clone(from, part, info.isDirectory()); free = true; } catch { await removeFile(part, { recursive: true, force: true }); }
       }
       if (!free) {
         if (info.isDirectory()) await cp(from, part, { recursive: true, mode: constants.COPYFILE_FICLONE, filter: (src) => !basename(src).startsWith('.') });
@@ -734,11 +745,11 @@ export async function bringIn(root, into, paths, mode, { anywhere = false, platf
       }
       landed.push(await queuedImport(dir, async () => {
         const at = join(dir, freeIn(root, dir, name));
-        await rename(part, at);
+        await replaceFile(part, at);
         return posix(relative(root, at));
       }));
     } catch (e) {
-      await rm(part, { recursive: true, force: true });
+      await discardImport(part, e);
       throw e;
     }
   }

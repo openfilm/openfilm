@@ -3011,6 +3011,8 @@ export const en = {
       none: 'Not installed',
       on: 'On',
       off: 'Off',
+      failed: 'Download failed',
+      retry: 'Try again',
       installing: 'Downloading {n}%',
       install: 'Install',
       installSize: 'Install · {size}',

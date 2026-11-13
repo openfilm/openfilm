@@ -3006,6 +3006,8 @@ export const ko: Words = {
       none: '설치 안 됨',
       on: '켜짐',
       off: '꺼짐',
+      failed: '다운로드 실패',
+      retry: '다시 시도',
       installing: '내려받는 중 {n}%',
       install: '설치',
       installSize: '설치 · {size}',

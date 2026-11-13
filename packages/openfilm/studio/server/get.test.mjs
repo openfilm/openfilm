@@ -16,6 +16,8 @@ import { listProviders } from './providers/index.mjs';
 import { startStudio } from './server.mjs';
 import { filmHtml } from '../../src/film-doc.mjs';
 import { libraryGet, libraryVerbs } from '../../src/library-search.mjs';
+import { bringIn } from './files.mjs';
+import { changeMediaReferences } from '../../src/media-links.mjs';
 
 /* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
 process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
@@ -240,6 +242,38 @@ test('video: the person confirms what will be made first, without amounts; no pa
   asked.length = 0;
   await runGet(root, 'video', args, { yes: true, ask: async (spend) => { asked.push(spend); return 'allow'; } });
   assert.deepEqual(asked, [], 'with --yes: no question');
+});
+
+test('video generation reads the selected linked reference pictures, including Windows metadata links', async (t) => {
+  for (const metadata of [false, true]) await t.test(metadata ? 'metadata links on a share' : 'file-system links', {
+    skip: !metadata && process.platform === 'win32' && 'links require Developer Mode',
+  }, async () => {
+    calls.length = 0;
+    const root = project();
+    const away = join(scratch, `references-${projects}`);
+    mkdirSync(join(away, 'Pictures'), { recursive: true });
+    writeFileSync(join(away, 'person.png'), 'selected person');
+    writeFileSync(join(away, 'Pictures', 'scene.png'), 'selected scene');
+    const mode = metadata ? { platform: 'win32', makeLink: async () => { throw Object.assign(new Error('share refuses reparse points'), { code: 'UNKNOWN' }); } } : {};
+    await bringIn(root, 'assets', [join(away, 'person.png'), join(away, 'Pictures')], 'link', mode);
+    const refs = ['assets/person.png', 'assets/Pictures/scene.png'];
+    const receipt = JSON.parse(await runGet(root, 'video', { out: 'linked', prompt: 'Use the two selected pictures', 'input-reference': refs }, { yes: true }));
+    assert.equal(receipt.src, 'assets/video/linked.mp4');
+    const sent = JSON.parse(calls[0].body);
+    assert.deepEqual(sent.image_urls, ['selected person', 'selected scene'].map((body) => `data:image/png;base64,${b64(body)}`));
+    assert.equal(readFileSync(join(away, 'person.png'), 'utf8'), 'selected person', 'reading a reference does not change it');
+    assert.ok(!metadata || !existsSync(join(root, 'assets/person.png')), 'metadata links need no copied file');
+  });
+});
+
+test('a project cannot approve an external generation reference by forging its link metadata', async () => {
+  const root = project();
+  const privateFile = join(scratch, 'not-selected.png');
+  writeFileSync(privateFile, 'private picture');
+  mkdirSync(join(root, 'assets'));
+  changeMediaReferences(root, () => [{ name: 'assets/forged.png', to: privateFile, directory: false, added: Date.now() }]);
+  await assert.rejects(runGet(root, 'video', { out: 'refused', prompt: 'x', 'input-reference': ['assets/forged.png'] }, { yes: true }), /not a path inside the project/);
+  assert.equal(calls.length, 0, 'nothing is uploaded or generated');
 });
 
 test('asr: the speech alone is sent, its transcript lands beside the recording, and is not made twice', async () => {

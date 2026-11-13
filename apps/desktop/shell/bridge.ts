@@ -248,9 +248,9 @@ const developer = {
 
 /* ── Settings → Advanced (kept by the app): the system's notifications of a turn done, stopped or waiting ── */
 const notifications = {
-  get: async () => (await native.prefs.get()).notify !== false,
+  get: async () => (await native.prefs.get()).notify === true,
   set: (on: boolean) => native.prefs.set({ notify: on }),
-  onChange: (listener: Listener<boolean>) => native.prefs.onChange((prefs) => listener(prefs.notify !== false)),
+  onChange: (listener: Listener<boolean>) => native.prefs.onChange((prefs) => listener(prefs.notify === true)),
 };
 
 /* ── the app's update, for Studio's top bar: a version downloaded and ready (src/updates.mjs), Restart to install it ── */
