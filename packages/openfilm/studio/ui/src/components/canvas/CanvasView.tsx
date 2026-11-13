@@ -42,7 +42,7 @@ import { studioHost, type StudioRef } from '@/lib/host';
 import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
-  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
+  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
   type Board, type BoardNode, type FileNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type NoteData, type Side, type SpawnKind, type UploadStatus,
 } from './board';
 import { BottomToolbar, CornerBar, Dots, EmptyBoard, Outline, Ripples, ToolCorner, Viewer } from './chrome';
@@ -678,13 +678,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const say = { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') };
     /* two or four at once: one after another, each a version of its own (a clip asked again is made anew) */
     const count = node.opts?.count ?? 1;
-    /* how long it took, kept for the model's list */
-    const timed = async (run: ReturnType<typeof makeRequest>) => {
-      const started = Date.now();
-      const ok = await startRun(projectId, folder, id, run, pick, inputsKey(node, inputs), say, boardId);
-      if (ok && choice) keepModelTime(choice.via, choice.model, (Date.now() - started) / 1000);
-      return ok;
-    };
+    const timed = (run: ReturnType<typeof makeRequest>) => startRun(projectId, folder, id, run, pick, inputsKey(node, inputs), say, boardId);
     if (count < 2) return timed(request);
     return (async () => {
       let made = false;

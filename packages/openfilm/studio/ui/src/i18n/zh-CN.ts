@@ -2102,7 +2102,6 @@ export const zhCN: Words = {
         mine: '你的服务',
         others: '连接后可用',
         connect: '连接',
-        took: '你用它生成的通常耗时',
         none: '没有这个名字的模型',
       },
       pictures: '连入的图片用作',

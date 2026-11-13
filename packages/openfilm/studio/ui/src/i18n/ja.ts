@@ -2101,7 +2101,6 @@ export const ja: Words = {
         mine: 'あなたのサービス',
         others: '接続すると使える',
         connect: '接続',
-        took: 'これまでの生成にかかった時間の目安',
         none: 'その名前のモデルはありません',
       },
       pictures: 'つないだ画像の使い方',

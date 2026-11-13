@@ -236,30 +236,6 @@ type Made = { path: string; made: string };
 export const runs = new Map<string, Run>();
 export const runErrors = new Map<string, string>();
 /** the board shown for each project, to take what was made */
-/**
- * How long a model takes, as this person's own runs with it took (the middle of the last few that made something):
- * kept in this browser, shown by the model in the panel's list. None run yet: nothing said.
- */
-const TIMES_KEY = 'openfilm.canvas.times';
-const TIMES_KEPT = 5;
-const readTimes = (): Record<string, number[]> => { try { return JSON.parse(localStorage.getItem(TIMES_KEY) ?? '{}') as Record<string, number[]>; } catch { return {}; } };
-export function modelTime(via: string, model?: string): number | null {
-  const list = readTimes()[`${via}|${model ?? ''}`];
-  if (!Array.isArray(list) || !list.length) return null;
-  const sorted = [...list].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)]!;
-}
-export function keepModelTime(via: string, model: string | undefined, seconds: number) {
-  const all = readTimes();
-  const key = `${via}|${model ?? ''}`;
-  all[key] = [...(all[key] ?? []), Math.round(seconds)].slice(-TIMES_KEPT);
-  try { localStorage.setItem(TIMES_KEY, JSON.stringify(all)); } catch { /* not kept */ }
-}
-/** "15s", "2min" */
-export function timeLabel(seconds: number): string {
-  return seconds < 90 ? `${Math.max(1, Math.round(seconds))}s` : `${Math.round(seconds / 60)}min`;
-}
-
 /** each project's board shown now (which of its boards, and how what is made comes onto it) */
 export const shownBoards = new Map<string, { board: string; take: (node: string, made: Made) => void }>();
 let runsVersion = 0;

@@ -2102,7 +2102,6 @@ export const en = {
         mine: 'Your services',
         others: 'Connect to use',
         connect: 'Connect',
-        took: 'How long it took you, typically',
         none: 'No model by that name',
       },
       pictures: 'Pictures wired in are',

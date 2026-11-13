@@ -626,7 +626,7 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
   const meta = sizeOf(file) ?? (media === 'audio' ? null : ratio);
   return (
     <div className="h-full w-full">
-      <ActionBar id={id} file={file} />
+      <ActionBar id={id} file={file} empty={media === 'audio' ? undefined : media} />
       <MakePanel id={id} data={data} />
       <Frame id={id} selected={selected} icon={Icon} title={data.title ?? (data.preset ? t(`canvas.presets.names.${data.preset}`) : t(`canvas.titles.${data.make}`).replace('{n}', String(n)))} meta={meta} by={data.by} stack={versions.length} onRename={rename}
         ins={media !== 'audio'}

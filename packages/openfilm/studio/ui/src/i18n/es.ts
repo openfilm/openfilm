@@ -2101,7 +2101,6 @@ export const es: Words = {
         mine: 'Tus servicios',
         others: 'Conéctalo para usarlo',
         connect: 'Conectar',
-        took: 'Lo que te ha tardado, por lo general',
         none: 'Ningún modelo con ese nombre',
       },
       pictures: 'Las imágenes conectadas son',

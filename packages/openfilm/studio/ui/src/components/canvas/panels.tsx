@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp,
+  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, Upload,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -16,10 +16,9 @@ import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { studioHost } from '@/lib/host';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
-import { modelTime, timeLabel, useBoard, type Choice, type MakeData } from './board';
+import { useBoard, type Choice, type MakeData } from './board';
 import { splitGrid } from './pixels';
 import { ProviderMark } from '../settings/ProviderMark';
-import { vendorOf } from '@/lib/provider-marks';
 import { useDraft } from './words';
 import { DocSheet } from './doc';
 import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
@@ -142,32 +141,46 @@ export function SelectionToolbar({ ids, onGroup, onUngroup, onDuplicate, onRemov
 }
 
 /** What can be done with what a node shows: onto the timeline, shown in the Assets, saved, seen whole. */
-export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | null }) {
+export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceResource | null; empty?: 'image' | 'video' }) {
   const t = useT();
   const board = useBoard();
   const [grid, setGrid] = React.useState(false);
-  if (board.readOnly || !file || board.single !== id) return null;
-  const btn = 'nodrag flex h-8 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
-  const icon = 'nodrag flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+  if (board.readOnly || board.single !== id || (!file && !empty)) return null;
+  const btn = 'cv-tool nodrag flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+  const icon = 'cv-tool nodrag flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+  const line = <span className="mx-1 h-4 w-px bg-[var(--cv-float-line)]" />;
+  const bar = 'cv-bar-top nopan flex w-max items-center gap-0.5 rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]';
+  /* first, the agent: what it shows (or is to make) made a reference in the chat, to change or make from */
+  const refer = board.refer ? (
+    <>
+      <Tooltip label={`${t('canvas.noteBar.toChat')} · ${MOD}L`}>
+        <button type="button" aria-label={t('canvas.noteBar.toChat')} className={icon} onClick={() => board.refer?.(id)}><MessageSquareQuote size={17} /></button>
+      </Tooltip>
+      {line}
+    </>
+  ) : null;
+  if (!file) {
+    /* nothing made yet: the agent, or one of the person's own brought in as it */
+    return (
+      <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={32}>
+        <div className={`${bar} nodrag`}>
+          {refer}
+          <button type="button" className={btn} onClick={() => board.upload(id, 'version')}><Upload size={16} />{t('canvas.panel.upload')}</button>
+        </div>
+      </NodeToolbar>
+    );
+  }
   const base = file.name.replace(/\.[^.]+$/, '');
   const fail = (e: unknown) => console.warn(e);
   const video = file.kind === 'video';
   const actions = (
-      <div className={`nopan flex w-max items-center gap-0.5 p-1 ${CARD} cv-bar-top ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
-        {/* first, the agent: what it shows made a reference in the chat, to change or make from */}
-        {board.refer ? (
-          <>
-            <Tooltip label={`${t('canvas.noteBar.toChat')} · ${MOD}L`}>
-              <button type="button" aria-label={t('canvas.noteBar.toChat')} className={icon} onClick={() => board.refer?.(id)}><MessageSquareQuote size={15} /></button>
-            </Tooltip>
-            <span className="mx-0.5 h-4 w-px bg-[var(--cv-float-line)]" />
-          </>
-        ) : null}
+      <div className={`${bar} ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
+        {refer}
         {file.kind === 'image' ? (
           <>
-            <button type="button" className={btn} onClick={() => board.spawn(id, 'image', { preset: 'cameras9', opts: { ratio: '1:1' } })}><Orbit size={14} />{t('canvas.actions.angles')}</button>
+            <button type="button" className={btn} onClick={() => board.spawn(id, 'image', { preset: 'cameras9', opts: { ratio: '1:1' } })}><Orbit size={16} />{t('canvas.actions.angles')}</button>
             <Popover open={grid} onOpenChange={setGrid} placement="bottom" align="start"
-              trigger={<button type="button" className={btn} onClick={() => setGrid((v) => !v)}><Grid2x2 size={14} />{t('canvas.actions.split')}<ChevronDown size={12} /></button>}>
+              trigger={<button type="button" className={btn} onClick={() => setGrid((v) => !v)}><Grid2x2 size={16} />{t('canvas.actions.split')}<ChevronDown size={13} /></button>}>
               <div className={`w-[160px] p-1 ${CARD}`}>
                 {[2, 3].map((n) => (
                   <button key={n} type="button" className={`${btn} w-full`} onClick={() => { setGrid(false); void splitGrid(board.sources.file(file), n, base).then((files) => board.bring(id, files), fail); }}>
@@ -176,27 +189,27 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
                 ))}
               </div>
             </Popover>
-            <button type="button" className={btn} onClick={() => board.redraw(id, file.path)}><Brush size={14} />{t('canvas.actions.redraw')}</button>
-            <button type="button" className={btn} onClick={() => board.cutout(id, file.path)}><Eraser size={14} />{t('canvas.actions.cutout')}</button>
+            <button type="button" className={btn} onClick={() => board.redraw(id, file.path)}><Brush size={16} />{t('canvas.actions.redraw')}</button>
+            <button type="button" className={btn} onClick={() => board.cutout(id, file.path)}><Eraser size={16} />{t('canvas.actions.cutout')}</button>
           </>
         ) : null}
-        {file.kind !== 'other' ? <button type="button" className={btn} onClick={() => board.addToFilm(file)}><Clapperboard size={14} />{t('canvas.addToFilm')}</button> : null}
-        <span className="mx-0.5 h-4 w-px bg-[var(--cv-float-line)]" />
+        {file.kind !== 'other' ? <button type="button" className={btn} onClick={() => board.addToFilm(file)}><Clapperboard size={16} />{t('canvas.addToFilm')}</button> : null}
+        {line}
         {board.reveal ? (
           <Tooltip label={t('canvas.actions.reveal')}>
-            <button type="button" aria-label={t('canvas.actions.reveal')} className={icon} onClick={() => board.reveal!(file.path)}><FolderSearch size={15} /></button>
+            <button type="button" aria-label={t('canvas.actions.reveal')} className={icon} onClick={() => board.reveal!(file.path)}><FolderSearch size={17} /></button>
           </Tooltip>
         ) : null}
         <Tooltip label={t('canvas.actions.download')}>
-          <a href={board.sources.file(file)} download={file.name} aria-label={t('canvas.actions.download')} className={icon}><Download size={15} /></a>
+          <a href={board.sources.file(file)} download={file.name} aria-label={t('canvas.actions.download')} className={icon}><Download size={17} /></a>
         </Tooltip>
         <Tooltip label={t('canvas.actions.view')}>
-          <button type="button" aria-label={t('canvas.actions.view')} className={icon} onClick={() => board.view(file.path)}><Maximize2 size={15} /></button>
+          <button type="button" aria-label={t('canvas.actions.view')} className={icon} onClick={() => board.view(file.path)}><Maximize2 size={17} /></button>
         </Tooltip>
       </div>
   );
   return video ? <VideoActionBar>{actions}</VideoActionBar> : (
-    <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={36}>{actions}</NodeToolbar>
+    <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={32}>{actions}</NodeToolbar>
   );
 }
 
@@ -282,14 +295,11 @@ function ModelPicker({ choices, picked, fallback, onPick, onConnect }: {
   const shown = q ? choices.filter((c) => `${c.name} ${c.provider}`.toLowerCase().includes(q)) : choices;
   const row = (c: Choice) => {
     const on = picked?.via === c.via && picked?.model === c.model;
-    /* how long it takes, as this person's runs with it took */
-    const took = modelTime(c.via, c.model);
     return (
       <button key={`${c.via}|${c.model ?? ''}`} type="button" onClick={() => (c.connected ? onPick(c) : onConnect())}
         className={`flex w-full min-w-0 items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-[var(--cv-float-hover)] ${on ? 'bg-[var(--cv-float-hover)]' : ''} ${c.connected ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] bg-[var(--cv-chip)]"><ProviderMark id={vendorOf(c.model, c.name) ?? c.via} size={13} /></span>
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] bg-[var(--cv-chip)]"><ProviderMark id={c.via} size={13} /></span>
         <span className="min-w-0 flex-1 truncate leading-5">{c.name}</span>
-        {took !== null ? <span className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-ink-2)]" title={t('canvas.panel.models.took')}>{timeLabel(took)}</span> : null}
         {on ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" />
           : !c.connected ? <span className="shrink-0 rounded-md border !border-[var(--cv-float-line)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-label)]">{t('canvas.panel.models.connect')}</span> : null}
       </button>
@@ -567,7 +577,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             <Popover open={open === 'model'} onOpenChange={(v) => setOpen(v ? 'model' : null)} placement="auto"
               trigger={(
                 <button type="button" className={`${PICK} ${choices.length ? '' : 'text-amber-500 hover:text-amber-400'}`} onClick={() => setOpen(open === 'model' ? null : 'model')}>
-                  {picked ?? fallback ? <ProviderMark id={vendorOf((picked ?? fallback)!.model, (picked ?? fallback)!.name) ?? (picked ?? fallback)!.via} size={16} /> : <Sparkles size={15} />}
+                  {picked ?? fallback ? <ProviderMark id={(picked ?? fallback)!.via} size={16} /> : <Sparkles size={15} />}
                   <span className="max-w-[200px] truncate">{(picked ?? fallback)?.name ?? t('canvas.panel.connect')}</span><ChevronDown size={14} className="shrink-0 text-[var(--cv-ink-2)]" />
                 </button>
               )}>

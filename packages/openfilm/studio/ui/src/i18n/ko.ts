@@ -2098,7 +2098,6 @@ export const ko: Words = {
         mine: '내 서비스',
         others: '연결하면 사용 가능',
         connect: '연결',
-        took: '지금까지 생성에 걸린 대략적인 시간',
         none: '그 이름의 모델이 없습니다',
       },
       pictures: '연결한 이미지 사용 방식',
