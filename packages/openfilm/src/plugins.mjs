@@ -30,8 +30,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setSharedPref, sharedPref } from './locations.mjs';
 
-/** The plugins that come with OpenFilm, each a folder. */
-export const pluginsDir = () => join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins');
+/** The plugins that come with OpenFilm, each a folder (OPENFILM_PLUGINS: another folder of them, which a test makes). */
+export const pluginsDir = () => process.env.OPENFILM_PLUGINS || join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins');
 
 /** A workbench's name: Studio's own (`edit`, `canvas`, `motion`), or a plugin's for the surface it brings. */
 const WORKBENCH = /^[a-z][a-z0-9-]{0,31}$/;
