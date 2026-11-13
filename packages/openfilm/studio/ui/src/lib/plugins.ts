@@ -35,6 +35,8 @@ const BEFORE = 'openfilm.workModes';
 const listeners = new Set<() => void>();
 let current: readonly Plugin[] | null = null;
 let asked = false;
+/** Studio has answered since this page opened: what is kept in this browser may be of another launch (addresses change). */
+let answered = false;
 
 const valid = (list: unknown): list is Plugin[] => Array.isArray(list) && list.length > 0
   && list.every((p) => p && typeof p === 'object' && typeof (p as Plugin).id === 'string' && typeof (p as Plugin).on === 'boolean');
@@ -72,6 +74,7 @@ async function read(): Promise<void> {
     }
     try { localStorage.removeItem(BEFORE); } catch { /* none */ }
   }
+  answered = true;
   take(plugins);
 }
 
@@ -101,6 +104,11 @@ export async function setPluginOn(id: string, on: boolean): Promise<void> {
   const body = await res?.json().catch(() => ({})) as { plugins?: unknown; error?: string } | undefined;
   if (!res?.ok || !valid(body?.plugins)) { take(was); throw new Error(body?.error ?? 'failed'); }
   take(body.plugins);
+}
+
+/** The plugins as Studio said them since this page opened; null until it has (what is kept in this browser is of an earlier launch). */
+export function useStudioPlugins(): readonly Plugin[] | null {
+  return useSyncExternalStore((fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; }, () => (start(), answered ? current : null), () => null);
 }
 
 export function usePlugins(): readonly Plugin[] {

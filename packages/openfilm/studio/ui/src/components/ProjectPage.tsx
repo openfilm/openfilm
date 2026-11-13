@@ -1,0 +1,44 @@
+/**
+ * A project's page: Studio's shell. What is worked in is a plugin's workbench, an element its plugin brings
+ * (src/skills.mjs elementIn; OpenFilm's own in plugins/<id>, loaded as anyone's is), put here and told the project.
+ *
+ * For now the edit's element holds the whole page (the library, the top bar, the canvas and the other plugins'
+ * surfaces are still drawn by it): they are moved up here one at a time.
+ */
+import React from 'react';
+import { useT } from '@/i18n';
+import { useStudioPlugins } from '@/lib/plugins';
+import { BrandLoadingScreen } from './BrandLoadingScreen';
+import { elementTag } from './surfaces';
+
+export function ProjectPage({ projectId }: { projectId: string }) {
+  const t = useT();
+  const plugins = useStudioPlugins();
+  const module = plugins?.find((p) => p.id === 'edit')?.element ?? null;
+  const host = React.useRef<HTMLDivElement>(null);
+  const [state, setState] = React.useState<'loading' | 'shown' | { error: string }>('loading');
+  React.useEffect(() => {
+    if (!plugins) return;
+    if (!module) { setState({ error: 'plugins/edit' }); return; }
+    let live = true, element: HTMLElement | null = null;
+    elementTag(module).then((tag) => {
+      if (!live || !host.current) return;
+      element = document.createElement(tag);
+      element.setAttribute('project-id', projectId);
+      host.current.append(element);
+      setState('shown');
+    }, (e) => { if (live) setState({ error: e instanceof Error ? e.message : String(e) }); });
+    return () => { live = false; element?.remove(); };
+  }, [module, projectId, Boolean(plugins)]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <>
+      {state === 'loading' ? <BrandLoadingScreen labelKey="projects.opening" /> : null}
+      {typeof state === 'object' ? (
+        <div className="workspace-shell flex items-center justify-center bg-[var(--bg-app)]">
+          <p className="max-w-[420px] whitespace-pre-wrap px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]">{`${t('assetDrawer.surfaceFailed')}\n\n${state.error}`}</p>
+        </div>
+      ) : null}
+      <div ref={host} style={{ display: 'contents' }} />
+    </>
+  );
+}

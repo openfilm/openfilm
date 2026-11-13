@@ -59,7 +59,7 @@ import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCov
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
-import { pluginOfSkill, pluginStates, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
+import { pluginOfSkill, pluginStates, pluginsDir, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
@@ -67,7 +67,7 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { coreSkills, keeps, listSkills, offeredSkills, pluginRuns, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
+import { coreSkills, elementIn, keeps, listSkills, offeredSkills, pluginRuns, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
 import { startPluginPages } from './plugin-pages.mjs';
 import { startPluginPrograms } from './plugin-programs.mjs';
 import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
@@ -507,12 +507,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* OpenFilm's plugins (src/plugins.mjs): each with whether it is on; one turned on or off (PUT plugins/:id { on }),
        answered with them all. 409 for one not made yet */
-    if (parts[0] === 'plugins' && parts.length === 1 && req.method === 'GET') return json(res, 200, { plugins: pluginStates() });
+    if (parts[0] === 'plugins' && parts.length === 1 && req.method === 'GET') return json(res, 200, { plugins: pluginsShown() });
     if (parts[0] === 'plugins' && parts.length === 2 && req.method === 'PUT') {
       const { on } = /** @type {{ on?: unknown }} */ (await readJson(req) ?? {});
       if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
       try { setPluginOn(parts[1], on); } catch (e) { throw new HttpError(/there is no plugin/i.test(/** @type {Error} */ (e).message) ? 404 : 409, /** @type {Error} */ (e).message); }
-      return json(res, 200, { plugins: pluginStates() });
+      return json(res, 200, { plugins: pluginsShown() });
     }
     /* the person's media in numbers (media-index.mjs): places, files, the room they take and the room copies take */
     if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
@@ -1458,6 +1458,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   /* one let run (a program, or an element in the editor's own page) can do all the person's agent can: it writes too */
   const pluginOptions = { secret: key, editorOrigin: () => origin, mayWrite: (/** @type {{ uid: string, source: string }} */ plugin, /** @type {{ id: string }} */ project) => pluginWrites(plugin, project) || pluginRuns(plugin, project) };
   const pluginPages = await startPluginPages({ port: port ? address.port + 2 : 0, ...pluginOptions }).catch(() => startPluginPages({ port: 0, ...pluginOptions }));
+  /**
+   * OpenFilm's plugins as the editor is told them: each with whether it is on, and where the module of its element is
+   * (its package.json's `browser`, src/skills.mjs elementIn), on the plugins' origin as anyone's is. Its own ship with
+   * OpenFilm, so they are not asked leave to run.
+   */
+  const pluginsShown = () => pluginStates().map((p) => {
+    const folder = join(pluginsDir(), p.id), module = elementIn(folder);
+    return module ? { ...p, element: pluginPages.surface({ uid: `openfilm/${p.id}`, source: 'own', folder, page: module }).page } : p;
+  });
   /* the programs of plugins that bring one, started as their workbenches are shown */
   const pluginPrograms = startPluginPrograms({ bin: join(studioHome(), 'plugin-bin'), mayRun: (plugin, project) => pluginRuns(plugin, project) });
   if (advertise) {

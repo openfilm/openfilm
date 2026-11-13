@@ -65,7 +65,7 @@ function ProgramSurface({ uid, projectId, title }: { uid: string; projectId: str
 
 /* a module's address → the name its element is defined under: a module is loaded, and its class defined, once */
 const elementTags = new Map<string, Promise<string>>();
-function elementTag(url: string): Promise<string> {
+export function elementTag(url: string): Promise<string> {
   let tag = elementTags.get(url);
   if (!tag) {
     tag = import(/* @vite-ignore */ url).then((module: { default?: unknown }) => {

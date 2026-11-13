@@ -212,6 +212,15 @@ test('a plugin someone made: its page on the plugins\' origin, the project read 
   assert.equal((await fetch(new URL('own.md', let_.files), { method: 'PUT', body: 'from the app', headers: { origin: studio.origin } })).status, 201);
   assert.equal(readFileSync(join(project.path, 'own.md'), 'utf8'), 'from the app');
   assert.equal((await fetch(new URL('own.md', let_.files), { method: 'PUT', body: 'x', headers: { origin: studio.filmOrigin } })).status, 403);
+  /* OpenFilm's own plugins bring their workbench the same way: the edit's element is a module in its folder, on the
+     plugins' origin, read by the editor's page; it names what was built with the editor, which the page's map finds */
+  const ours = (await (await api('/api/plugins')).json()).plugins;
+  const edit = ours.find((p) => p.id === 'edit');
+  assert.ok(edit.element.startsWith(`${studio.pluginOrigin}/s/`) && edit.element.endsWith('/ui.js'), edit.element);
+  const stub = await fetch(edit.element, { headers: { origin: studio.origin } });
+  assert.match(await stub.text(), /export \{ default \} from 'openfilm\/workbench\/edit';/);
+  assert.equal(stub.headers.get('access-control-allow-origin'), studio.origin);
+  assert.equal(ours.find((p) => p.id === 'motion').element, undefined);
   /* OpenFilm's own are not plugins of this kind */
   assert.ok((await listed()).filter((k) => k.core).every((k) => k.surface === undefined && k.commands === undefined));
 
