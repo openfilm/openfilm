@@ -6,8 +6,8 @@
  */
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { ProjectView } from '../components/ProjectView';
-import { openProject } from '../lib/navigate';
+import { ProjectView } from '../../components/ProjectView';
+import { openProject } from '../../lib/navigate';
 
 export default class EditWorkbench extends HTMLElement {
   #root: Root | null = null;
