@@ -81,10 +81,28 @@ function current(): Language {
   return typeof navigator === 'undefined' ? 'en' : languageFor(navigator.languages?.length ? navigator.languages : [navigator.language]);
 }
 
-/** The path in `language`'s table, else in English's, else the path itself. */
+/** The words plugins brought (addPluginWords), by language: `{ plugin: { <id>: … } }`. */
+const brought: Partial<Record<Language, { plugin: Record<string, unknown> }>> = {};
+
+/**
+ * A plugin's own words, looked up as `plugin.<id>.…` (`t('plugin.<id>.title')`) by whoever uses useT, its element's
+ * own root too. `files`: its `i18n/<language>.json` files by path, each a table of its words (nested as the UI's are),
+ * as a plugin's source reads them in at build time:
+ * `addPluginWords('<id>', import.meta.glob('<to the package>/plugins/<id>/i18n/*.json', { eager: true, import: 'default' }))`.
+ * A word one language leaves out is said in English, as the UI's are. Called once, as its module loads.
+ */
+export function addPluginWords(id: string, files: Record<string, unknown>): void {
+  for (const [path, words] of Object.entries(files)) {
+    const language = LANGUAGES.find((l) => path.endsWith(`/${l.code}.json`))?.code;
+    if (!language || !words || typeof words !== 'object') continue;
+    (brought[language] ??= { plugin: {} }).plugin[id] = words;
+  }
+}
+
+/** The path in `language`'s table, else in English's, else the path itself (a plugin's words, in its own tables). */
 export function lookup(path: string, language: Language = current()): string {
   const words = LANGUAGES.find((l) => l.code === language)?.words;
-  return (words && language !== 'en' ? find(words, path) : null) ?? find(en, path) ?? path;
+  return (words && language !== 'en' ? find(words, path) ?? find(brought[language], path) : null) ?? find(en, path) ?? find(brought.en, path) ?? path;
 }
 
 const listeners = new Set<() => void>();

@@ -9,7 +9,7 @@
  * reaches that workbench's first.
  *
  * Where these go (the room kept round them, the canvas's own frame where the panels float) is the layout's
- * (shell/layout); what the canvas does to the film is reached through the edit's wiring (workbenches/canvas.tsx).
+ * (shell/layout); what the canvas does to the film is reached through the edit's wiring (plugins/canvas).
  */
 import * as React from 'react';
 import { api, projectEvents } from '@/api';

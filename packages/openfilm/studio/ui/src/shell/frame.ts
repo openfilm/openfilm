@@ -1,6 +1,6 @@
 /**
  * What crosses between Studio's shell and the workbenches in it. A workbench is an element with a React root of its
- * own (workbenches/edit.tsx, workbenches/canvas.tsx, components/surfaces), so no context reaches it: the sides share
+ * own (plugins/edit, plugins/canvas, components/surfaces), so no context reaches it: the sides share
  * these stores, read with useSyncExternalStore.
  *
  * The frame is what the shell holds of the project for any workbench (shell/ProjectFrame: the project as read, its
@@ -78,7 +78,7 @@ export function usePublishFrame(value: FrameState): void {
 
 /**
  * A workbench's: the frame of its project. It keeps the last one told of its project: as a project is left its
- * workbench is taken down a moment after the shell's frame (workbenches/edit.tsx), and is never drawn with nothing,
+ * workbench is taken down a moment after the shell's frame (plugins/edit), and is never drawn with nothing,
  * nor with the frame of the project gone to.
  */
 export function useFrame(projectId: string): Frame {

@@ -7,12 +7,12 @@
 import * as React from 'react';
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { useT } from '../i18n';
-import { studioHost } from '../lib/host';
-import CanvasView from '../components/canvas/CanvasView';
-import { CanvasLoading } from '../components/canvas/CanvasLoading';
-import { LoadBoundary } from '../components/canvas/LoadBoundary';
-import { useFrame, wiringOf } from '../shell/frame';
+import { useT } from '../../i18n';
+import { studioHost } from '../../lib/host';
+import CanvasView from '../../components/canvas/CanvasView';
+import { CanvasLoading } from '../../components/canvas/CanvasLoading';
+import { LoadBoundary } from '../../components/canvas/LoadBoundary';
+import { useFrame, wiringOf } from '../../shell/frame';
 
 /** The board of the project `projectId`, with what the shell holds of it. */
 function Canvas({ projectId }: { projectId: string }) {
