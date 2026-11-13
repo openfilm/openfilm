@@ -17,7 +17,7 @@ import { useT } from '@/i18n';
 import { CARD_H, MAKE_MEDIA, type CanvasNode, type GroupColor } from '@/lib/canvas';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Tooltip } from '../Tooltip';
-import { fileCardWidth, useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode, type UploadStatus } from './board';
+import { fileCardWidth, modelTime, useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode, type UploadStatus } from './board';
 import { ActionBar, CutPanel, MakePanel, NotePanel } from './panels';
 import { DocSheet, DocView, FormatBar, saveText, useDoc } from './doc';
 import { MENU } from './menu-style';
@@ -220,6 +220,40 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
         </NodeResizeControl>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * A card while it is made: veiled whole by a field of dots with a wave of light running through them, and in its top
+ * left corner how far it is (measured against how long its model usually takes here; until that is known, a turning
+ * ring and the time so far) and a stop.
+ */
+function Making({ since, typical, onStop }: { since: number; typical: number | null; onStop: () => void }) {
+  const t = useT();
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 250); return () => window.clearInterval(timer); }, []);
+  const seconds = Math.max(0, (now - since) / 1000);
+  /* eases toward the end and never reaches it before it is done: 80% at the usual time */
+  const done = typical ? Math.min(0.97, 1 - Math.exp(-1.6 * seconds / Math.max(1, typical))) : null;
+  const r = 6.5;
+  const round = 2 * Math.PI * r;
+  return (
+    <>
+      <div className="cv-veil cv-fade absolute inset-0 z-10"><div className="cv-dots" /></div>
+      <div className="cv-fade absolute left-2.5 top-2.5 z-20 flex h-8 items-center gap-2 rounded-full border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] pl-2 pr-1 text-[12.5px] text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)]">
+        <svg width="16" height="16" viewBox="0 0 16 16" className={done === null ? 'animate-spin' : ''} aria-hidden>
+          <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2" />
+          <circle cx="8" cy="8" r={r} fill="none" stroke="var(--cv-edge-lit)" strokeWidth="2" strokeLinecap="round" transform="rotate(-90 8 8)"
+            strokeDasharray={round} strokeDashoffset={round * (1 - (done ?? 0.28))} style={{ transition: 'stroke-dashoffset 250ms linear' }} />
+        </svg>
+        <span className="tabular-nums">{t('canvas.make.making')}{done !== null ? ` ${Math.round(done * 100)}%` : ''}</span>
+        <span className="tabular-nums text-[var(--cv-ink-3)]">{Math.floor(seconds / 60)}:{String(Math.floor(seconds % 60)).padStart(2, '0')}</span>
+        <Tooltip label={t('canvas.make.stop')}>
+          <button type="button" aria-label={t('canvas.make.stop')} onClick={(event) => { event.stopPropagation(); onStop(); }}
+            className="nodrag flex h-6 w-6 items-center justify-center rounded-full text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><Square size={9} fill="currentColor" /></button>
+        </Tooltip>
+      </div>
+    </>
   );
 }
 
@@ -624,6 +658,9 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
   const ratio = data.opts?.ratio ?? '16:9';
   React.useEffect(() => { if (!selected) setVersionsOpen(false); }, [selected]);
   const meta = sizeOf(file) ?? (media === 'audio' ? null : ratio);
+  /* how long its model usually takes here: what its progress is measured against */
+  const making = data.via ? { via: data.via, model: data.model } : board.fallback(data.make);
+  const typical = making ? modelTime(making.via, making.model) : null;
   return (
     <div className="h-full w-full">
       <ActionBar id={id} file={file} empty={media === 'audio' ? undefined : media} />
@@ -672,14 +709,7 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
             </div>
           ) : null}
           {uploading ? <UploadPanel upload={uploading} /> : run ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 bg-black/55 text-[12.5px] text-white/90 backdrop-blur-[2px]">
-              <Loader2 size={20} className="animate-spin" />
-              <span>{t('canvas.make.making')} <Elapsed since={run.started} /></span>
-              <button type="button" onClick={(event) => { event.stopPropagation(); board.stop(id); }}
-                className="nodrag flex h-7 items-center gap-1.5 rounded-full border border-white/25 px-3 text-[12px] transition hover:bg-white/10">
-                <Square size={9} />{t('canvas.make.stop')}
-              </button>
-            </div>
+            <Making since={run.started} typical={typical} onStop={() => board.stop(id)} />
           ) : null}
         </div>
       </Frame>

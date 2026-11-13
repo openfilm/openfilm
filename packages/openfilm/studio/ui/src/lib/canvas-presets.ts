@@ -7,7 +7,8 @@
  * in English: every picture model reads it.
  */
 /** `character`: the pictures a new character is made of (canvas libraries), not offered in the presets' list */
-export type PresetGroup = 'story' | 'role' | 'scene' | 'product' | 'design' | 'edit' | 'character';
+/** `light` and `tool`: made from a picture by its own bar (Light, Tools), not in the presets' list */
+export type PresetGroup = 'story' | 'role' | 'scene' | 'product' | 'design' | 'edit' | 'light' | 'tool' | 'character';
 
 export interface CanvasPreset {
   id: string;
@@ -54,6 +55,17 @@ export const PRESETS: CanvasPreset[] = [
   { id: 'colorize', group: 'edit', fromPicture: true, ratio: '4:3', quality: 'high', prompt: 'Color the line art in the reference picture: clean colors with soft shading and light; keep every line, shape and the composition exactly as drawn.' },
   { id: 'realistic', group: 'edit', fromPicture: true, ratio: '3:4', quality: 'high', prompt: 'Turn the reference picture into a realistic photograph: real skin, hair, fabric and light; keep the people, their features, poses, clothes and the framing exactly the same.' },
   { id: 'background', group: 'edit', fromPicture: true, ratio: '3:4', quality: 'high', prompt: 'Keep the subject of the reference picture exactly as it is (face, body, pose, clothes) and put it in the place the words below describe, with matching light, shadows and perspective.' },
+  { id: 'lightGolden', group: 'light', fromPicture: true, ratio: '1:1', prompt: 'Relight the reference picture with warm low golden-hour sunlight from the side, an orange glow and long soft shadows; keep every person, face, pose, object, the framing and the layout of the background exactly the same, and change only the light, the shadows and the color of the light.' },
+  { id: 'lightRembrandt', group: 'light', fromPicture: true, ratio: '1:1', prompt: 'Relight the reference picture with Rembrandt lighting: one soft key light high at 45 degrees, a small triangle of light on the shadow side of the face; keep every person, face, pose, object, the framing and the layout of the background exactly the same, and change only the light, the shadows and the color of the light.' },
+  { id: 'lightLowKey', group: 'light', fromPicture: true, ratio: '1:1', prompt: 'Relight the reference picture with low-key hard side light: half of the subject in deep shadow, dark surroundings; keep every person, face, pose, object, the framing and the layout of the background exactly the same, and change only the light, the shadows and the color of the light.' },
+  { id: 'lightNeon', group: 'light', fromPicture: true, ratio: '1:1', prompt: 'Relight the reference picture with magenta and cyan neon light from both sides, at night; keep every person, face, pose, object, the framing and the layout of the background exactly the same, and change only the light, the shadows and the color of the light.' },
+  { id: 'lightRim', group: 'light', fromPicture: true, ratio: '1:1', prompt: 'Relight the reference picture with a strong rim light from behind outlining the subject, its front dim; keep every person, face, pose, object, the framing and the layout of the background exactly the same, and change only the light, the shadows and the color of the light.' },
+  { id: 'lightSoft', group: 'light', fromPicture: true, ratio: '1:1', prompt: 'Relight the reference picture with soft even light from a large softbox in front, gentle shadows; keep every person, face, pose, object, the framing and the layout of the background exactly the same, and change only the light, the shadows and the color of the light.' },
+  { id: 'lightCandle', group: 'light', fromPicture: true, ratio: '1:1', prompt: 'Relight the reference picture with warm candlelight from below and in front, deep warm shadows; keep every person, face, pose, object, the framing and the layout of the background exactly the same, and change only the light, the shadows and the color of the light.' },
+  { id: 'lightMoon', group: 'light', fromPicture: true, ratio: '1:1', prompt: 'Relight the reference picture with cool blue moonlight from above, silver highlights and deep blue shadows; keep every person, face, pose, object, the framing and the layout of the background exactly the same, and change only the light, the shadows and the color of the light.' },
+  { id: 'lightWindow', group: 'light', fromPicture: true, ratio: '1:1', prompt: 'Relight the reference picture with soft natural daylight from a large window at the side, airy and bright; keep every person, face, pose, object, the framing and the layout of the background exactly the same, and change only the light, the shadows and the color of the light.' },
+  { id: 'expand', group: 'tool', fromPicture: true, ratio: '16:9', prompt: 'Extend the reference picture beyond its edges to fill the new frame: continue the scene naturally on every side, and keep everything already in it exactly as it is, in the same place, style and light.' },
+  { id: 'upscale', group: 'tool', fromPicture: true, ratio: '1:1', quality: 'high', prompt: 'Recreate the reference picture at a higher resolution with finer detail: sharper edges and textures, no noise or artifacts; keep every person, object, color, the composition and the framing exactly the same.' },
 ];
 
 export const presetOf = (id: string | undefined): CanvasPreset | undefined => (id ? PRESETS.find((p) => p.id === id) : undefined);

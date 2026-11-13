@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, Upload, Image as ImageIcon,
+  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, ChevronRight, Upload, Image as ImageIcon, SunMedium, Wrench, Expand,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -20,8 +20,7 @@ import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { studioHost } from '@/lib/host';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
-import { useBoard, type Choice, type MakeData } from './board';
-import { splitGrid } from './pixels';
+import { keepLastModel, useBoard, type Choice, type MakeData } from './board';
 import { ProviderMark } from '../settings/ProviderMark';
 import { useDraft } from './words';
 import { DocSheet } from './doc';
@@ -49,20 +48,24 @@ const SEND = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-
 const CORNER = 'flex h-8 w-8 items-center justify-center rounded-[9px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
 
 /**
- * A node's composer, under it: what goes in, its words, how it is made. `above`, when shown, is a row over it (the
- * tools), the rest then set in a box of its own; `corner` sits by the expand button.
+ * A node's composer, under it: what goes in, its words, how it is made. `above` is a row over it (the tools), opened
+ * and closed with a slide (`aboveOpen`), the rest then set in a box of its own; `corner` sits by the expand button.
  */
-function Composer({ id, shown, expanded, setExpanded, corner, above, children }: {
-  id: string; shown: boolean; expanded: boolean; setExpanded: (expanded: boolean) => void; corner?: React.ReactNode; above?: React.ReactNode; children: React.ReactNode;
+function Composer({ id, shown, expanded, setExpanded, corner, above, aboveOpen = false, children }: {
+  id: string; shown: boolean; expanded: boolean; setExpanded: (expanded: boolean) => void; corner?: React.ReactNode; above?: React.ReactNode; aboveOpen?: boolean; children: React.ReactNode;
 }) {
   const t = useT();
   const board = useBoard();
   const label = t(expanded ? 'canvas.panel.collapse' : 'canvas.panel.expand');
   return (
     <NodeToolbar nodeId={id} isVisible={shown} position={Position.Bottom} offset={14}>
-      <div data-canvas-composer="" className={`nodrag nopan nowheel w-[min(680px,88vw)] ${above ? 'p-2' : ''} ${PANEL}`} onKeyDown={(event) => event.stopPropagation()}>
-        {above}
-        <div className={`relative px-4 pb-3 pt-4 ${above ? 'mt-2 rounded-[16px] bg-[color-mix(in_srgb,var(--cv-ink)_4%,transparent)]' : ''}`}>
+      <div data-canvas-composer="" className={`nodrag nopan nowheel w-[min(680px,88vw)] transition-[padding] duration-200 ease-out ${aboveOpen ? 'p-2' : 'p-0'} ${PANEL}`} onKeyDown={(event) => event.stopPropagation()}>
+        {above ? (
+          <div aria-hidden={!aboveOpen} className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${aboveOpen ? 'grid-rows-[1fr] opacity-100' : 'pointer-events-none grid-rows-[0fr] opacity-0'}`}>
+            <div className="min-h-0 overflow-hidden">{above}</div>
+          </div>
+        ) : null}
+        <div className={`relative px-4 pb-3 pt-4 transition-[margin,background-color,border-radius] duration-200 ease-out ${aboveOpen ? 'mt-2 rounded-[16px] bg-[color-mix(in_srgb,var(--cv-ink)_4%,transparent)]' : 'rounded-[20px]'}`}>
           <div className="absolute right-3 top-3 flex items-center gap-0.5">
             {corner}
             <Tooltip label={label}>
@@ -148,7 +151,8 @@ export function SelectionToolbar({ ids, onGroup, onUngroup, onDuplicate, onRemov
 export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceResource | null; empty?: 'image' | 'video' }) {
   const t = useT();
   const board = useBoard();
-  const [grid, setGrid] = React.useState(false);
+  const [open, setOpen] = React.useState<'presets' | 'light' | 'tools' | null>(null);
+  const [sub, setSub] = React.useState(false);
   if (board.readOnly || board.single !== id || (!file && !empty)) return null;
   const btn = 'cv-tool nodrag flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
   const icon = 'cv-tool nodrag flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
@@ -174,27 +178,49 @@ export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceReso
       </NodeToolbar>
     );
   }
-  const base = file.name.replace(/\.[^.]+$/, '');
-  const fail = (e: unknown) => console.warn(e);
   const video = file.kind === 'video';
+  /* a preset made from this picture: at the picture's own shape when it changes the picture, else at the preset's */
+  const from = (p: CanvasPreset) => {
+    setOpen(null);
+    setSub(false);
+    board.spawn(id, 'image', { preset: p.id, opts: { ratio: p.fromPicture && p.id !== 'expand' ? frameRatio(file.w, file.h) ?? p.ratio : p.ratio } });
+  };
   const actions = (
       <div className={`${bar} ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
         {refer}
         {file.kind === 'image' ? (
+          /* what can be made from the picture, each a new node wired from it: changed in part, as a preset, from more
+             angles, lit anew, or a tool (its background out, its grid cut apart, widened, made sharper) */
           <>
+            <button type="button" className={btn} onClick={() => board.redraw(id, file.path)}><Brush size={16} />{t('canvas.actions.redraw')}</button>
+            <Popover open={open === 'presets'} onOpenChange={(v) => setOpen(v ? 'presets' : null)} placement="bottom" align="start"
+              trigger={<button type="button" className={btn} onClick={() => setOpen(open === 'presets' ? null : 'presets')}><LayoutDashboard size={16} />{t('canvas.presets.title')}<ChevronDown size={13} /></button>}>
+              <PresetPicker hasPicture onPick={from} />
+            </Popover>
             <button type="button" className={btn} onClick={() => board.spawn(id, 'image', { preset: 'cameras9', opts: { ratio: '1:1' } })}><Orbit size={16} />{t('canvas.actions.angles')}</button>
-            <Popover open={grid} onOpenChange={setGrid} placement="bottom" align="start"
-              trigger={<button type="button" className={btn} onClick={() => setGrid((v) => !v)}><Grid2x2 size={16} />{t('canvas.actions.split')}<ChevronDown size={13} /></button>}>
-              <div className={`w-[160px] p-1 ${CARD}`}>
-                {[2, 3].map((n) => (
-                  <button key={n} type="button" className={`${btn} w-full`} onClick={() => { setGrid(false); void splitGrid(board.sources.file(file), n, base).then((files) => board.bring(id, files), fail); }}>
-                    {t('canvas.actions.splitInto').replace(/\{n\}/g, String(n))}
-                  </button>
-                ))}
+            <Popover open={open === 'light'} onOpenChange={(v) => setOpen(v ? 'light' : null)} placement="bottom" align="start"
+              trigger={<button type="button" className={btn} onClick={() => setOpen(open === 'light' ? null : 'light')}><SunMedium size={16} />{t('canvas.actions.light')}<ChevronDown size={13} /></button>}>
+              <div className={`w-[520px] p-3 ${CARD}`}>
+                <div className="mb-2.5 px-0.5 text-[13px] font-medium text-[var(--cv-ink)]">{t('canvas.actions.light')}</div>
+                <PictureCards presets={PRESETS.filter((p) => p.group === 'light')} hasPicture onPick={from} />
               </div>
             </Popover>
-            <button type="button" className={btn} onClick={() => board.redraw(id, file.path)}><Brush size={16} />{t('canvas.actions.redraw')}</button>
-            <button type="button" className={btn} onClick={() => board.cutout(id, file.path)}><Eraser size={16} />{t('canvas.actions.cutout')}</button>
+            <Popover open={open === 'tools'} onOpenChange={(v) => { setOpen(v ? 'tools' : null); if (!v) setSub(false); }} placement="bottom" align="start"
+              trigger={<button type="button" className={btn} onClick={() => setOpen(open === 'tools' ? null : 'tools')}><Wrench size={16} />{t('canvas.actions.tools')}<ChevronDown size={13} /></button>}>
+              <div className={`relative w-[200px] p-1 ${CARD}`}>
+                <button type="button" className={`${PICK} w-full`} onMouseEnter={() => setSub(false)} onClick={() => { setOpen(null); board.cutout(id, file.path); }}><Eraser size={15} />{t('canvas.actions.cutout')}</button>
+                <button type="button" className={`${PICK} w-full ${sub ? 'bg-[var(--cv-float-hover)]' : ''}`} onMouseEnter={() => setSub(true)} onClick={() => setSub(!sub)}>
+                  <Grid2x2 size={15} /><span className="flex-1 text-left">{t('canvas.actions.split')}</span><ChevronRight size={14} className="text-[var(--cv-ink-2)]" />
+                </button>
+                <button type="button" className={`${PICK} w-full`} onMouseEnter={() => setSub(false)} onClick={() => from(presetOf('expand')!)}><Expand size={15} />{t('canvas.presets.names.expand')}</button>
+                <button type="button" className={`${PICK} w-full`} onMouseEnter={() => setSub(false)} onClick={() => from(presetOf('upscale')!)}><Sparkles size={15} />{t('canvas.presets.names.upscale')}</button>
+                {sub ? (
+                  <div className="absolute left-full top-0 ml-1.5">
+                    <GridPicker onPick={(rows, cols) => { setOpen(null); setSub(false); board.split(id, file.path, rows, cols); }} />
+                  </div>
+                ) : null}
+              </div>
+            </Popover>
           </>
         ) : null}
         {file.kind !== 'other' ? <button type="button" className={btn} onClick={() => board.addToFilm(file)}><Clapperboard size={16} />{t('canvas.addToFilm')}</button> : null}
@@ -339,6 +365,90 @@ function ModelPicker({ choices, picked, fallback, onPick, onConnect }: {
   );
 }
 
+/** The presets as pictures of what each makes, a kind at a time; one that needs a picture is off without one. */
+function PresetPicker({ picked, hasPicture, onPick }: { picked?: string; hasPicture: boolean; onPick: (preset: CanvasPreset) => void }) {
+  const t = useT();
+  const [tab, setTab] = React.useState<PresetGroup>(() => {
+    const group = presetOf(picked)?.group;
+    return group && PRESET_GROUPS.includes(group) ? group : PRESET_GROUPS[0]!;
+  });
+  return (
+    <div className={`w-[560px] p-3 ${CARD}`}>
+      <div className="mb-3 flex flex-wrap gap-1">
+        {PRESET_GROUPS.map((group) => (
+          <button key={group} type="button" onClick={() => setTab(group)}
+            className={`h-7 rounded-[8px] px-2.5 text-[13px] transition ${group === tab ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
+            {t(`canvas.presets.groups.${group}`)}
+          </button>
+        ))}
+      </div>
+      <PictureCards presets={PRESETS.filter((p) => p.group === tab)} picked={picked} hasPicture={hasPicture} onPick={onPick} />
+    </div>
+  );
+}
+
+/** Presets as cards: each its picture, its name under it, "needs a picture" on one made from a picture. */
+function PictureCards({ presets, picked, hasPicture, onPick }: { presets: CanvasPreset[]; picked?: string; hasPicture: boolean; onPick: (preset: CanvasPreset) => void }) {
+  const t = useT();
+  return (
+    <div className="grid max-h-[400px] grid-cols-3 gap-x-2.5 gap-y-3 overflow-y-auto">
+      {presets.map((p) => {
+        const off = p.fromPicture && !hasPicture;
+        return (
+          <button key={p.id} type="button" disabled={off} onClick={() => onPick(p)} title={off ? t('canvas.presets.needsPicture') : undefined}
+            className="group/preset min-w-0 text-left disabled:cursor-not-allowed">
+            <span className={`relative block aspect-[3/2] overflow-hidden rounded-[10px] bg-[var(--cv-chip)] ${picked === p.id ? 'ring-2 ring-[var(--cv-ring)]' : 'ring-1 ring-inset ring-[var(--cv-float-line)]'}`}>
+              {PRESET_PICTURES[p.id] ? <img src={PRESET_PICTURES[p.id]} alt="" draggable={false} loading="lazy"
+                className={`h-full w-full object-cover transition duration-300 ${off ? 'opacity-40' : 'group-hover/preset:scale-[1.04]'}`} /> : null}
+              {p.fromPicture && !hasPicture ? (
+                <span className="absolute left-1.5 top-1.5 flex h-5 items-center gap-1 rounded-[6px] bg-black/60 px-1.5 text-[10.5px] text-white backdrop-blur-sm">
+                  <ImageIcon size={11} />{t('canvas.presets.fromPicture')}
+                </span>
+              ) : null}
+            </span>
+            <span className={`mt-1.5 block truncate px-0.5 text-[13px] ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)]'}`}>{t(`canvas.presets.names.${p.id}`)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * A grid to cut a picture into: found from its gutters, one of the usual ones, or any up to 8×8 (columns × rows)
+ * marked by pointing.
+ */
+function GridPicker({ onPick }: { onPick: (rows: number, cols: number) => void }) {
+  const t = useT();
+  const [over, setOver] = React.useState<{ r: number; c: number } | null>(null);
+  const cell = 'h-[18px] w-[18px] rounded-[4px] border transition-colors';
+  return (
+    <div className={`w-[232px] p-2.5 ${CARD}`}>
+      <button type="button" onClick={() => onPick(0, 0)} className={`${PICK} w-full !h-8 !text-[13px]`}><Sparkles size={14} />{t('canvas.actions.splitAuto')}</button>
+      <div className="mt-1.5 grid grid-cols-4 gap-1">
+        {[2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" onClick={() => onPick(n, n)} className={`h-8 ${OPTION} ${OPTION_OFF}`}>{n}×{n}</button>
+        ))}
+      </div>
+      <div className={`${OPTION_TITLE} mt-3 px-0.5`}>{t('canvas.actions.splitCustom')}</div>
+      <div className="relative" onMouseLeave={() => setOver(null)}>
+        <div className="grid w-max grid-cols-8 gap-1">
+          {Array.from({ length: 64 }, (_, i) => {
+            const r = Math.floor(i / 8) + 1;
+            const c = (i % 8) + 1;
+            const lit = over && r <= over.r && c <= over.c;
+            return (
+              <button key={i} type="button" aria-label={`${c}×${r}`} onMouseEnter={() => setOver({ r, c })} onFocus={() => setOver({ r, c })} onClick={() => onPick(r, c)}
+                className={`${cell} ${lit ? 'border-[var(--cv-edge-lit)] bg-[color-mix(in_srgb,var(--cv-edge-lit)_22%,transparent)]' : 'border-[var(--cv-float-line)] bg-[var(--cv-chip)]'}`} />
+            );
+          })}
+        </div>
+        <div className="mt-2 h-5 text-center text-[12.5px] tabular-nums text-[var(--cv-ink-2)]">{over ? `${over.c} × ${over.r}` : ''}</div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * A node that makes something: its panel, under it while it is the one selected. What goes into it first (brought in
  * from the computer, from the board, from the Assets), numbered in its wires' order; its words; with which model and
@@ -351,10 +461,6 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const [open, setOpen] = React.useState<string | null>(null);
   /* the words written in a taller box (the panel's ↗) */
   const [expanded, setExpanded] = React.useState(false);
-  const [presetTab, setPresetTab] = React.useState<PresetGroup>(() => {
-    const group = presetOf(data.preset)?.group;
-    return group && PRESET_GROUPS.includes(group) ? group : PRESET_GROUPS[0]!;
-  });
   const shown = board.single === id && !board.readOnly;
   const media = MAKE_MEDIA[data.make];
   const takesPictures = media !== 'audio';
@@ -432,39 +538,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
       <button type="button" className={`${PICK} w-full`} onClick={() => setOpen('assets')}><Images size={15} />{t('canvas.panel.fromAssets')}</button>
     </div>
   );
-  /* the presets as pictures of what each makes, a kind at a time */
-  const presetMenu = (
-    <div className={`w-[560px] p-3 ${CARD}`}>
-      <div className="mb-3 flex flex-wrap gap-1">
-        {PRESET_GROUPS.map((group) => (
-          <button key={group} type="button" onClick={() => setPresetTab(group)}
-            className={`h-7 rounded-[8px] px-2.5 text-[13px] transition ${group === presetTab ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
-            {t(`canvas.presets.groups.${group}`)}
-          </button>
-        ))}
-      </div>
-      <div className="grid max-h-[400px] grid-cols-3 gap-x-2.5 gap-y-3 overflow-y-auto">
-        {PRESETS.filter((p) => p.group === presetTab).map((p) => {
-          const off = p.fromPicture && !hasPicture;
-          return (
-            <button key={p.id} type="button" disabled={off} onClick={() => usePreset(p)} title={off ? t('canvas.presets.needsPicture') : undefined}
-              className="group/preset min-w-0 text-left disabled:cursor-not-allowed">
-              <span className={`relative block aspect-[3/2] overflow-hidden rounded-[10px] bg-[var(--cv-chip)] ${preset?.id === p.id ? 'ring-2 ring-[var(--cv-ring)]' : 'ring-1 ring-inset ring-[var(--cv-float-line)]'}`}>
-                {PRESET_PICTURES[p.id] ? <img src={PRESET_PICTURES[p.id]} alt="" draggable={false} loading="lazy"
-                  className={`h-full w-full object-cover transition duration-300 ${off ? 'opacity-40' : 'group-hover/preset:scale-[1.04]'}`} /> : null}
-                {p.fromPicture ? (
-                  <span className="absolute left-1.5 top-1.5 flex h-5 items-center gap-1 rounded-[6px] bg-black/60 px-1.5 text-[10.5px] text-white backdrop-blur-sm">
-                    <ImageIcon size={11} />{t('canvas.presets.fromPicture')}
-                  </span>
-                ) : null}
-              </span>
-              <span className={`mt-1.5 block truncate px-0.5 text-[13px] ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)]'}`}>{t(`canvas.presets.names.${p.id}`)}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+  const presetMenu = <PresetPicker picked={preset?.id} hasPicture={hasPicture} onPick={usePreset} />;
   return (
     <Composer id={id} shown={shown} expanded={expanded} setExpanded={setExpanded}
       corner={tools.length ? (
@@ -473,9 +547,10 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             className={`${CORNER} ${showTools ? 'bg-[var(--cv-float-hover)] !text-[var(--cv-ink)]' : ''}`}><Shapes size={16} /></button>
         </Tooltip>
       ) : null}
-      above={showTools && tools.length ? (
+      aboveOpen={showTools && tools.length > 0}
+      above={tools.length ? (
         /* the tools: a character, a style or an effect from the libraries, a preset */
-        <div className="cv-bar-bottom flex items-center gap-2">
+        <div className="flex items-center gap-2">
           {tools.map((tool) => (
             <div key={tool.key} className="min-w-0 flex-1">
               {tool.key === 'presets' ? (
@@ -601,7 +676,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                 </button>
               )}>
               <ModelPicker choices={every} picked={picked} fallback={fallback}
-                onPick={(choice) => { set({ via: choice?.via, model: choice?.model, ...(choice?.kind && choice.kind !== data.make ? { make: choice.kind } : {}) }); setOpen(null); }}
+                onPick={(choice) => { keepLastModel(choice?.kind ?? data.make, choice); set({ via: choice?.via, model: choice?.model, ...(choice?.kind && choice.kind !== data.make ? { make: choice.kind } : {}) }); setOpen(null); }}
                 onConnect={() => { setOpen(null); board.openSettings(); }} />
             </Popover>
           ) : (

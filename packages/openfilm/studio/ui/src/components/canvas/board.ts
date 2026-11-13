@@ -236,6 +236,37 @@ type Made = { path: string; made: string };
 export const runs = new Map<string, Run>();
 export const runErrors = new Map<string, string>();
 /** the board shown for each project, to take what was made */
+/**
+ * How long a model takes, as this person's own runs with it took (the middle of the last few that made something),
+ * kept in this browser: what the progress on a card making with it is measured against. None run yet: none shown.
+ */
+const TIMES_KEY = 'openfilm.canvas.times';
+const readKept = <T>(key: string): Record<string, T> => { try { return JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, T>; } catch { return {}; } };
+export function modelTime(via: string, model?: string): number | null {
+  const list = readKept<number[]>(TIMES_KEY)[`${via}|${model ?? ''}`];
+  if (!Array.isArray(list) || !list.length) return null;
+  return [...list].sort((a, b) => a - b)[Math.floor(list.length / 2)]!;
+}
+export function keepModelTime(via: string, model: string | undefined, seconds: number) {
+  const all = readKept<number[]>(TIMES_KEY);
+  const key = `${via}|${model ?? ''}`;
+  all[key] = [...(all[key] ?? []), Math.round(seconds)].slice(-5);
+  try { localStorage.setItem(TIMES_KEY, JSON.stringify(all)); } catch { /* not kept */ }
+}
+
+/** The model last picked for each kind, kept in this browser: a new node of that kind makes with it. */
+const LAST_KEY = 'openfilm.canvas.lastModel';
+export function lastModel(kind: MakeKind): { via: string; model?: string } | null {
+  const kept = readKept<{ via?: unknown; model?: unknown }>(LAST_KEY)[kind];
+  return kept && typeof kept.via === 'string' ? { via: kept.via, ...(typeof kept.model === 'string' ? { model: kept.model } : {}) } : null;
+}
+export function keepLastModel(kind: MakeKind, choice: { via: string; model?: string } | null) {
+  const all = readKept<unknown>(LAST_KEY);
+  if (choice) all[kind] = { via: choice.via, ...(choice.model ? { model: choice.model } : {}) };
+  else delete all[kind];
+  try { localStorage.setItem(LAST_KEY, JSON.stringify(all)); } catch { /* not kept */ }
+}
+
 /** each project's board shown now (which of its boards, and how what is made comes onto it) */
 export const shownBoards = new Map<string, { board: string; take: (node: string, made: Made) => void }>();
 let runsVersion = 0;
@@ -319,6 +350,8 @@ export interface Board {
   reportError?: (error: string) => void;
   /** a picture's background taken out by the person's service: a new picture beside it */
   cutout: (id: string, path: string) => void;
+  /** a picture of panels cut into them (`rows`×`cols`, or 0×0: as its gutters say), laid out in a group beside it */
+  split: (id: string, path: string, rows: number, cols: number) => void;
   remove: (ids: string[]) => void;
   /** the board as it is now kept to go back to: called before a change made in a node (a resize, words written) */
   willChange: () => void;

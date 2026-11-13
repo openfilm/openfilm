@@ -42,7 +42,7 @@ import { studioHost, type StudioRef } from '@/lib/host';
 import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
-  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
+  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, lastModel, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
   type Board, type BoardNode, type FileNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type NoteData, type Side, type SpawnKind, type UploadStatus,
 } from './board';
 import { BottomToolbar, CornerBar, Dots, EmptyBoard, Outline, Ripples, ToolCorner, Viewer } from './chrome';
@@ -51,6 +51,7 @@ import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from '.
 import { CHARACTER_PARTS, CharacterLibrary, HistoryModal, MaterialLibrary } from './libraries';
 import { RedrawEditor, type RedrawWay } from './redraw';
 import { presetOf } from '@/lib/canvas-presets';
+import { splitGrid } from './pixels';
 import { FRAME_COLOR, NODE_TYPES } from './nodes';
 import { SelectionToolbar } from './panels';
 import { CanvasLoading } from './CanvasLoading';
@@ -474,7 +475,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       /* a new picture is square, and made square until another shape is asked */
       const ratio = kind === 'video' ? lastVideoRatio.current : kind === 'image' ? '1:1' : undefined;
       const size = makeSize(kind, ratio);
-      place({ id, type: 'make', position: topLeft(placement, size.w, size.h), width: size.w, height: size.h, data: { make: kind, prompt: '', ...(ratio ? { opts: { ratio } } : {}) } }, placement.from, placement.wire);
+      /* made with the model last picked for its kind, while it is still there */
+      const last = lastModel(kind);
+      const model = last && choicesFor(providers, kind).some((c) => c.via === last.via && c.model === last.model) ? last : null;
+      place({ id, type: 'make', position: topLeft(placement, size.w, size.h), width: size.w, height: size.h, data: { make: kind, prompt: '', ...(model ?? {}), ...(ratio ? { opts: { ratio } } : {}) } }, placement.from, placement.wire);
     }
     return id;
   };
@@ -678,7 +682,13 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const say = { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') };
     /* two or four at once: one after another, each a version of its own (a clip asked again is made anew) */
     const count = node.opts?.count ?? 1;
-    const timed = (run: ReturnType<typeof makeRequest>) => startRun(projectId, folder, id, run, pick, inputsKey(node, inputs), say, boardId);
+    /* how long it took, kept to measure the progress of the next run with this model */
+    const timed = async (run: ReturnType<typeof makeRequest>) => {
+      const started = Date.now();
+      const ok = await startRun(projectId, folder, id, run, pick, inputsKey(node, inputs), say, boardId);
+      if (ok && choice) keepModelTime(choice.via, choice.model, (Date.now() - started) / 1000);
+      return ok;
+    };
     if (count < 2) return timed(request);
     return (async () => {
       let made = false;
@@ -1037,6 +1047,36 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         const receipt = JSON.parse(text) as { src?: string };
         if (receipt.src) addFile(receipt.src, { at: spotBeside(id, 'source', FILE_W), from: { node: id, side: 'source' }, corner: true });
       }, (e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+    },
+    split: (id, path, rows, cols) => {
+      const picture = byPath.get(path);
+      if (!picture) return;
+      const base = picture.name.replace(/\.[^.]+$/, '');
+      void splitGrid(sources.file(picture), rows, cols, base).then(async (cut) => {
+        const paths = await onImportFiles(cut.files);
+        /* the panels as they sat in the picture: a row of cards each as high, each as wide as its own shape */
+        const H = 220;
+        const GAP = 20;
+        const widths = cut.cells.map((c) => Math.round((H * c.w) / c.h));
+        const colW = Array.from({ length: cut.cols }, (_, c) => Math.max(...widths.filter((_, i) => i % cut.cols === c)));
+        const w = colW.reduce((sum, x) => sum + x, 0) + GAP * (cut.cols - 1) + 2 * GROUP_PAD;
+        const h = cut.rows * H + GAP * (cut.rows - 1) + 2 * GROUP_PAD + GROUP_HEAD / 2;
+        const at = spotBeside(id, 'source', w);
+        const group = canvasId('n');
+        add({
+          nodes: [
+            { id: group, x: at.x, y: at.y, w, h, group: `${base} · ${cut.cols}×${cut.rows}`, color: 'gray' },
+            ...paths.map((p, i) => {
+              const c = i % cut.cols;
+              const r = Math.floor(i / cut.cols);
+              const x = GROUP_PAD + colW.slice(0, c).reduce((sum, v) => sum + v + GAP, 0) + (colW[c]! - widths[i]!) / 2;
+              return { id: canvasId('n'), parent: group, path: p, x, y: GROUP_PAD + GROUP_HEAD / 2 + r * (H + GAP), w: widths[i]!, h: H };
+            }),
+          ],
+          edges: [],
+        });
+        requestAnimationFrame(() => requestAnimationFrame(() => { void flow.fitView({ nodes: [{ id: group }], padding: 0.2, maxZoom: 1, duration: 300 }); }));
+      }).catch((e: unknown) => onError(e instanceof Error && e.message === 'no grid found' ? t('canvas.split.none') : e instanceof Error ? e.message : String(e)));
     },
     remove,
     willChange,
@@ -1648,7 +1688,7 @@ function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => 
       files: [...files.values()],
       fileOf: (path) => files.get(path) ?? null,
       sources: { file: (file) => fileUrl(file.path), wave: () => '' },
-      addToFilm: nothing, setData: nothing, resize: nothing, spawn: nothing, bring: nothing, cutout: nothing, remove: nothing, willChange: nothing, editing: null, edit: nothing, single: null,
+      addToFilm: nothing, setData: nothing, resize: nothing, spawn: nothing, bring: nothing, cutout: nothing, split: nothing, remove: nothing, willChange: nothing, editing: null, edit: nothing, single: null,
       choices: () => [], allChoices: () => [], fallback: () => null, run: () => undefined, error: () => undefined, stale: NOTHING, unused: NONE,
       make: nothing, stop: nothing, inputs: (id) => inputViews(drawn.nodes, drawn.edges, id, mediaOf), unwire: nothing, sideMenu: nothing,
       upload: nothing, wireIn: nothing, sendToFilm: nothing, view: nothing,
