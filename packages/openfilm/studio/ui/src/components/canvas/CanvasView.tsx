@@ -784,9 +784,17 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       setWriting((ids) => { const next = new Map(ids); next.delete(id); return next; });
     }
   };
-  /** a node brought into view (the board's zoom kept) and flashed */
+  /** a node flashed where it is; brought into view (the board's zoom kept) only when it is not all in sight */
   const locate = (id: string) => {
-    void flow.fitView({ nodes: [{ id }], padding: 0.5, minZoom: flow.getZoom(), maxZoom: flow.getZoom(), duration: 300 });
+    const node = flow.getInternalNode(id);
+    const pane = rootRef.current?.getBoundingClientRect();
+    if (node && pane) {
+      const { x, y } = node.internals.positionAbsolute;
+      const a = flow.flowToScreenPosition({ x, y });
+      const b = flow.flowToScreenPosition({ x: x + (node.measured.width ?? 0), y: y + (node.measured.height ?? 0) });
+      const seen = a.x >= pane.left && a.y >= pane.top && b.x <= pane.right && b.y <= pane.bottom;
+      if (!seen) void flow.fitView({ nodes: [{ id }], padding: 0.5, minZoom: flow.getZoom(), maxZoom: flow.getZoom(), duration: 300 });
+    }
     setBorn((ids) => new Map(ids).set(id, 'cv-flash'));
     window.setTimeout(() => setBorn((ids) => { if (ids.get(id) !== 'cv-flash') return ids; const next = new Map(ids); next.delete(id); return next; }), 1400);
   };

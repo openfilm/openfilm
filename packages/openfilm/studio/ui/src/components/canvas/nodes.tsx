@@ -371,7 +371,10 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
   const rename = board.readOnly ? undefined : (name: string) => { board.willChange(); board.setData(id, { title: name || undefined }); };
   const open = () => { board.edit(null); setSheet(true); };
   return (
-    <div className="h-full w-full" onDoubleClick={() => { if (!board.readOnly && !editing) board.edit(id); }}
+    <div className="h-full w-full" onDoubleClick={(event) => {
+      /* only a double-click on the card itself: its bars are portals whose events still bubble here */
+      if (!board.readOnly && !editing && event.currentTarget.contains(event.target as Node)) board.edit(id);
+    }}
       onKeyDown={(event) => { if (editing && event.key === 'Escape' && !event.nativeEvent.isComposing) { event.stopPropagation(); editor?.commands.blur(); board.edit(null); } }}>
       <NotePanel id={id} />
       {editing && editor ? (
@@ -458,6 +461,9 @@ function NoteVersions({ id, text, earlier, open, onOpen, readOnly }: { id: strin
   );
 }
 
+const SWATCH = 'h-7 w-7 rounded-[7px] transition hover:scale-105';
+const SWATCH_ON = 'ring-2 ring-white ring-offset-2 ring-offset-[var(--cv-float)]';
+
 /** The bar over a selected note: its color (none: the card's own), the note opened large, its words saved as a Markdown file. */
 function NoteBar({ id, color, text, name, onExpand }: { id: string; color?: GroupColor; text: string; name: string; onExpand: () => void }) {
   const t = useT();
@@ -466,7 +472,7 @@ function NoteBar({ id, color, text, name, onExpand }: { id: string; color?: Grou
   const icon = 'cv-tool flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] disabled:opacity-40';
   const paint = (c: GroupColor | undefined) => { board.willChange(); board.setData(id, { color: c }); setColors(false); };
   return (
-    <div className="cv-bar-top nodrag nopan flex items-center gap-0.5 rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+    <div className="cv-bar-top nodrag nopan relative flex items-center gap-0.5 rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
       {/* first, the agent: the note made a reference in the chat, to change or write from */}
       {board.refer ? (
         <>
@@ -476,19 +482,20 @@ function NoteBar({ id, color, text, name, onExpand }: { id: string; color?: Grou
           <span className="mx-1 h-4 w-px bg-[var(--cv-float-line)]" />
         </>
       ) : null}
-      <span className="relative">
+      <span>
         <button type="button" aria-expanded={colors} onClick={() => setColors((v) => !v)}
           className="cv-tool flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
           <span className="h-[18px] w-[18px] rounded-[5px] border border-white/20" style={{ background: color ? FRAME_COLOR[color].dot : 'var(--cv-card)' }} />
           {t('canvas.noteBar.fill')}
         </button>
         {colors ? (
-          <span className={`${MENU} absolute left-0 top-11 z-10 flex gap-1.5 !p-2`}>
+          /* centered under the whole bar */
+          <span className={`${MENU} absolute left-1/2 top-full z-10 mt-2 flex -translate-x-1/2 gap-2 !p-2.5`}>
             <button type="button" aria-label={t('canvas.noteBar.none')} title={t('canvas.noteBar.none')} onClick={() => paint(undefined)}
-              className={`h-5 w-5 rounded-[5px] border bg-[var(--cv-card)] ${color ? 'border-white/20' : 'border-white'}`} />
+              className={`${SWATCH} bg-[var(--cv-card)] ${color ? 'border border-white/20' : SWATCH_ON}`} />
             {(Object.keys(FRAME_COLOR) as GroupColor[]).filter((c) => c !== 'gray').map((c) => (
               <button key={c} type="button" aria-label={c} onClick={() => paint(c)}
-                className={`h-5 w-5 rounded-[5px] border ${c === color ? 'border-white' : 'border-white/20'}`} style={{ background: FRAME_COLOR[c].dot }} />
+                className={`${SWATCH} ${c === color ? SWATCH_ON : ''}`} style={{ background: FRAME_COLOR[c].dot }} />
             ))}
           </span>
         ) : null}
