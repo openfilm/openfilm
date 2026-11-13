@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, asRun, coreSkills, promptSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
+import { addSkills, asRun, coreSkills, isPlugin, promptSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -511,6 +511,21 @@ test('a skill whose package.json has scripts.start brings a program: it is a plu
   assert.equal(made('empty', { scripts: { start: '  ' } }).program, undefined);
   assert.equal(made('odd', { scripts: { start: ['node'] } }).program, undefined);
   assert.equal(made('broken', '{').program, undefined);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('a skill whose package.json has a browser module brings an element: a plugin shown in the app itself', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-browser-'));
+  const made = (name, pkg, files = {}) => readSkill(skill(join(root, name), name, 'A bench', 'Steps', { 'package.json': JSON.stringify(pkg), ...files }), 'mine');
+  assert.equal(made('grade', { browser: './dist/ui.js' }, { 'dist/ui.js': 'export default class extends HTMLElement {}' }).element, 'dist/ui.js');
+  assert.equal(isPlugin(made('grade2', { browser: 'ui.js' }, { 'ui.js': '' })), true);
+  /* none: a module that is not there, one outside the folder, a browser field that is no file's name */
+  writeFileSync(join(root, 'outside.js'), '');
+  assert.equal(made('gone', { browser: 'ui.js' }).element, undefined);
+  assert.equal(made('out', { browser: '../outside.js' }).element, undefined);
+  assert.equal(made('map', { browser: { fs: false } }).element, undefined);
+  /* commands alone leave a skill a skill */
+  assert.equal(isPlugin(made('tool', { bin: 'run.mjs' }, { 'run.mjs': '' })), false);
   rmSync(root, { recursive: true, force: true });
 });
 

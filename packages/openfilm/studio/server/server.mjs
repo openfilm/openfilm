@@ -606,7 +606,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           /* the program it brings (src/skills.mjs programIn) serves its surface itself, once started (`start` below),
              which the person lets it or not */
           ...(k.program && k.installed && !k.core ? { program: true, ...(pluginRuns(k, project ?? null) ? { runs: true } : {}) } : {}),
-          ...(k.page && !k.program && k.installed && !k.core ? (() => {
+          /* the element it brings (src/skills.mjs elementIn) is put in the editor's own page: `inApp`, and once the
+             person lets it run, where its module is (`element`, by the version of its file, so a changed one is
+             loaded anew) and where the project's files are for it */
+          ...(k.element && !k.program && k.installed && !k.core ? (() => {
+            const runs = pluginRuns(k, project ?? null);
+            if (!runs) return { inApp: true };
+            const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.element }, project ?? null);
+            let version = '';
+            try { const stat = statSync(join(k.folder, k.element)); version = `${stat.size.toString(36)}-${Math.round(stat.mtimeMs).toString(36)}`; } catch { /* gone since it was listed */ }
+            return { inApp: true, runs: true, element: `${at.page}?v=${version}`, ...(at.project ? { files: at.project } : {}) };
+          })() : {}),
+          ...(k.page && !k.program && !k.element && k.installed && !k.core ? (() => {
             const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.page }, project ?? null);
             return { surface: at.page, ...(at.project ? { files: at.project } : {}), ...(pluginWrites(k, project ?? null) ? { writes: true } : {}) };
           })() : {}),
@@ -684,7 +695,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const on = (await readJson(req))?.on;
       if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
       const skill = await skillAt(decodeURIComponent(parts[1]));
-      if (!skill?.program) throw new HttpError(404, 'no such plugin');
+      if (!skill?.program && !skill?.element) throw new HttpError(404, 'no such plugin');
       const id = url.searchParams.get('project');
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) ?? null : null;
       try { setPluginRuns(skill, project, on); } catch (e) { throw new HttpError(409, /** @type {Error} */ (e).message); }
@@ -1444,7 +1455,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   filmOrigin = pages.origin;
   /* the plugins' origin, on the port after the film's when that one is free (a page's own storage is kept by its
      origin), else on any */
-  const pluginOptions = { secret: key, mayWrite: (/** @type {{ uid: string, source: string }} */ plugin, /** @type {{ id: string }} */ project) => pluginWrites(plugin, project) };
+  /* one let run (a program, or an element in the editor's own page) can do all the person's agent can: it writes too */
+  const pluginOptions = { secret: key, editorOrigin: () => origin, mayWrite: (/** @type {{ uid: string, source: string }} */ plugin, /** @type {{ id: string }} */ project) => pluginWrites(plugin, project) || pluginRuns(plugin, project) };
   const pluginPages = await startPluginPages({ port: port ? address.port + 2 : 0, ...pluginOptions }).catch(() => startPluginPages({ port: 0, ...pluginOptions }));
   /* the programs of plugins that bring one, started as their workbenches are shown */
   const pluginPrograms = startPluginPrograms({ bin: join(studioHome(), 'plugin-bin'), mayRun: (plugin, project) => pluginRuns(plugin, project) });

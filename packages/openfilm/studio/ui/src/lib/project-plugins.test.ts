@@ -24,6 +24,10 @@ test('a skill with a surface is a plugin: its workbench named by its uid, its sw
   const bench = skillPlugins([skill({ uid: 'local/shots', name: 'shots', program: true, runs: true })])[0]!;
   assert.deepEqual([bench.workbench, bench.page, bench.program, bench.runs], ['local/shots', undefined, true, true]);
   assert.equal(skillPlugins([skill({ uid: 'local/shots', name: 'shots', program: true })])[0]!.runs, false);
+  /* one with an element is shown in the editor's own page, from its module's address once the person lets it run */
+  const own = skillPlugins([skill({ uid: 'local/grade', name: 'grade', inApp: true, runs: true, element: 'http://localhost:1/s/t/ui.js?v=1' })])[0]!;
+  assert.deepEqual([own.workbench, own.inApp, own.runs, own.element], ['local/grade', true, true, 'http://localhost:1/s/t/ui.js?v=1']);
+  assert.deepEqual(skillPlugins([skill({ uid: 'local/grade', name: 'grade', inApp: true })]).map((p) => [p.workbench, p.runs, p.element]), [['local/grade', false, undefined]]);
   /* without words of its own, its name and what it tells the agent */
   assert.deepEqual([list[1].title, list[1].summary], [{ en: 'tool' }, { en: 'A storyboard' }]);
 });

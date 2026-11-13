@@ -6146,7 +6146,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             <div data-workspace-surface={surface} className="relative z-[3] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
               style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(freeGeometry ? null : insetStyle(dockGeometry)) }}>
               <div className="relative flex min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
-                <PluginSurface id={surface} page={surfacePlugin?.page} files={surfacePlugin?.files} program={surfacePlugin?.program} runs={surfacePlugin?.runs} projectId={projectId} folder={loaded?.project.path ?? ''} film={folder} />
+                <PluginSurface id={surface} page={surfacePlugin?.page} files={surfacePlugin?.files} program={surfacePlugin?.program} runs={surfacePlugin?.runs} inApp={surfacePlugin?.inApp} element={surfacePlugin?.element} projectId={projectId} folder={loaded?.project.path ?? ''} film={folder} />
               </div>
             </div>
           ) : null}

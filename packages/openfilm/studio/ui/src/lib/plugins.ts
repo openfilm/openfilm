@@ -19,7 +19,7 @@ export type Workbench = string;
  */
 export interface Plugin {
   id: string; title?: Record<string, string>; summary?: Record<string, string>; icon?: string;
-  workbench?: Workbench; skills: string[]; on: boolean; beta?: boolean; soon?: boolean; skill?: string; page?: string; files?: string; program?: boolean; runs?: boolean;
+  workbench?: Workbench; skills: string[]; on: boolean; beta?: boolean; soon?: boolean; skill?: string; page?: string; files?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string;
 }
 
 /** The plugins there are to turn as a new install has them, until Studio answers with every plugin. */

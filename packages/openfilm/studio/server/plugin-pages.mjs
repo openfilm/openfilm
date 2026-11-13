@@ -21,6 +21,11 @@
  * takes it only if the file is still that one (412 otherwise); `If-None-Match: *` only if there is none. It is written
  * whole, through a file beside it, and Studio then sees it as it sees an agent's write: merged with the person's edits
  * and shown (watch.mjs).
+ *
+ * A plugin's element (src/skills.mjs elementIn) is a module the editor's own page loads from `/s/`, and what it reads
+ * and writes of the project it reads and writes here as a page does. So the editor's origin is answered too: it may
+ * read both, and a write from it is taken as one from a page of this origin is. The film's origin is not: a film's
+ * pages still change nothing.
  */
 import { createHmac } from 'node:crypto';
 import { createWriteStream, realpathSync, statSync } from 'node:fs';
@@ -41,10 +46,14 @@ const tagOf = (/** @type {import('node:fs').Stats} */ stat) => `"${stat.size.toS
 /**
  * `port`: the one to listen on (0: any free one). `secret`: what tokens are signed with (Studio's key). `mayWrite`:
  * whether the person lets this plugin change this project, asked at every write.
- * @param {{ port: number, secret: string, mayWrite: (plugin: { uid: string, source: string }, project: { id: string }) => boolean }} options
+ * `editorOrigin`: the editor's origin, whose page loads plugins' elements.
+ * @param {{ port: number, secret: string, mayWrite: (plugin: { uid: string, source: string }, project: { id: string }) => boolean, editorOrigin?: () => string }} options
  */
-export async function startPluginPages({ port, secret, mayWrite }) {
-  const headers = { 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' };
+export async function startPluginPages({ port, secret, mayWrite, editorOrigin = () => '' }) {
+  const plain0 = { 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' };
+  /** What every answer says; the editor's page is let read it (its tag too). */
+  const headersFor = (/** @type {import('node:http').IncomingMessage} */ req) => (editorOrigin() && req.headers.origin === editorOrigin()
+    ? { ...plain0, 'access-control-allow-origin': editorOrigin(), 'access-control-expose-headers': 'etag', vary: 'origin' } : plain0);
   const sign = (/** @type {string} */ what) => createHmac('sha256', secret).update(`plugin origin\0${what}`).digest().subarray(0, 18).toString('base64url');
   /** @type {Map<string, string>} a plugin's token → its folder */
   const folders = new Map();
@@ -68,6 +77,7 @@ export async function startPluginPages({ port, secret, mayWrite }) {
   };
 
   const server = createServer(async (req, res) => {
+    const headers = headersFor(req);
     const own = /** @type {import('node:net').AddressInfo} */ (server.address()).port;
     if (!ownHost(req, own)) { res.writeHead(403, headers).end('not this address'); return; }
     const url = new URL(req.url ?? '/', 'http://plugins');
@@ -100,9 +110,13 @@ export async function startPluginPages({ port, secret, mayWrite }) {
       if (!folderFiles(root, { inject: '', headers: { ...headers, ...(tag ? { etag: tag } : {}) } })(req, res, path, url.searchParams)) res.writeHead(403, headers).end();
       return;
     }
+    const fromEditor = Boolean(editorOrigin()) && req.headers.origin === editorOrigin();
+    /* the editor's page asks before it writes (a browser's preflight) */
+    if (req.method === 'OPTIONS' && fromEditor) { res.writeHead(204, { ...headers, 'access-control-allow-methods': 'GET, HEAD, PUT', 'access-control-allow-headers': 'if-match, if-none-match, content-type', 'access-control-max-age': '600' }).end(); return; }
     if (req.method !== 'PUT') { res.writeHead(405, { ...headers, allow: 'GET, HEAD, PUT' }).end(); return; }
-    /* only a page of this origin writes: a browser says where a request comes from, and another site cannot say this */
-    if (req.headers.origin !== origin || (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin')) { res.writeHead(403, headers).end('Only a plugin\'s own page writes here.'); return; }
+    /* only a page of this origin writes, or the editor's (a plugin's element there): a browser says where a request
+       comes from, and another site cannot say this */
+    if (!fromEditor && (req.headers.origin !== origin || (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin'))) { res.writeHead(403, headers).end('Only a plugin\'s own page writes here.'); return; }
     if (!mayWrite(grant.plugin, grant.project)) { res.writeHead(403, headers).end('This plugin is not allowed to change the project. The person allows it on the plugin\'s page in the library.'); return; }
     const file = writable(root, plain.replace(/^\/+/, ''));
     if (!file) { res.writeHead(403, headers).end('That file cannot be written.'); return; }

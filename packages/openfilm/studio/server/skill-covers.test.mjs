@@ -154,6 +154,7 @@ test('a plugin someone made: its page on the plugins\' origin, the project read 
   });
   const PAGE = '<!doctype html><title>Board</title><script src="app.js"></script>';
   for (const [name, files] of [['board', { 'index.html': PAGE, 'app.js': 'window.board = 1;', '.env': 'SECRET=1' }], ['plain', {}], ['tool', { 'package.json': '{"bin":{"run":"run.mjs","check":"./run.mjs"}}', 'run.mjs': '' }],
+    ['own', { 'package.json': '{"browser":"ui.js"}', 'ui.js': 'export default class extends HTMLElement {}' }],
     ['bench', { 'index.html': PAGE, 'package.json': '{"scripts":{"start":"node server.mjs"}}', 'server.mjs': 'import { createServer } from "node:http"; createServer((q, r) => r.end(process.env.OPENFILM_PROJECT)).listen(Number(process.env.PORT), process.env.HOST);' }]]) {
     mkdirSync(join(variables.OPENFILM_SKILLS, name), { recursive: true });
     writeFileSync(join(variables.OPENFILM_SKILLS, name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\n---\nSteps.`);
@@ -192,6 +193,25 @@ test('a plugin someone made: its page on the plugins\' origin, the project read 
     for (let i = 0; i < 50 && !stopped; i++) { stopped = await fetch(url, { signal: AbortSignal.timeout(1000) }).then(() => false, () => true); if (!stopped) await new Promise((r) => setTimeout(r, 100)); }
     assert.ok(stopped, 'the program stopped with its plugin');
   }
+  /* one that brings an element (its package.json's `browser`): listed as in the app, its module's address given only
+     once the person lets it run; the editor's page then reads the module and the project, and writes the project */
+  const own = (await listed()).find((k) => k.uid === 'local/own');
+  assert.deepEqual([own.inApp, own.runs, own.element, own.surface], [true, undefined, undefined, undefined]);
+  assert.equal((await api('/api/skills/local%2Fown/runs', { method: 'PUT', body: { on: true } })).status, 200);
+  const let_ = (await listed()).find((k) => k.uid === 'local/own');
+  assert.ok(let_.runs && let_.element.startsWith(`${studio.pluginOrigin}/s/`) && /\/ui\.js\?v=[\w-]+$/.test(let_.element), let_.element);
+  const module = await fetch(let_.element, { headers: { origin: studio.origin } });
+  assert.equal(await module.text(), 'export default class extends HTMLElement {}');
+  assert.equal(module.headers.get('access-control-allow-origin'), studio.origin);
+  /* no other site is answered so */
+  assert.equal((await fetch(let_.element, { headers: { origin: studio.filmOrigin } })).headers.get('access-control-allow-origin'), null);
+  const fromEditor = await fetch(new URL('film.html', let_.files), { headers: { origin: studio.origin } });
+  assert.deepEqual([fromEditor.status, fromEditor.headers.get('access-control-allow-origin'), fromEditor.headers.get('access-control-expose-headers')], [200, studio.origin, 'etag']);
+  const asked = await fetch(new URL('own.md', let_.files), { method: 'OPTIONS', headers: { origin: studio.origin, 'access-control-request-method': 'PUT' } });
+  assert.deepEqual([asked.status, asked.headers.get('access-control-allow-methods')], [204, 'GET, HEAD, PUT']);
+  assert.equal((await fetch(new URL('own.md', let_.files), { method: 'PUT', body: 'from the app', headers: { origin: studio.origin } })).status, 201);
+  assert.equal(readFileSync(join(project.path, 'own.md'), 'utf8'), 'from the app');
+  assert.equal((await fetch(new URL('own.md', let_.files), { method: 'PUT', body: 'x', headers: { origin: studio.filmOrigin } })).status, 403);
   /* OpenFilm's own are not plugins of this kind */
   assert.ok((await listed()).filter((k) => k.core).every((k) => k.surface === undefined && k.commands === undefined));
 

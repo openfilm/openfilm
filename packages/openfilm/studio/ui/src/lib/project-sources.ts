@@ -70,6 +70,8 @@ export type SkillEntry = {
   commands?: string[];
   /** it brings a program that serves its surface (started by `startPlugin`); `runs`: the person lets it run */
   program?: true; runs?: true;
+  /** it brings an element put in the editor's own page (`inApp`); `element`: where its module is, once the person lets it run */
+  inApp?: true; element?: string;
   /** where its source can be read (a repository's address) */
   repository?: string;
   /** what it needs beyond OpenFilm, by language; the computers it runs on (none: every one), and whether this one is not among them */

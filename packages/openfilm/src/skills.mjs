@@ -85,10 +85,25 @@ export function commandsIn(folder, name) {
 /**
  * Whether a skill is a plugin. A skill is what an agent is taught, with any scripts and commands it runs: it shows
  * nowhere but in the conversation. A plugin is a package that also shows outside it: a surface the person works in
- * (its page, or what its program serves). Commands alone leave a skill a skill.
- * @param {{ page?: string, program?: string }} skill
+ * (its page, its element in the app, or what its program serves). Commands alone leave a skill a skill.
+ * @param {{ page?: string, program?: string, element?: string }} skill
  */
-export const isPlugin = (skill) => Boolean(skill.page || skill.program);
+export const isPlugin = (skill) => Boolean(skill.page || skill.program || skill.element);
+
+/**
+ * The element a plugin brings: its package.json's `browser`, npm's own field for what a browser loads, a JavaScript
+ * module in its folder whose default export is a custom element (a class that extends HTMLElement). Studio loads it
+ * into its own page and puts the element where the plugin's workbench is: in the app itself, not in a frame, so it
+ * can do all that OpenFilm's own workbenches do, which are loaded the same way. For that it runs only once the
+ * person lets this plugin run (pluginRuns). A file that is not there: undefined.
+ * @param {string} folder @returns {string | undefined} the module, in the folder
+ */
+export function elementIn(folder) {
+  try {
+    const browser = JSON.parse(readFileSync(join(folder, 'package.json'), 'utf8'))?.browser;
+    return typeof browser === 'string' ? fileIn(folder, browser.replace(/^\.\//, '')) ?? undefined : undefined;
+  } catch { return undefined; }
+}
 
 /**
  * The program a plugin brings: its package.json's `scripts.start`, npm's own field, a command line run in its folder
@@ -323,11 +338,11 @@ export function parseSkillFile(text) {
 
 /**
  * @typedef {{ uid: string, name: string, description: string, folder: string, source: SkillSource, file: string,
- *   scripts: string[], over?: SkillSource[], shown?: SkillShown, version?: string, page?: string, commands?: Record<string, string>, program?: string } & SkillLook} Skill
+ *   scripts: string[], over?: SkillSource[], shown?: SkillShown, version?: string, page?: string, commands?: Record<string, string>, program?: string, element?: string } & SkillLook} Skill
  *   `uid`: whose it is and its name (SKILL_UID). `over`: the places that had the same skill (its uid), which this one
  *   takes the place of. `version`: its openfilm.json's, else its front matter's. `page`: its surface (SKILL_PAGE), when
- *   it has one. `commands`: the commands it brings (commandsIn), by name. `program`: the program it brings (programIn). One with a
- *   page or a program is a plugin (isPlugin).
+ *   it has one. `commands`: the commands it brings (commandsIn), by name. `program`: the program it brings (programIn). `element`: the element it brings
+ *   (elementIn). One with a page, a program or an element is a plugin (isPlugin).
  * @typedef {{ title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string> }} SkillShown
  *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title, a one-line summary and a few lines
  *   on who it is for and what it does, by language (`en`, `zh-CN`…); the SKILL.md's description is for the agent
@@ -397,7 +412,7 @@ export function readSkill(folder, source) {
   const from = source === 'official' ? skillSource(folder) : null;
   const origin = source === 'mine' ? skillOrigins(dirname(folder))[basename(folder)] : from ? { from: /** @type {const} */ ('link'), address: from.repo } : undefined;
   return { uid: skillUid(source, name, origin), name, description: (fields.description ?? '').trim(), folder, source, file, scripts: scriptsIn(folder), ...extra,
-    ...(existsSync(join(folder, SKILL_PAGE)) ? { page: SKILL_PAGE } : {}), ...(commandsIn(folder, name) ? { commands: commandsIn(folder, name) } : {}), ...(programIn(folder) ? { program: programIn(folder) } : {}) };
+    ...(existsSync(join(folder, SKILL_PAGE)) ? { page: SKILL_PAGE } : {}), ...(commandsIn(folder, name) ? { commands: commandsIn(folder, name) } : {}), ...(programIn(folder) ? { program: programIn(folder) } : {}), ...(elementIn(folder) ? { element: elementIn(folder) } : {}) };
 }
 
 /** The scripts a skill brings (any file under scripts/, and executables anywhere), for the person to see. */
