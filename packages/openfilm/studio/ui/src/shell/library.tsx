@@ -136,12 +136,13 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     canvasOpen, setCanvasOpen, requestCanvasFiles,
     refOfFile, referOutside, onLibraryDownloadFailed, saveFiles,
     mediaScope, switchMedia, revealMedia, mediaRevealed, scopedListing, savedListing, savedImport, skillsShown,
+    setSettingsOpen,
   } = frame;
   /* a file of the media pane clicked is taken in hand by the workbench shown (its viewer shows it): by none, nothing */
   const pickFile = React.useCallback((file: WorkspaceResource | null) => { wiringStore.get()?.library?.pick(file); }, []);
   const pickSavedFile = React.useCallback((file: WorkspaceResource | null) => { wiringStore.get()?.library?.pick(file, { saved: true }); }, []);
   const pauseWorkbench = React.useCallback(() => { wiringStore.get()?.pause?.(); }, []);
-  const openServices = React.useCallback(() => { wiringStore.get()?.openSettings?.('models'); }, []);
+  const openServices = React.useCallback(() => { setSettingsOpen('models'); }, [setSettingsOpen]);
   /* where the drawer writes the way out of a try when no workbench has a place for it */
   const noDismiss = React.useRef<() => boolean>(() => false);
   const pane = wiring?.libraryPane;

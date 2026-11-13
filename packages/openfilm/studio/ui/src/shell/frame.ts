@@ -4,17 +4,16 @@
  * read with useSyncExternalStore.
  *
  * The frame is what the shell holds of the project for any workbench (shell/ProjectFrame: its files, how they were
- * made, the media pane's file operations, the toast, which workbench is shown, the library): the shell writes it, a
- * workbench reads it with `useFrame`. The wiring is what the workbench shown lets the shell reach of its own: that
- * workbench writes it, and the shell reads it when it needs it (`wiringStore.get()` inside a callback or an effect,
- * `useWiring` to draw), so nothing of a workbench's is held here.
+ * made, the media pane's file operations, the toast, which workbench is shown, the library, the page's own windows):
+ * the shell writes it, a workbench reads it with `useFrame`. The wiring is what the workbench shown lets the shell
+ * reach of its own: that workbench writes it, and the shell reads it when it needs it (`wiringStore.get()` inside a
+ * callback or an effect, `useWiring` to draw), so nothing of a workbench's is held here.
  *
  * Both are written in a layout effect, so the other side is drawn with the new value before the page is painted.
  */
 import * as React from 'react';
 import type { CaptionsActions } from '@/components/library/CaptionsPane';
 import type { LibraryActions } from '@/components/library/LibraryDrawer';
-import type { SettingsSection } from '@/components/settings/SettingsModal';
 import type { LibraryVoice, VoiceAccess } from '@/lib/library-voices';
 import type { DockRect } from '@/lib/workspace-dock';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
@@ -109,10 +108,23 @@ export interface Wiring {
   addToFilm?: (file: WorkspaceResource) => void;
   /** Put a cut of the canvas in the film, its files one after the other, then show the film. */
   sendToFilm?: (files: WorkspaceResource[]) => void;
-  /** Open Settings on a section. */
-  openSettings?: (section: SettingsSection) => void;
   /** The app's own panel beside the workbench (none: the app has no such panel): whether it is open, and the way to open or fold it. */
   chat?: { open: boolean; toggle: () => void };
+  /**
+   * What the workbench has on the page's top bar, which the shell draws (shell/top-bar). `tools`: its own buttons, drawn
+   * before the workbench switch. `menu`: a menu of its own that pops up at the pointer, kept in the bar (a right click
+   * on it is quiet, as on the bar). Both are drawn in the shell's React root, so nothing in them reads a context of the
+   * workbench's; each is the same one until what it shows changes. `film`: what the workbench knows of the film, said on
+   * the project's card. `coverFromFrame`: make the picture at the playhead the project's cover. `layoutEditing`: its
+   * panes are being rearranged, and the switch waits.
+   */
+  topBar?: {
+    tools: React.ReactNode;
+    menu: React.ReactNode;
+    film: { durationMs: number; stage: { w: number; h: number }; fps: number; clips: number };
+    coverFromFrame: () => void;
+    layoutEditing: boolean;
+  };
   /**
    * How the workbench lays the window out, for what the shell draws in the panes' place: the room kept round the panes
    * with the edit shown (`edit`) and with the canvas shown (`canvas`), and the canvas's own frame where the panes float

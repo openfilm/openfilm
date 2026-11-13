@@ -171,7 +171,7 @@ export function InPanesPlace({ frame }: { frame: ReturnType<typeof useProjectFra
   const t = useT();
   const wiring = useWiring('places', 'chat');
   const {
-    projectId, loaded, failure, folder, listing, mediaSources, onImport, toast, showFile,
+    projectId, loaded, failure, folder, listing, mediaSources, onImport, toast, showFile, setSettingsOpen,
     surface, surfacePlugin, noBench, away, canvasOpen, canvasKept, canvasFocus, canvasInsert, canvasAddFiles,
   } = frame;
   const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
@@ -207,7 +207,7 @@ export function InPanesPlace({ frame }: { frame: ReturnType<typeof useProjectFra
             <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
               <React.Suspense fallback={<CanvasLoading />}>
                 <CanvasView shown={canvasOpen} projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { wiringStore.get()?.addToFilm?.(file); }}
-                  onImportFiles={(dropped, progress = () => {}) => onImport(dropped, 'assets', progress)} onOpenSettings={() => wiringStore.get()?.openSettings?.('models')}
+                  onImportFiles={(dropped, progress = () => {}) => onImport(dropped, 'assets', progress)} onOpenSettings={() => setSettingsOpen('models')}
                   focus={canvasFocus} insert={canvasInsert} addFiles={canvasAddFiles} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
                   onSendToFilm={(list) => { wiringStore.get()?.sendToFilm?.(list); }} onReveal={(path) => showFile(path, true)}
                   {...(chat ? { chat } : {})}

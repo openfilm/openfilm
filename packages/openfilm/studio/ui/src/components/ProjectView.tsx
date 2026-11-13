@@ -8,7 +8,7 @@
  */
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
-import { BookmarkPlus, ChartSpline, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Diamond, Eye, EyeOff, FolderOpen, Layers, Lock, LockOpen, MessageSquarePlus, MonitorDown, Plus, Scissors, Settings2, Spline, TriangleAlert, Upload, Workflow } from 'lucide-react';
+import { BookmarkPlus, ChartSpline, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Diamond, Eye, EyeOff, FolderOpen, Layers, Lock, LockOpen, MessageSquarePlus, Plus, Settings2, Spline, TriangleAlert, Upload } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, withAnimations, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
@@ -86,11 +86,7 @@ import { canvasFor, firstPictureSize, fitToCanvas } from '@/lib/canvas-fit';
 import { positionOf } from '@/lib/stage-crop';
 import { createViewerZoom } from '@/lib/viewer-zoom';
 import { factsOfProbe, resourceKindOf, srcHitsAsset, type WorkspaceResource } from '@/lib/workspace-resources';
-import { SettingsModal, type SettingsSection } from './settings/SettingsModal';
-import { useSettings } from './settings/use-settings';
-import { DesktopDialog } from './DesktopDialog';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
-import { readCanvasDoc } from '../lib/canvas';
 import { studioHost, useHostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
 import { clipRef, layerRef, markRange, momentRef, rangeRef, regionRef, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
@@ -111,13 +107,7 @@ import { defaultDockTree, dockFrames, visibleDockPanels, type DockPanel } from '
 import { WorkspaceEditor, WorkspaceSeams } from './WorkspaceEditor';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
-import { ModeSwitcher } from './ModeSwitcher';
 import { MotionPanel } from './MotionPanel';
-import { ProjectTitle } from './ProjectTitle';
-import { ProjectTabs } from './ProjectTabs';
-import tabStyles from './ProjectTabs.module.css';
-import { AppMenu } from './AppMenu';
-import { UpdateButton, WebUpdateButton } from './UpdateButton';
 import { LayersPanel } from './LayersPanel';
 import type { LayerRow, LayerSelection } from '@/lib/layers-tree';
 import { SourcePreview } from './SourcePreview';
@@ -131,12 +121,10 @@ import { ProjectLayoutMenu } from './ProjectLayoutMenu';
 import { ProjectHistoryButton, ProjectHistoryControls } from './ProjectHistoryControls';
 import { useProjectHistory } from './use-project-history';
 import { historyMoved } from '@/lib/project-history';
-import { ProjectsPopover } from './ProjectsLibrary';
 import { FilmFullscreenBar, useFullscreenKeys } from './FilmFullscreenBar';
 import { ViewerBar } from './ViewerBar';
 import { ViewerZoom, ViewerZoomButton } from './ViewerZoom';
 import type { PlaybackClock } from './LiveTime';
-import { SpendAsks } from './SpendAsks';
 import { ExportCenter } from './export/ExportCenter';
 import { PasteAttrsDialog } from './PasteAttrsDialog';
 import { ExportTray, type ExportTrayHandle } from './export/ExportTray';
@@ -251,11 +239,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const {
     toast, showToast, loaded, setLoaded, failure, setFailure, filesTick, setFilesTick, rawListing, setRawListing, facts, proxies, onUndecoded, prefsTick,
     folder, mediaSources, listing, mediaMade, setMissingMedia, findMissing,
-    projectApi, onPick, onBring, onImport, coverSet, reveal,
+    projectApi, onPick, onBring, onImport, coverSet,
     slots,
     canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, noBench, surface, showWorkbench, away,
-    benchPlugins, pickBench, canToggleCanvas, setCanvasFocus, setCanvasInsert,
+    setCanvasFocus,
     libraryIndex, setRevealMedia, showFile, setSkillsShown, saveThings, onLibraryDownloadFailed,
+    title, setProjectsOpen, setSettingsOpen,
   } = useFrame(projectId);
   const keyHint = useKeyHint();
   /* the latest onLeave, for the folder's events (subscribed once per project) */
@@ -4982,43 +4971,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, []);
 
   /* ── top bar: title, menus, panels ── */
-  const [renaming, setRenaming] = React.useState(false);
-  const [titleDraft, setTitleDraft] = React.useState('');
-  const title = loaded?.project.name ?? '';
   /* the film as a whole, for the inspector when nothing is selected, and its tracks' badges */
   const filmSummary = React.useMemo(() => {
     const tracks = film.film?.tracks ?? [];
     return { title, durationMs: totalMs, tracks: tracks.length, clips: tracks.reduce((n, tr) => n + tr.clips.length, 0), empty, badges: filmTrackBadges(tracks) };
   }, [title, totalMs, film.film?.tracks, empty]);
-  const startRename = () => { setTitleDraft(title); setRenaming(true); };
   /* the film at the playhead, drawn by Studio as the projects list will show it */
   const coverFromFrame = () => {
     if (previewError || totalMs <= 0) { toast.show(t('project.filmNotReady')); return; }
     void api.setCover(projectId, { ms: Math.max(0, Math.min(totalMs - 1, timeRef.current)) })
       .then(coverSet, () => toast.showError(t('projects.coverFailed')));
   };
-  /* the app's "New Tab" (its menu): the projects, to pick what the new tab shows */
-  React.useEffect(() => studioHost?.tabs?.onPick(() => setProjectsOpen(true)), []);
-  React.useEffect(() => { if (title) studioHost?.tabs?.report({ title }); }, [title]);
-  const renameError = (e: unknown, name: string) =>
-    toast.showError(e instanceof ApiError && e.body.code === 'agent-running' ? t('projects.agentRunningRename')
-      : e instanceof ApiError && e.body.code === 'export-running' ? t('projects.exportRunningRename')
-      : e instanceof ApiError && e.status === 409 ? t('projects.renameTaken').replace('{name}', name) : t('project.renameFailed'));
-  const commitTitle = async (draft = titleDraft) => {
-    setRenaming(false);
-    const next = draft.trim();
-    if (!next || next === title || !loaded) return false;
-    setLoaded({ ...loaded, project: { ...loaded.project, name: next } });
-    try { const project = await api.rename(projectId, next); setLoaded((l) => (l ? { ...l, project } : l)); return true; }
-    catch (e) {
-      setLoaded((l) => (l ? { ...l, project: { ...l.project, name: title } } : l));
-      renameError(e, next);
-      return false;
-    }
-  };
-  /* the projects window: closed, open on the projects (true), or on the examples (and one example's page) */
-  const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string }>(false);
-  const [settingsOpen, setSettingsOpen] = useSettings();
   /* captions of what is said (the library's captions): what went wrong, shown there; with no service to transcribe, it opens Services */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
   const [captionsMaking, setCaptionsMaking] = React.useState(false);
@@ -5063,7 +5026,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       if (translate) await translateTrack(src ? { src } : { text: await file.text(), name: `${file.name.replace(/\.[^.]+$/, '')}.${translate}` }, translate);
     } finally { setCaptionsMaking(false); }
   }, [newCaptionTrack, translateTrack]);
-  const [desktopOpen, setDesktopOpen] = React.useState(false);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const history = useProjectHistory(projectId, { onError: toast.showError, beforeChange: film.settled });
   const forgetSteps = React.useRef(film.forget);
@@ -5120,11 +5082,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
   /* what the shell reaches of the edit when it needs it (shell/frame): the picture drawn again, the files the film
      plays; what changing the workbench shown asks of the edit (playing stopped, the panes being rearranged, Motion's
-     panes opened); what the canvas does here (a file or a cut put in the film, Settings opened, the app's panel);
-     where the shell draws what takes the panes' place, as the window is laid out here; and what the library does
-     here, with where its pane is (below). The edit's own functions are called as the latest render made them */
-  const forShell = React.useRef({ addFromCanvas, sendFromCanvas, setSettingsOpen, hostPanel, openLibrary });
-  forShell.current = { addFromCanvas, sendFromCanvas, setSettingsOpen, hostPanel, openLibrary };
+     panes opened); what the canvas does here (a file or a cut put in the film, the app's panel); where the shell
+     draws what takes the panes' place, as the window is laid out here; what the library does here, with where its
+     pane is; and what the edit has on the top bar (below). The edit's own functions are called as the latest render
+     made them */
+  const forShell = React.useRef({ addFromCanvas, sendFromCanvas, hostPanel, openLibrary });
+  forShell.current = { addFromCanvas, sendFromCanvas, hostPanel, openLibrary };
   const chatThere = Boolean(hostPanel);
   const chatOpen = Boolean(hostPanel?.open);
   const shellChat = React.useMemo(() => (chatThere ? { open: chatOpen, toggle: () => forShell.current.hostPanel?.setOpen(!chatOpen) } : undefined), [chatThere, chatOpen]);
@@ -5171,6 +5134,43 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     onResize: (size: { assetsWidth?: number; libraryHeight?: number }) => updateWorkspaceRef.current(size),
     setPanelWidth: (width: number, done?: boolean) => { forShell.current.hostPanel?.setWidth(width, done); },
   }), [libraryPaneKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the top bar is the shell's (shell/top-bar); what the edit has on it is given here, and drawn there in the shell's
+     own React root: the edit's own buttons (its panes' layout, its versions, its export and the exports' tray: the
+     canvas has its own bars), the picked keyframes' menu, which is kept in the bar, what the edit knows of the film
+     for the project's card, and the picture at the playhead made the cover. Each the same one until what it shows
+     changes: the buttons call the edit's functions as the latest render made them */
+  const barDoes = useSteady({
+    applyWorkspace, resetWorkspace, beginLayoutEdit, openHistory, coverFromFrame,
+    askExport: () => {
+      if (previewError) toast.showError(`${t('project.filmCannotExport')} ${previewError}`);
+      else if (totalMs > 0) setExportOpen(true);
+      else toast.show(t('project.filmNotReady'));
+    },
+  });
+  const layoutEditing = Boolean(layoutDraft.draft);
+  const layoutKey = JSON.stringify(workspaceLayout);
+  const fitHeight = fitTimelineHeight.current;
+  const editAway = canvasOpen || away;
+  const topBarTools = React.useMemo(() => (<>
+    <ProjectLayoutMenu className={TOP_BTN}
+      value={workspaceLayout} onChange={barDoes.applyWorkspace} onReset={barDoes.resetWorkspace}
+      hasChat={chatThere} viewport={workspaceViewport} timelineFitHeight={fitHeight} inspectorIdle={inspectorIdle} onEdit={barDoes.beginLayoutEdit} layoutEditing={layoutEditing} storageFailed={workspaceStorageFailed} />
+    {editAway ? null : (<>
+    <ProjectHistoryButton open={historyOpen} onClick={barDoes.openHistory} className={TOP_BTN} />
+    <Tooltip label={t('projectMenu.export')} side="bottom">
+      <button type="button" aria-label={t('projectMenu.export')} aria-haspopup="dialog" aria-expanded={exportOpen} className={TOP_BTN}
+        onClick={() => barDoes.askExport()}>
+        <Upload size={16} />
+      </button>
+    </Tooltip>
+    </>)}
+    <ExportTray ref={exportTrayRef} projectId={projectId} onError={showError} />
+  </>), [barDoes, layoutKey, chatThere, workspaceViewport, fitHeight, inspectorIdle, layoutEditing, workspaceStorageFailed, editAway, historyOpen, exportOpen, projectId, showError, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* open only for a moment: made anew by each render meanwhile */
+  const topBarMenu = keyMenu ? <ContextMenu x={keyMenu.x} y={keyMenu.y} dense items={keyMenuItems} onClose={() => setKeyMenu(null)} /> : null;
+  const stageW = stage.w, stageH = stage.h, filmClips = filmSummary.clips;
+  const topBarFilm = React.useMemo(() => ({ durationMs: totalMs, stage: { w: stageW, h: stageH }, fps: projectFps, clips: filmClips }), [totalMs, stageW, stageH, projectFps, filmClips]);
+  const shellTopBar = React.useMemo(() => ({ tools: topBarTools, menu: topBarMenu, film: topBarFilm, coverFromFrame: barDoes.coverFromFrame, layoutEditing }), [topBarTools, topBarMenu, topBarFilm, barDoes, layoutEditing]);
   usePublishWiring(React.useMemo(() => ({
     reloadPicture: () => preview.current?.reload?.(),
     srcsInUse: () => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])),
@@ -5179,16 +5179,15 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     motionShown: () => updateWorkspaceRef.current({ timeline: true, inspector: true }),
     addToFilm: (file: WorkspaceResource) => { void forShell.current.addFromCanvas(file); },
     sendToFilm: (list: WorkspaceResource[]) => { void forShell.current.sendFromCanvas(list); },
-    openSettings: (section: SettingsSection) => forShell.current.setSettingsOpen(section),
     ...(shellChat ? { chat: shellChat } : {}),
     places: shellPlaces,
     library: shellLibrary,
     libraryPane: shellLibraryPane,
-  }), [shellChat, shellPlaces, shellLibrary, shellLibraryPane]));
+    topBar: shellTopBar,
+  }), [shellChat, shellPlaces, shellLibrary, shellLibraryPane, shellTopBar]));
 
-  /* The page is the shell's (shell/ProjectFrame): what is drawn here goes into the places it keeps. In the edit's own
-     element are only the edit's panes; the top bar and what lies over the page are put into the shell's places from
-     here until each is the shell's own. */
+  /* The page is the shell's (shell/ProjectFrame), and so is its top bar (shell/top-bar). In the edit's own element are
+     only the edit's panes; the edit's own dialogs, which lie over the page, are put into the shell's places from here. */
   if (failure) {
     return ReactDOM.createPortal(
       <div data-page-ready="error" className="workspace-shell flex flex-col items-center justify-center gap-3 bg-[var(--bg-app)] text-[13px] text-[var(--text-muted)]">
@@ -5203,72 +5202,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
   const value = film.film;
   const viewerReady = Boolean(info);
-  const projectTitle = <ProjectTitle tab={Boolean(studioHost?.tabs)} name={title} editing={renaming} draft={titleDraft} onDraft={setTitleDraft}
-    onRename={startRename} onCommit={() => void commitTitle()} onCancel={() => setRenaming(false)}
-    facts={{ project: loaded.project, durationMs: totalMs, stage, fps: projectFps, clips: filmSummary.clips }}
-    actions={{ onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') }}
-    onAll={() => setProjectsOpen(true)} />;
   return (
     <>
-        {ReactDOM.createPortal(<>
-          {/* The desktop's tabs share the left edge; a browser keeps the project title centered. */}
-          <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 bg-[var(--bg-titlebar)] px-[6px]" style={{ gridArea: 'bar', ...(studioHost?.tabs ? { gap: 0 } : {}) }} onContextMenu={event => event.preventDefault()}>
-            {/* The title and arrow open the same project card on click. */}
-            {!studioHost?.tabs ? <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
-              <div className="pointer-events-auto flex min-w-0 max-w-full items-center">
-                {projectTitle}
-              </div>
-            </div> : null}
-            {keyMenu ? <ContextMenu x={keyMenu.x} y={keyMenu.y} dense items={keyMenuItems} onClose={() => setKeyMenu(null)} /> : null}
-            {/* the window's controls over this, then the app menu */}
-            <div aria-hidden className={studioHost?.tabs ? tabStyles.windowSpace : 'shrink-0 self-stretch'} style={{ width: 'var(--titlebar-logo-x)' }} />
-            <div className={studioHost?.tabs ? tabStyles.system : 'pointer-events-auto relative flex min-w-0 items-center'}><AppMenu onSettings={setSettingsOpen} /></div>
-            {studioHost?.tabs ? <ProjectTabs current={projectTitle} onProjects={() => setProjectsOpen(true)} onRenameCurrent={startRename} onCoverCurrent={coverFromFrame} /> : null}
-            <div className="pointer-events-auto relative flex min-w-0 items-center gap-1">
-              <UpdateButton />
-              <WebUpdateButton />
-              {!studioHost && <Tooltip label={t('desktop.title')} side="bottom">
-                <button type="button" aria-haspopup="dialog" onClick={() => setDesktopOpen(true)}
-                  className={`flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${desktopOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
-                  <MonitorDown size={14} />
-                  {t('nav.desktop')}
-                </button>
-              </Tooltip>}
-            </div>
-            <div className="min-w-0 flex-1" />
-            <div className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
-              {/* the edit's own: its panes, its versions, its export (the canvas has its own bars) */}
-              <ProjectLayoutMenu className={TOP_BTN}
-                value={workspaceLayout} onChange={applyWorkspace} onReset={resetWorkspace}
-                hasChat={Boolean(hostPanel)} viewport={workspaceViewport} timelineFitHeight={fitTimelineHeight.current} inspectorIdle={inspectorIdle} onEdit={beginLayoutEdit} layoutEditing={Boolean(layoutDraft.draft)} storageFailed={workspaceStorageFailed} />
-              {canvasOpen || away ? null : (<>
-              <ProjectHistoryButton open={historyOpen} onClick={openHistory} className={TOP_BTN} />
-              <Tooltip label={t('projectMenu.export')} side="bottom">
-                <button type="button" aria-label={t('projectMenu.export')} aria-haspopup="dialog" aria-expanded={exportOpen} className={TOP_BTN}
-                  onClick={() => {
-                    if (previewError) toast.showError(`${t('project.filmCannotExport')} ${previewError}`);
-                    else if (totalMs > 0) setExportOpen(true);
-                    else toast.show(t('project.filmNotReady'));
-                  }}>
-                  <Upload size={16} />
-                </button>
-              </Tooltip>
-              </>)}
-              <ExportTray ref={exportTrayRef} projectId={projectId} onError={toast.showError} />
-              {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
-              {pickBench ? <ModeSwitcher now={surface ?? (canvasOpen ? 'canvas' : 'edit')} plugins={benchPlugins} onPick={showWorkbench} disabled={Boolean(layoutDraft.draft)} />
-                : canToggleCanvas ? <Tooltip label={[t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas'), keyHint('work-mode')].filter(Boolean).join(' · ')} side="bottom">
-                <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} disabled={Boolean(layoutDraft.draft)} onClick={() => setCanvasOpen(!canvasOpen)}
-                  className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
-                  {canvasOpen ? <Workflow size={14} /> : <Scissors size={14} />}
-                  {t(canvasOpen ? 'canvas.title' : 'canvas.editTitle')}
-                </button>
-              </Tooltip> : null}
-            </div>
-            <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
-          </div>
-        </>, slots.top)}
-
           {/* the panes, edge to edge on the board of lines (--dock-line): a line under the top bar, and one beside the
               app's own panel (lib/host.ts `panel`), which sits left of this, under the top bar: room left for it */}
           <section ref={dockColRef} inert={canvasOpen || away} aria-hidden={canvasOpen || away} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
@@ -5729,18 +5664,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       <ProjectHistoryControls projectId={projectId} projectName={loaded?.project.name ?? ''} history={history} open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         onOpenProject={(id) => { setHistoryOpen(false); if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }} />
-      <ProjectsPopover open={projectsOpen !== false} currentProjectId={projectId}
-        {...(typeof projectsOpen === 'object' ? { examples: projectsOpen } : {})}
-        onOpen={(id) => { if (!studioHost?.tabs) setProjectsOpen(false); onProject(id); }} onCurrentRemoved={onLeave} onClose={() => setProjectsOpen(false)}
-        onUseCanvas={(example) => {
-          setProjectsOpen(false);
-          void api.exampleCanvasInto(projectId, example.id).then((raw) => {
-            setCanvasOpen(true);
-            setCanvasInsert({ doc: readCanvasDoc(raw), n: Date.now() });
-            toast.show(t('canvas.exampleCopied').replace('{folder}', `assets/examples/${example.id}/`));
-          }, (e: unknown) => toast.showError(e instanceof Error ? e.message : String(e)));
-        }} />
-      <SettingsModal open={settingsOpen !== null} section={settingsOpen ?? undefined} onClose={() => setSettingsOpen(null)} />
       {templateAsk ? (
         <TemplatePicker
           name={templateAsk.name}
@@ -5756,13 +5679,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         />
       ) : null}
       </>, slots.over)}
-      {/* the library's pane is the shell's (shell/library), drawn between these two places */}
+      {/* the page's own windows and the library's pane are the shell's (shell/top-bar, shell/library), drawn between
+          these two places */}
       {ReactDOM.createPortal(<>
       {freeGeometry && workspacePrefs.tree ? <WorkspaceSeams tree={workspacePrefs.tree} frames={freeGeometry} editing={Boolean(layoutDraft.draft)} onChange={tree => updateWorkspace({ tree })} onCheckpoint={layoutDraft.draft ? layoutDraft.checkpoint : undefined} /> : null}
       {layoutDraft.draft && freeGeometry ? <WorkspaceEditor value={layoutDraft.draft} frames={freeGeometry} hasChat={Boolean(hostPanel)} onChange={layoutDraft.change}
         onDone={finishLayoutEdit} onCancel={cancelLayoutEdit} onUndo={layoutDraft.undo} onRedo={layoutDraft.redo} canUndo={layoutDraft.canUndo} canRedo={layoutDraft.canRedo}
         onReset={() => { const next=defaultWorkspace(workspaceMode); layoutDraft.change({ ...next, tree:defaultDockTree(next,fitTimelineHeight.current) }); }} /> : null}
-      <DesktopDialog open={desktopOpen} onClose={() => setDesktopOpen(false)} />
       <ExportCenter
         open={exportOpen}
         onClose={() => { setExportOpen(false); setExportClipId(null); }}
@@ -5781,7 +5704,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         missingFiles={[...mediaTrouble].flatMap(([src, why]) => (why === 'missing' ? [src] : []))}
       />
       <PasteAttrsDialog attrs={pasteAttrsOpen ? copiedAttrs : null} onPaste={doPasteAttrs} onCancel={() => setPasteAttrsOpen(false)} />
-      <SpendAsks projectId={projectId} />
       </>, slots.overLibrary)}
     </>
   );

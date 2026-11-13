@@ -16,7 +16,8 @@ export default class EditWorkbench extends HTMLElement {
     if (!projectId || this.#root) return;
     /* its panes lay themselves out in the window: the element itself takes no room */
     this.style.display = 'contents';
-    this.#root = createRoot(this);
+    /* ids made in this root are told apart from the shell's (React's useId counts from the start in each root) */
+    this.#root = createRoot(this, { identifierPrefix: 'edit-' });
     this.#root.render(<StrictMode><ProjectView projectId={projectId} onProject={openProject} onLeave={leaveProject} /></StrictMode>);
   }
 

@@ -3,8 +3,8 @@
  * through shell/frame. Its files as the folder lists them, with what is known of each (its media facts, its proxy, how
  * it was made); the media pane's operations on them (bring in, link, move, delete, reveal); the project as it was read;
  * and the toast, which the shell draws. Which workbench is shown, and what takes the panes' place when it is not the
- * edit (the canvas, a plugin's surface), are the shell's too (shell/workbenches), and so is the library, its pane and
- * its drawer (shell/library).
+ * edit (the canvas, a plugin's surface), are the shell's too (shell/workbenches), and so are the library, its pane and
+ * its drawer (shell/library), and the top bar with the page's own windows (shell/top-bar).
  *
  * For now the project and its files are still read by the edit (ProjectView: the same events redraw its picture), which
  * puts them here with the setters this frame gives it. What a workbench has that an operation here needs (its picture
@@ -24,6 +24,7 @@ import { Toast, useToast } from '@/components/Toast';
 import { BrandLoadingScreen } from '@/components/BrandLoadingScreen';
 import { usePublishFrame, wiringStore } from './frame';
 import { LibraryPlace, useLibraryShown } from './library';
+import { PageAsks, PageWindows, TopBar, usePageWindows } from './top-bar';
 import { InPanesPlace, useWorkbenchShown } from './workbenches';
 
 /** What the shell holds of the project `projectId`: every name a workbench is given of it (shell/frame's `Frame`). */
@@ -290,15 +291,17 @@ export function useProjectFrame(projectId: string) {
   /* ── the library: what its pane shows of the project, whichever workbench is shown (shell/library) ── */
   const library = useLibraryShown(projectId, { listing, mediaSources, mediaMade, toast, canvasOpen: shown.canvasOpen });
 
+  /* ── the page's own windows (the projects, Settings, the desktop app's dialog), and the project's name (shell/top-bar) ── */
+  const windows = usePageWindows(loaded);
+
   /* ── the page's places: what a workbench draws outside its own element goes into one of them ── */
   const [slotPage, setSlotPage] = React.useState<HTMLDivElement | null>(null);
-  const [slotTop, setSlotTop] = React.useState<HTMLDivElement | null>(null);
   const [slotOver, setSlotOver] = React.useState<HTMLDivElement | null>(null);
   const [slotOverLibrary, setSlotOverLibrary] = React.useState<HTMLDivElement | null>(null);
-  /** `page`: in the page's stead (it could not be read). `top`: the top bar. `over`: over the page (dialogs), before
-   *  the library's pane, which the shell draws; `overLibrary`: over the page after it (what is laid over the pane). */
-  const slots = React.useMemo(() => (slotPage && slotTop && slotOver && slotOverLibrary ? { page: slotPage, top: slotTop, over: slotOver, overLibrary: slotOverLibrary } : null), [slotPage, slotTop, slotOver, slotOverLibrary]);
-  const slotRefs = React.useMemo(() => ({ page: setSlotPage, top: setSlotTop, over: setSlotOver, overLibrary: setSlotOverLibrary }), []);
+  /** `page`: in the page's stead (it could not be read). `over`: over the page (dialogs), before the page's own windows
+   *  and the library's pane, which the shell draws; `overLibrary`: over the page after the pane (what is laid over it). */
+  const slots = React.useMemo(() => (slotPage && slotOver && slotOverLibrary ? { page: slotPage, over: slotOver, overLibrary: slotOverLibrary } : null), [slotPage, slotOver, slotOverLibrary]);
+  const slotRefs = React.useMemo(() => ({ page: setSlotPage, over: setSlotOver, overLibrary: setSlotOverLibrary }), []);
 
   return {
     projectId, toast, showToast, slots, slotRefs,
@@ -308,6 +311,7 @@ export function useProjectFrame(projectId: string) {
     projectApi, onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, coverSet, onSetCover, onNewFolder, reveal,
     ...shown,
     ...library,
+    ...windows,
   };
 }
 
@@ -315,10 +319,10 @@ export function useProjectFrame(projectId: string) {
 const PLACE = { display: 'contents' } as const;
 
 /**
- * The project's page: its frame told, and the page itself, which is the shell's. The workbench's element (`children`)
- * goes where the panes are, and after it what takes their place (shell/workbenches); the library's pane is drawn over
- * the page (shell/library); the other places are filled by the workbench for now (see `slots`), each until it is the
- * shell's own. Nothing of a workbench is drawn before the frame is told with its places, so one never reads an empty
+ * The project's page: its frame told, and the page itself, which is the shell's. The top bar is drawn first
+ * (shell/top-bar); the workbench's element (`children`) goes where the panes are, and after it what takes their place
+ * (shell/workbenches); the page's own windows and the library's pane are drawn over the page (shell/library); the
+ * other places are filled by the workbench for now (see `slots`), each until it is the shell's own. Nothing of a workbench is drawn before the frame is told with its places, so one never reads an empty
  * frame. While the project is being read the loading screen is here (unless `covered`: the page says something else),
  * and the page is not shown. The toast is drawn over everything.
  */
@@ -337,14 +341,16 @@ export function ProjectFrame({ projectId, covered = false, children }: { project
       <div className="workspace-shell flex flex-col bg-[var(--bg-app)]" style={read ? undefined : { display: 'none' }}>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="relative z-10 grid min-h-0 min-w-0 flex-1 bg-[var(--dock-line)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
-            <div ref={slotRefs.top} style={PLACE} />
+            <TopBar frame={state} />
             {told && slots ? children : null}
             <InPanesPlace frame={state} />
           </div>
         </div>
         <div ref={slotRefs.over} style={PLACE} />
+        <PageWindows frame={state} />
         <LibraryPlace frame={state} />
         <div ref={slotRefs.overLibrary} style={PLACE} />
+        <PageAsks frame={state} />
       </div>
       {/* in a layer of its own, as the page is one: the toast stays under the dialogs put on the body */}
       <div className="fixed"><Toast toast={state.toast.current} /></div>

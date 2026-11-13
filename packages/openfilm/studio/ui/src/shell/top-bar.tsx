@@ -1,0 +1,174 @@
+/**
+ * The page's top bar, and the windows of the page's own that are opened from it: the shell draws them whichever
+ * workbench is shown, and with none. On the bar: the app's menu (Settings in it), the app's tabs or the project's
+ * title with its card (rename, the folder shown, all the projects), the updates, the desktop app's dialog, and the
+ * switch between the workbenches. Over the page: the projects window, Settings, the desktop app's dialog, and what an
+ * agent asks before it spends.
+ *
+ * What a workbench has on the bar it gives through the wiring (shell/frame `topBar`): its own buttons, drawn before
+ * the switch, what it knows of the film for the project's card, and the picture at the playhead made the cover.
+ * Without it the bar has the page's parts alone, the card says what the project says of itself, and no cover is made
+ * from a frame.
+ */
+import * as React from 'react';
+import { MonitorDown, Scissors, Workflow } from 'lucide-react';
+import { api, ApiError, type ProjectFilm } from '@/api';
+import { useT } from '@/i18n';
+import { readCanvasDoc } from '@/lib/canvas';
+import { studioHost } from '@/lib/host';
+import { useKeyHint } from '@/lib/keymap-store';
+import { leaveProject, openProject } from '@/lib/navigate';
+import { AppMenu } from '@/components/AppMenu';
+import { DesktopDialog } from '@/components/DesktopDialog';
+import { ModeSwitcher } from '@/components/ModeSwitcher';
+import { ProjectsPopover } from '@/components/ProjectsLibrary';
+import { ProjectTabs } from '@/components/ProjectTabs';
+import tabStyles from '@/components/ProjectTabs.module.css';
+import { ProjectTitle } from '@/components/ProjectTitle';
+import { SettingsModal } from '@/components/settings/SettingsModal';
+import { useSettings } from '@/components/settings/use-settings';
+import { SpendAsks } from '@/components/SpendAsks';
+import { Tooltip } from '@/components/Tooltip';
+import { UpdateButton, WebUpdateButton } from '@/components/UpdateButton';
+import type { useProjectFrame } from './ProjectFrame';
+import { useWiring } from './frame';
+
+/**
+ * The page's own windows, open or not, and the project's name: held in the frame, so a workbench opens Settings or
+ * the projects too. `loaded`: the project as read.
+ */
+export function usePageWindows(loaded: ProjectFilm | null) {
+  const title = loaded?.project.name ?? '';
+  /* the app's "New Tab" (its menu): the projects, to pick what the new tab shows */
+  React.useEffect(() => studioHost?.tabs?.onPick(() => setProjectsOpen(true)), []);
+  React.useEffect(() => { if (title) studioHost?.tabs?.report({ title }); }, [title]);
+  /* the projects window: closed, open on the projects (true), or on the examples (and one example's page) */
+  const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string }>(false);
+  const [settingsOpen, setSettingsOpen] = useSettings();
+  const [desktopOpen, setDesktopOpen] = React.useState(false);
+  return { title, projectsOpen, setProjectsOpen, settingsOpen, setSettingsOpen, desktopOpen, setDesktopOpen };
+}
+
+/** The top bar, in the page's grid before the workbench's element: drawn once the project was read. */
+export function TopBar({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
+  const { loaded, failure } = frame;
+  if (!loaded || failure) return null;
+  return <Bar frame={frame} loaded={loaded} />;
+}
+
+function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loaded: ProjectFilm }) {
+  const t = useT();
+  const keyHint = useKeyHint();
+  const bar = useWiring('topBar')?.topBar;
+  const {
+    projectId, setLoaded, toast, reveal, title, setProjectsOpen, setSettingsOpen, desktopOpen, setDesktopOpen,
+    canvasOpen, setCanvasOpen, surface, showWorkbench, benchPlugins, pickBench, canToggleCanvas,
+  } = frame;
+  const [renaming, setRenaming] = React.useState(false);
+  const [titleDraft, setTitleDraft] = React.useState('');
+
+  const startRename = () => { setTitleDraft(title); setRenaming(true); };
+  /* the film at the playhead as the projects list will show it: the workbench's to make (none shown: not offered) */
+  const coverFromFrame = bar?.coverFromFrame;
+  const renameError = (e: unknown, name: string) =>
+    toast.showError(e instanceof ApiError && e.body.code === 'agent-running' ? t('projects.agentRunningRename')
+      : e instanceof ApiError && e.body.code === 'export-running' ? t('projects.exportRunningRename')
+      : e instanceof ApiError && e.status === 409 ? t('projects.renameTaken').replace('{name}', name) : t('project.renameFailed'));
+  const commitTitle = async (draft = titleDraft) => {
+    setRenaming(false);
+    const next = draft.trim();
+    if (!next || next === title || !loaded) return false;
+    setLoaded({ ...loaded, project: { ...loaded.project, name: next } });
+    try { const project = await api.rename(projectId, next); setLoaded((l) => (l ? { ...l, project } : l)); return true; }
+    catch (e) {
+      setLoaded((l) => (l ? { ...l, project: { ...l.project, name: title } } : l));
+      renameError(e, next);
+      return false;
+    }
+  };
+  /* its panes are being rearranged: the workbench shown stays the one it is meanwhile */
+  const layoutEditing = Boolean(bar?.layoutEditing);
+  const projectTitle = <ProjectTitle tab={Boolean(studioHost?.tabs)} name={title} editing={renaming} draft={titleDraft} onDraft={setTitleDraft}
+    onRename={startRename} onCommit={() => void commitTitle()} onCancel={() => setRenaming(false)}
+    facts={{ project: loaded.project, ...(bar ? { film: bar.film } : {}) }}
+    actions={{ onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') }}
+    onAll={() => setProjectsOpen(true)} />;
+  /* The desktop's tabs share the left edge; a browser keeps the project title centered. */
+  return (
+    <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 bg-[var(--bg-titlebar)] px-[6px]" style={{ gridArea: 'bar', ...(studioHost?.tabs ? { gap: 0 } : {}) }} onContextMenu={event => event.preventDefault()}>
+      {/* The title and arrow open the same project card on click. */}
+      {!studioHost?.tabs ? <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
+        <div className="pointer-events-auto flex min-w-0 max-w-full items-center">
+          {projectTitle}
+        </div>
+      </div> : null}
+      {/* a menu of the workbench's own, kept in the bar */}
+      {bar?.menu}
+      {/* the window's controls over this, then the app menu */}
+      <div aria-hidden className={studioHost?.tabs ? tabStyles.windowSpace : 'shrink-0 self-stretch'} style={{ width: 'var(--titlebar-logo-x)' }} />
+      <div className={studioHost?.tabs ? tabStyles.system : 'pointer-events-auto relative flex min-w-0 items-center'}><AppMenu onSettings={setSettingsOpen} /></div>
+      {studioHost?.tabs ? <ProjectTabs current={projectTitle} onProjects={() => setProjectsOpen(true)} onRenameCurrent={startRename} onCoverCurrent={coverFromFrame} /> : null}
+      <div className="pointer-events-auto relative flex min-w-0 items-center gap-1">
+        <UpdateButton />
+        <WebUpdateButton />
+        {!studioHost && <Tooltip label={t('desktop.title')} side="bottom">
+          <button type="button" aria-haspopup="dialog" onClick={() => setDesktopOpen(true)}
+            className={`flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${desktopOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
+            <MonitorDown size={14} />
+            {t('nav.desktop')}
+          </button>
+        </Tooltip>}
+      </div>
+      <div className="min-w-0 flex-1" />
+      <div className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
+        {/* the workbench's own: for the edit its panes, its versions, its export (the canvas has its own bars) */}
+        {bar?.tools}
+        {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
+        {pickBench ? <ModeSwitcher now={surface ?? (canvasOpen ? 'canvas' : 'edit')} plugins={benchPlugins} onPick={showWorkbench} disabled={layoutEditing} />
+          : canToggleCanvas ? <Tooltip label={[t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas'), keyHint('work-mode')].filter(Boolean).join(' · ')} side="bottom">
+          <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} disabled={layoutEditing} onClick={() => setCanvasOpen(!canvasOpen)}
+            className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
+            {canvasOpen ? <Workflow size={14} /> : <Scissors size={14} />}
+            {t(canvasOpen ? 'canvas.title' : 'canvas.editTitle')}
+          </button>
+        </Tooltip> : null}
+      </div>
+      <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
+    </div>
+  );
+}
+
+/** The projects window and Settings: over the page, before the library's pane. */
+export function PageWindows({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
+  const t = useT();
+  const { projectId, loaded, failure, toast, projectsOpen, setProjectsOpen, settingsOpen, setSettingsOpen, setCanvasOpen, setCanvasInsert } = frame;
+  if (!loaded || failure) return null;
+  return (
+    <>
+      <ProjectsPopover open={projectsOpen !== false} currentProjectId={projectId}
+        {...(typeof projectsOpen === 'object' ? { examples: projectsOpen } : {})}
+        onOpen={(id) => { if (!studioHost?.tabs) setProjectsOpen(false); openProject(id); }} onCurrentRemoved={leaveProject} onClose={() => setProjectsOpen(false)}
+        onUseCanvas={(example) => {
+          setProjectsOpen(false);
+          void api.exampleCanvasInto(projectId, example.id).then((raw) => {
+            setCanvasOpen(true);
+            setCanvasInsert({ doc: readCanvasDoc(raw), n: Date.now() });
+            toast.show(t('canvas.exampleCopied').replace('{folder}', `assets/examples/${example.id}/`));
+          }, (e: unknown) => toast.showError(e instanceof Error ? e.message : String(e)));
+        }} />
+      <SettingsModal open={settingsOpen !== null} section={settingsOpen ?? undefined} onClose={() => setSettingsOpen(null)} />
+    </>
+  );
+}
+
+/** The desktop app's dialog, and what an agent asks before it spends: over the page, after everything else on it. */
+export function PageAsks({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
+  const { projectId, loaded, failure, desktopOpen, setDesktopOpen } = frame;
+  if (!loaded || failure) return null;
+  return (
+    <>
+      <DesktopDialog open={desktopOpen} onClose={() => setDesktopOpen(false)} />
+      <SpendAsks projectId={projectId} />
+    </>
+  );
+}

@@ -1,8 +1,8 @@
 /**
  * Which workbench the panes' place shows, on the top bar: one button saying which (its mark and name, on a fill of its
  * own so it reads apart from the bar's icons), and a short menu of the workbenches of the plugins on (lib/plugins),
- * each with what it is for. ProjectView shows it when there are more than the edit and the canvas to pick from (those
- * two alone are one button that goes from one to the other).
+ * each with what it is for. The top bar (shell/top-bar) shows it when there are more than the edit and the canvas to
+ * pick from (those two alone are one button that goes from one to the other).
  */
 import * as React from 'react';
 import { Puzzle } from 'lucide-react';
