@@ -1333,8 +1333,9 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           const onBoard = target.closest('.react-flow__pane')
             && !target.closest('.react-flow__node, .react-flow__edge, .react-flow__nodesselection, .react-flow__panel, .react-flow__handle, button, input, textarea, [contenteditable="true"]');
           const last = boardPress.current;
-          boardPress.current = onBoard ? { at: event.timeStamp, x: event.clientX, y: event.clientY } : null;
-          if (!onBoard || !last || event.timeStamp - last.at > DOUBLE_MS || Math.hypot(event.clientX - last.x, event.clientY - last.y) > DOUBLE_PX) return;
+          /* a press that closes a menu only closes it: it is not the first half of a double click */
+          boardPress.current = onBoard && !menu && !context ? { at: event.timeStamp, x: event.clientX, y: event.clientY } : null;
+          if (!onBoard || menu || context || !last || event.timeStamp - last.at > DOUBLE_MS || Math.hypot(event.clientX - last.x, event.clientY - last.y) > DOUBLE_PX) return;
           boardPress.current = null;
           const box = event.currentTarget.getBoundingClientRect();
           setTaps((list) => [...list, { id: event.timeStamp, x: event.clientX - box.left, y: event.clientY - box.top }]);
@@ -1532,7 +1533,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
             onRemoveTemplate={(template) => { void removeTemplate(template); }}
           />
         ) : null}
-        {context ? <ContextMenu x={context.x} y={context.y} items={context.items} onClose={() => setContext(null)} /> : null}
+        {context ? <ContextMenu canvas x={context.x} y={context.y} items={context.items} onClose={() => setContext(null)} /> : null}
         {viewed ? <Viewer file={viewed} sources={sources} onClose={() => setViewing(null)} /> : null}
         {!fitted ? <CanvasLoading /> : null}
         <input ref={pickerRef} type="file" multiple hidden />

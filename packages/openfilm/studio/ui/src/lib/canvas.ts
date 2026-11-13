@@ -18,7 +18,7 @@ export interface CanvasNode {
   text?: string;
   /** a file of the project, project-relative */
   path?: string;
-  /** a custom display title for a file or making node */
+  /** a custom display title for a file, a making node or a note */
   title?: string;
   /** a group: its name; a group's or a note's color, one of GROUP_COLORS (a note: none, its card's own) */
   group?: string;
@@ -159,7 +159,7 @@ export function readCanvasDoc(raw: unknown): CanvasDoc {
     else if (typeof n.path === 'string' && n.path) nodes.push({ ...box, ...parent, ...named, path: n.path });
     else if (typeof n.text === 'string') {
       const tint = GROUP_COLORS.find((c) => c === n.color && c !== 'gray');
-      nodes.push({ ...box, ...parent, text: n.text, ...(tint ? { color: tint } : {}) });
+      nodes.push({ ...box, ...parent, ...named, text: n.text, ...(tint ? { color: tint } : {}) });
     }
     else if (typeof n.group === 'string') {
       const color = GROUP_COLORS.find((c) => c === n.color) ?? 'gray';

@@ -87,6 +87,8 @@ export function useDoc({ text, editable, placeholder, onChange }: {
     editable,
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
+    /* no spelling marks under the words: they are a script's, a shot list's, often not words a dictionary knows */
+    editorProps: { attributes: { spellcheck: 'false' } },
     onBeforeCreate: ({ editor: made }) => { held.schema = made.schema; },
     onUpdate: ({ editor: changed }) => {
       const next = textOf(changed);
@@ -219,33 +221,61 @@ export function FormatBar({ editor, onExpand, large }: { editor: Editor; onExpan
 }
 
 /**
- * A note opened large, over the whole window: its name as a Markdown file, the bar, the words in a page's column;
- * downloaded as that file, closed with the ×, Escape, or a press outside it.
+ * A note opened large, over the whole window. Its top is a title bar like the app's: clear of the window's own buttons
+ * and dragging the window, with the note's name as a Markdown file (a double click renames it), its download and the ×.
+ * Under it, the bar and the words in a page's column. Closed with the ×, or Escape.
  */
-export function DocSheet({ name, text, onChange, onClose }: { name: string; text: string; onChange: (text: string) => void; onClose: () => void }) {
+export function DocSheet({ name, text, onChange, onRename, onClose }: {
+  name: string; text: string; onChange: (text: string) => void; onRename?: (name: string) => void; onClose: () => void;
+}) {
   const t = useT();
   const editor = useDoc({ text, editable: true, placeholder: t('canvas.words.placeholder'), onChange });
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const cancel = React.useRef(false);
   React.useEffect(() => { editor?.commands.focus('end'); }, [editor]);
   React.useEffect(() => {
-    const key = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.isComposing) { event.stopPropagation(); onClose(); } };
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing || (event.target as Element | null)?.closest?.('[data-sheet-name]')) return;
+      event.stopPropagation();
+      onClose();
+    };
     window.addEventListener('keydown', key, true);
     return () => window.removeEventListener('keydown', key, true);
   }, [onClose]);
+  const done = () => {
+    if (draft !== null && !cancel.current && draft.trim() !== name) onRename?.(draft.trim());
+    setDraft(null);
+  };
   return createPortal(
-    <div role="dialog" aria-label={`${name}.md`} className="cv-fade fixed inset-0 z-[300] flex flex-col bg-[var(--cv-sheet-back)] px-8 pb-8 text-[var(--cv-ink)]"
+    <div role="dialog" aria-label={`${name}.md`} className="cv-fade fixed inset-0 z-[300] flex flex-col bg-[var(--cv-sheet-back)] text-[var(--cv-ink)]"
       onKeyDown={(event) => event.stopPropagation()}>
-      <header className="flex h-[72px] shrink-0 items-center gap-2 px-2">
-        <FileText size={17} className="shrink-0 text-[var(--cv-ink-2)]" />
-        <span className="min-w-0 flex-1 truncate text-[14px] font-medium">{name}.md</span>
+      <header data-titlebar="" className="flex h-8 shrink-0 items-center gap-1.5"
+        style={{ paddingLeft: 'calc(var(--titlebar-logo-x) + 8px)', paddingRight: 'max(var(--titlebar-right-x, 0px), 8px)' }}>
+        <FileText size={14} className="shrink-0 text-[var(--cv-ink-2)]" />
+        {draft !== null ? (
+          <input data-sheet-name="" autoFocus maxLength={120} aria-label={t('canvas.video.rename')} value={draft}
+            onChange={(event) => setDraft(event.currentTarget.value)} onFocus={(event) => event.currentTarget.select()} onBlur={done}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
+              if (event.key === 'Escape') { cancel.current = true; event.currentTarget.blur(); }
+              if (event.key === 'Enter') event.currentTarget.blur();
+            }}
+            className="h-6 w-[240px] min-w-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 text-[13px] font-medium text-[var(--cv-ink)] outline outline-1 outline-[var(--cv-ring)]" />
+        ) : (
+          <span role={onRename ? 'button' : undefined} tabIndex={onRename ? 0 : undefined} title={onRename ? t('canvas.video.renameHint') : undefined}
+            onDoubleClick={() => { if (onRename) { cancel.current = false; setDraft(name); } }}
+            onKeyDown={(event) => { if (onRename && (event.key === 'Enter' || event.key === 'F2')) { event.preventDefault(); cancel.current = false; setDraft(name); } }}
+            className="min-w-0 truncate rounded-[4px] px-0.5 text-[13px] font-medium">{name}.md</span>
+        )}
+        <span className="flex-1" />
         <button type="button" onClick={() => saveText(name, editor ? textOf(editor) : text)}
-          className="cv-tool flex h-9 items-center gap-1.5 rounded-[10px] bg-[var(--cv-chip)] px-3.5 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
-          <Download size={15} />{t('canvas.actions.download')}
+          className="cv-tool flex h-6 items-center gap-1 rounded-[7px] bg-[var(--cv-chip)] px-2.5 text-[12.5px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
+          <Download size={13} />{t('canvas.actions.download')}
         </button>
-        <span className="mx-2 h-5 w-px bg-[var(--cv-float-line)]" />
         <button type="button" aria-label={t('canvas.outline.close')} onClick={onClose}
-          className="cv-tool flex h-9 w-9 items-center justify-center rounded-[10px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]"><X size={20} /></button>
+          className="cv-tool flex h-6 w-7 items-center justify-center rounded-[7px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><X size={16} /></button>
       </header>
-      <div className="cv-grow flex min-h-0 flex-1 flex-col overflow-hidden rounded-[16px] bg-[var(--cv-sheet)] shadow-[var(--cv-float-shadow)]">
+      <div className="cv-grow mx-3 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[12px] bg-[var(--cv-sheet)] shadow-[var(--cv-float-shadow)]">
         {editor ? (
           <div className="flex h-12 shrink-0 items-center justify-center border-b !border-[var(--cv-float-line)]">
             <FormatBar editor={editor} large />

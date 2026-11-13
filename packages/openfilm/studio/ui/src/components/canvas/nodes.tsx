@@ -353,7 +353,9 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
     editor.on('blur', blur);
     return () => { editor.off('blur', blur); };
   }, [editor, editing]);
-  const title = t('canvas.titles.note').replace('{n}', String(n));
+  const title = data.title ?? t('canvas.titles.note').replace('{n}', String(n));
+  /* named as the person calls it; an empty name goes back to its number */
+  const rename = board.readOnly ? undefined : (name: string) => { board.willChange(); board.setData(id, { title: name || undefined }); };
   const open = () => { board.edit(null); setSheet(true); };
   return (
     <div className="h-full w-full" onDoubleClick={() => { if (!board.readOnly && !editing) board.edit(id); }}
@@ -370,12 +372,12 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
           <NoteBar id={id} color={data.color} text={data.text} name={title} onExpand={open} />
         </NodeToolbar>
       ) : null}
-      <Frame id={id} selected={selected} icon={TypeIcon} title={title} by={data.by}
+      <Frame id={id} selected={selected} icon={TypeIcon} title={title} by={data.by} onRename={rename}
         tone={editing || data.text ? 'quiet' : 'card'} fill={data.color ? FRAME_COLOR[data.color].fill : undefined}>
-        {/* its words as they read: held and moved anywhere on them; written in, they take the pointer */}
-        <DocView editor={editor} className={`h-full w-full px-5 py-4 ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : 'overflow-hidden'}`} />
+        {/* its words as they read: held and moved anywhere on them, scrolled once it is selected; written in, they take the pointer */}
+        <DocView editor={editor} className={`h-full w-full px-5 py-4 ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : selected ? 'nowheel overflow-y-auto' : 'overflow-hidden'}`} />
       </Frame>
-      {sheet ? <DocSheet name={title} text={data.text} onChange={write} onClose={() => setSheet(false)} /> : null}
+      {sheet ? <DocSheet name={title} text={data.text} onChange={write} onRename={rename} onClose={() => setSheet(false)} /> : null}
     </div>
   );
 }

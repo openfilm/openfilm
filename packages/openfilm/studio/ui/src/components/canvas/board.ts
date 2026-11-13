@@ -16,7 +16,7 @@ export function fileCardWidth(file?: WorkspaceResource | null) {
 }
 
 export type FileData = { path: string; title?: string; by?: CanvasNode['by']; upload?: UploadStatus };
-export type NoteData = { text: string; color?: GroupColor; by?: CanvasNode['by'] };
+export type NoteData = { text: string; title?: string; color?: GroupColor; by?: CanvasNode['by'] };
 export type FrameData = { label: string; color: GroupColor };
 export type MakeData = Pick<CanvasNode, 'prompt' | 'via' | 'model' | 'opts' | 'preset' | 'versions' | 'path' | 'made' | 'by' | 'title'> & { make: MakeKind };
 export type CutData = { by?: CanvasNode['by'] };
@@ -45,7 +45,7 @@ export function toFlow(doc: CanvasDoc): { nodes: BoardNode[]; edges: Edge[] } {
       if (n.cut) return { ...base, type: 'cut', width: n.w ?? CUT_W, height: n.h ?? CARD_H, data: { ...by } };
       /* a file is as its picture draws it until resized */
       if (n.path != null) return { ...base, type: 'file', ...(n.w != null && n.h != null ? { width: n.w, height: n.h } : {}), data: { path: n.path, ...(n.title ? { title: n.title } : {}), ...by } };
-      return { ...base, type: 'note', width: n.w ?? NOTE_W, height: n.h ?? NOTE_H, data: { text: n.text ?? '', ...(n.color ? { color: n.color } : {}), ...by } };
+      return { ...base, type: 'note', width: n.w ?? NOTE_W, height: n.h ?? NOTE_H, data: { text: n.text ?? '', ...(n.title ? { title: n.title } : {}), ...(n.color ? { color: n.color } : {}), ...by } };
     }),
     edges: doc.edges.map((e) => ({ id: e.id, source: e.from, target: e.to, ...(e.order != null ? { data: { order: e.order } } : {}) })),
   };
@@ -63,7 +63,7 @@ export function fromFlow(nodes: readonly BoardNode[], edges: readonly Edge[]): C
       if (n.type === 'make') return { ...box, w, h: h(), ...n.data };
       if (n.type === 'cut') return { ...box, ...by, w, h: h(), cut: true as const };
       if (n.type === 'frame') return { id: n.id, x: box.x, y: box.y, w, h: h(), group: n.data.label, color: n.data.color };
-      return { ...box, ...by, w, h: h(), text: n.data.text, ...(n.data.color ? { color: n.data.color } : {}) };
+      return { ...box, ...by, w, h: h(), ...(n.data.title ? { title: n.data.title } : {}), text: n.data.text, ...(n.data.color ? { color: n.data.color } : {}) };
     }),
     edges: edges.map((e) => ({ id: e.id, from: e.source, to: e.target, ...(typeof e.data?.order === 'number' ? { order: e.data.order } : {}) })),
   };

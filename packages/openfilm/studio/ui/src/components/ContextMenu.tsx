@@ -61,6 +61,7 @@ export function ContextMenu({
   items: given,
   onClose,
   dense = false,
+  canvas = false,
   align = 'start',
   flipTo,
   trigger,
@@ -79,6 +80,8 @@ export function ContextMenu({
    * up something several times larger than the button itself, which looks like a misclick.
    */
   dense?: boolean;
+  /** Drawn as the canvas's own menus are (its add menu): its card, rows and type. */
+  canvas?: boolean;
   /** 'end': its right edge at `x` (a "⋯" at the right of a card); see menuPosition. */
   align?: 'start' | 'end';
   /** Opened from a button: when it does not fit below, it flips to end here (the button's top). See menuPosition. */
@@ -273,12 +276,17 @@ export function ContextMenu({
   const activeId = active >= 0 && usable[active] ? `ctxmenu-${usable[active]!.id}` : undefined;
   const subActiveId = subActive >= 0 && subUsable[subActive] ? `ctxmenu-sub-${subUsable[subActive]!.id}` : undefined;
 
-  const panel = dense
-    ? 'min-w-[136px] rounded-lg py-[3px]'
-    : 'min-w-[184px] rounded-xl py-1';
-  const row = dense
-    ? 'gap-2 px-2.5 py-[5px] text-[12px]'
-    : 'gap-2.5 px-3 py-[7px] text-[13px]';
+  const panel = canvas
+    ? 'min-w-[200px] rounded-[14px] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]'
+    : `border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)] ${dense ? 'min-w-[136px] rounded-lg py-[3px]' : 'min-w-[184px] rounded-xl py-1'}`;
+  const row = canvas
+    ? 'h-9 gap-2.5 rounded-[10px] px-2.5 text-[14px]'
+    : dense
+      ? 'gap-2 px-2.5 py-[5px] text-[12px]'
+      : 'gap-2.5 px-3 py-[7px] text-[13px]';
+  const lit = canvas ? 'bg-[var(--cv-float-hover)]' : 'bg-[var(--bg-hover)]';
+  const ink = canvas ? 'text-[var(--cv-ink)]' : 'text-[var(--text)]';
+  const line = canvas ? 'my-1.5 h-px bg-[var(--cv-float-line)]' : `h-px bg-[var(--border)] ${dense ? 'my-[3px]' : 'my-1'}`;
 
   return createPortal(
     <>
@@ -290,7 +298,7 @@ export function ContextMenu({
         {...(activeId ? { 'aria-activedescendant': activeId } : {})}
         onKeyDown={onKeyDown}
         /* above every dialog it can be opened in (the Projects window is z-10050); taller than the window, it scrolls */
-        className={`fixed z-[10060] overflow-y-auto overflow-x-hidden border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)] outline-none ${panel}`}
+        className={`fixed z-[10060] overflow-y-auto overflow-x-hidden outline-none ${panel}`}
         style={{
           left: pos?.left ?? x,
           top: pos?.top ?? y,
@@ -302,7 +310,7 @@ export function ContextMenu({
       >
         {items.map((entry) => {
           if (!isItem(entry)) {
-            return <div key={entry.id} className={`h-px bg-[var(--border)] ${dense ? 'my-[3px]' : 'my-1'}`} />;
+            return <div key={entry.id} className={line} />;
           }
           const idx = usable.indexOf(entry);
           const hasCheck = entry.checked !== undefined;
@@ -340,8 +348,8 @@ export function ContextMenu({
                   ? 'cursor-default text-[var(--text-faint)]'
                   : entry.danger
                     ? 'text-[var(--err)]'
-                    : 'text-[var(--text)]'
-              } ${idx >= 0 && idx === active && !entry.disabled ? 'bg-[var(--bg-hover)]' : ''}`}
+                    : ink
+              } ${idx >= 0 && idx === active && !entry.disabled ? lit : ''}`}
             >
               {hasCheck ? (
                 <span
@@ -353,7 +361,7 @@ export function ContextMenu({
                   {entry.checked ? '✓' : ''}
                 </span>
               ) : entry.icon ? (
-                <span className={`flex shrink-0 justify-center ${dense ? 'w-[13px]' : 'w-[15px]'}`}>
+                <span className={`flex shrink-0 justify-center ${canvas ? 'w-[17px] [&_svg]:size-[17px]' : dense ? 'w-[13px]' : 'w-[15px]'}`}>
                   {entry.icon}
                 </span>
               ) : null}
@@ -383,7 +391,7 @@ export function ContextMenu({
           aria-orientation="vertical"
           {...(subActiveId ? { 'aria-activedescendant': subActiveId } : {})}
           onKeyDown={onSubKeyDown}
-          className="fixed z-[10061] min-w-[168px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-raised)] py-1 shadow-[var(--shadow-lg)] outline-none"
+          className={`fixed z-[10061] overflow-hidden outline-none ${canvas ? panel : 'min-w-[168px] rounded-xl border border-[var(--border)] bg-[var(--bg-raised)] py-1 shadow-[var(--shadow-lg)]'}`}
           style={{
             left: subPos?.left ?? 0,
             top: subPos?.top ?? 0,
@@ -392,7 +400,7 @@ export function ContextMenu({
         >
           {subItems.map((entry) => {
             if (!isItem(entry)) {
-              return <div key={entry.id} className="my-1 h-px bg-[var(--border)]" />;
+              return <div key={entry.id} className={canvas ? line : 'my-1 h-px bg-[var(--border)]'} />;
             }
             const idx = subUsable.indexOf(entry);
             return (
@@ -405,11 +413,11 @@ export function ContextMenu({
                 title={entry.disabled ? entry.hint : undefined}
                 onPointerEnter={() => { if (inSub && idx >= 0) setSubActive(idx); }}
                 onClick={() => run(entry)}
-                className={`flex w-full items-center gap-2.5 px-3 py-[7px] text-left text-[13px] transition ${
+                className={`flex w-full items-center text-left transition ${canvas ? row : 'gap-2.5 px-3 py-[7px] text-[13px]'} ${
                   entry.disabled
                     ? 'cursor-default text-[var(--text-faint)]'
-                    : 'text-[var(--text)] hover:bg-[var(--bg-hover)]'
-                } ${inSub && idx >= 0 && idx === subActive ? 'bg-[var(--bg-hover)]' : ''}`}
+                    : `${ink} ${canvas ? 'hover:bg-[var(--cv-float-hover)]' : 'hover:bg-[var(--bg-hover)]'}`
+                } ${inSub && idx >= 0 && idx === subActive ? lit : ''}`}
               >
                 {entry.checked !== undefined ? (
                   <span
