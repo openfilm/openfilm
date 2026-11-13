@@ -15,7 +15,6 @@ import * as React from 'react';
 import { api, projectEvents } from '@/api';
 import { useT } from '@/i18n';
 import { afterPaintIdle } from '@/lib/after-paint-idle';
-import type { CanvasDoc } from '@/lib/canvas';
 import { keyAction } from '@/lib/keymap-store';
 import { useStudioPlugins } from '@/lib/plugins';
 import { usePluginsOf } from '@/lib/project-plugins';
@@ -26,6 +25,7 @@ import { LoadBoundary } from '@/components/canvas/LoadBoundary';
 import { DOCK_GAP } from '@/components/PaneDivider';
 import { elementTag, elementTagNow, NOTE, PluginSurface } from '@/components/surfaces';
 import { isTypingTarget } from '@/components/typing-target';
+import { addTo } from '@/studio/hub';
 import type { useProjectFrame } from './ProjectFrame';
 import { usePublishShown, wiringStore } from './frame';
 
@@ -51,18 +51,13 @@ const SURFACE_KEY = 'openfilm.surface';
 const surfacePicked = (projectId: string) => { try { return localStorage.getItem(`${SURFACE_KEY}:${projectId}`); } catch { return null; } };
 
 /**
- * The workbench shown in the project `projectId`, and what the canvas was asked for. `canvasProject`: the project's
+ * The workbench shown in the project `projectId`, and files asked onto the canvas. `canvasProject`: the project's
  * id once it was read (the canvas is warmed after that); `showError`: the toast's; `rearranging`: whether the page's
  * panels are being rearranged (shell/layout writes it).
  */
 export function useWorkbenchShown(projectId: string, canvasProject: string | undefined, showError: (message: string) => void, rearranging: React.RefObject<boolean>) {
   /* the canvas over the panes, or the edit: by project, as left */
   const [canvasOpen, setCanvasOpenState] = React.useState(() => canvasShown(projectId));
-  /** the canvas node a chat's reference asked to be shown (`n`: each time again) */
-  const [canvasFocus, setCanvasFocus] = React.useState<{ id: string; n: number } | null>(null);
-  /** a board to lay down on the canvas (an example's, copied in) */
-  const [canvasAddFiles, setCanvasAddFiles] = React.useState<{ paths: string[]; n: number } | null>(null);
-  const [canvasInsert, setCanvasInsert] = React.useState<{ doc: CanvasDoc; n: number } | null>(null);
   React.useEffect(() => { setCanvasOpenState(canvasShown(projectId)); }, [projectId]);
   /* the edit seen as an animation editor sees it (components/MotionTimeline), in the timeline's place */
   const [motionOpen, keepMotionOpen] = useKeptFlag('openfilm.project.motion', false);
@@ -178,7 +173,7 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     return () => window.removeEventListener('keydown', press, true);
   }, []);
   /* files asked onto the canvas (the library's "+" while the canvas is shown): one of Saved is brought into the
-     project first */
+     project first, then they are the canvas's `add` (openfilm/studio addTo) */
   const requestCanvasFiles = React.useCallback(async (path: string, saved = false) => {
     try {
       let paths = [path];
@@ -186,14 +181,14 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
         const taken = await api.takeSaved(projectId, path);
         paths = 'path' in taken ? [taken.path] : 'clip' in taken ? [taken.clip.src] : taken.clips.map(item => item.clip.src);
       }
-      setCanvasAddFiles({ paths: [...new Set(paths)], n: performance.now() });
+      addTo('canvas', [...new Set(paths)]);
     } catch (error) { showError(error instanceof Error ? error.message : String(error)); }
   }, [projectId, showError]);
 
   return {
     canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, noBench, surface, showWorkbench, away,
     benchPlugins, pickBench, canToggleCanvas, pluginsRead, arranged, placed: placedNext,
-    canvasKept, canvasFocus, setCanvasFocus, canvasInsert, setCanvasInsert, canvasAddFiles, requestCanvasFiles,
+    canvasKept, requestCanvasFiles,
   };
 }
 

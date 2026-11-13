@@ -152,8 +152,10 @@ import { nextOverrides, overrideOf, type OverrideGeometry, type OverrideTarget }
 import { compactScale, type MgTransform, type NodeOverride, type OverridePivot, type StageElement, type StageElementStyle, type StageGeometry } from '@/lib/stage-types';
 import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { isTextField, isTypingTarget } from './typing-target';
-import { useFrame, usePublishWiring, useSteady } from '@/shell/frame';
-import { TOP_BTN } from '@/shell/top-bar';
+/* Studio's public interface for what it offers (the app's chat, its commands, the edit's `add`, Settings), and the
+   shell's frame and wiring, OpenFilm-internal, for the rest */
+import { chat, onCommand, openSettings, provide } from '@/studio';
+import { TOP_BTN, useFrame, usePublishWiring, useSteady } from '@/studio/internal';
 
 /** How far a caption track's translation sits above it (% of the frame): about a line. */
 const TRANSLATION_LIFT_PCT = 7;
@@ -235,7 +237,7 @@ export function ProjectView({ projectId, onProject }: {
     slots,
     canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, away,
     libraryIndex, setRevealMedia, showFile, saveThings, onLibraryDownloadFailed,
-    title, setSettingsOpen,
+    title,
     editPrefs, updateWorkspace, editFree, freeStyle, editDock, insetStyle,
   } = useFrame(projectId);
   const keyHint = useKeyHint();
@@ -2911,7 +2913,7 @@ export function ProjectView({ projectId, onProject }: {
     if (refs.length) return refs;
     return [momentRef(projectId, timeRef.current)];
   };
-  const hostSelection = studioHost?.onSelection;
+  const hostSelection = chat.select;
   React.useEffect(() => {
     if (!hostSelection) return undefined;
     const timer = setTimeout(() => {
@@ -2983,7 +2985,7 @@ export function ProjectView({ projectId, onProject }: {
     return { clipLoc: showing ? hovered.loc! : null, box: boxNow(chatPoint?.box, timeMs), numbered: draftBoxesAt(draftMarks, timeMs) };
   })();
   /* what the pointer is over, told to the app (its chat lights the pills that point at it) */
-  const hostHover = studioHost?.onHover;
+  const hostHover = chat.hover;
   const hoverBlock = React.useCallback((b: TimelineBlock | null) => hostHover?.(b ? refOfBlock(b) : null), [hostHover]); // eslint-disable-line react-hooks/exhaustive-deps
   const hoverLayer = React.useCallback((hit: { element: StageElement; box: StageBox } | null) => {
     hostHover?.(hit ? layerRef(hit.element, { projectId: refSource.current.projectId, ms: timeRef.current, box: hit.box, stage: stageRef.current }) : null);
@@ -3949,7 +3951,7 @@ export function ProjectView({ projectId, onProject }: {
    * item says so.
    */
   const referEntry = (refs: () => StudioRef[], withKey = true): ContextMenuEntry[] => {
-    const refer = studioHost?.refer;
+    const refer = chat.refer;
     if (!refer) return [];
     return [{
       id: 'refer', label: t('host.refer'), icon: <MessageSquarePlus size={14} />,
@@ -3987,7 +3989,7 @@ export function ProjectView({ projectId, onProject }: {
   }, [t, keyHint, tools.menuExtra, copiedAttrs, copyAttrs, askPasteAttrs, saveBlocks, enterCompound]); // eslint-disable-line react-hooks/exhaustive-deps
   const trackMenuExtra = React.useCallback((track: TimelineTrack) => {
     const docIndex = track.docIndex;
-    const refer = docIndex == null || !studioHost?.refer ? [] : referEntry(() => { const ref = trackRef(tracksRef.current, docIndex); return ref ? [ref] : []; }, false);
+    const refer = docIndex == null || !chat.refer ? [] : referEntry(() => { const ref = trackRef(tracksRef.current, docIndex); return ref ? [ref] : []; }, false);
     /* the track and all on it, one undo step: a caption track taken out of the film (its file kept for the undo), a track
        of clips by its clips (a track with none goes, ops.mjs) */
     const src = track.captions?.src;
@@ -4003,11 +4005,11 @@ export function ProjectView({ projectId, onProject }: {
     return menuGroups(menuGroups(refer, tools.headMenuExtra(track)), remove);
   }, [t, tools.headMenuExtra, edit, toast]); // eslint-disable-line react-hooks/exhaustive-deps
   /* clips dragged out of the timeline onto the app's chat */
-  const referBlocks = React.useCallback((blocks: TimelineBlock[]) => { for (const b of blocks) studioHost?.refer?.(refOfBlock(b)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const referBlocks = React.useCallback((blocks: TimelineBlock[]) => { for (const b of blocks) chat.refer?.(refOfBlock(b)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const markedRangeRef = React.useCallback((range: FilmRange) => rangeRef(projectId, range, blocksRef.current), [projectId]);
   /* the ruler points at time for the chat: a ⌘-click, that moment; a ⌘-drag, that span */
   const referRuler = React.useCallback((what: { atMs: number } | { range: FilmRange }) => {
-    const refer = studioHost?.refer;
+    const refer = chat.refer;
     if (!refer) return;
     refer('atMs' in what ? momentRef(projectId, what.atMs) : rangeRef(projectId, what.range, blocksRef.current));
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -4040,7 +4042,7 @@ export function ProjectView({ projectId, onProject }: {
   duplicateRef.current = duplicateBlocks;
   /* a box drawn on the picture with ⌘ held, at the playhead */
   const referRegion = React.useCallback((region: { box: StageBox; clipIds: string[]; texts: string[] }) => {
-    studioHost?.refer?.(regionRef(projectId, timeRef.current, region.box, region, stageRef.current));
+    chat.refer?.(regionRef(projectId, timeRef.current, region.box, region, stageRef.current));
   }, [projectId]);
   const recoveryMenu = React.useCallback(() => stageRecoveryMenu(filmRef.current as unknown as FilmDoc, (layer, action) => {
     const doc = filmRef.current as unknown as FilmDoc | null;
@@ -4610,7 +4612,7 @@ export function ProjectView({ projectId, onProject }: {
    */
   const referKeysRef = React.useRef<(event: KeyboardEvent) => boolean>(() => false);
   referKeysRef.current = (event) => {
-    const refer = studioHost?.refer;
+    const refer = chat.refer;
     const el = event.target as HTMLElement | null;
     if (!refer || event.defaultPrevented || isTypingTarget(el) || el?.closest?.('[role="dialog"]')) return false;
     if (keyAction(event) === 'refer') {
@@ -4946,11 +4948,22 @@ export function ProjectView({ projectId, onProject }: {
 
   /* what the shell reaches of the edit when it needs it (shell/frame): the picture drawn again, the files the film
      plays; what changing the workbench shown asks of the edit (playing stopped, Motion's panes opened); what the
-     canvas does here (a file or a cut put in the film); what the layout reads of the edit's panes; what the library
-     does here; and what the edit has on the top bar (below). The edit's own functions are called as the latest render
-     made them */
-  const forShell = React.useRef({ addFromCanvas, sendFromCanvas });
-  forShell.current = { addFromCanvas, sendFromCanvas };
+     layout reads of the edit's panes; what the library does here; and what the edit has on the top bar (below). The
+     edit's own functions are called as the latest render made them */
+  const forShell = React.useRef({ addFromCanvas, sendFromCanvas, listing });
+  forShell.current = { addFromCanvas, sendFromCanvas, listing };
+  /* what others put in the film (openfilm/studio addTo: the canvas's file, or its cut, then the film shown), by path,
+     and the app's commands that are the edit's (openfilm/studio onCommand) */
+  React.useEffect(() => provide('edit', {
+    add: (paths, { show }) => {
+      const { listing: listed } = forShell.current;
+      const all = listed ? [...listed.files, ...listed.pages] : [];
+      const files = paths.flatMap((path) => all.find((f) => f.path === path) ?? []);
+      if (show) { void forShell.current.sendFromCanvas(files); return; }
+      void (async () => { for (const file of files) await forShell.current.addFromCanvas(file); })();
+    },
+  }), []);
+  React.useEffect(() => onCommand((command) => hostCommands.current(command)), []);
   /* the window is laid out by the shell (shell/layout); what it reads of the edit's panes is given here: how tall the
      timeline's tracks are and whether the inspector has anything to show (the layout's menu draws the arrangements
      with them), and the panes' sizes as they are drawn now, which rearranging begins from */
@@ -4966,7 +4979,7 @@ export function ProjectView({ projectId, onProject }: {
               picked: captionPicked, pick: pickCaptionClip, choosing: setCaptionChoosing,
               speechTrack: speechRow?.badge ?? null, captionTrack: captionRow?.badge ?? null,
               speechAuto: Boolean(speechSrc && cuesOf(speechSrc) && untouchedSpeech(cuesOf(speechSrc)!)),
-              make: (o) => void makeCaptions(o), connect: () => { setSubtitleProblem(null); setSettingsOpen('models'); },
+              make: (o) => void makeCaptions(o), connect: () => { setSubtitleProblem(null); openSettings('models'); },
               fromFile: (file, o) => void captionsFromFile(file, o), addOne: () => void captionHere(),
   });
   const libraryPreview = useSteady({ bar: libraryPreviewBar, picture: fullscreen ? null : libraryPreviewPicture, dismissRef: dismissLibraryPreview, begin: beginLibraryPreview });
@@ -5019,12 +5032,9 @@ export function ProjectView({ projectId, onProject }: {
     srcsInUse: () => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])),
     pause: () => pauseRef.current(),
     motionShown: () => updateWorkspaceRef.current({ timeline: true, inspector: true }),
-    addToFilm: (file: WorkspaceResource) => { void forShell.current.addFromCanvas(file); },
-    sendToFilm: (list: WorkspaceResource[]) => { void forShell.current.sendFromCanvas(list); },
     panes: shellPanes,
     library: shellLibrary,
     topBar: shellTopBar,
-    command: (command: StudioCommand) => hostCommands.current(command),
   }), [shellPanes, shellLibrary, shellTopBar]));
 
   /* The page is the shell's (shell/ProjectFrame), and so is its top bar (shell/top-bar). In the edit's own element are
@@ -5214,7 +5224,7 @@ export function ProjectView({ projectId, onProject }: {
                                 onGeometry={geometryStore.set}
                                 menuFor={stageMenuWithRefer}
                                 recoveryMenu={recoveryMenu}
-                                {...(studioHost?.refer ? { onRegion: referRegion, regionHint: t('host.regionHint') } : {})}
+                                {...(chat.refer ? { onRegion: referRegion, regionHint: t('host.regionHint') } : {})}
                                 flashBox={flashBox}
                                 chat={chatOnPicture}
                                 {...(hostHover ? { onHoverLayer: hoverLayer } : {})}
@@ -5426,7 +5436,7 @@ export function ProjectView({ projectId, onProject }: {
                     onOrganizeTracks={organizeTimelineTracks}
                     transcribed={transcribedSrcs}
                     captionPick={timelineCaptionPick}
-                    {...(studioHost?.refer ? {
+                    {...(chat.refer ? {
                       onReferBlocks: referBlocks, rangeRef: markedRangeRef, onReferRuler: referRuler,
                     } : {})}
                     commandsRef={timelineCommands}

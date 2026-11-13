@@ -1,6 +1,8 @@
 /**
- * What crosses between Studio's shell and the workbenches in it. A workbench is an element with a React root of its
- * own (plugins/edit, plugins/canvas, components/surfaces), so no context reaches it: the sides share
+ * What crosses between Studio's shell and the edit, OpenFilm-internal: NOT part of Studio's public interface. Any
+ * workbench (the canvas, a plugin someone made) reaches the shell through `openfilm/studio` (studio/index), which is
+ * read from the frame here; the edit reaches the rest of it through studio/internal. A workbench is an element with a
+ * React root of its own (plugins/edit, plugins/canvas, components/surfaces), so no context reaches it: the sides share
  * these stores, read with useSyncExternalStore.
  *
  * The frame is what the shell holds of the project for any workbench (shell/ProjectFrame: the project as read, its
@@ -8,14 +10,14 @@
  * how the window is laid out): the shell writes it, a workbench reads it with `useFrame`. A wiring is what a workbench
  * lets others reach of its own: each workbench writes its own under its name, and the shell reads them as one, the
  * workbench shown's first (`wiringStore.get()` inside a callback or an effect, `useWiring` to draw); a workbench
- * reaches another's with `wiringOf`. So nothing of a workbench's is held here.
+ * reaches another's with `wiringOf`. So nothing of a workbench's is held here. What a workbench takes from others
+ * (files put into it, the app's commands) and its buttons on the top bar go through `openfilm/studio` (studio/hub).
  *
  * Both are written in a layout effect, so the other side is drawn with the new value before the page is painted.
  */
 import * as React from 'react';
 import type { CaptionsActions } from '@/components/library/CaptionsPane';
 import type { LibraryActions } from '@/components/library/LibraryDrawer';
-import type { StudioCommand } from '@/lib/host';
 import type { LibraryVoice, VoiceAccess } from '@/lib/library-voices';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import type { useProjectFrame } from './ProjectFrame';
@@ -102,12 +104,6 @@ export interface Wiring {
   pause?: () => void;
   /** Motion was picked: the workbench opens what Motion is worked in. */
   motionShown?: () => void;
-  /** Put a file of the canvas in the film. */
-  addToFilm?: (file: WorkspaceResource) => void;
-  /** Put a cut of the canvas in the film, its files one after the other, then show the film. */
-  sendToFilm?: (files: WorkspaceResource[]) => void;
-  /** What the app asks Studio to show (lib/host.ts StudioCommand) that is not the page's own: the shell takes them all. */
-  command?: (command: StudioCommand) => void;
   /**
    * What the workbench has on the page's top bar, which the shell draws (shell/top-bar). `tools`: its own buttons, drawn
    * before the workbench switch. `menu`: a menu of its own that pops up at the pointer, kept in the bar (a right click

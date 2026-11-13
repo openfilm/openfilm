@@ -25,6 +25,7 @@ import { factsOfProbe, mediaListingOf, srcHitsAsset, warmProjectMedia, type Medi
 import type { ImportProgress } from '@/components/MediaPool';
 import { Toast, useToast } from '@/components/Toast';
 import { BrandLoadingScreen } from '@/components/BrandLoadingScreen';
+import { commandTo, forgetAsked, tellCommand } from '@/studio/hub';
 import { usePublishFrame, wiringStore } from './frame';
 import { LayoutOver, useLayout } from './layout';
 import { LibraryPlace, useLibraryShown } from './library';
@@ -287,7 +288,7 @@ export function useProjectFrame(projectId: string) {
     void fetch(`${projectApi}/reveal`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, ...(original ? { original } : {}) }) });
   }, [projectApi]);
 
-  /* ── the workbench shown, and what the canvas was asked for (shell/workbenches) ── */
+  /* ── the workbench shown (shell/workbenches) ── */
   /* whether the page's panels are being rearranged: the layout's, and the workbench shown stays the one it is meanwhile */
   const rearranging = React.useRef(false);
   const shown = useWorkbenchShown(projectId, loaded?.project.id, toast.showError, rearranging);
@@ -301,7 +302,8 @@ export function useProjectFrame(projectId: string) {
   /* ── the page's own windows (the projects, Settings, the desktop app's dialog), and the project's name (shell/top-bar) ── */
   const windows = usePageWindows(loaded);
 
-  /* ── the app's commands (lib/host.ts StudioCommand): what the page shows is done here, the rest is the workbench's ── */
+  /* ── the app's commands (lib/host.ts StudioCommand): what the page shows is done here; a canvas node is the canvas's
+     (studio/hub commandTo), and the rest are told to whoever listens (openfilm/studio onCommand: the edit) ── */
   const appCommand = React.useRef<(command: StudioCommand) => void>(() => {});
   appCommand.current = (command) => {
     if (command.type === 'settings') { windows.setSettingsOpen(command.section === 'providers' ? 'models' : command.section ?? 'agents'); return; }
@@ -314,11 +316,13 @@ export function useProjectFrame(projectId: string) {
       } else windows.setProjectsOpen({ example: open?.kind === 'example' ? open.id : undefined });
       return;
     }
-    if (command.type === 'show-node' && typeof command.id === 'string') { shown.setCanvasOpen(true); shown.setCanvasFocus({ id: command.id, n: Date.now() }); return; }
+    if (command.type === 'show-node' && typeof command.id === 'string') { shown.setCanvasOpen(true); commandTo('canvas', command); return; }
     if (command.type === 'show-file') { library.showFile(command.path); return; }
-    wiringStore.get()?.command?.(command);
+    tellCommand(command);
   };
   React.useEffect(() => { studioHost?.onCommand?.((command) => appCommand.current(command)); }, []);
+  /* what was asked of a workbench that was not there yet (studio/hub) is not given to one of the next project */
+  React.useEffect(() => forgetAsked, [projectId]);
 
   /* ── the page's places: what a workbench draws outside its own element goes into one of them ── */
   const [slotOver, setSlotOver] = React.useState<HTMLDivElement | null>(null);
