@@ -1,19 +1,22 @@
 /**
- * A skill on its own, in the library's Skills (library/SkillsPane) in place of its tiles: its preview (or picture),
+ * A skill on its own, in the library's Plugins (library/PluginsPane) in place of its list: its preview (or picture),
  * then its title and switch (on, an agent takes it up whenever it fits; off, no agent gets it), kind and version,
- * where it came from, what it does, and what to do with it: Try now (a new conversation with the skill named in its
- * message; installed or not, the skill is given to that conversation only), Install, or uninstalling it (an official
- * one) or moving it to the trash (the person's own, a project's); OpenFilm's system skills are only turned off. Back
- * returns to the list. Also here: a skill's words
- * in the language shown, and its cover.
+ * where it came from, what it does, how to use it, what it brings (a plugin someone made: its workbench or its tab of
+ * the library; the skill an agent is given, with what the agent is told of it; its commands), what it may do on this
+ * computer (its scripts; a plugin's leave to change the project and to run, the person's to give), and what to do
+ * with it: Try now (a new conversation with the skill named in its message; installed or not, the skill is given to
+ * that conversation only), Install, or uninstalling it (an official one) or moving it to the trash (the person's own,
+ * a project's); OpenFilm's system skills are only turned off. Back returns to the list. Also here: a skill's words in
+ * the language shown, its cover, and the parts a plugin's page (library/PluginsPane) is made of as well.
  */
 import React from 'react';
 import {
-  ArrowLeft, Copy, Film, Folder, GitBranch, Github, Layers, MessageSquarePlus, MonitorPlay, Music, PenLine,
-  PictureInPicture2, Plus, Presentation, RefreshCw, Scissors, Shapes, Sparkles, Trash2, Wand2, type LucideIcon,
+  AppWindow, ArrowLeft, Copy, Film, Folder, GitBranch, Github, Layers, MessageSquarePlus, MonitorPlay, Music, PanelLeft, PenLine,
+  PictureInPicture2, Plug, Plus, Presentation, RefreshCw, Scissors, Shapes, Sparkles, SquareTerminal, Trash2, Wand2, Zap, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { usePlugins } from '@/lib/plugins';
+import { isPlugin } from '@/lib/project-plugins';
 import { communityOf, makerOf, sourcesApi, type SkillEntry } from '@/lib/project-sources';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SettingsSwitch } from './settings/ui';
@@ -40,7 +43,81 @@ export function useSkillWords() {
 /** An official one not installed is in the catalog only; the person's own and a project's are installed already. */
 const installedOf = (skill: SkillEntry) => skill.installed !== false;
 
-export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
+/** What a plugin or a skill brings, as its badges say it and the Plugins tab's filters pick by. */
+export type Brings = 'workbench' | 'tab' | 'skill' | 'commands' | 'connection';
+
+/** What a skill brings: itself, its commands, and, one that is a plugin, its surface (a tab of the library, else a workbench). */
+export const skillBrings = (skill: SkillEntry): Brings[] => [
+  ...(isPlugin(skill) ? [skill.tab ? 'tab' as const : 'workbench' as const] : []), 'skill', ...(skill.commands?.length ? ['commands' as const] : []),
+];
+
+/** Each thing a plugin can bring, as its badge draws it. */
+const BRINGS_ICONS: Record<Brings, LucideIcon> = { workbench: AppWindow, tab: PanelLeft, skill: Zap, commands: SquareTerminal, connection: Plug };
+
+/**
+ * Small badges of what it brings: each its mark, and its word too where the list is wide enough (a container query on
+ * the nearest `@container`); the word is its name for assistive technology and its tooltip either way.
+ */
+export function BringsBadges({ brings }: { brings: readonly Brings[] }) {
+  const t = useT();
+  return (
+    <>
+      {brings.map((b) => {
+        const Mark = BRINGS_ICONS[b];
+        const word = t(`assetDrawer.brings_${b}`);
+        return (
+          <span key={b} data-brings={b} title={word} aria-label={word} role="img"
+            className="flex h-4 shrink-0 items-center gap-0.5 rounded-[4px] border border-[var(--border)] px-[3px] text-[10px] font-medium leading-none text-[var(--text-muted)]">
+            <Mark size={10} strokeWidth={2} aria-hidden /><span aria-hidden className="hidden @[260px]:inline">{word}</span>
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/** A part of a plugin's or a skill's page: its head, and what is under it. */
+export function PageSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-5">
+      <h3 className="mb-1.5 text-[11.5px] font-medium text-[var(--text-muted)]">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** How to use it, in one line under its head. */
+export function HowToUse({ text }: { text: string }) {
+  const t = useT();
+  return (
+    <p data-how-to-use="" className="mt-4 rounded-[10px] bg-[var(--bg-field)] px-3 py-2 text-[12.5px] leading-[19px] text-[var(--text)]">
+      <span className="font-medium">{t('assetDrawer.howToUse')}</span> <span className="text-[var(--text-muted)]">{text}</span>
+    </p>
+  );
+}
+
+/** One thing it brings: what it is, and under it its name or what it is for. */
+export function BringsLine({ kind, children }: { kind: string; children: React.ReactNode }) {
+  return (
+    <div className="py-1 text-[12.5px] leading-[18px]">
+      <div className="text-[11px] leading-[15px] text-[var(--text-faint)]">{kind}</div>
+      <div className="mt-0.5 min-w-0 text-[var(--text)]">{children}</div>
+    </div>
+  );
+}
+
+/** The commands it brings, as an agent (or a plugin) runs them: `openfilm <its name> <command>`. */
+export function CommandChips({ name, commands }: { name: string; commands: readonly string[] }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {commands.map((c) => (
+        <code key={c} className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[11px] text-[var(--text-muted)]">openfilm {name}{c === name ? '' : ` ${c}`}</code>
+      ))}
+    </div>
+  );
+}
+
+export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: {
   skill: SkillEntry;
   /** the list it is in: each change shown there at once, then read again */
   setSkills: React.Dispatch<React.SetStateAction<SkillEntry[]>>;
@@ -48,6 +125,8 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
   onBack: () => void;
   /** Try now (none: Studio without the app's chat) */
   onTry?: (skill: SkillEntry) => void;
+  /** it was turned on here */
+  onOn?: () => void;
 }) {
   const t = useT();
   const lang = useLanguage();
@@ -67,8 +146,9 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
   const reload = () => { void sourcesApi.skills(projectId).then(setSkills); };
   const turn = (on: boolean) => {
     patch((k) => { const { off: _was, plugin: _plugin, ...rest } = k; return on ? rest : { ...rest, off: true }; });
-    void sourcesApi.setSkillOn(skill.uid, on).catch(reload);
+    void sourcesApi.setSkillOn(skill.uid, on).then(() => { if (on) onOn?.(); }, reload);
   };
+  const plugin = isPlugin(skill);
   /* installing downloads it (a few seconds): said while it does, and why when it cannot */
   const [working, setWorking] = React.useState<'installing' | 'updating' | null>(null);
   const install = (on: boolean) => {
@@ -147,39 +227,6 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
       </div>
       {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', inLanguage(plugins.find((p) => p.id === skill.plugin)?.title, lang) ?? skill.plugin) : t('gallery.skillOff')}</p> : null}
       {skill.retired ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
-      {/* the commands it brings, as an agent (or a plugin) runs them */}
-      {skill.commands?.length ? (
-        <div className="mt-3">
-          <div className="text-[11.5px] font-medium text-[var(--text-muted)]">{t('gallery.pluginCommands')}</div>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {skill.commands.map((c) => (
-              <code key={c} className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[11px] text-[var(--text-muted)]">openfilm {skill.name}{c === skill.name ? '' : ` ${c}`}</code>
-            ))}
-          </div>
-        </div>
-      ) : null}
-      {/* a plugin someone made (a skill with a surface): its page reads the project; whether it may change it is the person's to say */}
-      {skill.surface && installed ? (
-        <div className="mt-3 rounded-[10px] border border-[var(--border)] px-3 py-2.5">
-          <div className="flex items-center gap-3">
-            <span className="min-w-0 flex-1 text-[12.5px] font-medium text-[var(--text)]">{t('gallery.pluginWrites')}</span>
-            <SettingsSwitch checked={Boolean(skill.writes)} label={t('gallery.pluginWrites')}
-              onChange={(on) => { patch((k) => { const { writes: _was, ...rest } = k; return on ? { ...rest, writes: true as const } : rest; }); void sourcesApi.setPluginWrites(skill.uid, on, projectId).catch(reload); }} />
-          </div>
-          <p className="mt-1 text-[11.5px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginWritesNote')}</p>
-        </div>
-      ) : null}
-      {/* one that brings a program, or an element put in the app itself: it runs on this computer once the person lets it */}
-      {(skill.program || skill.inApp) && installed ? (
-        <div className="mt-3 rounded-[10px] border border-[var(--border)] px-3 py-2.5">
-          <div className="flex items-center gap-3">
-            <span className="min-w-0 flex-1 text-[12.5px] font-medium text-[var(--text)]">{t('gallery.pluginRuns')}</span>
-            <SettingsSwitch checked={Boolean(skill.runs)} label={t('gallery.pluginRuns')}
-              onChange={(on) => { patch((k) => { const { runs: _was, ...rest } = k; return on ? { ...rest, runs: true as const } : rest; }); void sourcesApi.setPluginRuns(skill.uid, on, projectId).catch(reload); }} />
-          </div>
-          <p className="mt-1 text-[11.5px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginRunsNote')}</p>
-        </div>
-      ) : null}
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
         {/* the community's: whose it is, their account a link; OpenFilm's own: its kind */}
         {communityOf(skill) ? (
@@ -203,10 +250,6 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
           {t('gallery.onlyOn').replace('{where}', skill.platforms.map((p) => t(`gallery.platform_${p}`)).join(' / '))}</p>
       ) : null}
       {needs ? <p className="mt-2.5 text-[12.5px] leading-[20px] text-[var(--text-muted)]"><span className="font-medium text-[var(--text)]">{t('gallery.needs')}</span> {needs}</p> : null}
-      {/* scripts it brings run on this computer, with the agent's access */}
-      {skill.scripts > 0 && !skill.core ? (
-        <p className="mt-2.5 text-[12.5px] leading-[20px] text-[var(--text-muted)]">{t(skill.scripts === 1 ? 'gallery.scriptsOne' : 'gallery.scriptsMany').replace('{n}', String(skill.scripts))}</p>
-      ) : null}
       {/* each line of its details; a line's lead ("When it is used:") a shade brighter, to find at a glance */}
       {details ? details.split('\n').map((line) => {
         const lead = /^(.{1,24}?[：:])\s*(.+)$/.exec(line);
@@ -216,6 +259,44 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry }: {
           </p>
         );
       }) : null}
+      {/* how to use it: a plugin's surface where it is, else ask the agent */}
+      {installed ? <HowToUse text={t(!plugin ? 'assetDrawer.howSkill' : skill.tab ? 'assetDrawer.howTab' : 'assetDrawer.howWorkbench')} /> : null}
+      <PageSection title={t('assetDrawer.pluginBrings')}>
+        {plugin ? <BringsLine kind={t(skill.tab ? 'assetDrawer.brings_tab' : 'assetDrawer.brings_workbench')}>{inLanguage(skill.tab?.title, lang) ?? words.title}</BringsLine> : null}
+        {/* the skill an agent is given, with what it is told of it */}
+        <BringsLine kind={t('assetDrawer.brings_skill')}><span className="font-mono text-[11.5px]">{skill.as ?? skill.name}</span><span className="block text-[11.5px] leading-[17px] text-[var(--text-muted)]">{skill.description}</span></BringsLine>
+        {skill.commands?.length ? <BringsLine kind={t('assetDrawer.brings_commands')}><CommandChips name={skill.name} commands={skill.commands} /></BringsLine> : null}
+      </PageSection>
+      {(skill.scripts > 0 && !skill.core) || ((skill.surface || skill.program || skill.inApp) && installed) ? (
+        <PageSection title={t('assetDrawer.pluginMay')}>
+          {/* scripts it brings run on this computer, with the agent's access */}
+          {skill.scripts > 0 && !skill.core ? (
+            <p className="text-[12.5px] leading-[20px] text-[var(--text-muted)]">{t(skill.scripts === 1 ? 'gallery.scriptsOne' : 'gallery.scriptsMany').replace('{n}', String(skill.scripts))}</p>
+          ) : null}
+          {/* a plugin someone made (a skill with a surface): its page reads the project; whether it may change it is the person's to say */}
+          {skill.surface && installed ? (
+            <div className="mt-2 rounded-[10px] border border-[var(--border)] px-3 py-2.5">
+              <div className="flex items-center gap-3">
+                <span className="min-w-0 flex-1 text-[12.5px] font-medium text-[var(--text)]">{t('gallery.pluginWrites')}</span>
+                <SettingsSwitch checked={Boolean(skill.writes)} label={t('gallery.pluginWrites')}
+                  onChange={(on) => { patch((k) => { const { writes: _was, ...rest } = k; return on ? { ...rest, writes: true as const } : rest; }); void sourcesApi.setPluginWrites(skill.uid, on, projectId).catch(reload); }} />
+              </div>
+              <p className="mt-1 text-[11.5px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginWritesNote')}</p>
+            </div>
+          ) : null}
+          {/* one that brings a program, or an element put in the app itself: it runs on this computer once the person lets it */}
+          {(skill.program || skill.inApp) && installed ? (
+            <div className="mt-2 rounded-[10px] border border-[var(--border)] px-3 py-2.5">
+              <div className="flex items-center gap-3">
+                <span className="min-w-0 flex-1 text-[12.5px] font-medium text-[var(--text)]">{t('gallery.pluginRuns')}</span>
+                <SettingsSwitch checked={Boolean(skill.runs)} label={t('gallery.pluginRuns')}
+                  onChange={(on) => { patch((k) => { const { runs: _was, ...rest } = k; return on ? { ...rest, runs: true as const } : rest; }); void sourcesApi.setPluginRuns(skill.uid, on, projectId).catch(reload); }} />
+              </div>
+              <p className="mt-1 text-[11.5px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginRunsNote')}</p>
+            </div>
+          ) : null}
+        </PageSection>
+      ) : null}
       <div className="mt-5 flex flex-col gap-2">
         {onTry ? (
           <button type="button" onClick={() => onTry(skill)} disabled={skill.off} title={skill.off ? t('gallery.tryOff') : undefined}

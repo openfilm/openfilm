@@ -1,22 +1,27 @@
 /**
  * The one-line pill at the bottom center that goes away on its own (4s): "the button did nothing, and here is why"
- * (a notice), or something failed (an error: red text, role alert).
+ * (a notice), or something failed (an error: red text, role alert). A notice may carry one action, a button at its end
+ * (it stays a little longer then).
  *
  *   const toast = useToast();
  *   toast.show('The video isn’t ready yet');   toast.showError('Rename failed. Please retry.');
+ *   toast.show('Added to the top right', { label: 'Open', run: open });
  *   <Toast toast={toast.current} />
  */
 import React from 'react';
 
-export type ToastMessage = { text: string; error?: boolean };
+/** A button at a notice's end: its words, and what it does (the notice goes with it). */
+export type ToastAction = { label: string; run: () => void };
+export type ToastMessage = { text: string; error?: boolean; action?: ToastAction };
 
 const TOAST_MS = 4000;
+const ACTION_MS = 6000;
 
 export interface ToastState {
   /** What is showing now (null: nothing). */
   current: ToastMessage | null;
-  /** Show a notice; replaces whatever is showing and restarts the 4s. */
-  show: (text: string) => void;
+  /** Show a notice, with an action at its end if given; replaces whatever is showing and restarts the 4s. */
+  show: (text: string, action?: ToastAction) => void;
   /** Show an error. */
   showError: (text: string) => void;
   clear: () => void;
@@ -29,9 +34,9 @@ export function useToast(): ToastState {
   const put = React.useCallback((message: ToastMessage | null) => {
     setCurrent(message);
     if (timer.current) clearTimeout(timer.current);
-    timer.current = message ? setTimeout(() => setCurrent(null), TOAST_MS) : null;
+    timer.current = message ? setTimeout(() => setCurrent(null), message.action ? ACTION_MS : TOAST_MS) : null;
   }, []);
-  const show = React.useCallback((text: string) => put({ text }), [put]);
+  const show = React.useCallback((text: string, action?: ToastAction) => put(action ? { text, action: { label: action.label, run: () => { put(null); action.run(); } } } : { text }), [put]);
   const showError = React.useCallback((text: string) => put({ text, error: true }), [put]);
   const clear = React.useCallback(() => put(null), [put]);
   return React.useMemo(() => ({ current, show, showError, clear }), [current, show, showError, clear]);
@@ -50,6 +55,12 @@ export function Toast({ toast }: { toast: ToastMessage | null }) {
       style={{ animation: 'openfilm-rise 0.16s ease-out both' }}
     >
       {toast.text}
+      {toast.action ? (
+        <button type="button" onClick={toast.action.run}
+          className="pointer-events-auto -my-1 -mr-2 ml-3 rounded-full px-2.5 py-1 font-semibold text-[var(--accent)] hover:bg-[var(--bg-hover)]">
+          {toast.action.label}
+        </button>
+      ) : null}
     </div>
   );
 }

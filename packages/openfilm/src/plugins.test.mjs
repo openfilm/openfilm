@@ -118,6 +118,18 @@ test('a plugin is a folder with an openfilm.json that has a title; they are list
   assert.deepEqual(readPlugins(join(dir, 'none')), []);
 });
 
+test('a plugin can ask for a tab of the library: its words and mark, or its own; one not made yet has none', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-plugin-tabs-'));
+  const put = (id, json) => { mkdirSync(join(dir, id), { recursive: true }); writeFileSync(join(dir, id, 'openfilm.json'), JSON.stringify({ title: { en: id }, ...json })); };
+  put('notes', { tab: { icon: 'film', title: { en: 'Notes', 'zh-CN': '笔记', bad: 2 } } });
+  put('plain', { tab: true });
+  put('odd', { tab: { icon: 'Big Icon', title: 7 } });
+  put('none', { tab: 'yes' });
+  put('later', { tab: true, soon: true });
+  const tabs = Object.fromEntries(readPlugins(dir).map((p) => [p.id, p.tab]));
+  assert.deepEqual(tabs, { later: undefined, none: undefined, notes: { icon: 'film', title: { en: 'Notes', 'zh-CN': '笔记' } }, odd: {}, plain: {} });
+});
+
 test('an official plugin is one folder: each skill it names is in its skills/<name>/, and the edit, canvas and Motion\'s are nowhere else', async () => {
   const { coreSkills, coreSkillsDir } = await import('./skills.mjs');
   for (const p of PLUGINS) {

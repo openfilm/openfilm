@@ -11,7 +11,7 @@ Only in the conversation, it is a skill; also outside it, a plugin.
 ```
 my-plugin/
   SKILL.md        what an agent is taught: front matter with `name` and `description`, then the way to work
-  openfilm.json   how people see it (optional): `title`, `summary`, `icon`, by language
+  openfilm.json   how people see it (optional): `title`, `summary`, `icon`, by language; `tab`, below
   package.json    what runs (optional): `browser`, `bin`, `scripts.start`
   index.html      a page shown as its workbench (optional)
 ```
@@ -29,6 +29,17 @@ A workbench is one of three things, the first one found:
 | (none) and `index.html` | A web page, shown in a frame on an origin of its own, told where the project's files are by `?project=` | The project's files, read there, and written (PUT) once the person lets it |
 
 An element or a program runs only once the person lets the plugin run; nothing writes the project's files before they say so.
+
+### A tab of the library
+
+A plugin's workbench can be a tab of the library drawer instead, beside Media, Templates and the rest: its `openfilm.json`
+says `"tab": { "icon": "layers", "title": { "en": "Notes", "zh-CN": "笔记" } }` (each optional: the plugin's own `icon` and
+`title` when left out; `"tab": true` is the same as `{}`). The tab comes after the library's own, while the plugin is on, and
+is arranged with them in Settings › Advanced. It shows what the workbench would: the element (told the same `project-id`,
+`plugin`, `project` and `folder`), the program's page, or `index.html`. A plugin of OpenFilm's own (`plugins/<id>/`) declares
+both if it wants both: its `workbench` and its `tab` show the same element, the one its `browser` module names
+(`export { default } from 'openfilm/workbench/<name>'`, built from `studio/ui/src/plugins/<name>/index.tsx`); a tab named
+by a plugin's id that is also one of the library's own takes that one's place.
 
 `bin` gives commands: `"bin": { "look": "look.mjs" }` is `openfilm my-plugin look`, for an agent and for other plugins alike.
 A `bin` that is one file is one command, `openfilm my-plugin`.
