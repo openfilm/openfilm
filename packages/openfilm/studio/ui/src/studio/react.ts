@@ -23,6 +23,8 @@ export function useProvide(name: string, workbench: Workbench): void {
   React.useEffect(() => provide(name, {
     add: (paths, options) => latest.current.add?.(paths, options),
     command: (command) => latest.current.command?.(command),
+    settle: () => latest.current.settle?.(),
+    restored: () => latest.current.restored?.(),
     ...(opens != null ? { opens: opens ? opens.split('\n') : [], show: (link: string) => latest.current.show?.(link) } : {}),
   }), [name, opens]);
 }

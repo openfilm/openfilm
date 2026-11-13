@@ -172,13 +172,16 @@ being written; `chat.select(selection)` says what is selected and where the play
   them at the end of the film; `show: true` shows that workbench after). Kept until that workbench is there to take them.
 - `open(link)`: send the person to what a link names (Links, above): `open('film.html#' + id)` after putting a clip in
   the film shows the edit with it selected.
-- `provide(name, { add, command, opens, show })`: what your own workbench takes while it is there; returns the way to take
-  it back. `add(paths, { show })` is called for `addTo`; `command(command)` for a command meant for it alone. `opens`: the
-  files it shows, as patterns of paths in the project (`film.html`, `.film/canvas.json`, `looks/*.cube`, `**/*.cube`:
-  `*` in a name, `**` across folders, matched against the whole path); a link to one of them shows your workbench and
-  calls `show(link)` with it. The pattern that names a path most closely wins. Studio remembers what a workbench said it
-  opens, so once it has been in the page a link shows it again while it is not. What was asked of it before it was there is given to it now. `name`
-  is its `plugin` attribute.
+- `provide(name, { add, command, opens, show, settle, restored })`: what your own workbench takes while it is there;
+  returns the way to take it back. `add(paths, { show })` is called for `addTo`; `command(command)` for a command meant
+  for it alone. `opens`: the files it shows, as patterns of paths in the project (`film.html`, `.film/canvas.json`,
+  `looks/*.cube`, `**/*.cube`: `*` in a name, `**` across folders, matched against the whole path); a link to one of
+  them shows your workbench and calls `show(link)` with it. The pattern that names a path most closely wins. Studio
+  remembers what a workbench said it opens, so once it has been in the page a link shows it again while it is not.
+  The project's version history is Studio's, whichever workbench is shown: `settle()` is called as it opens and before
+  it saves a version or puts the project's files back (stop what plays, write what is still waiting; it waits for the
+  promise), and `restored()` once a version's files were put back, here or in another window (forget your undo steps,
+  read the files again). What was asked of it before it was there is given to it now. `name` is its `plugin` attribute.
 - `onCommand(listener)`: the app's commands that are not the page's own and not a link (`{ type: 'highlight', ref }`,
   `{ type: 'show-box', time, box }`, `{ type: 'show-track', track }`…); returns the way to stop. A clip, a moment, a
   stretch, a node or a file the app asks to show is a link, given to the workbench that shows it.

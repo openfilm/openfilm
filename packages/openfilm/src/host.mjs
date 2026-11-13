@@ -73,19 +73,24 @@ const TYPES = {
   '.glsl': 'text/plain', '.txt': 'text/plain',
 };
 
+/** @typedef {(file: string, luts: string[]) => { key: string } | { making: true } | null | Promise<{ key: string } | { making: true } | null>} Grade */
+
 /**
  * A handler that serves the files of `root` for one request, at `path` (the part of the URL inside the folder): HTML
  * with `inject` put before any page script (unless `?film-host=0`, the page as a visitor sees it), media with ranges.
  * `headers` go on every response (a host adds its own policy); the film (film.html) is played by the built-in
  * timeline, and gets `timelineInject` instead of `inject` (a host that drives it, like Studio, adds its bridge there). Returns false when the path is not inside
  * `root`, or leads out of it through a link.
- * `swap(file)` may name another file to serve in a file's place (a render's fast-seeking copy of a video, seekable.mjs;
- * the preview's proxy of heavy footage, studio/server/proxies.mjs); not for `?film-facts`, which asks what the file is.
+ * `swap(file, query)` may name another file to serve in a file's place (a render's fast-seeking copy of a video,
+ * seekable.mjs; the preview's proxy of heavy footage, studio/server/proxies.mjs; a video's graded copy, asked as
+ * `?of-grade=` its key); not for `?film-facts`, which asks what the file is.
  * `missed(file)` is told of a file in the folder asked for and not there, or refused (a link out of the folder): a
  * render keys its chunks on those too, as the page would draw otherwise once the file is there.
- * @param {string} root @param {{ inject?: string, timelineInject?: string, headers?: Record<string, string>, swap?: (file: string) => string | null, missed?: (file: string) => void }} [options]
+ * `grade(file, luts)` says a video graded by LUT files (SPEC.md `--of-lut`): the key of its graded copy (seekable.mjs
+ * gradeKey) once it is made, `making` while it is, null when it is played as it is. Without it, every video is.
+ * @param {string} root @param {{ inject?: string, timelineInject?: string, headers?: Record<string, string>, swap?: (file: string, query?: URLSearchParams) => string | null, missed?: (file: string) => void, grade?: Grade }} [options]
  */
-export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, timelineInject = inject, headers: extraHeaders = {}, swap, missed } = {}) {
+export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, timelineInject = inject, headers: extraHeaders = {}, swap, missed, grade } = {}) {
   root = resolve(root);
   return (req, res, path, query) => {
     /* beside any film, wherever in the folder it is (its page asks for them relative to itself) */
@@ -135,6 +140,20 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
       else void mediaFacts(file).then(answer);
       return true;
     }
+    if (path.endsWith('/__film/graded')) {
+      /* a video clip graded by LUTs (SPEC.md --of-lut): where to play it from, its graded copy (`src`, from the film's
+         folder, as `of` is), or null (as it is), `making` while its copy is made; `?of=` the video, `&lut=` each LUT,
+         in order, all from the film's folder */
+      const base = path.slice(0, -'/__film/graded'.length);
+      const of = query?.get('of') ?? '';
+      const file = fileInRoot(root, `${base}/${of}`);
+      const luts = (query?.getAll('lut') ?? []).map((lut) => fileInRoot(root, `${base}/${lut}`));
+      const answer = (/** @type {{ key: string } | { making: true } | null} */ said) => res.writeHead(200, { ...extraHeaders, 'content-type': 'application/json', 'cache-control': 'no-store' })
+        .end(JSON.stringify(said && 'key' in said ? { src: `${of}?of-grade=${said.key}` } : { src: null, making: Boolean(said?.making) }));
+      if (!grade || !file || !luts.length || luts.some((lut) => !lut)) answer(null);
+      else void Promise.resolve(grade(file, /** @type {string[]} */ (luts))).then(answer, () => answer(null));
+      return true;
+    }
     let rel;
     try { rel = decodeURIComponent(path); } catch { res.writeHead(400, extraHeaders).end('bad address'); return true; }
     /* an address speaks in `/`: a `\` in it (escaped as %5C) would be a separator on Windows, past every check */
@@ -150,7 +169,7 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     if (!inRoot) try { inRoot = within(realpathSync(root), realpathSync(asked)) || readableLink(root, asked); } catch { /* gone meanwhile */ }
     if (!inRoot) { missed?.(asked); return false; }
     /* what a file is (its length and size: `film-facts`) is the file's own, never its copy's */
-    const file = (query?.has('film-facts') ? null : swap?.(asked)) ?? linked ?? asked;
+    const file = (query?.has('film-facts') ? null : swap?.(asked, query)) ?? linked ?? asked;
     let stat;
     try { stat = statSync(file); } catch { res.writeHead(404, extraHeaders).end('not found'); return true; }
     if (stat.isDirectory()) { res.writeHead(302, { ...extraHeaders, location: `${path}/` }).end(); return true; }
@@ -282,8 +301,8 @@ export async function listenLocal(server, port = 0) {
  * Serve `root`. HTML gets the host flag injected before any page script;
  * ?film-host=0 serves the page untouched, as a visitor would see it.
  */
-export async function serve(root, { port = 0, swap, missed } = {}) {
-  const files = folderFiles(root, { swap, missed });
+export async function serve(root, { port = 0, swap, missed, grade } = {}) {
+  const files = folderFiles(root, { swap, missed, grade });
   const server = createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     if (!files(req, res, url.pathname, url.searchParams)) res.writeHead(403).end();

@@ -46,6 +46,17 @@ export interface Workbench {
   opens?: readonly string[];
   /** Show what a link to one of its files names (`film.html#t=12.5`, `.film/canvas.json#<node>`); it is shown already. */
   show?: (link: string) => void;
+  /**
+   * The project's version history is opened, or is about to save a version or put the project's files back: stop
+   * what plays, and write what is still waiting to be written. The history waits for the promise before it saves or
+   * puts files back.
+   */
+  settle?: () => Promise<unknown> | void;
+  /**
+   * The project's files were put back as a version had them, here or in another window: forget what was kept of them
+   * before (undo steps), and read them again.
+   */
+  restored?: () => void;
 }
 
 type Ask = { add: readonly string[]; show: boolean } | { command: WorkbenchCommand } | { link: string };
@@ -142,6 +153,14 @@ export function setOpener(next: (link: string) => void): () => void {
   for (const link of toOpen.splice(0)) next(link);
   return () => { if (opener === next) opener = null; };
 }
+
+/** The shell's: every workbench there settled (its `settle`) before the version history saves or puts files back. */
+export const settleWorkbenches = async (): Promise<void> => {
+  await Promise.all([...provided.values()].map((workbench) => workbench.settle?.()));
+};
+
+/** The shell's: every workbench there told that the project's files were put back as a version had them. */
+export const tellRestored = (): void => { for (const workbench of [...provided.values()]) workbench.restored?.(); };
 
 /* ── the top bar's buttons of the workbenches ── */
 

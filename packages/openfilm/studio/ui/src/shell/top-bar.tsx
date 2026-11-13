@@ -2,8 +2,8 @@
  * The page's top bar, and the windows of the page's own that are opened from it: the shell draws them whichever
  * workbench is shown, and with none. On the bar: the app's menu (Settings in it), the app's tabs or the project's
  * title with its card (rename, the folder shown, all the projects), the updates, the desktop app's dialog, and the
- * switch between the workbenches. Over the page: the projects window, Settings, the desktop app's dialog, and what an
- * agent asks before it spends.
+ * switch between the workbenches, and the project's version history (shell/history). Over the page: the projects window,
+ * Settings, the version history's window, the desktop app's dialog, and what an agent asks before it spends.
  *
  * What a workbench has on the bar it gives through the wiring (shell/frame `topBar`): its own buttons, drawn before
  * the switch, what it knows of the film for the project's card, and the picture at the playhead made the cover.
@@ -35,6 +35,7 @@ import { UpdateButton, WebUpdateButton } from '@/components/UpdateButton';
 import { commandTo, topBarTools } from '@/studio/hub';
 import type { useProjectFrame } from './ProjectFrame';
 import { useWiring } from './frame';
+import { useHistoryWindow } from './history';
 import { LayoutMenu } from './layout';
 
 /** A button of the top bar: the layout's menu, and a workbench's own beside it. */
@@ -76,6 +77,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
   } = frame;
   const [renaming, setRenaming] = React.useState(false);
   const [titleDraft, setTitleDraft] = React.useState('');
+  const history = useHistoryWindow(projectId, { projectName: title, onError: toast.showError, className: TOP_BTN });
 
   const startRename = () => { setTitleDraft(title); setRenaming(true); };
   /* the film at the playhead as the projects list will show it: the workbench's to make (none shown: not offered) */
@@ -102,7 +104,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
     actions={{ onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') }}
     onAll={() => setProjectsOpen(true)} />;
   /* The desktop's tabs share the left edge; a browser keeps the project title centered. */
-  return (
+  return (<>
     <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 bg-[var(--bg-titlebar)] px-[6px]" style={{ gridArea: 'bar', ...(studioHost?.tabs ? { gap: 0 } : {}) }} onContextMenu={event => event.preventDefault()}>
       {/* The title and arrow open the same project card on click. */}
       {!studioHost?.tabs ? <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
@@ -131,7 +133,9 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
       <div className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
         {/* how the page's panels are arranged */}
         <LayoutMenu frame={frame} className={TOP_BTN} />
-        {/* the workbench's own: for the edit its versions, its export (the canvas has its own bars) */}
+        {/* the project's version history, whichever workbench is shown */}
+        {history.button}
+        {/* the workbench's own: for the edit its export (the canvas has its own bars) */}
         {bar?.tools}
         {/* the buttons plugins put on the bar (openfilm/studio topBar) */}
         <PluginTools />
@@ -147,7 +151,9 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
       </div>
       <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
     </div>
-  );
+    {/* the version history's window, put over the page (on the document's body) */}
+    {history.over}
+  </>);
 }
 
 /** The buttons plugins put on the top bar (studio/hub `topBarTools`), drawn as the bar's own: an icon, or a few words. */

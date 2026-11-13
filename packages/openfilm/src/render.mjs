@@ -9,7 +9,7 @@ import { alphaCompositeFilter, broken, encoders, FRAMES_709, hardwareEncoder, ha
 import { memoryError } from './browser-memory.mjs';
 import { FilmPage, launch } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
-import { browserCopies, filmVideos } from './seekable.mjs';
+import { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey } from './seekable.mjs';
 import { ffmpeg, filmSound, fmt, kill, locate, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
 import { burned } from './burn.mjs';
 import { renderSelection, selectionClips, selectionFrame } from './render-ranges.mjs';
@@ -112,10 +112,19 @@ export async function render(args, opts = {}) {
   const missed = (/** @type {string} */ file) => { if (!used.has(file)) used.set(file, ''); };
   /** @type {Map<string, string>} */
   let copies = new Map();
-  const swap = (/** @type {string} */ file) => {
+  /** @type {Map<string, string>} the graded copies of the film's videos graded by LUTs, by their keys (seekable.mjs) */
+  let graded = new Map();
+  const swap = (/** @type {string} */ file, /** @type {URLSearchParams | undefined} */ query) => {
     if (clipKind(file) === 'video') videos.add(file);
     if (!used.has(file)) used.set(file, signature(file));
-    return copies.get(file) ?? null;
+    return graded.get(query?.get('of-grade') ?? '') ?? copies.get(file) ?? null;
+  };
+  /* a video graded by LUTs plays its graded copy, made before any frame is drawn; its LUTs are what its chunks are
+     drawn from too */
+  const grade = (/** @type {string} */ file, /** @type {string[]} */ luts) => {
+    for (const lut of luts) if (!used.has(lut)) used.set(lut, signature(lut));
+    const key = gradeKey(file, luts, !!opts.fine);
+    return key && graded.has(key) ? { key } : null;
   };
   /* `browsers` (a BrowserPool): the render borrows `workers` of its browsers, draws in a tab of its own in each, and
      gives them back; else it starts its own and closes them */
@@ -124,7 +133,7 @@ export async function render(args, opts = {}) {
   let failed = true;
   let probe;
   try {
-    probe = await open(target, { ...(opts.root ? { root: opts.root } : {}), swap, missed, ...(pool ? { browser: lent[0] } : {}) });
+    probe = await open(target, { ...(opts.root ? { root: opts.root } : {}), swap, missed, grade, ...(pool ? { browser: lent[0] } : {}) });
   } catch (e) {
     await pool?.give(lent, { retire: true });
     throw e;
@@ -186,9 +195,27 @@ export async function render(args, opts = {}) {
      for a render of more than a moment those that seek slowly (seekable.mjs). A film's video clips load only when
      their time comes, so they are read from film.html (a page drawn around the project's film, as a burned-in
      subtitle export is, reads the project's); a page's own videos are the ones it asked for */
+  const film = isFilm ? entry : opts.root ? FILM_FILE : null;
+  /* the film's videos graded by LUTs (SPEC.md --of-lut) get their graded copies, the ones the preview plays (a master
+     export's of its own, as its other copies); one that can't be made is drawn as it is, and said */
+  const grades = film ? filmGrades(root, film) : [];
+  /** @type {string[]} the videos of grades that failed: played as they are, so they may need a copy as they are */
+  const ungraded = [];
+  if (grades.length) {
+    try {
+      graded = await gradedCopies(grades, root, { signal: opts.signal, fine: !!opts.fine, failed: ({ file, luts }) => {
+        ungraded.push(file);
+        console.error(`openfilm render: ${shown(file)}: its copy graded by ${luts.map(shown).join(', ')} could not be made, so it is drawn as it is`);
+      } });
+    } catch (e) {
+      await probe.close();
+      await pool?.give(lent, { retire: true });
+      throw e;
+    }
+  }
   if (opts.seekable !== false) {
-    const film = isFilm ? entry : opts.root ? FILM_FILE : null;
-    const files = [...new Set([...videos, ...(film ? filmVideos(root, film) : [])])];
+    /* a video only ever graded plays its graded copy: it needs no other */
+    const files = [...new Set([...videos, ...(film ? filmVideos(root, film, { ungraded: true }) : []), ...ungraded])];
     /* one the browser does not decode then fails its first frame, by its clip (timeline.mjs): never drawn black */
     const failed = (/** @type {string} */ file) => {
       uncopied.push(file);
@@ -202,6 +229,7 @@ export async function render(args, opts = {}) {
       throw e;
     }
   }
+  uncopied.push(...ungraded);
 
   if (!process.stderr.isTTY && !opts.onProgress) process.stderr.write(`  rendering ${total} frames with ${workers} browser${workers > 1 ? 's' : ''}…\n`);
   /* the film in chunks, kept when the render stops: the next render of `out` (or of `resumeAs`, a host writing a
