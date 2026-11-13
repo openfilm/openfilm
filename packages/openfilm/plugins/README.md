@@ -126,6 +126,18 @@ being written; `chat.select(selection)` says what is selected and where the play
 - `onCommand(listener)`: the app's commands that are not the page's own (`{ type: 'seek', time }`, `{ type: 'select-clip', id }`,
   `{ type: 'highlight', ref }`…); returns the way to stop.
 
+**A plugin's own server code.** A plugin of OpenFilm's own (`plugins/<id>/`) may bring a `server.mjs` whose routes Studio
+answers under `/api/plugins/<id>/…` while the plugin is on (`studio/server/plugin-servers.mjs` says how to write one).
+`pluginApi(id)` calls them from the element: `get(path)`, `post(path, body)`, `put(path, body)`, `patch(path, body)` and
+`delete(path)` resolve with the route's JSON answer and reject with its error; `events(projectId, listener)` hears what the
+server code tells the project's pages (its `studio.emit`), and returns the way to stop.
+
+```js
+const notes = pluginApi('notes');
+const { text } = await notes.get(`projects/${encodeURIComponent(id)}/note`);
+const stop = notes.events(id, (data) => console.log(data));
+```
+
 ### React
 
 `openfilm/studio/react` is the same for an element drawn with React: `useProject(id)` (the project's `get()`, drawn again as it

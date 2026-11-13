@@ -7,7 +7,7 @@
  * What it gives: the project shown, as a value that is told when it changes (`project`), with its film read and written
  * as the edit does; the toast; Settings opened; the app's chat pointed at (`chat`, in the desktop app); the app's
  * commands (`onCommand`); files put into another plugin's workbench (`addTo`) and what one's own takes (`provide`);
- * buttons on the top bar (`topBar`).
+ * buttons on the top bar (`topBar`); a plugin's own server routes and events (`pluginApi`, lib/plugin-api).
  *
  * It is read from the shell's frame (shell/frame) and kept apart from it: the frame and the wiring stay OpenFilm's own
  * (studio/internal), and may change with any version; this changes only with `version`.
@@ -17,13 +17,14 @@ import { studioHost, type StudioCommand, type StudioRef, type StudioSelection } 
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 import type { ImportProgress } from '@/components/MediaPool';
 import type { SettingsSection } from '@/components/settings/SettingsModal';
+import { pluginApi, type PluginApi } from '@/lib/plugin-api';
 import { frameStore } from '@/shell/frame';
 import { addTo, onCommand, provide, topBarTools, type TopBarTool, type Workbench, type WorkbenchCommand } from './hub';
 
 /** The version of this interface: a change that breaks a plugin written for it comes with a new one. */
 export const version = 1;
 
-export type { ImportProgress, MediaSources, SettingsSection, TopBarTool, Workbench, WorkbenchCommand };
+export type { ImportProgress, MediaSources, PluginApi, SettingsSection, TopBarTool, Workbench, WorkbenchCommand };
 /** A file of the project, as Studio lists it: its path in the project's folder, its kind, and what is known of it. */
 export type ProjectFile = WorkspaceResource;
 /** How a file of the project was made by a service (`openfilm get`): the words it was asked with, who made it. */
@@ -181,4 +182,9 @@ export const topBar = {
   set(owner: string, bar: { tools: readonly TopBarTool[] } | null): void { topBarTools.set(owner, bar?.tools ?? null); },
 };
 
-export { addTo, onCommand, provide };
+/**
+ * `pluginApi(id)`: the routes the plugin `id`'s `server.mjs` answers under `/api/plugins/<id>/…`, called from the page as
+ * Studio's own requests are (`get`, `post`, `put`, `patch`, `delete`, each with the route's path), and what its server
+ * code tells the project's pages (`events(projectId, listener)`).
+ */
+export { addTo, onCommand, pluginApi, provide };
