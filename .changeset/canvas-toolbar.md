@@ -17,5 +17,5 @@ and an earlier one can be deleted. What a note is written from shows in its pane
 kept after sending: a note wired in as its kind's mark (pressed, the note is found on the board), a file added as
 itself (pressed, shown large when it can be, a Markdown or text file read as a note's words); a × off each tile's
 corner takes it out. With words already in it, the panel asks how to change them (they go with the ask, to rework).
-The bar over a selected note, picture or clip starts with "Ask in chat": the node becomes a reference in the chat's
-message, for the agent to change or make from.
+The bar over a selected note, picture or clip starts with an "Ask in chat" button: the node becomes a reference in the
+chat's message, named as the board names it (kept short), for the agent to change or make from.

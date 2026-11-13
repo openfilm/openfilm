@@ -725,9 +725,9 @@ html[data-file-drag] iframe { pointer-events: none; }
   mask-size: 100% 100%, 260% 100%; mask-repeat: no-repeat; mask-composite: intersect;
   animation: cv-dot-wave 2.4s cubic-bezier(0.45, 0, 0.35, 1) infinite;
 }
-/* a node found from what is made from it: a ring flashing twice round its card */
-@keyframes cv-flash { 0%, 50%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } 18%, 68% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.55); } }
-.openfilm-canvas .react-flow__node.cv-flash [data-canvas-card] { animation: cv-flash 1.3s ease-out; }
+/* a node found from what is made from it: a ring flashing once round its card */
+@keyframes cv-flash { 0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } 30% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.55); } }
+.openfilm-canvas .react-flow__node.cv-flash [data-canvas-card] { animation: cv-flash 0.7s ease-out; }
 @keyframes cv-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 .cv-streaming .tiptap > :is(p, h1, h2, h3):last-child::after,
 .cv-streaming .tiptap > :is(ul, ol):last-child > li:last-child > p::after,

@@ -1114,20 +1114,22 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
 
   /* ── the chat: nodes as references (⌘L), and a node a reference points at shown ── */
   const refOf = (n: BoardNode): StudioRef | null => {
-    const words = (text: string, fallback: string) => text.replace(/\s+/g, ' ').trim().slice(0, 60) || fallback;
+    /* its pill says its name, as the board's name row does ("Text 2", "Picture node 1", a file's name), kept short */
+    const short = (name: string) => (name.length > 16 ? `${name.slice(0, 15)}…` : name);
+    const number = () => { let k = 0; for (const node of now.current.nodes) { if (node.type === 'frame') continue; k += 1; if (node.id === n.id) break; } return String(k); };
     const picture = (path: string | undefined) => {
       const file = path ? byPath.get(path) : undefined;
       const src = !file ? undefined : file.kind === 'image' ? sources.file(file) : file.kind === 'video' ? sources.poster?.(file) : file.kind === 'mg' ? sources.pagePoster?.(file) : undefined;
       return src ? { image: { src } } : {};
     };
-    if (n.type === 'note') return { kind: 'node', id: n.id, nodeKind: 'note', label: words(n.data.text, t('canvas.kinds.note')), text: n.data.text };
-    if (n.type === 'frame') return { kind: 'node', id: n.id, nodeKind: 'group', label: n.data.label || t('canvas.group') };
+    if (n.type === 'note') return { kind: 'node', id: n.id, nodeKind: 'note', label: short(n.data.title ?? t('canvas.titles.note').replace('{n}', number())), text: n.data.text };
+    if (n.type === 'frame') return { kind: 'node', id: n.id, nodeKind: 'group', label: short(n.data.label || t('canvas.group')) };
     if (n.type === 'cut') return { kind: 'node', id: n.id, nodeKind: 'cut', label: t('canvas.kinds.cut') };
     if (n.type === 'file') {
-      return { kind: 'node', id: n.id, nodeKind: 'file', label: n.data.title ?? byPath.get(n.data.path)?.name ?? n.data.path.split('/').pop() ?? n.data.path, path: n.data.path, ...picture(n.data.path) };
+      return { kind: 'node', id: n.id, nodeKind: 'file', label: short(n.data.title ?? byPath.get(n.data.path)?.name ?? n.data.path.split('/').pop() ?? n.data.path), path: n.data.path, ...picture(n.data.path) };
     }
     return {
-      kind: 'node', id: n.id, nodeKind: n.data.make, label: n.data.title ?? words(n.data.prompt ?? '', t(`canvas.make.${n.data.make}`)), prompt: n.data.prompt ?? '',
+      kind: 'node', id: n.id, nodeKind: n.data.make, label: short(n.data.title ?? (n.data.preset ? t(`canvas.presets.names.${n.data.preset}`) : t(`canvas.titles.${n.data.make}`).replace('{n}', number()))), prompt: n.data.prompt ?? '',
       ...(n.data.path ? { path: n.data.path } : {}), ...(n.data.versions?.length ? { versions: n.data.versions.length } : {}), ...picture(n.data.path),
     };
   };

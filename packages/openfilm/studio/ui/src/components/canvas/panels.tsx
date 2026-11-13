@@ -123,8 +123,8 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
         {/* first, the agent: what it shows made a reference in the chat, to change or make from */}
         {board.refer ? (
           <>
-            <Tooltip label={`${t('host.refer')} · ${MOD}L`}>
-              <button type="button" className={btn} onClick={() => board.refer?.(id)}><MessageSquareQuote size={14} />{t('canvas.noteBar.toChat')}</button>
+            <Tooltip label={`${t('canvas.noteBar.toChat')} · ${MOD}L`}>
+              <button type="button" aria-label={t('canvas.noteBar.toChat')} className={icon} onClick={() => board.refer?.(id)}><MessageSquareQuote size={15} /></button>
             </Tooltip>
             <span className="mx-0.5 h-4 w-px bg-[var(--cv-float-line)]" />
           </>

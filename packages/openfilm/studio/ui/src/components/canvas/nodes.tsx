@@ -470,9 +470,8 @@ function NoteBar({ id, color, text, name, onExpand }: { id: string; color?: Grou
       {/* first, the agent: the note made a reference in the chat, to change or write from */}
       {board.refer ? (
         <>
-          <Tooltip label={`${t('host.refer')} · ${MOD}L`}>
-            <button type="button" onClick={() => board.refer?.(id)}
-              className="cv-tool flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]"><MessageSquareQuote size={17} />{t('canvas.noteBar.toChat')}</button>
+          <Tooltip label={`${t('canvas.noteBar.toChat')} · ${MOD}L`}>
+            <button type="button" aria-label={t('canvas.noteBar.toChat')} onClick={() => board.refer?.(id)} className={icon}><MessageSquareQuote size={17} /></button>
           </Tooltip>
           <span className="mx-1 h-4 w-px bg-[var(--cv-float-line)]" />
         </>
