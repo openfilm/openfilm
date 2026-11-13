@@ -77,16 +77,29 @@ export async function open(target, opts = {}) {
   }
   /** @type {Map<string, string>} */
   const copies = new Map();
-  const site = await serve(loc.root, { swap: (file) => opts.swap?.(file) ?? copies.get(file) ?? null, missed: opts.missed });
+  /** @type {Map<string, string>} the graded copies of the film's videos graded by LUTs, by their keys (seekable.mjs) */
+  const graded = new Map();
+  /** @type {((file: string, luts: string[]) => string | null) | null} seekable.mjs gradeKey, once it is loaded */
+  let keyOf = null;
+  const site = await serve(loc.root, {
+    swap: (file, query) => opts.swap?.(file, query) ?? graded.get(query?.get('of-grade') ?? '') ?? copies.get(file) ?? null,
+    missed: opts.missed,
+    grade: opts.grade ?? ((file, luts) => { const key = keyOf?.(file, luts); return key && graded.has(key) ? { key } : null; }),
+  });
   const lent = opts.browser ?? null;
   let browser;
   try { browser = lent ?? await launch(opts.launch); }
   catch (e) { await site.close(); throw e; }
   if (opts.playable) {
     try {
-      const { browserCopies, filmVideos } = await import('./seekable.mjs');
+      const { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey } = await import('./seekable.mjs');
+      keyOf = gradeKey;
       const files = Array.isArray(opts.playable) ? opts.playable : loc.isFilm ? filmVideos(loc.root, loc.entry) : [];
       for (const [file, copy] of await browserCopies(browser, site.url, loc.root, files, { signal: opts.signal })) copies.set(file, copy);
+      /* the film's videos graded by LUTs, as the preview and an export show them (the project's film, for a page drawn
+         around it, as a render's) */
+      const film = loc.isFilm ? loc.entry : opts.root ? FILM_FILE : null;
+      if (film) for (const [key, copy] of await gradedCopies(filmGrades(loc.root, film), loc.root, { signal: opts.signal })) graded.set(key, copy);
     } catch { /* the footage as it is */ }
   }
   /** @type {FilmPage} */
@@ -135,10 +148,11 @@ export function kill(proc) {
   else proc.kill('SIGKILL');
 }
 
-/** Run ffmpeg; `timeoutMs`: stop it and fail with `what` when it has not finished by then. */
-export function ffmpeg(args, { input = false, timeoutMs = 0, what = 'ffmpeg' } = {}) {
+/** Run ffmpeg; `timeoutMs`: stop it and fail with `what` when it has not finished by then. `cwd`: the folder it runs
+    in, which a file named in a filter is read from. */
+export function ffmpeg(args, { input = false, timeoutMs = 0, what = 'ffmpeg', cwd = undefined } = {}) {
   /* -nostdin: ffmpeg never reads keys from a terminal it was started in (an agent's shell is one) */
-  const proc = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', ...args], { stdio: [input ? 'pipe' : 'ignore', 'inherit', 'pipe'], windowsHide: true });
+  const proc = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', ...args], { stdio: [input ? 'pipe' : 'ignore', 'inherit', 'pipe'], windowsHide: true, cwd });
   let err = '';
   proc.stderr.on('data', (d) => { err += d; });
   let late = false;
