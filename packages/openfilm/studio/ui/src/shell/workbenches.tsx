@@ -169,9 +169,9 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
  */
 export function InPanesPlace({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
   const t = useT();
-  const wiring = useWiring();
+  const wiring = useWiring('places', 'chat');
   const {
-    projectId, loaded, failure, folder, listing, mediaSources, onImport, toast,
+    projectId, loaded, failure, folder, listing, mediaSources, onImport, toast, showFile,
     surface, surfacePlugin, noBench, away, canvasOpen, canvasKept, canvasFocus, canvasInsert, canvasAddFiles,
   } = frame;
   const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
@@ -209,7 +209,7 @@ export function InPanesPlace({ frame }: { frame: ReturnType<typeof useProjectFra
                 <CanvasView shown={canvasOpen} projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { wiringStore.get()?.addToFilm?.(file); }}
                   onImportFiles={(dropped, progress = () => {}) => onImport(dropped, 'assets', progress)} onOpenSettings={() => wiringStore.get()?.openSettings?.('models')}
                   focus={canvasFocus} insert={canvasInsert} addFiles={canvasAddFiles} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
-                  onSendToFilm={(list) => { wiringStore.get()?.sendToFilm?.(list); }} onReveal={(path) => wiringStore.get()?.showFile?.(path, true)}
+                  onSendToFilm={(list) => { wiringStore.get()?.sendToFilm?.(list); }} onReveal={(path) => showFile(path, true)}
                   {...(chat ? { chat } : {})}
                   onError={toast.showError} onNotice={(message) => toast.show(message)} />
               </React.Suspense>

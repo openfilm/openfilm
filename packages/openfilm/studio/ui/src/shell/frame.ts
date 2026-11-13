@@ -4,16 +4,21 @@
  * read with useSyncExternalStore.
  *
  * The frame is what the shell holds of the project for any workbench (shell/ProjectFrame: its files, how they were
- * made, the media pane's file operations, the toast, which workbench is shown): the shell writes it, a workbench reads
- * it with `useFrame`. The wiring is what the workbench shown lets the shell reach of its own: that workbench writes it,
- * and the shell reads it when it needs it (`wiringStore.get()` inside a callback or an effect, `useWiring` to draw), so
- * nothing of a workbench's is held here.
+ * made, the media pane's file operations, the toast, which workbench is shown, the library): the shell writes it, a
+ * workbench reads it with `useFrame`. The wiring is what the workbench shown lets the shell reach of its own: that
+ * workbench writes it, and the shell reads it when it needs it (`wiringStore.get()` inside a callback or an effect,
+ * `useWiring` to draw), so nothing of a workbench's is held here.
  *
  * Both are written in a layout effect, so the other side is drawn with the new value before the page is painted.
  */
 import * as React from 'react';
+import type { CaptionsActions } from '@/components/library/CaptionsPane';
+import type { LibraryActions } from '@/components/library/LibraryDrawer';
 import type { SettingsSection } from '@/components/settings/SettingsModal';
+import type { LibraryVoice, VoiceAccess } from '@/lib/library-voices';
+import type { DockRect } from '@/lib/workspace-dock';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
+import type { LibraryDock, PanelSide } from '@/lib/workspaces';
 import type { useProjectFrame } from './ProjectFrame';
 
 /** A value kept outside React, with those told when it changes. */
@@ -104,8 +109,6 @@ export interface Wiring {
   addToFilm?: (file: WorkspaceResource) => void;
   /** Put a cut of the canvas in the film, its files one after the other, then show the film. */
   sendToFilm?: (files: WorkspaceResource[]) => void;
-  /** Find a file in the library's media (`highlight`: pointed out there, what is picked left as it is). */
-  showFile?: (path: string, highlight?: boolean) => void;
   /** Open Settings on a section. */
   openSettings?: (section: SettingsSection) => void;
   /** The app's own panel beside the workbench (none: the app has no such panel): whether it is open, and the way to open or fold it. */
@@ -116,6 +119,58 @@ export interface Wiring {
    * (`canvasFrame`). Each is a style, the same one until it changes.
    */
   places?: { edit: React.CSSProperties; canvas: React.CSSProperties; canvasFrame: React.CSSProperties };
+  /**
+   * What the library (shell/library) does in the workbench. Without it the library is only browsed: nothing of it is
+   * put in a film, taken in hand or tried.
+   */
+  library?: {
+    /** "+" or Enter on a file of the media pane: put in the film at the playhead (`saved`: one of Saved, brought into the project first). */
+    add: (file: WorkspaceResource, saved: boolean) => void;
+    /** The file of the media pane in hand, shown in the workbench's viewer and inspector (null: none), and whether it is one of Saved. */
+    pickedPath: string | null;
+    pickedSaved: boolean;
+    /** Take a file of the media pane in hand (null: let go). `saved`: one of Saved. `quiet`: in hand only, what plays and the panes left as they are. */
+    pick: (file: WorkspaceResource | null, how?: { saved?: boolean; quiet?: boolean }) => void;
+    /** The files the film's clips play (each clip's `src`): the media pane marks them, and counts them before one is deleted. */
+    usedSrcs: readonly string[];
+    /** Files of the project are going to the trash: their clips taken off the film first (null, or why not). */
+    onDropClipsForAssets: (paths: readonly string[]) => Promise<string | null>;
+    /** The file the app's chat points at, lit in the media pane. */
+    litPath: string | null;
+    /** What Enter or "+" and a click do with a thing of the library. */
+    actions: LibraryActions;
+    /** The thing of the library being tried (its id). */
+    tried: string | null;
+    /** The templates whose try failed. */
+    templateStatus: Partial<Record<string, 'failed'>>;
+    /**
+     * Where a thing of the library is tried in the workbench's viewer: the place of its transport (`bar`) and of its
+     * cover (`picture`), each null when there is none now; `dismissRef`, which the drawer writes the way to end the try
+     * into; and `begin`, called as a try starts.
+     */
+    preview: { bar: HTMLDivElement | null; picture: HTMLDivElement | null; dismissRef: React.RefObject<() => boolean>; begin: () => void };
+    /** Where a caption track comes from (components/library/CaptionsPane). */
+    captions: CaptionsActions;
+    /** Words spoken in a voice of the library, put on the film at the playhead: null, or why not. */
+    speak: (voice: LibraryVoice, access: VoiceAccess, text: string) => Promise<string | null>;
+  };
+  /**
+   * Where the library's pane is, as the workbench lays the window out (for now): open or not, the side it is docked on
+   * and its box, `free` when the panes float, how much of its foot the app's composer covers (`under`), and the seam
+   * that sizes the app's panel while the pane covers it (`seam`; null: none). `setOpen` opens or closes the pane,
+   * `onResize` keeps a new size of it, `setPanelWidth` sizes the app's panel (`done`: the drag is over).
+   */
+  libraryPane?: {
+    open: boolean;
+    dock: LibraryDock;
+    rect: DockRect;
+    free: boolean;
+    under: number;
+    seam: { label: string; width: number; bottom: number; side: PanelSide } | null;
+    setOpen: (open: boolean) => void;
+    onResize: (size: { assetsWidth?: number; libraryHeight?: number }) => void;
+    setPanelWidth: (width: number, done?: boolean) => void;
+  };
 }
 
 export const wiringStore = createStore<Wiring | null>(null);
@@ -125,7 +180,45 @@ export function usePublishWiring(value: Wiring): void {
   usePublish(wiringStore, value);
 }
 
-/** The shell's: the wiring of the workbench shown (null: none is), to draw with. A callback reads `wiringStore.get()` instead. */
-export function useWiring(): Wiring | null {
-  return React.useSyncExternalStore(wiringStore.subscribe, wiringStore.get);
+/**
+ * A workbench's: `value` to put in its wiring, the same one while what it holds is the same. Its functions are stood
+ * for by ones that call the latest given, so a function made anew by every render changes nothing; its other fields
+ * are compared as they are (a list or an object among them is to be the same one until it changes).
+ */
+export function useSteady<T extends object>(value: T): T {
+  const latest = React.useRef(value);
+  latest.current = value;
+  const kept = React.useRef<{ of: T; steady: T } | null>(null);
+  const isFunction = (field: unknown): field is (...args: unknown[]) => unknown => typeof field === 'function';
+  const keys = Object.keys(value) as (keyof T)[];
+  const was = kept.current;
+  if (was && keys.length === Object.keys(was.of).length && keys.every((key) => (isFunction(value[key]) ? isFunction(was.of[key]) : Object.is(value[key], was.of[key])))) return was.steady;
+  const steady = { ...value };
+  for (const key of keys) {
+    if (!isFunction(value[key])) continue;
+    const call = (...args: unknown[]) => { const now = latest.current[key]; return isFunction(now) ? now(...args) : undefined; };
+    steady[key] = call as T[keyof T];
+  }
+  kept.current = { of: value, steady };
+  return steady;
+}
+
+/**
+ * The shell's: these fields of the wiring of the workbench shown (null: none is), to draw with; the same object until
+ * one of them changes, so what draws with some of the wiring is not drawn again when the rest of it changes. A
+ * callback reads `wiringStore.get()` instead.
+ */
+export function useWiring<K extends keyof Wiring>(...fields: K[]): Pick<Wiring, K> | null {
+  const kept = React.useRef<Pick<Wiring, K> | null>(null);
+  return React.useSyncExternalStore(wiringStore.subscribe, () => {
+    const now = wiringStore.get();
+    const was = kept.current;
+    if (!now) kept.current = null;
+    else if (!was || fields.some((field) => !Object.is(was[field], now[field]))) {
+      const next = {} as Pick<Wiring, K>;
+      for (const field of fields) next[field] = now[field];
+      kept.current = next;
+    }
+    return kept.current;
+  });
 }

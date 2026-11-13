@@ -108,8 +108,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   dismissRef: React.RefObject<() => boolean>;
   onPreviewStart: () => void;
   onDownloadFailed: () => void;
-  /** where a caption track comes from: what is said, a file, or new */
-  captions: CaptionsActions;
+  /** where a caption track comes from: what is said, a file, or new (none: no workbench makes captions, and they are not shown) */
+  captions?: CaptionsActions;
   /** words spoken in a voice of the library, put on the film at the playhead (VoicesPane): null, or why not */
   speak?: (voice: LibraryVoice, access: VoiceAccess, text: string) => Promise<string | null>;
   /** Settings › Services: where a voice's service is connected */
@@ -129,7 +129,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   const voices = useLibraryVoices();
   /* the categories shown, in the person's order */
   const arranged = useLibraryArrangement();
-  const categories = arrangedCategories(CATEGORIES, arranged).filter((c) => c.on).map((c) => c.id);
+  const categories = arrangedCategories(CATEGORIES, arranged).filter((c) => c.on && (c.id !== 'captions' || captions)).map((c) => c.id);
   const [shownCat, setCat] = React.useState<Category>(SHOWN.cat);
   /* one turned off while it was shown: the media in its place */
   const cat: Category = categories.includes(shownCat) ? shownCat : 'media';
@@ -521,7 +521,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
           </nav>
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
-          {cat === 'media' ? media : cat === 'captions' ? <CaptionsPane actions={captions} /> : cat === 'plugin' ? <PluginsPane projectId={projectId} /> : (
+          {cat === 'media' ? media : cat === 'captions' && captions ? <CaptionsPane actions={captions} /> : cat === 'plugin' ? <PluginsPane projectId={projectId} /> : (
             <>
               {/* a skill's page has its own way back instead */}
               <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'skill' && skillOpen != null}>

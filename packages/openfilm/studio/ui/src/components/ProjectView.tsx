@@ -52,9 +52,9 @@ import { attrsOf, pasteAttrs, type AttrGroup, type CopiedAttrs } from '@/lib/cli
 import { cutPoints, nextCut } from '@/lib/timeline-nav';
 import { anyLocked, lockedEdits } from '@/lib/track-lock';
 import { placeMedia, type SourceRange } from '@/lib/media-place';
-import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, defaultTextWords, fromLibrary, isLibraryClip, isTextClip, libraryItemOfClip, libraryBox, libraryDragItem, libraryUrl, nameOf, onCut, pageUrl, placedGroup, useLibraryIndex, withLook, withRootVars, type LibraryItem } from '@/lib/library';
-import { LibraryDrawer, type LibraryActions, type SkillsRequest } from '@/components/library/LibraryDrawer';
-import type { CaptionsMake } from '@/components/library/CaptionsPane';
+import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, defaultTextWords, fromLibrary, isLibraryClip, isTextClip, libraryItemOfClip, libraryBox, libraryDragItem, libraryUrl, nameOf, onCut, pageUrl, placedGroup, withLook, withRootVars, type LibraryItem } from '@/lib/library';
+import type { LibraryActions } from '@/components/library/LibraryDrawer';
+import type { CaptionsActions, CaptionsMake } from '@/components/library/CaptionsPane';
 import { LibraryTrial, type TemplatePreviewState } from '@/components/library/LibraryTrial';
 import { hugText } from '@/lib/text-box';
 import { textVars, withMotion, withWords } from '@/lib/text-look';
@@ -91,8 +91,8 @@ import { useSettings } from './settings/use-settings';
 import { DesktopDialog } from './DesktopDialog';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { readCanvasDoc } from '../lib/canvas';
-import { HOST_PANEL_WIDTH, studioHost, useHostPanel, type HostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
-import { clipRef, fileRef, layerRef, markRange, momentRef, rangeRef, regionRef, stillUrl, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
+import { studioHost, useHostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
+import { clipRef, layerRef, markRange, momentRef, rangeRef, regionRef, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
 import { usePageChanges } from './use-page-changes';
 import { CaptionInspector, type CaptionTrackInfo } from './CaptionInspector';
@@ -109,7 +109,6 @@ import { defaultWorkspace, workspaceChatWidth, workspaceGeometry, type Workspace
 import { useWorkspaceDraft, useWorkspaceLayouts } from '@/lib/use-workspaces';
 import { defaultDockTree, dockFrames, visibleDockPanels, type DockPanel } from '@/lib/workspace-dock';
 import { WorkspaceEditor, WorkspaceSeams } from './WorkspaceEditor';
-import { WorkspaceLibraryPane } from './WorkspaceLibraryPane';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 import { ModeSwitcher } from './ModeSwitcher';
@@ -119,7 +118,6 @@ import { ProjectTabs } from './ProjectTabs';
 import tabStyles from './ProjectTabs.module.css';
 import { AppMenu } from './AppMenu';
 import { UpdateButton, WebUpdateButton } from './UpdateButton';
-import { MediaPool, type ImportProgress } from './MediaPool';
 import { LayersPanel } from './LayersPanel';
 import type { LayerRow, LayerSelection } from '@/lib/layers-tree';
 import { SourcePreview } from './SourcePreview';
@@ -160,7 +158,7 @@ import { idsIn, pastedElsewhere, pastedPage, withoutPaste, withPaste, type Paste
 import { pasteTargets, targetById } from '@/lib/layer-paste-target';
 import { PropertiesSection, type PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
-import { SAVED, importIntoSaved, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
+import { savedSources } from '@/lib/saved';
 import { deliveryGainDb, deliveryLoudness, onDeliveryLoudness } from '@/lib/delivery-loudness';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
@@ -170,7 +168,8 @@ import { nextOverrides, overrideOf, type OverrideGeometry, type OverrideTarget }
 import { compactScale, type MgTransform, type NodeOverride, type OverridePivot, type StageElement, type StageElementStyle, type StageGeometry } from '@/lib/stage-types';
 import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { isTextField, isTypingTarget } from './typing-target';
-import { useFrame, usePublishWiring } from '@/shell/frame';
+import { useFrame, usePublishWiring, useSteady } from '@/shell/frame';
+import { HOST_PANEL_TOP } from '@/shell/library';
 
 /** How far a caption track's translation sits above it (% of the frame): about a line. */
 const TRANSLATION_LIFT_PCT = 7;
@@ -180,11 +179,6 @@ const PANE = 'relative flex min-h-0 min-w-0 flex-col overflow-hidden';
 const PICTURE_FILE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
 /* ⌘ is the modifier on a Mac, Ctrl elsewhere (the editor's keys, lib/timeline-keys) */
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-/** Which the media pane shows, the project's media, the media library or Saved: kept while Studio is open, across projects. */
-type MediaScope = 'project' | 'saved';
-const MEDIA_SCOPE: { current: MediaScope } = { current: 'project' };
-/** where the app's panel starts: under Studio's top bar (its h-8) */
-const HOST_PANEL_TOP = 32;
 
 const TIMELINE_H = 200;
 const TIMELINE_SHARE = 0.45;
@@ -256,11 +250,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
      operations on them, the toast. The project and its files are still read here, and put there with its setters */
   const {
     toast, showToast, loaded, setLoaded, failure, setFailure, filesTick, setFilesTick, rawListing, setRawListing, facts, proxies, onUndecoded, prefsTick,
-    folder, mediaSources, listing, mediaMade, madeWords, madeVersions, missingMedia, setMissingMedia, findMissing,
-    projectApi, onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, coverSet, onSetCover, onNewFolder, reveal,
+    folder, mediaSources, listing, mediaMade, setMissingMedia, findMissing,
+    projectApi, onPick, onBring, onImport, coverSet, reveal,
     slots,
     canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, noBench, surface, showWorkbench, away,
-    benchPlugins, pickBench, canToggleCanvas, setCanvasFocus, setCanvasInsert, requestCanvasFiles,
+    benchPlugins, pickBench, canToggleCanvas, setCanvasFocus, setCanvasInsert,
+    libraryIndex, setRevealMedia, showFile, setSkillsShown, saveThings, onLibraryDownloadFailed,
   } = useFrame(projectId);
   const keyHint = useKeyHint();
   /* the latest onLeave, for the folder's events (subscribed once per project) */
@@ -391,22 +386,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   React.useEffect(() => {
     if (surface == null && workModes.length && !workModes.includes(workMode)) showWorkbench(workModes[0]!);
   }, [workModes, workMode, surface, showWorkbench]);
-  /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
-     origin: see stillUrl) */
-  const refOfFile = React.useCallback((file: WorkspaceResource, made: MediaMade | undefined = mediaMade[file.path]) => fileRef(file, file.kind === 'mg' ? mediaSources.pagePoster?.(file)
-    : file.kind === 'image' ? stillUrl(projectId, file.path, Math.round(file.mtimeMs)) : file.kind === 'video' ? mediaSources.poster?.(file) : undefined, made), [mediaSources, projectId, mediaMade]);
-  /* a file of the media library or of Saved pointed at for the agent: brought into the project first (how it was made comes
-     with it), so what the agent is given is a file of the project it can use as it is */
-  const referOutside = React.useCallback(async (file: WorkspaceResource) => {
-    if (!studioHost?.refer) return;
-    try {
-      const taken = await api.takeSaved(projectId, file.path);
-      if (!('path' in taken)) return;
-      const made = (await api.mediaMade(projectId).catch(() => ({} as Record<string, MediaMade>)))[taken.path];
-      const { bundle: _bundle, ...rest } = file;
-      studioHost.refer(refOfFile({ ...rest, path: taken.path }, made));
-    } catch (e) { toast.showError(e instanceof Error ? e.message : String(e)); }
-  }, [projectId, refOfFile, toast]);
 
   /* ── transport: the sound is the clock; the picture follows it, drawn in the preview from the player's line ── */
   const player = React.useRef(new Player());
@@ -2072,7 +2051,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
    */
   const [libraryTrial, setLibraryTrial] = React.useState<LibraryItem | null>(null);
   const [templateStatus, setTemplateStatus] = React.useState<Partial<Record<string, 'failed'>>>({});
-  const onLibraryDownloadFailed = React.useCallback(() => showToast(t('assetDrawer.networkRetry')), [showToast, t]);
   const onTemplateState = React.useCallback((id: string, state: TemplatePreviewState) => {
     setTemplateStatus((current) => {
       if (state === null) {
@@ -2290,18 +2268,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     };
     return { actions, applyDrop, lookTargets, place };
   }, [language, selectedClips, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, editClips, playTextMotion, askTransition, t, toast, insertTemplate]);
-  /* clips (and files) kept to use again in any project (lib/saved, studio/server/saved.mjs): the timeline's, the
-     picture's and the media pane's "Add to Saved" */
-  const saveThings = React.useCallback(async (what: Parameters<typeof api.save>[1], n: number) => {
-    if (!n) return;
-    try {
-      await api.save(projectId, what);
-      refreshSaved();
-      toast.show(n === 1 ? t('saved.added') : t('saved.addedMany').replace('{n}', String(n)));
-    } catch (e) {
-      toast.showError(t('saved.failed').replace('{error}', e instanceof Error ? e.message : String(e)));
-    }
-  }, [projectId, t, toast]);
   const saveBlocks = React.useCallback((blocks: readonly TimelineBlock[], together = false) => {
     const kept = blocks.filter((b) => b.clipId);
     /* several as one: laid out as they are, from the first one's start to the last one's end */
@@ -2324,10 +2290,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return { id: b.clipId!, name: b.title, durationMs: Math.max(0, b.endMs - b.startMs), ...(w ? { w } : {}), ...(h ? { h } : {}) };
     });
     void saveThings({ clips }, clips.length);
-  }, [saveThings]);
-  const saveFiles = React.useCallback((files: WorkspaceResource[]) => {
-    const list = files.map((f) => ({ path: f.path, name: f.name, ...(f.durationMs ? { durationMs: f.durationMs } : {}), ...(f.w ? { w: f.w } : {}), ...(f.h ? { h: f.h } : {}) }));
-    void saveThings({ files: list }, list.length);
   }, [saveThings]);
   /* one clip, or several as one (each one alone, too) */
   const saveEntry = (blocks: readonly TimelineBlock[]): ContextMenuEntry[] => {
@@ -3022,84 +2984,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const layersShownWidth = editFree?.panels.layers?.width ?? (rowWidth ? Math.min(layersWidth, layersRoom) : layersWidth);
   const layersFit = Boolean(editFree) || !rowWidth || layersShownWidth >= 180;
   const layersShown = layersPaneOpen && layersFit;
-  /* the media pane shows the project's media, or Saved (lib/saved): the same pane, the button beside Upload switches */
-  const [mediaScope, setMediaScope] = React.useState<MediaScope>(() => MEDIA_SCOPE.current);
-  const switchMedia = React.useCallback((next: MediaScope) => { MEDIA_SCOPE.current = next; setMediaScope(next); }, []);
-  const [revealMedia, setRevealMedia] = React.useState<{ path: string; seq: number; highlight: boolean; done?: boolean } | null>(null);
-  const mediaRevealed = React.useCallback((seq: number) => {
-    setRevealMedia((request) => request?.seq === seq && !request.done ? { ...request, done: true } : request);
-  }, []);
-  /* the drawer's media: only the project's own; what it took from the library (lib/library fromLibrary) is shown in
-     the library's own category, tried there without being listed here */
-  const libraryIndex = useLibraryIndex();
   /* the library's templates, for one to take another's place (TemplateSection) */
   const templateItemsRef = React.useRef<LibraryItem[]>([]);
   templateItemsRef.current = (libraryIndex?.items ?? []).filter((i) => i.cat === 'template' && i.kind === 'group');
-  const scopedListing = React.useMemo(() => {
-    if (!listing || mediaScope === 'saved') return listing;
-    const keep = (f: { path: string }) => f.path === revealMedia?.path || !fromLibrary(f.path, libraryIndex?.items ?? null);
-    return { ...listing, files: listing.files.filter(keep), pages: listing.pages.filter(keep) };
-  }, [listing, mediaScope, libraryIndex, revealMedia?.path]);
-  const savedListing = useSavedListing(mediaScope === 'saved');
-  const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => importIntoSaved(files, into, onProgress, t('assets.uploadFailed')), [t]);
-  /* `inDrawer`: in the assets drawer, whose side bar switches between the project's media and Saved */
-  const mediaPool = (inDrawer = false) => (mediaScope === 'saved' ? (
-    <MediaPool
-      key="saved"
-      projectId={SAVED}
-      listing={savedListing}
-      sources={savedSources}
-      selectedPath={pickedSaved ? pickedMedia?.path ?? null : null}
-      onSelectFile={(file) => { pickMedia(file); setPickedSaved(Boolean(file)); }}
-      onImport={savedImport}
-      onMove={savedActions.move}
-      onDelete={savedActions.remove}
-      onNewFolder={savedActions.newFolder}
-      onReveal={savedActions.reveal}
-      onPick={onPick}
-      onBring={(paths, into, mode) => savedActions.bring(paths, into, mode)}
-      {...(studioHost?.refer ? { onReferFile: (file: WorkspaceResource) => void referOutside(file) } : {})}
-      scope="saved"
-      onScope={inDrawer ? undefined : switchMedia}
-      onAdd={(file) => { if (canvasOpen) void requestCanvasFiles(file.path, true); else void placeSaved(file, { atPlayhead: true }); }}
-    />
-  ) : (
-    <MediaPool
-      key={mediaScope}
-      projectId={projectId}
-      listing={inDrawer ? scopedListing : listing}
-      sources={mediaSources}
-      usedSrcs={usedSrcs}
-      selectedPath={pickedSaved ? null : pickedMedia?.path ?? null}
-      onSelectFile={pickMedia}
-      onImport={onImport}
-      onMove={onMove}
-      onMoveCheck={onMoveCheck}
-      onDelete={onDelete}
-      onExtractAudio={onExtractAudio}
-      onSetCover={onSetCover}
-      onNewFolder={onNewFolder}
-      onDropClips={dropClipsForAssets}
-      onReveal={reveal}
-      onPick={onPick}
-      onBring={onBring}
-      onRelink={onRelink}
-      onCollect={onCollect}
-      missing={missingMedia.length}
-      onFindMissing={() => void findMissing()}
-      wordsOf={madeWords}
-      versionsOf={madeVersions}
-      onSave={saveFiles}
-      scope="project"
-      onScope={inDrawer ? undefined : switchMedia}
-      {...(studioHost?.refer ? { fileRef: refOfFile, onRefer: studioHost.refer } : {})}
-      reveal={revealMedia}
-      onRevealed={mediaRevealed}
-      shown={libraryOpen}
-      litPath={chatPoint?.file ?? null}
-      onAdd={(file) => { if (canvasOpen) void requestCanvasFiles(file.path); else void addMedia(file, { atPlayhead: true }); }}
-    />
-  ));
   /* the range marked on the timeline (⇧-drag on the ruler, I and O): Studio's, told to the app with the selection */
   const [markedRange, setMarkedRange] = React.useState<FilmRange | null>(null);
   /* Clicking a range in chat briefly points it out, separately from the editing selection. */
@@ -3175,20 +3062,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* what the app's chat points at (lib/chat-marks): the pill hovered there, the references of the message being written */
   const [chatRef, setChatRef] = React.useState<StudioRef | null>(null);
   const [draftMarks, setDraftMarks] = React.useState<DraftMarks>(NO_DRAFT);
-  /** Find a file in Assets; the canvas points it out without replacing the editing selection. */
-  const showFile = (path: string, highlight = false) => {
-    const file = listing ? [...listing.pages, ...listing.files].find((f) => f.path === path) : undefined;
-    if (!file) return;
-    openLibrary(true);
-    switchMedia('project');
-    if (!highlight) {
-      if (canvasOpen) {
-        setPickedMedia(file);
-        setPickedSaved(false);
-      } else pickMedia(file);
-    }
-    setRevealMedia((cur) => ({ path: file.path, seq: (cur?.seq ?? 0) + 1, highlight }));
-  };
   const hostCommands = React.useRef<(command: StudioCommand) => void>(() => {});
   hostCommands.current = (command) => {
     if (command.type === 'highlight') { setChatRef(command.ref ?? null); return; }
@@ -4706,15 +4579,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     });
   }, [importAndPlace, takeSubtitleFiles]);
   const [pictureDrop, setPictureDrop] = React.useState(false);
+  /* the cover a sound of the library shows over the picture is the shell's drawer's, put there from another React
+     root: what is dragged over it reaches the picture's handlers now, and is left alone as it was before */
+  const overLibraryCover = (e: React.DragEvent) => Boolean(libraryPreviewPicture?.contains(e.target as Node));
   const pictureDropProps = {
     onDragOver: (e: React.DragEvent) => {
-      if (!isComputerFileDrag(e.dataTransfer)) return;
+      if (overLibraryCover(e) || !isComputerFileDrag(e.dataTransfer)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
       setPictureDrop(true);
     },
     onDragLeave: (e: React.DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPictureDrop(false); },
     onDrop: (e: React.DragEvent) => {
+      if (overLibraryCover(e)) return;
       setPictureDrop(false);
       if (!isComputerFileDrag(e.dataTransfer) || !e.dataTransfer.files.length) return;
       e.preventDefault();
@@ -5141,8 +5018,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   };
   /* the projects window: closed, open on the projects (true), or on the examples (and one example's page) */
   const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string }>(false);
-  /* the library's skills as the app's chat asked to show them (LibraryDrawer `showSkills`) */
-  const [skillsShown, setSkillsShown] = React.useState<SkillsRequest | null>(null);
   const [settingsOpen, setSettingsOpen] = useSettings();
   /* captions of what is said (the library's captions): what went wrong, shown there; with no service to transcribe, it opens Services */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
@@ -5245,17 +5120,57 @@ export function ProjectView({ projectId, onProject, onLeave }: {
 
   /* what the shell reaches of the edit when it needs it (shell/frame): the picture drawn again, the files the film
      plays; what changing the workbench shown asks of the edit (playing stopped, the panes being rearranged, Motion's
-     panes opened); what the canvas does here (a file or a cut put in the film, a file found in the library, Settings
-     opened, the app's panel); and where the shell draws what takes the panes' place, as the window is laid out here.
-     The edit's own functions are called as the latest render made them */
-  const forShell = React.useRef({ addFromCanvas, sendFromCanvas, showFile, setSettingsOpen, hostPanel });
-  forShell.current = { addFromCanvas, sendFromCanvas, showFile, setSettingsOpen, hostPanel };
+     panes opened); what the canvas does here (a file or a cut put in the film, Settings opened, the app's panel);
+     where the shell draws what takes the panes' place, as the window is laid out here; and what the library does
+     here, with where its pane is (below). The edit's own functions are called as the latest render made them */
+  const forShell = React.useRef({ addFromCanvas, sendFromCanvas, setSettingsOpen, hostPanel, openLibrary });
+  forShell.current = { addFromCanvas, sendFromCanvas, setSettingsOpen, hostPanel, openLibrary };
   const chatThere = Boolean(hostPanel);
   const chatOpen = Boolean(hostPanel?.open);
   const shellChat = React.useMemo(() => (chatThere ? { open: chatOpen, toggle: () => forShell.current.hostPanel?.setOpen(!chatOpen) } : undefined), [chatThere, chatOpen]);
   const places = { edit: editFree ? {} : insetStyle(editDock), canvas: canvasFree ? {} : insetStyle(canvasDock), canvasFrame: freeStyle('canvas') };
   const placesKey = JSON.stringify(places);
   const shellPlaces = React.useMemo(() => places, [placesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the library is the shell's (shell/library); what it does in the edit is given here: a file of the media pane put in
+     the film at the playhead or taken in hand (shown in the viewer and the inspector), the library's things added or
+     tried over the picture, the captions, the voices. Each the same one until it changes (useSteady) */
+  const libraryCaptions = useSteady<CaptionsActions>({
+              heard: heardClips, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
+              picked: captionPicked, pick: pickCaptionClip, choosing: setCaptionChoosing,
+              speechTrack: speechRow?.badge ?? null, captionTrack: captionRow?.badge ?? null,
+              speechAuto: Boolean(speechSrc && cuesOf(speechSrc) && untouchedSpeech(cuesOf(speechSrc)!)),
+              make: (o) => void makeCaptions(o), connect: () => { setSubtitleProblem(null); setSettingsOpen('models'); },
+              fromFile: (file, o) => void captionsFromFile(file, o), addOne: () => void captionHere(),
+  });
+  const libraryPreview = useSteady({ bar: libraryPreviewBar, picture: fullscreen ? null : libraryPreviewPicture, dismissRef: dismissLibraryPreview, begin: beginLibraryPreview });
+  const shellLibrary = useSteady({
+    add: (file: WorkspaceResource, saved: boolean) => { if (saved) void placeSaved(file, { atPlayhead: true }); else void addMedia(file, { atPlayhead: true }); },
+    pickedPath: pickedMedia?.path ?? null, pickedSaved,
+    pick: (file: WorkspaceResource | null, how?: { saved?: boolean; quiet?: boolean }) => {
+      /* with the canvas over the viewer: in hand only, nothing paused or opened */
+      if (how?.quiet) { setPickedMedia(file); setPickedSaved(false); return; }
+      pickMedia(file);
+      if (how?.saved) setPickedSaved(Boolean(file));
+    },
+    usedSrcs, onDropClipsForAssets: dropClipsForAssets, litPath: chatPoint?.file ?? null,
+    actions: library.actions, tried: libraryTrial?.id ?? null, templateStatus,
+    preview: libraryPreview, captions: libraryCaptions, speak: speakVoice,
+  });
+  /* where the library's pane is, as the window is laid out here (the layout is still the edit's): docked on its own,
+     or in the app's panel over the chat, with the seam that sizes the panel while the pane covers it */
+  const libraryPane = {
+    open: libraryOpen, dock: independentLibrary ? dockGeometry.dock : 'chat' as const,
+    rect: independentLibrary ? freeGeometry?.panels.library ?? dockGeometry.library : chatLibraryRect,
+    free: Boolean(freeGeometry), under: !independentLibrary ? hostAssets?.bottom ?? 0 : 0,
+    seam: !freeGeometry && !independentLibrary && hostAssets?.open && hostPanel ? { label: hostPanel.label, width: hostPanel.width, bottom: hostAssets.bottom, side: workspacePrefs.chatSide } : null,
+  };
+  const libraryPaneKey = JSON.stringify(libraryPane);
+  const shellLibraryPane = React.useMemo(() => ({
+    ...libraryPane,
+    setOpen: (open: boolean) => forShell.current.openLibrary(open),
+    onResize: (size: { assetsWidth?: number; libraryHeight?: number }) => updateWorkspaceRef.current(size),
+    setPanelWidth: (width: number, done?: boolean) => { forShell.current.hostPanel?.setWidth(width, done); },
+  }), [libraryPaneKey]); // eslint-disable-line react-hooks/exhaustive-deps
   usePublishWiring(React.useMemo(() => ({
     reloadPicture: () => preview.current?.reload?.(),
     srcsInUse: () => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])),
@@ -5264,11 +5179,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     motionShown: () => updateWorkspaceRef.current({ timeline: true, inspector: true }),
     addToFilm: (file: WorkspaceResource) => { void forShell.current.addFromCanvas(file); },
     sendToFilm: (list: WorkspaceResource[]) => { void forShell.current.sendFromCanvas(list); },
-    showFile: (path: string, highlight?: boolean) => forShell.current.showFile(path, highlight),
     openSettings: (section: SettingsSection) => forShell.current.setSettingsOpen(section),
     ...(shellChat ? { chat: shellChat } : {}),
     places: shellPlaces,
-  }), [shellChat, shellPlaces]));
+    library: shellLibrary,
+    libraryPane: shellLibraryPane,
+  }), [shellChat, shellPlaces, shellLibrary, shellLibraryPane]));
 
   /* The page is the shell's (shell/ProjectFrame): what is drawn here goes into the places it keeps. In the edit's own
      element are only the edit's panes; the top bar and what lies over the page are put into the shell's places from
@@ -5839,25 +5755,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
           onClose={() => setTemplateAsk(null)}
         />
       ) : null}
-      {!freeGeometry && !independentLibrary && hostAssets?.open && hostPanel ? <PanelSeam panel={hostPanel} bottom={hostAssets.bottom} side={workspacePrefs.chatSide} /> : null}
-      <WorkspaceLibraryPane open={libraryOpen} dock={independentLibrary ? dockGeometry.dock : 'chat'}
-        rect={independentLibrary ? freeGeometry?.panels.library ?? dockGeometry.library : chatLibraryRect}
-        free={Boolean(freeGeometry)}
-        onResize={updateWorkspace}>
-          <LibraryDrawer media={mediaPool(true)} mediaScope={mediaScope} onMediaScope={switchMedia} mediaRequest={revealMedia?.seq} actions={canvasOpen ? { ...library.actions, add: item => { if (['page', 'sound', 'group'].includes(item.kind)) void requestCanvasFiles(`${BUILT_IN}/${item.id}`, true); else { setCanvasOpen(false); library.actions.add(item); } }, tryOut: () => {} } : library.actions}
-            tried={libraryTrial?.id ?? null} templateStatus={templateStatus} previewBar={canvasOpen ? null : libraryPreviewBar} previewPicture={canvasOpen || fullscreen ? null : libraryPreviewPicture} dismissRef={dismissLibraryPreview}
-            onPreviewStart={canvasOpen ? pause : beginLibraryPreview} onDownloadFailed={onLibraryDownloadFailed} shown={libraryOpen} under={!independentLibrary ? hostAssets?.bottom ?? 0 : 0}
-            captions={{
-              heard: heardClips, making: captionsMaking || subs.transcribing, problem: subtitleProblem,
-              picked: captionPicked, pick: pickCaptionClip, choosing: setCaptionChoosing,
-              speechTrack: speechRow?.badge ?? null, captionTrack: captionRow?.badge ?? null,
-              speechAuto: Boolean(speechSrc && cuesOf(speechSrc) && untouchedSpeech(cuesOf(speechSrc)!)),
-              make: (o) => void makeCaptions(o), connect: () => { setSubtitleProblem(null); setSettingsOpen('models'); },
-              fromFile: (file, o) => void captionsFromFile(file, o), addOne: () => void captionHere(),
-            }}
-            speak={speakVoice}
-            onServices={() => setSettingsOpen('models')} projectId={projectId} showSkills={skillsShown} />
-      </WorkspaceLibraryPane>
+      </>, slots.over)}
+      {/* the library's pane is the shell's (shell/library), drawn between these two places */}
+      {ReactDOM.createPortal(<>
       {freeGeometry && workspacePrefs.tree ? <WorkspaceSeams tree={workspacePrefs.tree} frames={freeGeometry} editing={Boolean(layoutDraft.draft)} onChange={tree => updateWorkspace({ tree })} onCheckpoint={layoutDraft.draft ? layoutDraft.checkpoint : undefined} /> : null}
       {layoutDraft.draft && freeGeometry ? <WorkspaceEditor value={layoutDraft.draft} frames={freeGeometry} hasChat={Boolean(hostPanel)} onChange={layoutDraft.change}
         onDone={finishLayoutEdit} onCancel={cancelLayoutEdit} onUndo={layoutDraft.undo} onRedo={layoutDraft.redo} canUndo={layoutDraft.canUndo} canRedo={layoutDraft.canRedo}
@@ -5882,7 +5782,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       />
       <PasteAttrsDialog attrs={pasteAttrsOpen ? copiedAttrs : null} onPaste={doPasteAttrs} onCancel={() => setPasteAttrsOpen(false)} />
       <SpendAsks projectId={projectId} />
-      </>, slots.over)}
+      </>, slots.overLibrary)}
     </>
   );
 }
@@ -5916,37 +5816,4 @@ function createGeometryStore(): GeometryStore {
 function LiveGeometryInspector({ store, ...props }: Omit<React.ComponentProps<typeof FilmInspector>, 'geometry'> & { store: GeometryStore }) {
   const geometry = React.useSyncExternalStore(store.subscribe, store.get, store.get);
   return <FilmInspector {...props} geometry={geometry} />;
-}
-
-/**
- * The seam that sizes the app's panel while Studio's assets drawer covers it (the panel's own seam is under the
- * drawer then): the same 10 px strip over the column's right edge, dragged or moved with the arrow keys.
- */
-function PanelSeam({ panel, bottom, side = 'left' }: { panel: HostPanel; bottom: number; side?: 'left' | 'right' }) {
-  const drag = React.useRef<{ x: number; width: number } | null>(null);
-  return (
-    <div role="separator" aria-orientation="vertical" aria-label={panel.label} tabIndex={0}
-      className="workspace-resize-handle fixed z-[38] w-[9px] cursor-col-resize touch-none outline-none"
-      style={{ top: HOST_PANEL_TOP, bottom, left: side === 'right' ? `calc(100vw - ${HOST_PANEL_WIDTH} - 4px)` : `calc(${HOST_PANEL_WIDTH} - 5px)` }}
-      onPointerDown={(e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-        e.currentTarget.setPointerCapture(e.pointerId);
-        drag.current = { x: e.clientX, width: panel.width };
-        document.body.style.cursor = 'col-resize';
-      }}
-      onPointerMove={(e) => { if (drag.current) panel.setWidth(drag.current.width + (e.clientX - drag.current.x) * (side === 'right' ? -1 : 1)); }}
-      onPointerUp={(e) => {
-        if (!drag.current) return;
-        panel.setWidth(drag.current.width + (e.clientX - drag.current.x) * (side === 'right' ? -1 : 1), true);
-        drag.current = null;
-        document.body.style.cursor = '';
-      }}
-      onLostPointerCapture={() => { drag.current = null; document.body.style.cursor = ''; }}
-      onKeyDown={(e) => {
-        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-        e.preventDefault();
-        panel.setWidth(panel.width + (e.key === 'ArrowRight' ? 24 : -24) * (side === 'right' ? -1 : 1), true);
-      }} />
-  );
 }
