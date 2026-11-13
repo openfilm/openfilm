@@ -27,7 +27,7 @@ export declare class UsageError extends Error {}
 /** Stop a process at once, with its children on Windows. */
 export declare function kill(proc: import('node:child_process').ChildProcess): void;
 /** Run ffmpeg (`-nostdin`, errors only) with `args`; rejects with its error, or when it runs past `timeoutMs`. */
-export declare function ffmpeg(args: string[], opts?: { input?: boolean; timeoutMs?: number; what?: string }): { proc: import('node:child_process').ChildProcess; done: Promise<void> };
+export declare function ffmpeg(args: string[], opts?: { input?: boolean; timeoutMs?: number; what?: string; cwd?: string }): { proc: import('node:child_process').ChildProcess; done: Promise<void> };
 
 /** Where a path the film asks for (a sound's `src`, resolved from the entry as the browser would) lives on disk; throws for one outside the film's folder, or a link out of it that is not media the person linked (src/media-links.mjs). */
 export declare function fileOf(root: string, entry: string, src: string): string;

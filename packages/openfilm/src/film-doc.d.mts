@@ -157,3 +157,5 @@ export declare function fittedFade(fade: readonly [number, number] | null | unde
 export declare function pictureRect(kind: FilmClipKind | null, own: { w: number; h: number } | null | undefined, stage: { w: number; h: number }, box?: FilmBox | null): { x: number; y: number; w: number; h: number; r: number };
 /** A style attribute's declarations, in order: `[property, value]`, the property in lower case. */
 export declare function declarations(style: string): [string, string][];
+/** The LUT files a video clip's picture is graded by, in order: its style's `--of-lut` `url(…)`s, as written. */
+export declare function lutsOf(clip: { src?: unknown; sound?: unknown; style?: unknown } | null | undefined): string[];
