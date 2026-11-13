@@ -27,12 +27,13 @@ export interface SurfaceProps {
 }
 
 /**
- * A plugin's surface by its workbench's name: the page of one someone made, what its program serves, or its element;
- * one this build has nothing to show for says so.
+ * A plugin's surface by its workbench's name: its element (one of OpenFilm's own, or one someone made once the person
+ * lets it run), the page of one someone made, or what its program serves; one this build has nothing to show for says so.
  */
 export function PluginSurface({ id, page, files, title, program, runs, inApp, element, ...props }: SurfaceProps & { id: string; page?: string; files?: string; title?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string }) {
   const t = useT();
-  if (inApp) return element ? <ElementSurface key={element} url={element} files={files} projectId={props.projectId} folder={props.folder} /> : <p className={NOTE}>{t('assetDrawer.surfaceNotAllowed')}</p>;
+  if (element) return <ElementSurface key={element} url={element} files={files} projectId={props.projectId} folder={props.folder} />;
+  if (inApp) return <p className={NOTE}>{t('assetDrawer.surfaceNotAllowed')}</p>;
   if (program) return <ProgramSurface key={`${id}:${props.projectId}:${runs ? 1 : 0}`} uid={id} projectId={props.projectId} title={title ?? id} />;
   if (page) return <iframe key={page} src={`${page}${files ? `?project=${encodeURIComponent(files)}` : ''}`} title={title ?? id} allow="autoplay" className="min-h-0 min-w-0 flex-1 border-0 bg-[var(--bg-panel)]" />;
   return <p className="m-auto max-w-[360px] px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.surfaceMissing')}</p>;
