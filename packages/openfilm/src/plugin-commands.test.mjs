@@ -66,7 +66,7 @@ test('a plugin that is off runs nothing, and two of one name are told apart', ()
   setSkillOn('local/outline', false, where.home);
   const off = pluginCommand(['outline', 'list'], where);
   assert.equal(off.status, 1);
-  assert.match(off.error, /^The outline skill is off: the person turns it on in the library's Skills tab\.$/);
+  assert.match(off.error, /^The outline skill is off: the person turns it on in the library's Plugins tab\.$/);
   /* one with a surface is a plugin, and is said to be */
   plugin(join(where.mine, 'board'), 'board', { list: 'list.mjs' }, { 'list.mjs': '', 'index.html': '<p>' });
   setSkillOn('local/board', false, where.home);
