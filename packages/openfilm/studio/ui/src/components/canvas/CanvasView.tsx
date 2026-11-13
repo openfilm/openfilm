@@ -43,13 +43,17 @@ import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
   BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, lastModel, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
-  type Board, type BoardNode, type FileNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type NoteData, type Side, type SpawnKind, type UploadStatus,
+  type AssistKind, type Board, type BoardNode, type FileNode, type PictureTool, type FrameData, type FrameNode, type MakeData, type MakingNode, type NoteData, type Side, type SpawnKind, type UploadStatus,
 } from './board';
 import { BottomToolbar, CornerBar, Dots, EmptyBoard, Outline, Ripples, ToolCorner, Viewer } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
 import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from './connections';
 import { CharacterLibrary, HistoryModal, MaterialLibrary, SUBJECT_KINDS, SUBJECT_PARTS, loadSubjects } from './libraries';
-import { RedrawEditor, type RedrawWay } from './redraw';
+import { RedrawEditor, type RedrawStart, type RedrawWay } from './redraw';
+import { ExpandEditor, type Expanded } from './expand';
+import { CropEditor } from './crop';
+import { AdjustEditor } from './adjust';
+import { LightPanel } from './light';
 import { presetOf } from '@/lib/canvas-presets';
 import { splitGrid } from './pixels';
 import { FRAME_COLOR, NODE_TYPES } from './nodes';
@@ -147,7 +151,9 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   /* a window over the board: what was made, the characters, the styles, the effects */
   const [modal, setModal] = React.useState<null | 'history' | 'characters' | 'styles' | 'effects'>(null);
   /* a picture being changed in part: the node it is on and its file */
-  const [redraw, setRedraw] = React.useState<{ id: string; path: string } | null>(null);
+  const [redraw, setRedraw] = React.useState<{ id: string; path: string; start?: RedrawStart } | null>(null);
+  /* a picture's own tool open over the board */
+  const [pictureTool, setPictureTool] = React.useState<{ id: string; path: string; tool: PictureTool } | null>(null);
   /* the node a library was opened for (its panel's chip): what is picked goes into it */
   const [modalFor, setModalFor] = React.useState<string | null>(null);
   const openLibrary = (which: 'characters' | 'styles' | 'effects', node?: string) => { setModalFor(node ?? null); setModal(which); };
@@ -940,6 +946,153 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
 
+  /**
+   * Pictures made from one, each its own preset and shape, in a row in a group beside it, every one wired from it and
+   * all made at once.
+   */
+  const makeGroupFrom = (sourceId: string, label: string, items: Array<{ preset: string; ratio: string; prompt?: string }>) => {
+    const gap = 40;
+    const sizes = items.map((item) => makeSize('image', item.ratio));
+    const w = sizes.reduce((sum, z) => sum + z.w, 0) + gap * (items.length - 1) + 2 * GROUP_PAD;
+    const h = Math.max(...sizes.map((z) => z.h)) + 2 * GROUP_PAD + GROUP_HEAD / 2;
+    const at = spotBeside(sourceId, 'source', w);
+    const group = canvasId('n');
+    let x = GROUP_PAD;
+    const made = items.map((item, i) => {
+      const node = { id: canvasId('n'), parent: group, x, y: GROUP_PAD + GROUP_HEAD / 2, w: sizes[i]!.w, h: sizes[i]!.h, make: 'image' as const, prompt: item.prompt ?? '', preset: item.preset, opts: { ratio: item.ratio } };
+      x += sizes[i]!.w + gap;
+      return node;
+    });
+    add({
+      nodes: [{ id: group, x: at.x, y: at.y, w, h, group: label, color: 'gray' }, ...made],
+      edges: made.map((n) => ({ id: canvasId('e'), from: sourceId, to: n.id, order: 0 })),
+    });
+    requestAnimationFrame(() => requestAnimationFrame(() => { void flow.fitView({ nodes: [{ id: group }], padding: 0.2, maxZoom: 1, duration: 300 }); void makeAll(group); }));
+  };
+  /** a picture widened: the picture in its larger frame and the mask kept, a new picture made from them beside it */
+  const outpaint = async (sourceId: string, expanded: Expanded) => {
+    const choice = choicesFor(providers, 'image').find((c) => c.spec?.mask);
+    if (!choice) { onError(t('canvas.redraw.noModel')); return; }
+    try {
+      const stamp = Date.now().toString(36);
+      const [framed, mask] = await onImportFiles([
+        new File([expanded.picture], `expand-${stamp}.png`, { type: 'image/png' }),
+        new File([expanded.mask], `mask-${stamp}.png`, { type: 'image/png' }),
+      ]);
+      if (!framed || !mask) return;
+      const ratio = ratioOf(expanded.ratio, choice.spec);
+      const size = makeSize('image', ratio);
+      /* the framed picture beside the source, the new one beside it, made from it */
+      const holder = canvasId('n');
+      const id = canvasId('n');
+      const at = spotBeside(sourceId, 'source', size.w * 2 + BESIDE);
+      add({
+        nodes: [
+          { id: holder, x: at.x, y: at.y, w: size.w, h: size.h, path: framed },
+          { id, x: at.x + size.w + BESIDE, y: at.y, w: size.w, h: size.h, make: 'image', prompt: expanded.words, preset: undefined, via: choice.via, ...(choice.model ? { model: choice.model } : {}), opts: { ratio, mask } },
+        ],
+        edges: [{ id: canvasId('e'), from: sourceId, to: holder, order: 0 }, { id: canvasId('e'), from: holder, to: id, order: 0 }],
+      }, false);
+      setPictureTool(null);
+      requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(id); }));
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+  /** an edited copy of a picture (cropped, colored) brought in beside it, wired from it */
+  const bringEdited = async (sourceId: string, file: File) => {
+    try {
+      const [path] = await onImportFiles([file]);
+      if (path) addFile(path, { at: spotBeside(sourceId, 'source', FILE_W), from: { node: sourceId, side: 'source' }, corner: true });
+      setPictureTool(null);
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+  /**
+   * A picture parted into layers: its subject cut out (on this computer), and the background without it — the subject's
+   * shape, a little larger, as a mask a model fills in — in a group beside it.
+   */
+  const splitLayers = async (sourceId: string, path: string) => {
+    if (!folder) return;
+    const source = byPath.get(path);
+    if (!source) return;
+    const base = source.name.replace(/\.[^.]+$/, '');
+    onNotice(t('canvas.marketing.parting'));
+    try {
+      const receipt = JSON.parse(await api.make(folder, 'cutout', { src: path, out: `${base}-subject` }, {})) as { src?: string };
+      if (!receipt.src) return;
+      const cut = await new Promise<HTMLImageElement>((done, fail) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => done(img);
+        img.onerror = () => fail(new Error('the cut-out did not load'));
+        img.src = sources.file({ ...source, path: receipt.src! });
+      });
+      const W = cut.naturalWidth; const H = cut.naturalHeight;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      /* the subject's shape, grown a little all round, cleared: what the model redraws */
+      ctx.globalCompositeOperation = 'destination-out';
+      const grow = Math.max(4, Math.round(Math.min(W, H) * 0.012));
+      for (let a = 0; a < 16; a++) ctx.drawImage(cut, Math.cos((a / 16) * Math.PI * 2) * grow, Math.sin((a / 16) * Math.PI * 2) * grow);
+      ctx.drawImage(cut, 0, 0);
+      const mask = await new Promise<Blob>((done, fail) => canvas.toBlob((b) => (b ? done(b) : fail(new Error('no mask was made'))), 'image/png'));
+      const [maskPath] = await onImportFiles([new File([mask], `${base}-layer-mask.png`, { type: 'image/png' })]);
+      const choice = choicesFor(providers, 'image').find((c) => c.spec?.mask);
+      const ratio = frameRatio(source.w, source.h, choice?.spec) ?? '1:1';
+      const size = makeSize('image', ratio);
+      const gap = 40;
+      const w = size.w * 2 + gap + 2 * GROUP_PAD;
+      const h = size.h + 2 * GROUP_PAD + GROUP_HEAD / 2;
+      const at = spotBeside(sourceId, 'source', w);
+      const group = canvasId('n');
+      const background = canvasId('n');
+      const y = GROUP_PAD + GROUP_HEAD / 2;
+      add({
+        nodes: [
+          { id: group, x: at.x, y: at.y, w, h, group: t('canvas.marketing.layers'), color: 'gray' },
+          { id: canvasId('n'), parent: group, x: GROUP_PAD, y, w: size.w, h: size.h, path: receipt.src, title: t('canvas.marketing.subject') },
+          ...(choice && maskPath ? [{ id: background, parent: group, x: GROUP_PAD + size.w + gap, y, w: size.w, h: size.h, make: 'image' as const, title: t('canvas.marketing.background'),
+            prompt: 'Remove the subject in the masked area completely and fill the place in with the background behind it, continuing its texture, light and perspective, with no trace of the subject and no shadow of it.',
+            via: choice.via, ...(choice.model ? { model: choice.model } : {}), opts: { ratio, mask: maskPath } }] : []),
+        ],
+        edges: choice && maskPath ? [{ id: canvasId('e'), from: sourceId, to: background, order: 0 }] : [],
+      });
+      if (!choice) onError(t('canvas.redraw.noModel'));
+      else requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(background); }));
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+  /**
+   * The agent reading a picture: a text node beside it written from the picture — the prompt that would make it again,
+   * four ideas to take it further, a shot list around it, or the words in it, each as a line to change (then wired into
+   * a picture node that changes them).
+   */
+  const assist = (sourceId: string, path: string, kind: AssistKind) => {
+    const tongue = ({ 'zh-CN': 'Simplified Chinese', en: 'English', ja: 'Japanese', ko: 'Korean', es: 'Spanish' } as Record<string, string>)[language] ?? 'English';
+    const asks: Record<AssistKind, string> = {
+      prompt: `Look at the attached picture and write one detailed prompt an image model could use to make it again: the subject and what it is doing, the setting, the composition and framing, the camera and lens, the light, the colors, the style and the mood. One paragraph, no preamble. Write it in ${tongue}.`,
+      ideas: `Look at the attached picture and suggest four different creative directions to take it further, each a ready-to-use prompt for an image model, numbered 1 to 4, one or two sentences each: change the moment, the angle, the light or the style while keeping its subject. No preamble. Write in ${tongue}.`,
+      shots: `Look at the attached picture as a frame of a film and design a cinematic shot list of six shots that build a short scene around it. For each shot, one numbered line: shot size, camera angle, lens, camera movement, light, and what happens. No preamble. Write in ${tongue}.`,
+      text: 'List every piece of text visible in the attached picture exactly as it is written, one per line, each written twice as: "text" → "text" (the second to be changed). Only those lines, no preamble.',
+    };
+    const at = spotBeside(sourceId, 'source', NOTE_W);
+    const note = canvasId('n');
+    const nodesAdded: CanvasDoc['nodes'] = [{ id: note, x: at.x, y: at.y, w: NOTE_W, h: CARD_H, text: '', title: t(`canvas.assist.${kind}`) }];
+    const edgesAdded: CanvasDoc['edges'] = [];
+    /* the words in it: the lines wired, with the picture, into a node that changes them */
+    if (kind === 'text') {
+      const change = canvasId('n');
+      const source = byPath.get(path);
+      const ratio = frameRatio(source?.w, source?.h) ?? '1:1';
+      const size = makeSize('image', ratio);
+      nodesAdded.push({ id: change, x: at.x + NOTE_W + BESIDE, y: at.y, w: size.w, h: size.h, make: 'image', prompt: '', preset: 'editText', opts: { ratio } });
+      edgesAdded.push({ id: canvasId('e'), from: sourceId, to: change, order: 0 }, { id: canvasId('e'), from: note, to: change, order: 1 });
+    }
+    add({ nodes: nodesAdded, edges: edgesAdded }, false);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      void write(note, asks[kind], [path]).then((error) => { if (error) onError(error); });
+    }));
+  };
   /** a group's pictures (or one picture) kept as a character, named as the group is, its words what it is about */
   const keepCharacter = async (id: string) => {
     const nodesNow = now.current.nodes;
@@ -1053,7 +1206,16 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     spawn: (id, kind, data) => {
       const made = addKind(kind, { at: spotBeside(id, 'source', WIDE[kind]), from: { node: id, side: 'source' }, corner: true });
       if (data) setNodes((list) => list.map((n) => (n.id === made ? { ...n, data: { ...n.data, ...data } } as BoardNode : n)));
+      return made;
     },
+    openTool: (id, path, which) => setPictureTool({ id, path, tool: which }),
+    sizes: (id, ratios) => makeGroupFrom(id, t('canvas.presets.names.multiSize'), ratios.map((ratio) => ({ preset: 'multiSize', ratio }))),
+    productSet: (id) => makeGroupFrom(id, t('canvas.marketing.set'), [
+      { preset: 'whiteShot', ratio: '1:1' }, { preset: 'productDetail', ratio: '1:1' }, { preset: 'productLife', ratio: '4:3' },
+      { preset: 'adShot', ratio: '3:4' }, { preset: 'productFeatures', ratio: '3:4' },
+    ]),
+    layers: (id, path) => { void splitLayers(id, path); },
+    assist: (id, path, kind) => assist(id, path, kind),
     bring: (id, list) => {
       uploadFiles(list, { at: spotBeside(id, 'source', FILE_W), from: { node: id, side: 'source' }, corner: true, wireFirstOnly: true });
     },
@@ -1149,7 +1311,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     keepCharacter: (id) => { void keepCharacter(id); },
     openLibrary,
     useSubject: (id, subject) => { void useCharacter(subject, id); },
-    redraw: (id, path) => setRedraw({ id, path }),
+    redraw: (id, path, start) => setRedraw({ id, path, ...(start ? { start } : {}) }),
     tidy: (group) => { willChange(); setNodes((list) => tidyGroup(list, group)); },
     openSettings: onOpenSettings,
     ...(chat ? { write, writing: (id: string) => writing.get(id), stopWriting: (id: string) => writers.current.get(id)?.abort(), uploadWritingFiles: onImportFiles } : {}),
@@ -1241,7 +1403,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (target !== document.body && !rootRef.current?.contains(target)) return;
     /* a menu open has the keys (its Escape closes it, and only it); a dialog over the board has them all (its own undo) */
     if (menu || context) return;
-    if (modal || redraw || target.closest('[role="dialog"]')) { if (target === document.body) event.stopPropagation(); return; }
+    if (modal || redraw || pictureTool || target.closest('[role="dialog"]')) { if (target === document.body) event.stopPropagation(); return; }
     if (viewing) { if (event.key === 'Escape') { event.preventDefault(); setViewing(null); } return; }
     if (picking && event.key === 'Escape') { event.preventDefault(); setPicking(null); return; }
     if (target.closest('input, textarea, [contenteditable="true"], [data-canvas-video-controls], [data-canvas-title]')) return;
@@ -1584,8 +1746,24 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           onLibrary={(which) => openLibrary(which)} onCharacters={() => openLibrary('characters')} onHistory={() => setModal('history')}
         />}
         {redraw && byPath.get(redraw.path) ? (
-          <RedrawEditor src={sources.file(byPath.get(redraw.path)!)} onClose={() => setRedraw(null)} onMake={redrawMake} />
+          <RedrawEditor src={sources.file(byPath.get(redraw.path)!)} start={redraw.start} onClose={() => setRedraw(null)} onMake={redrawMake} />
         ) : null}
+        {/* a picture's own tools: widened, cropped and turned, colored, lit anew */}
+        {pictureTool && byPath.get(pictureTool.path) ? (() => {
+          const picture = byPath.get(pictureTool.path)!;
+          const src = sources.file(picture);
+          const close = () => setPictureTool(null);
+          if (pictureTool.tool === 'expand') return <ExpandEditor src={src} onClose={close} onMake={(expanded) => outpaint(pictureTool.id, expanded)} />;
+          if (pictureTool.tool === 'crop') return <CropEditor src={src} name={picture.name} onClose={close} onDone={(file) => bringEdited(pictureTool.id, file)} />;
+          if (pictureTool.tool === 'adjust') return <AdjustEditor src={src} name={picture.name} onClose={close} onDone={(file) => bringEdited(pictureTool.id, file)} />;
+          return (
+            <LightPanel src={src} onClose={close} onMake={(made) => {
+              const shape = frameRatio(picture.w, picture.h) ?? '1:1';
+              board.spawn(pictureTool.id, 'image', 'preset' in made ? { preset: made.preset, opts: { ratio: shape } } : { prompt: made.words, opts: { ratio: shape } });
+              close();
+            }} />
+          );
+        })() : null}
         {modal === 'styles' || modal === 'effects' ? (
           <MaterialLibrary kind={modal} onClose={() => setModal(null)} onPick={(item) => { placeMaterial(modal, item); setModal(null); }} />
         ) : null}
@@ -1706,7 +1884,7 @@ function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => 
       files: [...files.values()],
       fileOf: (path) => files.get(path) ?? null,
       sources: { file: (file) => fileUrl(file.path), wave: () => '' },
-      addToFilm: nothing, setData: nothing, resize: nothing, spawn: nothing, bring: nothing, cutout: nothing, split: nothing, remove: nothing, willChange: nothing, editing: null, edit: nothing, single: null,
+      addToFilm: nothing, setData: nothing, resize: nothing, spawn: () => '', bring: nothing, cutout: nothing, split: nothing, openTool: nothing, sizes: nothing, productSet: nothing, layers: nothing, assist: nothing, remove: nothing, willChange: nothing, editing: null, edit: nothing, single: null,
       choices: () => [], allChoices: () => [], fallback: () => null, run: () => undefined, error: () => undefined, stale: NOTHING, unused: NONE,
       make: nothing, stop: nothing, inputs: (id) => inputViews(drawn.nodes, drawn.edges, id, mediaOf), unwire: nothing, sideMenu: nothing,
       upload: nothing, wireIn: nothing, sendToFilm: nothing, view: nothing,

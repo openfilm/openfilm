@@ -6,6 +6,7 @@
 import React from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import { api, type CanvasCharacter } from '@/api';
+import type { RedrawStart } from './redraw';
 import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, makeRequest } from '@/lib/canvas';
 import type { ProvidersState } from '@/lib/providers';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
@@ -198,6 +199,10 @@ export function tidyGroup(list: BoardNode[], group: string): BoardNode[] {
  * a service and model a node can make its kind with (via, model: as `get` names them), whether the person has
  * connected that service, and what the model makes
  */
+/** a picture's own tools, each in a window over the board */
+export type PictureTool = 'expand' | 'crop' | 'adjust' | 'light';
+export type AssistKind = 'prompt' | 'ideas' | 'shots' | 'text';
+
 export interface Choice { via: string; model?: string; name: string; provider: string; connected: boolean; spec?: ModelSpec; kind?: MakeKind }
 
 /** Every service that makes a kind, each model of each: the connected ones first, then the others to connect. */
@@ -341,7 +346,18 @@ export interface Board {
   /** a node's card drawn this big */
   resize: (id: string, size: { w: number; h: number }) => void;
   /** a node of a kind made from this one: beside it on the right, wired from it (with what it starts with) */
-  spawn: (id: string, kind: SpawnKind, data?: Partial<MakeData>) => void;
+  /** a node made from this one, wired from it: its id */
+  spawn: (id: string, kind: SpawnKind, data?: Partial<MakeData>) => string;
+  /** a picture's own tool opened over the board: widen, crop and turn, color, light */
+  openTool: (id: string, path: string, tool: PictureTool) => void;
+  /** a picture made again at each of these shapes, in a group beside it, made at once */
+  sizes: (id: string, ratios: string[]) => void;
+  /** a product's set of pictures (main shot, detail, in use, ad, features), in a group beside it, made at once */
+  productSet: (id: string) => void;
+  /** a picture parted into its subject (cut out) and the background without it */
+  layers: (id: string, path: string) => void;
+  /** the agent reading a picture into words, on a text node beside it: its prompt, ideas, a shot list, its text to edit */
+  assist: (id: string, path: string, kind: AssistKind) => void;
   /** files made from a node on this computer (its picture's cells, a frame of its clip): into the project, beside it */
   bring: (id: string, files: File[]) => void;
   uploading?: (id: string) => UploadStatus | undefined;
@@ -405,7 +421,7 @@ export interface Board {
   /** what is in a group laid out again in rows, clear of each other */
   tidy: (group: string) => void;
   /** a picture changed in part (brushed or drawn on, then said what to): the editor opened on it */
-  redraw: (id: string, path: string) => void;
+  redraw: (id: string, path: string, start?: RedrawStart) => void;
   /** a text node's words written by the person's agent from what they ask and what is wired in (in the app with a chat); why not, if not */
   write?: (id: string, ask: string, attachments: string[]) => Promise<string | null>;
   /** whether a text node is being written by the agent now (since when), and its writing stopped */
