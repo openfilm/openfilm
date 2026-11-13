@@ -32,7 +32,7 @@ export interface SurfaceProps {
  */
 export function PluginSurface({ id, page, files, title, program, runs, inApp, element, ...props }: SurfaceProps & { id: string; page?: string; files?: string; title?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string }) {
   const t = useT();
-  if (element) return <ElementSurface key={element} url={element} files={files} projectId={props.projectId} folder={props.folder} />;
+  if (element) return <ElementSurface key={element} url={element} plugin={id} files={files} projectId={props.projectId} folder={props.folder} />;
   if (inApp) return <p className={NOTE}>{t('assetDrawer.surfaceNotAllowed')}</p>;
   if (program) return <ProgramSurface key={`${id}:${props.projectId}:${runs ? 1 : 0}`} uid={id} projectId={props.projectId} title={title ?? id} />;
   if (page) return <iframe key={page} src={`${page}${files ? `?project=${encodeURIComponent(files)}` : ''}`} title={title ?? id} allow="autoplay" className="min-h-0 min-w-0 flex-1 border-0 bg-[var(--bg-panel)]" />;
@@ -88,10 +88,11 @@ export function elementTag(url: string): Promise<string> {
 
 /**
  * The surface of a plugin that brings an element: its module loaded into this page, and one element of it put here.
- * It is told the project by attributes: `project-id` (for the editor's API), `project` (where the project's files are
- * read and written, as a plugin's page is told) and `folder` (the project's folder on this computer).
+ * It is told the project by attributes: `project-id` (for `openfilm/studio`), `project` (where the project's files are
+ * read and written, as a plugin's page is told) and `folder` (the project's folder on this computer); and `plugin`, its
+ * workbench's name, which others put files into it by (`openfilm/studio` addTo, provide).
  */
-function ElementSurface({ url, files, projectId, folder }: { url: string; files?: string | undefined; projectId: string; folder: string }) {
+function ElementSurface({ url, plugin, files, projectId, folder }: { url: string; plugin: string; files?: string | undefined; projectId: string; folder: string }) {
   const t = useT();
   const host = React.useRef<HTMLDivElement>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -101,13 +102,14 @@ function ElementSurface({ url, files, projectId, folder }: { url: string; files?
       if (!live || !host.current) return;
       element = document.createElement(tag);
       element.setAttribute('project-id', projectId);
+      element.setAttribute('plugin', plugin);
       if (files) element.setAttribute('project', files);
       if (folder) element.setAttribute('folder', folder);
       Object.assign(element.style, { display: 'block', flex: '1 1 0', minWidth: '0', minHeight: '0' });
       host.current.append(element);
     }, (e) => { if (live) setError(e instanceof Error ? e.message : String(e)); });
     return () => { live = false; element?.remove(); };
-  }, [url, files, projectId, folder]);
+  }, [url, plugin, files, projectId, folder]);
   if (error) return <p className={NOTE}>{`${t('assetDrawer.surfaceFailed')}\n\n${error}`}</p>;
   return <div ref={host} className="flex min-h-0 min-w-0 flex-1" />;
 }
