@@ -1,29 +1,43 @@
 /**
- * What is round the board, as the node canvases people know lay theirs out: the toolbar at its foot (add, move,
- * templates, the keys), the bar at its bottom right (every node in a list, the overview map, the wires shown or not,
- * snapping to the grid, how far it is zoomed), the list itself, and a file seen whole over the board.
+ * What is round the board, as the node canvases people know lay theirs out: the toolbar at its foot (a node of each
+ * kind, the libraries, upload), the bar at its bottom left (select, the hand, the keys), the bar at its bottom right
+ * (every node in a list, the overview map, the wires shown or not, snapping to the grid, how far it is zoomed), the list
+ * itself, what an empty board says, and a file seen whole over the board.
  */
 import React from 'react';
 import { Background, BackgroundVariant, useReactFlow, useStore } from '@xyflow/react';
 import {
-  Clapperboard, Grid3x3, Hand, History, Keyboard, LayoutTemplate, ListTree, Map as MapIcon, MousePointer2, Palette, Plus, Scissors, Search, Shapes, Spline,
-  Type as TypeIcon, UserRound, X,
+  AudioLines, Clapperboard, Grid3x3, Hand, History, Image as ImageIcon, Keyboard, LayoutTemplate, ListTree, Map as MapIcon, MousePointer2, Palette, Scissors, Search,
+  Shapes, Spline, Type as TypeIcon, Upload, UserRound, Video, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { useKeyHint } from '@/lib/keymap-store';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
-import type { BoardNode, MakeData } from './board';
+import type { BoardNode, MakeData, SpawnKind } from './board';
 import { KIND_ICON, MAKE_ICON } from './nodes';
 
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 const OPT = MOD === '⌘' ? '⌥' : 'Alt+';
-/** a toolbar's button, and one switched on */
+/** a panel's button, and one switched on: a clearly lighter ground */
 const TOOL = 'flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
-const ON = '!bg-[var(--cv-float-hover)]';
-/** the bottom left bar's smaller ones */
-const SMALL = 'flex h-7 min-w-7 items-center justify-center rounded-[8px] px-1 text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+const ON = '!bg-[var(--cv-on)] !text-[var(--cv-ink)]';
+/** the toolbar's buttons: they sink when pressed and spring back (globals.css) */
+const BAR = 'cv-tool flex h-10 w-10 items-center justify-center rounded-[10px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]';
+/** the corner bars, and their smaller buttons: dimmer while off, so the ones on stand out */
+const CORNER = 'pointer-events-auto absolute bottom-3 z-20 flex h-10 items-center gap-1 rounded-[12px] border-[0.5px] !border-[var(--cv-bar-line)] bg-[var(--cv-bar)] px-1.5';
+const SMALL = 'cv-tool flex h-7 min-w-7 items-center justify-center rounded-[8px] px-1 text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
+const SMALL_ICON = { size: 15, strokeWidth: 1.75 } as const;
+
+/** How far apart the board's dots are, on the board, at a zoom: 20, doubled while they would be closer than 14 on the screen. */
+function dotGap(zoom: number) {
+  let gap = 20;
+  while (gap * zoom < 14) gap *= 2;
+  return gap;
+}
+/** each dot's size on the screen */
+const DOT = 1.6;
 
 /**
  * The board's dots, the same on the screen however far it is zoomed: each 1.6 across, 20 apart, twice as far apart (on
@@ -31,35 +45,123 @@ const SMALL = 'flex h-7 min-w-7 items-center justify-center rounded-[8px] px-1 t
  */
 export function Dots() {
   const zoom = useStore((s) => s.transform[2]);
-  let gap = 20;
-  while (gap * zoom < 14) gap *= 2;
-  return <Background variant={BackgroundVariant.Dots} gap={gap} size={1.6 / zoom} />;
+  return <Background variant={BackgroundVariant.Dots} gap={dotGap(zoom)} size={DOT / zoom} />;
 }
 
-/** The canvas is still being tried out: said at its bottom left, its tip saying what that means. */
-export function BetaTag() {
-  const t = useT();
+/** The cursor an empty board shows double-clicking: an arrow in the brand's blue to warm yellow. */
+function BrandCursor() {
+  const id = React.useId();
   return (
-    <Tooltip label={t('canvas.betaTip')} side="top">
-      <span className="pointer-events-auto absolute bottom-4 left-3 z-20 flex h-[22px] cursor-default select-none items-center rounded-full border-[0.5px] !border-[var(--cv-bar-line)] bg-[color-mix(in_srgb,var(--cv-bg)_70%,transparent)] px-2.5 text-[11px] font-medium tracking-wide text-[var(--cv-ink-2)] backdrop-blur-[16px]">
-        {t('canvas.beta')}
-      </span>
-    </Tooltip>
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden className="overflow-visible">
+      <defs>
+        <linearGradient id={`${id}-fill`} x1="4" y1="4" x2="26" y2="26" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#2f6ff5" />
+          <stop offset="0.55" stopColor="#34c6ee" />
+          <stop offset="1" stopColor="#f2d250" />
+        </linearGradient>
+      </defs>
+      <path d="M5.2 3.6 26 13.2a1 1 0 0 1-.1 1.86l-8.6 2.9-3.9 8.4a1 1 0 0 1-1.84-.08L4 5a1 1 0 0 1 1.2-1.4Z"
+        fill={`url(#${id}-fill)`} stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
   );
 }
 
-/** The toolbar at the board's foot: what is added, how the board is moved, the templates, the keys. */
-export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibrary, onCharacters, onHistory }: {
-  adding: boolean;
-  onAdd: (from: DOMRect) => void;
-  tool: 'select' | 'hand';
-  onTool: (tool: 'select' | 'hand') => void;
+/** What an empty board says, in its middle: "double-click the canvas", a cursor double-clicking, "to add a node". */
+export function EmptyBoard() {
+  const t = useT();
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-4 text-[16px] tracking-[0.02em] text-[var(--cv-ink-2)]">
+      <span>{t('canvas.empty.before')}</span>
+      <span className="relative flex h-[30px] w-[30px] items-center justify-center">
+        <span className="cv-dblclick-ring" />
+        <span className="cv-dblclick-ring cv-dblclick-ring-2" />
+        <span className="cv-dblclick-arrow"><BrandCursor /></span>
+      </span>
+      <span>{t('canvas.empty.after')}</span>
+    </div>
+  );
+}
+
+/** A ring spreading where the board was double-clicked, gone when it has spread. */
+export function Ripples({ taps, onDone }: { taps: ReadonlyArray<{ id: number; x: number; y: number }>; onDone: (id: number) => void }) {
+  return (
+    <>
+      {taps.map((tap) => (
+        <span key={tap.id} className="cv-ripple" style={{ left: tap.x, top: tap.y }} onAnimationEnd={() => onDone(tap.id)} />
+      ))}
+    </>
+  );
+}
+
+/** the nodes the toolbar adds with a click, in the order a film is made: the words, the pictures, the sound, the clips, the cut */
+const KINDS: ReadonlyArray<[SpawnKind, React.ComponentType<{ size?: number; strokeWidth?: number }>, string]> = [
+  ['note', TypeIcon, 'canvas.kinds.note'], ['image', ImageIcon, 'canvas.start.image'], ['music', AudioLines, 'canvas.start.audio'],
+  ['video', Video, 'canvas.start.video'], ['cut', Scissors, 'canvas.start.cut'],
+];
+const ICON = { size: 20, strokeWidth: 1.75 } as const;
+const BAR_LINE = <span className="mx-1 h-5 w-px shrink-0 bg-[var(--cv-bar-line)]" />;
+
+/**
+ * The toolbar at the board's foot: a node of each kind, the libraries (materials, characters, templates, what was made),
+ * a file from the computer.
+ */
+export function BottomToolbar({ onKind, onUpload, onTemplates, onLibrary, onCharacters, onHistory }: {
+  /** a node of this kind in the middle of the view */
+  onKind: (kind: SpawnKind) => void;
+  onUpload: () => void;
   onTemplates: (from: DOMRect) => void;
   /** the material libraries (styles, effects), the characters, what was made */
   onLibrary: (which: 'styles' | 'effects') => void;
   onCharacters: () => void;
   onHistory: () => void;
 }) {
+  const t = useT();
+  const [library, setLibrary] = React.useState(false);
+  return (
+    <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center">
+      <div className="pointer-events-auto flex items-center gap-0.5 rounded-[14px] border-[0.5px] !border-[var(--cv-bar-line)] bg-[var(--cv-bar)] p-1.5 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.5)]">
+        {KINDS.map(([kind, Icon, label]) => (
+          <Tooltip key={kind} label={t(label)} side="top">
+            <button type="button" aria-label={t(label)} onClick={() => onKind(kind)} className={BAR}><Icon {...ICON} /></button>
+          </Tooltip>
+        ))}
+        {BAR_LINE}
+        {/* the material libraries: styles for pictures, effects (camera moves) for clips */}
+        <Popover open={library} onOpenChange={setLibrary} placement="top" align="center"
+          trigger={(
+            <Tooltip label={t('canvas.library.title')} side="top">
+              <button type="button" aria-label={t('canvas.library.title')} onClick={() => setLibrary((v) => !v)} className={`${BAR} ${library ? ON : ''}`}><Shapes {...ICON} /></button>
+            </Tooltip>
+          )}>
+          <div className="cv-pop w-[154px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
+            <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-3)]">{t('canvas.library.title')}</div>
+            {(['styles', 'effects'] as const).map((which) => (
+              <button key={which} type="button" onClick={() => { setLibrary(false); onLibrary(which); }}
+                className="flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]">
+                {which === 'styles' ? <Palette size={15} /> : <Clapperboard size={15} />}{t(`canvas.library.${which}`)}
+              </button>
+            ))}
+          </div>
+        </Popover>
+        <Tooltip label={t('canvas.characters.title')} side="top">
+          <button type="button" aria-label={t('canvas.characters.title')} onClick={onCharacters} className={BAR}><UserRound {...ICON} /></button>
+        </Tooltip>
+        <Tooltip label={t('canvas.menu.templates')} side="top">
+          <button type="button" aria-label={t('canvas.menu.templates')} onClick={(event) => onTemplates(event.currentTarget.getBoundingClientRect())} className={BAR}><LayoutTemplate {...ICON} /></button>
+        </Tooltip>
+        <Tooltip label={t('canvas.history.title')} side="top">
+          <button type="button" aria-label={t('canvas.history.title')} onClick={onHistory} className={BAR}><History {...ICON} /></button>
+        </Tooltip>
+        <Tooltip label={t('canvas.menu.upload')} side="top">
+          <button type="button" aria-label={t('canvas.menu.upload')} onClick={onUpload} className={BAR}><Upload {...ICON} /></button>
+        </Tooltip>
+      </div>
+    </div>
+  );
+}
+
+/** The bar at the board's bottom left: select (V) and the hand (H), the one in use lit, and the keys. */
+export function ToolCorner({ tool, onTool }: { tool: 'select' | 'hand'; onTool: (tool: 'select' | 'hand') => void }) {
   const t = useT();
   const [keys, setKeys] = React.useState(false);
   const keysButton = React.useRef<HTMLButtonElement>(null);
@@ -77,7 +179,6 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibr
     window.addEventListener('keydown', escape, true);
     return () => { window.removeEventListener('pointerdown', away, true); window.removeEventListener('keydown', escape, true); };
   }, [keys]);
-  const [library, setLibrary] = React.useState(false);
   /* the keys, in four columns: making, zooming, moving the board, and the rest */
   const columns: Array<[string, Array<[string, string]>]> = [
     [t('canvas.keys.make'), [
@@ -93,11 +194,11 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibr
     ]],
   ];
   return (
-    <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2">
-      {/* the keys over the bar, in the middle of the board's foot as the bar is */}
+    <div className={`${CORNER} left-2`}>
+      {/* the keys over the bar, from its left */}
       {keys ? (
         <div ref={keysPanel} role="dialog" aria-label={t('canvas.keys.title')}
-          className="cv-pop pointer-events-auto absolute bottom-full left-1/2 mb-2 grid w-[min(860px,92vw)] -translate-x-1/2 grid-cols-4 gap-6 rounded-[12px] bg-[var(--cv-float)] p-5 shadow-[var(--cv-float-shadow)]">
+          className="cv-pop pointer-events-auto absolute bottom-full left-0 mb-2 grid w-[min(860px,calc(100vw-24px))] grid-cols-4 gap-6 rounded-[12px] bg-[var(--cv-float)] p-5 shadow-[var(--cv-float-shadow)]">
           <button type="button" aria-label={t('canvas.outline.close')} onClick={() => setKeys(false)} className="absolute right-3 top-3 text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]"><X size={15} /></button>
           {columns.map(([title, rows]) => (
             <div key={title}>
@@ -112,50 +213,16 @@ export function BottomToolbar({ adding, onAdd, tool, onTool, onTemplates, onLibr
           ))}
         </div>
       ) : null}
-      <div className="pointer-events-auto flex items-center gap-2 rounded-[12px] border-[0.5px] !border-[var(--cv-bar-line)] bg-[var(--cv-bar)] p-2">
-        <Tooltip label={`${t('canvas.toolbar.add')} · /`} side="top">
-          <button type="button" aria-label={t('canvas.toolbar.add')} onClick={(event) => onAdd(event.currentTarget.getBoundingClientRect())}
-            className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90">
-            {adding ? <X size={17} /> : <Plus size={18} />}
-          </button>
-        </Tooltip>
-        {/* select (V) and the hand (H): one button, the one in use */}
-        <Tooltip label={tool === 'select' ? `${t('canvas.keys.select')} · V` : `${t('canvas.keys.hand')} · H`} side="top">
-          <button type="button" aria-label={t(tool === 'select' ? 'canvas.keys.select' : 'canvas.keys.hand')} onClick={() => onTool(tool === 'select' ? 'hand' : 'select')} className={TOOL}>
-            {tool === 'select' ? <MousePointer2 size={17} /> : <Hand size={17} />}
-          </button>
-        </Tooltip>
-        <Tooltip label={t('canvas.menu.templates')} side="top">
-          <button type="button" aria-label={t('canvas.menu.templates')} onClick={(event) => onTemplates(event.currentTarget.getBoundingClientRect())} className={TOOL}><LayoutTemplate size={17} /></button>
-        </Tooltip>
-        {/* the material libraries: styles for pictures, effects (camera moves) for clips */}
-        <Popover open={library} onOpenChange={setLibrary} placement="top" align="center"
-          trigger={(
-            <Tooltip label={t('canvas.library.title')} side="top">
-              <button type="button" aria-label={t('canvas.library.title')} onClick={() => setLibrary((v) => !v)} className={`${TOOL} ${library ? ON : ''}`}><Shapes size={17} /></button>
-            </Tooltip>
-          )}>
-          <div className="cv-pop w-[154px] rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
-            <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-3)]">{t('canvas.library.title')}</div>
-            {(['styles', 'effects'] as const).map((which) => (
-              <button key={which} type="button" onClick={() => { setLibrary(false); onLibrary(which); }}
-                className="flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]">
-                {which === 'styles' ? <Palette size={15} /> : <Clapperboard size={15} />}{t(`canvas.library.${which}`)}
-              </button>
-            ))}
-          </div>
-        </Popover>
-        <Tooltip label={t('canvas.characters.title')} side="top">
-          <button type="button" aria-label={t('canvas.characters.title')} onClick={onCharacters} className={TOOL}><UserRound size={17} /></button>
-        </Tooltip>
-        <Tooltip label={t('canvas.history.title')} side="top">
-          <button type="button" aria-label={t('canvas.history.title')} onClick={onHistory} className={TOOL}><History size={17} /></button>
-        </Tooltip>
-        <span className="h-4 w-px bg-[var(--cv-bar-line)]" />
-        <Tooltip label={t('canvas.keys.title')} side="top">
-          <button ref={keysButton} type="button" aria-label={t('canvas.keys.title')} aria-expanded={keys} onClick={() => setKeys((v) => !v)} className={`${TOOL} ${keys ? ON : ''}`}><Keyboard size={17} /></button>
-        </Tooltip>
-      </div>
+      <Tooltip label={t('canvas.keys.select')} shortcut="V" side="top">
+        <button type="button" aria-label={t('canvas.keys.select')} aria-pressed={tool === 'select'} onClick={() => onTool('select')} className={`${SMALL} ${tool === 'select' ? ON : ''}`}><MousePointer2 {...SMALL_ICON} /></button>
+      </Tooltip>
+      <Tooltip label={t('canvas.keys.hand')} shortcut="H" side="top">
+        <button type="button" aria-label={t('canvas.keys.hand')} aria-pressed={tool === 'hand'} onClick={() => onTool('hand')} className={`${SMALL} ${tool === 'hand' ? ON : ''}`}><Hand {...SMALL_ICON} /></button>
+      </Tooltip>
+      <span className="mx-0.5 h-4 w-px shrink-0 bg-[var(--cv-bar-line)]" />
+      <Tooltip label={t('canvas.keys.title')} side="top">
+        <button ref={keysButton} type="button" aria-label={t('canvas.keys.title')} aria-expanded={keys} onClick={() => setKeys((v) => !v)} className={`${SMALL} ${keys ? ON : ''}`}><Keyboard {...SMALL_ICON} /></button>
+      </Tooltip>
     </div>
   );
 }
@@ -177,22 +244,22 @@ export function CornerBar({ outline, onOutline, map, onMap, wires, onWires, snap
   const row = 'flex h-8 w-full items-center justify-between rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]';
   const act = (run: () => void) => () => { run(); setOpen(false); };
   return (
-    <div className="pointer-events-auto absolute bottom-3 right-2 z-20 flex h-10 items-center gap-1 rounded-[12px] bg-[color-mix(in_srgb,var(--cv-bg)_70%,transparent)] px-1.5 backdrop-blur-[16px]">
+    <div className={`${CORNER} right-2`}>
       <Tooltip label={t('canvas.outline.title')} side="top">
-        <button type="button" aria-label={t('canvas.outline.title')} onClick={onOutline} className={`${SMALL} ${outline ? ON : ''}`}><ListTree size={15} /></button>
+        <button type="button" aria-label={t('canvas.outline.title')} onClick={onOutline} className={`${SMALL} ${outline ? ON : ''}`}><ListTree {...SMALL_ICON} /></button>
       </Tooltip>
       <Tooltip label={t('canvas.toolbar.map')} side="top">
-        <button type="button" aria-label={t('canvas.toolbar.map')} onClick={onMap} className={`${SMALL} ${map ? ON : ''}`}><MapIcon size={15} /></button>
+        <button type="button" aria-label={t('canvas.toolbar.map')} onClick={onMap} className={`${SMALL} ${map ? ON : ''}`}><MapIcon {...SMALL_ICON} /></button>
       </Tooltip>
       <Tooltip label={t(wires ? 'canvas.toolbar.hideWires' : 'canvas.toolbar.showWires')} side="top">
-        <button type="button" aria-label={t(wires ? 'canvas.toolbar.hideWires' : 'canvas.toolbar.showWires')} onClick={onWires} className={`${SMALL} ${wires ? '' : ON}`}><Spline size={15} /></button>
+        <button type="button" aria-label={t(wires ? 'canvas.toolbar.hideWires' : 'canvas.toolbar.showWires')} onClick={onWires} className={`${SMALL} ${wires ? '' : ON}`}><Spline {...SMALL_ICON} /></button>
       </Tooltip>
       <Tooltip label={t('canvas.toolbar.snap')} side="top">
-        <button type="button" aria-label={t('canvas.toolbar.snap')} aria-pressed={snap} onClick={onSnap} className={`${SMALL} ${snap ? ON : ''}`}><Grid3x3 size={15} /></button>
+        <button type="button" aria-label={t('canvas.toolbar.snap')} aria-pressed={snap} onClick={onSnap} className={`${SMALL} ${snap ? ON : ''}`}><Grid3x3 {...SMALL_ICON} /></button>
       </Tooltip>
       <Popover open={open} onOpenChange={setOpen} placement="top" align="end"
         trigger={(
-          <button type="button" onClick={() => setOpen((v) => !v)} className={`${SMALL} !px-1.5 text-[12.5px] tabular-nums`}>
+          <button type="button" onClick={() => setOpen((v) => !v)} className={`${SMALL} ${open ? ON : ''} !px-1.5 text-[12.5px] tabular-nums`}>
             {Math.round(zoom * 100)}%
           </button>
         )}>

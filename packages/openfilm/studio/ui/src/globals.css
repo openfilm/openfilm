@@ -608,6 +608,7 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-float-line: rgba(0, 0, 0, 0.08);
   --cv-float-hover: rgba(0, 0, 0, 0.05);
   --cv-chip: rgba(0, 0, 0, 0.05);
+  --cv-on: rgba(0, 0, 0, 0.1);
   --cv-bar: #ffffff;
   --cv-bar-line: #e4e4e7;
   --cv-invert: #111113;
@@ -637,6 +638,7 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-float-line: rgba(255, 255, 255, 0.08);
   --cv-float-hover: rgba(255, 255, 255, 0.07);
   --cv-chip: rgba(255, 255, 255, 0.05);
+  --cv-on: rgba(255, 255, 255, 0.16);
   --cv-bar: #181818;
   --cv-bar-line: #363636;
   --cv-invert: #ffffff;
@@ -691,6 +693,42 @@ html[data-file-drag] iframe { pointer-events: none; }
 .cv-fade { animation: cv-fade 160ms ease-out; }
 .cv-grow { animation: cv-grow 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 @media (prefers-reduced-motion: reduce) { .cv-pop, .cv-fade, .cv-grow { animation: none; } }
+/* the toolbar's buttons sink when pressed and spring back a little past where they were */
+.cv-tool {
+  transition: transform 260ms cubic-bezier(0.3, 1.8, 0.5, 1), background-color 120ms ease-out;
+}
+.cv-tool:active { transform: scale(0.86); transition-duration: 80ms, 120ms; }
+/* a node just added comes in with a small pop, from its middle */
+@keyframes cv-born { from { opacity: 0; transform: scale(0.88); } 60% { opacity: 1; transform: scale(1.02); } }
+.openfilm-canvas .react-flow__node.cv-born > * { animation: cv-born 320ms cubic-bezier(0.2, 0.8, 0.3, 1); }
+.openfilm-canvas .react-flow__node.cv-born-fade > * { animation: cv-fade 200ms ease-out; }
+/* a ring spreading where the board was double-clicked */
+@keyframes cv-ripple { from { opacity: 0.9; transform: scale(0.2); } to { opacity: 0; transform: scale(1.5); } }
+.cv-ripple {
+  position: absolute; z-index: 30; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 9999px; pointer-events: none;
+  border: 1.5px solid color-mix(in srgb, var(--cv-edge-lit) 75%, transparent);
+  background: color-mix(in srgb, var(--cv-edge-lit) 10%, transparent);
+  animation: cv-ripple 520ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+/* an empty board: a cursor double-clicking */
+@keyframes cv-dblclick { 0%, 30%, 100% { transform: scale(1); } 6%, 18% { transform: scale(0.82); } 12%, 24% { transform: scale(1.04); } }
+@keyframes cv-dblclick-ring {
+  0%, 5% { opacity: 0; transform: scale(0.2); }
+  6% { opacity: 0.85; transform: scale(0.25); }
+  34%, 100% { opacity: 0; transform: scale(1.9); }
+}
+.cv-dblclick-arrow { display: flex; transform-origin: 20% 15%; animation: cv-dblclick 3.2s cubic-bezier(0.3, 0.7, 0.4, 1) infinite; filter: drop-shadow(0 4px 10px rgba(52, 140, 240, 0.35)); }
+.cv-dblclick-ring {
+  position: absolute; left: -9px; top: -10px; width: 30px; height: 30px; border-radius: 9999px;
+  border: 1.5px solid rgba(80, 190, 245, 0.8); opacity: 0;
+  animation: cv-dblclick-ring 3.2s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+}
+.cv-dblclick-ring-2 { animation-delay: 0.384s; }
+@media (prefers-reduced-motion: reduce) {
+  .cv-tool, .cv-tool:active { transition: none; transform: none; }
+  .openfilm-canvas .react-flow__node.cv-born > *, .openfilm-canvas .react-flow__node.cv-born-fade > *, .cv-ripple, .cv-dblclick-arrow, .cv-dblclick-ring { animation: none; }
+  .cv-ripple { display: none; }
+}
 .openfilm-canvas .react-flow__minimap { overflow: hidden; border-radius: 12px; box-shadow: var(--cv-float-shadow); }
 .openfilm-canvas .react-flow__node { border-radius: var(--cv-card-radius); }
 .cv-card-resize { opacity: 0; }

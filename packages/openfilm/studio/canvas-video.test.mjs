@@ -43,7 +43,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     await openCanvas();
     await page.locator('.react-flow__pane').dblclick({ position: { x: 600, y: 360 } });
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Upload', exact: true }).click();
+    await page.locator('[data-canvas-add-menu]').getByRole('button', { name: 'Upload', exact: true }).click();
     await (await chooser).setFiles(input);
     const pending = page.locator('.react-flow__node').filter({ hasText: 'Uploading…' });
     await pending.waitFor();
@@ -214,7 +214,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     near(origin, cardEdge);
     near(tip, drop);
     assert.deepEqual(await stroke(menuWire), activeStroke);
-    await page.getByRole('button', { name: 'Text', exact: true }).click();
+    await page.locator('[data-canvas-add-menu]').getByRole('button', { name: 'Text', exact: true }).click();
     await menuWire.waitFor({ state: 'detached' });
     const made = page.locator('.react-flow__node-note').first();
     await made.waitFor();
@@ -241,7 +241,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     await page.mouse.up();
     await menuWire.waitFor({ state: 'attached' });
     near((await endpoints(menuWire))[1], leftDrop);
-    await page.getByRole('button', { name: 'Text', exact: true }).click();
+    await page.locator('[data-canvas-add-menu]').getByRole('button', { name: 'Text', exact: true }).click();
     const reference = page.locator('.react-flow__node-note').nth(1);
     await reference.waitFor();
     const referenceBox = await reference.boundingBox();

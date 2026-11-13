@@ -115,7 +115,7 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
   /* the first part's title heads the menu, and typed into searches */
   const head = sections[0]?.title ?? t('canvas.menu.nodes');
   return (
-    <div ref={ref} className="cv-pop fixed z-[200] overflow-hidden rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]" style={{ ...place, width: MENU_WIDTH }}>
+    <div ref={ref} data-canvas-add-menu className="cv-pop fixed z-[200] overflow-hidden rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]" style={{ ...place, width: MENU_WIDTH }}>
       <label className="flex h-7 items-center gap-1.5 px-2">
         {view === 'kinds' ? null : (
           <button type="button" aria-label={t('canvas.menu.back')} onClick={() => { setView('kinds'); setActive(0); }}
