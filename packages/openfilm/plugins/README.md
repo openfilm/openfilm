@@ -11,7 +11,7 @@ Only in the conversation, it is a skill; also outside it, a plugin.
 ```
 my-plugin/
   SKILL.md        what an agent is taught: front matter with `name` and `description`, then the way to work
-  openfilm.json   how people see it (optional): `title`, `summary`, `icon`, by language
+  openfilm.json   how people see it (optional): `title`, `summary`, `icon`, by language; `blocks` (below)
   package.json    what runs (optional): `browser`, `bin`, `scripts.start`
   index.html      a page shown as its workbench (optional)
 ```
@@ -186,6 +186,43 @@ being written; `chat.select(selection)` says what is selected and where the play
   `{ type: 'show-box', time, box }`, `{ type: 'show-track', track }`…); returns the way to stop. A clip, a moment, a
   stretch, a node or a file the app asks to show is a link, given to the workbench that shows it.
 
+**Blocks.** A workbench of OpenFilm's own plugins (`plugins/<id>/`) can be laid out among the page's panels, as the edit
+is, instead of taking the whole of the page's middle: its `openfilm.json` says which blocks it draws, and Studio arranges
+them with the page's own (the app's chat, the library) and with blocks another workbench draws. The person shows, hides,
+sizes and moves them from the layout's menu, as the edit's; each workbench has an arrangement of its own.
+
+```json
+"blocks": [
+  { "id": "scopes", "title": { "en": "Scopes" }, "edge": "left", "size": 320 },
+  { "id": "wheels", "title": { "en": "Wheels" }, "edge": "right", "size": 320, "open": false },
+  "edit:viewer", "edit:timeline"
+]
+```
+
+A block: `id`; `title` by language; `edge`, where it is when the panels are docked: `center` (the main block, one), or
+`left`, `right`, `top`, `bottom` of it; `size`, its width beside the main block or its height above or below it, as it
+first opens; `open: false` to start hidden; `min`, the smallest it is drawn where panels float (`[width, height]`);
+`range`, the sizes a person may give it. `"owner:id"` is a block another workbench draws, as that one declares it (the
+edit's are `viewer`, `layers`, `inspector` and `timeline`): the example shows the edit's viewer and timeline beside its
+own. `"blocks": "edit"` instead lays the workbench out in the edit's arrangement.
+
+The element draws each of its blocks into the place Studio gives it:
+
+- `blocks.slot(owner, id)`: the place of block `id` of the workbench `owner` (its `plugin` attribute): an element that is
+  the same one for the page's life. Studio puts it wherever the block is in the arrangement shown, and takes it out while
+  the block is not there; what is drawn in it stays drawn.
+- `blocks.draw(owner, id)`: say the block is drawn; returns the way to say it no longer is. Studio lays a block out only
+  while it is drawn.
+- `blocks.shown(owner, id)`: whether it is in the arrangement shown now and visible; `blocks.subscribe(listener)` is told
+  when that changes, and returns the way to stop.
+- `blocks.open(owner, id, open)`: show or hide it in the arrangement shown.
+
+```js
+const scopes = blocks.slot('grade', 'scopes');
+const stop = blocks.draw('grade', 'scopes');
+scopes.append(drawScopes());
+```
+
 **A plugin's own server code.** A plugin of OpenFilm's own (`plugins/<id>/`) may bring a `server.mjs` whose routes Studio
 answers under `/api/plugins/<id>/…` while the plugin is on (`studio/server/plugin-servers.mjs` says how to write one).
 `pluginApi(id)` calls them from the element: `get(path)`, `post(path, body)`, `put(path, body)`, `patch(path, body)` and
@@ -201,7 +238,8 @@ const stop = notes.events(id, (data) => console.log(data));
 ### React
 
 `openfilm/studio/react` is the same for an element drawn with React: `useProject(id)` (the project's `get()`, drawn again as it
-changes), `useProvide(name, workbench)`, `useCommand(listener)` and `useTopBar(owner, tools)`.
+changes), `useProvide(name, workbench)`, `useCommand(listener)`, `useTopBar(owner, tools)` and `useBlock(owner, id)` (a
+block drawn while the component is there: its `slot`, to draw into with `createPortal`, and whether it is `shown`).
 
 The import map also names `react`, `react/jsx-runtime`, `react-dom` and `react-dom/client`: Studio's own copy. An element that
 imports them by those names draws with the same React as Studio. It may bundle its own React instead; it then uses
@@ -210,5 +248,5 @@ imports them by those names draws with the same React as Studio. It may bundle i
 ### What is not public
 
 Everything else in Studio's page is OpenFilm's own and may change with any version: its modules, its elements, its classes and
-its styles. OpenFilm's edit reaches a little more of the shell than this (its panes' layout, the library's actions on its
-timeline), through a module that is built into it and not named by the import map.
+its styles. OpenFilm's edit reaches a little more of the shell than this (how its blocks are sized where they are docked,
+the library's actions on its timeline), through a module that is built into it and not named by the import map.
