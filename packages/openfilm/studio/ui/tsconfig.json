@@ -28,7 +28,8 @@
   },
   "include": [
     "src",
-    "vite.config.ts"
+    "vite.config.ts",
+    "workbenches.ts"
   ],
   "exclude": [
     "src/**/*.test.ts"

@@ -5,6 +5,8 @@ import type { Plugin as PostcssPlugin } from 'postcss';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+/* the workbenches of OpenFilm's own plugins, built with the editor as Studio's own page builds them */
+import { workbenchImportMap, workbenchInputs } from '../../../packages/openfilm/studio/ui/workbenches';
 
 /*
  * The app's window: one page, Studio's editor and the chat beside it, built into shell/dist and served by the app's
@@ -57,9 +59,13 @@ const scopeChat: PostcssPlugin = {
 
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
-  plugins: [twoTrees(), react(), tailwind()],
+  plugins: [twoTrees(), react(), tailwind(), workbenchImportMap()],
   css: { postcss: { plugins: [scopeChat] } },
   /* one React for both trees (each would find its own package's otherwise) */
   resolve: { dedupe: ['react', 'react-dom', 'lucide-react'] },
-  build: { outDir: 'dist', emptyOutDir: true, target: 'es2022', sourcemap: false },
+  build: {
+    outDir: 'dist', emptyOutDir: true, target: 'es2022', sourcemap: false,
+    /* a workbench's entry keeps what it exports (its element): it is imported by name, from outside the build */
+    rollupOptions: { preserveEntrySignatures: 'exports-only', input: { main: fileURLToPath(new URL('./index.html', import.meta.url)), ...workbenchInputs() } },
+  },
 });
