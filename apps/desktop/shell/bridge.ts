@@ -406,6 +406,7 @@ function commandFor(ref: StudioRef): StudioCommand {
   onSelection: (listener: Listener<StudioSelection>) => selection.on((s) => { if (s) listener(s); }),
   onFfmpeg: native.onFfmpeg,
   showInStudio: (ref: StudioRef) => command?.(commandFor(ref)),
+  openInStudio: (link: string) => command?.({ type: 'open', link }),
   /* an example's folder on this computer (Studio fetches it when needed), for a reference to one in a message sent */
   async exampleFolder(id: string) {
     const res = await fetch(`/api/examples/${encodeURIComponent(id)}/folder`, { method: 'POST' });

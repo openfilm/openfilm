@@ -7,7 +7,8 @@ import {
   type MarkdownBlock,
   type MarkdownScan,
 } from '@openfilm/shared/markdown';
-import type { StudioRef } from '../app-bridge';
+import { app, type StudioRef } from '../app-bridge';
+import { parseLink } from 'openfilm/studio-ui/lib/links.ts';
 import { audioLinkPath, projectAudioUrl } from '@/lib/audio-link';
 import { AttachmentPreview } from './AttachmentPreview';
 import { useT } from '@/i18n';
@@ -142,6 +143,7 @@ function inline(text: string): React.ReactNode[] {
     if (piece.kind === 'strong') return <strong key={index} className="font-semibold">{withRefs(piece.text)}</strong>;
     if (piece.kind === 'em') return <em key={index} className="italic">{withRefs(piece.text)}</em>;
     if (piece.kind === 'link' && audioLinkPath(piece.href)) return <AudioLink key={index} href={piece.href} text={piece.text} />;
+    if (piece.kind === 'link' && parseLink(piece.href)) return <ProjectLink key={index} href={piece.href} text={piece.text} />;
     if (piece.kind === 'link') {
       return (
         <a
@@ -197,6 +199,19 @@ function AgentRefPill({ studioRef }: { studioRef: StudioRef }) {
         },
       } : {})}
     />
+  );
+}
+
+/** A link to a thing of the project (`film.html#<clip>`, `film.html#t=12.5`, a file): a click shows it in Studio. */
+function ProjectLink({ href, text }: { href: string; text: string }) {
+  return (
+    <a
+      href={href}
+      onClick={(event) => { event.preventDefault(); app?.openInStudio?.(href); }}
+      className="break-all text-[var(--accent)] underline underline-offset-2 hover:opacity-80"
+    >
+      {text}
+    </a>
   );
 }
 
