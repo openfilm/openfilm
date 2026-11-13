@@ -10,8 +10,8 @@
  * left out, and the library is only browsed. While the canvas is shown, "+" sends files to the canvas, and nothing is
  * tried over the picture.
  *
- * For now the window is still laid out by the edit, so where the pane is and whether it is open are reached through
- * the wiring too (`libraryPane`): the pane is drawn once a workbench says where.
+ * Where the pane is and whether it is open are the layout's (shell/layout): the pane is drawn there with a workbench
+ * in the page or none.
  */
 import * as React from 'react';
 import { api, type MediaMade } from '@/api';
@@ -26,7 +26,7 @@ import { MediaPool, type ImportProgress } from '@/components/MediaPool';
 import type { useToast } from '@/components/Toast';
 import { WorkspaceLibraryPane } from '@/components/WorkspaceLibraryPane';
 import type { useProjectFrame } from './ProjectFrame';
-import { useWiring, wiringStore } from './frame';
+import { useWiring, wiringStore, type Wiring } from './frame';
 
 /** Which the media pane shows, the project's media, the media library or Saved: kept while Studio is open, across projects. */
 type MediaScope = 'project' | 'saved';
@@ -39,13 +39,15 @@ const nothing = () => {};
 
 /**
  * What the library shows of the project `projectId`, whichever workbench is shown. `of`: what the frame holds that it
- * reads (the project's files, where their pictures come from, how they were made, the toast, the canvas shown or not).
+ * reads (the project's files, where their pictures come from, how they were made, the toast, the canvas shown or not,
+ * the layout's way to open the pane).
  */
 export function useLibraryShown(projectId: string, of: {
   listing: MediaListing | null; mediaSources: MediaSources; mediaMade: Record<string, MediaMade>; toast: ReturnType<typeof useToast>; canvasOpen: boolean;
+  openLibrary: (open: boolean) => void;
 }) {
   const t = useT();
-  const { listing, mediaSources, mediaMade, toast, canvasOpen } = of;
+  const { listing, mediaSources, mediaMade, toast, canvasOpen, openLibrary } = of;
   const { show: showToast } = toast;
   /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
      origin: see stillUrl) */
@@ -98,45 +100,49 @@ export function useLibraryShown(projectId: string, of: {
   }, [listing, mediaScope, libraryIndex, revealMedia?.path]);
   const savedListing = useSavedListing(mediaScope === 'saved');
   const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => importIntoSaved(files, into, onProgress, t('assets.uploadFailed')), [t]);
+  /* the file a workbench was just asked to take in hand (showFile), with what it gave the library then: the media
+     pane is told that file is in hand until the workbench says what is. The shell and a workbench are drawn one after
+     the other, so without it the pane could be drawn on the file asked for before it is known to be the one in hand */
+  const [askedInHand, setAskedInHand] = React.useState<{ path: string; of: NonNullable<Wiring['library']> } | null>(null);
   /**
-   * Find a file in Assets; the canvas points it out without replacing the editing selection. The pane is opened by
-   * the workbench that lays the window out, and the file is taken in hand by the workbench shown (with the canvas over
-   * it, in hand only).
+   * Find a file in Assets; the canvas points it out without replacing the editing selection. The pane is opened, and
+   * the file is taken in hand by the workbench shown (with the canvas over it, in hand only).
    */
   const showFile = React.useCallback((path: string, highlight = false) => {
     const file = listing ? [...listing.pages, ...listing.files].find((f) => f.path === path) : undefined;
     if (!file) return;
-    const wiring = wiringStore.get();
-    wiring?.libraryPane?.setOpen(true);
+    const library = wiringStore.get()?.library;
+    openLibrary(true);
     switchMedia('project');
-    if (!highlight) wiring?.library?.pick(file, canvasOpen ? { quiet: true } : undefined);
+    if (!highlight && library) { setAskedInHand({ path: file.path, of: library }); library.pick(file, canvasOpen ? { quiet: true } : undefined); }
     setRevealMedia((cur) => ({ path: file.path, seq: (cur?.seq ?? 0) + 1, highlight }));
-  }, [listing, canvasOpen, switchMedia]);
+  }, [listing, canvasOpen, switchMedia, openLibrary]);
   /* the library's skills as the app's chat asked to show them (LibraryDrawer `showSkills`) */
   const [skillsShown, setSkillsShown] = React.useState<SkillsRequest | null>(null);
 
   return {
     refOfFile, referOutside, onLibraryDownloadFailed, saveThings, saveFiles,
     mediaScope, switchMedia, revealMedia, setRevealMedia, mediaRevealed, libraryIndex, scopedListing, savedListing, savedImport,
-    showFile, skillsShown, setSkillsShown,
+    showFile, askedInHand, skillsShown, setSkillsShown,
   };
 }
 
 /**
  * The library's pane with its drawer, and the seam that sizes the app's panel while the pane covers it: drawn over the
- * page, where the workbench that lays the window out says the pane is, once the project was read. It is the same
- * drawer whichever workbench is shown, so what is open in it stays as the edit gives way to the canvas.
+ * page, where the layout says the pane is (shell/layout), once the project was read. It is the same drawer whichever
+ * workbench is shown, so what is open in it stays as the edit gives way to the canvas.
  */
 export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
-  const wiring = useWiring('library', 'libraryPane');
+  const library = useWiring('library')?.library;
   const {
     projectId, loaded, failure, mediaSources,
     onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, onSetCover, onNewFolder, reveal,
     missingMedia, findMissing, madeWords, madeVersions,
     canvasOpen, setCanvasOpen, requestCanvasFiles,
     refOfFile, referOutside, onLibraryDownloadFailed, saveFiles,
-    mediaScope, switchMedia, revealMedia, mediaRevealed, scopedListing, savedListing, savedImport, skillsShown,
+    mediaScope, switchMedia, revealMedia, mediaRevealed, scopedListing, savedListing, savedImport, skillsShown, askedInHand,
     setSettingsOpen,
+    libraryPane: pane, updateWorkspace, setPanelWidth,
   } = frame;
   /* a file of the media pane clicked is taken in hand by the workbench shown (its viewer shows it): by none, nothing */
   const pickFile = React.useCallback((file: WorkspaceResource | null) => { wiringStore.get()?.library?.pick(file); }, []);
@@ -145,9 +151,9 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
   const openServices = React.useCallback(() => { setSettingsOpen('models'); }, [setSettingsOpen]);
   /* where the drawer writes the way out of a try when no workbench has a place for it */
   const noDismiss = React.useRef<() => boolean>(() => false);
-  const pane = wiring?.libraryPane;
-  if (!wiring || !pane || !loaded || failure) return null;
-  const library = wiring.library;
+  if (!loaded || failure) return null;
+  /* the file the workbench was just asked to take in hand, until it says what is in hand (see `askedInHand`) */
+  const asked = askedInHand && askedInHand.of === library ? askedInHand.path : null;
   /* the canvas shown: a page, a sound or a template goes to the canvas, anything else to the film, which is shown;
      nothing is tried */
   const actions: LibraryActions = canvasOpen ? {
@@ -184,7 +190,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
       listing={scopedListing}
       sources={mediaSources}
       usedSrcs={library?.usedSrcs}
-      selectedPath={library && !library.pickedSaved ? library.pickedPath : null}
+      selectedPath={asked ?? (library && !library.pickedSaved ? library.pickedPath : null)}
       onSelectFile={pickFile}
       onImport={onImport}
       onMove={onMove}
@@ -215,11 +221,11 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
   );
   return (
     <>
-      {pane.seam ? <PanelSeam panel={{ label: pane.seam.label, width: pane.seam.width, setWidth: pane.setPanelWidth }} bottom={pane.seam.bottom} side={pane.seam.side} /> : null}
+      {pane.seam ? <PanelSeam panel={{ label: pane.seam.label, width: pane.seam.width, setWidth: setPanelWidth }} bottom={pane.seam.bottom} side={pane.seam.side} /> : null}
       <WorkspaceLibraryPane open={pane.open} dock={pane.dock}
         rect={pane.rect}
         free={pane.free}
-        onResize={pane.onResize}>
+        onResize={updateWorkspace}>
           <LibraryDrawer media={media} mediaScope={mediaScope} onMediaScope={switchMedia} mediaRequest={revealMedia?.seq} actions={actions}
             tried={library?.tried ?? null} templateStatus={library?.templateStatus ?? NO_STATUS} previewBar={canvasOpen ? null : library?.preview.bar ?? null} previewPicture={canvasOpen ? null : library?.preview.picture ?? null} dismissRef={library?.preview.dismissRef ?? noDismiss}
             onPreviewStart={canvasOpen ? pauseWorkbench : library?.preview.begin ?? nothing} onDownloadFailed={onLibraryDownloadFailed} shown={pane.open} under={pane.under}

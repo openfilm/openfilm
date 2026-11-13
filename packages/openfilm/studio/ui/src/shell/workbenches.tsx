@@ -4,8 +4,8 @@
  * project as left; Motion, a view of the edit; a plugin's surface picked on the top bar) and tells it in the frame
  * (shell/ProjectFrame); the edit draws its panes hidden under whatever else is shown.
  *
- * For now the window is still laid out by the edit, so where these go (the room kept round them, the canvas's own
- * frame) and what the canvas does to the film are reached through the wiring (shell/frame).
+ * Where these go (the room kept round them, the canvas's own frame where the panels float) is the layout's
+ * (shell/layout); what the canvas does to the film is reached through the wiring (shell/frame).
  */
 import * as React from 'react';
 import { api, projectEvents } from '@/api';
@@ -23,7 +23,7 @@ import { DOCK_GAP } from '@/components/PaneDivider';
 import { OWN_SURFACES, PluginSurface } from '@/components/surfaces';
 import { isTypingTarget } from '@/components/typing-target';
 import type { useProjectFrame } from './ProjectFrame';
-import { useWiring, wiringStore } from './frame';
+import { wiringStore } from './frame';
 
 /**
  * A panel shown or hidden, as the person last left it (kept in this browser; open when nothing is kept): the value,
@@ -50,9 +50,10 @@ const surfacePicked = (projectId: string) => { try { return localStorage.getItem
 
 /**
  * The workbench shown in the project `projectId`, and what the canvas was asked for. `canvasProject`: the project's
- * id once it was read (the canvas is warmed after that); `showError`: the toast's.
+ * id once it was read (the canvas is warmed after that); `showError`: the toast's; `rearranging`: whether the page's
+ * panels are being rearranged (shell/layout writes it).
  */
-export function useWorkbenchShown(projectId: string, canvasProject: string | undefined, showError: (message: string) => void) {
+export function useWorkbenchShown(projectId: string, canvasProject: string | undefined, showError: (message: string) => void, rearranging: React.RefObject<boolean>) {
   /* the canvas over the panes, or the edit: by project, as left */
   const [canvasOpen, setCanvasOpenState] = React.useState(() => canvasShown(projectId));
   /** the canvas node a chat's reference asked to be shown (`n`: each time again) */
@@ -63,14 +64,14 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
   React.useEffect(() => { setCanvasOpenState(canvasShown(projectId)); }, [projectId]);
   /* the edit seen as an animation editor sees it (components/MotionTimeline), in the timeline's place */
   const [motionOpen, keepMotionOpen] = useKeptFlag('openfilm.project.motion', false);
-  /* not while the workbench's panes are being rearranged; opening it stops the film playing (the panes under it are
-     hidden): both are the workbench's, asked of it as this runs */
+  /* not while the page's panels are being rearranged; opening it stops the film playing (the panes under it are
+     hidden): that is the workbench's, asked of it as this runs */
   const setCanvasOpen = React.useCallback((open: boolean) => {
-    if (wiringStore.get()?.rearranging?.()) return;
+    if (rearranging.current) return;
     if (open) wiringStore.get()?.pause?.();
     setCanvasOpenState(open);
     try { localStorage.setItem(`${CANVAS_KEY}:${projectId}`, open ? '1' : '0'); } catch { /* for this launch only */ }
-  }, [projectId]);
+  }, [projectId, rearranging]);
   const workMode: 'canvas' | 'edit' | 'motion' = canvasOpen ? 'canvas' : motionOpen ? 'motion' : 'edit';
   /* the motion view opens what it is worked in (the workbench's own panes) with it */
   const setWorkMode = React.useCallback((mode: 'canvas' | 'edit' | 'motion') => {
@@ -165,20 +166,22 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
 /**
  * What takes the panes' place, drawn in the page's grid after the workbench's element: a plugin's surface, the notice
  * that no workbench is on, and the canvas (kept there once warmed or opened, hidden while it is not shown). They are
- * drawn while a workbench is in the page (its wiring says where they go) and the project was read.
+ * drawn once the project was read, where the layout says (shell/layout), with a workbench in the page or none.
  */
 export function InPanesPlace({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
   const t = useT();
-  const wiring = useWiring('places', 'chat');
   const {
     projectId, loaded, failure, folder, listing, mediaSources, onImport, toast, showFile, setSettingsOpen,
     surface, surfacePlugin, noBench, away, canvasOpen, canvasKept, canvasFocus, canvasInsert, canvasAddFiles,
+    editFree, canvasFree, editDock, canvasDock, insetStyle, freeStyle, chat,
   } = frame;
   const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
-  if (!wiring || !loaded || failure) return null;
-  /* the room the workbench's layout keeps round its panes, with the edit shown or the canvas: the same round these */
-  const room = canvasOpen ? wiring.places?.canvas : wiring.places?.edit;
-  const chat = wiring.chat;
+  /* how the window is laid out round these: the room kept round the panes with the edit shown and with the canvas
+     shown (none where the panels float), and the canvas's own frame where they float */
+  const places = React.useMemo(() => ({ edit: editFree ? {} : insetStyle(editDock), canvas: canvasFree ? {} : insetStyle(canvasDock), canvasFrame: freeStyle('canvas') }), [editFree, canvasFree, editDock, canvasDock, insetStyle, freeStyle]);
+  if (!loaded || failure) return null;
+  /* the room the layout keeps round the panes, with the edit shown or the canvas: the same round these */
+  const room = canvasOpen ? places.canvas : places.edit;
   return (
     <>
       {/* a plugin's own surface in the panes' place, as the canvas is: they stay laid out as they were, hidden under it */}
@@ -202,7 +205,7 @@ export function InPanesPlace({ frame }: { frame: ReturnType<typeof useProjectFra
       {canvasKept || canvasOpen ? (
         /* hidden with opacity too: the canvas's library writes `visibility: visible` on each of its nodes */
         <div data-workspace-canvas className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]" aria-hidden={!canvasOpen || away} inert={!canvasOpen || away}
-          style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...wiring.places?.canvas, ...wiring.places?.canvasFrame, ...(canvasOpen && !away ? null : { visibility: 'hidden', opacity: 0, zIndex: 0 }) }}>
+          style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...places.canvas, ...places.canvasFrame, ...(canvasOpen && !away ? null : { visibility: 'hidden', opacity: 0, zIndex: 0 }) }}>
           <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
             <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
               <React.Suspense fallback={<CanvasLoading />}>

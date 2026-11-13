@@ -4,8 +4,8 @@
  * read with useSyncExternalStore.
  *
  * The frame is what the shell holds of the project for any workbench (shell/ProjectFrame: its files, how they were
- * made, the media pane's file operations, the toast, which workbench is shown, the library, the page's own windows):
- * the shell writes it, a workbench reads it with `useFrame`. The wiring is what the workbench shown lets the shell
+ * made, the media pane's file operations, the toast, which workbench is shown, the library, the page's own windows,
+ * how the window is laid out): the shell writes it, a workbench reads it with `useFrame`. The wiring is what the workbench shown lets the shell
  * reach of its own: that workbench writes it, and the shell reads it when it needs it (`wiringStore.get()` inside a
  * callback or an effect, `useWiring` to draw), so nothing of a workbench's is held here.
  *
@@ -15,9 +15,7 @@ import * as React from 'react';
 import type { CaptionsActions } from '@/components/library/CaptionsPane';
 import type { LibraryActions } from '@/components/library/LibraryDrawer';
 import type { LibraryVoice, VoiceAccess } from '@/lib/library-voices';
-import type { DockRect } from '@/lib/workspace-dock';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
-import type { LibraryDock, PanelSide } from '@/lib/workspaces';
 import type { useProjectFrame } from './ProjectFrame';
 
 /** A value kept outside React, with those told when it changes. */
@@ -100,37 +98,33 @@ export interface Wiring {
   srcsInUse?: () => readonly string[];
   /** Stop what plays: the canvas is about to be shown over the workbench. */
   pause?: () => void;
-  /** Whether its panes are being rearranged: the workbench shown stays the one it is meanwhile. */
-  rearranging?: () => boolean;
   /** Motion was picked: the workbench opens what Motion is worked in. */
   motionShown?: () => void;
   /** Put a file of the canvas in the film. */
   addToFilm?: (file: WorkspaceResource) => void;
   /** Put a cut of the canvas in the film, its files one after the other, then show the film. */
   sendToFilm?: (files: WorkspaceResource[]) => void;
-  /** The app's own panel beside the workbench (none: the app has no such panel): whether it is open, and the way to open or fold it. */
-  chat?: { open: boolean; toggle: () => void };
   /**
    * What the workbench has on the page's top bar, which the shell draws (shell/top-bar). `tools`: its own buttons, drawn
    * before the workbench switch. `menu`: a menu of its own that pops up at the pointer, kept in the bar (a right click
    * on it is quiet, as on the bar). Both are drawn in the shell's React root, so nothing in them reads a context of the
    * workbench's; each is the same one until what it shows changes. `film`: what the workbench knows of the film, said on
-   * the project's card. `coverFromFrame`: make the picture at the playhead the project's cover. `layoutEditing`: its
-   * panes are being rearranged, and the switch waits.
+   * the project's card. `coverFromFrame`: make the picture at the playhead the project's cover.
    */
   topBar?: {
     tools: React.ReactNode;
     menu: React.ReactNode;
     film: { durationMs: number; stage: { w: number; h: number }; fps: number; clips: number };
     coverFromFrame: () => void;
-    layoutEditing: boolean;
   };
   /**
-   * How the workbench lays the window out, for what the shell draws in the panes' place: the room kept round the panes
-   * with the edit shown (`edit`) and with the canvas shown (`canvas`), and the canvas's own frame where the panes float
-   * (`canvasFrame`). Each is a style, the same one until it changes.
+   * What the layout (shell/layout) reads of the workbench's own panes. `timelineFit`: the height its timeline's tracks
+   * need, and `inspectorIdle`: its inspector has nothing in hand to show (a narrow window then leaves it out); the
+   * layout's menu draws the arrangements with them. `sizes`: its panes as they are drawn now (the timeline's height,
+   * the inspector's and the layers' widths), which rearranging begins from. Without it the layout takes what it takes
+   * for a pane that is not there.
    */
-  places?: { edit: React.CSSProperties; canvas: React.CSSProperties; canvasFrame: React.CSSProperties };
+  panes?: { timelineFit: number; inspectorIdle: boolean; sizes: () => { timeline: number; inspector: number; layers: number } };
   /**
    * What the library (shell/library) does in the workbench. Without it the library is only browsed: nothing of it is
    * put in a film, taken in hand or tried.
@@ -166,23 +160,6 @@ export interface Wiring {
     /** Words spoken in a voice of the library, put on the film at the playhead: null, or why not. */
     speak: (voice: LibraryVoice, access: VoiceAccess, text: string) => Promise<string | null>;
   };
-  /**
-   * Where the library's pane is, as the workbench lays the window out (for now): open or not, the side it is docked on
-   * and its box, `free` when the panes float, how much of its foot the app's composer covers (`under`), and the seam
-   * that sizes the app's panel while the pane covers it (`seam`; null: none). `setOpen` opens or closes the pane,
-   * `onResize` keeps a new size of it, `setPanelWidth` sizes the app's panel (`done`: the drag is over).
-   */
-  libraryPane?: {
-    open: boolean;
-    dock: LibraryDock;
-    rect: DockRect;
-    free: boolean;
-    under: number;
-    seam: { label: string; width: number; bottom: number; side: PanelSide } | null;
-    setOpen: (open: boolean) => void;
-    onResize: (size: { assetsWidth?: number; libraryHeight?: number }) => void;
-    setPanelWidth: (width: number, done?: boolean) => void;
-  };
 }
 
 export const wiringStore = createStore<Wiring | null>(null);
@@ -193,9 +170,10 @@ export function usePublishWiring(value: Wiring): void {
 }
 
 /**
- * A workbench's: `value` to put in its wiring, the same one while what it holds is the same. Its functions are stood
- * for by ones that call the latest given, so a function made anew by every render changes nothing; its other fields
- * are compared as they are (a list or an object among them is to be the same one until it changes).
+ * A workbench's, for its wiring (or the shell's, for the frame): `value`, the same one while what it holds is the
+ * same. Its functions are stood for by ones that call the latest given, so a function made anew by every render
+ * changes nothing; its other fields are compared as they are (a list or an object among them is to be the same one
+ * until it changes).
  */
 export function useSteady<T extends object>(value: T): T {
   const latest = React.useRef(value);

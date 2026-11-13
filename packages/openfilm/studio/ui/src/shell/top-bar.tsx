@@ -8,7 +8,7 @@
  * What a workbench has on the bar it gives through the wiring (shell/frame `topBar`): its own buttons, drawn before
  * the switch, what it knows of the film for the project's card, and the picture at the playhead made the cover.
  * Without it the bar has the page's parts alone, the card says what the project says of itself, and no cover is made
- * from a frame.
+ * from a frame. The layout's menu (shell/layout) is the page's: it is the first of the buttons on the right.
  */
 import * as React from 'react';
 import { MonitorDown, Scissors, Workflow } from 'lucide-react';
@@ -32,6 +32,11 @@ import { Tooltip } from '@/components/Tooltip';
 import { UpdateButton, WebUpdateButton } from '@/components/UpdateButton';
 import type { useProjectFrame } from './ProjectFrame';
 import { useWiring } from './frame';
+import { LayoutMenu } from './layout';
+
+/** A button of the top bar: the layout's menu, and a workbench's own beside it. */
+export const TOP_BTN =
+  'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
 
 /**
  * The page's own windows, open or not, and the project's name: held in the frame, so a workbench opens Settings or
@@ -63,6 +68,8 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
   const {
     projectId, setLoaded, toast, reveal, title, setProjectsOpen, setSettingsOpen, desktopOpen, setDesktopOpen,
     canvasOpen, setCanvasOpen, surface, showWorkbench, benchPlugins, pickBench, canToggleCanvas,
+    /* the page's panels are being rearranged (shell/layout): the workbench shown stays the one it is meanwhile */
+    layoutEditing,
   } = frame;
   const [renaming, setRenaming] = React.useState(false);
   const [titleDraft, setTitleDraft] = React.useState('');
@@ -86,8 +93,6 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
       return false;
     }
   };
-  /* its panes are being rearranged: the workbench shown stays the one it is meanwhile */
-  const layoutEditing = Boolean(bar?.layoutEditing);
   const projectTitle = <ProjectTitle tab={Boolean(studioHost?.tabs)} name={title} editing={renaming} draft={titleDraft} onDraft={setTitleDraft}
     onRename={startRename} onCommit={() => void commitTitle()} onCancel={() => setRenaming(false)}
     facts={{ project: loaded.project, ...(bar ? { film: bar.film } : {}) }}
@@ -121,7 +126,9 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
       </div>
       <div className="min-w-0 flex-1" />
       <div className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
-        {/* the workbench's own: for the edit its panes, its versions, its export (the canvas has its own bars) */}
+        {/* how the page's panels are arranged */}
+        <LayoutMenu frame={frame} className={TOP_BTN} />
+        {/* the workbench's own: for the edit its versions, its export (the canvas has its own bars) */}
         {bar?.tools}
         {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
         {pickBench ? <ModeSwitcher now={surface ?? (canvasOpen ? 'canvas' : 'edit')} plugins={benchPlugins} onPick={showWorkbench} disabled={layoutEditing} />

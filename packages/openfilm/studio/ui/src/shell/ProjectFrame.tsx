@@ -4,7 +4,8 @@
  * it was made); the media pane's operations on them (bring in, link, move, delete, reveal); the project as it was read;
  * and the toast, which the shell draws. Which workbench is shown, and what takes the panes' place when it is not the
  * edit (the canvas, a plugin's surface), are the shell's too (shell/workbenches), and so are the library, its pane and
- * its drawer (shell/library), and the top bar with the page's own windows (shell/top-bar).
+ * its drawer (shell/library), the top bar with the page's own windows (shell/top-bar), and how the window is laid out
+ * (shell/layout).
  *
  * For now the project and its files are still read by the edit (ProjectView: the same events redraw its picture), which
  * puts them here with the setters this frame gives it. What a workbench has that an operation here needs (its picture
@@ -23,6 +24,7 @@ import type { ImportProgress } from '@/components/MediaPool';
 import { Toast, useToast } from '@/components/Toast';
 import { BrandLoadingScreen } from '@/components/BrandLoadingScreen';
 import { usePublishFrame, wiringStore } from './frame';
+import { LayoutOver, useLayout } from './layout';
 import { LibraryPlace, useLibraryShown } from './library';
 import { PageAsks, PageWindows, TopBar, usePageWindows } from './top-bar';
 import { InPanesPlace, useWorkbenchShown } from './workbenches';
@@ -286,10 +288,15 @@ export function useProjectFrame(projectId: string) {
   }, [projectApi]);
 
   /* ── the workbench shown, and what the canvas was asked for (shell/workbenches) ── */
-  const shown = useWorkbenchShown(projectId, loaded?.project.id, toast.showError);
+  /* whether the page's panels are being rearranged: the layout's, and the workbench shown stays the one it is meanwhile */
+  const rearranging = React.useRef(false);
+  const shown = useWorkbenchShown(projectId, loaded?.project.id, toast.showError, rearranging);
+
+  /* ── how the window is laid out: the app's panel, the library, the canvas and the workbench's panes (shell/layout) ── */
+  const layout = useLayout({ canvasOpen: shown.canvasOpen, noBench: shown.noBench, rearranging });
 
   /* ── the library: what its pane shows of the project, whichever workbench is shown (shell/library) ── */
-  const library = useLibraryShown(projectId, { listing, mediaSources, mediaMade, toast, canvasOpen: shown.canvasOpen });
+  const library = useLibraryShown(projectId, { listing, mediaSources, mediaMade, toast, canvasOpen: shown.canvasOpen, openLibrary: layout.openLibrary });
 
   /* ── the page's own windows (the projects, Settings, the desktop app's dialog), and the project's name (shell/top-bar) ── */
   const windows = usePageWindows(loaded);
@@ -310,6 +317,7 @@ export function useProjectFrame(projectId: string) {
     mediaMade, madeWords, madeVersions, missingMedia, setMissingMedia, findMissing,
     projectApi, onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, coverSet, onSetCover, onNewFolder, reveal,
     ...shown,
+    ...layout,
     ...library,
     ...windows,
   };
@@ -321,8 +329,9 @@ const PLACE = { display: 'contents' } as const;
 /**
  * The project's page: its frame told, and the page itself, which is the shell's. The top bar is drawn first
  * (shell/top-bar); the workbench's element (`children`) goes where the panes are, and after it what takes their place
- * (shell/workbenches); the page's own windows and the library's pane are drawn over the page (shell/library); the
- * other places are filled by the workbench for now (see `slots`), each until it is the shell's own. Nothing of a workbench is drawn before the frame is told with its places, so one never reads an empty
+ * (shell/workbenches); the page's own windows, the library's pane (shell/library) and the layout's seams and editor
+ * (shell/layout) are drawn over the page; the other places are filled by the workbench for now (see `slots`), each
+ * until it is the shell's own. Nothing of a workbench is drawn before the frame is told with its places, so one never reads an empty
  * frame. While the project is being read the loading screen is here (unless `covered`: the page says something else),
  * and the page is not shown. The toast is drawn over everything.
  */
@@ -349,6 +358,7 @@ export function ProjectFrame({ projectId, covered = false, children }: { project
         <div ref={slotRefs.over} style={PLACE} />
         <PageWindows frame={state} />
         <LibraryPlace frame={state} />
+        <LayoutOver frame={state} />
         <div ref={slotRefs.overLibrary} style={PLACE} />
         <PageAsks frame={state} />
       </div>

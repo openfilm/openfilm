@@ -87,7 +87,7 @@ import { positionOf } from '@/lib/stage-crop';
 import { createViewerZoom } from '@/lib/viewer-zoom';
 import { factsOfProbe, resourceKindOf, srcHitsAsset, type WorkspaceResource } from '@/lib/workspace-resources';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
-import { studioHost, useHostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
+import { studioHost, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
 import { clipRef, layerRef, markRange, momentRef, rangeRef, regionRef, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
 import { usePageChanges } from './use-page-changes';
@@ -101,10 +101,7 @@ import { cueClipId, cueEditOf, cueOf, cueStandIn, isCueClip, withCueBlocks, type
 
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
 import { DEFAULT_INSPECTOR, DOCK_GAP, DockPaneDivider, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER, PaneDivider } from './PaneDivider';
-import { defaultWorkspace, workspaceChatWidth, workspaceGeometry, type WorkspaceLayout } from '@/lib/workspaces';
-import { useWorkspaceDraft, useWorkspaceLayouts } from '@/lib/use-workspaces';
-import { defaultDockTree, dockFrames, visibleDockPanels, type DockPanel } from '@/lib/workspace-dock';
-import { WorkspaceEditor, WorkspaceSeams } from './WorkspaceEditor';
+import type { WorkspaceLayout } from '@/lib/workspaces';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
 import { MotionPanel } from './MotionPanel';
@@ -117,7 +114,6 @@ import { Timeline, timelineFitHeight, type TimelineCommands, type TimelineHistor
 import { useEditorTools } from './use-editor-tools';
 import { AudioMeters, METERS_W } from './AudioMeters';
 import { trackFlagStep, type SessionTimeline } from './OperationHistory';
-import { ProjectLayoutMenu } from './ProjectLayoutMenu';
 import { ProjectHistoryButton, ProjectHistoryControls } from './ProjectHistoryControls';
 import { useProjectHistory } from './use-project-history';
 import { historyMoved } from '@/lib/project-history';
@@ -157,7 +153,7 @@ import { compactScale, type MgTransform, type NodeOverride, type OverridePivot, 
 import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { isTextField, isTypingTarget } from './typing-target';
 import { useFrame, usePublishWiring, useSteady } from '@/shell/frame';
-import { HOST_PANEL_TOP } from '@/shell/library';
+import { TOP_BTN } from '@/shell/top-bar';
 
 /** How far a caption track's translation sits above it (% of the frame): about a line. */
 const TRANSLATION_LIFT_PCT = 7;
@@ -171,9 +167,6 @@ const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator
 const TIMELINE_H = 200;
 const TIMELINE_SHARE = 0.45;
 const TIMELINE_SPARE = 48;
-
-const TOP_BTN =
-  'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
 
 /**
  * Which edit-history label a batch of clip edits gets: by its most telling property; a track's switch by its badge; a
@@ -241,10 +234,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     folder, mediaSources, listing, mediaMade, setMissingMedia, findMissing,
     projectApi, onPick, onBring, onImport, coverSet,
     slots,
-    canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, noBench, surface, showWorkbench, away,
+    canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, surface, showWorkbench, away,
     setCanvasFocus,
     libraryIndex, setRevealMedia, showFile, setSkillsShown, saveThings, onLibraryDownloadFailed,
     title, setProjectsOpen, setSettingsOpen,
+    editPrefs, updateWorkspace, editFree, freeStyle, editDock, insetStyle, openLibrary,
   } = useFrame(projectId);
   const keyHint = useKeyHint();
   /* the latest onLeave, for the folder's events (subscribed once per project) */
@@ -362,15 +356,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   React.useEffect(() => () => setCaptionSelection(null), [projectId]);
   /* which workbench is shown (the canvas over the panes, the edit, Motion, a plugin's surface) is the shell's
      (shell/workbenches); what it asks of the edit as it changes that is kept here */
-  const layoutEditingRef = React.useRef(false);
   /* opening it stops the film playing (the panes under it are hidden): the player's pause, set once it is made */
   const pauseRef = React.useRef<() => void>(() => {});
   /* layers the motion panel just put something on, twirled open on the motion timeline */
   const [motionReveal, setMotionReveal] = React.useState<{ ids: readonly string[]; n: number } | null>(null);
-  /* the workspace's own setter, made further down: the motion view opens the timeline and inspector with it */
+  /* the workspace's own setter, the shell's (shell/layout): the motion view opens the timeline and inspector with it */
   const updateWorkspaceRef = React.useRef<(patch: Partial<WorkspaceLayout>) => void>(() => {});
-  /* every plugin off: no workbench is shown, only the library (and the app's chat), which opens */
-  React.useEffect(() => { if (noBench) updateWorkspaceRef.current({ assets: true }); }, [noBench]);
   /* the ways of working turned on (Settings → Advanced): one turned off while in use gives way to the first still on */
   React.useEffect(() => {
     if (surface == null && workModes.length && !workModes.includes(workMode)) showWorkbench(workModes[0]!);
@@ -685,21 +676,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   /* ── layout ── */
   const dockColRef = React.useRef<HTMLDivElement | null>(null);
   const viewerRowRef = React.useRef<HTMLDivElement | null>(null);
-  const workspaceMode = canvasOpen ? 'canvas' : 'edit';
-  const { layout: storedWorkspace, profiles: workspaceProfiles, update: commitWorkspace, viewport: workspaceViewport, storageFailed: workspaceStorageFailed } = useWorkspaceLayouts(workspaceMode);
-  const layoutDraft = useWorkspaceDraft();
-  const workspacePrefs = layoutDraft.draft ?? storedWorkspace;
-  const editPrefs = workspaceMode === 'edit' ? workspacePrefs : workspaceProfiles.edit;
-  const canvasPrefs = workspaceMode === 'canvas' ? workspacePrefs : workspaceProfiles.canvas;
-  layoutEditingRef.current = layoutDraft.draft !== null;
-  const updateWorkspace = React.useCallback((patch: Partial<WorkspaceLayout>) => {
-    if (layoutDraft.active.current) layoutDraft.update(patch); else commitWorkspace(patch);
-  }, [layoutDraft.active, layoutDraft.update, commitWorkspace]);
+  /* how the window is laid out is the shell's (shell/layout): the edit's own arrangement (`editPrefs`), where its
+     panes float (`editFree`, `freeStyle`) and the room kept round them (`editDock`) come from the frame, and a pane
+     sized or shown here is told with `updateWorkspace` */
   updateWorkspaceRef.current = updateWorkspace;
   const storedTimelineHeight = editPrefs.timelineHeight;
   const timelineHeightSaved = storedTimelineHeight !== null;
   const inspectorWidth = editPrefs.inspectorWidth;
-  const assetsPaneOpen = workspacePrefs.assets;
   const layersPaneOpen = editPrefs.layers;
   const layersWidth = editPrefs.layersWidth;
   const timelineOpen = editPrefs.timeline;
@@ -821,14 +804,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       return next.length === keys.length && next.every((k, i) => k === keys[i]) ? keys : next;
     });
   }, [cuePick]);
-  const freeFrames = (layout: WorkspaceLayout) => layout.tree ? dockFrames(layout.tree, workspaceViewport, visibleDockPanels(layout, Boolean(studioHost?.panel))) : null;
-  const editFree = freeFrames(editPrefs);
-  const canvasFree = freeFrames(canvasPrefs);
-  const freeGeometry = canvasOpen ? canvasFree : editFree;
-  const freeStyle = (panel: DockPanel): React.CSSProperties => {
-    const rect = (panel === 'canvas' ? canvasFree : editFree)?.panels[panel];
-    return rect ? { position: 'fixed', zIndex: 30, ...rect, paddingTop:0, borderTop:rect.top===HOST_PANEL_TOP?'1px solid var(--dock-line)':0 } : {};
-  };
   const rowNarrow = rowWidth > 0 && rowWidth < MIN_VIEWER + DEFAULT_INSPECTOR + 240;
   const inspectorIdle = inspectorContent === 'selection' && !stageElement && !selectedBlocks.length;
   const inspectorShown = inspectorOpen && (Boolean(editFree) || !(rowNarrow && inspectorIdle));
@@ -2901,74 +2876,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   }, [setSelectedLocs, showCaptionLook]);
 
   /* ── the app Studio is embedded in (lib/host.ts): what the person points at, handed to it; what it asks to be shown ── */
-  const hostPanel = useHostPanel();
-  /* an app that hosts Studio can keep the media in a drawer of its own panel (window.openfilmHost panel.assets): no
-     left pane then, the viewer first on the left */
-  const hostAssets = hostPanel?.assets ?? null;
-  const workspaceLayout: WorkspaceLayout = { ...workspacePrefs, chat: hostPanel?.open ?? workspacePrefs.chat,
-    chatWidth: hostPanel?.preferredWidth ?? workspacePrefs.chatWidth };
-  const restoringHost = React.useRef(false);
-  const applyHostWorkspace = (next: WorkspaceLayout) => {
-    const native = studioHost?.panel;
-    hostPanel?.setPlacement({ side: next.chatSide, libraryDock: next.libraryDock });
-    hostPanel?.setOpen(next.chat);
-    if (native?.preferredWidth !== next.chatWidth) hostPanel?.setWidth(next.chatWidth, true);
-    if (native?.assets?.open !== next.assets) hostAssets?.setOpen(next.assets);
-  };
-  const hostApplyRef = React.useRef(applyHostWorkspace); hostApplyRef.current = applyHostWorkspace;
-  // Changing mode restores its own profile before accepting new changes from the native chat.
-  React.useLayoutEffect(() => {
-    const next = workspacePrefs;
-    restoringHost.current = true;
-    let live = true;
-    queueMicrotask(() => {
-      if (!live) return;
-      try { hostApplyRef.current(next); }
-      finally { restoringHost.current = false; }
-    });
-    return () => { live = false; restoringHost.current = false; };
-  }, [workspaceMode, workspacePrefs.chat, workspacePrefs.assets, workspacePrefs.chatWidth, workspacePrefs.libraryDock, workspacePrefs.chatSide]);
-  React.useEffect(() => {
-    const native = studioHost?.panel;
-    if (!hostPanel || !native || restoringHost.current) return;
-    // A profile can already match the host and produce no change event. Read the current host, not an older render's
-    // snapshot, so a later drag is never mistaken for an acknowledgement of that profile.
-    updateWorkspace({ chat: native.open, chatWidth: native.preferredWidth ?? hostPanel.preferredWidth,
-      ...(hostAssets && native.assets ? { assets: native.assets.open } : {}) });
-  }, [hostPanel?.open, hostPanel?.preferredWidth, hostAssets?.open, workspaceMode, updateWorkspace]);
-  const applyWorkspace = (next: WorkspaceLayout) => {
-    if (next.mode !== workspaceMode) return;
-    if (next.libraryDock === 'chat' && !next.chat && hostAssets) next = { ...next, assets: false };
-    updateWorkspace(next); applyHostWorkspace(next);
-  };
-  const resetWorkspace = () => applyWorkspace(defaultWorkspace(workspaceMode));
-  const beginLayoutEdit = () => layoutDraft.begin({ ...workspaceLayout, tree: workspaceLayout.tree ?? defaultDockTree({ ...workspaceLayout, chatWidth:hostPanel?.width || workspaceLayout.chatWidth, inspectorWidth:inspectorShownWidth, layersWidth:layersShown ? layersShownWidth : layersWidth }, timelineShownHeight) });
-  const cancelLayoutEdit = () => { layoutDraft.close(); applyHostWorkspace(storedWorkspace); };
-  const finishLayoutEdit = () => { const next = layoutDraft.draft; if (!next) return; layoutDraft.close(); commitWorkspace(next); applyHostWorkspace(next); };
-  const chatBounds = freeGeometry?.panels.chat ?? null;
-  const boundsKey = JSON.stringify(chatBounds);
-  React.useLayoutEffect(() => {
-    let live = true;
-    queueMicrotask(() => { if (live) studioHost?.panel?.setBounds?.(chatBounds); });
-    return () => { live = false; };
-  }, [boundsKey]);
-  React.useEffect(() => () => studioHost?.panel?.setBounds?.(null), []);
-  const dockOf = (layout: WorkspaceLayout) => {
-    const active = layout.mode === workspaceMode && !layout.tree ? hostPanel : null;
-    return workspaceGeometry({ ...layout, chat: active?.open ?? layout.chat,
-      libraryDock: !hostAssets && layout.libraryDock === 'chat' ? 'left' : layout.libraryDock },
-      workspaceViewport, active?.width ?? (hostPanel && layout.chat ? workspaceChatWidth(workspaceViewport.width, layout.chatWidth) : 0));
-  };
-  const editDock = dockOf(editPrefs);
-  const canvasDock = dockOf(canvasPrefs);
-  const dockGeometry = canvasOpen ? canvasDock : editDock;
-  const chatWidth = dockGeometry.inset[workspacePrefs.chatSide];
-  const chatLibraryRect = chatBounds ?? { left: workspacePrefs.chatSide === 'right' ? workspaceViewport.width - chatWidth : 0,
-    top: HOST_PANEL_TOP, width: chatWidth, height: workspaceViewport.height - HOST_PANEL_TOP };
-  const independentLibrary = workspacePrefs.libraryDock !== 'chat' || !hostAssets;
-  const libraryOpen = independentLibrary ? assetsPaneOpen : Boolean(hostAssets?.open);
-  const openLibrary = (open: boolean) => { updateWorkspace({ assets: open }); hostAssets?.setOpen(open); };
-  const insetStyle = ({ inset }: typeof dockGeometry): React.CSSProperties => ({ marginLeft: inset.left, marginRight: inset.right, marginBottom: inset.bottom });
   const layersRoom = rowWidth - (inspectorShown ? inspectorShownWidth : 0) - MIN_VIEWER - 16;
   const layersShownWidth = editFree?.panels.layers?.width ?? (rowWidth ? Math.min(layersWidth, layersRoom) : layersWidth);
   const layersFit = Boolean(editFree) || !rowWidth || layersShownWidth >= 180;
@@ -5081,19 +4988,19 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   );
 
   /* what the shell reaches of the edit when it needs it (shell/frame): the picture drawn again, the files the film
-     plays; what changing the workbench shown asks of the edit (playing stopped, the panes being rearranged, Motion's
-     panes opened); what the canvas does here (a file or a cut put in the film, the app's panel); where the shell
-     draws what takes the panes' place, as the window is laid out here; what the library does here, with where its
-     pane is; and what the edit has on the top bar (below). The edit's own functions are called as the latest render
+     plays; what changing the workbench shown asks of the edit (playing stopped, Motion's panes opened); what the
+     canvas does here (a file or a cut put in the film); what the layout reads of the edit's panes; what the library
+     does here; and what the edit has on the top bar (below). The edit's own functions are called as the latest render
      made them */
-  const forShell = React.useRef({ addFromCanvas, sendFromCanvas, hostPanel, openLibrary });
-  forShell.current = { addFromCanvas, sendFromCanvas, hostPanel, openLibrary };
-  const chatThere = Boolean(hostPanel);
-  const chatOpen = Boolean(hostPanel?.open);
-  const shellChat = React.useMemo(() => (chatThere ? { open: chatOpen, toggle: () => forShell.current.hostPanel?.setOpen(!chatOpen) } : undefined), [chatThere, chatOpen]);
-  const places = { edit: editFree ? {} : insetStyle(editDock), canvas: canvasFree ? {} : insetStyle(canvasDock), canvasFrame: freeStyle('canvas') };
-  const placesKey = JSON.stringify(places);
-  const shellPlaces = React.useMemo(() => places, [placesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const forShell = React.useRef({ addFromCanvas, sendFromCanvas });
+  forShell.current = { addFromCanvas, sendFromCanvas };
+  /* the window is laid out by the shell (shell/layout); what it reads of the edit's panes is given here: how tall the
+     timeline's tracks are and whether the inspector has anything to show (the layout's menu draws the arrangements
+     with them), and the panes' sizes as they are drawn now, which rearranging begins from */
+  const shellPanes = useSteady({
+    timelineFit: fitTimelineHeight.current, inspectorIdle,
+    sizes: () => ({ timeline: timelineShownHeight, inspector: inspectorShownWidth, layers: layersShown ? layersShownWidth : layersWidth }),
+  });
   /* the library is the shell's (shell/library); what it does in the edit is given here: a file of the media pane put in
      the film at the playhead or taken in hand (shown in the viewer and the inspector), the library's things added or
      tried over the picture, the captions, the voices. Each the same one until it changes (useSteady) */
@@ -5119,42 +5026,21 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     actions: library.actions, tried: libraryTrial?.id ?? null, templateStatus,
     preview: libraryPreview, captions: libraryCaptions, speak: speakVoice,
   });
-  /* where the library's pane is, as the window is laid out here (the layout is still the edit's): docked on its own,
-     or in the app's panel over the chat, with the seam that sizes the panel while the pane covers it */
-  const libraryPane = {
-    open: libraryOpen, dock: independentLibrary ? dockGeometry.dock : 'chat' as const,
-    rect: independentLibrary ? freeGeometry?.panels.library ?? dockGeometry.library : chatLibraryRect,
-    free: Boolean(freeGeometry), under: !independentLibrary ? hostAssets?.bottom ?? 0 : 0,
-    seam: !freeGeometry && !independentLibrary && hostAssets?.open && hostPanel ? { label: hostPanel.label, width: hostPanel.width, bottom: hostAssets.bottom, side: workspacePrefs.chatSide } : null,
-  };
-  const libraryPaneKey = JSON.stringify(libraryPane);
-  const shellLibraryPane = React.useMemo(() => ({
-    ...libraryPane,
-    setOpen: (open: boolean) => forShell.current.openLibrary(open),
-    onResize: (size: { assetsWidth?: number; libraryHeight?: number }) => updateWorkspaceRef.current(size),
-    setPanelWidth: (width: number, done?: boolean) => { forShell.current.hostPanel?.setWidth(width, done); },
-  }), [libraryPaneKey]); // eslint-disable-line react-hooks/exhaustive-deps
   /* the top bar is the shell's (shell/top-bar); what the edit has on it is given here, and drawn there in the shell's
-     own React root: the edit's own buttons (its panes' layout, its versions, its export and the exports' tray: the
+     own React root: the edit's own buttons (its versions, its export and the exports' tray: the
      canvas has its own bars), the picked keyframes' menu, which is kept in the bar, what the edit knows of the film
      for the project's card, and the picture at the playhead made the cover. Each the same one until what it shows
      changes: the buttons call the edit's functions as the latest render made them */
   const barDoes = useSteady({
-    applyWorkspace, resetWorkspace, beginLayoutEdit, openHistory, coverFromFrame,
+    openHistory, coverFromFrame,
     askExport: () => {
       if (previewError) toast.showError(`${t('project.filmCannotExport')} ${previewError}`);
       else if (totalMs > 0) setExportOpen(true);
       else toast.show(t('project.filmNotReady'));
     },
   });
-  const layoutEditing = Boolean(layoutDraft.draft);
-  const layoutKey = JSON.stringify(workspaceLayout);
-  const fitHeight = fitTimelineHeight.current;
   const editAway = canvasOpen || away;
   const topBarTools = React.useMemo(() => (<>
-    <ProjectLayoutMenu className={TOP_BTN}
-      value={workspaceLayout} onChange={barDoes.applyWorkspace} onReset={barDoes.resetWorkspace}
-      hasChat={chatThere} viewport={workspaceViewport} timelineFitHeight={fitHeight} inspectorIdle={inspectorIdle} onEdit={barDoes.beginLayoutEdit} layoutEditing={layoutEditing} storageFailed={workspaceStorageFailed} />
     {editAway ? null : (<>
     <ProjectHistoryButton open={historyOpen} onClick={barDoes.openHistory} className={TOP_BTN} />
     <Tooltip label={t('projectMenu.export')} side="bottom">
@@ -5165,26 +5051,23 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     </Tooltip>
     </>)}
     <ExportTray ref={exportTrayRef} projectId={projectId} onError={showError} />
-  </>), [barDoes, layoutKey, chatThere, workspaceViewport, fitHeight, inspectorIdle, layoutEditing, workspaceStorageFailed, editAway, historyOpen, exportOpen, projectId, showError, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  </>), [barDoes, editAway, historyOpen, exportOpen, projectId, showError, t]); // eslint-disable-line react-hooks/exhaustive-deps
   /* open only for a moment: made anew by each render meanwhile */
   const topBarMenu = keyMenu ? <ContextMenu x={keyMenu.x} y={keyMenu.y} dense items={keyMenuItems} onClose={() => setKeyMenu(null)} /> : null;
   const stageW = stage.w, stageH = stage.h, filmClips = filmSummary.clips;
   const topBarFilm = React.useMemo(() => ({ durationMs: totalMs, stage: { w: stageW, h: stageH }, fps: projectFps, clips: filmClips }), [totalMs, stageW, stageH, projectFps, filmClips]);
-  const shellTopBar = React.useMemo(() => ({ tools: topBarTools, menu: topBarMenu, film: topBarFilm, coverFromFrame: barDoes.coverFromFrame, layoutEditing }), [topBarTools, topBarMenu, topBarFilm, barDoes, layoutEditing]);
+  const shellTopBar = React.useMemo(() => ({ tools: topBarTools, menu: topBarMenu, film: topBarFilm, coverFromFrame: barDoes.coverFromFrame }), [topBarTools, topBarMenu, topBarFilm, barDoes]);
   usePublishWiring(React.useMemo(() => ({
     reloadPicture: () => preview.current?.reload?.(),
     srcsInUse: () => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])),
     pause: () => pauseRef.current(),
-    rearranging: () => layoutEditingRef.current,
     motionShown: () => updateWorkspaceRef.current({ timeline: true, inspector: true }),
     addToFilm: (file: WorkspaceResource) => { void forShell.current.addFromCanvas(file); },
     sendToFilm: (list: WorkspaceResource[]) => { void forShell.current.sendFromCanvas(list); },
-    ...(shellChat ? { chat: shellChat } : {}),
-    places: shellPlaces,
+    panes: shellPanes,
     library: shellLibrary,
-    libraryPane: shellLibraryPane,
     topBar: shellTopBar,
-  }), [shellChat, shellPlaces, shellLibrary, shellLibraryPane, shellTopBar]));
+  }), [shellPanes, shellLibrary, shellTopBar]));
 
   /* The page is the shell's (shell/ProjectFrame), and so is its top bar (shell/top-bar). In the edit's own element are
      only the edit's panes; the edit's own dialogs, which lie over the page, are put into the shell's places from here. */
@@ -5679,13 +5562,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
         />
       ) : null}
       </>, slots.over)}
-      {/* the page's own windows and the library's pane are the shell's (shell/top-bar, shell/library), drawn between
-          these two places */}
+      {/* the page's own windows, the library's pane and the layout's seams and editor are the shell's (shell/top-bar,
+          shell/library, shell/layout), drawn between these two places */}
       {ReactDOM.createPortal(<>
-      {freeGeometry && workspacePrefs.tree ? <WorkspaceSeams tree={workspacePrefs.tree} frames={freeGeometry} editing={Boolean(layoutDraft.draft)} onChange={tree => updateWorkspace({ tree })} onCheckpoint={layoutDraft.draft ? layoutDraft.checkpoint : undefined} /> : null}
-      {layoutDraft.draft && freeGeometry ? <WorkspaceEditor value={layoutDraft.draft} frames={freeGeometry} hasChat={Boolean(hostPanel)} onChange={layoutDraft.change}
-        onDone={finishLayoutEdit} onCancel={cancelLayoutEdit} onUndo={layoutDraft.undo} onRedo={layoutDraft.redo} canUndo={layoutDraft.canUndo} canRedo={layoutDraft.canRedo}
-        onReset={() => { const next=defaultWorkspace(workspaceMode); layoutDraft.change({ ...next, tree:defaultDockTree(next,fitTimelineHeight.current) }); }} /> : null}
       <ExportCenter
         open={exportOpen}
         onClose={() => { setExportOpen(false); setExportClipId(null); }}
