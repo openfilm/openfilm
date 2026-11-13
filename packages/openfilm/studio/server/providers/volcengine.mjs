@@ -186,7 +186,9 @@ async function video(args, ctx) {
       ...(voices.length > 1 ? { voices } : voices.length ? { voice: voices[0] } : {}), ...(clips.length > 1 ? { clips } : clips.length ? { clip: clips[0] } : {}),
     } }],
     receipt: { provider: 'volcengine', model, src: path, dur, ...(size.w ? { width: size.w, height: size.h } : {}), hasAudio: true, resolution,
-      ...(tokens !== null ? { tokens } : {}), ...(clips.length ? { videoInput: true } : {}), ...notes(said) },
+      ...(tokens !== null ? { tokens } : {}), ...(clips.length ? { videoInput: true } : {}),
+      /* the clips' own seconds, which Volcengine counts too, when each one's length is known */
+      ...(clips.length && durations.every((n) => n !== null) ? { referenceSeconds: Math.round(total * 1000) / 1000 } : {}), ...notes(said) },
     cost: billedBy(NAME),
   };
 }

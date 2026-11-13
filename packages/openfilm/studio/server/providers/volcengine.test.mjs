@@ -83,6 +83,7 @@ test('references: pictures, clips and recordings by role; clips and recordings o
   assert.deepEqual(body.content.slice(1).map((c) => [c.type, c.role]), [['image_url', 'reference_image'], ['video_url', 'reference_video'], ['audio_url', 'reference_audio']]);
   assert.equal(body.content[2].video_url.url, 'https://relay.example/c.mp4');
   assert.equal(result.receipt.videoInput, true);
+  assert.equal(result.receipt.referenceSeconds, undefined, 'a clip whose length is not known');
   await assert.rejects(volcengine.run('video', { prompt: 'p', video: 'c.mp4', out: 'r' }, ctx(files)), /only from a web address/);
   await assert.rejects(volcengine.run('video', { prompt: 'p', voice: 'v.mp3', out: 'r' }, ctx(files, 'doubao-seedance-2-0-mini-260615', link)), /needs a reference picture or clip/);
 });
