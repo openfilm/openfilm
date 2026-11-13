@@ -7,6 +7,7 @@
  * are written one at a time (see editor/use-film.ts); the agent's writes come in through the folder's events.
  */
 import * as React from 'react';
+import * as ReactDOM from 'react-dom';
 import { afterPaintIdle } from '@/lib/after-paint-idle';
 import { loadCanvas } from './canvas/load';
 import { CanvasLoading } from './canvas/CanvasLoading';
@@ -89,7 +90,6 @@ import { canvasFor, firstPictureSize, fitToCanvas } from '@/lib/canvas-fit';
 import { positionOf } from '@/lib/stage-crop';
 import { createViewerZoom } from '@/lib/viewer-zoom';
 import { factsOfProbe, resourceKindOf, srcHitsAsset, type WorkspaceResource } from '@/lib/workspace-resources';
-import { BrandLoadingScreen } from './BrandLoadingScreen';
 import { SettingsModal } from './settings/SettingsModal';
 import { useSettings } from './settings/use-settings';
 import { DesktopDialog } from './DesktopDialog';
@@ -291,6 +291,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     toast, showToast, loaded, setLoaded, failure, setFailure, filesTick, setFilesTick, rawListing, setRawListing, facts, proxies, onUndecoded, prefsTick,
     folder, mediaSources, listing, mediaMade, madeWords, madeVersions, missingMedia, setMissingMedia, findMissing,
     projectApi, onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, coverSet, onSetCover, onNewFolder, reveal,
+    slots,
   } = useFrame(projectId);
   const keyHint = useKeyHint();
   /* the latest onLeave, for the folder's events (subscribed once per project) */
@@ -5371,15 +5372,20 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     [film.film, info, mediaFacts],
   );
 
+  /* The page is the shell's (shell/ProjectFrame): what is drawn here goes into the places it keeps. In the edit's own
+     element are only the edit's panes; the top bar, what else takes the panes' place and what lies over the page are
+     put into the shell's places from here until each is the shell's own. */
   if (failure) {
-    return (
+    return ReactDOM.createPortal(
       <div data-page-ready="error" className="workspace-shell flex flex-col items-center justify-center gap-3 bg-[var(--bg-app)] text-[13px] text-[var(--text-muted)]">
         <p>{failure}</p>
         <button type="button" onClick={onLeave} className="rounded-lg border border-[var(--border)] px-3 py-1.5 hover:bg-[var(--bg-hover)]">{t('nav.projects')}</button>
-      </div>
+      </div>,
+      slots.page,
     );
   }
-  if (!loaded) return <BrandLoadingScreen labelKey="projects.opening" />;
+  /* the shell draws the loading screen */
+  if (!loaded) return null;
 
   const value = film.film;
   const viewerReady = Boolean(info);
@@ -5389,9 +5395,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     actions={{ onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') }}
     onAll={() => setProjectsOpen(true)} />;
   return (
-    <div className="workspace-shell flex flex-col bg-[var(--bg-app)]">
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="relative z-10 grid min-h-0 min-w-0 flex-1 bg-[var(--dock-line)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
+    <>
+        {ReactDOM.createPortal(<>
           {/* The desktop's tabs share the left edge; a browser keeps the project title centered. */}
           <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 bg-[var(--bg-titlebar)] px-[6px]" style={{ gridArea: 'bar', ...(studioHost?.tabs ? { gap: 0 } : {}) }} onContextMenu={event => event.preventDefault()}>
             {/* The title and arrow open the same project card on click. */}
@@ -5448,6 +5453,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
             </div>
             <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
           </div>
+        </>, slots.top)}
 
           {/* the panes, edge to edge on the board of lines (--dock-line): a line under the top bar, and one beside the
               app's own panel (lib/host.ts `panel`), which sits left of this, under the top bar: room left for it */}
@@ -5904,6 +5910,7 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </div>
             ) : null}
           </section>
+        {ReactDOM.createPortal(<>
           {/* a plugin's own surface in the panes' place, as the canvas is: they stay laid out as they were, hidden under it */}
           {surface != null ? (
             <div data-workspace-surface={surface} className="relative z-[3] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
@@ -5940,9 +5947,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </div>
             </div>
           ) : null}
-        </div>
-      </div>
+        </>, slots.main)}
 
+      {ReactDOM.createPortal(<>
       <ProjectHistoryControls projectId={projectId} projectName={loaded?.project.name ?? ''} history={history} open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         onOpenProject={(id) => { setHistoryOpen(false); if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }} />
@@ -6015,7 +6022,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       />
       <PasteAttrsDialog attrs={pasteAttrsOpen ? copiedAttrs : null} onPaste={doPasteAttrs} onCancel={() => setPasteAttrsOpen(false)} />
       <SpendAsks projectId={projectId} />
-    </div>
+      </>, slots.over)}
+    </>
   );
 }
 

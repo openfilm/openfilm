@@ -19,6 +19,7 @@ import { recycleRefusalOf } from '@/lib/recycle';
 import { factsOfProbe, mediaListingOf, srcHitsAsset, warmProjectMedia, type MediaListing, type MediaProxy, type MediaResult, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import type { ImportProgress } from '@/components/MediaPool';
 import { Toast, useToast } from '@/components/Toast';
+import { BrandLoadingScreen } from '@/components/BrandLoadingScreen';
 import { usePublishFrame, wiringStore } from './frame';
 
 /** What the shell holds of the project `projectId`: every name a workbench is given of it (shell/frame's `Frame`). */
@@ -279,8 +280,18 @@ export function useProjectFrame(projectId: string) {
     void fetch(`${projectApi}/reveal`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, ...(original ? { original } : {}) }) });
   }, [projectApi]);
 
+  /* ── the page's places: what a workbench draws outside its own element goes into one of them ── */
+  const [slotPage, setSlotPage] = React.useState<HTMLDivElement | null>(null);
+  const [slotTop, setSlotTop] = React.useState<HTMLDivElement | null>(null);
+  const [slotMain, setSlotMain] = React.useState<HTMLDivElement | null>(null);
+  const [slotOver, setSlotOver] = React.useState<HTMLDivElement | null>(null);
+  /** `page`: in the page's stead (it could not be read). `top`: the top bar. `main`: beside the workbench, in the
+   *  panes' place. `over`: over the page (the library's pane, dialogs). */
+  const slots = React.useMemo(() => (slotPage && slotTop && slotMain && slotOver ? { page: slotPage, top: slotTop, main: slotMain, over: slotOver } : null), [slotPage, slotTop, slotMain, slotOver]);
+  const slotRefs = React.useMemo(() => ({ page: setSlotPage, top: setSlotTop, main: setSlotMain, over: setSlotOver }), []);
+
   return {
-    projectId, toast, showToast,
+    projectId, toast, showToast, slots, slotRefs,
     loaded, setLoaded, failure, setFailure,
     filesTick, setFilesTick, rawListing, setRawListing, facts, proxies, onUndecoded, prefsTick, folder, mediaSources, listing,
     mediaMade, madeWords, madeVersions, missingMedia, setMissingMedia, findMissing,
@@ -288,21 +299,40 @@ export function useProjectFrame(projectId: string) {
   };
 }
 
+/** A place of the page's that takes no room of its own: what is put in it is laid out as its parent's. */
+const PLACE = { display: 'contents' } as const;
+
 /**
- * The project's frame around the workbench: told before anything in it is drawn, so a workbench never reads an empty
- * one. The toast is drawn here, over the workbench.
+ * The project's page: its frame told, and the page itself, which is the shell's. The workbench's element (`children`)
+ * goes where the panes are; the places beside it are filled by the workbench for now (see `slots`), each until it is
+ * the shell's own. Nothing of a workbench is drawn before the frame is told with its places, so one never reads an
+ * empty frame. While the project is being read the loading screen is here (unless `covered`: the page says something
+ * else), and the page is not shown. The toast is drawn over everything.
  */
-export function ProjectFrame({ projectId, children }: { projectId: string; children: React.ReactNode }) {
-  const frame = useProjectFrame(projectId);
-  usePublishFrame(frame);
+export function ProjectFrame({ projectId, covered = false, children }: { projectId: string; covered?: boolean; children: React.ReactNode }) {
+  const state = useProjectFrame(projectId);
+  usePublishFrame(state);
+  const { loaded, failure, slots, slotRefs } = state;
   /* set after the frame is told (the layout effect above runs first), and drawn again before the page is painted */
   const [told, setTold] = React.useState(false);
   React.useLayoutEffect(() => { setTold(true); }, []);
+  const read = Boolean(loaded) && !failure;
   return (
     <>
-      {told ? children : null}
-      {/* in a layer of its own, as the workbench's page is one: the toast stays under the dialogs put on the body */}
-      <div className="fixed"><Toast toast={frame.toast.current} /></div>
+      <div ref={slotRefs.page} style={PLACE} />
+      {!loaded && !failure && !covered ? <BrandLoadingScreen labelKey="projects.opening" /> : null}
+      <div className="workspace-shell flex flex-col bg-[var(--bg-app)]" style={read ? undefined : { display: 'none' }}>
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="relative z-10 grid min-h-0 min-w-0 flex-1 bg-[var(--dock-line)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
+            <div ref={slotRefs.top} style={PLACE} />
+            {told && slots ? children : null}
+            <div ref={slotRefs.main} style={PLACE} />
+          </div>
+        </div>
+        <div ref={slotRefs.over} style={PLACE} />
+      </div>
+      {/* in a layer of its own, as the page is one: the toast stays under the dialogs put on the body */}
+      <div className="fixed"><Toast toast={state.toast.current} /></div>
     </>
   );
 }

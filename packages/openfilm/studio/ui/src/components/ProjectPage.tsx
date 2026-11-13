@@ -11,7 +11,6 @@ import React from 'react';
 import { useT } from '@/i18n';
 import { useStudioPlugins } from '@/lib/plugins';
 import { ProjectFrame } from '@/shell/ProjectFrame';
-import { BrandLoadingScreen } from './BrandLoadingScreen';
 import { elementTag } from './surfaces';
 
 export function ProjectPage({ projectId }: { projectId: string }) {
@@ -35,13 +34,12 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   }, [module, projectId, Boolean(plugins)]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      {state === 'loading' ? <BrandLoadingScreen labelKey="projects.opening" /> : null}
       {typeof state === 'object' ? (
         <div className="workspace-shell flex items-center justify-center bg-[var(--bg-app)]">
           <p className="max-w-[420px] whitespace-pre-wrap px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]">{`${t('assetDrawer.surfaceFailed')}\n\n${state.error}`}</p>
         </div>
       ) : null}
-      <ProjectFrame projectId={projectId}>
+      <ProjectFrame projectId={projectId} covered={typeof state === 'object'}>
         <div ref={host} style={{ display: 'contents' }} />
       </ProjectFrame>
     </>

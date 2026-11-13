@@ -57,13 +57,15 @@ function usePublish<T extends object>(store: Store<T | null>, value: T): void {
   }, [store]);
 }
 
-/** What the shell holds of the project for the workbench shown: whatever shell/ProjectFrame's hook returns. */
-export type Frame = ReturnType<typeof useProjectFrame>;
+/** What the shell holds of the project: whatever shell/ProjectFrame's hook returns. */
+type FrameState = ReturnType<typeof useProjectFrame>;
+/** That, as a workbench is given it: with the page's places there (the shell draws no workbench before they are). */
+export type Frame = Omit<FrameState, 'slots'> & { slots: NonNullable<FrameState['slots']> };
 
-export const frameStore = createStore<Frame | null>(null);
+export const frameStore = createStore<FrameState | null>(null);
 
 /** The shell's: keep the project's frame told. */
-export function usePublishFrame(value: Frame): void {
+export function usePublishFrame(value: FrameState): void {
   usePublish(frameStore, value);
 }
 
@@ -76,7 +78,7 @@ export function useFrame(projectId: string): Frame {
   const kept = React.useRef<Frame | null>(null);
   const frame = React.useSyncExternalStore(frameStore.subscribe, () => {
     const now = frameStore.get();
-    if (now?.projectId === projectId) kept.current = now;
+    if (now?.projectId === projectId && now.slots) kept.current = now as Frame;
     return kept.current?.projectId === projectId ? kept.current : null;
   });
   if (!frame) throw new Error(`useFrame: no frame of project ${projectId} yet. A workbench is drawn inside the shell's <ProjectFrame>, after it has told the frame.`);
