@@ -223,16 +223,17 @@ export function FormatBar({ editor, onExpand, large }: { editor: Editor; onExpan
 /**
  * A note opened large, over the whole window. Its top is a title bar like the app's: clear of the window's own buttons
  * and dragging the window, with the note's name as a Markdown file (a double click renames it), its download and the ×.
- * Under it, the bar and the words in a page's column. Closed with the ×, or Escape.
+ * Under it, the bar and the words in a page's column. Closed with the ×, or Escape. Without `onChange` it only shows
+ * them (a Markdown file added to a note's panel): no bar, nothing written.
  */
 export function DocSheet({ name, text, onChange, onRename, onClose }: {
-  name: string; text: string; onChange: (text: string) => void; onRename?: (name: string) => void; onClose: () => void;
+  name: string; text: string; onChange?: (text: string) => void; onRename?: (name: string) => void; onClose: () => void;
 }) {
   const t = useT();
-  const editor = useDoc({ text, editable: true, placeholder: t('canvas.words.placeholder'), onChange });
+  const editor = useDoc({ text, editable: Boolean(onChange), placeholder: t('canvas.words.placeholder'), onChange: onChange ?? (() => {}) });
   const [draft, setDraft] = React.useState<string | null>(null);
   const cancel = React.useRef(false);
-  React.useEffect(() => { editor?.commands.focus('end'); }, [editor]);
+  React.useEffect(() => { if (onChange) editor?.commands.focus('end'); }, [editor]); // eslint-disable-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.isComposing || (event.target as Element | null)?.closest?.('[data-sheet-name]')) return;
@@ -242,12 +243,14 @@ export function DocSheet({ name, text, onChange, onRename, onClose }: {
     window.addEventListener('keydown', key, true);
     return () => window.removeEventListener('keydown', key, true);
   }, [onClose]);
+  /* a note's name as a Markdown file; a file's own name as it is */
+  const file = /\.(md|markdown|txt)$/i.test(name) ? name : `${name}.md`;
   const done = () => {
     if (draft !== null && !cancel.current && draft.trim() !== name) onRename?.(draft.trim());
     setDraft(null);
   };
   return createPortal(
-    <div role="dialog" aria-label={`${name}.md`} className="cv-fade fixed inset-0 z-[300] flex flex-col bg-[var(--cv-sheet-back)] text-[var(--cv-ink)]"
+    <div role="dialog" aria-label={file} className="cv-fade fixed inset-0 z-[300] flex flex-col bg-[var(--cv-sheet-back)] text-[var(--cv-ink)]"
       onKeyDown={(event) => event.stopPropagation()}>
       <header data-titlebar="" className="flex h-8 shrink-0 items-center gap-1.5"
         style={{ paddingLeft: 'calc(var(--titlebar-logo-x) + 8px)', paddingRight: 'max(var(--titlebar-right-x, 0px), 8px)' }}>
@@ -266,10 +269,10 @@ export function DocSheet({ name, text, onChange, onRename, onClose }: {
           <span role={onRename ? 'button' : undefined} tabIndex={onRename ? 0 : undefined} title={onRename ? t('canvas.video.renameHint') : undefined}
             onDoubleClick={() => { if (onRename) { cancel.current = false; setDraft(name); } }}
             onKeyDown={(event) => { if (onRename && (event.key === 'Enter' || event.key === 'F2')) { event.preventDefault(); cancel.current = false; setDraft(name); } }}
-            className="min-w-0 max-w-[320px] truncate rounded-[4px] px-0.5 text-[13px] font-medium">{name}.md</span>
+            className="min-w-0 max-w-[320px] truncate rounded-[4px] px-0.5 text-[13px] font-medium">{file}</span>
         )}
         <span className="flex-1" />
-        <button type="button" onClick={() => saveText(name, editor ? textOf(editor) : text)}
+        <button type="button" onClick={() => saveText(file.replace(/\.(md|markdown)$/i, ''), editor ? textOf(editor) : text)}
           className="cv-tool flex h-6 items-center gap-1 rounded-[7px] bg-[var(--cv-chip)] px-2.5 text-[12.5px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
           <Download size={13} />{t('canvas.actions.download')}
         </button>
@@ -277,12 +280,12 @@ export function DocSheet({ name, text, onChange, onRename, onClose }: {
           className="cv-tool flex h-6 w-7 items-center justify-center rounded-[7px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><X size={16} /></button>
       </header>
       <div className="cv-grow mx-3 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[12px] bg-[var(--cv-sheet)] shadow-[var(--cv-float-shadow)]">
-        {editor ? (
+        {editor && onChange ? (
           <div className="flex h-12 shrink-0 items-center justify-center border-b !border-[var(--cv-float-line)]">
             <FormatBar editor={editor} large />
           </div>
         ) : null}
-        <div className="min-h-0 flex-1 cursor-text overflow-y-auto" onMouseDown={(event) => { if (event.target === event.currentTarget) { event.preventDefault(); editor?.commands.focus('end'); } }}>
+        <div className={`min-h-0 flex-1 overflow-y-auto ${onChange ? 'cursor-text' : ''}`} onMouseDown={(event) => { if (onChange && event.target === event.currentTarget) { event.preventDefault(); editor?.commands.focus('end'); } }}>
           <DocView editor={editor} large className="mx-auto w-full max-w-[860px] px-10 py-8" />
         </div>
       </div>

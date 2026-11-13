@@ -402,6 +402,8 @@ export interface Board {
   stopWriting?: (id: string) => void;
   /** a node brought into view and flashed, as what something is made from is found */
   locate?: (id: string) => void;
+  /** a node made a reference in the chat's message (in the app with a chat), for the agent to change or make from */
+  refer?: (id: string) => void;
   uploadWritingFiles?: (files: File[], onProgress?: (index: number, progress: number, path?: string) => void) => Promise<string[]>;
   /** a board only looked at (an example's): nothing on it is changed, made or wired */
   readOnly?: boolean;

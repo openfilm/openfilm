@@ -11,7 +11,7 @@ import React from 'react';
 import { Handle, NodeResizeControl, NodeResizer, NodeToolbar, Position, useStore, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
   AudioLines, BookmarkPlus, Bot, Clapperboard, Download, FileQuestion, Image as ImageIcon, Layers, LayoutGrid, Loader2, Maximize2, Mic, Music, Play, Plus, Scissors,
-  Square, Trash2, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
+  MessageSquareQuote, Square, Trash2, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { CARD_H, MAKE_MEDIA, type CanvasNode, type GroupColor } from '@/lib/canvas';
@@ -26,6 +26,7 @@ import { CanvasVideo } from './video';
 
 /** below this zoom a node is only its outline (its picture, its words are not drawn) */
 export const FAR = 0.35;
+const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 export const farSelector = (s: { transform: [number, number, number] }) => s.transform[2] < FAR;
 
 export const KIND_ICON = { video: Video, image: ImageIcon, audio: Music, mg: Clapperboard, other: FileQuestion } as const;
@@ -385,10 +386,12 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
         </NodeToolbar>
       ) : null}
       <Frame id={id} selected={selected} icon={TypeIcon} title={title} by={data.by} onRename={rename}
+        note={earlier.length && !busy ? <NoteVersions id={id} text={data.text} earlier={earlier} open={versionsOpen} onOpen={setVersionsOpen} readOnly={board.readOnly} /> : null}
         tone={editing || data.text ? 'quiet' : 'card'} fill={data.color ? FRAME_COLOR[data.color].fill : undefined}>
         {/* its words as they read: held and moved anywhere on them, scrolled once it is selected; written in, they take the pointer */}
         <DocView editor={editor} className={`h-full w-full px-5 py-4 ${busy ? 'cv-streaming' : ''} ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : selected ? 'nowheel overflow-y-auto' : 'overflow-hidden'}`} />
-        {veiled ? <div className="cv-veil cv-fade absolute inset-0 z-10"><div className="cv-dots" /></div> : null}
+        {/* veiled whole: what it said before is gone from sight, as a new one comes */}
+        {veiled ? <div className="cv-veil cv-fade absolute inset-0 z-10" style={data.color ? { backgroundImage: `linear-gradient(${FRAME_COLOR[data.color].fill}, ${FRAME_COLOR[data.color].fill})` } : undefined}><div className="cv-dots" /></div> : null}
         {busy ? (
           /* at it: since when, and stopped here */
           <div role="status" className="absolute left-2.5 top-2.5 z-20 flex h-7 items-center gap-2 rounded-[8px] bg-[var(--cv-float)] pl-2.5 pr-1 text-[12.5px] text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)]">
@@ -398,8 +401,6 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
                 className="nodrag flex h-5 items-center rounded-[6px] px-1.5 text-[12px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">{t('canvas.write.stop')}</button>
             ) : null}
           </div>
-        ) : earlier.length && selected && !board.readOnly ? (
-          <NoteVersions id={id} text={data.text} earlier={earlier} open={versionsOpen} onOpen={setVersionsOpen} />
         ) : null}
       </Frame>
       {sheet ? <DocSheet name={title} text={data.text} onChange={write} onRename={rename} onClose={() => setSheet(false)} /> : null}
@@ -411,7 +412,7 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
  * A note's versions: what it says now and the words its agent's writing took the place of, newest first. One picked
  * takes the place of what it says now, which is kept among them; an earlier one can be removed.
  */
-function NoteVersions({ id, text, earlier, open, onOpen }: { id: string; text: string; earlier: string[]; open: boolean; onOpen: (open: boolean) => void }) {
+function NoteVersions({ id, text, earlier, open, onOpen, readOnly }: { id: string; text: string; earlier: string[]; open: boolean; onOpen: (open: boolean) => void; readOnly?: boolean }) {
   const t = useT();
   const board = useBoard();
   const firstLine = (words: string) => words.replace(/[#>*_`~-]/g, ' ').split('\n').map((l) => l.trim()).find(Boolean) ?? t('canvas.noteVersions.empty');
@@ -429,13 +430,14 @@ function NoteVersions({ id, text, earlier, open, onOpen }: { id: string; text: s
   };
   const row = 'flex h-9 w-full min-w-0 items-center gap-2 rounded-[10px] px-2.5 text-left text-[13px]';
   return (
-    <div className="nodrag nowheel absolute right-2.5 top-2.5 z-20 flex flex-col items-end gap-1.5">
-      <button type="button" aria-expanded={open} onClick={(event) => { event.stopPropagation(); onOpen(!open); }}
-        className={`flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12.5px] shadow-[var(--cv-float-shadow)] transition ${open ? 'bg-[var(--cv-on)] text-[var(--cv-ink)]' : 'bg-[var(--cv-float)] text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
-        <Layers size={13} />{t('canvas.noteVersions.count').replace('{n}', String(earlier.length + 1))}
+    /* in the name row over the card, at its right */
+    <div className="nodrag nopan nowheel pointer-events-auto relative shrink-0">
+      <button type="button" aria-expanded={open} disabled={readOnly} onClick={(event) => { event.stopPropagation(); onOpen(!open); }}
+        className={`flex h-5 items-center gap-1 rounded-[6px] px-1.5 text-[12px] transition ${open ? 'bg-[var(--cv-on)] text-[var(--cv-ink)]' : 'text-[var(--cv-label)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]'}`}>
+        <Layers size={12} />{t('canvas.noteVersions.count').replace('{n}', String(earlier.length + 1))}
       </button>
       {open ? (
-        <div className={`${MENU} max-h-[260px] w-[240px] overflow-y-auto`} onPointerDown={(event) => event.stopPropagation()}>
+        <div className={`${MENU} absolute right-0 top-full z-30 mt-1.5 max-h-[260px] w-[240px] overflow-y-auto`} onPointerDown={(event) => event.stopPropagation()}>
           <div className={`${row} bg-[var(--cv-float-hover)] text-[var(--cv-ink)]`}>
             <span className="shrink-0 text-[11.5px] text-[var(--cv-edge-lit)]">{t('canvas.noteVersions.current')}</span>
             <span className="min-w-0 flex-1 truncate">{firstLine(text)}</span>
@@ -465,6 +467,16 @@ function NoteBar({ id, color, text, name, onExpand }: { id: string; color?: Grou
   const paint = (c: GroupColor | undefined) => { board.willChange(); board.setData(id, { color: c }); setColors(false); };
   return (
     <div className="cv-bar-top nodrag nopan flex items-center gap-0.5 rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+      {/* first, the agent: the note made a reference in the chat, to change or write from */}
+      {board.refer ? (
+        <>
+          <Tooltip label={`${t('host.refer')} · ${MOD}L`}>
+            <button type="button" onClick={() => board.refer?.(id)}
+              className="cv-tool flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]"><MessageSquareQuote size={17} />{t('canvas.noteBar.toChat')}</button>
+          </Tooltip>
+          <span className="mx-1 h-4 w-px bg-[var(--cv-float-line)]" />
+        </>
+      ) : null}
       <span className="relative">
         <button type="button" aria-expanded={colors} onClick={() => setColors((v) => !v)}
           className="cv-tool flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">

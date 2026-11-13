@@ -10,9 +10,12 @@ and opens the note large in a window of its own, with its name as a Markdown fil
 its background color, opens it large or downloads it. Its words stay Markdown (underline and alignment as the HTML
 Markdown allows), and its color is kept in the canvas file. Its panel's "+" adds references to write from, and the
 four quick starts are gone. A text node is named "Text 1", not "Text node 1", and a double click on its name renames it, on the board or in its window, whose top is a title bar clear of the window's buttons that drags the window. Selected, its words scroll; they show no spelling marks. The bars over and under a node come in with a slight rise or drop, a node's name (and its rename field) is as wide as
-its words up to a limit, and a note the agent writes is veiled by a field of dots with a wave of light running through them until its first words
-come, which then stream in with a caret at their end; a "Writing" pill on the card says since when and cancels it.
-What it said before is kept: its versions are listed on the card, one picked takes the place of what it says now,
+its words up to a limit, and a note the agent writes is veiled whole (what it said before out of sight) by a field of dots with a wave of light
+running through them until its first words come, which then stream in with a caret at their end; a "Writing" pill on the card says since when and cancels it.
+What it said before is kept: its versions are listed in the name row over the card, one picked takes the place of what it says now,
 and an earlier one can be deleted. What a note is written from shows in its panel as rounded tiles left of the "+",
-kept after sending: a note wired in as a little page of its words (pressed, the note is found on the board), a file
-added as itself (pressed, shown large when it can be); a × off each tile's corner takes it out.
+kept after sending: a note wired in as its kind's mark (pressed, the note is found on the board), a file added as
+itself (pressed, shown large when it can be, a Markdown or text file read as a note's words); a × off each tile's
+corner takes it out. With words already in it, the panel asks how to change them (they go with the ask, to rework).
+The bar over a selected note, picture or clip starts with "Ask in chat": the node becomes a reference in the chat's
+message, for the agent to change or make from.

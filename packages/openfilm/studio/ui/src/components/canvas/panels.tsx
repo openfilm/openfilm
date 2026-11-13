@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  AlignLeft, ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon,
+  AlignLeft, ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -20,6 +20,7 @@ import { modelTime, timeLabel, useBoard, type Choice, type MakeData } from './bo
 import { splitGrid } from './pixels';
 import { ProviderMark } from '../settings/ProviderMark';
 import { useDraft } from './words';
+import { DocSheet } from './doc';
 import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
 import { VoiceId, VoicePicker, defaultVoice, serviceOf, voicesOf } from './voices';
 import { WRITING_ATTACHMENT_ACCEPT, WRITING_ATTACHMENT_LIMIT, writingAttachmentKind } from '../../../../../src/canvas-attachments.mjs';
@@ -119,6 +120,15 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
   const video = file.kind === 'video';
   const actions = (
       <div className={`nopan flex w-max items-center gap-0.5 p-1 ${CARD} cv-bar-top ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
+        {/* first, the agent: what it shows made a reference in the chat, to change or make from */}
+        {board.refer ? (
+          <>
+            <Tooltip label={`${t('host.refer')} · ${MOD}L`}>
+              <button type="button" className={btn} onClick={() => board.refer?.(id)}><MessageSquareQuote size={14} />{t('canvas.noteBar.toChat')}</button>
+            </Tooltip>
+            <span className="mx-0.5 h-4 w-px bg-[var(--cv-float-line)]" />
+          </>
+        ) : null}
         {file.kind === 'image' ? (
           <>
             <button type="button" className={btn} onClick={() => board.spawn(id, 'image', { preset: 'cameras9', opts: { ratio: '1:1' } })}><Orbit size={14} />{t('canvas.actions.angles')}</button>
@@ -683,11 +693,22 @@ export function NotePanel({ id }: { id: string }) {
   const upload = board.uploadWritingFiles;
   const Picker = studioHost?.canvasWriting?.Picker;
   const thumb = useThumb();
+  /* what it says now goes with the ask, to rework: its panel says so */
+  const said = useStore((s) => Boolean((s.nodeLookup.get(id)?.data as { text?: string } | undefined)?.text?.trim()));
   if (!write) return null;
   const shown = board.single === id && !board.readOnly;
   const texts = shown ? board.inputs(id).filter((i) => i.text != null) : [];
   const wired = texts.length;
   const canSend = !busy && !uploading && Boolean(ask.trim() || wired || attachments.length);
+  /* a Markdown or text file added, read and shown as the note's own words are */
+  const [reading, setReading] = React.useState<{ name: string; text: string } | null>(null);
+  const readWords = async (path: string, name: string) => {
+    try {
+      const res = await fetch(board.sources.file(board.fileOf(path) ?? { path, mtimeMs: 0 } as WorkspaceResource));
+      if (!res.ok) throw new Error(String(res.status));
+      setReading({ name, text: await res.text() });
+    } catch { setError(t('canvas.write.unreadable')); }
+  };
   const attach = async (files: File[]) => {
     if (!upload || !files.length || uploading || busy) return;
     if (files.length + attachments.length > WRITING_ATTACHMENT_LIMIT || files.some((file) => !writingAttachmentKind(file.name))) {
@@ -721,26 +742,23 @@ export function NotePanel({ id }: { id: string }) {
     <Composer id={id} shown={shown} expanded={expanded} setExpanded={setExpanded}>
         {/* what it is written from, each a tile left of the +: the words wired in, then the files added here */}
         <div className="flex min-h-12 flex-wrap items-center gap-2 pr-9">
-          {/* a note wired in: a little page of its first words, a T in its corner; pressed, the note found on the board */}
+          {/* a note wired in: its kind's mark; pressed, the note found on the board */}
           {texts.map((input) => (
             <Tile key={input.edge} label={`${t('canvas.write.locate')} · ${(input.text || t('canvas.kinds.note')).slice(0, 80)}`} onOpen={board.locate ? () => board.locate?.(input.from) : undefined}
               onRemove={() => board.unwire(input.edge)} removeLabel={t('canvas.removeWire')}>
-              <span className="relative block h-full w-full bg-[var(--cv-card)] px-1.5 pt-1.5 text-left">
-                <span className="line-clamp-3 block break-all text-[7.5px] leading-[1.35] text-[var(--cv-ink-2)]">{input.text || '…'}</span>
-                <span className="absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-[var(--cv-card)] to-transparent" />
-                <span className="absolute bottom-1 right-1 flex h-3.5 w-3.5 items-center justify-center rounded-[4px] bg-[var(--cv-edge-lit)] text-white"><TypeIcon size={9} strokeWidth={2.5} /></span>
-              </span>
+              <span className="flex h-full w-full items-center justify-center bg-[var(--cv-chip)] text-[var(--cv-ink)]"><TypeIcon size={20} strokeWidth={1.75} /></span>
             </Tile>
           ))}
           {attachments.map((path) => {
             const name = path.split('/').pop() ?? path;
             const file = board.fileOf(path);
             const src = thumb(file);
-            /* shown large when it can be: a picture, a clip, a sound */
+            /* shown large when it can be: a picture, a clip, a sound, words (a Markdown or text file) */
             const viewable = file && (file.kind === 'image' || file.kind === 'video' || file.kind === 'audio');
+            const words = writingAttachmentKind(name) === 'text';
             const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toUpperCase().slice(0, 4) : '';
             return (
-              <Tile key={path} label={viewable ? `${t('canvas.write.preview')} · ${name}` : name} onOpen={viewable ? () => board.view(path) : undefined}
+              <Tile key={path} label={viewable || words ? `${t('canvas.write.preview')} · ${name}` : name} onOpen={viewable ? () => board.view(path) : words ? () => void readWords(path, name) : undefined}
                 disabled={busy || uploading} removeLabel={`${t('canvas.remove')} ${name}`}
                 onRemove={() => setAttachments((current) => current.filter((item) => item !== path))}>
                 {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : (
@@ -771,7 +789,7 @@ export function NotePanel({ id }: { id: string }) {
             if (event.key === 'Escape') event.currentTarget.blur();
             else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); send(); }
           }}
-          placeholder={t('canvas.write.placeholder')}
+          placeholder={t(said ? 'canvas.write.rework' : 'canvas.write.placeholder')}
           className={`${PROMPT} disabled:opacity-60`}
         />
         <div className={COMPOSER_FOOTER}>
@@ -787,6 +805,7 @@ export function NotePanel({ id }: { id: string }) {
           </Tooltip>
         </div>
         {error ? <div className="mt-2 select-text text-[12px] leading-snug text-red-500">{error}</div> : null}
+        {reading ? <DocSheet name={reading.name} text={reading.text} onClose={() => setReading(null)} /> : null}
     </Composer>
   );
 }

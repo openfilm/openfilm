@@ -1086,6 +1086,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     openSettings: onOpenSettings,
     ...(chat ? { write, writing: (id: string) => writing.get(id), stopWriting: (id: string) => writers.current.get(id)?.abort(), uploadWritingFiles: onImportFiles } : {}),
     locate,
+    ...(onRefer ? { refer: (id: string) => { const node = now.current.nodes.find((n) => n.id === id); const ref = node ? refOf(node) : null; if (ref) onRefer([ref]); } } : {}),
   }), [chat, writing, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal, onError, onImportFiles, activeUploads, shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onDrop = (event: React.DragEvent) => {
