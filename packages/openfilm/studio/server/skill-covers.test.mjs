@@ -220,7 +220,12 @@ test('a plugin someone made: its page on the plugins\' origin, the project read 
   const stub = await fetch(edit.element, { headers: { origin: studio.origin } });
   assert.match(await stub.text(), /export \{ default \} from 'openfilm\/workbench\/edit';/);
   assert.equal(stub.headers.get('access-control-allow-origin'), studio.origin);
-  assert.equal(ours.find((p) => p.id === 'motion').element, undefined);
+  /* the canvas brings its own; Motion, a view of the edit, brings the edit's */
+  for (const [id, workbench] of [['canvas', 'canvas'], ['motion', 'edit']]) {
+    const own = ours.find((p) => p.id === id);
+    assert.ok(own.element.startsWith(`${studio.pluginOrigin}/s/`) && own.element.endsWith('/ui.js'), own.element);
+    assert.ok((await (await fetch(own.element, { headers: { origin: studio.origin } })).text()).includes(`export { default } from 'openfilm/workbench/${workbench}';`));
+  }
   /* OpenFilm's own are not plugins of this kind */
   assert.ok((await listed()).filter((k) => k.core).every((k) => k.surface === undefined && k.commands === undefined));
 

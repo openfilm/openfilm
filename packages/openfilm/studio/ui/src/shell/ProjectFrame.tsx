@@ -2,10 +2,10 @@
  * The project's frame: what Studio's shell holds of a project for whichever workbench is shown in it, and tells it
  * through shell/frame. Its files as the folder lists them, with what is known of each (its media facts, its proxy, how
  * it was made); the media pane's operations on them (bring in, link, move, delete, reveal); the project as it was read;
- * and the toast, which the shell draws. Which workbench is shown, and what takes the panes' place when it is not the
- * edit (the canvas, a plugin's surface), are the shell's too (shell/workbenches), and so are the library, its pane and
- * its drawer (shell/library), the top bar with the page's own windows (shell/top-bar), and how the window is laid out
- * (shell/layout).
+ * and the toast, which the shell draws. Which workbench is shown, and the elements the plugins on bring, put where the
+ * layout says (the edit among the page's panels, the canvas in its box, another plugin's surface in the panes' place),
+ * are the shell's too (shell/workbenches), and so are the library, its pane and its drawer (shell/library), the top bar
+ * with the page's own windows (shell/top-bar), and how the window is laid out (shell/layout).
  *
  * The project and its files are read here (shell/project-read), with a workbench in the page or none; the app's
  * commands are taken here too, and those that are not the page's are the workbench's. What a workbench has that an
@@ -30,7 +30,7 @@ import { LayoutOver, useLayout } from './layout';
 import { LibraryPlace, useLibraryShown } from './library';
 import { useProjectRead } from './project-read';
 import { PageAsks, PageWindows, TopBar, usePageWindows } from './top-bar';
-import { InPanesPlace, useWorkbenchShown } from './workbenches';
+import { AmongPanes, InPanesPlace, useWorkbenchShown } from './workbenches';
 
 /** What the shell holds of the project `projectId`: every name a workbench is given of it (shell/frame's `Frame`). */
 export function useProjectFrame(projectId: string) {
@@ -346,14 +346,15 @@ const PLACE = { display: 'contents' } as const;
 
 /**
  * The project's page: its frame told, and the page itself, which is the shell's. The top bar is drawn first
- * (shell/top-bar); the workbench's element (`children`) goes where the panes are, and after it what takes their place
- * (shell/workbenches); the page's own windows, the library's pane (shell/library) and the layout's seams and editor
- * (shell/layout) are drawn over the page; the other places are filled by the workbench for now (see `slots`), each
- * until it is the shell's own. Nothing of a workbench is drawn before the frame is told with its places, so one never reads an empty
- * frame. While the project is being read the loading screen is here, and why it could not be read once it could not
- * (unless `covered`: the page says something else), and the page is not shown. The toast is drawn over everything.
+ * (shell/top-bar); the element laid out among the page's panels (the edit's) goes where the panes are, and after it what
+ * takes their place: a plugin's surface, the canvas (shell/workbenches); the page's own windows, the library's pane
+ * (shell/library) and the layout's seams and editor (shell/layout) are drawn over the page; the other places are
+ * filled by the workbench for now (see `slots`), each until it is the shell's own. Nothing of a workbench is drawn
+ * before the frame is told with its places, so one never reads an empty frame. While the project is being read the
+ * loading screen is here, and why it could not be read once it could not, and the page is not shown. The toast is
+ * drawn over everything.
  */
-export function ProjectFrame({ projectId, covered = false, children }: { projectId: string; covered?: boolean; children: React.ReactNode }) {
+export function ProjectFrame({ projectId }: { projectId: string }) {
   const t = useT();
   const state = useProjectFrame(projectId);
   usePublishFrame(state);
@@ -364,18 +365,18 @@ export function ProjectFrame({ projectId, covered = false, children }: { project
   const read = Boolean(loaded) && !failure;
   return (
     <>
-      {failure && !covered ? (
+      {failure ? (
         <div data-page-ready="error" className="workspace-shell flex flex-col items-center justify-center gap-3 bg-[var(--bg-app)] text-[13px] text-[var(--text-muted)]">
           <p>{failure}</p>
           <button type="button" onClick={leaveProject} className="rounded-lg border border-[var(--border)] px-3 py-1.5 hover:bg-[var(--bg-hover)]">{t('nav.projects')}</button>
         </div>
       ) : null}
-      {!loaded && !failure && !covered ? <BrandLoadingScreen labelKey="projects.opening" /> : null}
+      {!loaded && !failure ? <BrandLoadingScreen labelKey="projects.opening" /> : null}
       <div className="workspace-shell flex flex-col bg-[var(--bg-app)]" style={read ? undefined : { display: 'none' }}>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="relative z-10 grid min-h-0 min-w-0 flex-1 bg-[var(--dock-line)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
             <TopBar frame={state} />
-            {told && slots ? children : null}
+            {told && slots ? <AmongPanes frame={state} /> : null}
             <InPanesPlace frame={state} />
           </div>
         </div>

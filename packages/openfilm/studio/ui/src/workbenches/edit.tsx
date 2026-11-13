@@ -1,7 +1,8 @@
 /**
- * The edit, as the element its plugin brings (plugins/edit: its package.json's `browser`): Studio's shell puts one in
- * the project's page, as it does a workbench anyone made (components/surfaces, src/skills.mjs elementIn), and what is
- * drawn in it is the edit's own. It is told the project by its `project-id`.
+ * The edit, as the element its plugin brings (plugins/edit: its package.json's `browser`; Motion's plugin brings the
+ * same one, as the edit's own code draws Motion): Studio's shell loads it as it does a workbench anyone made
+ * (components/surfaces elementTag, src/skills.mjs elementIn) and puts one where the page's panels are
+ * (shell/workbenches), and what is drawn in it is the edit's own. It is told the project by its `project-id`.
  */
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';

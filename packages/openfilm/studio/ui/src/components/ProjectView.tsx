@@ -233,7 +233,7 @@ export function ProjectView({ projectId, onProject }: {
     folder, mediaSources, listing, mediaMade, setMissingMedia, findMissing,
     projectApi, onPick, onBring, onImport, coverSet,
     slots,
-    canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, surface, showWorkbench, away,
+    canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, away,
     libraryIndex, setRevealMedia, showFile, saveThings, onLibraryDownloadFailed,
     title, setSettingsOpen,
     editPrefs, updateWorkspace, editFree, freeStyle, editDock, insetStyle,
@@ -336,10 +336,6 @@ export function ProjectView({ projectId, onProject }: {
   const [motionReveal, setMotionReveal] = React.useState<{ ids: readonly string[]; n: number } | null>(null);
   /* the workspace's own setter, the shell's (shell/layout): the motion view opens the timeline and inspector with it */
   const updateWorkspaceRef = React.useRef<(patch: Partial<WorkspaceLayout>) => void>(() => {});
-  /* the ways of working turned on (Settings → Advanced): one turned off while in use gives way to the first still on */
-  React.useEffect(() => {
-    if (surface == null && workModes.length && !workModes.includes(workMode)) showWorkbench(workModes[0]!);
-  }, [workModes, workMode, surface, showWorkbench]);
 
   /* ── transport: the sound is the clock; the picture follows it, drawn in the preview from the player's line ── */
   const player = React.useRef(new Player());
@@ -5018,7 +5014,7 @@ export function ProjectView({ projectId, onProject }: {
   const stageW = stage.w, stageH = stage.h, filmClips = filmSummary.clips;
   const topBarFilm = React.useMemo(() => ({ durationMs: totalMs, stage: { w: stageW, h: stageH }, fps: projectFps, clips: filmClips }), [totalMs, stageW, stageH, projectFps, filmClips]);
   const shellTopBar = React.useMemo(() => ({ tools: topBarTools, menu: topBarMenu, film: topBarFilm, coverFromFrame: barDoes.coverFromFrame }), [topBarTools, topBarMenu, topBarFilm, barDoes]);
-  usePublishWiring(React.useMemo(() => ({
+  usePublishWiring('edit', React.useMemo(() => ({
     reloadPicture: () => preview.current?.reload?.(),
     srcsInUse: () => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])),
     pause: () => pauseRef.current(),

@@ -29,6 +29,11 @@ export const DEFAULT_CANVAS_WORKSPACE: WorkspaceLayout = {
   ...DEFAULT_WORKSPACE, mode: 'canvas', chatSide: 'left', timeline: false, inspector: false,
 };
 export const defaultWorkspace = (mode: WorkspaceMode): WorkspaceLayout => ({ ...(mode === 'canvas' ? DEFAULT_CANVAS_WORKSPACE : DEFAULT_WORKSPACE) });
+/**
+ * Where a workbench (lib/plugins `workbench`) is laid out: among the page's panels as the edit is (Motion, a view of
+ * the edit, with it), in the canvas's own arrangement, or, for any other, nowhere of its own: it takes the panes' place whole.
+ */
+export const arrangementOf = (workbench: string): WorkspaceMode | null => (workbench === 'canvas' ? 'canvas' : workbench === 'edit' || workbench === 'motion' ? 'edit' : null);
 const bound = (v: number, min: number, max: number) => Math.round(Math.max(min, Math.min(max, v)));
 const cleanName = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 40);
 

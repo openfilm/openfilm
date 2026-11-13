@@ -4,16 +4,18 @@
  * writes the film itself with the editor's own parts (editor/use-film for the film and its edits, editor/Preview for
  * the picture, editor/player for the clock), so no workbench reaches into another.
  *
- * The edit and the canvas are held by ProjectView itself. Every other workbench of OpenFilm's own is listed here by its
- * name (`workbench` in its plugin's openfilm.json, src/plugins.mjs) and loaded when first shown. One someone made is
- * a web page (its skill's `index.html`, lib/project-plugins), shown in a frame on the plugins' own origin
- * (studio/server/plugin-pages.mjs): it is told where the project's files are (`?project=`, their address there), reads
- * them from there, and writes them (PUT) once the person lets it; it cannot reach the editor. One that brings a
- * program (studio/server/plugin-programs.mjs) is shown what its program serves, started when its workbench is first
- * shown, once the person lets it run. One that brings an element (its package.json's `browser`: a module whose default
- * export is a custom element) is not in a frame at all: the module is loaded into this page and the element put where
- * the workbench is, so it does all a workbench of OpenFilm's own does (menus over the library, drags from it, the
- * editor's API), again once the person lets it run. ProjectView shows the one picked without knowing which there are.
+ * OpenFilm's own workbenches are elements their plugins bring (plugins/<id>: its package.json's `browser`), which the
+ * shell lays out where the layout says (shell/workbenches: the edit among the page's panels, the canvas in its box).
+ * Any other is shown here, in the panes' place. One someone made is a web page (its skill's `index.html`,
+ * lib/project-plugins), shown in a frame on the plugins' own origin (studio/server/plugin-pages.mjs): it is told
+ * where the project's files are (`?project=`, their address there), reads them from there, and writes them (PUT) once
+ * the person lets it; it cannot reach the editor. One that brings a program (studio/server/plugin-programs.mjs) is
+ * shown what its program serves, started when its workbench is first shown, once the person lets it run. One that
+ * brings an element (its package.json's `browser`: a module whose default export is a custom element) is not in a
+ * frame at all: the module is loaded into this page and the element put where the workbench is, so it does all a
+ * workbench of OpenFilm's own does (menus over the library, drags from it, the editor's API), again once the person
+ * lets it run. The shell shows the one picked without knowing which there are,
+ * and keeps it, hidden, while another workbench is shown.
  */
 import React from 'react';
 import { useT } from '@/i18n';
@@ -23,28 +25,22 @@ export interface SurfaceProps {
   projectId: string;
   /** the project's folder on this computer */
   folder: string;
-  /** the address of the project's files on the film's origin */
-  film: string;
 }
 
-/** The surfaces there are, by the workbench their plugin names: `color: React.lazy(() => import('./color/ColorView'))`. */
-export const SURFACES: Record<string, React.LazyExoticComponent<React.ComponentType<SurfaceProps>>> = {};
-
-/** The workbenches shown without a plugin's surface (shell/workbenches): the edit, the canvas, and Motion (a view of the edit's timeline). */
-export const OWN_SURFACES: readonly string[] = ['edit', 'canvas', 'motion'];
-
-/** A plugin's surface by its workbench's name, or the page of one someone made; one this build has no surface for says so. */
-export function PluginSurface({ id, page, files, title, program, runs, inApp, element, ...props }: SurfaceProps & { id: string; page?: string; files?: string; title?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string }) {
+/**
+ * A plugin's surface by its workbench's name: the page of one someone made, what its program serves, or its element
+ * (`hidden`: kept while another workbench is shown); one this build has nothing to show for says so.
+ */
+export function PluginSurface({ id, page, files, title, program, runs, inApp, element, hidden = false, ...props }: SurfaceProps & { id: string; page?: string; files?: string; title?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string; hidden?: boolean }) {
   const t = useT();
-  if (inApp) return element ? <ElementSurface key={element} url={element} files={files} projectId={props.projectId} folder={props.folder} /> : <p className={NOTE}>{t('assetDrawer.surfaceNotAllowed')}</p>;
+  if (inApp) return element ? <ElementSurface key={element} url={element} files={files} projectId={props.projectId} folder={props.folder} hidden={hidden} /> : <p className={NOTE}>{t('assetDrawer.surfaceNotAllowed')}</p>;
   if (program) return <ProgramSurface key={`${id}:${props.projectId}:${runs ? 1 : 0}`} uid={id} projectId={props.projectId} title={title ?? id} />;
   if (page) return <iframe key={page} src={`${page}${files ? `?project=${encodeURIComponent(files)}` : ''}`} title={title ?? id} allow="autoplay" className="min-h-0 min-w-0 flex-1 border-0 bg-[var(--bg-panel)]" />;
-  const Surface = SURFACES[id];
-  if (!Surface) return <p className="m-auto max-w-[360px] px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.surfaceMissing')}</p>;
-  return <React.Suspense fallback={null}><Surface {...props} /></React.Suspense>;
+  return <p className="m-auto max-w-[360px] px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.surfaceMissing')}</p>;
 }
 
-const NOTE = 'm-auto max-w-[420px] whitespace-pre-wrap px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]';
+/** How a plugin's surface or element says something in its place: it is starting, it is not let run, it failed. */
+export const NOTE = 'm-auto max-w-[420px] whitespace-pre-wrap px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]';
 
 /** The surface of a plugin that brings a program: the program started (or found running), then what it serves. */
 function ProgramSurface({ uid, projectId, title }: { uid: string; projectId: string; title: string }) {
@@ -63,8 +59,10 @@ function ProgramSurface({ uid, projectId, title }: { uid: string; projectId: str
   return <iframe src={state.url} title={title} allow="autoplay" className="min-h-0 min-w-0 flex-1 border-0 bg-[var(--bg-panel)]" />;
 }
 
-/* a module's address → the name its element is defined under: a module is loaded, and its class defined, once */
+/* a module's address → the name its element is defined under: a module is loaded, and its class defined, once. Names
+   are counted as classes are defined, not as modules are asked for: several may load at once */
 const elementTags = new Map<string, Promise<string>>();
+let defined = 0;
 export function elementTag(url: string): Promise<string> {
   let tag = elementTags.get(url);
   if (!tag) {
@@ -74,7 +72,8 @@ export function elementTag(url: string): Promise<string> {
       /* one its author defined under a name of their own keeps that name */
       const named = (customElements as unknown as { getName?: (c: unknown) => string | null }).getName?.(made);
       if (named) return named;
-      const name = `openfilm-plugin-${elementTags.size}`;
+      let name = '';
+      do name = `openfilm-plugin-${++defined}`; while (customElements.get(name));
       customElements.define(name, made as CustomElementConstructor);
       return name;
     });
@@ -87,12 +86,16 @@ export function elementTag(url: string): Promise<string> {
 /**
  * The surface of a plugin that brings an element: its module loaded into this page, and one element of it put here.
  * It is told the project by attributes: `project-id` (for the editor's API), `project` (where the project's files are
- * read and written, as a plugin's page is told) and `folder` (the project's folder on this computer).
+ * read and written, as a plugin's page is told) and `folder` (the project's folder on this computer). While another
+ * workbench is shown (`hidden`) the element has the `inert` attribute, which it can observe.
  */
-function ElementSurface({ url, files, projectId, folder }: { url: string; files?: string | undefined; projectId: string; folder: string }) {
+function ElementSurface({ url, files, projectId, folder, hidden }: { url: string; files?: string | undefined; projectId: string; folder: string; hidden: boolean }) {
   const t = useT();
   const host = React.useRef<HTMLDivElement>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const made = React.useRef<HTMLElement | null>(null);
+  const hiddenNow = React.useRef(hidden);
+  hiddenNow.current = hidden;
   React.useEffect(() => {
     let live = true, element: HTMLElement | null = null;
     elementTag(url).then((tag) => {
@@ -101,11 +104,14 @@ function ElementSurface({ url, files, projectId, folder }: { url: string; files?
       element.setAttribute('project-id', projectId);
       if (files) element.setAttribute('project', files);
       if (folder) element.setAttribute('folder', folder);
+      if (hiddenNow.current) element.setAttribute('inert', '');
       Object.assign(element.style, { display: 'block', flex: '1 1 0', minWidth: '0', minHeight: '0' });
       host.current.append(element);
+      made.current = element;
     }, (e) => { if (live) setError(e instanceof Error ? e.message : String(e)); });
-    return () => { live = false; element?.remove(); };
+    return () => { live = false; element?.remove(); made.current = null; };
   }, [url, files, projectId, folder]);
+  React.useEffect(() => { made.current?.toggleAttribute('inert', hidden); }, [hidden]);
   if (error) return <p className={NOTE}>{`${t('assetDrawer.surfaceFailed')}\n\n${error}`}</p>;
   return <div ref={host} className="flex min-h-0 min-w-0 flex-1" />;
 }

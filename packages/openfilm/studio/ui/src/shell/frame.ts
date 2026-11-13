@@ -1,13 +1,14 @@
 /**
- * What crosses between Studio's shell and the workbench shown in it. A workbench is an element with a React root of
- * its own (workbenches/edit.tsx, components/surfaces), so no context reaches it: the two sides share these two stores,
- * read with useSyncExternalStore.
+ * What crosses between Studio's shell and the workbenches in it. A workbench is an element with a React root of its
+ * own (workbenches/edit.tsx, workbenches/canvas.tsx, components/surfaces), so no context reaches it: the sides share
+ * these stores, read with useSyncExternalStore.
  *
  * The frame is what the shell holds of the project for any workbench (shell/ProjectFrame: the project as read, its
  * files, how they were made, the media pane's file operations, the toast, which workbench is shown, the library, the page's own windows,
- * how the window is laid out): the shell writes it, a workbench reads it with `useFrame`. The wiring is what the workbench shown lets the shell
- * reach of its own: that workbench writes it, and the shell reads it when it needs it (`wiringStore.get()` inside a
- * callback or an effect, `useWiring` to draw), so nothing of a workbench's is held here.
+ * how the window is laid out): the shell writes it, a workbench reads it with `useFrame`. A wiring is what a workbench
+ * lets others reach of its own: each workbench writes its own under its name, and the shell reads them as one, the
+ * workbench shown's first (`wiringStore.get()` inside a callback or an effect, `useWiring` to draw); a workbench
+ * reaches another's with `wiringOf`. So nothing of a workbench's is held here.
  *
  * Both are written in a layout effect, so the other side is drawn with the new value before the page is painted.
  */
@@ -50,7 +51,7 @@ function sameFields<T extends object>(a: T, b: T): boolean {
  * Keep `value` in `store` while the component is there: written when a field of it changed, and taken out when the
  * component goes (unless another has written its own meanwhile).
  */
-function usePublish<T extends object>(store: Store<T | null>, value: T): void {
+function usePublish<T extends object>(store: Pick<Store<T | null>, 'get' | 'set'>, value: T): void {
   const told = React.useRef<T | null>(null);
   React.useLayoutEffect(() => {
     if (told.current && sameFields(told.current, value)) return;
@@ -165,11 +166,49 @@ export interface Wiring {
   };
 }
 
+/** Each workbench's own wiring, by its workbench's name, in the order they were first told. */
+const wirings = new Map<string, Wiring>();
+/** The workbench shown (null: none is), as the shell last told it. */
+let benchShown: string | null = null;
+
+/**
+ * What the shell draws and acts with: the wiring of the workbench shown, and for each field it does not say, the
+ * first other wiring told that does (null: none is told). The same object until one of its fields changes.
+ */
 export const wiringStore = createStore<Wiring | null>(null);
 
-/** A workbench's: keep its wiring told while it is shown. */
-export function usePublishWiring(value: Wiring): void {
-  usePublish(wiringStore, value);
+/** Make `wiringStore` again from the wirings told and the workbench shown. */
+function resolveWiring(): void {
+  if (!wirings.size) { wiringStore.set(null); return; }
+  const own = benchShown != null ? wirings.get(benchShown) : undefined;
+  const next: Record<string, unknown> = {};
+  for (const wiring of [...(own ? [own] : []), ...[...wirings].filter(([name]) => name !== benchShown).map(([, w]) => w)]) {
+    for (const [key, field] of Object.entries(wiring)) if (next[key] === undefined && field !== undefined) next[key] = field;
+  }
+  const was = wiringStore.get();
+  if (!was || !sameFields(was as Record<string, unknown>, next)) wiringStore.set(next as Wiring);
+}
+
+/** A workbench's, under its workbench's name (`edit` for the edit): keep its wiring told while it is there. */
+export function usePublishWiring(workbench: string, value: Wiring): void {
+  const slot = React.useMemo(() => ({
+    get: () => wirings.get(workbench) ?? null,
+    set: (next: Wiring | null) => { if (next) wirings.set(workbench, next); else wirings.delete(workbench); resolveWiring(); },
+  }), [workbench]);
+  usePublish(slot, value);
+}
+
+/** One workbench's own wiring (null: it told none): how one workbench reaches another, read when it is needed. */
+export function wiringOf(workbench: string): Wiring | null {
+  return wirings.get(workbench) ?? null;
+}
+
+/** The shell's: tell which workbench is shown (null: none is), before the page is painted. */
+export function usePublishShown(workbench: string | null): void {
+  React.useLayoutEffect(() => {
+    benchShown = workbench;
+    resolveWiring();
+  }, [workbench]);
 }
 
 /**
@@ -197,7 +236,7 @@ export function useSteady<T extends object>(value: T): T {
 }
 
 /**
- * The shell's: these fields of the wiring of the workbench shown (null: none is), to draw with; the same object until
+ * The shell's: these fields of the wiring as it reads it (`wiringStore`; null: none is told), to draw with; the same object until
  * one of them changes, so what draws with some of the wiring is not drawn again when the rest of it changes. A
  * callback reads `wiringStore.get()` instead.
  */
