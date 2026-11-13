@@ -2120,6 +2120,7 @@ export const ko: Words = {
     },
     keys: {
       title: '단축키',
+      add: '노드 추가',
       select: '선택',
       hand: '손 도구(캔버스 이동)',
       make: '만들기',

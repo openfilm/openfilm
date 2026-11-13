@@ -2124,6 +2124,7 @@ export const zhCN: Words = {
     },
     keys: {
       title: '快捷键',
+      add: '添加节点',
       select: '选择',
       hand: '抓手（拖动画布）',
       make: '创作',

@@ -1,6 +1,6 @@
 /**
  * What is round the board, as the node canvases people know lay theirs out: the toolbar at its foot (a node of each
- * kind, the libraries, upload), the bar at its bottom left (select, the hand, the keys), the bar at its bottom right
+ * kind, the libraries, upload), the bar at its bottom left (the keys, select or the hand), the bar at its bottom right
  * (every node in a list, the overview map, the wires shown or not, snapping to the grid, how far it is zoomed), the list
  * itself, what an empty board says, and a file seen whole over the board.
  */
@@ -160,7 +160,10 @@ export function BottomToolbar({ onKind, onUpload, onTemplates, onLibrary, onChar
   );
 }
 
-/** The bar at the board's bottom left: select (V) and the hand (H), the one in use lit, and the keys. */
+/**
+ * The bar at the board's bottom left: the keys, and one button for the tool in use, select (V) or the hand (H), lit
+ * while it is the hand; a click takes the other.
+ */
 export function ToolCorner({ tool, onTool }: { tool: 'select' | 'hand'; onTool: (tool: 'select' | 'hand') => void }) {
   const t = useT();
   const [keys, setKeys] = React.useState(false);
@@ -193,37 +196,42 @@ export function ToolCorner({ tool, onTool }: { tool: 'select' | 'hand'; onTool: 
       ...(hint('work-mode') ? [[t('canvas.toEdit'), hint('work-mode')!] as [string, string]] : []),
     ]],
   ];
+  const other = tool === 'select' ? 'hand' : 'select';
   return (
-    <div className={`${CORNER} left-2`}>
-      {/* the keys over the bar, from its left */}
+    <>
+      {/* the keys over the board's bottom toolbar, in the middle */}
       {keys ? (
-        <div ref={keysPanel} role="dialog" aria-label={t('canvas.keys.title')}
-          className="cv-pop pointer-events-auto absolute bottom-full left-0 mb-2 grid w-[min(860px,calc(100vw-24px))] grid-cols-4 gap-6 rounded-[12px] bg-[var(--cv-float)] p-5 shadow-[var(--cv-float-shadow)]">
-          <button type="button" aria-label={t('canvas.outline.close')} onClick={() => setKeys(false)} className="absolute right-3 top-3 text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]"><X size={15} /></button>
-          {columns.map(([title, rows]) => (
-            <div key={title}>
-              <div className="mb-2 text-[12.5px] font-medium text-[var(--cv-edge-lit)]">{title}</div>
-              {rows.map(([what, key]) => (
-                <div key={what} className="flex h-8 items-center justify-between gap-2 text-[12.5px]">
-                  <span className="truncate text-[var(--cv-ink-2)]">{what}</span>
-                  <kbd className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 py-0.5 font-sans text-[11.5px] text-[var(--cv-ink)]">{key}</kbd>
-                </div>
-              ))}
-            </div>
-          ))}
+        <div className="pointer-events-none absolute bottom-[74px] left-1/2 z-30 w-[min(860px,calc(100%-24px))] -translate-x-1/2">
+          <div ref={keysPanel} role="dialog" aria-label={t('canvas.keys.title')}
+            className="cv-pop pointer-events-auto relative grid grid-cols-4 gap-6 rounded-[12px] bg-[var(--cv-float)] p-5 shadow-[var(--cv-float-shadow)]">
+            <button type="button" aria-label={t('canvas.outline.close')} onClick={() => setKeys(false)} className="absolute right-3 top-3 text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]"><X size={15} /></button>
+            {columns.map(([title, rows]) => (
+              <div key={title}>
+                <div className="mb-2 text-[12.5px] font-medium text-[var(--cv-edge-lit)]">{title}</div>
+                {rows.map(([what, key]) => (
+                  <div key={what} className="flex h-8 items-center justify-between gap-2 text-[12.5px]">
+                    <span className="truncate text-[var(--cv-ink-2)]">{what}</span>
+                    <kbd className="shrink-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 py-0.5 font-sans text-[11.5px] text-[var(--cv-ink)]">{key}</kbd>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
-      <Tooltip label={t('canvas.keys.select')} shortcut="V" side="top">
-        <button type="button" aria-label={t('canvas.keys.select')} aria-pressed={tool === 'select'} onClick={() => onTool('select')} className={`${SMALL} ${tool === 'select' ? ON : ''}`}><MousePointer2 {...SMALL_ICON} /></button>
-      </Tooltip>
-      <Tooltip label={t('canvas.keys.hand')} shortcut="H" side="top">
-        <button type="button" aria-label={t('canvas.keys.hand')} aria-pressed={tool === 'hand'} onClick={() => onTool('hand')} className={`${SMALL} ${tool === 'hand' ? ON : ''}`}><Hand {...SMALL_ICON} /></button>
-      </Tooltip>
-      <span className="mx-0.5 h-4 w-px shrink-0 bg-[var(--cv-bar-line)]" />
-      <Tooltip label={t('canvas.keys.title')} side="top">
-        <button ref={keysButton} type="button" aria-label={t('canvas.keys.title')} aria-expanded={keys} onClick={() => setKeys((v) => !v)} className={`${SMALL} ${keys ? ON : ''}`}><Keyboard {...SMALL_ICON} /></button>
-      </Tooltip>
-    </div>
+      <div className={`${CORNER} left-2`}>
+        <Tooltip label={t('canvas.keys.title')} side="top">
+          <button ref={keysButton} type="button" aria-label={t('canvas.keys.title')} aria-expanded={keys} onClick={() => setKeys((v) => !v)} className={`${SMALL} ${keys ? ON : ''}`}><Keyboard {...SMALL_ICON} /></button>
+        </Tooltip>
+        <span className="mx-0.5 h-4 w-px shrink-0 bg-[var(--cv-bar-line)]" />
+        {/* one button: it shows the tool in use, and a click takes the other */}
+        <Tooltip label={t(`canvas.keys.${other}`)} shortcut={other === 'select' ? 'V' : 'H'} side="top">
+          <button type="button" aria-label={t(`canvas.keys.${tool}`)} aria-pressed={tool === 'hand'} onClick={() => onTool(other)} className={`${SMALL} ${tool === 'hand' ? ON : ''}`}>
+            <span key={tool} className="cv-swap flex">{tool === 'select' ? <MousePointer2 {...SMALL_ICON} /> : <Hand {...SMALL_ICON} />}</span>
+          </button>
+        </Tooltip>
+      </div>
+    </>
   );
 }
 

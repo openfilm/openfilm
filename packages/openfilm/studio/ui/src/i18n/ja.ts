@@ -2123,6 +2123,7 @@ export const ja: Words = {
     },
     keys: {
       title: 'ショートカット',
+      add: 'ノードを追加',
       select: '選択',
       hand: 'ハンド（キャンバスを移動）',
       make: '作成',

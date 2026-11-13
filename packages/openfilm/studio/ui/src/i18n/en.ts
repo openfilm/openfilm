@@ -2124,6 +2124,7 @@ export const en = {
     },
     keys: {
       title: 'Shortcuts',
+      add: 'Add a node',
       select: 'Select',
       hand: 'Hand (move the canvas)',
       make: 'Making',

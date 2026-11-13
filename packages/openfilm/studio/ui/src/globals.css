@@ -698,6 +698,9 @@ html[data-file-drag] iframe { pointer-events: none; }
   transition: transform 260ms cubic-bezier(0.3, 1.8, 0.5, 1), background-color 120ms ease-out;
 }
 .cv-tool:active { transform: scale(0.86); transition-duration: 80ms, 120ms; }
+/* a toggle's icon turning into the other one */
+@keyframes cv-swap { from { opacity: 0; transform: rotate(-30deg) scale(0.6); } }
+.cv-swap { animation: cv-swap 220ms cubic-bezier(0.3, 1.6, 0.5, 1); }
 /* a node just added comes in with a small pop, from its middle */
 @keyframes cv-born { from { opacity: 0; transform: scale(0.88); } 60% { opacity: 1; transform: scale(1.02); } }
 .openfilm-canvas .react-flow__node.cv-born > * { animation: cv-born 320ms cubic-bezier(0.2, 0.8, 0.3, 1); }
@@ -726,7 +729,7 @@ html[data-file-drag] iframe { pointer-events: none; }
 .cv-dblclick-ring-2 { animation-delay: 0.384s; }
 @media (prefers-reduced-motion: reduce) {
   .cv-tool, .cv-tool:active { transition: none; transform: none; }
-  .openfilm-canvas .react-flow__node.cv-born > *, .openfilm-canvas .react-flow__node.cv-born-fade > *, .cv-ripple, .cv-dblclick-arrow, .cv-dblclick-ring { animation: none; }
+  .openfilm-canvas .react-flow__node.cv-born > *, .openfilm-canvas .react-flow__node.cv-born-fade > *, .cv-ripple, .cv-dblclick-arrow, .cv-dblclick-ring, .cv-swap { animation: none; }
   .cv-ripple { display: none; }
 }
 .openfilm-canvas .react-flow__minimap { overflow: hidden; border-radius: 12px; box-shadow: var(--cv-float-shadow); }

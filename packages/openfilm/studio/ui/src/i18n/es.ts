@@ -2123,6 +2123,7 @@ export const es: Words = {
     },
     keys: {
       title: 'Atajos',
+      add: 'Añadir un nodo',
       select: 'Seleccionar',
       hand: 'Mano (mover el lienzo)',
       make: 'Crear',
