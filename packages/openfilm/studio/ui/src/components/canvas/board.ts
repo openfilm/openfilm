@@ -396,6 +396,8 @@ export interface Board {
   redraw: (id: string, path: string) => void;
   /** a text node's words written by the person's agent from what they ask and what is wired in (in the app with a chat); why not, if not */
   write?: (id: string, ask: string, attachments: string[]) => Promise<string | null>;
+  /** whether a text node is being written by the agent now */
+  writing?: (id: string) => boolean;
   uploadWritingFiles?: (files: File[], onProgress?: (index: number, progress: number, path?: string) => void) => Promise<string[]>;
   /** a board only looked at (an example's): nothing on it is changed, made or wired */
   readOnly?: boolean;

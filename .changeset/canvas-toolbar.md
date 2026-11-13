@@ -9,4 +9,6 @@ text, a bulleted or numbered list, a quote, the alignment, bold, struck, italic 
 and opens the note large in a window of its own, with its name as a Markdown file to download. Selected, its bar sets
 its background color, opens it large or downloads it. Its words stay Markdown (underline and alignment as the HTML
 Markdown allows), and its color is kept in the canvas file. Its panel's "+" adds references to write from, and the
-four quick starts are gone. A text node is named "Text 1", not "Text node 1", and a double click on its name renames it, on the board or in its window, whose top is a title bar clear of the window's buttons that drags the window. Selected, its words scroll; they show no spelling marks.
+four quick starts are gone. A text node is named "Text 1", not "Text node 1", and a double click on its name renames it, on the board or in its window, whose top is a title bar clear of the window's buttons that drags the window. Selected, its words scroll; they show no spelling marks. The bars over and under a node come in with a slight rise or drop, a node's name (and its rename field) is as wide as
+its words up to a limit, and while the agent writes a note its card shows a soft light sweeping across it (three grey
+lines while it is empty) in place of a "writing" line, the words fading in when they come.

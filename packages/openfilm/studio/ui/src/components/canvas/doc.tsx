@@ -260,12 +260,13 @@ export function DocSheet({ name, text, onChange, onRename, onClose }: {
               if (event.key === 'Escape') { cancel.current = true; event.currentTarget.blur(); }
               if (event.key === 'Enter') event.currentTarget.blur();
             }}
-            className="h-6 w-[240px] min-w-0 rounded-[6px] bg-[var(--cv-chip)] px-1.5 text-[13px] font-medium text-[var(--cv-ink)] outline outline-1 outline-[var(--cv-ring)]" />
+            size={Math.max(2, draft.length)}
+            className="h-6 min-w-[3ch] max-w-[320px] rounded-[6px] bg-[var(--cv-chip)] px-1.5 text-[13px] font-medium text-[var(--cv-ink)] outline outline-1 outline-[var(--cv-ring)] [field-sizing:content]" />
         ) : (
           <span role={onRename ? 'button' : undefined} tabIndex={onRename ? 0 : undefined} title={onRename ? t('canvas.video.renameHint') : undefined}
             onDoubleClick={() => { if (onRename) { cancel.current = false; setDraft(name); } }}
             onKeyDown={(event) => { if (onRename && (event.key === 'Enter' || event.key === 'F2')) { event.preventDefault(); cancel.current = false; setDraft(name); } }}
-            className="min-w-0 truncate rounded-[4px] px-0.5 text-[13px] font-medium">{name}.md</span>
+            className="min-w-0 max-w-[320px] truncate rounded-[4px] px-0.5 text-[13px] font-medium">{name}.md</span>
         )}
         <span className="flex-1" />
         <button type="button" onClick={() => saveText(name, editor ? textOf(editor) : text)}

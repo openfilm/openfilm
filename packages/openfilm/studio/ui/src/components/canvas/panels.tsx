@@ -36,7 +36,7 @@ const OPTION_OFF = 'bg-[var(--cv-chip)] text-[var(--cv-ink-2)] hover:bg-[var(--c
 const OPTION_TITLE = 'mb-1.5 text-[11.5px] text-[var(--cv-ink-3)]';
 const PICK = 'flex h-8 min-w-0 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
 /** the panel under a selected node: wider and rounder than the menus, a hairline round it */
-const PANEL = 'cv-pop relative rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
+const PANEL = 'cv-bar-bottom relative rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
 const PROMPT = 'mt-2.5 block max-h-[42vh] w-full resize-none bg-transparent px-1 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]';
 const COMPOSER_FOOTER = 'mt-1 flex min-w-0 items-center gap-0.5';
 const SEND = 'flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]';
@@ -92,7 +92,7 @@ export function SelectionToolbar({ ids, onGroup, onUngroup, onDuplicate, onRemov
   const action = 'flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]';
   return (
     <NodeToolbar nodeId={ids} isVisible position={Position.Top} offset={Math.min(32, top - 48)} style={{ zIndex: 4 }}>
-      <div data-canvas-selection-toolbar="" role="group" className={`nodrag nopan flex w-max items-center gap-0.5 p-1 ${CARD}`}>
+      <div data-canvas-selection-toolbar="" role="group" className={`nodrag nopan flex w-max items-center gap-0.5 p-1 ${CARD} cv-bar-top`}>
         {onGroup ? <button type="button" className={action} onClick={onGroup}><Group size={15} />{t('canvas.groupThem')}</button> : null}
         {onUngroup ? <button type="button" className={action} onClick={onUngroup}><Ungroup size={15} />{t('canvas.ungroup')}</button> : null}
         <Tooltip label={t('canvas.duplicate')}>
@@ -118,7 +118,7 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
   const fail = (e: unknown) => console.warn(e);
   const video = file.kind === 'video';
   const actions = (
-      <div className={`nopan flex w-max items-center gap-0.5 p-1 ${CARD} ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
+      <div className={`nopan flex w-max items-center gap-0.5 p-1 ${CARD} cv-bar-top ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
         {file.kind === 'image' ? (
           <>
             <button type="button" className={btn} onClick={() => board.spawn(id, 'image', { preset: 'cameras9', opts: { ratio: '1:1' } })}><Orbit size={14} />{t('canvas.actions.angles')}</button>
@@ -653,7 +653,9 @@ export function NotePanel({ id }: { id: string }) {
   const t = useT();
   const board = useBoard();
   const [ask, setAsk] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
+  const [sending, setSending] = React.useState(false);
+  /* written now: sent from here, or still going after the panel was closed and opened again */
+  const busy = sending || Boolean(board.writing?.(id));
   const [uploading, setUploading] = React.useState(false);
   const [expanded, setExpanded] = React.useState(false);
   const [attachments, setAttachments] = React.useState<string[]>([]);
@@ -686,11 +688,11 @@ export function NotePanel({ id }: { id: string }) {
   };
   const send = () => {
     if (!canSend) return;
-    setBusy(true);
+    setSending(true);
     setError(null);
     /* written: the ask is done; refused: it stays, to send again */
     void write(id, ask.trim(), attachments).then((why) => {
-      setBusy(false);
+      setSending(false);
       setError(why);
       if (!why) { setAsk(''); setAttachments([]); setExpanded(false); }
     });
@@ -738,7 +740,6 @@ export function NotePanel({ id }: { id: string }) {
           {Picker ? <Picker triggerClassName={PICK} /> : <span className={PICK}>
             <Sparkles size={14} className="shrink-0" /><span className="truncate">{t('canvas.write.by')}</span>
           </span>}
-          {busy ? <span role="status" className="truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.write.busy')}</span> : null}
           <span className="flex-1" />
           {wired ? <span className="mr-1 truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.write.wired').replace('{n}', String(wired))}</span> : null}
           <Tooltip label={`${t('canvas.write.run')} · ${MOD}↵`}>
@@ -759,7 +760,7 @@ export function CutPanel({ id, count }: { id: string; count: number }) {
   const board = useBoard();
   return (
     <NodeToolbar nodeId={id} isVisible={board.single === id && !board.readOnly} position={Position.Bottom} offset={14}>
-      <div className={`nodrag nopan flex w-[min(420px,80vw)] items-center gap-3 p-3 ${CARD}`}>
+      <div className={`nodrag nopan flex w-[min(420px,80vw)] items-center gap-3 p-3 ${CARD} cv-bar-bottom`}>
         <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-[var(--cv-label)]">{count ? t('canvas.cut.how') : t('canvas.cut.waiting')}</span>
         <button type="button" disabled={!count} onClick={() => board.sendToFilm(id)}
           className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-[var(--primary)] px-4 text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-30">

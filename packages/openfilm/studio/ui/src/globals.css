@@ -702,6 +702,19 @@ html[data-file-drag] iframe { pointer-events: none; }
   transition: transform 260ms cubic-bezier(0.3, 1.8, 0.5, 1), background-color 120ms ease-out;
 }
 .cv-tool:active { transform: scale(0.86); transition-duration: 80ms, 120ms; }
+/* the bars over and under a node come in from its side: over it they rise, under it they drop */
+@keyframes cv-bar-up { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
+@keyframes cv-bar-down { from { opacity: 0; transform: translateY(-6px) scale(0.98); } }
+.cv-bar-top { transform-origin: 50% 100%; animation: cv-bar-up 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cv-bar-bottom { transform-origin: 50% 0; animation: cv-bar-down 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+/* a note being written by an agent: a soft light sweeping across its card, three grey lines while it is empty */
+@keyframes cv-sweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
+.cv-writing::after {
+  content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  background: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--cv-ink) 8%, transparent) 50%, transparent 65%);
+  background-size: 260% 100%; animation: cv-sweep 1.5s cubic-bezier(0.4, 0, 0.4, 1) infinite;
+}
+.cv-skeleton { height: 10px; border-radius: 5px; background: var(--cv-chip); }
 /* a toggle's icon turning into the other one */
 @keyframes cv-swap { from { opacity: 0; transform: rotate(-30deg) scale(0.6); } }
 .cv-swap { animation: cv-swap 220ms cubic-bezier(0.3, 1.6, 0.5, 1); }
@@ -733,7 +746,7 @@ html[data-file-drag] iframe { pointer-events: none; }
 .cv-dblclick-ring-2 { animation-delay: 0.384s; }
 @media (prefers-reduced-motion: reduce) {
   .cv-tool, .cv-tool:active { transition: none; transform: none; }
-  .openfilm-canvas .react-flow__node.cv-born > *, .openfilm-canvas .react-flow__node.cv-born-fade > *, .cv-ripple, .cv-dblclick-arrow, .cv-dblclick-ring, .cv-swap { animation: none; }
+  .openfilm-canvas .react-flow__node.cv-born > *, .openfilm-canvas .react-flow__node.cv-born-fade > *, .cv-ripple, .cv-dblclick-arrow, .cv-dblclick-ring, .cv-swap, .cv-bar-top, .cv-bar-bottom, .cv-writing::after { animation: none; }
   .cv-ripple { display: none; }
 }
 .openfilm-canvas .react-flow__minimap { overflow: hidden; border-radius: 12px; box-shadow: var(--cv-float-shadow); }

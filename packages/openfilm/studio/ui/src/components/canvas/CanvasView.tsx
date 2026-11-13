@@ -743,11 +743,14 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
   /** a group kept as a template, by its name, with what is in it and the wires between them */
   /* a text node written by the person's agent: the words wired in (and its own, to rework) go with what they ask */
+  /** the text nodes being written by the agent now */
+  const [writing, setWriting] = React.useState<ReadonlySet<string>>(new Set());
   const write = async (id: string, ask: string, attachments: string[]): Promise<string | null> => {
     const inputs = edges.filter((e) => e.target === id).map((e) => nodes.find((n) => n.id === e.source))
       .flatMap((n) => (n?.type === 'note' && n.data.text.trim() ? [n.data.text] : []));
     const own = nodes.find((n) => n.id === id);
     const mine = own?.type === 'note' ? own.data.text.trim() : '';
+    setWriting((ids) => new Set(ids).add(id));
     try {
       const model = studioHost?.canvasWriting?.selection();
       if (model === null) return t('canvas.write.noAgent');
@@ -759,6 +762,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     } catch (error) {
       if (error instanceof ApiError && error.body.code === 'no-agent') return t('canvas.write.noAgent');
       return error instanceof Error ? error.message : String(error);
+    } finally {
+      setWriting((ids) => { const next = new Set(ids); next.delete(id); return next; });
     }
   };
 
@@ -1058,8 +1063,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     redraw: (id, path) => setRedraw({ id, path }),
     tidy: (group) => { willChange(); setNodes((list) => tidyGroup(list, group)); },
     openSettings: onOpenSettings,
-    ...(chat ? { write, uploadWritingFiles: onImportFiles } : {}),
-  }), [chat, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal, onError, onImportFiles, activeUploads, shown]); // eslint-disable-line react-hooks/exhaustive-deps
+    ...(chat ? { write, writing: (id: string) => writing.has(id), uploadWritingFiles: onImportFiles } : {}),
+  }), [chat, writing, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal, onError, onImportFiles, activeUploads, shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onDrop = (event: React.DragEvent) => {
     const at = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });

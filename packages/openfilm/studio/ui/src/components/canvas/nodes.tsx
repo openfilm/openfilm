@@ -139,11 +139,13 @@ function useNumber(id: string): number {
 }
 
 /** What every node is drawn in: its name row above, its card, its sides. */
-function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card', fill, onRename, pending }: {
+function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card', fill, busy, onRename, pending }: {
   id: string; selected: boolean; icon: React.ComponentType<{ size?: number; className?: string }>; title: string; meta?: string | null;
   by?: CanvasNode['by']; note?: React.ReactNode; stack?: number; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
   /** a tint over the card (a note's color) */
   fill?: string;
+  /** being written: a light sweeping across the card */
+  busy?: boolean;
   onRename?: (title: string) => void; pending?: boolean;
 }) {
   const board = useBoard();
@@ -185,15 +187,17 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
                 if (event.key === 'Escape') cancel.current = true;
                 if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur();
               }}
-              className="nodrag min-w-0 flex-1 rounded bg-[var(--cv-float)] px-1 text-[var(--cv-ink)] outline outline-[var(--cv-ring)]" />
+              /* as wide as its words, to a limit */
+              size={Math.max(2, draft.length)}
+              className="nodrag min-w-[3ch] max-w-[240px] rounded bg-[var(--cv-float)] px-1 text-[var(--cv-ink)] outline outline-[var(--cv-ring)] [field-sizing:content]" />
           ) : onRename ? (
-            <span data-canvas-title="" role="button" tabIndex={0} title={t('canvas.video.renameHint')} className="truncate rounded-sm focus-visible:outline"
+            <span data-canvas-title="" role="button" tabIndex={0} title={t('canvas.video.renameHint')} className="max-w-[240px] truncate rounded-sm focus-visible:outline"
               onDoubleClick={(event) => { event.stopPropagation(); rename(); }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); event.stopPropagation(); rename(); }
               }}>{title}</span>
-          ) : <span className="truncate">{title}</span>}
-          {draft === null ? <span className="flex-1" /> : null}
+          ) : <span className="max-w-[240px] truncate">{title}</span>}
+          <span className="flex-1" />
           {note}
           {by ? <ByAgent by={by} /> : null}
           {meta ? <span className="shrink-0 tabular-nums">{meta}</span> : null}
@@ -206,7 +210,7 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
           <div className={`absolute inset-0 translate-x-[6px] -translate-y-[5px] rotate-[1.75deg] rounded-[var(--cv-card-radius)] border bg-[var(--cv-card-2)] ${stackBorder}`} />
         </>
       ) : null}
-      <div data-canvas-card="" className={card} style={fill ? { backgroundImage: `linear-gradient(${fill}, ${fill})` } : undefined}>{children}</div>
+      <div data-canvas-card="" className={`${card} ${busy ? 'cv-writing' : ''}`} style={fill ? { backgroundImage: `linear-gradient(${fill}, ${fill})` } : undefined}>{children}</div>
       {!pending ? <Sides id={id} selected={selected} ins={ins} outs={outs} /> : null}
       {!pending && !board.readOnly && (board.single === id || board.editing === id) ? (
         <NodeResizeControl position="bottom-right" minWidth={160} minHeight={100} maxWidth={1600} maxHeight={1200}
@@ -354,6 +358,15 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
     return () => { editor.off('blur', blur); };
   }, [editor, editing]);
   const title = data.title ?? t('canvas.titles.note').replace('{n}', String(n));
+  /* written by the agent: the card at it until the words come, which then fade in */
+  const busy = Boolean(board.writing?.(id));
+  const [arrived, setArrived] = React.useState(false);
+  const wasBusy = React.useRef(busy);
+  React.useEffect(() => {
+    if (wasBusy.current && !busy) { setArrived(true); const done = setTimeout(() => setArrived(false), 400); wasBusy.current = busy; return () => clearTimeout(done); }
+    wasBusy.current = busy;
+    return undefined;
+  }, [busy]);
   /* named as the person calls it; an empty name goes back to its number */
   const rename = board.readOnly ? undefined : (name: string) => { board.willChange(); board.setData(id, { title: name || undefined }); };
   const open = () => { board.edit(null); setSheet(true); };
@@ -363,7 +376,7 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
       <NotePanel id={id} />
       {editing && editor ? (
         <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={32}>
-          <div className="nodrag nopan rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+          <div className="cv-bar-top nodrag nopan rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
             <FormatBar editor={editor} onExpand={open} />
           </div>
         </NodeToolbar>
@@ -373,9 +386,14 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
         </NodeToolbar>
       ) : null}
       <Frame id={id} selected={selected} icon={TypeIcon} title={title} by={data.by} onRename={rename}
-        tone={editing || data.text ? 'quiet' : 'card'} fill={data.color ? FRAME_COLOR[data.color].fill : undefined}>
+        tone={editing || data.text ? 'quiet' : 'card'} fill={data.color ? FRAME_COLOR[data.color].fill : undefined} busy={busy}>
         {/* its words as they read: held and moved anywhere on them, scrolled once it is selected; written in, they take the pointer */}
-        <DocView editor={editor} className={`h-full w-full px-5 py-4 ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : selected ? 'nowheel overflow-y-auto' : 'overflow-hidden'}`} />
+        {busy && !data.text.trim() ? (
+          <div role="status" aria-label={t('canvas.write.busy')} className="flex flex-col gap-3 px-5 py-5">
+            <span className="cv-skeleton w-[72%]" /><span className="cv-skeleton w-[90%]" /><span className="cv-skeleton w-[56%]" />
+          </div>
+        ) : null}
+        <DocView editor={editor} className={`h-full w-full px-5 py-4 ${busy && !data.text.trim() ? 'hidden' : ''} ${arrived ? 'cv-fade' : ''} ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : selected ? 'nowheel overflow-y-auto' : 'overflow-hidden'}`} />
       </Frame>
       {sheet ? <DocSheet name={title} text={data.text} onChange={write} onRename={rename} onClose={() => setSheet(false)} /> : null}
     </div>
@@ -390,7 +408,7 @@ function NoteBar({ id, color, text, name, onExpand }: { id: string; color?: Grou
   const icon = 'cv-tool flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] disabled:opacity-40';
   const paint = (c: GroupColor | undefined) => { board.willChange(); board.setData(id, { color: c }); setColors(false); };
   return (
-    <div className="nodrag nopan flex items-center gap-0.5 rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+    <div className="cv-bar-top nodrag nopan flex items-center gap-0.5 rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
       <span className="relative">
         <button type="button" aria-expanded={colors} onClick={() => setColors((v) => !v)}
           className="cv-tool flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
@@ -443,7 +461,7 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
         handleClassName={RESIZE_HANDLE} onResizeStart={board.willChange} />
       {selected && !board.readOnly && board.single === id ? (
         <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={36} style={{ zIndex: 4 }}>
-          <div className="nodrag nopan flex items-center gap-0.5 rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
+          <div className="cv-bar-top nodrag nopan flex items-center gap-0.5 rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
             <span className="relative">
               <button type="button" aria-label={t('canvas.color')} onClick={() => setColors((v) => !v)} className={`${bar} !px-1.5`}>
                 <span className="h-4 w-4 rounded-full border border-white/20" style={{ background: paint.dot }} />
