@@ -13,10 +13,11 @@ import { seenSkills, watchSkills, type SkillEntry } from './project-sources.ts';
 
 /**
  * A skill that is a plugin, as one: with a surface, its workbench is named by its uid; one whose openfilm.json asks for
- * a tab of the library shows its surface there instead, and has no workbench.
+ * a tab of the library shows its surface there instead, and has no workbench. A workbench is laid out among the
+ * page's panels in the blocks its openfilm.json declares (lib/blocks), its own keyed by its uid.
  */
 export const pluginOfSkill = (skill: SkillEntry): Plugin => {
-  const surface = skill.tab ? {} : { workbench: skill.uid };
+  const surface = skill.tab ? {} : { workbench: skill.uid, ...(skill.blocks ? { blocks: skill.blocks } : {}) };
   return {
     id: skill.uid, title: skill.shown?.title ?? { en: skill.name }, summary: skill.shown?.summary ?? { en: skill.description },
     ...(skill.icon ? { icon: skill.icon } : {}), skills: [skill.name], on: !skill.off, skill: skill.uid,

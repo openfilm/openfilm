@@ -197,8 +197,8 @@ being written; `chat.select(selection)` says what is selected and where the play
   `{ type: 'show-box', time, box }`, `{ type: 'show-track', track }`…); returns the way to stop. A clip, a moment, a
   stretch, a node or a file the app asks to show is a link, given to the workbench that shows it.
 
-**Blocks.** A workbench of OpenFilm's own plugins (`plugins/<id>/`) can be laid out among the page's panels, as the edit
-is, instead of taking the whole of the page's middle: its `openfilm.json` says which blocks it draws, and Studio arranges
+**Blocks.** A workbench whose element runs in Studio's page (OpenFilm's own, or one someone made, once the person lets it
+run) can be laid out among the page's panels, as the edit is, instead of taking the whole of the page's middle: its `openfilm.json` says which blocks it draws, and Studio arranges
 them with the page's own (the app's chat, the library) and with blocks another workbench draws. The person shows, hides,
 sizes and moves them from the layout's menu, as the edit's; each workbench has an arrangement of its own.
 
@@ -215,7 +215,8 @@ A block: `id`; `title` by language; `edge`, where it is when the panels are dock
 first opens; `open: false` to start hidden; `min`, the smallest it is drawn where panels float (`[width, height]`);
 `range`, the sizes a person may give it. `"owner:id"` is a block another workbench draws, as that one declares it (the
 edit's are `viewer`, `layers`, `inspector` and `timeline`): the example shows the edit's viewer and timeline beside its
-own. `"blocks": "edit"` instead lays the workbench out in the edit's arrangement.
+own. `"blocks": "edit"` instead lays the workbench out in the edit's arrangement. The workbench of a plugin someone made
+is named by its skill's uid (`local/grade`): its element's `plugin` attribute, the `owner` of its own blocks below.
 
 The element draws each of its blocks into the place Studio gives it:
 

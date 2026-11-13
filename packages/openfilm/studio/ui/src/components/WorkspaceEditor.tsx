@@ -37,13 +37,13 @@ export function WorkspaceSeams({ tree, frames, editing = false, onChange, onChec
     }}/>)}</>,document.body);
 }
 
-export function WorkspaceEditor({ value, spec, frames, hasChat, onChange, onDone, onCancel, onUndo, onRedo, canUndo, canRedo, onReset }: {
-  value: WorkspaceLayout; spec: ArrangementSpec; frames: Frames; hasChat: boolean; onChange:(layout:WorkspaceLayout)=>void;
+export function WorkspaceEditor({ value, spec, title, frames, hasChat, onChange, onDone, onCancel, onUndo, onRedo, canUndo, canRedo, onReset }: {
+  value: WorkspaceLayout; spec: ArrangementSpec; title?: Readonly<Record<string, string>>; frames: Frames; hasChat: boolean; onChange:(layout:WorkspaceLayout)=>void;
   onDone:()=>void; onCancel:()=>void; onUndo:()=>void; onRedo:()=>void; canUndo:boolean; canRedo:boolean; onReset:()=>void;
 }) {
   const t=useT();
   const language=useLanguage();
-  const words=useArrangementWords(value.mode);
+  const words=useArrangementWords(value.mode,title);
   const root=React.useRef<HTMLDivElement>(null);
   const [moving,setMoving]=React.useState<DockPanel|null>(null);
   const [drop,setDrop]=React.useState<ReturnType<typeof dockDropAt>>(null);

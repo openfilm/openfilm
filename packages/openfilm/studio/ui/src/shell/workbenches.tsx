@@ -102,7 +102,9 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
   }, [setWorkMode, setSurface, heldHere]);
   /* the arrangement laid out among the page's panels: the plugin's picked, when it has one of its own; else the edit's,
      under the canvas and any other plugin's surface too */
-  const surfaceArrangement = surface != null ? arrangementOf(surface, plugins) : null;
+  /* one someone made is laid out among the panels once its element may run; until then its surface says why not */
+  const surfacePlugin = surface != null ? plugins.find((p) => p.workbench === surface) : undefined;
+  const surfaceArrangement = surface != null && (!surfacePlugin?.skill || surfacePlugin.element) ? arrangementOf(surface, plugins) : null;
   const among = surfaceArrangement != null && !heldHere(surface!) ? surfaceArrangement : 'edit';
   /* the edit and the canvas are not shown: no workbench is on, or a plugin's surface is in their place */
   const away = noBench || surface != null;

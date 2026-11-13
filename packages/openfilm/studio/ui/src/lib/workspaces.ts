@@ -61,7 +61,7 @@ const bound = (v: number, min: number, max: number) => Math.round(Math.max(min, 
 const cleanName = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 40);
 const EDGES: readonly BlockEdge[] = ['left', 'right', 'top', 'bottom', 'center'];
 const KEY = /^(?:[a-z][a-z0-9-]{0,31}:)?[a-z][a-z0-9-]{0,31}$/;
-const NAME = /^[a-z][a-z0-9-]{0,63}(?:\/[a-z0-9][a-z0-9._-]{0,127})*$/;
+const NAME = /^[a-z0-9][a-z0-9-]{0,63}(?:\/[a-z0-9][a-z0-9._-]{0,127})*$/;
 const sideways = (edge: BlockEdge) => edge === 'left' || edge === 'right';
 
 function readPlace(value: unknown): BlockPlace | null {

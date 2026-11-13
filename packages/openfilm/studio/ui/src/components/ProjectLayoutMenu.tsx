@@ -10,23 +10,25 @@ import { Popover } from './Popover';
 import styles from './ProjectLayoutMenu.module.css';
 
 /** The words naming an arrangement's layouts and its rearranging: the edit's and the canvas's own, else with its workbench's name. */
-export function useArrangementWords(name: string): { layouts: string; editing: string } {
+export function useArrangementWords(name: string, titled?: Readonly<Record<string, string>>): { layouts: string; editing: string } {
   const t = useT();
   const language = useLanguage();
-  const plugin = usePlugins().find((p) => p.workbench === name);
-  const title = plugin?.title?.[language] ?? plugin?.title?.en ?? name;
+  /* a plugin of OpenFilm's own by the plugins listed; one someone made by the words its workbench was given (`titled`) */
+  const own = usePlugins().find((p) => p.workbench === name)?.title;
+  const words = titled ?? own;
+  const title = words?.[language] ?? words?.en ?? name;
   return name === 'edit' ? { layouts: t('layout.editLayouts'), editing: t('layout.editingEdit') }
     : name === 'canvas' ? { layouts: t('layout.canvasLayouts'), editing: t('layout.editingCanvas') }
       : { layouts: t('layout.layoutsOf').replace('{name}', title), editing: t('layout.editingOf').replace('{name}', title) };
 }
 
-export function ProjectLayoutMenu({ className, value, spec, onChange, onReset, hasChat, onEdit, layoutEditing, storageFailed, viewport, sizes }: {
-  className?: string; value: WorkspaceLayout; spec: ArrangementSpec; onChange: (layout: WorkspaceLayout) => void; onReset: () => void;
+export function ProjectLayoutMenu({ className, value, spec, title, onChange, onReset, hasChat, onEdit, layoutEditing, storageFailed, viewport, sizes }: {
+  className?: string; value: WorkspaceLayout; spec: ArrangementSpec; title?: Readonly<Record<string, string>>; onChange: (layout: WorkspaceLayout) => void; onReset: () => void;
   viewport: {width:number;height:number}; sizes: (layout: WorkspaceLayout, room: BlockRoom) => Readonly<Record<string, DrawnBlock>>;
   hasChat: boolean; onEdit: () => void; layoutEditing?: boolean; storageFailed?: boolean;
 }) {
   const t = useT();
-  const words = useArrangementWords(value.mode);
+  const words = useArrangementWords(value.mode, title);
   const [open, setOpen] = React.useState(false);
   React.useEffect(() => { if (layoutEditing) setOpen(false); }, [layoutEditing]);
   const [saved, setSaved] = React.useState<SavedWorkspace[]>([]);

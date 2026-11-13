@@ -11,6 +11,7 @@
  *   POST /api/projects/:id/locate { path } → { project }
  */
 import { refreshPlugins, type PluginTab } from './plugins.ts';
+import type { BlockDecl } from '../../../../src/plugin-blocks.mjs';
 
 export type BrowseFolder = { name: string; path: string; film: boolean };
 export type BrowseListing = {
@@ -74,6 +75,8 @@ export type SkillEntry = {
   inApp?: true; element?: string;
   /** its surface is a tab of the library instead of a workbench: its name and mark, its own where left out */
   tab?: PluginTab;
+  /** the blocks its workbench is laid out in among the page's panels (lib/blocks), as its openfilm.json declares them */
+  blocks?: string | readonly (BlockDecl | string)[];
   /** where its source can be read (a repository's address) */
   repository?: string;
   /** what it needs beyond OpenFilm, by language; the computers it runs on (none: every one), and whether this one is not among them */

@@ -37,6 +37,7 @@ import { pictureType } from '../studio/server/cover.mjs';
 import { parseRepoUrl } from '../studio/server/fetch-repo.mjs';
 import { libraryDefault, setSharedPref, sharedHome, sharedPref } from './locations.mjs';
 import { PLUGINS, pluginSkillDir, pluginsOffLine, skillsOfPluginsOff, tabOf } from './plugins.mjs';
+import { readBlocks } from './plugin-blocks.mjs';
 
 const mkdirSyncSafe = (/** @type {string} */ dir) => mkdirSync(dir, { recursive: true });
 /** a folder moved to another place: renamed, else (another disk) copied and then removed */
@@ -346,11 +347,12 @@ export function parseSkillFile(text) {
  * @typedef {{ title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string> }} SkillShown
  *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title, a one-line summary and a few lines
  *   on who it is for and what it does, by language (`en`, `zh-CN`…); the SKILL.md's description is for the agent
- * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string, needs?: Record<string, string>, platforms?: SkillPlatform[], tab?: import('./plugins.mjs').PluginTab }} SkillLook
+ * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string, needs?: Record<string, string>, platforms?: SkillPlatform[], tab?: import('./plugins.mjs').PluginTab, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[] }} SkillLook
  *   where an app shows it (openfilm.json, each optional): `kind` a way of working or a look, `order` among its kind,
  *   `icon` a mark's name, `cover` a picture and `preview` a video in its folder, `repository` where its source is read,
  *   `needs` what it needs beyond OpenFilm (by language), `platforms` the computers it runs on (none: every one), `tab`
- *   a plugin's surface shown as a tab of the library instead of as a workbench (src/plugins.mjs tabOf)
+ *   a plugin's surface shown as a tab of the library instead of as a workbench (src/plugins.mjs tabOf), `blocks` the
+ *   blocks its workbench is laid out in among the page's panels (src/plugin-blocks.mjs)
  */
 
 /** The words of an openfilm.json field: a string (any language), or one per language; anything else is none. */
@@ -385,6 +387,8 @@ function openfilmJson(folder) {
   if (platforms.length) out.platforms = platforms;
   const tab = tabOf(raw?.tab, byLanguage);
   if (tab) out.tab = tab;
+  const blocks = readBlocks(raw?.blocks);
+  if (blocks) out.blocks = blocks;
   const cover = fileIn(folder, raw?.cover), preview = fileIn(folder, raw?.preview);
   if (cover) out.cover = cover;
   if (preview) out.preview = preview;

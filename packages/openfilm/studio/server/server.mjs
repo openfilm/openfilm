@@ -608,6 +608,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
              whether the person lets it change them */
           /* a plugin's surface shown as a tab of the library instead of as a workbench (src/plugins.mjs tabOf) */
           ...(k.tab && k.installed && !k.core ? { tab: k.tab } : {}),
+          /* the blocks its workbench is laid out in among the page's panels (src/plugin-blocks.mjs) */
+          ...(k.blocks && k.installed && !k.core ? { blocks: k.blocks } : {}),
           /* the commands it brings (src/skills.mjs commandsIn), by name: `openfilm <its name> <command>` */
           ...(k.commands && k.installed && !k.core ? { commands: Object.keys(k.commands) } : {}),
           /* the program it brings (src/skills.mjs programIn) serves its surface itself, once started (`start` below),

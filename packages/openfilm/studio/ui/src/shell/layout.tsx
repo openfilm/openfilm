@@ -236,12 +236,14 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
  * it shows changes.
  */
 export function LayoutMenu({ frame, className }: { frame: ReturnType<typeof useProjectFrame>; className: string }) {
-  const { workspaceLayout, shownSpec, applyWorkspace, resetWorkspace, beginLayoutEdit, chatThere, workspaceViewport, layoutEditing, workspaceStorageFailed, previewSizes } = frame;
+  const { workspaceLayout, shownSpec, applyWorkspace, resetWorkspace, beginLayoutEdit, chatThere, workspaceViewport, layoutEditing, workspaceStorageFailed, previewSizes, benchPlugins } = frame;
+  /* the words of the workbench whose arrangement it is (one someone made is not among OpenFilm's own plugins) */
+  const title = benchPlugins.find((p) => p.workbench === workspaceLayout.mode)?.title;
   return React.useMemo(() => (
     <ProjectLayoutMenu className={className}
-      value={workspaceLayout} spec={shownSpec} onChange={applyWorkspace} onReset={resetWorkspace}
+      value={workspaceLayout} spec={shownSpec} title={title} onChange={applyWorkspace} onReset={resetWorkspace}
       hasChat={chatThere} viewport={workspaceViewport} sizes={previewSizes} onEdit={beginLayoutEdit} layoutEditing={layoutEditing} storageFailed={workspaceStorageFailed} />
-  ), [className, workspaceLayout, shownSpec, applyWorkspace, resetWorkspace, chatThere, workspaceViewport, previewSizes, beginLayoutEdit, layoutEditing, workspaceStorageFailed]);
+  ), [className, workspaceLayout, shownSpec, title, applyWorkspace, resetWorkspace, chatThere, workspaceViewport, previewSizes, beginLayoutEdit, layoutEditing, workspaceStorageFailed]);
 }
 
 /**
@@ -249,12 +251,12 @@ export function LayoutMenu({ frame, className }: { frame: ReturnType<typeof useP
  * the project was read.
  */
 export function LayoutOver({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
-  const { loaded, failure, workspacePrefs, shownSpec, freeGeometry, layoutDraft, updateWorkspace, chatThere, finishLayoutEdit, cancelLayoutEdit, resetLayoutEdit } = frame;
+  const { loaded, failure, workspacePrefs, shownSpec, benchPlugins, freeGeometry, layoutDraft, updateWorkspace, chatThere, finishLayoutEdit, cancelLayoutEdit, resetLayoutEdit } = frame;
   if (!loaded || failure) return null;
   return (
     <>
       {freeGeometry && workspacePrefs.tree ? <WorkspaceSeams tree={workspacePrefs.tree} frames={freeGeometry} editing={Boolean(layoutDraft.draft)} onChange={tree => updateWorkspace({ tree })} onCheckpoint={layoutDraft.draft ? layoutDraft.checkpoint : undefined} /> : null}
-      {layoutDraft.draft && freeGeometry ? <WorkspaceEditor value={layoutDraft.draft} spec={shownSpec} frames={freeGeometry} hasChat={chatThere} onChange={layoutDraft.change}
+      {layoutDraft.draft && freeGeometry ? <WorkspaceEditor value={layoutDraft.draft} spec={shownSpec} title={benchPlugins.find((p) => p.workbench === layoutDraft.draft!.mode)?.title} frames={freeGeometry} hasChat={chatThere} onChange={layoutDraft.change}
         onDone={finishLayoutEdit} onCancel={cancelLayoutEdit} onUndo={layoutDraft.undo} onRedo={layoutDraft.redo} canUndo={layoutDraft.canUndo} canRedo={layoutDraft.canRedo}
         onReset={resetLayoutEdit} /> : null}
     </>
