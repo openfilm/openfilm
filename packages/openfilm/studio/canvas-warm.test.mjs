@@ -132,7 +132,7 @@ test('new videos keep the ratio picked while the canvas stays open, including th
       assert.equal(requests.at(-1).args['aspect-ratio'], ratio);
     };
     const addVideo = async () => {
-      await page.getByRole('button', { name: 'Add a node', exact: true }).click();
+      /* the toolbar at the board's foot adds a node of each kind with one click */
       await page.getByRole('button', { name: 'Video', exact: true }).click();
       const selected = page.locator('.react-flow__node-make.selected');
       await selected.waitFor();
