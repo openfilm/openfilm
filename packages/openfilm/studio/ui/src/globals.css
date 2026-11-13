@@ -708,28 +708,26 @@ html[data-file-drag] iframe { pointer-events: none; }
 .cv-bar-top { transform-origin: 50% 100%; animation: cv-bar-up 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 .cv-bar-bottom { transform-origin: 50% 0; animation: cv-bar-down 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 /*
- * a note being written by an agent: a light running round its edge in the brand's colours (blue, cyan, a touch of
- * yellow) with a soft glow breathing under it; empty, grey lines shimmering where the words will come; the words
- * coming in, a caret at their end
+ * a note being written by an agent, until its first words come: its card veiled by a field of dots, a wave of light
+ * running through them on a slant, as a line being written; the edges of the field fading out
  */
-@property --cv-orbit { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
-@keyframes cv-orbit { to { --cv-orbit: 360deg; } }
-@keyframes cv-breathe { 0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } 50% { box-shadow: 0 0 28px -6px rgba(59, 130, 246, 0.45); } }
-.cv-writing { animation: cv-breathe 2.4s ease-in-out infinite; }
-.cv-writing::after {
-  content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit; padding: 1.5px;
-  background: conic-gradient(from var(--cv-orbit), transparent 0 58%, rgba(59, 130, 246, 0.9) 74%, #38d0f0 86%, #f5d24a 93%, transparent 100%);
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
-  animation: cv-orbit 2.2s linear infinite;
+.cv-veil { background: color-mix(in srgb, var(--cv-card) 94%, transparent); }
+.cv-dots, .cv-dots::after {
+  position: absolute; inset: 0; background-size: 18px 18px; background-position: 9px 9px;
+  mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 35%, transparent 100%);
 }
-@keyframes cv-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
-.cv-skeleton {
-  height: 10px; border-radius: 5px;
-  background: linear-gradient(90deg, var(--cv-chip) 0%, color-mix(in srgb, var(--cv-ink) 14%, transparent) 50%, var(--cv-chip) 100%);
-  background-size: 200% 100%; animation: cv-shimmer 1.4s ease-in-out infinite;
+.cv-dots { background-image: radial-gradient(circle, color-mix(in srgb, var(--cv-ink) 16%, transparent) 1.1px, transparent 1.6px); }
+@keyframes cv-dot-wave { from { -webkit-mask-position: 0 0, 160% 0; mask-position: 0 0, 160% 0; } to { -webkit-mask-position: 0 0, -60% 0; mask-position: 0 0, -60% 0; } }
+.cv-dots::after {
+  content: '';
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--cv-edge-lit) 55%, var(--cv-ink)) 1.6px, transparent 2.2px);
+  mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 35%, transparent 100%), linear-gradient(110deg, transparent 38%, #000 47%, #000 53%, transparent 62%);
+  mask-size: 100% 100%, 260% 100%; mask-repeat: no-repeat; mask-composite: intersect;
+  animation: cv-dot-wave 2.4s cubic-bezier(0.45, 0, 0.35, 1) infinite;
 }
-.cv-skeleton:nth-child(2) { animation-delay: 0.12s; }
-.cv-skeleton:nth-child(3) { animation-delay: 0.24s; }
+/* a node found from what is made from it: a ring flashing twice round its card */
+@keyframes cv-flash { 0%, 50%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } 18%, 68% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.55); } }
+.openfilm-canvas .react-flow__node.cv-flash [data-canvas-card] { animation: cv-flash 1.3s ease-out; }
 @keyframes cv-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 .cv-streaming .tiptap > :is(p, h1, h2, h3):last-child::after,
 .cv-streaming .tiptap > :is(ul, ol):last-child > li:last-child > p::after,
@@ -768,7 +766,7 @@ html[data-file-drag] iframe { pointer-events: none; }
 .cv-dblclick-ring-2 { animation-delay: 0.384s; }
 @media (prefers-reduced-motion: reduce) {
   .cv-tool, .cv-tool:active { transition: none; transform: none; }
-  .openfilm-canvas .react-flow__node.cv-born > *, .openfilm-canvas .react-flow__node.cv-born-fade > *, .cv-ripple, .cv-dblclick-arrow, .cv-dblclick-ring, .cv-swap, .cv-bar-top, .cv-bar-bottom, .cv-writing, .cv-writing::after, .cv-skeleton { animation: none; }
+  .openfilm-canvas .react-flow__node.cv-born > *, .openfilm-canvas .react-flow__node.cv-born-fade > *, .cv-ripple, .cv-dblclick-arrow, .cv-dblclick-ring, .cv-swap, .cv-bar-top, .cv-bar-bottom, .cv-dots::after, .openfilm-canvas .react-flow__node.cv-flash [data-canvas-card] { animation: none; }
   .cv-ripple { display: none; }
 }
 .openfilm-canvas .react-flow__minimap { overflow: hidden; border-radius: 12px; box-shadow: var(--cv-float-shadow); }

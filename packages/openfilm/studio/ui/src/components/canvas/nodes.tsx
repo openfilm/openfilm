@@ -11,7 +11,7 @@ import React from 'react';
 import { Handle, NodeResizeControl, NodeResizer, NodeToolbar, Position, useStore, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
   AudioLines, BookmarkPlus, Bot, Clapperboard, Download, FileQuestion, Image as ImageIcon, Layers, LayoutGrid, Loader2, Maximize2, Mic, Music, Play, Plus, Scissors,
-  Square, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
+  Square, Trash2, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { CARD_H, MAKE_MEDIA, type CanvasNode, type GroupColor } from '@/lib/canvas';
@@ -139,13 +139,11 @@ function useNumber(id: string): number {
 }
 
 /** What every node is drawn in: its name row above, its card, its sides. */
-function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card', fill, busy, onRename, pending }: {
+function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card', fill, onRename, pending }: {
   id: string; selected: boolean; icon: React.ComponentType<{ size?: number; className?: string }>; title: string; meta?: string | null;
   by?: CanvasNode['by']; note?: React.ReactNode; stack?: number; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
   /** a tint over the card (a note's color) */
   fill?: string;
-  /** being written: a light sweeping across the card */
-  busy?: boolean;
   onRename?: (title: string) => void; pending?: boolean;
 }) {
   const board = useBoard();
@@ -210,7 +208,7 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
           <div className={`absolute inset-0 translate-x-[6px] -translate-y-[5px] rotate-[1.75deg] rounded-[var(--cv-card-radius)] border bg-[var(--cv-card-2)] ${stackBorder}`} />
         </>
       ) : null}
-      <div data-canvas-card="" className={`${card} ${busy ? 'cv-writing' : ''}`} style={fill ? { backgroundImage: `linear-gradient(${fill}, ${fill})` } : undefined}>{children}</div>
+      <div data-canvas-card="" className={card} style={fill ? { backgroundImage: `linear-gradient(${fill}, ${fill})` } : undefined}>{children}</div>
       {!pending ? <Sides id={id} selected={selected} ins={ins} outs={outs} /> : null}
       {!pending && !board.readOnly && (board.single === id || board.editing === id) ? (
         <NodeResizeControl position="bottom-right" minWidth={160} minHeight={100} maxWidth={1600} maxHeight={1200}
@@ -358,8 +356,16 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
     return () => { editor.off('blur', blur); };
   }, [editor, editing]);
   const title = data.title ?? t('canvas.titles.note').replace('{n}', String(n));
-  /* written by the agent: its card at it while the words come in */
-  const busy = Boolean(board.writing?.(id));
+  /* written by the agent: veiled until its first words come, which then fill in, a caret at their end */
+  const since = board.writing?.(id);
+  const busy = since != null;
+  const start = React.useRef<string | null>(null);
+  if (!busy) start.current = null;
+  else if (start.current === null) start.current = data.text;
+  const veiled = busy && data.text === start.current;
+  const [versionsOpen, setVersionsOpen] = React.useState(false);
+  React.useEffect(() => { if (!selected) setVersionsOpen(false); }, [selected]);
+  const earlier = data.versions ?? [];
   /* named as the person calls it; an empty name goes back to its number */
   const rename = board.readOnly ? undefined : (name: string) => { board.willChange(); board.setData(id, { title: name || undefined }); };
   const open = () => { board.edit(null); setSheet(true); };
@@ -379,16 +385,73 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
         </NodeToolbar>
       ) : null}
       <Frame id={id} selected={selected} icon={TypeIcon} title={title} by={data.by} onRename={rename}
-        tone={editing || data.text ? 'quiet' : 'card'} fill={data.color ? FRAME_COLOR[data.color].fill : undefined} busy={busy}>
+        tone={editing || data.text ? 'quiet' : 'card'} fill={data.color ? FRAME_COLOR[data.color].fill : undefined}>
         {/* its words as they read: held and moved anywhere on them, scrolled once it is selected; written in, they take the pointer */}
-        {busy && !data.text.trim() ? (
-          <div role="status" aria-label={t('canvas.write.busy')} className="flex flex-col gap-3 px-5 py-5">
-            <span className="cv-skeleton w-[72%]" /><span className="cv-skeleton w-[90%]" /><span className="cv-skeleton w-[56%]" />
+        <DocView editor={editor} className={`h-full w-full px-5 py-4 ${busy ? 'cv-streaming' : ''} ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : selected ? 'nowheel overflow-y-auto' : 'overflow-hidden'}`} />
+        {veiled ? <div className="cv-veil cv-fade absolute inset-0 z-10"><div className="cv-dots" /></div> : null}
+        {busy ? (
+          /* at it: since when, and stopped here */
+          <div role="status" className="absolute left-2.5 top-2.5 z-20 flex h-7 items-center gap-2 rounded-[8px] bg-[var(--cv-float)] pl-2.5 pr-1 text-[12.5px] text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)]">
+            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--cv-edge-lit)]" />{t('canvas.write.writing')} <span className="tabular-nums text-[var(--cv-ink-2)]"><Elapsed since={since} /></span></span>
+            {board.stopWriting ? (
+              <button type="button" onClick={(event) => { event.stopPropagation(); board.stopWriting?.(id); }}
+                className="nodrag flex h-5 items-center rounded-[6px] px-1.5 text-[12px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">{t('canvas.write.stop')}</button>
+            ) : null}
           </div>
+        ) : earlier.length && selected && !board.readOnly ? (
+          <NoteVersions id={id} text={data.text} earlier={earlier} open={versionsOpen} onOpen={setVersionsOpen} />
         ) : null}
-        <DocView editor={editor} className={`h-full w-full px-5 py-4 ${busy && !data.text.trim() ? 'hidden' : ''} ${busy ? 'cv-streaming' : ''} ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : selected ? 'nowheel overflow-y-auto' : 'overflow-hidden'}`} />
       </Frame>
       {sheet ? <DocSheet name={title} text={data.text} onChange={write} onRename={rename} onClose={() => setSheet(false)} /> : null}
+    </div>
+  );
+}
+
+/**
+ * A note's versions: what it says now and the words its agent's writing took the place of, newest first. One picked
+ * takes the place of what it says now, which is kept among them; an earlier one can be removed.
+ */
+function NoteVersions({ id, text, earlier, open, onOpen }: { id: string; text: string; earlier: string[]; open: boolean; onOpen: (open: boolean) => void }) {
+  const t = useT();
+  const board = useBoard();
+  const firstLine = (words: string) => words.replace(/[#>*_`~-]/g, ' ').split('\n').map((l) => l.trim()).find(Boolean) ?? t('canvas.noteVersions.empty');
+  const pick = (i: number) => {
+    board.willChange();
+    const rest = earlier.filter((_, k) => k !== i);
+    board.setData(id, { text: earlier[i], versions: text.trim() ? [...rest, text] : rest.length ? rest : undefined });
+    onOpen(false);
+  };
+  const remove = (i: number) => {
+    board.willChange();
+    const rest = earlier.filter((_, k) => k !== i);
+    board.setData(id, { versions: rest.length ? rest : undefined });
+    if (!rest.length) onOpen(false);
+  };
+  const row = 'flex h-9 w-full min-w-0 items-center gap-2 rounded-[10px] px-2.5 text-left text-[13px]';
+  return (
+    <div className="nodrag nowheel absolute right-2.5 top-2.5 z-20 flex flex-col items-end gap-1.5">
+      <button type="button" aria-expanded={open} onClick={(event) => { event.stopPropagation(); onOpen(!open); }}
+        className={`flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12.5px] shadow-[var(--cv-float-shadow)] transition ${open ? 'bg-[var(--cv-on)] text-[var(--cv-ink)]' : 'bg-[var(--cv-float)] text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
+        <Layers size={13} />{t('canvas.noteVersions.count').replace('{n}', String(earlier.length + 1))}
+      </button>
+      {open ? (
+        <div className={`${MENU} max-h-[260px] w-[240px] overflow-y-auto`} onPointerDown={(event) => event.stopPropagation()}>
+          <div className={`${row} bg-[var(--cv-float-hover)] text-[var(--cv-ink)]`}>
+            <span className="shrink-0 text-[11.5px] text-[var(--cv-edge-lit)]">{t('canvas.noteVersions.current')}</span>
+            <span className="min-w-0 flex-1 truncate">{firstLine(text)}</span>
+          </div>
+          {earlier.map((words, i) => ({ words, i })).reverse().map(({ words, i }) => (
+            <div key={`${i}:${words.length}`} className={`group/version ${row} text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]`}>
+              <button type="button" onClick={() => pick(i)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <span className="shrink-0 text-[11.5px] tabular-nums text-[var(--cv-ink-3)]">{t('canvas.noteVersions.version').replace('{n}', String(i + 1))}</span>
+                <span className="min-w-0 flex-1 truncate">{firstLine(words)}</span>
+              </button>
+              <button type="button" aria-label={t('canvas.noteVersions.remove')} title={t('canvas.noteVersions.remove')} onClick={() => remove(i)}
+                className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-[var(--cv-ink-3)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] group-hover/version:flex"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

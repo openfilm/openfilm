@@ -159,7 +159,8 @@ export function readCanvasDoc(raw: unknown): CanvasDoc {
     else if (typeof n.path === 'string' && n.path) nodes.push({ ...box, ...parent, ...named, path: n.path });
     else if (typeof n.text === 'string') {
       const tint = GROUP_COLORS.find((c) => c === n.color && c !== 'gray');
-      nodes.push({ ...box, ...parent, ...named, text: n.text, ...(tint ? { color: tint } : {}) });
+      const earlier = Array.isArray(n.versions) ? n.versions.filter((v): v is string => typeof v === 'string' && v.trim().length > 0) : [];
+      nodes.push({ ...box, ...parent, ...named, text: n.text, ...(tint ? { color: tint } : {}), ...(earlier.length ? { versions: earlier } : {}) });
     }
     else if (typeof n.group === 'string') {
       const color = GROUP_COLORS.find((c) => c === n.color) ?? 'gray';

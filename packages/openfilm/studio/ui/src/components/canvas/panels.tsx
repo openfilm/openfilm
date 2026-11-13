@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  AlignLeft, ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X,
+  AlignLeft, ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -645,13 +645,21 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   );
 }
 
-/** What a note is written from, in its panel: a rounded square of it, its name on hover, a × to take it out. */
-function Tile({ label, children, onRemove, removeLabel, disabled }: { label: string; children: React.ReactNode; onRemove: () => void; removeLabel: string; disabled?: boolean }) {
+/**
+ * What a note is written from, in its panel: a rounded square of it, its name on hover; pressed, what it does (the
+ * note it comes from found on the board, a file shown); a × off its corner takes it out.
+ */
+function Tile({ label, children, onOpen, onRemove, removeLabel, disabled }: {
+  label: string; children: React.ReactNode; onOpen?: () => void; onRemove: () => void; removeLabel: string; disabled?: boolean;
+}) {
   return (
-    <div title={label} className="group/tile relative h-12 w-12 shrink-0 overflow-hidden rounded-[10px] ring-1 ring-inset ring-[var(--cv-float-line)]">
-      {children}
+    <div className="group/tile relative h-12 w-12 shrink-0">
+      <button type="button" title={label} aria-label={label} onClick={onOpen} disabled={!onOpen}
+        className="cv-tool block h-full w-full overflow-hidden rounded-[10px] ring-1 ring-inset ring-[var(--cv-float-line)] transition enabled:hover:ring-[var(--cv-ring)] disabled:cursor-default">
+        {children}
+      </button>
       <button type="button" aria-label={removeLabel} disabled={disabled} onClick={onRemove}
-        className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-black/70 text-white group-hover/tile:flex disabled:hidden"><X size={10} /></button>
+        className="absolute -right-1.5 -top-1.5 z-10 hidden h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] shadow-[0_0_0_2px_var(--cv-float)] group-hover/tile:flex disabled:!hidden"><X size={11} strokeWidth={2.5} /></button>
     </div>
   );
 }
@@ -707,24 +715,33 @@ export function NotePanel({ id }: { id: string }) {
     void write(id, ask.trim(), attachments).then((why) => {
       setSending(false);
       setError(why);
-      if (!why) { setAsk(''); setAttachments([]); setExpanded(false); }
     });
   };
   return (
     <Composer id={id} shown={shown} expanded={expanded} setExpanded={setExpanded}>
         {/* what it is written from, each a tile left of the +: the words wired in, then the files added here */}
         <div className="flex min-h-12 flex-wrap items-center gap-2 pr-9">
+          {/* a note wired in: a little page of its first words, a T in its corner; pressed, the note found on the board */}
           {texts.map((input) => (
-            <Tile key={input.edge} label={input.text || t('canvas.kinds.note')} onRemove={() => board.unwire(input.edge)} removeLabel={t('canvas.removeWire')}>
-              <span className="flex h-full w-full items-center justify-center bg-[linear-gradient(140deg,#8ea4c8,#5b6f94)] text-white"><AlignLeft size={20} strokeWidth={2} /></span>
+            <Tile key={input.edge} label={`${t('canvas.write.locate')} · ${(input.text || t('canvas.kinds.note')).slice(0, 80)}`} onOpen={board.locate ? () => board.locate?.(input.from) : undefined}
+              onRemove={() => board.unwire(input.edge)} removeLabel={t('canvas.removeWire')}>
+              <span className="relative block h-full w-full bg-[var(--cv-card)] px-1.5 pt-1.5 text-left">
+                <span className="line-clamp-3 block break-all text-[7.5px] leading-[1.35] text-[var(--cv-ink-2)]">{input.text || '…'}</span>
+                <span className="absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-[var(--cv-card)] to-transparent" />
+                <span className="absolute bottom-1 right-1 flex h-3.5 w-3.5 items-center justify-center rounded-[4px] bg-[var(--cv-edge-lit)] text-white"><TypeIcon size={9} strokeWidth={2.5} /></span>
+              </span>
             </Tile>
           ))}
           {attachments.map((path) => {
             const name = path.split('/').pop() ?? path;
-            const src = thumb(board.fileOf(path));
+            const file = board.fileOf(path);
+            const src = thumb(file);
+            /* shown large when it can be: a picture, a clip, a sound */
+            const viewable = file && (file.kind === 'image' || file.kind === 'video' || file.kind === 'audio');
             const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toUpperCase().slice(0, 4) : '';
             return (
-              <Tile key={path} label={name} disabled={busy || uploading} removeLabel={`${t('canvas.remove')} ${name}`}
+              <Tile key={path} label={viewable ? `${t('canvas.write.preview')} · ${name}` : name} onOpen={viewable ? () => board.view(path) : undefined}
+                disabled={busy || uploading} removeLabel={`${t('canvas.remove')} ${name}`}
                 onRemove={() => setAttachments((current) => current.filter((item) => item !== path))}>
                 {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : (
                   <span className="flex h-full w-full flex-col items-center justify-center gap-0.5 bg-[var(--cv-chip)] text-[var(--cv-ink-2)]">

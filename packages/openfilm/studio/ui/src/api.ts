@@ -239,9 +239,9 @@ export const api = {
   canvasWrite: (id: string, prompt: string, inputs: string[], model?: HostWritingModel, attachments: string[] = []) =>
     call<{ text: string }>(`${p(id)}/canvas-write`, { method: 'POST', json: { prompt, inputs, model, attachments } }),
   /** the same, each piece of the words to `onDelta` as the agent writes it; the whole at the end */
-  canvasWriteStream: async (id: string, prompt: string, inputs: string[], model: HostWritingModel | undefined, attachments: string[], onDelta: (delta: string) => void): Promise<{ text: string }> => {
+  canvasWriteStream: async (id: string, prompt: string, inputs: string[], model: HostWritingModel | undefined, attachments: string[], onDelta: (delta: string) => void, signal?: AbortSignal): Promise<{ text: string }> => {
     const res = await fetch(`/api/${p(id)}/canvas-write`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, inputs, model, attachments, stream: true }),
+      method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, inputs, model, attachments, stream: true }),
     });
     if (res.status === 401) markLocked();
     if (!res.ok || !res.body) {

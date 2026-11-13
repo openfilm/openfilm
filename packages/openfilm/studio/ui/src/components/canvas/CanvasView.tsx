@@ -43,7 +43,7 @@ import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
   BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
-  type Board, type BoardNode, type FileNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type Side, type SpawnKind, type UploadStatus,
+  type Board, type BoardNode, type FileNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type NoteData, type Side, type SpawnKind, type UploadStatus,
 } from './board';
 import { BottomToolbar, CornerBar, Dots, EmptyBoard, Outline, Ripples, ToolCorner, Viewer } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
@@ -128,7 +128,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   const [tool, setTool] = React.useState<'select' | 'hand'>('select');
   /* the nodes just added, which come in with a small pop (or, wired as they come, a fade, so the wire meets them where
      they stay), and the rings where the board was double-clicked */
-  const [born, setBorn] = React.useState<ReadonlyMap<string, 'cv-born' | 'cv-born-fade'>>(() => new Map());
+  const [born, setBorn] = React.useState<ReadonlyMap<string, 'cv-born' | 'cv-born-fade' | 'cv-flash'>>(() => new Map());
   const [taps, setTaps] = React.useState<Array<{ id: number; x: number; y: number }>>([]);
   const [outline, setOutline] = React.useState(false);
   const [map, setMap] = React.useState(false);
@@ -743,39 +743,49 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
   /** a group kept as a template, by its name, with what is in it and the wires between them */
   /* a text node written by the person's agent: the words wired in (and its own, to rework) go with what they ask */
-  /** the text nodes being written by the agent now */
-  const [writing, setWriting] = React.useState<ReadonlySet<string>>(new Set());
+  /** the text nodes being written by the agent now (since when), and how each is stopped */
+  const [writing, setWriting] = React.useState<ReadonlyMap<string, number>>(new Map());
+  const writers = React.useRef(new Map<string, AbortController>());
   const write = async (id: string, ask: string, attachments: string[]): Promise<string | null> => {
     const inputs = edges.filter((e) => e.target === id).map((e) => nodes.find((n) => n.id === e.source))
       .flatMap((n) => (n?.type === 'note' && n.data.text.trim() ? [n.data.text] : []));
     const own = nodes.find((n) => n.id === id);
-    const mine = own?.type === 'note' ? own.data.text.trim() : '';
-    setWriting((ids) => new Set(ids).add(id));
+    const before = own?.type === 'note' ? own.data.text : '';
+    const mine = before.trim();
+    const stop = new AbortController();
+    writers.current.set(id, stop);
+    setWriting((ids) => new Map(ids).set(id, Date.now()));
+    /* the words onto the card as the agent writes them, in place of what it said before; one undo takes them all back */
+    const put = (data: Partial<NoteData>) => setNodes((all) => all.map((n) => (n.id === id && n.type === 'note' ? { ...n, data: { ...n.data, ...data } } : n)));
+    let said = '';
     try {
       const model = studioHost?.canvasWriting?.selection();
       if (model === null) return t('canvas.write.noAgent');
-      /* the words onto the card as the agent writes them, in place of what it said before; one undo takes them all back */
-      const put = (text: string) => setNodes((all) => all.map((n) => (n.id === id && n.type === 'note' ? { ...n, data: { ...n.data, text } } : n)));
-      let said = '';
       willChange();
-      try {
-        const { text } = await api.canvasWriteStream(projectId, ask, mine ? [...inputs, `(the node's words now, to rework) ${mine}`] : inputs, model, attachments, (delta) => {
-          said += delta;
-          put(said.replace(/^\s+/, ''));
-        });
-        put(text || mine);
-      } catch (error) {
-        /* not written after all: its words as they were */
-        if (said) put(own?.type === 'note' ? own.data.text : '');
-        throw error;
-      }
+      const { text } = await api.canvasWriteStream(projectId, ask, mine ? [...inputs, `(the node's words now, to rework) ${mine}`] : inputs, model, attachments, (delta) => {
+        said += delta;
+        put({ text: said.replace(/^\s+/, '') });
+      }, stop.signal);
+      /* written: what it said before kept as an earlier version */
+      const kept = own?.type === 'note' ? own.data.versions ?? [] : [];
+      put({ text: text || before, ...(text && mine ? { versions: [...kept.filter((v) => v !== before), before].slice(-20) } : {}) });
       return null;
     } catch (error) {
+      /* stopped, or not written after all: its words as they were */
+      if (said) put({ text: before });
+      if (stop.signal.aborted) return null;
       if (error instanceof ApiError && error.body.code === 'no-agent') return t('canvas.write.noAgent');
       return error instanceof Error ? error.message : String(error);
     } finally {
-      setWriting((ids) => { const next = new Set(ids); next.delete(id); return next; });
+      writers.current.delete(id);
+      setWriting((ids) => { const next = new Map(ids); next.delete(id); return next; });
     }
+  };
+  /** a node brought into view (the board's zoom kept) and flashed */
+  const locate = (id: string) => {
+    void flow.fitView({ nodes: [{ id }], padding: 0.5, minZoom: flow.getZoom(), maxZoom: flow.getZoom(), duration: 300 });
+    setBorn((ids) => new Map(ids).set(id, 'cv-flash'));
+    window.setTimeout(() => setBorn((ids) => { if (ids.get(id) !== 'cv-flash') return ids; const next = new Map(ids); next.delete(id); return next; }), 1400);
   };
 
   /* ── the libraries: a style or an effect onto the board, a character's pictures, a new character made ── */
@@ -1074,7 +1084,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     redraw: (id, path) => setRedraw({ id, path }),
     tidy: (group) => { willChange(); setNodes((list) => tidyGroup(list, group)); },
     openSettings: onOpenSettings,
-    ...(chat ? { write, writing: (id: string) => writing.has(id), uploadWritingFiles: onImportFiles } : {}),
+    ...(chat ? { write, writing: (id: string) => writing.get(id), stopWriting: (id: string) => writers.current.get(id)?.abort(), uploadWritingFiles: onImportFiles } : {}),
+    locate,
   }), [chat, writing, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal, onError, onImportFiles, activeUploads, shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onDrop = (event: React.DragEvent) => {

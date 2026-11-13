@@ -4,13 +4,13 @@
  * and what leads to what drawn. Studio's own, beside film.html, not in it (SPEC §1: an editor's own state lives in
  * `.film/`): nothing on it is in the film until it is put on the timeline.
  *
- * A node is a note (`text`, its `title` and a `color` tinting it), a file of the project (`path`, project-relative), a
- * group (`group`, its name, and a `color`) or a node that makes something with the person's services (`make`: image,
- * video, sfx or music; its `prompt`, `via` and `model`, its `opts`, the files it made, `versions`, the one shown
- * `path`, and `made` what it was asked when it last made one), at `x`, `y` on the board, `w` wide (and `h` high, for a
- * note or a group). A node in a group names it (`parent`), and its `x`, `y` are from the group's corner; one an agent
- * put there names it (`by`). A cut (`cut`) is the order what is wired into it goes onto the timeline in. An edge goes
- * from one node to another, `order` its place among those into that node.
+ * A node is a note (`text`, its `title`, a `color` tinting it, and its earlier words, `versions`), a file of the
+ * project (`path`, project-relative), a group (`group`, its name, and a `color`) or a node that makes something with
+ * the person's services (`make`: image, video, sfx or music; its `prompt`, `via` and `model`, its `opts`, the files it
+ * made, `versions`, the one shown `path`, and `made` what it was asked when it last made one), at `x`, `y` on the
+ * board, `w` wide (and `h` high, for a note or a group). A node in a group names it (`parent`), and its `x`, `y` are
+ * from the group's corner; one an agent put there names it (`by`). A cut (`cut`) is the order what is wired into it
+ * goes onto the timeline in. An edge goes from one node to another, `order` its place among those into that node.
  *
  *   GET canvas                    → { nodes, edges, name? }
  *   PUT canvas { nodes, edges }   → { nodes, edges, name? }: the whole board, as kept (the board in Studio writes it)
@@ -65,7 +65,7 @@ const VERSIONS_MAX = 50;
 const SHORT_MAX = 120;
 
 /**
- * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, z?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string, title?: string, color?: string } | { path: string, title?: string } | { group: string, color: string } | { make: string, title?: string } | { cut: true })} CanvasNode
+ * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, z?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string, title?: string, color?: string, versions?: string[] } | { path: string, title?: string } | { group: string, color: string } | { make: string, title?: string } | { cut: true })} CanvasNode
  * @typedef {{ id: string, from: string, to: string, order?: number }} CanvasEdge
  * @typedef {{ nodes: CanvasNode[], edges: CanvasEdge[], name?: string }} Canvas
  */
@@ -107,7 +107,9 @@ export function parseCanvas(raw) {
     else if (typeof n.text === 'string') {
       /* a note's color is a tint over its card: none is its own */
       const tint = n.color !== 'gray' && GROUP_COLORS.includes(String(n.color)) ? { color: String(n.color) } : {};
-      out.nodes.push({ ...box, ...parent, ...named, text: n.text.slice(0, TEXT_MAX), ...tint });
+      /* a note's earlier words, the ones its agent's writing took the place of (oldest first) */
+      const earlier = (Array.isArray(n.versions) ? n.versions : []).filter((v) => typeof v === 'string' && v.trim()).slice(-VERSIONS_MAX).map((v) => v.slice(0, TEXT_MAX));
+      out.nodes.push({ ...box, ...parent, ...named, text: n.text.slice(0, TEXT_MAX), ...tint, ...(earlier.length ? { versions: earlier } : {}) });
     }
     else if (typeof n.group === 'string') {
       out.nodes.push({ ...box, ...readBy(n.by), group: n.group.trim().slice(0, NAME_MAX), color: GROUP_COLORS.includes(String(n.color)) ? String(n.color) : 'gray' });
