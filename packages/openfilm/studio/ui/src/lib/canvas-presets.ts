@@ -1,11 +1,13 @@
 /**
- * Ways to ask for a picture that come with the canvas ("presets"): each a set of words put before the node's own (a
- * character's turnaround, a 2×2 of what happens next, the same moment from nine cameras…), the shape and quality it
- * is best made at, and whether it is made from a picture wired in. Picked in a picture node's panel, it shows as a tag
- * before its words and names the node. Their words are OpenFilm's own, in English: every picture model reads it.
+ * Ways to ask for a picture that come with the canvas ("presets"), as the picture models' guides lay out what people
+ * make most: a story told in frames, a character's sheets, a place, a product, a design, a picture retouched. Each is a
+ * set of words put before the node's own, the shape and quality it is best made at, and whether it is made from a
+ * picture wired in. Picked in a picture node's panel (each shown by a picture of what it makes,
+ * components/canvas/presets/), it shows as a tag before its words and names the node. Their words are OpenFilm's own,
+ * in English: every picture model reads it.
  */
 /** `character`: the pictures a new character is made of (canvas libraries), not offered in the presets' list */
-export type PresetGroup = 'story' | 'texture' | 'camera' | 'design' | 'character';
+export type PresetGroup = 'story' | 'role' | 'scene' | 'product' | 'design' | 'edit' | 'character';
 
 export interface CanvasPreset {
   id: string;
@@ -17,7 +19,7 @@ export interface CanvasPreset {
   prompt: string;
 }
 
-export const PRESET_GROUPS: PresetGroup[] = ['story', 'texture', 'camera', 'design'];
+export const PRESET_GROUPS: PresetGroup[] = ['story', 'role', 'scene', 'product', 'design', 'edit'];
 
 export const PRESETS: CanvasPreset[] = [
   { id: 'storyboard', group: 'story', ratio: '16:9', prompt: 'A storyboard sheet of six consecutive shots of this scene in a 3×2 grid with thin white gutters, each panel a clear cinematic frame with its own camera angle, the same characters, setting, costume and light throughout, readable as one continuous sequence.' },
@@ -25,19 +27,33 @@ export const PRESETS: CanvasPreset[] = [
   { id: 'next4', group: 'story', fromPicture: true, ratio: '16:9', prompt: 'A 2×2 grid of the four moments that follow the reference picture, in order from top left, the same characters, setting, lighting and style, the story moving forward naturally, thin white gutters.' },
   { id: 'later3', group: 'story', fromPicture: true, ratio: '16:9', prompt: 'The same scene three seconds after the reference picture: continue the action naturally, keep the characters, their clothes, the setting, the light and the camera exactly as they are.' },
   { id: 'earlier5', group: 'story', fromPicture: true, ratio: '16:9', prompt: 'The same scene five seconds before the reference picture: show what led to it, keep the characters, their clothes, the setting, the light and the camera exactly as they are.' },
-  { id: 'skin', group: 'texture', fromPicture: true, ratio: '16:9', quality: 'high', prompt: 'Retouch the person in the reference picture to look like a real photograph: natural skin texture with fine pores and soft highlights, real hair strands, no plastic smoothing; keep the face, expression, pose, clothes and framing exactly the same.' },
-  { id: 'cinematic', group: 'texture', fromPicture: true, ratio: '16:9', quality: 'high', prompt: 'Relight the reference picture as a film still: motivated cinematic lighting with soft key light and gentle contrast, natural color grading and subtle film grain; keep every person, object, pose and the framing exactly the same.' },
-  { id: 'panorama', group: 'camera', ratio: '2:1', quality: 'high', prompt: 'A seamless 360° equirectangular panorama of this place, eye level, the horizon straight across the middle, even exposure all around, no people in the way.' },
-  { id: 'cameras9', group: 'camera', ratio: '1:1', quality: 'high', prompt: 'A 3×3 grid of the same moment seen from nine camera positions — wide, medium and close; eye level, high and low; front, three-quarter and side — the same characters, pose, setting and light in every panel, thin white gutters.' },
-  { id: 'turnaround', group: 'design', ratio: '21:9', quality: 'high', prompt: 'A character turnaround sheet on a plain white background: full-body front, side and back views side by side and a front close-up portrait, the same face, hair, body and outfit in every view, even studio light, no text.' },
-  { id: 'faces', group: 'design', ratio: '21:9', quality: 'high', prompt: 'A head turnaround of the same person on a plain white background: front, three-quarter and profile close-ups side by side, neutral expression, the same face, hair and skin in every view, even studio light, no text.' },
-  { id: 'character', group: 'design', ratio: '16:9', quality: 'high', prompt: 'A character design sheet: a full-body front view, four expression close-ups, details of the outfit, shoes and props, and a small color palette, neatly laid out on a light background, the same person throughout.' },
-  { id: 'scene', group: 'design', ratio: '16:9', quality: 'high', prompt: 'An environment design sheet of this place: one wide establishing view and three detail views of its key spots, consistent architecture, materials and light, neatly laid out on a light background.' },
+  { id: 'skin', group: 'edit', fromPicture: true, ratio: '16:9', quality: 'high', prompt: 'Retouch the person in the reference picture to look like a real photograph: natural skin texture with fine pores and soft highlights, real hair strands, no plastic smoothing; keep the face, expression, pose, clothes and framing exactly the same.' },
+  { id: 'cinematic', group: 'edit', fromPicture: true, ratio: '16:9', quality: 'high', prompt: 'Relight the reference picture as a film still: motivated cinematic lighting with soft key light and gentle contrast, natural color grading and subtle film grain; keep every person, object, pose and the framing exactly the same.' },
+  { id: 'panorama', group: 'scene', ratio: '2:1', quality: 'high', prompt: 'A seamless 360° equirectangular panorama of this place, eye level, the horizon straight across the middle, even exposure all around, no people in the way.' },
+  { id: 'cameras9', group: 'story', ratio: '1:1', quality: 'high', prompt: 'A 3×3 grid of the same moment seen from nine camera positions — wide, medium and close; eye level, high and low; front, three-quarter and side — the same characters, pose, setting and light in every panel, thin white gutters.' },
+  { id: 'turnaround', group: 'role', ratio: '21:9', quality: 'high', prompt: 'A character turnaround sheet on a plain white background: full-body front, side and back views side by side and a front close-up portrait, the same face, hair, body and outfit in every view, even studio light, no text.' },
+  { id: 'faces', group: 'role', ratio: '21:9', quality: 'high', prompt: 'A head turnaround of the same person on a plain white background: front, three-quarter and profile close-ups side by side, neutral expression, the same face, hair and skin in every view, even studio light, no text.' },
+  { id: 'character', group: 'role', ratio: '16:9', quality: 'high', prompt: 'A character design sheet: a full-body front view, four expression close-ups, details of the outfit, shoes and props, and a small color palette, neatly laid out on a light background, the same person throughout.' },
+  { id: 'scene', group: 'scene', ratio: '16:9', quality: 'high', prompt: 'An environment design sheet of this place: one wide establishing view and three detail views of its key spots, consistent architecture, materials and light, neatly laid out on a light background.' },
   { id: 'portrait', group: 'character', ratio: '1:1', quality: 'high', prompt: 'A head-and-shoulders portrait of this character facing the camera on a plain white background, neutral expression, even studio light, sharp detail, no text.' },
   { id: 'fullBody', group: 'character', ratio: '9:16', quality: 'high', prompt: 'A full-body picture of this character standing facing the camera on a plain white background, relaxed pose, the whole outfit and shoes visible, even studio light, no text.' },
-  { id: 'expressions', group: 'character', ratio: '1:1', quality: 'high', prompt: 'A 3×3 grid of close-ups of this character showing nine expressions — calm, happy, laughing, sad, angry, surprised, scared, thinking, tired — the same face, hair and light in every panel, plain white background, thin white gutters, no text.' },
+  { id: 'expressions', group: 'role', ratio: '1:1', quality: 'high', prompt: 'A 3×3 grid of close-ups of this character showing nine expressions — calm, happy, laughing, sad, angry, surprised, scared, thinking, tired — the same face, hair and light in every panel, plain white background, thin white gutters, no text.' },
   { id: 'turnaround16', group: 'character', ratio: '16:9', quality: 'high', prompt: 'A turnaround sheet of this character on a plain white background: full-body front, three-quarter, side and back views in a row and three head close-ups from different angles, the same face, hair and outfit in every view, even studio light, no text.' },
-  { id: 'product', group: 'design', ratio: '16:9', quality: 'high', prompt: 'A product design sheet on a plain white background: front, side, back and three-quarter views of the same product, even studio light, accurate proportions and materials, no text.' },
+  { id: 'product', group: 'product', ratio: '16:9', quality: 'high', prompt: 'A product design sheet on a plain white background: front, side, back and three-quarter views of the same product, even studio light, accurate proportions and materials, no text.' },
+  { id: 'outfit', group: 'role', fromPicture: true, ratio: '3:4', quality: 'high', prompt: 'Keep the person in the reference picture exactly the same (face, hair, body, pose and framing) and change only what they wear, to the outfit the words below describe, fitted naturally and lit like the rest of the picture.' },
+  { id: 'isometric', group: 'scene', ratio: '1:1', quality: 'high', prompt: 'An isometric miniature diorama of this place on a small floating square base: tiny detailed buildings, props and people, soft studio light, clean pastel background, tilt-shift detail.' },
+  { id: 'concept', group: 'scene', ratio: '16:9', quality: 'high', prompt: 'A cinematic concept art keyframe of this scene: dramatic scale and composition, atmospheric light and weather, painterly matte-painting finish.' },
+  { id: 'whiteShot', group: 'product', ratio: '1:1', quality: 'high', prompt: 'An e-commerce hero photograph of this product centered on a pure white seamless background with a soft shadow beneath, crisp even studio light, color accurate; keep its shape, color, label and proportions exactly.' },
+  { id: 'adShot', group: 'product', ratio: '3:4', quality: 'high', prompt: 'A premium advertising photograph of this product in a styled scene that suits it, dramatic rim light, rich materials and props, shallow depth of field; keep its shape, color, label and proportions exactly.' },
+  { id: 'exploded', group: 'product', ratio: '3:4', quality: 'high', prompt: 'A clean technical exploded view of this product: its parts separated along one axis in the order they assemble, white background, product-render quality, no text.' },
+  { id: 'poster', group: 'design', ratio: '2:3', quality: 'high', prompt: 'A cinematic movie poster of this: bold minimalist composition, one strong central image, dramatic light, and the title the words below give set in elegant type with generous space around it; every word spelled exactly.' },
+  { id: 'stickers', group: 'design', ratio: '1:1', quality: 'high', prompt: 'A die-cut sticker sheet: eight cute sticker illustrations of this subject in different poses and moods, each with a thick white border, flat cartoon style, light gray background, no text.' },
+  { id: 'infographic', group: 'design', ratio: '2:3', quality: 'high', prompt: 'A clean editorial infographic explaining this: one clear central illustration with numbered callouts, a short title, few words, every word spelled exactly, flat style, generous white space.' },
+  { id: 'cover', group: 'design', ratio: '16:9', quality: 'high', prompt: 'A bold video thumbnail for this: one expressive subject large in the foreground, a clear focal point, high contrast and vivid color, and the short headline the words below give in thick letters with an outline, readable at a small size.' },
+  { id: 'restore', group: 'edit', fromPicture: true, ratio: '4:3', quality: 'high', prompt: 'Restore the old photograph in the reference picture: remove scratches, dust, creases and stains, recover sharpness and detail, and color it naturally; keep every face, person and object exactly as they are.' },
+  { id: 'colorize', group: 'edit', fromPicture: true, ratio: '4:3', quality: 'high', prompt: 'Color the line art in the reference picture: clean colors with soft shading and light; keep every line, shape and the composition exactly as drawn.' },
+  { id: 'realistic', group: 'edit', fromPicture: true, ratio: '3:4', quality: 'high', prompt: 'Turn the reference picture into a realistic photograph: real skin, hair, fabric and light; keep the people, their features, poses, clothes and the framing exactly the same.' },
+  { id: 'background', group: 'edit', fromPicture: true, ratio: '3:4', quality: 'high', prompt: 'Keep the subject of the reference picture exactly as it is (face, body, pose, clothes) and put it in the place the words below describe, with matching light, shadows and perspective.' },
 ];
 
 export const presetOf = (id: string | undefined): CanvasPreset | undefined => (id ? PRESETS.find((p) => p.id === id) : undefined);

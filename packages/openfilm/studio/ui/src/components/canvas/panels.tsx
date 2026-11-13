@@ -7,11 +7,15 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, Upload,
+  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, Upload, Image as ImageIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
-import { PRESETS, PRESET_GROUPS, presetOf, type CanvasPreset } from '@/lib/canvas-presets';
+import { PRESETS, PRESET_GROUPS, presetOf, type CanvasPreset, type PresetGroup } from '@/lib/canvas-presets';
+
+/** each preset's picture of what it makes (made for OpenFilm), by its id */
+const PRESET_PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./presets/*.jpg', { eager: true, import: 'default' }))
+  .map(([path, url]) => [path.slice('./presets/'.length, -'.jpg'.length), url]));
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { studioHost } from '@/lib/host';
 import { Popover } from '../Popover';
@@ -347,6 +351,10 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const [open, setOpen] = React.useState<string | null>(null);
   /* the words written in a taller box (the panel's ↗) */
   const [expanded, setExpanded] = React.useState(false);
+  const [presetTab, setPresetTab] = React.useState<PresetGroup>(() => {
+    const group = presetOf(data.preset)?.group;
+    return group && PRESET_GROUPS.includes(group) ? group : PRESET_GROUPS[0]!;
+  });
   const shown = board.single === id && !board.readOnly;
   const media = MAKE_MEDIA[data.make];
   const takesPictures = media !== 'audio';
@@ -424,26 +432,37 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
       <button type="button" className={`${PICK} w-full`} onClick={() => setOpen('assets')}><Images size={15} />{t('canvas.panel.fromAssets')}</button>
     </div>
   );
+  /* the presets as pictures of what each makes, a kind at a time */
   const presetMenu = (
-    <div className={`grid w-[520px] grid-cols-2 gap-x-3 p-3 ${CARD}`}>
-      {[PRESET_GROUPS.slice(0, 2), PRESET_GROUPS.slice(2)].map((column, ci) => (
-        <div key={ci}>
-          {column.map((group) => (
-            <div key={group} className="mb-2">
-              <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-2)]">{t(`canvas.presets.groups.${group}`)}</div>
-              {PRESETS.filter((p) => p.group === group).map((p) => {
-                const off = p.fromPicture && !hasPicture;
-                return (
-                  <button key={p.id} type="button" disabled={off} onClick={() => usePreset(p)} title={off ? t('canvas.presets.needsPicture') : undefined}
-                    className={`flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-left text-[13px] transition ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]'} ${preset?.id === p.id ? 'bg-[var(--cv-float-hover)]' : ''}`}>
-                      <LayoutDashboard size={14} className="shrink-0 opacity-70" />{t(`canvas.presets.names.${p.id}`)}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      ))}
+    <div className={`w-[560px] p-3 ${CARD}`}>
+      <div className="mb-3 flex flex-wrap gap-1">
+        {PRESET_GROUPS.map((group) => (
+          <button key={group} type="button" onClick={() => setPresetTab(group)}
+            className={`h-7 rounded-[8px] px-2.5 text-[13px] transition ${group === presetTab ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
+            {t(`canvas.presets.groups.${group}`)}
+          </button>
+        ))}
+      </div>
+      <div className="grid max-h-[400px] grid-cols-3 gap-x-2.5 gap-y-3 overflow-y-auto">
+        {PRESETS.filter((p) => p.group === presetTab).map((p) => {
+          const off = p.fromPicture && !hasPicture;
+          return (
+            <button key={p.id} type="button" disabled={off} onClick={() => usePreset(p)} title={off ? t('canvas.presets.needsPicture') : undefined}
+              className="group/preset min-w-0 text-left disabled:cursor-not-allowed">
+              <span className={`relative block aspect-[3/2] overflow-hidden rounded-[10px] bg-[var(--cv-chip)] ${preset?.id === p.id ? 'ring-2 ring-[var(--cv-ring)]' : 'ring-1 ring-inset ring-[var(--cv-float-line)]'}`}>
+                {PRESET_PICTURES[p.id] ? <img src={PRESET_PICTURES[p.id]} alt="" draggable={false} loading="lazy"
+                  className={`h-full w-full object-cover transition duration-300 ${off ? 'opacity-40' : 'group-hover/preset:scale-[1.04]'}`} /> : null}
+                {p.fromPicture ? (
+                  <span className="absolute left-1.5 top-1.5 flex h-5 items-center gap-1 rounded-[6px] bg-black/60 px-1.5 text-[10.5px] text-white backdrop-blur-sm">
+                    <ImageIcon size={11} />{t('canvas.presets.fromPicture')}
+                  </span>
+                ) : null}
+              </span>
+              <span className={`mt-1.5 block truncate px-0.5 text-[13px] ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)]'}`}>{t(`canvas.presets.names.${p.id}`)}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
   return (
