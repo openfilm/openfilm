@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  AlignLeft, ArrowUp, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X,
+  AlignLeft, ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -20,6 +20,7 @@ import { modelTime, timeLabel, useBoard, type Choice, type MakeData } from './bo
 import { splitGrid } from './pixels';
 import { ProviderMark } from '../settings/ProviderMark';
 import { useDraft } from './words';
+import { DocSheet } from './doc';
 import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
 import { VoiceId, VoicePicker, defaultVoice, serviceOf, voicesOf } from './voices';
 import { WRITING_ATTACHMENT_ACCEPT, WRITING_ATTACHMENT_LIMIT, writingAttachmentKind } from '../../../../../src/canvas-attachments.mjs';
@@ -36,7 +37,7 @@ const OPTION_OFF = 'bg-[var(--cv-chip)] text-[var(--cv-ink-2)] hover:bg-[var(--c
 const OPTION_TITLE = 'mb-1.5 text-[11.5px] text-[var(--cv-ink-3)]';
 const PICK = 'flex h-8 min-w-0 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
 /** the panel under a selected node: wider and rounder than the menus, a hairline round it */
-const PANEL = 'cv-pop relative rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
+const PANEL = 'cv-bar-bottom relative rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
 const PROMPT = 'mt-2.5 block max-h-[42vh] w-full resize-none bg-transparent px-1 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]';
 const COMPOSER_FOOTER = 'mt-1 flex min-w-0 items-center gap-0.5';
 const SEND = 'flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]';
@@ -92,7 +93,7 @@ export function SelectionToolbar({ ids, onGroup, onUngroup, onDuplicate, onRemov
   const action = 'flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]';
   return (
     <NodeToolbar nodeId={ids} isVisible position={Position.Top} offset={Math.min(32, top - 48)} style={{ zIndex: 4 }}>
-      <div data-canvas-selection-toolbar="" role="group" className={`nodrag nopan flex w-max items-center gap-0.5 p-1 ${CARD}`}>
+      <div data-canvas-selection-toolbar="" role="group" className={`nodrag nopan flex w-max items-center gap-0.5 p-1 ${CARD} cv-bar-top`}>
         {onGroup ? <button type="button" className={action} onClick={onGroup}><Group size={15} />{t('canvas.groupThem')}</button> : null}
         {onUngroup ? <button type="button" className={action} onClick={onUngroup}><Ungroup size={15} />{t('canvas.ungroup')}</button> : null}
         <Tooltip label={t('canvas.duplicate')}>
@@ -118,7 +119,16 @@ export function ActionBar({ id, file }: { id: string; file: WorkspaceResource | 
   const fail = (e: unknown) => console.warn(e);
   const video = file.kind === 'video';
   const actions = (
-      <div className={`nopan flex w-max items-center gap-0.5 p-1 ${CARD} ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
+      <div className={`nopan flex w-max items-center gap-0.5 p-1 ${CARD} cv-bar-top ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
+        {/* first, the agent: what it shows made a reference in the chat, to change or make from */}
+        {board.refer ? (
+          <>
+            <Tooltip label={`${t('canvas.noteBar.toChat')} · ${MOD}L`}>
+              <button type="button" aria-label={t('canvas.noteBar.toChat')} className={icon} onClick={() => board.refer?.(id)}><MessageSquareQuote size={15} /></button>
+            </Tooltip>
+            <span className="mx-0.5 h-4 w-px bg-[var(--cv-float-line)]" />
+          </>
+        ) : null}
         {file.kind === 'image' ? (
           <>
             <button type="button" className={btn} onClick={() => board.spawn(id, 'image', { preset: 'cameras9', opts: { ratio: '1:1' } })}><Orbit size={14} />{t('canvas.actions.angles')}</button>
@@ -646,6 +656,25 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
 }
 
 /**
+ * What a note is written from, in its panel: a rounded square of it, its name on hover; pressed, what it does (the
+ * note it comes from found on the board, a file shown); a × off its corner takes it out.
+ */
+function Tile({ label, children, onOpen, onRemove, removeLabel, disabled }: {
+  label: string; children: React.ReactNode; onOpen?: () => void; onRemove: () => void; removeLabel: string; disabled?: boolean;
+}) {
+  return (
+    <div className="group/tile relative h-12 w-12 shrink-0">
+      <button type="button" title={label} aria-label={label} onClick={onOpen} disabled={!onOpen}
+        className="cv-tool block h-full w-full overflow-hidden rounded-[10px] ring-1 ring-inset ring-[var(--cv-float-line)] transition enabled:hover:ring-[var(--cv-ring)] disabled:cursor-default">
+        {children}
+      </button>
+      <button type="button" aria-label={removeLabel} disabled={disabled} onClick={onRemove}
+        className="absolute -right-1.5 -top-1.5 z-10 hidden h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] shadow-[0_0_0_2px_var(--cv-float)] group-hover/tile:flex disabled:!hidden"><X size={11} strokeWidth={2.5} /></button>
+    </div>
+  );
+}
+
+/**
  * A text node's panel (in the app with a chat): what to write, written into it by the person's own agent from that and
  * the words wired in. Its words are theirs to change after.
  */
@@ -653,7 +682,9 @@ export function NotePanel({ id }: { id: string }) {
   const t = useT();
   const board = useBoard();
   const [ask, setAsk] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
+  const [sending, setSending] = React.useState(false);
+  /* written now: sent from here, or still going after the panel was closed and opened again */
+  const busy = sending || Boolean(board.writing?.(id));
   const [uploading, setUploading] = React.useState(false);
   const [expanded, setExpanded] = React.useState(false);
   const [attachments, setAttachments] = React.useState<string[]>([]);
@@ -661,10 +692,23 @@ export function NotePanel({ id }: { id: string }) {
   const write = board.write;
   const upload = board.uploadWritingFiles;
   const Picker = studioHost?.canvasWriting?.Picker;
+  const thumb = useThumb();
+  /* what it says now goes with the ask, to rework: its panel says so */
+  const said = useStore((s) => Boolean((s.nodeLookup.get(id)?.data as { text?: string } | undefined)?.text?.trim()));
   if (!write) return null;
   const shown = board.single === id && !board.readOnly;
-  const wired = shown ? board.inputs(id).filter((i) => i.text != null).length : 0;
+  const texts = shown ? board.inputs(id).filter((i) => i.text != null) : [];
+  const wired = texts.length;
   const canSend = !busy && !uploading && Boolean(ask.trim() || wired || attachments.length);
+  /* a Markdown or text file added, read and shown as the note's own words are */
+  const [reading, setReading] = React.useState<{ name: string; text: string } | null>(null);
+  const readWords = async (path: string, name: string) => {
+    try {
+      const res = await fetch(board.sources.file(board.fileOf(path) ?? { path, mtimeMs: 0 } as WorkspaceResource));
+      if (!res.ok) throw new Error(String(res.status));
+      setReading({ name, text: await res.text() });
+    } catch { setError(t('canvas.write.unreadable')); }
+  };
   const attach = async (files: File[]) => {
     if (!upload || !files.length || uploading || busy) return;
     if (files.length + attachments.length > WRITING_ATTACHMENT_LIMIT || files.some((file) => !writingAttachmentKind(file.name))) {
@@ -686,40 +730,55 @@ export function NotePanel({ id }: { id: string }) {
   };
   const send = () => {
     if (!canSend) return;
-    setBusy(true);
+    setSending(true);
     setError(null);
     /* written: the ask is done; refused: it stays, to send again */
     void write(id, ask.trim(), attachments).then((why) => {
-      setBusy(false);
+      setSending(false);
       setError(why);
-      if (!why) { setAsk(''); setAttachments([]); setExpanded(false); }
     });
   };
   return (
     <Composer id={id} shown={shown} expanded={expanded} setExpanded={setExpanded}>
-        <div className="flex h-6 items-center gap-1 pr-9">
-          {upload ? <label className={`relative focus-within:outline ${CHIP} ${busy || uploading ? 'opacity-60' : 'cursor-pointer'}`} title={t('canvas.write.attach')}>
+        {/* what it is written from, each a tile left of the +: the words wired in, then the files added here */}
+        <div className="flex min-h-12 flex-wrap items-center gap-2 pr-9">
+          {/* a note wired in: its kind's mark; pressed, the note found on the board */}
+          {texts.map((input) => (
+            <Tile key={input.edge} label={`${t('canvas.write.locate')} · ${(input.text || t('canvas.kinds.note')).slice(0, 80)}`} onOpen={board.locate ? () => board.locate?.(input.from) : undefined}
+              onRemove={() => board.unwire(input.edge)} removeLabel={t('canvas.removeWire')}>
+              <span className="flex h-full w-full items-center justify-center bg-[var(--cv-chip)] text-[var(--cv-ink)]"><TypeIcon size={20} strokeWidth={1.75} /></span>
+            </Tile>
+          ))}
+          {attachments.map((path) => {
+            const name = path.split('/').pop() ?? path;
+            const file = board.fileOf(path);
+            const src = thumb(file);
+            /* shown large when it can be: a picture, a clip, a sound, words (a Markdown or text file) */
+            const viewable = file && (file.kind === 'image' || file.kind === 'video' || file.kind === 'audio');
+            const words = writingAttachmentKind(name) === 'text';
+            const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toUpperCase().slice(0, 4) : '';
+            return (
+              <Tile key={path} label={viewable || words ? `${t('canvas.write.preview')} · ${name}` : name} onOpen={viewable ? () => board.view(path) : words ? () => void readWords(path, name) : undefined}
+                disabled={busy || uploading} removeLabel={`${t('canvas.remove')} ${name}`}
+                onRemove={() => setAttachments((current) => current.filter((item) => item !== path))}>
+                {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : (
+                  <span className="flex h-full w-full flex-col items-center justify-center gap-0.5 bg-[var(--cv-chip)] text-[var(--cv-ink-2)]">
+                    <FileText size={17} strokeWidth={1.75} />{ext ? <span className="text-[9.5px] font-medium leading-none tracking-wide">{ext}</span> : null}
+                  </span>
+                )}
+              </Tile>
+            );
+          })}
+          {upload ? <label className={`cv-tool relative flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-chip)] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] focus-within:outline ${busy || uploading ? 'opacity-60' : 'cursor-pointer'}`} title={t('canvas.write.add')}>
             <input type="file" multiple accept={WRITING_ATTACHMENT_ACCEPT} disabled={busy || uploading} aria-label={t('canvas.write.attach')}
               className="absolute inset-0 size-full cursor-pointer opacity-0 disabled:cursor-default" onChange={(event) => {
                 const files = Array.from(event.currentTarget.files ?? []);
                 event.currentTarget.value = '';
                 void attach(files);
               }} />
-            <Plus size={13} />{t('canvas.panel.upload')}
+            {uploading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Plus size={20} strokeWidth={1.75} />}
           </label> : null}
-          {uploading ? <span role="status" className="truncate text-xs text-[var(--cv-label)]">{t('canvas.importUploading')}</span> : null}
         </div>
-        {attachments.length ? <div className="mt-2.5 flex max-h-24 flex-wrap gap-1 overflow-y-auto">
-          {attachments.map((path) => {
-            const name = path.split('/').pop() ?? path;
-            return <span key={path} className="inline-flex max-w-full items-center gap-1 rounded-md bg-[var(--cv-chip)] px-2 py-1 text-xs text-[var(--cv-ink-2)]">
-              <span className="truncate" title={name}>{name}</span>
-              <button type="button" disabled={busy || uploading} aria-label={`${t('canvas.remove')} ${name}`} onClick={() => setAttachments((current) => current.filter((item) => item !== path))}>
-                <X size={12} />
-              </button>
-            </span>;
-          })}
-        </div> : null}
         <textarea
           value={ask}
           rows={expanded ? 14 : 3}
@@ -730,16 +789,14 @@ export function NotePanel({ id }: { id: string }) {
             if (event.key === 'Escape') event.currentTarget.blur();
             else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); send(); }
           }}
-          placeholder={t('canvas.write.placeholder')}
+          placeholder={t(said ? 'canvas.write.rework' : 'canvas.write.placeholder')}
           className={`${PROMPT} disabled:opacity-60`}
         />
         <div className={COMPOSER_FOOTER}>
           {Picker ? <Picker triggerClassName={PICK} /> : <span className={PICK}>
             <Sparkles size={14} className="shrink-0" /><span className="truncate">{t('canvas.write.by')}</span>
           </span>}
-          {busy ? <span role="status" className="truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.write.busy')}</span> : null}
           <span className="flex-1" />
-          {wired ? <span className="mr-1 truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.write.wired').replace('{n}', String(wired))}</span> : null}
           <Tooltip label={`${t('canvas.write.run')} · ${MOD}↵`}>
             <button type="button" aria-label={t('canvas.write.run')} disabled={!canSend} onClick={send}
               className={SEND}>
@@ -748,6 +805,7 @@ export function NotePanel({ id }: { id: string }) {
           </Tooltip>
         </div>
         {error ? <div className="mt-2 select-text text-[12px] leading-snug text-red-500">{error}</div> : null}
+        {reading ? <DocSheet name={reading.name} text={reading.text} onClose={() => setReading(null)} /> : null}
     </Composer>
   );
 }
@@ -758,7 +816,7 @@ export function CutPanel({ id, count }: { id: string; count: number }) {
   const board = useBoard();
   return (
     <NodeToolbar nodeId={id} isVisible={board.single === id && !board.readOnly} position={Position.Bottom} offset={14}>
-      <div className={`nodrag nopan flex w-[min(420px,80vw)] items-center gap-3 p-3 ${CARD}`}>
+      <div className={`nodrag nopan flex w-[min(420px,80vw)] items-center gap-3 p-3 ${CARD} cv-bar-bottom`}>
         <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-[var(--cv-label)]">{count ? t('canvas.cut.how') : t('canvas.cut.waiting')}</span>
         <button type="button" disabled={!count} onClick={() => board.sendToFilm(id)}
           className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-[var(--primary)] px-4 text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-30">

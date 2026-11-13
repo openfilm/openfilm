@@ -10,21 +10,23 @@
 import React from 'react';
 import { Handle, NodeResizeControl, NodeResizer, NodeToolbar, Position, useStore, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
-  AlignLeft, AudioLines, BookmarkPlus, Bot, Clapperboard, FileQuestion, Film, Image as ImageIcon, Layers, LayoutGrid, Loader2, Mic, Music, PenLine, Play, Plus, Scissors,
-  Square, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
+  AudioLines, BookmarkPlus, Bot, Clapperboard, Download, FileQuestion, Image as ImageIcon, Layers, LayoutGrid, Loader2, Maximize2, Mic, Music, Play, Plus, Scissors,
+  MessageSquareQuote, Square, Trash2, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
-import { CARD_H, MAKE_MEDIA, NOTE_H, NOTE_W, type CanvasNode, type GroupColor } from '@/lib/canvas';
+import { CARD_H, MAKE_MEDIA, type CanvasNode, type GroupColor } from '@/lib/canvas';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Tooltip } from '../Tooltip';
 import { fileCardWidth, useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode, type UploadStatus } from './board';
 import { ActionBar, CutPanel, MakePanel, NotePanel } from './panels';
-import { Words, WritingBar, useDraft } from './words';
+import { DocSheet, DocView, FormatBar, saveText, useDoc } from './doc';
+import { MENU } from './menu-style';
 import { SoundCard } from './sound';
 import { CanvasVideo } from './video';
 
 /** below this zoom a node is only its outline (its picture, its words are not drawn) */
 export const FAR = 0.35;
+const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 export const farSelector = (s: { transform: [number, number, number] }) => s.transform[2] < FAR;
 
 export const KIND_ICON = { video: Video, image: ImageIcon, audio: Music, mg: Clapperboard, other: FileQuestion } as const;
@@ -138,9 +140,11 @@ function useNumber(id: string): number {
 }
 
 /** What every node is drawn in: its name row above, its card, its sides. */
-function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card', onRename, pending }: {
+function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card', fill, onRename, pending }: {
   id: string; selected: boolean; icon: React.ComponentType<{ size?: number; className?: string }>; title: string; meta?: string | null;
   by?: CanvasNode['by']; note?: React.ReactNode; stack?: number; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
+  /** a tint over the card (a note's color) */
+  fill?: string;
   onRename?: (title: string) => void; pending?: boolean;
 }) {
   const board = useBoard();
@@ -182,15 +186,17 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
                 if (event.key === 'Escape') cancel.current = true;
                 if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur();
               }}
-              className="nodrag min-w-0 flex-1 rounded bg-[var(--cv-float)] px-1 text-[var(--cv-ink)] outline outline-[var(--cv-ring)]" />
+              /* as wide as its words, to a limit */
+              size={Math.max(2, draft.length)}
+              className="nodrag min-w-[3ch] max-w-[240px] rounded bg-[var(--cv-float)] px-1 text-[var(--cv-ink)] outline outline-[var(--cv-ring)] [field-sizing:content]" />
           ) : onRename ? (
-            <span data-canvas-title="" role="button" tabIndex={0} title={t('canvas.video.renameHint')} className="truncate rounded-sm focus-visible:outline"
+            <span data-canvas-title="" role="button" tabIndex={0} title={t('canvas.video.renameHint')} className="max-w-[240px] truncate rounded-sm focus-visible:outline"
               onDoubleClick={(event) => { event.stopPropagation(); rename(); }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); event.stopPropagation(); rename(); }
               }}>{title}</span>
-          ) : <span className="truncate">{title}</span>}
-          {draft === null ? <span className="flex-1" /> : null}
+          ) : <span className="max-w-[240px] truncate">{title}</span>}
+          <span className="flex-1" />
           {note}
           {by ? <ByAgent by={by} /> : null}
           {meta ? <span className="shrink-0 tabular-nums">{meta}</span> : null}
@@ -203,7 +209,7 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
           <div className={`absolute inset-0 translate-x-[6px] -translate-y-[5px] rotate-[1.75deg] rounded-[var(--cv-card-radius)] border bg-[var(--cv-card-2)] ${stackBorder}`} />
         </>
       ) : null}
-      <div data-canvas-card="" className={card}>{children}</div>
+      <div data-canvas-card="" className={card} style={fill ? { backgroundImage: `linear-gradient(${fill}, ${fill})` } : undefined}>{children}</div>
       {!pending ? <Sides id={id} selected={selected} ins={ins} outs={outs} /> : null}
       {!pending && !board.readOnly && (board.single === id || board.editing === id) ? (
         <NodeResizeControl position="bottom-right" minWidth={160} minHeight={100} maxWidth={1600} maxHeight={1200}
@@ -315,14 +321,16 @@ export function FileNodeView({ id, data, selected }: NodeProps<FileNode>) {
 }
 
 /**
- * Words on the board ("Text"). New, it is square and offers what to start with: writing in it, or a picture, a clip,
- * music made from it. Written in, it is a box of words; a double click writes in it, clicking away is done.
+ * Words on the board ("Text"): a document, empty until written in. A double click writes in it, with the bar over it
+ * that sets the words; clicking away or Escape is done. Selected, a bar over it: its color, the note opened large, its
+ * words saved as a file.
  */
-export function NoteNodeView({ id, data, selected, width, height }: NodeProps<NoteNode>) {
+export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
   const t = useT();
   const board = useBoard();
   const n = useNumber(id);
-  const editing = board.editing === id;
+  const editing = board.editing === id && !board.readOnly;
+  const [sheet, setSheet] = React.useState(false);
   /* empty, it says what to write for what it is wired into (a picture, a clip, a sound) */
   const feeds = useStore((s) => {
     for (const e of s.edges) {
@@ -332,59 +340,166 @@ export function NoteNodeView({ id, data, selected, width, height }: NodeProps<No
     }
     return null;
   });
-  const hint = feeds ? t(`canvas.noteFor.${feeds}`) : t('canvas.notePlaceholder');
-  /* to write in: a box of words (a new, square one shrinks to it) */
-  const write = () => {
-    if (board.readOnly) return;
-    if (width === NOTE_W && height === CARD_H) board.resize(id, { w: NOTE_W, h: NOTE_H });
-    board.edit(id);
-  };
-  const fresh = !data.text && !editing && !feeds;
-  const area = React.useRef<HTMLTextAreaElement>(null);
-  /* the bar over it pressed: the words stay open to write in */
-  const barPressed = React.useRef(false);
-  const words = useDraft(data.text, (text) => board.setData(id, { text }));
+  const placeholder = feeds ? t(`canvas.noteFor.${feeds}`) : editing ? t('canvas.words.placeholder') : t('canvas.noteEmpty');
+  const write = (text: string) => board.setData(id, { text });
+  const editor = useDoc({ text: data.text, editable: editing, placeholder, onChange: write });
+  /* written in: the caret where the words end; done when the focus goes anywhere but the bar over it */
+  const stop = React.useRef(() => board.edit(null));
+  stop.current = () => board.edit(null);
+  React.useEffect(() => {
+    if (!editor || !editing) return undefined;
+    editor.commands.focus('end');
+    const blur = ({ event }: { event: FocusEvent }) => {
+      if ((event.relatedTarget as HTMLElement | null)?.closest?.('[data-writing-bar]')) return;
+      stop.current();
+    };
+    editor.on('blur', blur);
+    return () => { editor.off('blur', blur); };
+  }, [editor, editing]);
+  const title = data.title ?? t('canvas.titles.note').replace('{n}', String(n));
+  /* written by the agent: veiled until its first words come, which then fill in, a caret at their end */
+  const since = board.writing?.(id);
+  const busy = since != null;
+  const start = React.useRef<string | null>(null);
+  if (!busy) start.current = null;
+  else if (start.current === null) start.current = data.text;
+  const veiled = busy && data.text === start.current;
+  const [versionsOpen, setVersionsOpen] = React.useState(false);
+  React.useEffect(() => { if (!selected) setVersionsOpen(false); }, [selected]);
+  const earlier = data.versions ?? [];
+  /* named as the person calls it; an empty name goes back to its number */
+  const rename = board.readOnly ? undefined : (name: string) => { board.willChange(); board.setData(id, { title: name || undefined }); };
+  const open = () => { board.edit(null); setSheet(true); };
   return (
-    <div className="h-full w-full" onDoubleClick={write}>
+    <div className="h-full w-full" onDoubleClick={() => { if (!board.readOnly && !editing) board.edit(id); }}
+      onKeyDown={(event) => { if (editing && event.key === 'Escape' && !event.nativeEvent.isComposing) { event.stopPropagation(); editor?.commands.blur(); board.edit(null); } }}>
       <NotePanel id={id} />
-      {editing && !board.readOnly ? (
+      {editing && editor ? (
         <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={32}>
-          <div data-writing-bar onPointerDownCapture={() => { barPressed.current = true; }}>
-            <WritingBar area={area} onChange={words.set} onLarger={() => board.resize(id, { w: 720, h: 520 })} />
+          <div className="cv-bar-top nodrag nopan rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+            <FormatBar editor={editor} onExpand={open} />
           </div>
         </NodeToolbar>
+      ) : selected && !board.readOnly && board.single === id ? (
+        <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={32}>
+          <NoteBar id={id} color={data.color} text={data.text} name={title} onExpand={open} />
+        </NodeToolbar>
       ) : null}
-      <Frame id={id} selected={selected} icon={TypeIcon} title={t('canvas.titles.note').replace('{n}', String(n))} by={data.by}
-        tone={editing || data.text ? 'quiet' : 'card'}>
-        {editing ? (
-          <textarea
-            ref={area}
-            autoFocus
-            /* written on where it ends */
-            onFocus={(event) => { const end = event.currentTarget.value.length; event.currentTarget.setSelectionRange(end, end); }}
-            {...words.props}
-            /* done when the focus goes elsewhere: not to the bar over it, which hands it back */
-            onBlur={() => { setTimeout(() => { if (document.activeElement !== area.current && !document.activeElement?.closest('[data-writing-bar]') && !barPressed.current) board.edit(null); barPressed.current = false; }, 0); }}
-            onKeyDown={(event) => { if (event.key === 'Escape' && !event.nativeEvent.isComposing) { barPressed.current = false; board.edit(null); } }}
-            placeholder={hint}
-            className="nodrag nowheel h-full w-full resize-none bg-transparent px-4 py-3.5 text-[14px] leading-[1.65] text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]"
-          />
-        ) : fresh ? (
-          <Empty icon={AlignLeft} tries={(
-            <>
-              <TryLine icon={PenLine} label={t('canvas.try.write')} onClick={write} />
-              <TryLine icon={ImageIcon} label={t('canvas.try.toImage')} onClick={() => board.spawn(id, 'image')} />
-              <TryLine icon={Music} label={t('canvas.try.toMusic')} onClick={() => board.spawn(id, 'music')} />
-              <TryLine icon={Film} label={t('canvas.try.toVideo')} onClick={() => board.spawn(id, 'video')} />
-            </>
-          )} />
-        ) : (
-          /* its words as they read: the card is held and moved anywhere on them; a double click, Enter or typing writes in it */
-          <div className={`h-full w-full overflow-hidden break-words px-4 py-3.5 text-[14px] leading-[1.65] ${data.text ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
-            {data.text ? <Words text={data.text} /> : hint}
+      <Frame id={id} selected={selected} icon={TypeIcon} title={title} by={data.by} onRename={rename}
+        note={earlier.length && !busy ? <NoteVersions id={id} text={data.text} earlier={earlier} open={versionsOpen} onOpen={setVersionsOpen} readOnly={board.readOnly} /> : null}
+        tone={editing || data.text ? 'quiet' : 'card'} fill={data.color ? FRAME_COLOR[data.color].fill : undefined}>
+        {/* its words as they read: held and moved anywhere on them, scrolled once it is selected; written in, they take the pointer */}
+        <DocView editor={editor} className={`h-full w-full px-5 py-4 ${busy ? 'cv-streaming' : ''} ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : selected ? 'nowheel overflow-y-auto' : 'overflow-hidden'}`} />
+        {/* veiled whole: what it said before is gone from sight, as a new one comes */}
+        {veiled ? <div className="cv-veil cv-fade absolute inset-0 z-10" style={data.color ? { backgroundImage: `linear-gradient(${FRAME_COLOR[data.color].fill}, ${FRAME_COLOR[data.color].fill})` } : undefined}><div className="cv-dots" /></div> : null}
+        {busy ? (
+          /* at it: since when, and stopped here */
+          <div role="status" className="absolute left-2.5 top-2.5 z-20 flex h-7 items-center gap-2 rounded-[8px] bg-[var(--cv-float)] pl-2.5 pr-1 text-[12.5px] text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)]">
+            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--cv-edge-lit)]" />{t('canvas.write.writing')} <span className="tabular-nums text-[var(--cv-ink-2)]"><Elapsed since={since} /></span></span>
+            {board.stopWriting ? (
+              <button type="button" onClick={(event) => { event.stopPropagation(); board.stopWriting?.(id); }}
+                className="nodrag flex h-5 items-center rounded-[6px] px-1.5 text-[12px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">{t('canvas.write.stop')}</button>
+            ) : null}
           </div>
-        )}
+        ) : null}
       </Frame>
+      {sheet ? <DocSheet name={title} text={data.text} onChange={write} onRename={rename} onClose={() => setSheet(false)} /> : null}
+    </div>
+  );
+}
+
+/**
+ * A note's versions: what it says now and the words its agent's writing took the place of, newest first. One picked
+ * takes the place of what it says now, which is kept among them; an earlier one can be removed.
+ */
+function NoteVersions({ id, text, earlier, open, onOpen, readOnly }: { id: string; text: string; earlier: string[]; open: boolean; onOpen: (open: boolean) => void; readOnly?: boolean }) {
+  const t = useT();
+  const board = useBoard();
+  const firstLine = (words: string) => words.replace(/[#>*_`~-]/g, ' ').split('\n').map((l) => l.trim()).find(Boolean) ?? t('canvas.noteVersions.empty');
+  const pick = (i: number) => {
+    board.willChange();
+    const rest = earlier.filter((_, k) => k !== i);
+    board.setData(id, { text: earlier[i], versions: text.trim() ? [...rest, text] : rest.length ? rest : undefined });
+    onOpen(false);
+  };
+  const remove = (i: number) => {
+    board.willChange();
+    const rest = earlier.filter((_, k) => k !== i);
+    board.setData(id, { versions: rest.length ? rest : undefined });
+    if (!rest.length) onOpen(false);
+  };
+  const row = 'flex h-9 w-full min-w-0 items-center gap-2 rounded-[10px] px-2.5 text-left text-[13px]';
+  return (
+    /* in the name row over the card, at its right */
+    <div className="nodrag nopan nowheel pointer-events-auto relative shrink-0">
+      <button type="button" aria-expanded={open} disabled={readOnly} onClick={(event) => { event.stopPropagation(); onOpen(!open); }}
+        className={`flex h-5 items-center gap-1 rounded-[6px] px-1.5 text-[12px] transition ${open ? 'bg-[var(--cv-on)] text-[var(--cv-ink)]' : 'text-[var(--cv-label)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]'}`}>
+        <Layers size={12} />{t('canvas.noteVersions.count').replace('{n}', String(earlier.length + 1))}
+      </button>
+      {open ? (
+        <div className={`${MENU} absolute right-0 top-full z-30 mt-1.5 max-h-[260px] w-[240px] overflow-y-auto`} onPointerDown={(event) => event.stopPropagation()}>
+          <div className={`${row} bg-[var(--cv-float-hover)] text-[var(--cv-ink)]`}>
+            <span className="shrink-0 text-[11.5px] text-[var(--cv-edge-lit)]">{t('canvas.noteVersions.current')}</span>
+            <span className="min-w-0 flex-1 truncate">{firstLine(text)}</span>
+          </div>
+          {earlier.map((words, i) => ({ words, i })).reverse().map(({ words, i }) => (
+            <div key={`${i}:${words.length}`} className={`group/version ${row} text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]`}>
+              <button type="button" onClick={() => pick(i)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <span className="shrink-0 text-[11.5px] tabular-nums text-[var(--cv-ink-3)]">{t('canvas.noteVersions.version').replace('{n}', String(i + 1))}</span>
+                <span className="min-w-0 flex-1 truncate">{firstLine(words)}</span>
+              </button>
+              <button type="button" aria-label={t('canvas.noteVersions.remove')} title={t('canvas.noteVersions.remove')} onClick={() => remove(i)}
+                className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-[var(--cv-ink-3)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] group-hover/version:flex"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The bar over a selected note: its color (none: the card's own), the note opened large, its words saved as a Markdown file. */
+function NoteBar({ id, color, text, name, onExpand }: { id: string; color?: GroupColor; text: string; name: string; onExpand: () => void }) {
+  const t = useT();
+  const board = useBoard();
+  const [colors, setColors] = React.useState(false);
+  const icon = 'cv-tool flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] disabled:opacity-40';
+  const paint = (c: GroupColor | undefined) => { board.willChange(); board.setData(id, { color: c }); setColors(false); };
+  return (
+    <div className="cv-bar-top nodrag nopan flex items-center gap-0.5 rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+      {/* first, the agent: the note made a reference in the chat, to change or write from */}
+      {board.refer ? (
+        <>
+          <Tooltip label={`${t('canvas.noteBar.toChat')} · ${MOD}L`}>
+            <button type="button" aria-label={t('canvas.noteBar.toChat')} onClick={() => board.refer?.(id)} className={icon}><MessageSquareQuote size={17} /></button>
+          </Tooltip>
+          <span className="mx-1 h-4 w-px bg-[var(--cv-float-line)]" />
+        </>
+      ) : null}
+      <span className="relative">
+        <button type="button" aria-expanded={colors} onClick={() => setColors((v) => !v)}
+          className="cv-tool flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
+          <span className="h-[18px] w-[18px] rounded-[5px] border border-white/20" style={{ background: color ? FRAME_COLOR[color].dot : 'var(--cv-card)' }} />
+          {t('canvas.noteBar.fill')}
+        </button>
+        {colors ? (
+          <span className={`${MENU} absolute left-0 top-11 z-10 flex gap-1.5 !p-2`}>
+            <button type="button" aria-label={t('canvas.noteBar.none')} title={t('canvas.noteBar.none')} onClick={() => paint(undefined)}
+              className={`h-5 w-5 rounded-[5px] border bg-[var(--cv-card)] ${color ? 'border-white/20' : 'border-white'}`} />
+            {(Object.keys(FRAME_COLOR) as GroupColor[]).filter((c) => c !== 'gray').map((c) => (
+              <button key={c} type="button" aria-label={c} onClick={() => paint(c)}
+                className={`h-5 w-5 rounded-[5px] border ${c === color ? 'border-white' : 'border-white/20'}`} style={{ background: FRAME_COLOR[c].dot }} />
+            ))}
+          </span>
+        ) : null}
+      </span>
+      <span className="mx-1 h-4 w-px bg-[var(--cv-float-line)]" />
+      <Tooltip label={t('canvas.words.expand')}>
+        <button type="button" aria-label={t('canvas.words.expand')} onClick={onExpand} className={icon}><Maximize2 size={17} /></button>
+      </Tooltip>
+      <Tooltip label={t('canvas.actions.download')}>
+        <button type="button" aria-label={t('canvas.actions.download')} disabled={!text} onClick={() => saveText(name, text)} className={icon}><Download size={17} /></button>
+      </Tooltip>
     </div>
   );
 }
@@ -413,7 +528,7 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
         handleClassName={RESIZE_HANDLE} onResizeStart={board.willChange} />
       {selected && !board.readOnly && board.single === id ? (
         <NodeToolbar nodeId={id} isVisible position={Position.Top} offset={36} style={{ zIndex: 4 }}>
-          <div className="nodrag nopan flex items-center gap-0.5 rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
+          <div className="cv-bar-top nodrag nopan flex items-center gap-0.5 rounded-[12px] bg-[var(--cv-float)] p-1 shadow-[var(--cv-float-shadow)]">
             <span className="relative">
               <button type="button" aria-label={t('canvas.color')} onClick={() => setColors((v) => !v)} className={`${bar} !px-1.5`}>
                 <span className="h-4 w-4 rounded-full border border-white/20" style={{ background: paint.dot }} />

@@ -19,11 +19,11 @@
 import React from 'react';
 import { flushSync } from 'react-dom';
 import {
-  MiniMap, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, useStoreApi,
+  MiniMap, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, useStoreApi, useUpdateNodeInternals,
   type Connection, type Edge, type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { AudioLines, Clapperboard, Download, Film, FolderSearch, Image as ImageIcon, LayoutTemplate, Maximize2, MousePointerClick, Play, Plus, Scissors, ScrollText, Sparkles, Square, Upload, UserRound } from 'lucide-react';
+import { Clapperboard, Download, FolderSearch, LayoutTemplate, Maximize2, MousePointerClick, Play, Plus, Sparkles, Square, Upload, UserRound } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { ApiError, api, projectEvents, type CanvasBoard, type CanvasCharacter } from '@/api';
 import { BoardSwitcher, boardName, nextBoardName } from './boards';
@@ -43,9 +43,9 @@ import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
   BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
-  type Board, type BoardNode, type FileNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type Side, type SpawnKind, type UploadStatus,
+  type Board, type BoardNode, type FileNode, type FrameData, type FrameNode, type MakeData, type MakingNode, type NoteData, type Side, type SpawnKind, type UploadStatus,
 } from './board';
-import { BetaTag, BottomToolbar, CornerBar, Dots, Outline, Viewer } from './chrome';
+import { BottomToolbar, CornerBar, Dots, EmptyBoard, Outline, Ripples, ToolCorner, Viewer } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
 import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from './connections';
 import { CHARACTER_PARTS, CharacterLibrary, HistoryModal, MaterialLibrary } from './libraries';
@@ -109,6 +109,7 @@ type PendingUpload = UploadStatus & Pick<UploadTarget, 'from' | 'version'> & {
 function BoardView({ shown = true, projectId, folder, files, sources, onAddToFilm, onSendToFilm, onImportFiles, onOpenSettings, onReveal, chat, onError, onNotice, focus, insert, addFiles, onRefer }: CanvasViewProps) {
   const t = useT();
   const flow = useReactFlow<BoardNode, Edge>();
+  const updateNodeInternals = useUpdateNodeInternals();
   const flowStore = useStoreApi();
   const selectionStart = React.useRef<{ x: number; y: number } | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardNode>([]);
@@ -124,7 +125,13 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   const [editing, setEditing] = React.useState<string | null>(null);
   const [menu, setMenu] = React.useState<MenuAt | null>(null);
   const [context, setContext] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
+  /** the board's last press, for a double click on it */
+  const boardPress = React.useRef<{ at: number; x: number; y: number } | null>(null);
   const [tool, setTool] = React.useState<'select' | 'hand'>('select');
+  /* the nodes just added, which come in with a small pop (or, wired as they come, a fade, so the wire meets them where
+     they stay), and the rings where the board was double-clicked */
+  const [born, setBorn] = React.useState<ReadonlyMap<string, 'cv-born' | 'cv-born-fade' | 'cv-flash'>>(() => new Map());
+  const [taps, setTaps] = React.useState<Array<{ id: number; x: number; y: number }>>([]);
   const [outline, setOutline] = React.useState(false);
   const [map, setMap] = React.useState(false);
   /* a node's references being picked on the board: the node they go into (its panel's "From the canvas") */
@@ -432,6 +439,12 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
   const place = (node: BoardNode, from?: MenuAt['from'], wireDrop?: boolean) => {
     willChange();
+    setBorn((ids) => new Map(ids).set(node.id, from ? 'cv-born-fade' : 'cv-born'));
+    window.setTimeout(() => {
+      setBorn((ids) => { const next = new Map(ids); next.delete(node.id); return next; });
+      /* its handles were measured while it was still growing: measured again, as it stays */
+      updateNodeInternals(node.id);
+    }, 400);
     /* off the screen: the board moves to it, as far zoomed as it is */
     if (!wireDrop) requestAnimationFrame(() => requestAnimationFrame(() => {
       const box = rootRef.current?.getBoundingClientRect();
@@ -541,6 +554,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     return [
       ...nodes.map((node) => node.type === 'frame' ? node : {
         ...node, zIndex: (node.zIndex ?? defaultLayer) + (node.dragging ? defaultLayer : 0),
+        ...(born.has(node.id) ? { className: `${node.className ?? ''} ${born.get(node.id)}` } : {}),
       }),
       ...activeUploads.filter((upload) => !upload.version).map((upload): FileNode => ({
         id: upload.id, type: 'file', position: upload.position, width: FILE_W, height: CARD_H, zIndex: defaultLayer,
@@ -549,7 +563,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         data: { path: '', upload },
       })),
     ];
-  }, [nodes, activeUploads]);
+  }, [nodes, activeUploads, born]);
 
   React.useEffect(() => {
     if (!ready || switchingBoards.current) return;
@@ -732,23 +746,49 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
   /** a group kept as a template, by its name, with what is in it and the wires between them */
   /* a text node written by the person's agent: the words wired in (and its own, to rework) go with what they ask */
+  /** the text nodes being written by the agent now (since when), and how each is stopped */
+  const [writing, setWriting] = React.useState<ReadonlyMap<string, number>>(new Map());
+  const writers = React.useRef(new Map<string, AbortController>());
   const write = async (id: string, ask: string, attachments: string[]): Promise<string | null> => {
     const inputs = edges.filter((e) => e.target === id).map((e) => nodes.find((n) => n.id === e.source))
       .flatMap((n) => (n?.type === 'note' && n.data.text.trim() ? [n.data.text] : []));
     const own = nodes.find((n) => n.id === id);
-    const mine = own?.type === 'note' ? own.data.text.trim() : '';
+    const before = own?.type === 'note' ? own.data.text : '';
+    const mine = before.trim();
+    const stop = new AbortController();
+    writers.current.set(id, stop);
+    setWriting((ids) => new Map(ids).set(id, Date.now()));
+    /* the words onto the card as the agent writes them, in place of what it said before; one undo takes them all back */
+    const put = (data: Partial<NoteData>) => setNodes((all) => all.map((n) => (n.id === id && n.type === 'note' ? { ...n, data: { ...n.data, ...data } } : n)));
+    let said = '';
     try {
       const model = studioHost?.canvasWriting?.selection();
       if (model === null) return t('canvas.write.noAgent');
-      const { text } = await api.canvasWrite(projectId, ask, mine ? [...inputs, `(the node's words now, to rework) ${mine}`] : inputs, model, attachments);
-      if (!text) return null;
       willChange();
-      setNodes((all) => all.map((n) => (n.id === id && n.type === 'note' ? { ...n, data: { ...n.data, text } } : n)));
+      const { text } = await api.canvasWriteStream(projectId, ask, mine ? [...inputs, `(the node's words now, to rework) ${mine}`] : inputs, model, attachments, (delta) => {
+        said += delta;
+        put({ text: said.replace(/^\s+/, '') });
+      }, stop.signal);
+      /* written: what it said before kept as an earlier version */
+      const kept = own?.type === 'note' ? own.data.versions ?? [] : [];
+      put({ text: text || before, ...(text && mine ? { versions: [...kept.filter((v) => v !== before), before].slice(-20) } : {}) });
       return null;
     } catch (error) {
+      /* stopped, or not written after all: its words as they were */
+      if (said) put({ text: before });
+      if (stop.signal.aborted) return null;
       if (error instanceof ApiError && error.body.code === 'no-agent') return t('canvas.write.noAgent');
       return error instanceof Error ? error.message : String(error);
+    } finally {
+      writers.current.delete(id);
+      setWriting((ids) => { const next = new Map(ids); next.delete(id); return next; });
     }
+  };
+  /** a node brought into view (the board's zoom kept) and flashed */
+  const locate = (id: string) => {
+    void flow.fitView({ nodes: [{ id }], padding: 0.5, minZoom: flow.getZoom(), maxZoom: flow.getZoom(), duration: 300 });
+    setBorn((ids) => new Map(ids).set(id, 'cv-flash'));
+    window.setTimeout(() => setBorn((ids) => { if (ids.get(id) !== 'cv-flash') return ids; const next = new Map(ids); next.delete(id); return next; }), 1400);
   };
 
   /* ── the libraries: a style or an effect onto the board, a character's pictures, a new character made ── */
@@ -759,6 +799,17 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (!top.length) { const at = middle(); return { x: at.x - w / 2, y: at.y - h / 2 }; }
     const box = top.reduce((b, n) => { const at = boxOf(n, byId); return { x1: Math.max(b.x1, at.x + at.w), y0: Math.min(b.y0, at.y) }; }, { x1: -Infinity, y0: Infinity });
     return { x: box.x1 + 160, y: box.y0 };
+  };
+  /** where something `w` × `h` goes in view: its middle at `at` when that is clear of what is on the board, else the clear spot nearest it */
+  const clearNear = (at: { x: number; y: number }, w: number, h: number) => {
+    const byId = new Map(now.current.nodes.map((n) => [n.id, n]));
+    const boxes = now.current.nodes.filter((n) => !n.parentId).map((n) => boxOf(n, byId));
+    const clear = ({ x, y }: { x: number; y: number }) => boxes.every((b) => x + w + 48 <= b.x || x >= b.x + b.w + 48 || y + h + 64 <= b.y || y >= b.y + b.h + 64);
+    const spots: Array<{ x: number; y: number }> = [];
+    for (let i = -6; i <= 6; i++) for (let j = -4; j <= 4; j++) spots.push({ x: at.x - w / 2 + (i * (w + 48)) / 2, y: at.y - h / 2 + (j * (h + 64)) / 2 });
+    /* along the row first: a step up or down counts twice */
+    const far = (s: { x: number; y: number }) => Math.hypot(s.x + w / 2 - at.x, 2 * (s.y + h / 2 - at.y));
+    return spots.sort((a, b) => far(a) - far(b)).find(clear) ?? clearSpot(w, h);
   };
   /** a text node of the style's or effect's words, wired into the node it was picked for (or in the middle) */
   const placeMaterial = (kind: 'styles' | 'effects', item: { id: string; words: string }) => {
@@ -1040,8 +1091,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     redraw: (id, path) => setRedraw({ id, path }),
     tidy: (group) => { willChange(); setNodes((list) => tidyGroup(list, group)); },
     openSettings: onOpenSettings,
-    ...(chat ? { write, uploadWritingFiles: onImportFiles } : {}),
-  }), [chat, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal, onError, onImportFiles, activeUploads, shown]); // eslint-disable-line react-hooks/exhaustive-deps
+    ...(chat ? { write, writing: (id: string) => writing.get(id), stopWriting: (id: string) => writers.current.get(id)?.abort(), uploadWritingFiles: onImportFiles } : {}),
+    locate,
+    ...(onRefer ? { refer: (id: string) => { const node = now.current.nodes.find((n) => n.id === id); const ref = node ? refOf(node) : null; if (ref) onRefer([ref]); } } : {}),
+  }), [chat, writing, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal, onError, onImportFiles, activeUploads, shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onDrop = (event: React.DragEvent) => {
     const at = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -1068,20 +1121,22 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
 
   /* ── the chat: nodes as references (⌘L), and a node a reference points at shown ── */
   const refOf = (n: BoardNode): StudioRef | null => {
-    const words = (text: string, fallback: string) => text.replace(/\s+/g, ' ').trim().slice(0, 60) || fallback;
+    /* its pill says its name, as the board's name row does ("Text 2", "Picture node 1", a file's name), kept short */
+    const short = (name: string) => (name.length > 16 ? `${name.slice(0, 15)}…` : name);
+    const number = () => { let k = 0; for (const node of now.current.nodes) { if (node.type === 'frame') continue; k += 1; if (node.id === n.id) break; } return String(k); };
     const picture = (path: string | undefined) => {
       const file = path ? byPath.get(path) : undefined;
       const src = !file ? undefined : file.kind === 'image' ? sources.file(file) : file.kind === 'video' ? sources.poster?.(file) : file.kind === 'mg' ? sources.pagePoster?.(file) : undefined;
       return src ? { image: { src } } : {};
     };
-    if (n.type === 'note') return { kind: 'node', id: n.id, nodeKind: 'note', label: words(n.data.text, t('canvas.kinds.note')), text: n.data.text };
-    if (n.type === 'frame') return { kind: 'node', id: n.id, nodeKind: 'group', label: n.data.label || t('canvas.group') };
+    if (n.type === 'note') return { kind: 'node', id: n.id, nodeKind: 'note', label: short(n.data.title ?? t('canvas.titles.note').replace('{n}', number())), text: n.data.text };
+    if (n.type === 'frame') return { kind: 'node', id: n.id, nodeKind: 'group', label: short(n.data.label || t('canvas.group')) };
     if (n.type === 'cut') return { kind: 'node', id: n.id, nodeKind: 'cut', label: t('canvas.kinds.cut') };
     if (n.type === 'file') {
-      return { kind: 'node', id: n.id, nodeKind: 'file', label: n.data.title ?? byPath.get(n.data.path)?.name ?? n.data.path.split('/').pop() ?? n.data.path, path: n.data.path, ...picture(n.data.path) };
+      return { kind: 'node', id: n.id, nodeKind: 'file', label: short(n.data.title ?? byPath.get(n.data.path)?.name ?? n.data.path.split('/').pop() ?? n.data.path), path: n.data.path, ...picture(n.data.path) };
     }
     return {
-      kind: 'node', id: n.id, nodeKind: n.data.make, label: n.data.title ?? words(n.data.prompt ?? '', t(`canvas.make.${n.data.make}`)), prompt: n.data.prompt ?? '',
+      kind: 'node', id: n.id, nodeKind: n.data.make, label: short(n.data.title ?? (n.data.preset ? t(`canvas.presets.names.${n.data.preset}`) : t(`canvas.titles.${n.data.make}`).replace('{n}', number()))), prompt: n.data.prompt ?? '',
       ...(n.data.path ? { path: n.data.path } : {}), ...(n.data.versions?.length ? { versions: n.data.versions.length } : {}), ...picture(n.data.path),
     };
   };
@@ -1298,15 +1353,29 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         aria-busy={!fitted}
         tabIndex={-1}
         className="relative h-full w-full outline-none"
-        onPointerDown={(event) => { if (!(event.target as HTMLElement).closest('input, textarea, [data-canvas-video-controls]')) rootRef.current?.focus({ preventScroll: true }); }}
+        onPointerDown={(event) => { if (!(event.target as HTMLElement).closest('input, textarea, [contenteditable="true"], [data-writing-bar], [data-canvas-video-controls]')) rootRef.current?.focus({ preventScroll: true }); }}
         onDragOver={(event) => {
           if (!event.dataTransfer.types.includes(RESOURCE_DRAG_TYPE) && !isComputerFileDrag(event.dataTransfer)) return;
           event.preventDefault();
           event.dataTransfer.dropEffect = 'copy';
         }}
         onDrop={onDrop}
-        onDoubleClick={(event) => {
-          if (!(event.target as Element).classList?.contains('react-flow__pane')) return;
+        /*
+         * a double click on the board opens the add menu: two presses close in time and place, counted here, as the
+         * browser's own double click is lost when the first press starts a selection or lands on what lies on the board
+         */
+        onPointerDownCapture={(event) => {
+          if (event.button !== 0) return;
+          const target = event.target as Element;
+          const onBoard = target.closest('.react-flow__pane')
+            && !target.closest('.react-flow__node, .react-flow__edge, .react-flow__nodesselection, .react-flow__panel, .react-flow__handle, button, input, textarea, [contenteditable="true"]');
+          const last = boardPress.current;
+          /* a press that closes a menu only closes it: it is not the first half of a double click */
+          boardPress.current = onBoard && !menu && !context ? { at: event.timeStamp, x: event.clientX, y: event.clientY } : null;
+          if (!onBoard || menu || context || !last || event.timeStamp - last.at > DOUBLE_MS || Math.hypot(event.clientX - last.x, event.clientY - last.y) > DOUBLE_PX) return;
+          boardPress.current = null;
+          const box = event.currentTarget.getBoundingClientRect();
+          setTaps((list) => [...list, { id: event.timeStamp, x: event.clientX - box.left, y: event.clientY - box.top }]);
           openMenu(event.clientX, event.clientY);
         }}
       >
@@ -1441,14 +1510,15 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           </div>
         ) : null}
         {picking ? null : <BottomToolbar
-          adding={Boolean(menu && !menu.from && menu.above)}
-          onAdd={(from) => {
-            if (menu) { setMenu(null); return; }
+          onKind={(kind) => {
+            setMenu(null);
             setContext(null);
-            setMenu({ screen: { x: from.left, y: from.top }, above: true, at: middle() });
+            /* a little above the middle (so the panel under it clears the toolbar), clear of the rest */
+            const at = middle();
+            const size = kind === 'note' || kind === 'cut' ? { w: WIDE[kind], h: CARD_H } : makeSize(kind);
+            addKind(kind, { at: clearNear({ x: at.x, y: at.y - 90 / flow.getZoom() }, size.w, size.h), corner: true });
           }}
-          tool={tool}
-          onTool={setTool}
+          onUpload={() => { setMenu(null); setContext(null); void pickUpload({ at: middle() }); }}
           onTemplates={(from) => { setContext(null); setMenu({ screen: { x: from.left, y: from.top }, above: true, at: middle(), view: 'templates' }); }}
           onLibrary={(which) => openLibrary(which)} onCharacters={() => openLibrary('characters')} onHistory={() => setModal('history')}
         />}
@@ -1476,35 +1546,14 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           onPick={(id) => { void showBoard(id); }} onAdd={() => addBoard()} onRename={renameBoard} onCopy={(id) => { void addBoard(id); }}
           onRemove={(id) => { void removeBoard(id); }}
           {...(studioHost ? {} : { onOpenApart: (id: string) => { const url = new URL(window.location.href); url.searchParams.set('canvas', id); window.open(url.toString(), '_blank'); } })} />
-        <BetaTag />
+        <ToolCorner tool={tool} onTool={setTool} />
         <CornerBar outline={outline} onOutline={() => setOutline((v) => !v)} map={map} onMap={() => setMap((v) => !v)}
           wires={wires} onWires={() => setWires((v) => !v)} snap={snap} onSnap={() => setSnap((v) => !v)} />
         {outline ? (
           <Outline nodes={nodes} fileOf={board.fileOf} sources={sources} onShow={showNode} onClose={() => setOutline(false)} />
         ) : null}
-        {ready && nodes.length === 0 && !board.readOnly ? (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-5 px-6">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--cv-label)]"><MousePointerClick size={16} />{t('canvas.empty')}</div>
-            {/* to start: a node of each kind in the middle of the view, or the agent asked for a script */}
-            <div className="pointer-events-auto flex flex-wrap justify-center gap-2">
-              {([
-                /* in the order a film is made: the words, the pictures, the sound, the clips, the cut */
-                ['script', ScrollText, 'canvas.start.script'], ['image', ImageIcon, 'canvas.start.image'], ['music', AudioLines, 'canvas.start.audio'],
-                ['video', Film, 'canvas.start.video'], ['cut', Scissors, 'canvas.start.cut'],
-              ] as const).map(([kind, Icon, label]) => (
-                <button key={kind} type="button"
-                  onClick={() => {
-                    if (kind === 'script') { if (studioHost?.ask) studioHost.ask({ text: t('canvas.start.scriptAsk'), refs: [] }); else addKind('note', { at: middle() }); return; }
-                    addKind(kind, { at: middle() });
-                  }}
-                  className="flex h-14 w-[184px] items-center gap-3 rounded-2xl border !border-[var(--cv-float-line)] bg-[var(--cv-float)] px-3 text-left text-[14px] font-medium text-[var(--cv-ink)] transition hover:bg-[color-mix(in_srgb,var(--cv-float)_93%,var(--cv-ink))]">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--cv-chip)]"><Icon size={16} /></span>
-                  <span className="min-w-0 flex-1 truncate">{t(label)}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
+        {ready && nodes.length === 0 && !board.readOnly ? <EmptyBoard /> : null}
+        <Ripples taps={taps} onDone={(id) => setTaps((list) => list.filter((tap) => tap.id !== id))} />
         {menu ? (
           <AddMenu
             menu={menu}
@@ -1521,7 +1570,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
             onRemoveTemplate={(template) => { void removeTemplate(template); }}
           />
         ) : null}
-        {context ? <ContextMenu x={context.x} y={context.y} items={context.items} onClose={() => setContext(null)} /> : null}
+        {context ? <ContextMenu canvas x={context.x} y={context.y} items={context.items} onClose={() => setContext(null)} /> : null}
         {viewed ? <Viewer file={viewed} sources={sources} onClose={() => setViewing(null)} /> : null}
         {!fitted ? <CanvasLoading /> : null}
         <input ref={pickerRef} type="file" multiple hidden />
@@ -1639,6 +1688,10 @@ export function CanvasPreview(props: { doc: CanvasDoc; fileUrl: (path: string) =
     </ReactFlowProvider>
   );
 }
+
+/** two presses on the board this close in time (ms) and place (px) are a double click */
+const DOUBLE_MS = 400;
+const DOUBLE_PX = 8;
 
 export default function CanvasView(props: CanvasViewProps) {
   return (

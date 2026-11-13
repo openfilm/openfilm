@@ -18,9 +18,9 @@ export interface CanvasNode {
   text?: string;
   /** a file of the project, project-relative */
   path?: string;
-  /** a custom display title for a file or making node */
+  /** a custom display title for a file, a making node or a note */
   title?: string;
-  /** a group: its name (and its color, one of GROUP_COLORS) */
+  /** a group: its name; a group's or a note's color, one of GROUP_COLORS (a note: none, its card's own) */
   group?: string;
   color?: GroupColor;
   /** the group it is in (its x, y then from the group's corner) */
@@ -157,7 +157,11 @@ export function readCanvasDoc(raw: unknown): CanvasDoc {
     if (make) nodes.push({ ...box, ...parent, ...named, ...readMake(n), make });
     else if (n.cut === true) nodes.push({ ...box, ...parent, cut: true });
     else if (typeof n.path === 'string' && n.path) nodes.push({ ...box, ...parent, ...named, path: n.path });
-    else if (typeof n.text === 'string') nodes.push({ ...box, ...parent, text: n.text });
+    else if (typeof n.text === 'string') {
+      const tint = GROUP_COLORS.find((c) => c === n.color && c !== 'gray');
+      const earlier = Array.isArray(n.versions) ? n.versions.filter((v): v is string => typeof v === 'string' && v.trim().length > 0) : [];
+      nodes.push({ ...box, ...parent, ...named, text: n.text, ...(tint ? { color: tint } : {}), ...(earlier.length ? { versions: earlier } : {}) });
+    }
     else if (typeof n.group === 'string') {
       const color = GROUP_COLORS.find((c) => c === n.color) ?? 'gray';
       nodes.push({ ...box, ...(parent.by ? { by: parent.by } : {}), group: n.group, color });

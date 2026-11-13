@@ -511,7 +511,9 @@ function answerStudio(message, reply) {
   if (!agent || !ready.includes(agent) || !localAgents) { reply({ type: 'answer', id: message.id, error: 'No agent is connected.', code: 'no-agent' }); return; }
   const stop = new AbortController();
   asked.set(message.id, stop);
-  localAgents.ask(agent, String(message.text ?? ''), stop.signal, message.model?.options, message.images)
+  /* asked for as it comes (a note being written): each piece of the answer sent on its own */
+  const onText = message.stream ? (delta) => reply({ type: 'answer-part', id: message.id, delta }) : undefined;
+  localAgents.ask(agent, String(message.text ?? ''), stop.signal, message.model?.options, message.images, onText)
     .then((text) => reply({ type: 'answer', id: message.id, text }))
     .catch((error) => { if (!stop.signal.aborted) reply({ type: 'answer', id: message.id, error: error?.message ?? String(error), ...(error?.code ? { code: String(error.code) } : {}) }); })
     .finally(() => asked.delete(message.id));

@@ -11,6 +11,7 @@
  *   → { type: 'open', url }                          Studio wants something shown in the person's browser
  *   → { type: 'ask', id, text }                      a question for the person's agent's own model (askAgent)
  *   → { type: 'ask-cancel', id }                     that question no longer wanted
+ *   ← { type: 'answer-part', id, delta }             a piece of it as it comes (asked with `stream`)
  *   ← { type: 'answer', id, text | error, code? }    its answer
  *   ← { type: 'quit' }                               stop (history is written first)
  *   ← { type: 'working', folders }                   the folders the chat's agents are working in now (not deletable)
@@ -38,11 +39,13 @@ async function stop() {
 }
 /** the folders the chat's agents are working in, as the main process last told */
 let working = [];
-/** the questions asked of the person's agent, waiting for their answers, by id */
+/** the questions asked of the person's agent, waiting for their answers, by id; and those asked to hear each piece */
 const asking = new Map();
+const hearing = new Map();
 parent.on('message', ({ data }) => {
   if (data?.type === 'quit') void stop();
   if (data?.type === 'working' && Array.isArray(data.folders)) working = data.folders.filter((f) => typeof f === 'string');
+  if (data?.type === 'answer-part' && typeof data.delta === 'string') hearing.get(data.id)?.(data.delta);
   if (data?.type === 'answer') asking.get(data.id)?.(data);
   if (data?.type === 'account:read') {
     void desktopAccount({ fresh: data.fresh === true }).then(
@@ -56,20 +59,23 @@ parent.on('message', ({ data }) => {
  * One question answered by the person's agent's own model (the main process picks the agent and asks it, with no
  * chat): Studio's own work that needs a model, such as translating subtitles.
  * @param {string} text @param {AbortSignal} [signal] @param {import('./studio.mjs').WritingModel} [model]
- * @param {import('./studio.mjs').WritingImage[]} [images] @returns {Promise<string>}
+ * @param {import('./studio.mjs').WritingImage[]} [images] @param {(piece: string) => void} [onText] each piece as it comes
+ * @returns {Promise<string>}
  */
-function askAgent(text, signal, model, images) {
+function askAgent(text, signal, model, images, onText) {
   const id = randomUUID();
   return new Promise((resolve, reject) => {
-    const cancel = () => { asking.delete(id); send({ type: 'ask-cancel', id }); reject(signal?.reason ?? new Error('stopped')); };
+    const cancel = () => { asking.delete(id); hearing.delete(id); send({ type: 'ask-cancel', id }); reject(signal?.reason ?? new Error('stopped')); };
+    if (onText) hearing.set(id, onText);
     asking.set(id, (answer) => {
       asking.delete(id);
+      hearing.delete(id);
       signal?.removeEventListener('abort', cancel);
       if (typeof answer.text === 'string') resolve(answer.text);
       else reject(Object.assign(new Error(String(answer.error ?? 'The agent did not answer.')), answer.code ? { code: answer.code } : {}));
     });
     signal?.addEventListener('abort', cancel, { once: true });
-    send({ type: 'ask', id, text, model, images });
+    send({ type: 'ask', id, text, model, images, ...(onText ? { stream: true } : {}) });
   });
 }
 
