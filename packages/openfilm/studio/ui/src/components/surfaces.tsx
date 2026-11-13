@@ -30,7 +30,7 @@ export interface SurfaceProps {
 /** The surfaces there are, by the workbench their plugin names: `color: React.lazy(() => import('./color/ColorView'))`. */
 export const SURFACES: Record<string, React.LazyExoticComponent<React.ComponentType<SurfaceProps>>> = {};
 
-/** The workbenches ProjectView holds itself: the edit, the canvas, and Motion (a view of the edit's timeline). */
+/** The workbenches shown without a plugin's surface (shell/workbenches): the edit, the canvas, and Motion (a view of the edit's timeline). */
 export const OWN_SURFACES: readonly string[] = ['edit', 'canvas', 'motion'];
 
 /** A plugin's surface by its workbench's name, or the page of one someone made; one this build has no surface for says so. */

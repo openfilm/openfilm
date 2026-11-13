@@ -2,7 +2,8 @@
  * The project's frame: what Studio's shell holds of a project for whichever workbench is shown in it, and tells it
  * through shell/frame. Its files as the folder lists them, with what is known of each (its media facts, its proxy, how
  * it was made); the media pane's operations on them (bring in, link, move, delete, reveal); the project as it was read;
- * and the toast, which the shell draws.
+ * and the toast, which the shell draws. Which workbench is shown, and what takes the panes' place when it is not the
+ * edit (the canvas, a plugin's surface), are the shell's too (shell/workbenches).
  *
  * For now the project and its files are still read by the edit (ProjectView: the same events redraw its picture), which
  * puts them here with the setters this frame gives it. What a workbench has that an operation here needs (its picture
@@ -21,6 +22,7 @@ import type { ImportProgress } from '@/components/MediaPool';
 import { Toast, useToast } from '@/components/Toast';
 import { BrandLoadingScreen } from '@/components/BrandLoadingScreen';
 import { usePublishFrame, wiringStore } from './frame';
+import { InPanesPlace, useWorkbenchShown } from './workbenches';
 
 /** What the shell holds of the project `projectId`: every name a workbench is given of it (shell/frame's `Frame`). */
 export function useProjectFrame(projectId: string) {
@@ -280,15 +282,17 @@ export function useProjectFrame(projectId: string) {
     void fetch(`${projectApi}/reveal`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, ...(original ? { original } : {}) }) });
   }, [projectApi]);
 
+  /* ── the workbench shown, and what the canvas was asked for (shell/workbenches) ── */
+  const shown = useWorkbenchShown(projectId, loaded?.project.id, toast.showError);
+
   /* ── the page's places: what a workbench draws outside its own element goes into one of them ── */
   const [slotPage, setSlotPage] = React.useState<HTMLDivElement | null>(null);
   const [slotTop, setSlotTop] = React.useState<HTMLDivElement | null>(null);
-  const [slotMain, setSlotMain] = React.useState<HTMLDivElement | null>(null);
   const [slotOver, setSlotOver] = React.useState<HTMLDivElement | null>(null);
-  /** `page`: in the page's stead (it could not be read). `top`: the top bar. `main`: beside the workbench, in the
-   *  panes' place. `over`: over the page (the library's pane, dialogs). */
-  const slots = React.useMemo(() => (slotPage && slotTop && slotMain && slotOver ? { page: slotPage, top: slotTop, main: slotMain, over: slotOver } : null), [slotPage, slotTop, slotMain, slotOver]);
-  const slotRefs = React.useMemo(() => ({ page: setSlotPage, top: setSlotTop, main: setSlotMain, over: setSlotOver }), []);
+  /** `page`: in the page's stead (it could not be read). `top`: the top bar. `over`: over the page (the library's
+   *  pane, dialogs). */
+  const slots = React.useMemo(() => (slotPage && slotTop && slotOver ? { page: slotPage, top: slotTop, over: slotOver } : null), [slotPage, slotTop, slotOver]);
+  const slotRefs = React.useMemo(() => ({ page: setSlotPage, top: setSlotTop, over: setSlotOver }), []);
 
   return {
     projectId, toast, showToast, slots, slotRefs,
@@ -296,6 +300,7 @@ export function useProjectFrame(projectId: string) {
     filesTick, setFilesTick, rawListing, setRawListing, facts, proxies, onUndecoded, prefsTick, folder, mediaSources, listing,
     mediaMade, madeWords, madeVersions, missingMedia, setMissingMedia, findMissing,
     projectApi, onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, coverSet, onSetCover, onNewFolder, reveal,
+    ...shown,
   };
 }
 
@@ -304,10 +309,11 @@ const PLACE = { display: 'contents' } as const;
 
 /**
  * The project's page: its frame told, and the page itself, which is the shell's. The workbench's element (`children`)
- * goes where the panes are; the places beside it are filled by the workbench for now (see `slots`), each until it is
- * the shell's own. Nothing of a workbench is drawn before the frame is told with its places, so one never reads an
- * empty frame. While the project is being read the loading screen is here (unless `covered`: the page says something
- * else), and the page is not shown. The toast is drawn over everything.
+ * goes where the panes are, and after it what takes their place (shell/workbenches); the other places are filled by
+ * the workbench for now (see `slots`), each until it is the shell's own. Nothing of a workbench is drawn before the
+ * frame is told with its places, so one never reads an empty frame. While the project is being read the loading
+ * screen is here (unless `covered`: the page says something else), and the page is not shown. The toast is drawn over
+ * everything.
  */
 export function ProjectFrame({ projectId, covered = false, children }: { projectId: string; covered?: boolean; children: React.ReactNode }) {
   const state = useProjectFrame(projectId);
@@ -326,7 +332,7 @@ export function ProjectFrame({ projectId, covered = false, children }: { project
           <div className="relative z-10 grid min-h-0 min-w-0 flex-1 bg-[var(--dock-line)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
             <div ref={slotRefs.top} style={PLACE} />
             {told && slots ? children : null}
-            <div ref={slotRefs.main} style={PLACE} />
+            <InPanesPlace frame={state} />
           </div>
         </div>
         <div ref={slotRefs.over} style={PLACE} />

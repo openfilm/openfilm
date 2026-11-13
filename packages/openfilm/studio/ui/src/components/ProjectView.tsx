@@ -8,9 +8,6 @@
  */
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
-import { afterPaintIdle } from '@/lib/after-paint-idle';
-import { loadCanvas } from './canvas/load';
-import { CanvasLoading } from './canvas/CanvasLoading';
 import { BookmarkPlus, ChartSpline, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Diamond, Eye, EyeOff, FolderOpen, Layers, Lock, LockOpen, MessageSquarePlus, MonitorDown, Plus, Scissors, Settings2, Spline, TriangleAlert, Upload, Workflow } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, withAnimations, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
@@ -76,7 +73,6 @@ import {
   type ClipFacts, type TransitionAsk, type TransitionPlan,
 } from '@/lib/transitions';
 import { frameMs } from '@/lib/timecode';
-import { LoadBoundary } from './canvas/LoadBoundary';
 import { splitHalves } from '@/lib/timeline-split';
 import { assetDropInsert, assetRunInsert, assetRunMs, pendingDropOf, soundLaneHit, withPendingBlocks, type AssetDropTarget, type AssetLaneHit, type AssetRunInsert, type PendingDrop } from '@/lib/asset-timeline';
 import { isComputerFileDrag, type ResourceDragItem } from '@/lib/resource-drag';
@@ -90,11 +86,11 @@ import { canvasFor, firstPictureSize, fitToCanvas } from '@/lib/canvas-fit';
 import { positionOf } from '@/lib/stage-crop';
 import { createViewerZoom } from '@/lib/viewer-zoom';
 import { factsOfProbe, resourceKindOf, srcHitsAsset, type WorkspaceResource } from '@/lib/workspace-resources';
-import { SettingsModal } from './settings/SettingsModal';
+import { SettingsModal, type SettingsSection } from './settings/SettingsModal';
 import { useSettings } from './settings/use-settings';
 import { DesktopDialog } from './DesktopDialog';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
-import { readCanvasDoc, type CanvasDoc } from '../lib/canvas';
+import { readCanvasDoc } from '../lib/canvas';
 import { HOST_PANEL_WIDTH, studioHost, useHostPanel, type HostPanel, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
 import { clipRef, fileRef, layerRef, markRange, momentRef, rangeRef, regionRef, stillUrl, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
@@ -116,10 +112,7 @@ import { WorkspaceEditor, WorkspaceSeams } from './WorkspaceEditor';
 import { WorkspaceLibraryPane } from './WorkspaceLibraryPane';
 import { PANE_BAR, PANE_BTN_ON, PANE_TOGGLE, PANE_TOGGLE_ICON } from './dock-pane-bar';
 import { Tooltip } from './Tooltip';
-import { useWorkModes } from '@/lib/work-modes';
-import { usePluginsOf } from '@/lib/project-plugins';
 import { ModeSwitcher } from './ModeSwitcher';
-import { OWN_SURFACES, PluginSurface } from './surfaces';
 import { MotionPanel } from './MotionPanel';
 import { ProjectTitle } from './ProjectTitle';
 import { ProjectTabs } from './ProjectTabs';
@@ -193,35 +186,9 @@ const MEDIA_SCOPE: { current: MediaScope } = { current: 'project' };
 /** where the app's panel starts: under Studio's top bar (its h-8) */
 const HOST_PANEL_TOP = 32;
 
-/**
- * A panel shown or hidden, as the person last left it (kept in this browser; open when nothing is kept): the value,
- * the way to change and keep it (the person's own toggle), and the way to change it for now only (shown on its own).
- */
-/**
- * A panel shown or hidden, as the person last left it (kept in this browser; open when nothing is kept): the value,
- * the way to change and keep it (the person's own toggle), and the way to change it for now only (shown on its own).
- */
-function useKeptFlag(key: string, initial = true): [boolean, (open: boolean) => void, React.Dispatch<React.SetStateAction<boolean>>] {
-  const [open, setOpen] = React.useState(() => {
-    try { const kept = localStorage.getItem(key); return kept == null ? initial : kept !== '0'; } catch { return initial; }
-  });
-  const keep = React.useCallback((next: boolean) => {
-    setOpen(next);
-    try { localStorage.setItem(key, next ? '1' : '0'); } catch { /* not kept */ }
-  }, [key]);
-  return [open, keep, setOpen];
-}
 const TIMELINE_H = 200;
 const TIMELINE_SHARE = 0.45;
 const TIMELINE_SPARE = 48;
-/* the canvas beside the edit: its code and fitted layout are warmed while the edit is in use */
-const CanvasView = React.lazy(loadCanvas);
-/** whether a project shows its canvas, kept on this computer by project */
-const CANVAS_KEY = 'openfilm.canvas.open';
-const canvasShown = (projectId: string) => { try { return localStorage.getItem(`${CANVAS_KEY}:${projectId}`) === '1'; } catch { return false; } };
-/* the plugin's surface a project was left on (its workbench's name), kept as the canvas being open is */
-const SURFACE_KEY = 'openfilm.surface';
-const surfacePicked = (projectId: string) => { try { return localStorage.getItem(`${SURFACE_KEY}:${projectId}`); } catch { return null; } };
 
 const TOP_BTN =
   'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
@@ -292,6 +259,8 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     folder, mediaSources, listing, mediaMade, madeWords, madeVersions, missingMedia, setMissingMedia, findMissing,
     projectApi, onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, coverSet, onSetCover, onNewFolder, reveal,
     slots,
+    canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, noBench, surface, showWorkbench, away,
+    benchPlugins, pickBench, canToggleCanvas, setCanvasFocus, setCanvasInsert, requestCanvasFiles,
   } = useFrame(projectId);
   const keyHint = useKeyHint();
   /* the latest onLeave, for the folder's events (subscribed once per project) */
@@ -306,11 +275,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   previewErrorRef.current = previewError;
   const [info, setInfo] = React.useState<FilmInfo | null>(null);
   const preview = React.useRef<PreviewHandle>(null);
-  /* what the shell reaches of the edit when it needs it (shell/frame): the picture drawn again, the files the film plays */
-  usePublishWiring(React.useMemo(() => ({
-    reloadPicture: () => preview.current?.reload?.(),
-    srcsInUse: () => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])),
-  }), []));
 
   /* ── the project, its film and its files ── */
   React.useEffect(() => {
@@ -412,104 +376,21 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     preview.current?.captions?.();
   }, [rawListing, projectId]);
   React.useEffect(() => () => setCaptionSelection(null), [projectId]);
-  /* the canvas over the panes, or the edit: by project, as left */
+  /* which workbench is shown (the canvas over the panes, the edit, Motion, a plugin's surface) is the shell's
+     (shell/workbenches); what it asks of the edit as it changes that is kept here */
   const layoutEditingRef = React.useRef(false);
-  const [canvasOpen, setCanvasOpenState] = React.useState(() => canvasShown(projectId));
-  /** the canvas node a chat's reference asked to be shown (`n`: each time again) */
-  const [canvasFocus, setCanvasFocus] = React.useState<{ id: string; n: number } | null>(null);
-  /** a board to lay down on the canvas (an example's, copied in) */
-  const [canvasAddFiles, setCanvasAddFiles] = React.useState<{ paths: string[]; n: number } | null>(null);
-  const [canvasInsert, setCanvasInsert] = React.useState<{ doc: CanvasDoc; n: number } | null>(null);
   /* opening it stops the film playing (the panes under it are hidden): the player's pause, set once it is made */
   const pauseRef = React.useRef<() => void>(() => {});
-  React.useEffect(() => { setCanvasOpenState(canvasShown(projectId)); }, [projectId]);
-  /* the edit seen as an animation editor sees it (components/MotionTimeline), in the timeline's place */
-  const [motionOpen, keepMotionOpen] = useKeptFlag('openfilm.project.motion', false);
   /* layers the motion panel just put something on, twirled open on the motion timeline */
   const [motionReveal, setMotionReveal] = React.useState<{ ids: readonly string[]; n: number } | null>(null);
-  const setCanvasOpen = React.useCallback((open: boolean) => {
-    if (layoutEditingRef.current) return;
-    if (open) pauseRef.current();
-    setCanvasOpenState(open);
-    try { localStorage.setItem(`${CANVAS_KEY}:${projectId}`, open ? '1' : '0'); } catch { /* for this launch only */ }
-  }, [projectId]);
   /* the workspace's own setter, made further down: the motion view opens the timeline and inspector with it */
   const updateWorkspaceRef = React.useRef<(patch: Partial<WorkspaceLayout>) => void>(() => {});
-  const workMode: 'canvas' | 'edit' | 'motion' = canvasOpen ? 'canvas' : motionOpen ? 'motion' : 'edit';
-  const setWorkMode = React.useCallback((mode: 'canvas' | 'edit' | 'motion') => {
-    setCanvasOpen(mode === 'canvas');
-    if (mode !== 'canvas') keepMotionOpen(mode === 'motion');
-    if (mode === 'motion') updateWorkspaceRef.current({ timeline: true, inspector: true });
-  }, [setCanvasOpen, keepMotionOpen]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* the ways of working turned on (Settings → Advanced): one turned off while in use gives way to the first still on */
-  const workModes = useWorkModes(projectId);
   /* every plugin off: no workbench is shown, only the library (and the app's chat), which opens */
-  const noBench = workModes.length === 0;
   React.useEffect(() => { if (noBench) updateWorkspaceRef.current({ assets: true }); }, [noBench]);
-  /* a plugin's own surface shown in the panes' place (components/surfaces), by its workbench's name; none: the edit
-     or the canvas, which are held here. The one picked is kept for the project, and shown while its plugin is on */
-  const [pickedSurface, setPickedSurface] = React.useState<string | null>(() => surfacePicked(projectId));
-  React.useEffect(() => { setPickedSurface(surfacePicked(projectId)); }, [projectId]);
-  const setSurface = React.useCallback((next: string | null) => {
-    setPickedSurface(next);
-    try { if (next) localStorage.setItem(`${SURFACE_KEY}:${projectId}`, next); else localStorage.removeItem(`${SURFACE_KEY}:${projectId}`); } catch { /* for this launch only */ }
-  }, [projectId]);
-  const surface = pickedSurface != null && workModes.includes(pickedSurface) ? pickedSurface : null;
-  const showWorkbench = React.useCallback((mode: string) => {
-    if (mode === 'canvas' || mode === 'edit' || mode === 'motion') { setSurface(null); setWorkMode(mode); } else setSurface(mode);
-  }, [setWorkMode, setSurface]);
-  /* the edit and the canvas are not shown: no workbench is on, or a plugin's surface is in their place */
-  const away = noBench || surface != null;
-  /* the workbenches to pick from on the top bar (Motion is picked in the edit's timeline); the edit and the canvas
-     alone are one button that goes from one to the other */
-  const benchPlugins = usePluginsOf(projectId).filter((p) => p.on && p.workbench && p.workbench !== 'motion');
-  const surfacePlugin = surface != null ? benchPlugins.find((p) => p.workbench === surface) : undefined;
-  const pickBench = benchPlugins.length > 1 && benchPlugins.some((p) => !OWN_SURFACES.includes(p.workbench!));
-  const canToggleCanvas = workModes.includes('canvas') && workModes.length > 1;
+  /* the ways of working turned on (Settings → Advanced): one turned off while in use gives way to the first still on */
   React.useEffect(() => {
     if (surface == null && workModes.length && !workModes.includes(workMode)) showWorkbench(workModes[0]!);
   }, [workModes, workMode, surface, showWorkbench]);
-  /* what an agent lays out on the canvas (`openfilm canvas apply`) is shown: the canvas opens on it */
-  React.useEffect(() => projectEvents(projectId, (event) => { if (event.type === 'canvas') setCanvasOpen(true); }), [projectId, setCanvasOpen]);
-  /* warmed in place, then kept hidden under the edit: opening it never reloads or refits the same board */
-  const [canvasKept, setCanvasKept] = React.useState(canvasOpen);
-  React.useEffect(() => { if (canvasOpen) setCanvasKept(true); }, [canvasOpen]);
-  React.useEffect(() => { setCanvasKept(canvasShown(projectId)); }, [projectId]);
-  const canvasProject = loaded?.project.id;
-  /* Only the current visible project's board, after the project has opened and the UI has painted. */
-  React.useEffect(() => {
-    if (!canvasProject || canvasKept) return;
-    let live = true;
-    let cancel = () => {};
-    const warm = () => {
-      cancel();
-      if (document.hidden) return;
-      cancel = afterPaintIdle(() => {
-        void loadCanvas().then(() => {
-          if (live && !document.hidden) React.startTransition(() => setCanvasKept(true));
-        }, () => {});
-      });
-    };
-    warm();
-    document.addEventListener('visibilitychange', warm);
-    return () => { live = false; cancel(); document.removeEventListener('visibilitychange', warm); };
-  }, [canvasProject, canvasKept]);
-  /* the edit or the canvas, from either (keymap `work-mode`, ⌘E): not while typing, nor over a dialog */
-  const workModeRef = React.useRef(() => {});
-  workModeRef.current = () => { if (surface != null) setSurface(null); else if (canToggleCanvas) setCanvasOpen(!canvasOpen); };
-  React.useEffect(() => {
-    const press = (event: KeyboardEvent) => {
-      const el = event.target as HTMLElement | null;
-      if (event.defaultPrevented || event.repeat || keyAction(event) !== 'work-mode' || isTypingTarget(el) || el?.closest?.('[role="dialog"]')) return;
-      /* a dialog of the canvas's open (a redraw, a library): it has the keys until it closes */
-      if (document.querySelector('[data-studio-canvas] [role="dialog"]')) return;
-      event.preventDefault();
-      workModeRef.current();
-    };
-    window.addEventListener('keydown', press, true);
-    return () => window.removeEventListener('keydown', press, true);
-  }, []);
-  const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
   /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
      origin: see stillUrl) */
   const refOfFile = React.useCallback((file: WorkspaceResource, made: MediaMade | undefined = mediaMade[file.path]) => fileRef(file, file.kind === 'mg' ? mediaSources.pagePoster?.(file)
@@ -3162,16 +3043,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const savedListing = useSavedListing(mediaScope === 'saved');
   const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => importIntoSaved(files, into, onProgress, t('assets.uploadFailed')), [t]);
   /* `inDrawer`: in the assets drawer, whose side bar switches between the project's media and Saved */
-  const requestCanvasFiles = async (path: string, saved = false) => {
-    try {
-      let paths = [path];
-      if (saved) {
-        const taken = await api.takeSaved(projectId, path);
-        paths = 'path' in taken ? [taken.path] : 'clip' in taken ? [taken.clip.src] : taken.clips.map(item => item.clip.src);
-      }
-      setCanvasAddFiles({ paths: [...new Set(paths)], n: performance.now() });
-    } catch (error) { toast.showError(error instanceof Error ? error.message : String(error)); }
-  };
   const mediaPool = (inDrawer = false) => (mediaScope === 'saved' ? (
     <MediaPool
       key="saved"
@@ -5372,9 +5243,36 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     [film.film, info, mediaFacts],
   );
 
+  /* what the shell reaches of the edit when it needs it (shell/frame): the picture drawn again, the files the film
+     plays; what changing the workbench shown asks of the edit (playing stopped, the panes being rearranged, Motion's
+     panes opened); what the canvas does here (a file or a cut put in the film, a file found in the library, Settings
+     opened, the app's panel); and where the shell draws what takes the panes' place, as the window is laid out here.
+     The edit's own functions are called as the latest render made them */
+  const forShell = React.useRef({ addFromCanvas, sendFromCanvas, showFile, setSettingsOpen, hostPanel });
+  forShell.current = { addFromCanvas, sendFromCanvas, showFile, setSettingsOpen, hostPanel };
+  const chatThere = Boolean(hostPanel);
+  const chatOpen = Boolean(hostPanel?.open);
+  const shellChat = React.useMemo(() => (chatThere ? { open: chatOpen, toggle: () => forShell.current.hostPanel?.setOpen(!chatOpen) } : undefined), [chatThere, chatOpen]);
+  const places = { edit: editFree ? {} : insetStyle(editDock), canvas: canvasFree ? {} : insetStyle(canvasDock), canvasFrame: freeStyle('canvas') };
+  const placesKey = JSON.stringify(places);
+  const shellPlaces = React.useMemo(() => places, [placesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  usePublishWiring(React.useMemo(() => ({
+    reloadPicture: () => preview.current?.reload?.(),
+    srcsInUse: () => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])),
+    pause: () => pauseRef.current(),
+    rearranging: () => layoutEditingRef.current,
+    motionShown: () => updateWorkspaceRef.current({ timeline: true, inspector: true }),
+    addToFilm: (file: WorkspaceResource) => { void forShell.current.addFromCanvas(file); },
+    sendToFilm: (list: WorkspaceResource[]) => { void forShell.current.sendFromCanvas(list); },
+    showFile: (path: string, highlight?: boolean) => forShell.current.showFile(path, highlight),
+    openSettings: (section: SettingsSection) => forShell.current.setSettingsOpen(section),
+    ...(shellChat ? { chat: shellChat } : {}),
+    places: shellPlaces,
+  }), [shellChat, shellPlaces]));
+
   /* The page is the shell's (shell/ProjectFrame): what is drawn here goes into the places it keeps. In the edit's own
-     element are only the edit's panes; the top bar, what else takes the panes' place and what lies over the page are
-     put into the shell's places from here until each is the shell's own. */
+     element are only the edit's panes; the top bar and what lies over the page are put into the shell's places from
+     here until each is the shell's own. */
   if (failure) {
     return ReactDOM.createPortal(
       <div data-page-ready="error" className="workspace-shell flex flex-col items-center justify-center gap-3 bg-[var(--bg-app)] text-[13px] text-[var(--text-muted)]">
@@ -5910,44 +5808,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
               </div>
             ) : null}
           </section>
-        {ReactDOM.createPortal(<>
-          {/* a plugin's own surface in the panes' place, as the canvas is: they stay laid out as they were, hidden under it */}
-          {surface != null ? (
-            <div data-workspace-surface={surface} className="relative z-[3] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
-              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(freeGeometry ? null : insetStyle(dockGeometry)) }}>
-              <div className="relative flex min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
-                <PluginSurface id={surface} page={surfacePlugin?.page} files={surfacePlugin?.files} program={surfacePlugin?.program} runs={surfacePlugin?.runs} inApp={surfacePlugin?.inApp} element={surfacePlugin?.element} projectId={projectId} folder={loaded?.project.path ?? ''} film={folder} />
-              </div>
-            </div>
-          ) : null}
-          {/* no workbench on: where one would be says so, over the panes (and the canvas), which stay as they were */}
-          {noBench ? (
-            <div data-workspace-empty className="relative z-[3] flex min-h-0 min-w-0 items-center justify-center bg-[var(--bg-panel)] px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]"
-              style={{ gridArea: 'main', ...(freeGeometry ? null : insetStyle(dockGeometry)) }}>
-              <p className="max-w-[360px]">{t('assetDrawer.noPluginsOn')}</p>
-            </div>
-          ) : null}
-          {/* the canvas in the panes' place: they stay laid out as they were, hidden under it; the gaps round it are the
-              panes' lines (the one under the top bar, the one by the chat) */}
-          {canvasKept || canvasOpen ? (
-            /* hidden with opacity too: the canvas's library writes `visibility: visible` on each of its nodes */
-            <div data-workspace-canvas className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]" aria-hidden={!canvasOpen || away} inert={!canvasOpen || away}
-              style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...(canvasFree ? null : insetStyle(canvasDock)), ...freeStyle('canvas'), ...(canvasOpen && !away ? null : { visibility: 'hidden', opacity: 0, zIndex: 0 }) }}>
-              <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
-                <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
-                  <React.Suspense fallback={<CanvasLoading />}>
-                    <CanvasView shown={canvasOpen} projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { void addFromCanvas(file); }}
-                      onImportFiles={(dropped, progress = () => {}) => onImport(dropped, 'assets', progress)} onOpenSettings={() => setSettingsOpen('models')}
-                      focus={canvasFocus} insert={canvasInsert} addFiles={canvasAddFiles} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
-                      onSendToFilm={(list) => { void sendFromCanvas(list); }} onReveal={(path) => showFile(path, true)}
-                      {...(hostPanel ? { chat: { open: hostPanel.open, toggle: () => hostPanel.setOpen(!hostPanel.open) } } : {})}
-                      onError={toast.showError} onNotice={(message) => toast.show(message)} />
-                  </React.Suspense>
-                </LoadBoundary>
-              </div>
-            </div>
-          ) : null}
-        </>, slots.main)}
 
       {ReactDOM.createPortal(<>
       <ProjectHistoryControls projectId={projectId} projectName={loaded?.project.name ?? ''} history={history} open={historyOpen}

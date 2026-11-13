@@ -4,13 +4,16 @@
  * read with useSyncExternalStore.
  *
  * The frame is what the shell holds of the project for any workbench (shell/ProjectFrame: its files, how they were
- * made, the media pane's file operations, the toast): the shell writes it, a workbench reads it with `useFrame`. The
- * wiring is what the workbench shown lets the shell reach of its own: that workbench writes it, and the shell reads it
- * when it needs it (`wiringStore.get()` inside a callback or an effect), so nothing of a workbench's is held here.
+ * made, the media pane's file operations, the toast, which workbench is shown): the shell writes it, a workbench reads
+ * it with `useFrame`. The wiring is what the workbench shown lets the shell reach of its own: that workbench writes it,
+ * and the shell reads it when it needs it (`wiringStore.get()` inside a callback or an effect, `useWiring` to draw), so
+ * nothing of a workbench's is held here.
  *
  * Both are written in a layout effect, so the other side is drawn with the new value before the page is painted.
  */
 import * as React from 'react';
+import type { SettingsSection } from '@/components/settings/SettingsModal';
+import type { WorkspaceResource } from '@/lib/workspace-resources';
 import type { useProjectFrame } from './ProjectFrame';
 
 /** A value kept outside React, with those told when it changes. */
@@ -91,6 +94,28 @@ export interface Wiring {
   reloadPicture?: () => void;
   /** The files the film's clips play now (each clip's `src`). */
   srcsInUse?: () => readonly string[];
+  /** Stop what plays: the canvas is about to be shown over the workbench. */
+  pause?: () => void;
+  /** Whether its panes are being rearranged: the workbench shown stays the one it is meanwhile. */
+  rearranging?: () => boolean;
+  /** Motion was picked: the workbench opens what Motion is worked in. */
+  motionShown?: () => void;
+  /** Put a file of the canvas in the film. */
+  addToFilm?: (file: WorkspaceResource) => void;
+  /** Put a cut of the canvas in the film, its files one after the other, then show the film. */
+  sendToFilm?: (files: WorkspaceResource[]) => void;
+  /** Find a file in the library's media (`highlight`: pointed out there, what is picked left as it is). */
+  showFile?: (path: string, highlight?: boolean) => void;
+  /** Open Settings on a section. */
+  openSettings?: (section: SettingsSection) => void;
+  /** The app's own panel beside the workbench (none: the app has no such panel): whether it is open, and the way to open or fold it. */
+  chat?: { open: boolean; toggle: () => void };
+  /**
+   * How the workbench lays the window out, for what the shell draws in the panes' place: the room kept round the panes
+   * with the edit shown (`edit`) and with the canvas shown (`canvas`), and the canvas's own frame where the panes float
+   * (`canvasFrame`). Each is a style, the same one until it changes.
+   */
+  places?: { edit: React.CSSProperties; canvas: React.CSSProperties; canvasFrame: React.CSSProperties };
 }
 
 export const wiringStore = createStore<Wiring | null>(null);
