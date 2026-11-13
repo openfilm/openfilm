@@ -27,7 +27,7 @@ import { declared, withDeclarations } from '@/lib/clip-look';
 import { declarations } from '../../../../src/film-doc.mjs';
 import { PARTS, compoundFolder, compoundOf, dissolvedOf, srcInto, srcOutOf } from '../../../server/compound.mjs';
 import type { FilmValue } from '../../../server/ops.mjs';
-import { api, ApiError, PREFS_EVENT, projectEvents, type Clip, type Film, type Listing, type MediaMade, type MissingMedia, type Op, type ProjectFilm, type ProjectSettings, type SavedGroupClip } from '@/api';
+import { api, ApiError, projectEvents, type Clip, type Film, type Listing, type MediaMade, type Op, type ProjectSettings, type SavedGroupClip } from '@/api';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
 import { Player } from '@/editor/player';
@@ -61,7 +61,7 @@ import { LibraryTrial, type TemplatePreviewState } from '@/components/library/Li
 import { hugText } from '@/lib/text-box';
 import { textVars, withMotion, withWords } from '@/lib/text-look';
 import { apartOnTracks, stackClipEdit, toggleClipEdits, type ClipEdit } from '@/lib/film-clip-edits';
-import { mediaFetch, useMediaImages } from '@/lib/media-queue';
+import { useMediaImages } from '@/lib/media-queue';
 import { clipboardItemsOf, clipboardNow, laneOfBlock, pasteEdit, type TimelineClipboardItem } from '@/lib/timeline-clipboard';
 import {
   editModelOf, freshLink, linkedIds, magnetOn, mainTrackOf, planDetachAudio, planMove, planRippleTrim, planRoom, planSpeed, slowestSpeed, type EditMode,
@@ -88,9 +88,7 @@ import { filmFrameBox, type FilmFrameId } from '@/lib/film-frame';
 import { canvasFor, firstPictureSize, fitToCanvas } from '@/lib/canvas-fit';
 import { positionOf } from '@/lib/stage-crop';
 import { createViewerZoom } from '@/lib/viewer-zoom';
-import { decodes, type PlayCheck } from '@/lib/decodes';
-import { factsOfProbe, mediaListingOf, resourceKindOf, srcHitsAsset, warmProjectMedia, type MediaListing, type MediaProxy, type MediaResult, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
-import { recycleRefusalOf } from '@/lib/recycle';
+import { factsOfProbe, resourceKindOf, srcHitsAsset, type WorkspaceResource } from '@/lib/workspace-resources';
 import { BrandLoadingScreen } from './BrandLoadingScreen';
 import { SettingsModal } from './settings/SettingsModal';
 import { useSettings } from './settings/use-settings';
@@ -147,7 +145,6 @@ import { FilmFullscreenBar, useFullscreenKeys } from './FilmFullscreenBar';
 import { ViewerBar } from './ViewerBar';
 import { ViewerZoom, ViewerZoomButton } from './ViewerZoom';
 import type { PlaybackClock } from './LiveTime';
-import { Toast, useToast } from './Toast';
 import { SpendAsks } from './SpendAsks';
 import { ExportCenter } from './export/ExportCenter';
 import { PasteAttrsDialog } from './PasteAttrsDialog';
@@ -172,7 +169,6 @@ import { PropertiesSection, type PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
 import { SAVED, importIntoSaved, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { deliveryGainDb, deliveryLoudness, onDeliveryLoudness } from '@/lib/delivery-loudness';
-import { batchMap } from '@/lib/batch-map';
 import { groupInsertAt, groupInsertOps } from '@/lib/saved-insert';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
 import type { MaskSession } from '@/lib/stage-mask';
@@ -181,6 +177,7 @@ import { nextOverrides, overrideOf, type OverrideGeometry, type OverrideTarget }
 import { compactScale, type MgTransform, type NodeOverride, type OverridePivot, type StageElement, type StageElementStyle, type StageGeometry } from '@/lib/stage-types';
 import { usePreviewPrefs } from '@/lib/preview-prefs';
 import { isTextField, isTypingTarget } from './typing-target';
+import { useFrame, usePublishWiring } from '@/shell/frame';
 
 /** How far a caption track's translation sits above it (% of the frame): about a line. */
 const TRANSLATION_LIFT_PCT = 7;
@@ -288,15 +285,17 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   onLeave: () => void;
 }) {
   const t = useT();
-  const toast = useToast();
+  /* what the shell holds of the project (shell/ProjectFrame): its files and how they were made, the media pane's
+     operations on them, the toast. The project and its files are still read here, and put there with its setters */
+  const {
+    toast, showToast, loaded, setLoaded, failure, setFailure, filesTick, setFilesTick, rawListing, setRawListing, facts, proxies, onUndecoded, prefsTick,
+    folder, mediaSources, listing, mediaMade, madeWords, madeVersions, missingMedia, setMissingMedia, findMissing,
+    projectApi, onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, coverSet, onSetCover, onNewFolder, reveal,
+  } = useFrame(projectId);
   const keyHint = useKeyHint();
   /* the latest onLeave, for the folder's events (subscribed once per project) */
   const leaveRef = React.useRef(onLeave);
   leaveRef.current = onLeave;
-  /* how many times the project's files changed since it opened (see the folder events below) */
-  const [filesTick, setFilesTick] = React.useState(0);
-  const [loaded, setLoaded] = React.useState<ProjectFilm | null>(null);
-  const [failure, setFailure] = React.useState<string | null>(null);
   /** film.html is missing from the folder (an agent writing it again, or it lost): said on the picture until it is back */
   const [filmMissing, setFilmMissing] = React.useState(false);
   const filmReads = React.useRef(0);
@@ -304,10 +303,13 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const [previewError, setPreviewError] = React.useState<string | null>(null);
   const previewErrorRef = React.useRef(previewError);
   previewErrorRef.current = previewError;
-  const [rawListing, setRawListing] = React.useState<Listing | null>(null);
-  const [facts, setFacts] = React.useState<Map<string, ReturnType<typeof factsOfProbe> & { audio?: boolean }>>(new Map());
   const [info, setInfo] = React.useState<FilmInfo | null>(null);
   const preview = React.useRef<PreviewHandle>(null);
+  /* what the shell reaches of the edit when it needs it (shell/frame): the picture drawn again, the files the film plays */
+  usePublishWiring(React.useMemo(() => ({
+    reloadPicture: () => preview.current?.reload?.(),
+    srcsInUse: () => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])),
+  }), []));
 
   /* ── the project, its film and its files ── */
   React.useEffect(() => {
@@ -397,111 +399,11 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const { showError } = toast;
   React.useEffect(() => { if (film.error) showError(film.error); }, [film.error, showError]);
 
-  /* media facts (length, size, sound) of the project's videos, stills and sounds and its web pages, probed once each: a
-     page without a duration has no end, and is dropped on the timeline with a length of its own; a picture's size
-     gives its clip a box in its own shape */
-  const probed = React.useRef(new Set<string>());
-  /* the answers handed on a few times a second, not one by one (lib/batch-map) */
-  const factsIn = React.useMemo(() => batchMap<string, ReturnType<typeof factsOfProbe> & { audio?: boolean }>((batch) => {
-    setFacts((m) => { const next = new Map(m); for (const [path, f] of batch) next.set(path, f); return next; });
-  }, 250), []);
-  React.useEffect(() => () => factsIn.cancel(), [factsIn]);
-  React.useEffect(() => {
-    if (!rawListing) return;
-    const wanted = [
-      ...rawListing.files.filter((f) => f.kind === 'video' || f.kind === 'image' || f.kind === 'audio').map((f) => ({ f, page: false })),
-      /* pages: the project's, and any put in a folder of the media pane */
-      ...[...rawListing.pages, ...rawListing.files.filter((f) => f.kind === 'page')].map((f) => ({ f, page: true })),
-    ];
-    for (const { f, page } of wanted) {
-      const key = `${f.path}@${f.mtime}`;
-      if (probed.current.has(key)) continue;
-      probed.current.add(key);
-      void mediaFetch(`/api/projects/${encodeURIComponent(projectId)}/media?what=probe&path=${encodeURIComponent(f.path)}&v=${f.mtime}`, undefined, 'background')
-        .then((r) => (r.ok ? r.json() : null))
-        .then((probe) => {
-          if (!probe) return;
-          const facts = {
-            ...factsOfProbe(probe), audio: Boolean(probe.audio),
-            ...(page && !(probe.duration > 0) ? { endless: true } : {}),
-            ...(page && probe.reflows ? { reflows: true } : {}),
-          };
-          factsIn.set(f.path, facts);
-        }, () => {});
-    }
-  }, [rawListing, projectId, factsIn]);
-
-  const folder = loaded?.folder ?? '';
-  const mediaSources = React.useMemo<MediaSources>(() => {
-    const media = (what: string, path: string, mtime: number | string) => `/api/projects/${encodeURIComponent(projectId)}/media?what=${what}&path=${encodeURIComponent(path)}&v=${mtime}`;
-    return {
-      file: (f) => `${folder}${f.path.split('/').map(encodeURIComponent).join('/')}?v=${Math.round(f.mtimeMs)}`,
-      poster: (f) => (f.kind === 'video' ? media('poster', f.path, Math.round(f.mtimeMs)) : undefined),
-      wave: (f) => media('wave', f.path, Math.round(f.mtimeMs)),
-      pagePoster: (f) => media('poster', f.path, `${Math.round(f.mtimeMs)}.${filesTick}`),
-      pageSurface: (f) => `${folder}${f.path.split('/').map(encodeURIComponent).join('/')}`,
-    };
-  }, [projectId, folder, filesTick]);
   /* for the pictures' thumbnails in a menu built after the render that made it */
   const mediaSourcesRef = React.useRef(mediaSources);
   mediaSourcesRef.current = mediaSources;
-  /*
-   * proxies (studio/server/proxies.mjs): asked for the project's heavy footage whenever its files change or the
-   * preferences do, followed while they are made, and for the footage this browser does not decode (lib/decodes.ts),
-   * whose proxy is all it shows, proxies on or off. One ready for footage on the film, or other preferences, load the
-   * preview again behind the picture, so it plays what it should.
-   */
-  const [proxies, setProxies] = React.useState<Record<string, MediaProxy>>({});
-  /* the videos the preview could not play though this browser said it would (their src): told as not decoded too */
-  const unplayed = React.useRef(new Set<string>());
-  const askProxies = React.useRef<(() => void) | null>(null);
-  const onUndecoded = React.useCallback((src: string) => {
-    if (unplayed.current.has(src)) return;
-    unplayed.current.add(src);
-    askProxies.current?.();
-  }, []);
-  const [prefsTick, setPrefsTick] = React.useState(0);
-  React.useEffect(() => {
-    const changed = () => setPrefsTick((n) => n + 1);
-    window.addEventListener(PREFS_EVENT, changed);
-    return () => window.removeEventListener(PREFS_EVENT, changed);
-  }, []);
+  /* other preferences: the preview is loaded again behind the picture (the shell asks for the proxies again) */
   React.useEffect(() => { if (prefsTick) preview.current?.reload?.(); }, [prefsTick]);
-  React.useEffect(() => {
-    if (!rawListing) return undefined;
-    let alive = true;
-    let timer = 0;
-    let before: Record<string, MediaProxy> | null = null;
-    let undecoded: string[] = [];
-    const ask = async () => {
-      const answer = await fetch(`/api/projects/${encodeURIComponent(projectId)}/proxies`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ undecoded }) })
-        .then((r) => (r.ok ? r.json() : null), () => null) as { states?: Record<string, MediaProxy>; checks?: Record<string, PlayCheck> } | null;
-      if (!alive || !answer) return;
-      const states = answer.states ?? {};
-      setProxies(states);
-      /* made since the last answer, or found made for footage just said not to decode (the server had not heard yet) */
-      const now = before ? Object.keys(states).filter((path) => states[path]!.state === 'ready' && (before![path]?.state !== 'ready' || (states[path]!.needed && !before![path]?.needed))) : [];
-      if (now.some((path) => blocksRef.current.some((b) => b.src && srcHitsAsset(b.src, path)))) preview.current?.reload?.();
-      before = states;
-      const found = (await Promise.all(Object.entries(answer.checks ?? {}).map(async ([path, check]) => ((await decodes(check)) ? [] : [path])))).flat();
-      if (!alive) return;
-      for (const path of new Set([...Object.keys(states), ...Object.keys(answer.checks ?? {})])) {
-        if (!found.includes(path) && [...unplayed.current].some((src) => srcHitsAsset(src, path))) found.push(path);
-      }
-      const told = found.every((path) => undecoded.includes(path));
-      undecoded = found;
-      if (!told) void ask();
-      else if (Object.values(states).some((s) => s.state === 'waiting' || s.state === 'making')) timer = window.setTimeout(() => { void ask(); }, 1500);
-    };
-    askProxies.current = () => { window.clearTimeout(timer); void ask(); };
-    void ask();
-    return () => { alive = false; window.clearTimeout(timer); askProxies.current = null; };
-  }, [rawListing, projectId, prefsTick]);
-  const listing = React.useMemo<MediaListing | null>(
-    () => (rawListing ? mediaListingOf(rawListing, (path) => ({ ...facts.get(path), ...(proxies[path] ? { proxy: proxies[path] } : {}) }), (rawListing as { made?: string[] }).made) : null),
-    [rawListing, facts, proxies],
-  );
-  React.useEffect(() => { if (listing) warmProjectMedia(projectId, listing, mediaSources); }, [projectId, listing, mediaSources]);
   /* the caption tracks' files: read again when the folder changed (the agent may have written one), the picture too */
   React.useEffect(() => {
     if (!rawListing) return;
@@ -609,14 +511,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
   /* a file of the media pane as a reference: shown by its poster (a video, a page) or itself (a still, on Studio's
      origin: see stillUrl) */
-  /* how the project's media was made (studio/server/media-made.mjs), by path: read with the files, and again when a
-     run of `get` has put what it landed on record. A file pointed at for the agent says it too */
-  const [mediaMade, setMediaMade] = React.useState<Record<string, MediaMade>>({});
-  React.useEffect(() => {
-    let live = true;
-    void api.mediaMade(projectId).then((made) => { if (live) setMediaMade(made); }, () => {});
-    return () => { live = false; };
-  }, [projectId, filesTick]);
   const refOfFile = React.useCallback((file: WorkspaceResource, made: MediaMade | undefined = mediaMade[file.path]) => fileRef(file, file.kind === 'mg' ? mediaSources.pagePoster?.(file)
     : file.kind === 'image' ? stillUrl(projectId, file.path, Math.round(file.mtimeMs)) : file.kind === 'video' ? mediaSources.poster?.(file) : undefined, made), [mediaSources, projectId, mediaMade]);
   /* a file of the media library or of Saved pointed at for the agent: brought into the project first (how it was made comes
@@ -2296,7 +2190,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
    */
   const [libraryTrial, setLibraryTrial] = React.useState<LibraryItem | null>(null);
   const [templateStatus, setTemplateStatus] = React.useState<Partial<Record<string, 'failed'>>>({});
-  const { show: showToast } = toast;
   const onLibraryDownloadFailed = React.useCallback(() => showToast(t('assetDrawer.networkRetry')), [showToast, t]);
   const onTemplateState = React.useCallback((id: string, state: TemplatePreviewState) => {
     setTemplateStatus((current) => {
@@ -4766,42 +4659,9 @@ export function ProjectView({ projectId, onProject, onLeave }: {
   const usedSrcs = React.useMemo(() => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])), [timelineTracks]);
 
   /* ── media pane actions ── */
-  const projectApi = `/api/projects/${encodeURIComponent(projectId)}`;
-  const mediaResult = async (res: Response): Promise<MediaResult> => (res.ok ? 'ok' : res.status === 409 ? recycleRefusalOf(await res.json().catch(() => null)) ?? 'taken' : 'failed');
-  /* media kept on this computer (files.mjs bringIn): picked in the system's dialog (the app's own for a folder, when
-     it has one; 'no-dialog' where there is none), copied in (cloned where the disk can) or linked where it is kept (a
-     NAS). A link pointed elsewhere, or copied into the project in its place */
-  const postJson = React.useCallback(async (path: string, body: unknown) => {
-    const res = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    const answer = await res.json().catch(() => ({})) as Record<string, unknown>;
-    return { ok: res.ok, status: res.status, answer };
-  }, []);
-  const onPick = React.useCallback(async (title: string, folder: boolean): Promise<string[] | 'no-dialog'> => {
-    if (folder && studioHost?.folders?.pick) { const path = await studioHost.folders.pick({ title }); return path ? [path] : []; }
-    const { ok, status, answer } = await postJson(folder ? '/api/pick-folder' : '/api/pick-files', { title });
-    if (status === 501) return 'no-dialog';
-    if (!ok) return [];
-    return folder ? (typeof answer.path === 'string' ? [answer.path] : []) : Array.isArray(answer.paths) ? answer.paths.map(String) : [];
-  }, [postJson]);
-  const onBring = React.useCallback(async (paths: string[], into: string, mode: 'auto' | 'link'): Promise<string[]> => {
-    const { ok, answer } = await postJson(`${projectApi}/files/bring`, { paths, into, mode });
-    if (!ok) throw new Error(String(answer.error ?? t('assets.uploadFailed')));
-    /* big media that could only come in as a second copy was left where it is kept, and linked: said, so it is no surprise */
-    if (mode === 'auto' && Array.isArray(answer.linked) && answer.linked.length) showToast(t('media.keptInPlace').replace('{n}', String(answer.linked.length)));
-    return Array.isArray(answer.landed) ? answer.landed.map(String) : [];
-  }, [projectApi, postJson, t, showToast]);
-  const onRelink = React.useCallback(async (path: string, folder: boolean): Promise<MediaResult> => {
-    const to = (await onPick(t('media.pickRelink'), folder));
-    if (to === 'no-dialog' || !to.length) return 'ok';
-    return (await postJson(`${projectApi}/files/relink`, { path, to: to[0] })).ok ? 'ok' : 'failed';
-  }, [projectApi, postJson, onPick, t]);
-  const onCollect = React.useCallback(async (path: string): Promise<MediaResult> => (
-    (await postJson(`${projectApi}/files/collect`, { path })).ok ? 'ok' : 'failed'
-  ), [projectApi, postJson]);
   /* media that cannot be found (studio/server/media-reconnect.mjs): asked for when a link leads nowhere or a clip
      names a file that is gone. What Studio finds on its own is connected again unasked, and said once; for the
      rest the person points at the folder it is in now */
-  const [missingMedia, setMissingMedia] = React.useState<MissingMedia[]>([]);
   const linkMissing = React.useMemo(() => Object.values(rawListing?.links ?? {}).some((l) => l.missing), [rawListing]);
   const clipMissing = React.useMemo(() => [...mediaTrouble.values()].includes('missing'), [mediaTrouble]);
   React.useEffect(() => {
@@ -4810,11 +4670,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
     void api.missingMedia(projectId).then((missing) => { if (live) setMissingMedia(missing); }, () => {});
     return () => { live = false; };
   }, [projectId, rawListing, linkMissing, clipMissing]);
-  /* how the project's media was made (studio/server/media-made.mjs), by path: read with the files, and again when a
-     run of `get` has put what it landed on record. The media pane searches the words and shows versions as one; the
-     inspector says it all, and asks for the same once more (`mediaMade`, read above with the files) */
-  const madeWords = React.useCallback((file: WorkspaceResource) => mediaMade[file.path]?.words, [mediaMade]);
-  const madeVersions = React.useCallback((file: WorkspaceResource) => mediaMade[file.path]?.versions, [mediaMade]);
   /* what "Make another" made is picked once the listing has it (it may have it before the run answers, or after) */
   const [pickWhenListed, setPickWhenListed] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -4846,77 +4701,12 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       onAgain: () => makeAgain(made),
     } : undefined;
   };
-  /* media kept elsewhere is renamed or moved without the project's folder changing: its links are looked at again
-     when the person comes back to the window, and the listing is taken when one of them changed */
-  const hasLinks = React.useMemo(() => Object.keys(rawListing?.links ?? {}).length > 0, [rawListing]);
-  React.useEffect(() => {
-    if (!hasLinks) return undefined;
-    const back = () => {
-      void api.files(projectId).then((next) => setRawListing((now) => (JSON.stringify(now?.links ?? {}) === JSON.stringify(next.links ?? {}) ? now : next)), () => {});
-    };
-    window.addEventListener('focus', back);
-    return () => window.removeEventListener('focus', back);
-  }, [hasLinks, projectId]);
   React.useEffect(() => projectEvents(projectId, (e) => {
     if (e.type !== 'files' || !e.reconnected) return;
     showToast(t('media.reconnected').replace('{n}', String(e.reconnected)));
     /* the picture had nothing to draw for it: drawn again now that it is back */
     preview.current?.reload?.();
   }), [projectId, showToast, t]);
-  const findMissing = React.useCallback(async () => {
-    const picked = await onPick(t('media.pickMissingFolder'), true);
-    if (picked === 'no-dialog') { toast.show(t('media.noDialog')); return; }
-    if (!picked[0]) return;
-    try {
-      const { found, missing } = await api.reconnectMedia(projectId, picked[0]);
-      setMissingMedia(missing);
-      if (found) preview.current?.reload?.();
-      toast.show(!found ? t('media.reconnectNone')
-        : missing.length ? t('media.reconnectedSome').replace('{n}', String(found)).replace('{left}', String(missing.length))
-          : t('media.reconnected').replace('{n}', String(found)));
-    } catch (e) { toast.showError(e instanceof Error ? e.message : String(e)); }
-  }, [projectId, onPick, toast, t]);
-  /*
-   * resolves with where each file landed (a taken name gets a number); one that is no readable media is said at once.
-   * Each file's progress is its bytes sent (XMLHttpRequest: fetch cannot tell how much of a body has gone), then 1 and
-   * where it landed
-   */
-  const onImport = React.useCallback(async (files: File[], into: string, onProgress: ImportProgress): Promise<string[]> => {
-    const landed: string[] = [];
-    /* in the app a dropped file's path is known: copied on this computer (cloned where the disk can: at once, and no
-       more room taken), not sent through the page */
-    const paths = files.map((file) => studioHost?.folders?.pathOf(file) ?? '');
-    if (paths.length && paths.every(Boolean)) {
-      for (const [i, path] of paths.entries()) {
-        onProgress(i, -1);
-        // eslint-disable-next-line no-await-in-loop
-        const [at] = await onBring([path], into, 'auto');
-        if (at) landed.push(at);
-        onProgress(i, 1, at);
-      }
-      return landed;
-    }
-    for (const [i, file] of files.entries()) {
-      // eslint-disable-next-line no-await-in-loop
-      const { ok, body } = await new Promise<{ ok: boolean; body: { path?: string; error?: string; unreadable?: string } }>((done) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', `${projectApi}/files?path=${encodeURIComponent(`${into}/${file.name}`)}`);
-        xhr.upload.onprogress = (e) => { if (e.lengthComputable && e.total > 0) onProgress(i, Math.min(0.99, e.loaded / e.total)); };
-        xhr.onload = () => {
-          let body = {};
-          try { body = JSON.parse(xhr.responseText); } catch { /* no answer to read */ }
-          done({ ok: xhr.status >= 200 && xhr.status < 300, body });
-        };
-        xhr.onerror = () => done({ ok: false, body: {} });
-        xhr.send(file);
-      });
-      if (!ok) throw new Error(String(body.error ?? t('assets.uploadFailed')));
-      if (body.path) landed.push(body.path);
-      if (body.unreadable) toast.show(t('assets.unreadable').replace('{name}', file.name).replace('{why}', body.unreadable));
-      onProgress(i, 1, body.path);
-    }
-    return landed;
-  }, [projectApi, t, toast, onBring]);
   /* the person's own from this computer, into the project, for a template's places: where they landed */
   const importOwn = React.useCallback(async (): Promise<string[]> => {
     const picked = await onPick(t('template.import'), false);
@@ -5102,33 +4892,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       window.removeEventListener('dragend', done);
     };
   }, []);
-  const onMove = React.useCallback(async (from: string, to: string) => mediaResult(await fetch(`${projectApi}/files`, {
-    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ from, to }),
-  })), [projectApi]);
-  const onMoveCheck = React.useCallback(async (from: string, to: string) => {
-    const res = await fetch(`${projectApi}/files`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ from, to, check: true }) });
-    const body = await res.json().catch(() => ({})) as { unseen?: { file: string; unseen: string[] }[] };
-    return res.ok ? body.unseen ?? [] : [];
-  }, [projectApi]);
-  const onDelete = React.useCallback(async (path: string) => mediaResult(await fetch(`${projectApi}/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' })), [projectApi]);
-  const onExtractAudio = React.useCallback(async (path: string) => mediaResult(await fetch(`${projectApi}/files/audio`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }),
-  })), [projectApi]);
-  /* a picture of the project: the project's card in the projects list */
-  const coverSet = React.useCallback((cover: number | null) => {
-    setLoaded((current) => current?.project.id === projectId
-      ? { ...current, project: { ...current.project, cover: cover ?? undefined } } : current);
-    toast.show(t('projects.coverSet'));
-  }, [projectId, toast, t]);
-  const onSetCover = React.useCallback((path: string) => {
-    void api.setCover(projectId, { path }).then(coverSet, () => toast.showError(t('projects.coverFailed')));
-  }, [projectId, coverSet, toast, t]);
-  const onNewFolder = React.useCallback(async (path: string) => mediaResult(await fetch(`${projectApi}/folders`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }),
-  })), [projectApi]);
-  const reveal = React.useCallback((path: string, original?: boolean) => {
-    void fetch(`${projectApi}/reveal`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, ...(original ? { original } : {}) }) });
-  }, [projectApi]);
 
   /* ── picture: the delivery frame, fullscreen ── */
   const stage = film.film?.stage ?? { w: 1920, h: 1080 };
@@ -6252,7 +6015,6 @@ export function ProjectView({ projectId, onProject, onLeave }: {
       />
       <PasteAttrsDialog attrs={pasteAttrsOpen ? copiedAttrs : null} onPaste={doPasteAttrs} onCancel={() => setPasteAttrsOpen(false)} />
       <SpendAsks projectId={projectId} />
-      <Toast toast={toast.current} />
     </div>
   );
 }

@@ -3,11 +3,14 @@
  * (src/skills.mjs elementIn; OpenFilm's own in plugins/<id>, loaded as anyone's is), put here and told the project.
  *
  * For now the edit's element holds the whole page (the library, the top bar, the canvas and the other plugins'
- * surfaces are still drawn by it): they are moved up here one at a time.
+ * surfaces are still drawn by it): they are moved up here one at a time. What is here already is the project's frame
+ * (shell/ProjectFrame): the project's files and the media pane's operations on them, and the toast, which a workbench
+ * is given through shell/frame.
  */
 import React from 'react';
 import { useT } from '@/i18n';
 import { useStudioPlugins } from '@/lib/plugins';
+import { ProjectFrame } from '@/shell/ProjectFrame';
 import { BrandLoadingScreen } from './BrandLoadingScreen';
 import { elementTag } from './surfaces';
 
@@ -38,7 +41,9 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           <p className="max-w-[420px] whitespace-pre-wrap px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]">{`${t('assetDrawer.surfaceFailed')}\n\n${state.error}`}</p>
         </div>
       ) : null}
-      <div ref={host} style={{ display: 'contents' }} />
+      <ProjectFrame projectId={projectId}>
+        <div ref={host} style={{ display: 'contents' }} />
+      </ProjectFrame>
     </>
   );
 }
