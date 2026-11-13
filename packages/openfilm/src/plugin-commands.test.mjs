@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { pluginCommand, runPluginCommand } from './plugin-commands.mjs';
 import { pluginsDir, setPluginOn } from './plugins.mjs';
 import { setSkillOn } from './skills.mjs';
@@ -96,6 +98,45 @@ test('OpenFilm\'s own plugins bring commands the same way, named by their id, an
   assert.match(off.error, /^The edit plugin is off: /);
   /* a plugin of OpenFilm's with no commands is no command */
   assert.equal(pluginCommand(['motion', 'add'], where), null);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('openfilm canvas is the canvas plugin\'s one command: every word after it is its own, and it runs only while the plugin is on', () => {
+  const { root, where } = places();
+  const found = pluginCommand(['canvas', 'apply', '[]'], where);
+  assert.deepEqual([found.command, found.file, found.rest, found.plugin.source], ['canvas', join(pluginsDir(), 'canvas', 'canvas.mjs'), ['apply', '[]'], 'own']);
+  assert.deepEqual(pluginCommand(['canvas'], where).rest, []);
+  assert.deepEqual(pluginCommand(['canvas', '--help'], where).rest, ['--help']);
+  setPluginOn('canvas', false, where.home);
+  const off = pluginCommand(['canvas'], where);
+  assert.equal(off.status, 1);
+  assert.equal(off.error, 'The canvas plugin is off: the person turns it on in the library\'s Plugins tab.');
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('openfilm canvas says what it takes, and where it works, as before it was the plugin\'s', () => {
+  const { root, where } = places();
+  const bin = fileURLToPath(new URL('../bin/openfilm.mjs', import.meta.url));
+  const env = { ...process.env, OPENFILM_SHARED_HOME: where.home, OPENFILM_HOME: where.home, OPENFILM_NO_UPDATE_CHECK: '1', OPENFILM_RUN: '' };
+  delete env.npm_command;
+  const cli = (/** @type {string[]} */ args, cwd = where.cwd) => spawnSync(process.execPath, [bin, ...args], { cwd, env, encoding: 'utf8' });
+  for (const args of [['canvas', '--help'], ['canvas', '-h'], ['canvas', 'apply', '--help']]) {
+    const help = cli(args);
+    assert.equal(help.status, 0, args.join(' '));
+    assert.match(help.stdout, /^openfilm canvas \[apply <steps>\]\n\n  The project's canvas: /);
+    assert.match(help.stdout, /canvas apply <steps> {3}steps on it, all taken or none/);
+  }
+  const outside = cli(['canvas'], root);
+  assert.equal(outside.status, 2);
+  assert.equal(outside.stdout, `openfilm canvas: ${root} is not in a project; \`openfilm open\` makes one\n`);
+  const wrong = cli(['canvas', 'nope']);
+  assert.equal(wrong.status, 2);
+  assert.equal(wrong.stdout, 'openfilm canvas: `canvas` shows the board, `canvas apply <steps>` changes it\n');
+  assert.equal(cli(['canvas', 'apply', '[bad']).status, 2);
+  setPluginOn('canvas', false, where.home);
+  const off = cli(['canvas']);
+  assert.equal(off.status, 1);
+  assert.equal(off.stderr, 'openfilm canvas: The canvas plugin is off: the person turns it on in the library\'s Plugins tab.\n');
   rmSync(root, { recursive: true, force: true });
 });
 
