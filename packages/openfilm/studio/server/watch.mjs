@@ -35,10 +35,12 @@ const WRITING = /(^|[/\\])([^/\\]+\.[0-9a-f-]{8,}\.tmp|\.\d+\.\d+\.importing)$/;
  * restored), so Studio's own state of the film is read again. `history-progress`: how far an action is, `op` which
  * ('save', 'restore'…).
  * `project`: the project renamed, as it is now. `canvas`: an agent changed the canvas (canvas.mjs).
+ * `plugin`: what one of OpenFilm's own plugins told the pages, from its server code (plugin-servers.mjs).
  * @typedef {{ type: 'film', rev: string } | { type: 'files', paths?: string[], reconnected?: number, made?: boolean } | { type: 'history', moved?: boolean } | { type: 'export', job: object }
  *   | { type: 'history-progress', op: string, phase: string, done: number, total: number } | { type: 'project', project: object }
  *   | { type: 'ask', ask: object } | { type: 'asked', id: string } | { type: 'notice', notice: object }
- *   | { type: 'canvas', reset?: boolean } | { type: 'film-missing' } | { type: 'gone' }} FolderEvent   `gone`: the project was deleted, or
+ *   | { type: 'canvas', reset?: boolean } | { type: 'film-missing' } | { type: 'gone' }
+ *   | { type: 'plugin', plugin: string, data: unknown }} FolderEvent   `gone`: the project was deleted, or
  *   its folder is missing. `film-missing`: its folder is there but film.html is not (being written again, or lost): the
  *   project stays open, and its pages hear of the film (`film`) once it is back
  */
