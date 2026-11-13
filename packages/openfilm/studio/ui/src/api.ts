@@ -78,7 +78,9 @@ export type PropEdit = { clip: string; prop: string; value: PropValue };
 /** one of a project's canvases: the first is `main`; `nodes`, how many it has */
 export interface CanvasBoard { id: string; name?: string; nodes: number }
 /** one of the person's characters: its pictures by what they show */
-export interface CanvasCharacter { id: string; name: string; about?: string; created: number; pictures: Array<{ role: 'face' | 'body' | 'expressions' | 'turnaround' | 'other'; url: string }> }
+/** a subject kept to reuse: a character, an object or a place */
+export type SubjectKind = 'person' | 'object' | 'place';
+export interface CanvasCharacter { id: string; name: string; kind: SubjectKind; about?: string; created: number; pictures: Array<{ role: 'face' | 'body' | 'expressions' | 'turnaround' | 'other'; url: string }> }
 /** one thing a canvas made: in this project, or (`project`) another */
 export interface CanvasMade { path: string; make: 'image' | 'video' | 'sfx' | 'music'; prompt?: string; via?: string; model?: string; at: number; project?: string; projectName?: string }
 
@@ -229,11 +231,11 @@ export const api = {
   bringMade: (id: string, made: CanvasMade) => call<{ path: string }>(`${p(id)}/canvas-made/bring`, { method: 'POST', json: { project: made.project, path: made.path } }).then((r) => r.path),
   /** the person's characters (studio/server/canvas-characters.mjs): listed, kept from this project's pictures, changed, removed, brought in */
   canvasCharacters: () => call<{ characters: CanvasCharacter[] }>('canvas-characters').then((r) => r.characters),
-  saveCanvasCharacter: (id: string, body: { name: string; about?: string; pictures: Array<{ role: string; path: string }> }) =>
+  saveCanvasCharacter: (id: string, body: { name: string; kind?: SubjectKind; about?: string; pictures: Array<{ role: string; path: string }> }) =>
     call<{ character: CanvasCharacter }>(`${p(id)}/canvas-characters`, { method: 'POST', json: body }).then((r) => r.character),
-  updateCanvasCharacter: (id: string, body: { name?: string; about?: string }) => call<{ character: CanvasCharacter }>(`canvas-characters/${encodeURIComponent(id)}`, { method: 'PATCH', json: body }),
+  updateCanvasCharacter: (id: string, body: { name?: string; kind?: SubjectKind; about?: string }) => call<{ character: CanvasCharacter }>(`canvas-characters/${encodeURIComponent(id)}`, { method: 'PATCH', json: body }),
   removeCanvasCharacter: (id: string) => call<Record<string, never>>(`canvas-characters/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  useCanvasCharacter: (project: string, id: string) => call<{ name: string; about?: string; pictures: Array<{ role: string; path: string }> }>(`${p(project)}/canvas-characters/${encodeURIComponent(id)}`, { method: 'POST' }),
+  useCanvasCharacter: (project: string, id: string) => call<{ name: string; kind: SubjectKind; about?: string; pictures: Array<{ role: string; path: string }> }>(`${p(project)}/canvas-characters/${encodeURIComponent(id)}`, { method: 'POST' }),
   removeCanvasBoard: (id: string, board: string) => call<{ boards: CanvasBoard[] }>(`${p(id)}/canvases/${encodeURIComponent(board)}`, { method: 'DELETE' }).then((r) => r.boards),
   /** a text node's words written by the person's own agent (studio/server/canvas.mjs canvasWriteRoute); 409 without one */
   canvasWrite: (id: string, prompt: string, inputs: string[], model?: HostWritingModel, attachments: string[] = []) =>

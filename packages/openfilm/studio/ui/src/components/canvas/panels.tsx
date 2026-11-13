@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, ChevronRight, Upload, Image as ImageIcon, SunMedium, Wrench, Expand,
+  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Eraser, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, ChevronRight, AtSign, Upload, Image as ImageIcon, SunMedium, Wrench, Expand,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -24,6 +24,8 @@ import { keepLastModel, useBoard, type Choice, type MakeData } from './board';
 import { ProviderMark } from '../settings/ProviderMark';
 import { useDraft } from './words';
 import { DocSheet } from './doc';
+import { KIND_ICON, coverOf, useSubjects } from './libraries';
+import type { CanvasCharacter } from '@/api';
 import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
 import { VoiceId, VoicePicker, defaultVoice, serviceOf, voicesOf } from './voices';
 import { WRITING_ATTACHMENT_ACCEPT, WRITING_ATTACHMENT_LIMIT, writingAttachmentKind } from '../../../../../src/canvas-attachments.mjs';
@@ -461,6 +463,9 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const [open, setOpen] = React.useState<string | null>(null);
   /* the words written in a taller box (the panel's ↗) */
   const [expanded, setExpanded] = React.useState(false);
+  const area = React.useRef<HTMLTextAreaElement>(null);
+  const [mention, setMention] = React.useState<{ at: number; query: string; index: number } | null>(null);
+  const subjectList = useSubjects();
   const shown = board.single === id && !board.readOnly;
   const media = MAKE_MEDIA[data.make];
   const takesPictures = media !== 'audio';
@@ -539,6 +544,34 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
     </div>
   );
   const presetMenu = <PresetPicker picked={preset?.id} hasPicture={hasPicture} onPick={usePreset} />;
+  /* @ a subject: the list opens on an @ typed at a word's start, narrowed by what follows it */
+  const takesSubjects = data.make === 'image' || data.make === 'video';
+  const matches = (subjectList ?? []).filter((c) => !mention?.query || `${c.name} ${c.about ?? ''}`.toLowerCase().includes(mention.query.toLowerCase())).slice(0, 8);
+  const findMention = (box: HTMLTextAreaElement) => {
+    const before = box.value.slice(0, box.selectionStart ?? box.value.length);
+    const found = /(^|\s)@([^\s@]{0,24})$/.exec(before);
+    setMention(found ? { at: before.length - found[2]!.length - 1, query: found[2]!, index: 0 } : null);
+  };
+  const pickSubject = (c: CanvasCharacter) => {
+    const box = area.current;
+    if (!box || !mention) return;
+    const end = mention.at + 1 + mention.query.length;
+    prompt.set(`${box.value.slice(0, mention.at)}@${c.name} ${box.value.slice(end)}`);
+    const caret = mention.at + c.name.length + 2;
+    setMention(null);
+    board.useSubject(id, c);
+    requestAnimationFrame(() => { box.focus(); box.setSelectionRange(caret, caret); });
+  };
+  /* the @ button: an @ put where the caret is, the list opened */
+  const startMention = () => {
+    const box = area.current;
+    if (!box) return;
+    const at = box.selectionStart ?? box.value.length;
+    const gap = at > 0 && !/\s/.test(box.value[at - 1]!) ? ' ' : '';
+    prompt.set(`${box.value.slice(0, at)}${gap}@${box.value.slice(at)}`);
+    setMention({ at: at + gap.length, query: '', index: 0 });
+    requestAnimationFrame(() => { box.focus(); box.setSelectionRange(at + gap.length + 1, at + gap.length + 1); });
+  };
   return (
     <Composer id={id} shown={shown} expanded={expanded} setExpanded={setExpanded}
       corner={tools.length ? (
@@ -654,18 +687,57 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             </span>
           </div>
         ) : null}
-        <textarea
-          {...prompt.props}
-          rows={expanded ? 14 : 3}
-          onFocus={board.willChange}
-          onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing) return;
-            if (event.key === 'Escape') event.currentTarget.blur();
-            else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); board.make(id); }
-          }}
-          placeholder={preset ? t('canvas.presets.hint') : t(`canvas.panel.placeholder.${data.make}`)}
-          className={PROMPT}
-        />
+        <div className="relative">
+          <textarea
+            {...prompt.props}
+            ref={area}
+            rows={expanded ? 14 : 3}
+            onFocus={board.willChange}
+            onChange={(event) => { prompt.props.onChange(event); findMention(event.currentTarget); }}
+            onClick={(event) => findMention(event.currentTarget)}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
+              /* the @ list open: its keys */
+              if (mention && takesSubjects) {
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  const n = matches.length || 1;
+                  setMention({ ...mention, index: (mention.index + (event.key === 'ArrowDown' ? 1 : n - 1)) % n });
+                  return;
+                }
+                if ((event.key === 'Enter' || event.key === 'Tab') && matches[mention.index]) { event.preventDefault(); pickSubject(matches[mention.index]!); return; }
+                if (event.key === 'Escape') { event.preventDefault(); setMention(null); return; }
+              }
+              if (event.key === 'Escape') event.currentTarget.blur();
+              else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); board.make(id); }
+            }}
+            onBlur={() => window.setTimeout(() => setMention(null), 150)}
+            placeholder={preset ? t('canvas.presets.hint') : t(`canvas.panel.placeholder.${data.make}`)}
+            className={PROMPT}
+          />
+          {mention && takesSubjects ? (
+            /* the subjects to name with @: a picked one goes in, its picture wired into the node */
+            <div className={`absolute bottom-full left-0 z-30 mb-1 w-[300px] p-1 ${CARD}`} onMouseDown={(event) => event.preventDefault()}>
+              <div className="flex h-7 items-center px-2 text-[12px] text-[var(--cv-ink-3)]">{t('canvas.subjects.title')}</div>
+              {matches.map((c, i) => {
+                const Icon = KIND_ICON[c.kind];
+                const cover = coverOf(c);
+                return (
+                  <button key={c.id} type="button" onMouseEnter={() => setMention({ ...mention, index: i })} onClick={() => pickSubject(c)}
+                    className={`flex h-10 w-full items-center gap-2.5 rounded-[8px] px-2 text-left text-[13px] text-[var(--cv-ink)] ${i === mention.index ? 'bg-[var(--cv-float-hover)]' : ''}`}>
+                    <span className="h-7 w-7 shrink-0 overflow-hidden rounded-[6px] bg-[var(--cv-chip)]">{cover ? <img src={cover} alt="" className="h-full w-full object-cover" /> : null}</span>
+                    <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                    <span className="flex shrink-0 items-center gap-1 text-[11.5px] text-[var(--cv-ink-3)]"><Icon size={12} />{t(`canvas.subjects.kinds.${c.kind}`)}</span>
+                  </button>
+                );
+              })}
+              {!matches.length ? <div className="px-2 py-2 text-[12.5px] leading-snug text-[var(--cv-ink-3)]">{t(subjectList?.length ? 'canvas.subjects.noMatch' : 'canvas.subjects.empty')}</div> : null}
+              <div className="my-1 h-px bg-[var(--cv-float-line)]" />
+              <button type="button" onClick={() => { setMention(null); board.openLibrary('characters', id); }}
+                className="flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><Plus size={14} />{t('canvas.subjects.manage')}</button>
+            </div>
+          ) : null}
+        </div>
         <div className={COMPOSER_FOOTER}>
           {every.length ? (
             <Popover open={open === 'model'} onOpenChange={(v) => setOpen(v ? 'model' : null)} placement="auto"
@@ -803,6 +875,12 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                 </div>
               </Popover>
             </>
+          ) : null}
+          {takesSubjects ? (
+            <Tooltip label={t('canvas.subjects.mention')}>
+              <button type="button" aria-label={t('canvas.subjects.mention')} onClick={startMention}
+                className="flex h-9 w-9 items-center justify-center rounded-[10px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]"><AtSign size={17} /></button>
+            </Tooltip>
           ) : null}
           <span className="flex-1" />
           {unused ? <span className="mr-1 truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.make.unused').replace('{n}', String(unused))}</span> : null}

@@ -2004,7 +2004,8 @@ export const zhCN: Words = {
     library: { title: '素材库', styles: '风格库', effects: '特效库', short: { styles: '风格', effects: '特效' }, tabs: { all: '{kind}广场', fav: '我的收藏', recent: '最近使用' }, search: { styles: '搜索风格名称', effects: '搜索特效名称' }, groups: { all: '全部', photo: '摄影写真', illustration: '风格插画', three: '三维', design: '平面设计', move: '运镜', drone: '航拍', time: '时间', feel: '视角' }, like: '收藏', unlike: '取消收藏', noneLiked: '还没有收藏', noneUsed: '还没有用过', tag: { styles: '风格', effects: '运镜' }, styleChip: '风格', effectChip: '特效' },
     styles: { names: { film: '胶片摄影', cinema: '电影感', documentary: '黑白纪实', portrait: '棚拍人像', product: '商品棚拍', watercolor: '水彩', oil: '油画', sketch: '铅笔素描', flat: '扁平插画', anime: '日系动画', comic: '美式漫画', clay: '黏土定格', toon3d: '三维动画', lowpoly: '低多边形', miniature: '移轴微缩', poster: '极简海报', retro: '七十年代印刷', neon: '霓虹夜景' } },
     effects: { names: { pushIn: '推镜头', pullOut: '拉镜头', orbit: '环绕', track: '横移跟拍', follow: '背后跟随', whip: '甩镜', dollyZoom: '希区柯克变焦', craneUp: '升镜头', dive: '俯冲航拍', clouds: '穿云而入', fpv: 'FPV 穿越', slowMo: '慢动作', timelapse: '延时摄影', bulletTime: '子弹时间', handheld: '手持', pov: '第一人称', rack: '焦点转移' } },
-    characters: { title: '角色库', chip: '角色库', mine: '我的角色库', search: '搜索角色', none: '还没有角色。用几句话生成一个，或用已有的图片创建，之后在每张图、每段视频里都是同一个人。', create: '创建新角色', generateNew: '生成新角色', fromComputer: '从本地导入', fromAssets: '从资源导入', newTitle: '创建你的新角色', nameTitle: '给角色起个名字', name: '名字', describe: '描述你的角色特征：年龄、外貌、发型、服装、特点…', aboutHint: '关于这个角色（可选）', generate: '生成', save: '保存', cancel: '取消', next: '下一步', pickAssets: '选出这个角色的图片，主图放第一张', edit: '编辑角色', remove: '删除', add: '添加到画布', useHere: '用在这里', keep: '存为角色', kept: '已存入角色库：{name}', noPictures: '这里没有可以存为角色的图片' },
+    characters: { title: '主体库', chip: '主体', mine: '我的主体', search: '搜索主体', none: '还没有主体。人物、物品、场景都可以存成主体：用几句话生成，或用已有的图片创建，之后在提示词里 @ 它，每张图、每段视频里都是同一个。', create: '新建主体', generateNew: '用文字生成', fromComputer: '从本地导入', fromAssets: '从资源导入', newTitle: '生成新的主体', nameTitle: '给主体起个名字', name: '名字', describe: '描述你的角色特征：年龄、外貌、发型、服装、特点…', aboutHint: '关于它的几句话（可选）', generate: '生成', save: '保存', cancel: '取消', next: '下一步', pickAssets: '选出这个主体的图片，主图放第一张', edit: '编辑主体', remove: '删除', add: '添加到画布', useHere: '用在这里', keep: '存为主体', kept: '已存入主体库：{name}', noPictures: '这里没有可以存为主体的图片' },
+    subjects: { title: '主体', mention: '@ 主体', manage: '管理主体库', noMatch: '没有这个名字的主体', empty: '还没有主体，去主体库新建一个', kinds: { all: '全部', person: '人物', object: '物品', place: '场景' }, describe: { person: '描述你的角色特征：年龄、外貌、发型、服装、特点…', object: '描述这件物品：是什么、材质、颜色、形状、细节…', place: '描述这个地方：在哪里、什么时代、建筑与陈设、光线氛围…' } },
     noteFor: {
       tts: '要说的台词，一字不差',
       image: '描述这个画面：谁、在哪、在做什么、什么光线',
@@ -2126,7 +2127,7 @@ export const zhCN: Words = {
       expand: '展开',
       collapse: '收起',
       add: '添加参考',
-      tools: { title: '工具', characters: '角色' },
+      tools: { title: '工具', characters: '主体' },
       models: {
         search: '搜索模型',
         mine: '你的服务',

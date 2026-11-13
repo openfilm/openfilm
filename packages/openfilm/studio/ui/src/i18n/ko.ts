@@ -2000,7 +2000,8 @@ export const ko: Words = {
     library: { title: '소재 라이브러리', styles: '스타일 라이브러리', effects: '효과 라이브러리', short: { styles: '스타일', effects: '효과' }, tabs: { all: '{kind} 갤러리', fav: '즐겨찾기', recent: '최근 사용' }, search: { styles: '스타일 검색', effects: '효과 검색' }, groups: { all: '전체', photo: '사진', illustration: '일러스트', three: '3D', design: '그래픽 디자인', move: '카메라 무빙', drone: '항공', time: '시간', feel: '시점' }, like: '즐겨찾기에 추가', unlike: '즐겨찾기에서 제거', noneLiked: '아직 즐겨찾기가 없습니다', noneUsed: '아직 사용한 항목이 없습니다', tag: { styles: '스타일', effects: '카메라' }, styleChip: '스타일', effectChip: '효과' },
     styles: { names: { film: '35mm 필름', cinema: '시네마틱', documentary: '흑백 다큐멘터리', portrait: '스튜디오 인물', product: '제품 촬영', watercolor: '수채화', oil: '유화', sketch: '연필 스케치', flat: '플랫 벡터', anime: '애니메이션', comic: '미국 코믹스', clay: '클레이 애니메이션', toon3d: '3D 애니메이션', lowpoly: '로우 폴리', miniature: '틸트 시프트 미니어처', poster: '미니멀 포스터', retro: '70년대 인쇄', neon: '네온 야경' } },
     effects: { names: { pushIn: '푸시 인', pullOut: '풀 아웃', orbit: '오빗', track: '트래킹', follow: '팔로우', whip: '휩 팬', dollyZoom: '돌리 줌', craneUp: '크레인 업', dive: '드론 다이브', clouds: '구름 통과', fpv: 'FPV 비행', slowMo: '슬로 모션', timelapse: '타임랩스', bulletTime: '불릿 타임', handheld: '핸드헬드', pov: '1인칭 시점', rack: '랙 포커스' } },
-    characters: { title: '캐릭터', chip: '캐릭터', mine: '내 캐릭터', search: '캐릭터 검색', none: '아직 캐릭터가 없습니다. 몇 마디로 생성하거나 가진 이미지로 만들면 모든 이미지와 영상에서 같은 인물이 됩니다.', create: '새 캐릭터', generateNew: '캐릭터 생성', fromComputer: '이 컴퓨터에서', fromAssets: '에셋에서', newTitle: '새 캐릭터 만들기', nameTitle: '캐릭터 이름 정하기', name: '이름', describe: '어떤 인물인지: 나이, 외모, 머리, 옷차림, 특징…', aboutHint: '이 캐릭터에 대해 (선택)', generate: '생성', save: '저장', cancel: '취소', next: '다음', pickAssets: '이 캐릭터의 이미지를 고르세요 (대표 이미지를 먼저)', edit: '캐릭터 편집', remove: '삭제', add: '캔버스에 추가', useHere: '여기에 사용', keep: '캐릭터로 저장', kept: '"{name}"을(를) 캐릭터에 저장했습니다', noPictures: '캐릭터로 저장할 이미지가 없습니다' },
+    characters: { title: '주체 라이브러리', chip: '주체', mine: '내 주체', search: '주체 검색', none: '아직 주체가 없습니다. 인물, 사물, 장소를 주체로 저장할 수 있습니다. 몇 마디로 생성하거나 가진 이미지로 만든 뒤 프롬프트에서 @ 하면 모든 이미지와 영상에서 같은 모습이 됩니다.', create: '새 주체', generateNew: '글로 생성', fromComputer: '이 컴퓨터에서', fromAssets: '에셋에서', newTitle: '새 주체 생성', nameTitle: '주체 이름 정하기', name: '이름', describe: '어떤 사람인지: 나이, 외모, 머리, 옷, 특징…', aboutHint: '간단한 설명(선택)', generate: '생성', save: '저장', cancel: '취소', next: '다음', pickAssets: '이 주체의 이미지를 고르세요. 대표 이미지를 먼저', edit: '주체 편집', remove: '삭제', add: '캔버스에 추가', useHere: '여기에 사용', keep: '주체로 저장', kept: '“{name}”을(를) 주체에 저장했습니다', noPictures: '주체로 저장할 이미지가 없습니다' },
+    subjects: { title: '주체', mention: '주체 @', manage: '주체 라이브러리 관리', noMatch: '그 이름의 주체가 없습니다', empty: '아직 주체가 없습니다. 라이브러리에서 만들어 보세요', kinds: { all: '전체', person: '인물', object: '사물', place: '장소' }, describe: { person: '어떤 사람인지: 나이, 외모, 머리, 옷, 특징…', object: '어떤 물건인지: 소재, 색, 모양, 디테일…', place: '어떤 장소인지: 어디, 언제, 건물과 소품, 빛과 분위기…' } },
     noteFor: {
       tts: '말할 대사를 그대로',
       image: '장면을 설명하세요: 누가, 어디서, 무엇을, 어떤 빛',
@@ -2122,7 +2123,7 @@ export const ko: Words = {
       expand: '크게',
       collapse: '작게',
       add: '참조 추가',
-      tools: { title: '도구', characters: '캐릭터' },
+      tools: { title: '도구', characters: '주체' },
       models: {
         search: '모델 검색',
         mine: '내 서비스',

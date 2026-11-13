@@ -5,9 +5,9 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { AudioLines, ChevronLeft, Clock, FileX2, Film, Heart, Image as ImageIcon, PenLine, Search, Sparkles, Trash2, Upload, UserPlus, UserRound, X } from 'lucide-react';
+import { AudioLines, Box, ChevronLeft, Clock, FileX2, Film, Heart, Image as ImageIcon, Mountain, PenLine, Plus, Search, Sparkles, Trash2, Upload, UserRound, X } from 'lucide-react';
 import { useT } from '@/i18n';
-import { api, type CanvasCharacter, type CanvasMade } from '@/api';
+import { api, type CanvasCharacter, type CanvasMade, type SubjectKind } from '@/api';
 import { EFFECTS, EFFECT_GROUPS, STYLES, STYLE_GROUPS, libraryKept, noteUsed, toggleFavorite, type LibraryItem, type LibraryKind } from '@/lib/canvas-library';
 
 /** the window itself: 1200 × 780 at most, 24 round, a column of its parts at the left when it has them */
@@ -291,17 +291,40 @@ export function MaterialLibrary({ kind, onPick, onClose }: {
   );
 }
 
-/* ── the characters ── */
+/* ── the subjects: characters, objects, places ── */
 
 /** what a character's picture is of, as made from its presets: the portrait, the full body, its expressions, a turnaround */
 export const CHARACTER_PARTS = [
   { role: 'face', preset: 'portrait' }, { role: 'body', preset: 'fullBody' }, { role: 'expressions', preset: 'expressions' }, { role: 'turnaround', preset: 'turnaround16' },
 ] as const;
+/** what a new subject's pictures are made as, by its kind: an object its main shot and its views, a place a view and its sheet */
+export const SUBJECT_PARTS: Record<SubjectKind, ReadonlyArray<{ role: 'face' | 'body' | 'expressions' | 'turnaround'; preset: string }>> = {
+  person: CHARACTER_PARTS,
+  object: [{ role: 'face', preset: 'whiteShot' }, { role: 'turnaround', preset: 'product' }],
+  place: [{ role: 'face', preset: 'concept' }, { role: 'turnaround', preset: 'scene' }],
+};
+export const SUBJECT_KINDS: SubjectKind[] = ['person', 'object', 'place'];
+export const KIND_ICON: Record<SubjectKind, React.ComponentType<{ size?: number; className?: string }>> = { person: UserRound, object: Box, place: Mountain };
+/** a subject's picture shown for it: its main one */
+export const coverOf = (c: CanvasCharacter) => (c.pictures.find((p) => p.role === 'face') ?? c.pictures.find((p) => p.role === 'body') ?? c.pictures[0])?.url;
+
+/* the subjects as last read, shared by the library and every composer's @ list */
+let subjects: CanvasCharacter[] | null = null;
+const heard = new Set<() => void>();
+export function loadSubjects() {
+  void api.canvasCharacters().then((list) => { subjects = list; heard.forEach((f) => f()); }, () => { subjects = []; heard.forEach((f) => f()); });
+}
+export function useSubjects(): CanvasCharacter[] | null {
+  const [, tick] = React.useReducer((n: number) => n + 1, 0);
+  React.useEffect(() => { heard.add(tick); if (subjects === null) loadSubjects(); return () => { heard.delete(tick); }; }, []);
+  return subjects;
+}
 
 /**
- * The person's characters: their cards (a picture, a name); one picked is put on the board (or wired into the node it
- * was opened for), renamed, described or removed. A new one is made from a few words (its pictures made on the board,
- * a group to keep as a character once made), or brought from pictures of the computer or of the Assets.
+ * The person's subjects (characters, objects, places), by kind: their cards (a picture, a name, its kind); one picked
+ * is put on the board (or wired into the node it was opened for), renamed, described, its kind changed, or removed. A
+ * new one is made from a few words (its pictures made on the board, a group to keep as a subject once made), or brought
+ * from pictures of the computer or of the Assets.
  */
 export function CharacterLibrary({ projectId, forNode, assets, onUse, onGenerate, onImport, onClose }: {
   projectId: string;
@@ -310,13 +333,15 @@ export function CharacterLibrary({ projectId, forNode, assets, onUse, onGenerate
   /** the project's pictures, to make one of */
   assets: Array<{ path: string; name: string; url: string }>;
   onUse: (character: CanvasCharacter) => void;
-  onGenerate: (name: string, about: string) => void;
+  onGenerate: (name: string, about: string, kind: SubjectKind) => void;
   /** pictures of the computer brought into the project: their paths */
   onImport: () => Promise<string[]>;
   onClose: () => void;
 }) {
   const t = useT();
-  const [list, setList] = React.useState<CanvasCharacter[] | null>(null);
+  const list = useSubjects();
+  const [tab, setTab] = React.useState<'all' | SubjectKind>('all');
+  const [kind, setKind] = React.useState<SubjectKind>('person');
   const [query, setQuery] = React.useState('');
   const [picked, setPicked] = React.useState<string | null>(null);
   const [step, setStep] = React.useState<null | 'menu' | 'import' | 'generate' | 'name' | 'edit'>(null);
@@ -324,16 +349,15 @@ export function CharacterLibrary({ projectId, forNode, assets, onUse, onGenerate
   const [about, setAbout] = React.useState('');
   const [chosen, setChosen] = React.useState<string[]>([]);
   const [error, setError] = React.useState<string | null>(null);
-  const load = React.useCallback(() => { void api.canvasCharacters().then(setList, () => setList([])); }, []);
-  React.useEffect(load, [load]);
+  const load = loadSubjects;
   const q = query.trim().toLowerCase();
-  const shown = (list ?? []).filter((c) => !q || `${c.name} ${c.about ?? ''}`.toLowerCase().includes(q));
+  const shown = (list ?? []).filter((c) => (tab === 'all' || c.kind === tab) && (!q || `${c.name} ${c.about ?? ''}`.toLowerCase().includes(q)));
   const current = (list ?? []).find((c) => c.id === picked) ?? null;
-  const cover = (c: CanvasCharacter) => (c.pictures.find((p) => p.role === 'body') ?? c.pictures.find((p) => p.role === 'face') ?? c.pictures[0])?.url;
+  const cover = coverOf;
   const keep = async () => {
     setError(null);
     try {
-      await api.saveCanvasCharacter(projectId, { name: name.trim(), about: about.trim(), pictures: chosen.map((path, i) => ({ role: i === 0 ? 'face' : 'other', path })) });
+      await api.saveCanvasCharacter(projectId, { name: name.trim(), kind, about: about.trim(), pictures: chosen.map((path, i) => ({ role: i === 0 ? 'face' : 'other', path })) });
       setStep(null); setChosen([]); setName(''); setAbout(''); load();
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
@@ -354,9 +378,21 @@ export function CharacterLibrary({ projectId, forNode, assets, onUse, onGenerate
               {chosen.map((path) => { const a = assets.find((x) => x.path === path); return a ? <img key={path} src={a.url} alt="" className="h-24 w-24 shrink-0 rounded-[10px] object-cover" /> : null; })}
             </div>
           ) : null}
+          {/* what it is: a character, an object, a place */}
+          <div className="flex gap-1 self-start rounded-[10px] bg-[var(--cv-chip)] p-0.5">
+            {SUBJECT_KINDS.map((k) => {
+              const Icon = KIND_ICON[k];
+              return (
+                <button key={k} type="button" onClick={() => setKind(k)}
+                  className={`flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-[13px] transition ${k === kind ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)] shadow-sm' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
+                  <Icon size={14} />{t(`canvas.subjects.kinds.${k}`)}
+                </button>
+              );
+            })}
+          </div>
           <input autoFocus value={editing ? name || current!.name : name} onChange={(event) => setName(event.target.value)} placeholder={t('canvas.characters.name')} className={field} />
           <textarea value={editing && !about ? current!.about ?? '' : about} onChange={(event) => setAbout(event.target.value)} rows={5}
-            placeholder={t(step === 'generate' ? 'canvas.characters.describe' : 'canvas.characters.aboutHint')} className={`${field} resize-none leading-relaxed`} />
+            placeholder={t(step === 'generate' ? `canvas.subjects.describe.${kind}` : 'canvas.characters.aboutHint')} className={`${field} resize-none leading-relaxed`} />
           {error ? <div className="text-[12px] text-red-500">{error}</div> : null}
           <div className="flex items-center gap-2">
             {editing ? (
@@ -366,12 +402,12 @@ export function CharacterLibrary({ projectId, forNode, assets, onUse, onGenerate
             ) : null}
             <span className="flex-1" />
             {step === 'generate' ? (
-              <button type="button" className={primary} disabled={!name.trim() || !about.trim()} onClick={() => { onGenerate(name.trim(), about.trim()); onClose(); }}>
+              <button type="button" className={primary} disabled={!name.trim() || !about.trim()} onClick={() => { onGenerate(name.trim(), about.trim(), kind); onClose(); }}>
                 <Sparkles size={14} />{t('canvas.characters.generate')}
               </button>
             ) : step === 'edit' ? (
               <button type="button" className={primary} onClick={() => {
-                void api.updateCanvasCharacter(current!.id, { ...(name.trim() ? { name: name.trim() } : {}), about: about || current!.about || '' })
+                void api.updateCanvasCharacter(current!.id, { ...(name.trim() ? { name: name.trim() } : {}), kind, about: about || current!.about || '' })
                   .then(() => { setStep(null); setName(''); setAbout(''); load(); }, (e: unknown) => setError(e instanceof Error ? e.message : String(e)));
               }}>{t('canvas.characters.save')}</button>
             ) : (
@@ -385,7 +421,7 @@ export function CharacterLibrary({ projectId, forNode, assets, onUse, onGenerate
   return (
     <CanvasModal label={t('canvas.characters.title')} onClose={onClose}>
       <div className="flex items-center gap-4 px-5 pr-16 pt-5">
-        <TopTabs tabs={[['mine', t('canvas.characters.mine')]]} on="mine" onPick={() => {}} />
+        <TopTabs tabs={[['all', t('canvas.subjects.kinds.all')], ...SUBJECT_KINDS.map((k) => [k, t(`canvas.subjects.kinds.${k}`)] as [SubjectKind, string])]} on={tab} onPick={setTab} />
         <label className="ml-auto flex h-8 w-[220px] items-center gap-2 rounded-[10px] bg-[var(--cv-chip)] px-3 text-[var(--cv-ink-3)]">
           <Search size={14} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('canvas.characters.search')}
@@ -417,6 +453,7 @@ export function CharacterLibrary({ projectId, forNode, assets, onUse, onGenerate
                 className="group/char flex flex-col items-center gap-2 text-left">
                 <span className={`relative block aspect-[3/4] w-full overflow-hidden rounded-[14px] bg-[var(--cv-card)] ring-2 transition ${picked === c.id ? 'ring-[var(--cv-ink)]' : 'ring-transparent group-hover/char:ring-[var(--cv-ring)]'}`}>
                   {cover(c) ? <img src={cover(c)} alt="" className="h-full w-full object-cover" /> : null}
+                  {(() => { const Icon = KIND_ICON[c.kind]; return <span className="absolute left-1.5 top-1.5 flex h-6 items-center gap-1 rounded-[7px] bg-black/60 px-1.5 text-[11px] text-white backdrop-blur-sm"><Icon size={12} />{t(`canvas.subjects.kinds.${c.kind}`)}</span>; })()}
                   <span className="absolute bottom-1.5 right-1.5 rounded-[6px] bg-black/60 px-1.5 text-[11px] text-white">{c.pictures.length}</span>
                 </span>
                 <span className="w-full truncate text-center text-[13px]">{c.name}</span>
@@ -425,7 +462,7 @@ export function CharacterLibrary({ projectId, forNode, assets, onUse, onGenerate
           </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-[13px] text-[var(--cv-ink-2)]">
-            <UserRound size={30} className="text-[var(--cv-ink-3)]" />
+            <Box size={30} className="text-[var(--cv-ink-3)]" />
             <span className="max-w-[360px] leading-relaxed">{t('canvas.characters.none')}</span>
           </div>
         )}
@@ -442,7 +479,7 @@ export function CharacterLibrary({ projectId, forNode, assets, onUse, onGenerate
             {/* none picked: making one is what the window offers, in its middle */}
             {current ? null : <span className="flex-1" />}
             <div className="relative">
-              <button type="button" className={current ? secondary : primary} onClick={() => setStep(step === 'menu' ? null : 'menu')}><UserPlus size={14} />{t('canvas.characters.create')}</button>
+              <button type="button" className={current ? secondary : primary} onClick={() => { setKind(tab === 'all' ? 'person' : tab); setStep(step === 'menu' ? null : 'menu'); }}><Plus size={14} />{t('canvas.characters.create')}</button>
               {step === 'menu' ? (
                 <div className={`absolute bottom-11 w-[200px] rounded-[12px] bg-[var(--cv-float)] p-1 text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)] ${current ? 'left-0' : 'left-1/2 -translate-x-1/2'}`}>
                   <button type="button" className="flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-[13px] hover:bg-[var(--cv-float-hover)]" onClick={() => { setName(''); setAbout(''); setStep('generate'); }}><Sparkles size={14} />{t('canvas.characters.generateNew')}</button>
@@ -454,7 +491,7 @@ export function CharacterLibrary({ projectId, forNode, assets, onUse, onGenerate
             <span className="flex-1" />
             {current ? (
               <>
-                <button type="button" className={secondary} onClick={() => { setName(''); setAbout(''); setStep('edit'); }}><PenLine size={14} />{t('canvas.characters.edit')}</button>
+                <button type="button" className={secondary} onClick={() => { setName(''); setAbout(''); setKind(current.kind); setStep('edit'); }}><PenLine size={14} />{t('canvas.characters.edit')}</button>
                 <button type="button" className={primary} onClick={() => { onUse(current); onClose(); }}>{t(forNode ? 'canvas.characters.useHere' : 'canvas.characters.add')}</button>
               </>
             ) : null}

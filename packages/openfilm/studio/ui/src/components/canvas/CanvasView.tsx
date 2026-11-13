@@ -25,7 +25,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Clapperboard, Download, FolderSearch, LayoutTemplate, Maximize2, MousePointerClick, Play, Plus, Sparkles, Square, Upload, UserRound } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { ApiError, api, projectEvents, type CanvasBoard, type CanvasCharacter } from '@/api';
+import { ApiError, api, projectEvents, type CanvasBoard, type CanvasCharacter, type SubjectKind } from '@/api';
 import { BoardSwitcher, boardName, nextBoardName } from './boards';
 import {
   CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modeOf, frameRatio, ratioOf,
@@ -48,7 +48,7 @@ import {
 import { BottomToolbar, CornerBar, Dots, EmptyBoard, Outline, Ripples, ToolCorner, Viewer } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
 import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from './connections';
-import { CHARACTER_PARTS, CharacterLibrary, HistoryModal, MaterialLibrary } from './libraries';
+import { CharacterLibrary, HistoryModal, MaterialLibrary, SUBJECT_KINDS, SUBJECT_PARTS, loadSubjects } from './libraries';
 import { RedrawEditor, type RedrawWay } from './redraw';
 import { presetOf } from '@/lib/canvas-presets';
 import { splitGrid } from './pixels';
@@ -482,9 +482,9 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     }
     return id;
   };
-  const addFile = (path: string, placement: NodePlacement, size?: { w: number; h: number }) => {
+  const addFile = (path: string, placement: NodePlacement, size?: { w: number; h: number }, title?: string) => {
     const width = size?.w ?? (placement.wire ? fileCardWidth(byPath.get(path)) : FILE_W);
-    place({ id: canvasId('n'), type: 'file', position: topLeft(placement, width, size?.h ?? CARD_H), data: { path }, ...(size ? { width: size.w, height: size.h } : {}) }, placement.from, placement.wire);
+    place({ id: canvasId('n'), type: 'file', position: topLeft(placement, width, size?.h ?? CARD_H), data: { path, ...(title ? { title } : {}) }, ...(size ? { width: size.w, height: size.h } : {}) }, placement.from, placement.wire);
   };
   const openMenu = (clientX: number, clientY: number, from?: MenuAt['from']) => {
     setContext(null);
@@ -651,6 +651,14 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const inputs = inputsOf(doc, id, mediaOf);
     const choice = choiceOf(providers, node.make, node.via, node.model);
     const spec = choice?.spec;
+    /* a subject named with @ in its words: said as the reference picture it is (its picture wired in, named for it) */
+    if (node.prompt?.includes('@')) {
+      const pictures = inputs.filter((i) => 'media' in i && i.media === 'image');
+      pictures.forEach((input, k) => {
+        const title = doc.nodes.find((n) => n.id === input.from)?.title;
+        if (title) node.prompt = node.prompt!.split(`@${title}`).join(`${title} (reference picture ${k + 1})`);
+      });
+    }
     /* a clip made from frames or references: they are there first */
     if (node.make === 'video') {
       const pictures = inputs.filter((i) => 'media' in i && i.media === 'image').length;
@@ -832,16 +840,21 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     place({ id: canvasId('n'), type: 'note', position: target ? at : { x: at.x - NOTE_W / 2, y: at.y - NOTE_H / 2 }, width: NOTE_W, height: NOTE_H, data: { text } },
       target ? { node: target, side: 'target' } : undefined);
   };
-  /** a character's pictures, copied into the project: into the node it was picked for (its portrait), or a group of them */
-  const useCharacter = async (character: CanvasCharacter) => {
+  /**
+   * A subject's pictures, copied into the project: into the node it was picked for (its main picture, named as the
+   * subject is, so @its name in the node's words is that picture), or a group of them.
+   */
+  const useCharacter = async (character: CanvasCharacter, into: string | null = modalFor) => {
     try {
+      const target = into && now.current.nodes.some((n) => n.id === into) ? into : null;
+      /* already wired into it: nothing more */
+      if (target && now.current.edges.some((e) => e.target === target && (now.current.nodes.find((n) => n.id === e.source)?.data as { title?: string } | undefined)?.title === character.name)) return;
       const used = await api.useCanvasCharacter(projectId, character.id);
-      const target = modalFor && now.current.nodes.some((n) => n.id === modalFor) ? modalFor : null;
       if (target) {
         const main = used.pictures.find((p) => p.role === 'face') ?? used.pictures.find((p) => p.role === 'body') ?? used.pictures[0];
         const shape: Record<string, string> = { face: '1:1', body: '9:16', expressions: '1:1', turnaround: '16:9' };
         const size = main ? { w: cardWidth(shape[main.role] ?? '1:1'), h: CARD_H } : null;
-        if (main && size) addFile(main.path, { at: spotBeside(target, 'target', size.w), from: { node: target, side: 'target' }, corner: true }, size);
+        if (main && size) addFile(main.path, { at: spotBeside(target, 'target', size.w), from: { node: target, side: 'target' }, corner: true }, size, used.name);
         return;
       }
       /* in a row, each its own shape (a portrait square, the full body tall, the turnaround wide) */
@@ -871,10 +884,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
    * into its full body, expressions and turnaround — all made at once, in that order. Once made, the group is kept as
    * a character from its bar.
    */
-  const generateCharacter = (name: string, about: string) => {
+  const generateCharacter = (name: string, about: string, kind: SubjectKind = 'person') => {
     const group = canvasId('n');
     const note = canvasId('n');
-    const parts = CHARACTER_PARTS.map((part) => ({ ...part, id: canvasId('n'), size: makeSize('image', presetOf(part.preset)?.ratio) }));
+    const parts = SUBJECT_PARTS[kind].map((part) => ({ ...part, id: canvasId('n'), size: makeSize('image', presetOf(part.preset)?.ratio) }));
     const gap = 60;
     const face = parts[0]!;
     const rest = parts.slice(1);
@@ -936,14 +949,18 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const pictures = inIt.flatMap((n) => {
       const path = n.type === 'file' ? n.data.path : n.type === 'make' && n.data.make === 'image' ? n.data.path : undefined;
       if (!path || mediaOf(path) !== 'image') return [];
-      const role = n.type === 'make' ? CHARACTER_PARTS.find((p) => p.preset === n.data.preset)?.role ?? 'other' : node.type === 'frame' ? 'other' : 'body';
-      return [{ role, path }];
+      const part = n.type === 'make' ? SUBJECT_KINDS.flatMap((k) => SUBJECT_PARTS[k].map((p) => ({ ...p, kind: k }))).find((p) => p.preset === n.data.preset) : undefined;
+      const role = n.type === 'make' ? part?.role ?? 'other' : node.type === 'frame' ? 'other' : 'body';
+      return [{ role, path, kind: part?.kind }];
     });
     if (!pictures.length) { onError(t('canvas.characters.noPictures')); return; }
     const about = inIt.flatMap((n) => (n.type === 'note' && n.data.text.trim() ? [n.data.text.trim()] : [])).join('\n\n');
     const name = node.type === 'frame' ? node.data.label : byPath.get(pictures[0]!.path)?.name.replace(/\.[^.]+$/, '') ?? t('canvas.characters.title');
     try {
-      await api.saveCanvasCharacter(projectId, { name, ...(about ? { about } : {}), pictures });
+      /* its kind as its pictures were made: a product's or a place's sheet, else a character */
+      const kind = pictures.find((p) => p.kind)?.kind ?? 'person';
+      await api.saveCanvasCharacter(projectId, { name, kind, ...(about ? { about } : {}), pictures: pictures.map(({ role, path }) => ({ role, path })) });
+      loadSubjects();
       onNotice(t('canvas.characters.kept').replace('{name}', name));
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
@@ -1131,6 +1148,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     keepTemplate: (groupId) => { void keepTemplate(groupId); },
     keepCharacter: (id) => { void keepCharacter(id); },
     openLibrary,
+    useSubject: (id, subject) => { void useCharacter(subject, id); },
     redraw: (id, path) => setRedraw({ id, path }),
     tidy: (group) => { willChange(); setNodes((list) => tidyGroup(list, group)); },
     openSettings: onOpenSettings,
@@ -1692,7 +1710,7 @@ function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => 
       choices: () => [], allChoices: () => [], fallback: () => null, run: () => undefined, error: () => undefined, stale: NOTHING, unused: NONE,
       make: nothing, stop: nothing, inputs: (id) => inputViews(drawn.nodes, drawn.edges, id, mediaOf), unwire: nothing, sideMenu: nothing,
       upload: nothing, wireIn: nothing, sendToFilm: nothing, view: nothing,
-      makesIn: () => 0, busyIn: () => false, makeAll: nothing, ungroup: nothing, keepTemplate: nothing, keepCharacter: nothing, openLibrary: nothing, redraw: nothing, tidy: nothing, select: nothing, pick: nothing, openSettings: nothing, readOnly: true,
+      makesIn: () => 0, busyIn: () => false, makeAll: nothing, ungroup: nothing, keepTemplate: nothing, keepCharacter: nothing, openLibrary: nothing, useSubject: nothing, redraw: nothing, tidy: nothing, select: nothing, pick: nothing, openSettings: nothing, readOnly: true,
     };
   }, [doc, fileUrl, drawn]);
   return (

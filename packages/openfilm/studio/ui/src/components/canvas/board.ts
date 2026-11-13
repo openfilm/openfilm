@@ -5,7 +5,7 @@
  */
 import React from 'react';
 import type { Edge, Node } from '@xyflow/react';
-import { api } from '@/api';
+import { api, type CanvasCharacter } from '@/api';
 import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, makeRequest } from '@/lib/canvas';
 import type { ProvidersState } from '@/lib/providers';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
@@ -398,6 +398,8 @@ export interface Board {
   keepTemplate: (group: string) => void;
   /** a group's pictures, or a picture, kept as a character; a library opened (for a node: what is picked goes into it) */
   keepCharacter: (id: string) => void;
+  /** a subject wired into a node: its main picture, named as it is (what @its name in the node's words means) */
+  useSubject: (id: string, subject: CanvasCharacter) => void;
   openLibrary: (which: 'characters' | 'styles' | 'effects', node?: string) => void;
   openSettings: () => void;
   /** what is in a group laid out again in rows, clear of each other */

@@ -2003,7 +2003,8 @@ export const ja: Words = {
     library: { title: '素材ライブラリ', styles: 'スタイルライブラリ', effects: 'エフェクトライブラリ', short: { styles: 'スタイル', effects: 'エフェクト' }, tabs: { all: '{kind}ギャラリー', fav: 'お気に入り', recent: '最近使ったもの' }, search: { styles: 'スタイルを検索', effects: 'エフェクトを検索' }, groups: { all: 'すべて', photo: '写真', illustration: 'イラスト', three: '3D', design: 'グラフィック', move: 'カメラワーク', drone: '空撮', time: '時間', feel: '視点' }, like: 'お気に入りに追加', unlike: 'お気に入りから外す', noneLiked: 'お気に入りはまだありません', noneUsed: 'まだ使っていません', tag: { styles: 'スタイル', effects: 'カメラ' }, styleChip: 'スタイル', effectChip: 'エフェクト' },
     styles: { names: { film: '35mm フィルム', cinema: 'シネマティック', documentary: 'モノクロ記録写真', portrait: 'スタジオポートレート', product: '商品撮影', watercolor: '水彩', oil: '油絵', sketch: '鉛筆スケッチ', flat: 'フラットベクター', anime: 'アニメ', comic: 'アメコミ', clay: 'クレイアニメ', toon3d: '3D アニメーション', lowpoly: 'ローポリ', miniature: 'ミニチュア風', poster: 'ミニマルポスター', retro: '70年代プリント', neon: 'ネオンの夜' } },
     effects: { names: { pushIn: 'ドリーイン', pullOut: 'ドリーアウト', orbit: '回り込み', track: 'トラッキング', follow: 'フォロー', whip: 'ウィップパン', dollyZoom: 'ドリーズーム', craneUp: 'クレーンアップ', dive: 'ドローン急降下', clouds: '雲を抜ける', fpv: 'FPV 飛行', slowMo: 'スローモーション', timelapse: 'タイムラプス', bulletTime: 'バレットタイム', handheld: '手持ち', pov: '一人称視点', rack: 'ピント送り' } },
-    characters: { title: 'キャラクター', chip: 'キャラクター', mine: 'マイキャラクター', search: 'キャラクターを検索', none: 'キャラクターはまだありません。短い説明から生成するか、手持ちの画像から作ると、どの画像や動画でも同じ人物になります。', create: '新しいキャラクター', generateNew: 'キャラクターを生成', fromComputer: 'このコンピュータから', fromAssets: 'アセットから', newTitle: '新しいキャラクターを作成', nameTitle: 'キャラクターに名前を付ける', name: '名前', describe: 'どんな人物か：年齢、外見、髪型、服装、特徴…', aboutHint: 'このキャラクターについて（任意）', generate: '生成', save: '保存', cancel: 'キャンセル', next: '次へ', pickAssets: 'このキャラクターの画像を選んでください（メインを最初に）', edit: 'キャラクターを編集', remove: '削除', add: 'キャンバスに追加', useHere: 'ここで使う', keep: 'キャラクターとして保存', kept: '「{name}」をキャラクターに保存しました', noPictures: 'キャラクターとして保存できる画像がありません' },
+    characters: { title: '主体ライブラリ', chip: '主体', mine: 'マイ主体', search: '主体を検索', none: 'まだ主体がありません。人物・モノ・場所を主体として保存できます。言葉から生成するか手持ちの画像から作り、プロンプトで @ すると、どの画像・動画でも同じ姿になります。', create: '新しい主体', generateNew: '言葉から生成', fromComputer: 'このコンピュータから', fromAssets: 'アセットから', newTitle: '新しい主体を生成', nameTitle: '主体に名前を付ける', name: '名前', describe: 'どんな人物か：年齢、外見、髪型、服装、特徴…', aboutHint: 'ひとこと説明（任意）', generate: '生成', save: '保存', cancel: 'キャンセル', next: '次へ', pickAssets: 'この主体の画像を選んでください（メインを最初に）', edit: '主体を編集', remove: '削除', add: 'キャンバスに追加', useHere: 'ここで使う', keep: '主体として保存', kept: '「{name}」を主体に保存しました', noPictures: '主体として保存できる画像がありません' },
+    subjects: { title: '主体', mention: '主体を @', manage: '主体ライブラリを管理', noMatch: 'その名前の主体はありません', empty: 'まだ主体がありません。ライブラリで作成してください', kinds: { all: 'すべて', person: '人物', object: 'モノ', place: '場所' }, describe: { person: 'どんな人物か：年齢、外見、髪型、服装、特徴…', object: 'どんなモノか：素材、色、形、細部…', place: 'どんな場所か：どこ、いつ、建物や調度、光と雰囲気…' } },
     noteFor: {
       tts: '話すセリフをそのまま',
       image: '画面を説明：誰が、どこで、何をしているか、光の具合',
@@ -2125,7 +2126,7 @@ export const ja: Words = {
       expand: '広げる',
       collapse: '縮める',
       add: '参照を追加',
-      tools: { title: 'ツール', characters: 'キャラクター' },
+      tools: { title: 'ツール', characters: '主体' },
       models: {
         search: 'モデルを検索',
         mine: 'あなたのサービス',
