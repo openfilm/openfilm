@@ -19,6 +19,8 @@ export function useProvide(name: string, workbench: Workbench): void {
   React.useEffect(() => provide(name, {
     add: (paths, options) => latest.current.add?.(paths, options),
     command: (command) => latest.current.command?.(command),
+    settle: () => latest.current.settle?.(),
+    restored: () => latest.current.restored?.(),
   }), [name]);
 }
 

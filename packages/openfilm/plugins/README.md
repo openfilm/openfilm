@@ -120,9 +120,13 @@ being written; `chat.select(selection)` says what is selected and where the play
 
 - `addTo(name, paths, { show })`: put files of the project, by path, into the workbench `name` (`addTo('edit', [path])` puts
   them at the end of the film; `show: true` shows that workbench after). Kept until that workbench is there to take them.
-- `provide(name, { add, command })`: what your own workbench takes while it is there; returns the way to take it back.
-  `add(paths, { show })` is called for `addTo`; `command(command)` for a command meant for it alone. What was asked of it
-  before it was there is given to it now. `name` is its `plugin` attribute.
+- `provide(name, { add, command, settle, restored })`: what your own workbench takes while it is there; returns the way
+  to take it back. `add(paths, { show })` is called for `addTo`; `command(command)` for a command meant for it alone.
+  What was asked of it before it was there is given to it now. `name` is its `plugin` attribute.
+  The project's version history is Studio's, whichever workbench is shown: `settle()` is called as it opens and before
+  it saves a version or puts the project's files back (stop what plays, write what is still waiting; it waits for the
+  promise), and `restored()` once a version's files were put back, here or in another window (forget your undo steps,
+  read the files again).
 - `onCommand(listener)`: the app's commands that are not the page's own (`{ type: 'seek', time }`, `{ type: 'select-clip', id }`,
   `{ type: 'highlight', ref }`…); returns the way to stop.
 

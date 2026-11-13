@@ -114,9 +114,6 @@ import { Timeline, timelineFitHeight, type TimelineCommands, type TimelineHistor
 import { useEditorTools } from './use-editor-tools';
 import { AudioMeters, METERS_W } from './AudioMeters';
 import { trackFlagStep, type SessionTimeline } from './OperationHistory';
-import { ProjectHistoryButton, ProjectHistoryControls } from './ProjectHistoryControls';
-import { useProjectHistory } from './use-project-history';
-import { historyMoved } from '@/lib/project-history';
 import { FilmFullscreenBar, useFullscreenKeys } from './FilmFullscreenBar';
 import { ViewerBar } from './ViewerBar';
 import { ViewerZoom, ViewerZoomButton } from './ViewerZoom';
@@ -4892,38 +4889,20 @@ export function ProjectView({ projectId, onProject }: {
       if (translate) await translateTrack(src ? { src } : { text: await file.text(), name: `${file.name.replace(/\.[^.]+$/, '')}.${translate}` }, translate);
     } finally { setCaptionsMaking(false); }
   }, [newCaptionTrack, translateTrack]);
-  const [historyOpen, setHistoryOpen] = React.useState(false);
-  const history = useProjectHistory(projectId, { onError: toast.showError, beforeChange: film.settled });
-  const forgetSteps = React.useRef(film.forget);
-  forgetSteps.current = film.forget;
-  const refreshHistory = React.useRef(history.refresh);
-  refreshHistory.current = history.refresh;
-  const historyOpenRef = React.useRef(historyOpen);
-  historyOpenRef.current = historyOpen;
-  React.useEffect(() => {
-    /* a history action, at once; the folder changing (an edit, the agent's writes) while the panel shows its uncommitted
-       changes, once the burst settles */
-    let later: ReturnType<typeof setTimeout> | null = null;
-    const stop = projectEvents(projectId, (e) => {
-      /* a version restored, here or in another window: the folder's files changed under the editor. Its undo steps
-         were of the film before, and the film, its settings, markers and captions are read again (each where it is
-         kept: use-editor-tools, use-film-subtitles, caption-tracks) */
-      if (historyMoved(e)) {
-        forgetSteps.current();
-        readFilm();
-        void api.settings(projectId).then(setSettings, () => {});
-      }
-      if (e.type === 'history') { void refreshHistory.current(); return; }
-      if ((e.type === 'film' || e.type === 'files') && historyOpenRef.current) {
-        if (later) clearTimeout(later);
-        later = setTimeout(() => { later = null; void refreshHistory.current(); }, 400);
-      }
-    });
-    return () => { if (later) clearTimeout(later); stop(); };
-  }, [projectId]);
-  const openHistory = () => {
-    pause();
-    setHistoryOpen((v) => !v);
+  /* the project's version history is the shell's (shell/history); what it asks of the edit is given with the rest
+     below (provide): before it saves a version or puts files back, playing stopped and the edits still waiting to be
+     written landed first, so the version holds what the person sees and a restore is not undone by them; once a
+     version is put back, here or in another window, the folder's files changed under the editor: its undo steps were
+     of the film before, and the film, its settings, markers and captions are read again (each where it is kept:
+     use-editor-tools, use-film-subtitles, caption-tracks) */
+  const forHistory = React.useRef({ settle: () => film.settled(), restored: () => {} });
+  forHistory.current = {
+    settle: () => { pause(); return film.settled(); },
+    restored: () => {
+      film.forget();
+      readFilm();
+      void api.settings(projectId).then(setSettings, () => {});
+    },
   };
   const [exportOpen, setExportOpen] = React.useState(false);
   const [exportClipId, setExportClipId] = React.useState<string | null>(null);
@@ -4962,6 +4941,8 @@ export function ProjectView({ projectId, onProject }: {
       if (show) { void forShell.current.sendFromCanvas(files); return; }
       void (async () => { for (const file of files) await forShell.current.addFromCanvas(file); })();
     },
+    settle: () => forHistory.current.settle(),
+    restored: () => forHistory.current.restored(),
   }), []);
   React.useEffect(() => onCommand((command) => hostCommands.current(command)), []);
   /* the window is laid out by the shell (shell/layout); what it reads of the edit's panes is given here: how tall the
@@ -4997,12 +4978,12 @@ export function ProjectView({ projectId, onProject }: {
     preview: libraryPreview, captions: libraryCaptions, speak: speakVoice,
   });
   /* the top bar is the shell's (shell/top-bar); what the edit has on it is given here, and drawn there in the shell's
-     own React root: the edit's own buttons (its versions, its export and the exports' tray: the
+     own React root: the edit's own buttons (its export and the exports' tray: the
      canvas has its own bars), the picked keyframes' menu, which is kept in the bar, what the edit knows of the film
      for the project's card, and the picture at the playhead made the cover. Each the same one until what it shows
      changes: the buttons call the edit's functions as the latest render made them */
   const barDoes = useSteady({
-    openHistory, coverFromFrame,
+    coverFromFrame,
     askExport: () => {
       if (previewError) toast.showError(`${t('project.filmCannotExport')} ${previewError}`);
       else if (totalMs > 0) setExportOpen(true);
@@ -5012,7 +4993,6 @@ export function ProjectView({ projectId, onProject }: {
   const editAway = canvasOpen || away;
   const topBarTools = React.useMemo(() => (<>
     {editAway ? null : (<>
-    <ProjectHistoryButton open={historyOpen} onClick={barDoes.openHistory} className={TOP_BTN} />
     <Tooltip label={t('projectMenu.export')} side="bottom">
       <button type="button" aria-label={t('projectMenu.export')} aria-haspopup="dialog" aria-expanded={exportOpen} className={TOP_BTN}
         onClick={() => barDoes.askExport()}>
@@ -5021,7 +5001,7 @@ export function ProjectView({ projectId, onProject }: {
     </Tooltip>
     </>)}
     <ExportTray ref={exportTrayRef} projectId={projectId} onError={showError} />
-  </>), [barDoes, editAway, historyOpen, exportOpen, projectId, showError, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  </>), [barDoes, editAway, exportOpen, projectId, showError, t]); // eslint-disable-line react-hooks/exhaustive-deps
   /* open only for a moment: made anew by each render meanwhile */
   const topBarMenu = keyMenu ? <ContextMenu x={keyMenu.x} y={keyMenu.y} dense items={keyMenuItems} onClose={() => setKeyMenu(null)} /> : null;
   const stageW = stage.w, stageH = stage.h, filmClips = filmSummary.clips;
@@ -5503,9 +5483,6 @@ export function ProjectView({ projectId, onProject }: {
           </section>
 
       {ReactDOM.createPortal(<>
-      <ProjectHistoryControls projectId={projectId} projectName={loaded?.project.name ?? ''} history={history} open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        onOpenProject={(id) => { setHistoryOpen(false); if (studioHost?.tabs) studioHost.tabs.open(id); else onProject(id); }} />
       {templateAsk ? (
         <TemplatePicker
           name={templateAsk.name}
