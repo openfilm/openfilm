@@ -14,13 +14,21 @@ export function useWorkspaceLayouts(mode: WorkspaceMode, specs: ReadonlyMap<stri
   const specsRef = React.useRef(specs); specsRef.current = specs;
   const latest = React.useRef(profiles); latest.current = profiles;
   const [storageFailed, setStorageFailed] = React.useState(false);
+  /* the arrangements shown with their blocks known: each is kept from then on, as it is drawn, though none changed it */
+  const shown = React.useRef(new Set<string>());
+  const layoutOfRef = React.useRef<(name: string) => WorkspaceLayout>(() => { throw new Error('not yet'); });
+  const kept = () => {
+    const out: Record<string, WorkspaceLayout> = { ...latest.current };
+    for (const name of shown.current) out[name] ??= layoutOfRef.current(name);
+    return serializeProfiles(out);
+  };
+  const save = () => { try { localStorage.setItem(CURRENT_WORKSPACE_KEY, kept()); setStorageFailed(false); } catch { setStorageFailed(true); } };
   React.useEffect(() => {
-    const save = () => { try { localStorage.setItem(CURRENT_WORKSPACE_KEY, serializeProfiles(profiles)); setStorageFailed(false); } catch { setStorageFailed(true); } };
     const timer = window.setTimeout(save, 100);
     return () => window.clearTimeout(timer);
-  }, [profiles]);
+  }, [profiles]); // eslint-disable-line react-hooks/exhaustive-deps
   React.useEffect(() => {
-    const flush = () => { try { localStorage.setItem(CURRENT_WORKSPACE_KEY, serializeProfiles(latest.current)); } catch { /* The mounted effect reports storage failures. */ } };
+    const flush = () => { try { localStorage.setItem(CURRENT_WORKSPACE_KEY, kept()); } catch { /* The mounted effect reports storage failures. */ } };
     const changed = (event: StorageEvent) => {
       if (event.key !== CURRENT_WORKSPACE_KEY) return;
       const next = readWorkspaceProfiles({ getItem: key => localStorage.getItem(key) });
@@ -53,13 +61,16 @@ export function useWorkspaceLayouts(mode: WorkspaceMode, specs: ReadonlyMap<stri
   }, [profiles, specs]);
   const [viewport, setViewport] = React.useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   React.useEffect(() => { let frame = 0; const resize = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => setViewport({ width: window.innerWidth, height: window.innerHeight })); }; window.addEventListener('resize', resize); return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', resize); }; }, []);
-  /* the arrangement shown is kept from when it is first shown with its blocks known, as it is drawn */
-  const shownLayout = layoutOf(mode);
+  layoutOfRef.current = layoutOf;
+  /* the arrangement shown is kept from when it is first shown with its blocks known: written a moment after, nothing drawn again */
   const known = specs.has(mode);
+  const saveRef = React.useRef(save); saveRef.current = save;
   React.useEffect(() => {
-    if (known) setProfiles((previous) => (previous[mode] ? previous : { ...previous, [mode]: shownLayout }));
-  }, [known, mode, shownLayout]);
-  return { layout: shownLayout, layoutOf, update, viewport, storageFailed };
+    if (!known || shown.current.has(mode)) return;
+    shown.current.add(mode);
+    if (!latest.current[mode]) window.setTimeout(() => saveRef.current(), 400);
+  }, [known, mode]);
+  return { layout: layoutOf(mode), layoutOf, update, viewport, storageFailed };
 }
 
 /** Layout editing is a transaction. Pointer previews never write preferences until Done. A patch's `blocks` are merged by key. */
