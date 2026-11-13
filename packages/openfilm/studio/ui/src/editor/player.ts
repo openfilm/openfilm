@@ -19,13 +19,19 @@
  * (its copy still being made) is silent until it is, then joins where the film is. Sounds are started a few seconds
  * ahead of the film, not all at once: a film of hundreds of sounds starts as quickly as one of a few.
  *
- * Every sound goes through one mix, metered (`levels`: the audio meters read it while the film plays, nothing reads it
- * paused) before the person's volume. Solo (`setHeard`) leaves the clips of the other tracks out of what plays here
- * only: the film and its exports are as they are.
+ * Every sound goes through one mix, then the film's bus (the delivery gain and the limiter) as the export has them:
+ * the sound engine's own code (src/sound-engine.mjs), run in an AudioWorklet (sound-worklet.ts) at the export's rate,
+ * so what is heard of a mix is what is delivered of it; played from the middle, the bus is first fed the second
+ * before, as the export had it there. A clip with a chain (`chain`, none today) goes through it, in a worklet of its
+ * own, before its volume and fades. The bus is metered (`levels`: the audio meters read it while the film plays,
+ * nothing reads it paused) before the person's volume. Solo (`setHeard`) leaves the clips of the other tracks out of
+ * what plays here only: the film and its exports are as they are.
  */
 
 import { SPEED_MAX, SPEED_MIN } from '../lib/playback-speed.ts';
 import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, mediaPlays } from '../../../../src/film-doc.mjs';
+import { RATE, limiterLatency, type Step } from '../../../../src/sound-engine.mjs';
+import type { BusMessage } from './sound-worklet.ts';
 
 /** Sounds fetched at once; the others wait, the ones nearest to where the film is first. */
 const FETCHES = 3;
@@ -39,9 +45,16 @@ const LEAD = 0.03;
 const DRIFT = 0.12;
 /** After a sound is put back in its place, how long it is left to settle before it is checked again (ms). */
 const SETTLE_MS = 1000;
+/** How much of the film before where it plays from the sound engine is fed first, unheard (s). */
+const WARM = 1;
+/** How long a change of the delivery gain takes while the film plays (s), so it does not click. */
+const GAIN_RAMP = 0.02;
 
-/** `fade`: its fades in and out, film seconds, already fitted to its length (src/timeline.mjs). */
-export type Sound = { src: string; at: number; from: number; to: number; volume: number; speed: number; clip?: string; fade?: [number, number] };
+/**
+ * `fade`: its fades in and out, film seconds, already fitted to its length (src/timeline.mjs). `chain`: what its sound
+ * goes through before its volume and fades (src/sound-engine.mjs clipChain); no clip has one yet.
+ */
+export type Sound = { src: string; at: number; from: number; to: number; volume: number; speed: number; clip?: string; fade?: [number, number]; chain?: Step[] };
 
 /**
  * Where the film is while it plays: film second `t` at `at` (ms on the page's clock, performance.now()), moving on
@@ -75,17 +88,20 @@ export function easedLead(current: number | null, measured: number): number {
  * as the film's mix and its picture have them (src/film-doc.mjs fadeGain).
  */
 export function fadeSteps(local: number, length: number, fade: readonly [number, number] | undefined): [number, number][] {
-  const gain = (u: number) => {
-    if (!fade) return 1;
-    let g = 1;
-    if (fade[0] > 0) g = Math.min(g, u / fade[0]);
-    if (fade[1] > 0) g = Math.min(g, (length - u) / fade[1]);
-    return Math.max(0, Math.min(1, g));
-  };
+  const gain = (u: number) => fadeAt(u, length, fade);
   const steps: [number, number][] = [[local, gain(local)]];
   if (!fade) return steps;
   for (const u of [fade[0], length - fade[1], length]) if (u > local + 1e-6 && u <= length) steps.push([u, gain(u)]);
   return steps;
+}
+
+/** A sound's gain from its fades `u` seconds into its `length` (see fadeSteps). */
+function fadeAt(u: number, length: number, fade: readonly [number, number] | undefined): number {
+  if (!fade) return 1;
+  let g = 1;
+  if (fade[0] > 0) g = Math.min(g, u / fade[0]);
+  if (fade[1] > 0) g = Math.min(g, (length - u) / fade[1]);
+  return Math.max(0, Math.min(1, g));
 }
 
 /** The mix's level now, by channel (left, right): its latest samples, as the audio meters read them. */
@@ -113,7 +129,7 @@ export function fileTime(s: Sound, t: number): number {
  * A sound played by a media element: the element, what it goes through in the mix, when it was last put back, and
  * what starts it once its file is ready (`ready`, listened for until then).
  */
-type Voice = { el: HTMLAudioElement; source: MediaElementAudioSourceNode; gain: GainNode; sound: Sound; timer: number; settled: number; ready?: () => void };
+type Voice = { el: HTMLAudioElement; source: MediaElementAudioSourceNode; gain: GainNode; chain: AudioWorkletNode | null; sound: Sound; timer: number; settled: number; ready?: () => void };
 
 /**
  * Where a sound joins the film when its file is ready only now (its copy was still being made, the file slow to read):
@@ -145,8 +161,9 @@ export function soundsDue(sounds: readonly Sound[], from: number, until: number,
 }
 
 /**
- * A limiter as an export's (src/loudness.mjs limiterFilter): peaks over -2 dBFS caught at once, let go over 60 ms,
- * what is under them untouched. The browser's compressor raises everything it passes by a makeup gain of its own
+ * The limiter heard only where the sound engine's worklet cannot run (no AudioWorklet, or its module did not load),
+ * close to the engine's (src/sound-engine.mjs Limiter): peaks over -2 dBFS caught at once, let go over 60 ms, what is
+ * under them untouched. The browser's compressor raises everything it passes by a makeup gain of its own
  * ((1 / its gain at full scale)^0.6, as the Web Audio spec has it): taken off after it, so under the ceiling the
  * sound is heard at the level it is exported at.
  */
@@ -168,12 +185,15 @@ export function limiter(ctx: BaseAudioContext): { in: AudioNode; out: AudioNode 
 
 export class Player {
   private ctx: AudioContext | null = null;
-  /** each file's decoded sound, and the version of the file it was decoded from (undefined: not known then) */
-  private buffers = new Map<string, { version: number | undefined; buffer: Promise<AudioBuffer | null> }>();
+  /** each file's decoded sound (`decoded` once it is), and the version of the file it was decoded from (undefined: not
+      known then) */
+  private buffers = new Map<string, { version: number | undefined; buffer: Promise<AudioBuffer | null>; decoded?: AudioBuffer | null }>();
   private origin = '';
   private versionOf: (src: string) => number | undefined = () => undefined;
   private sounds: Sound[] = [];
   private playingNodes: AudioScheduledSourceNode[] = [];
+  /** the clips' chains playing (see clipNode) */
+  private chainNodes: AudioWorkletNode[] = [];
   /** the sounds heard faster or slower, each played by a media element (see stretchRate) */
   private voices: Voice[] = [];
   /** where the film is while playing, on the page's clock (see Anchor) */
@@ -190,8 +210,10 @@ export class Player {
   private master: GainNode | null = null;
   /** every sound added together, as the film's sound is before it is delivered */
   private mix: GainNode | null = null;
-  /** the mix turned to the loudness the film is delivered at (setDelivery), then its peaks caught as an export catches
-      them: what the meters read, before the person's volume */
+  /** the film's bus (the sound engine in a worklet): the mix turned to the loudness the film is delivered at
+      (setDelivery), then its peaks caught as an export catches them; what the meters read, before the person's
+      volume. Null until its module has loaded, or where it cannot: `delivery` and the browser's limiter instead */
+  private bus: AudioWorkletNode | null = null;
   private delivery: GainNode | null = null;
   private deliveryDb = 0;
   private analysers: [AnalyserNode, AnalyserNode] | null = null;
@@ -246,13 +268,15 @@ export class Player {
         continue;
       }
       const url = this.soundUrl(s.src);
-      this.buffers.set(s.src, { version, buffer: this.slot(s.src)
+      const entry: { version: number | undefined; buffer: Promise<AudioBuffer | null>; decoded?: AudioBuffer | null } = { version, buffer: this.slot(s.src)
         .then((done) => fetch(url)
           /* 204: there is no sound in it */
           .then((r) => (r.status === 204 ? null : r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
           .finally(done))
         .then((bytes) => (bytes ? ctx.decodeAudioData(bytes) : null))
-        .catch(() => null) });
+        .catch(() => null)
+        .then((decoded) => { entry.decoded = decoded; return decoded; }) };
+      this.buffers.set(s.src, entry);
       fetched = true;
     }
     return fetched;
@@ -292,11 +316,14 @@ export class Player {
 
   private context() {
     if (!this.ctx) {
-      this.ctx = new AudioContext({ latencyHint: 'interactive' });
+      /* at the export's rate: the sounds are decoded to it, and the sound engine processes at it */
+      this.ctx = new AudioContext({ latencyHint: 'interactive', sampleRate: RATE });
       this.master = this.ctx.createGain();
       this.master.gain.value = this.muted ? 0 : this.volume;
       this.master.connect(this.ctx.destination);
       this.mix = this.ctx.createGain();
+      /* until the sound engine's module has loaded (it is, long before anything plays: the sounds are fetched first),
+         or where it cannot, the browser's own limiter */
       this.delivery = this.ctx.createGain();
       this.delivery.gain.value = 10 ** (this.deliveryDb / 20);
       const caught = limiter(this.ctx);
@@ -305,6 +332,7 @@ export class Player {
       /* a splitter takes two channels in: a mono mix is heard, and metered, on both */
       const split = this.ctx.createChannelSplitter(2);
       caught.out.connect(split);
+      void this.engine(this.ctx, caught.out, split);
       const meter = (channel: number) => {
         const a = this.ctx!.createAnalyser();
         a.fftSize = 2048;
@@ -320,16 +348,112 @@ export class Player {
   }
 
   /**
+   * The film's bus as the sound engine has it (sound-worklet.ts), in place of the browser's limiter (`fallback`, and
+   * the delivery gain before it) once its module has loaded. Where it cannot load, the browser's limiter stays.
+   */
+  private async engine(ctx: AudioContext, fallback: AudioNode, split: ChannelSplitterNode) {
+    try {
+      if (!ctx.audioWorklet) return;
+      const { default: url } = await import('./sound-worklet.ts?worker&url');
+      await ctx.audioWorklet.addModule(url);
+      if (this.ctx !== ctx || !this.mix || !this.master) return;
+      const bus = new AudioWorkletNode(ctx, 'openfilm-bus', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2,
+        channelCountMode: 'explicit', channelInterpretation: 'speakers', processorOptions: { gainDb: this.deliveryDb } });
+      this.mix.disconnect();
+      fallback.disconnect();
+      this.mix.connect(bus);
+      bus.connect(this.master);
+      bus.connect(split);
+      this.bus = bus;
+      this.delivery = null;
+    } catch {
+      /* the browser's limiter goes on */
+    }
+  }
+
+  /**
    * How far the audio clock is ahead of the page's now (s): the output timestamp pairs the audio time being heard with
    * the page time it is heard at. Before the device has said (its first moments), the context's own time less its
-   * latencies. Null while the sound is not running.
+   * latencies. The bus's latency is the sound's too: a sound started at an audio time is heard that much later. Null
+   * while the sound is not running.
    */
   private measuredLead(): number | null {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== 'running') return null;
+    const late = this.bus ? limiterLatency(ctx.sampleRate) / ctx.sampleRate : 0;
     const stamp = typeof ctx.getOutputTimestamp === 'function' ? ctx.getOutputTimestamp() : null;
-    if (stamp && Number(stamp.contextTime) > 0 && Number(stamp.performanceTime) > 0) return stamp.contextTime! - stamp.performanceTime! / 1000;
-    return ctx.currentTime - (ctx.baseLatency || 0) - (ctx.outputLatency || 0) - performance.now() / 1000;
+    if (stamp && Number(stamp.contextTime) > 0 && Number(stamp.performanceTime) > 0) return stamp.contextTime! - late - stamp.performanceTime! / 1000;
+    return ctx.currentTime - late - (ctx.baseLatency || 0) - (ctx.outputLatency || 0) - performance.now() / 1000;
+  }
+
+  /**
+   * The bus started anew where the film is heard from (`heard`: film second `t` at audio time `at`), fed first the
+   * mix of the WARM seconds before (warmMix), so it is where an export of the whole film is there.
+   */
+  private warmBus(heard: { t: number; at: number }) {
+    const ctx = this.ctx;
+    if (!this.bus || !ctx) return;
+    const message: BusMessage = { start: Math.round(heard.at * ctx.sampleRate), warm: this.warmMix(heard.t, ctx.sampleRate) };
+    this.bus.port.postMessage(message, message.warm ? message.warm.map((c) => c.buffer) : []);
+  }
+
+  /**
+   * The mix of the WARM seconds before film second `t` (fewer at the film's start), as it plays here: the sounds
+   * decoded (at the film's own speed; the others, those not decoded yet and those with a chain, whose processors run
+   * on the audio thread, left out), at their volume and fades. Null when there is nothing before `t`, or the film
+   * plays at another speed.
+   */
+  private warmMix(t: number, rate: number): [Float32Array<ArrayBuffer>, Float32Array<ArrayBuffer>] | null {
+    const n = Math.round(Math.min(t, WARM) * rate);
+    if (!n || this.rate !== 1) return null;
+    const from = t - n / rate;
+    const l = new Float32Array(n), r = new Float32Array(n);
+    for (const s of this.sounds) {
+      const buffer = this.buffers.get(s.src)?.decoded;
+      if (!buffer || s.speed !== 1 || s.chain?.length || (this.heard && !(s.clip && this.heard.has(s.clip)))) continue;
+      const length = lengthOf(s);
+      const a = Math.max(0, Math.ceil((s.at - from) * rate)), b = Math.min(n, Math.ceil((s.at + length - from) * rate));
+      const left = buffer.getChannelData(0), right = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : left;
+      for (let i = a; i < b; i++) {
+        const u = from + i / rate - s.at;
+        const k = Math.round((s.from + u) * buffer.sampleRate);
+        if (k < 0 || k >= left.length) continue;
+        const g = s.volume * fadeAt(u, length, s.fade);
+        l[i] += left[k] * g;
+        r[i] += right[k] * g;
+      }
+    }
+    return [l, r];
+  }
+
+  /**
+   * A clip's chain as a node its sound goes through before its gain (sound-worklet.ts `openfilm-clip`), fed first its
+   * own sound of the WARM seconds before `startFilm` when it starts inside the clip (from `buffer`, when decoded).
+   * Null for a clip without one, or before the sound engine's module has loaded.
+   */
+  private clipNode(s: Sound, startFilm: number, buffer: AudioBuffer | null): AudioWorkletNode | null {
+    const ctx = this.ctx;
+    if (!s.chain?.length || !this.bus || !ctx) return null;
+    let warm: [Float32Array, Float32Array] | null = null;
+    if (buffer && startFilm > s.at) {
+      const end = Math.round(fileTime(s, startFilm) * buffer.sampleRate);
+      const start = Math.max(0, end - Math.round(WARM * buffer.sampleRate), Math.round(s.from * buffer.sampleRate));
+      const part = (c: number) => buffer.getChannelData(Math.min(c, buffer.numberOfChannels - 1)).slice(start, end);
+      if (end > start) warm = [part(0), part(1)];
+    }
+    const node = new AudioWorkletNode(ctx, 'openfilm-clip', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], channelCount: 2,
+      channelCountMode: 'explicit', channelInterpretation: 'speakers', processorOptions: { chain: s.chain, warm } });
+    this.chainNodes.push(node);
+    return node;
+  }
+
+  /** A clip's chain let go of (its sound ended, or stopped). */
+  private dropChain(node: AudioWorkletNode | null) {
+    if (!node) return;
+    node.port.postMessage('end');
+    try { node.disconnect(); } catch { /* already apart */ }
+    const i = this.chainNodes.indexOf(node);
+    if (i >= 0) this.chainNodes.splice(i, 1);
   }
 
   /**
@@ -365,7 +489,10 @@ export class Player {
     const next = Number.isFinite(db) ? Math.max(-24, Math.min(24, db)) : 0;
     if (next === this.deliveryDb) return;
     this.deliveryDb = next;
-    if (this.delivery && this.ctx) this.delivery.gain.setTargetAtTime(10 ** (next / 20), this.ctx.currentTime, 0.02);
+    if (this.bus && this.ctx) {
+      const message: BusMessage = { gainDb: next, frames: Math.round(GAIN_RAMP * this.ctx.sampleRate) };
+      this.bus.port.postMessage(message);
+    } else if (this.delivery && this.ctx) this.delivery.gain.setTargetAtTime(10 ** (next / 20), this.ctx.currentTime, 0.02);
   }
 
   setVolume(v: number) {
@@ -417,6 +544,7 @@ export class Player {
       const at = ctx.currentTime + LEAD;
       this.heardLine = { t, at };
       this.line = { t, at: (at - this.lead) * 1000, rate: this.rate };
+      this.warmBus(this.heardLine);
       this.startDue();
     } else {
       this.heardLine = null;
@@ -448,6 +576,7 @@ export class Player {
     const at = this.ctx!.currentTime + LEAD;
     this.heardLine = { t: anchorTime(this.line, (at - this.lead) * 1000), at };
     this.started.clear();
+    this.warmBus(this.heardLine);
     this.startDue();
   }
 
@@ -506,11 +635,13 @@ export class Player {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     const gain = this.fades(s, startFilm, when, ctxAt);
-    source.connect(gain).connect(this.mix ?? ctx.destination);
+    const chain = this.clipNode(s, startFilm, buffer);
+    (chain ? source.connect(chain) : source).connect(gain).connect(this.mix ?? ctx.destination);
     source.start(when, fileTime(s, startFilm), end - startFilm);
     source.onended = () => {
       const i = this.playingNodes.indexOf(source);
       if (i >= 0) this.playingNodes.splice(i, 1);
+      this.dropChain(chain);
     };
     this.playingNodes.push(source);
   }
@@ -550,8 +681,9 @@ export class Player {
     el.currentTime = fileTime(s, startFilm);
     const source = ctx.createMediaElementSource(el);
     const gain = this.fades(s, startFilm, when, ctxAt);
-    source.connect(gain).connect(this.mix ?? ctx.destination);
-    const voice: Voice = { el, source, gain, sound: s, settled: 0, timer: 0 };
+    const chain = this.clipNode(s, startFilm, null);
+    (chain ? source.connect(chain) : source).connect(gain).connect(this.mix ?? ctx.destination);
+    const voice: Voice = { el, source, gain, chain, sound: s, settled: 0, timer: 0 };
     /* started once its file is ready, where the film is then (a file not ready in time joins late, in step). Ready
        now, or on whichever of its events comes first; never twice; let go of with the voice (dropVoice) */
     const start = () => {
@@ -603,6 +735,7 @@ export class Player {
     v.el.removeAttribute('src');
     v.el.load();
     try { v.source.disconnect(); v.gain.disconnect(); } catch { /* already apart */ }
+    this.dropChain(v.chain);
     const i = this.voices.indexOf(v);
     if (i >= 0) this.voices.splice(i, 1);
   }
@@ -626,6 +759,7 @@ export class Player {
   private stopNodes() {
     for (const node of this.playingNodes) { try { node.onended = null; node.stop(); } catch { /* already stopped */ } }
     this.playingNodes = [];
+    for (const node of [...this.chainNodes]) this.dropChain(node);
     for (const v of [...this.voices]) this.dropVoice(v);
     this.started.clear();
   }
@@ -636,6 +770,7 @@ export class Player {
     this.ctx = null;
     this.master = null;
     this.mix = null;
+    this.bus = null;
     this.delivery = null;
     this.analysers = null;
   }
