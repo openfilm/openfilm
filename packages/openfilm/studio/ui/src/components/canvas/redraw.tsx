@@ -11,11 +11,12 @@
  */
 import React from 'react';
 import {
-  ArrowUp, Brush, Check, ChevronDown, Eraser, Expand as Grow, FlipHorizontal2, ImagePlus, Lasso, Loader2, MapPin, Minus, MoreHorizontal, Plus, Redo2,
-  Scan, Shrink, SquareDashed, Trash2, Undo2, X,
+  ArrowUp, Brush, Check, ChevronDown, Eraser, Expand as Grow, FlipHorizontal2, Lasso, Loader2, MapPin, Minus, MoreHorizontal, Plus, Redo2,
+  Scan, Shrink, SquareDashed, Trash2, Undo2, Upload, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { ProviderMark } from '../settings/ProviderMark';
+import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
 import { CanvasModal } from './libraries';
 
@@ -134,7 +135,7 @@ function coverOf(source: HTMLCanvasElement): number {
 
 const toBlob = (c: HTMLCanvasElement) => new Promise<Blob | null>((done) => c.toBlob(done, 'image/png'));
 
-export function RedrawEditor({ src, models, model: firstModel, onClose, onMake, onSubject, onAddRef }: {
+export function RedrawEditor({ src, models, model: firstModel, pictures, onClose, onMake, onSubject, onAddRef }: {
   src: string;
   start?: RedrawStart;
   /** the connected picture models that take a picture to change */
@@ -147,6 +148,8 @@ export function RedrawEditor({ src, models, model: firstModel, onClose, onMake, 
   onSubject?: () => Promise<string>;
   /** a picture brought in to take from */
   onAddRef?: (file: File) => Promise<RedrawRef | null>;
+  /** the project's pictures, to take from */
+  pictures?: ReadonlyArray<RedrawRef & { name: string }>;
 }) {
   const t = useT();
   const [tool, setTool] = React.useState<Tool>('brush');
@@ -168,7 +171,7 @@ export function RedrawEditor({ src, models, model: firstModel, onClose, onMake, 
   const [panning, setPanning] = React.useState(false);
   const [modelKey, setModelKey] = React.useState(firstModel);
   const picked = models.find((m) => m.key === modelKey) ?? models[0];
-  const [open, setOpen] = React.useState<'models' | 'more' | null>(null);
+  const [open, setOpen] = React.useState<'models' | 'more' | 'refs' | null>(null);
   /* a lasso or box being drawn, shown as a line over the picture until it is let go */
   const [outline, setOutline] = React.useState<Mark | null>(null);
   const selectCanvas = React.useRef<HTMLCanvasElement>(null);
@@ -495,40 +498,68 @@ export function RedrawEditor({ src, models, model: firstModel, onClose, onMake, 
               </div>
             ) : null}
           </div>
-        </div>
-
-        {/* how far in, at the corner */}
-        <div onPointerDown={(event) => event.stopPropagation()} className={`absolute bottom-[132px] left-4 flex cursor-default items-center rounded-[10px] p-0.5 text-[11.5px] text-[var(--cv-ink-2)] ${float}`}>
-          <button type="button" aria-label={t('canvas.redraw.zoomOut')} className="flex h-7 w-7 items-center justify-center rounded-[8px] hover:bg-[var(--cv-float-hover)]" onClick={() => zoomTo(view.z / 1.25)}><Minus size={13} /></button>
-          <button type="button" title={`${t('canvas.redraw.fit')} · ${MOD}0`} onClick={fitView} className="h-7 min-w-[44px] rounded-[8px] tabular-nums hover:bg-[var(--cv-float-hover)]">{Math.round(scale * 100)}%</button>
-          <button type="button" aria-label={t('canvas.redraw.zoomIn')} className="flex h-7 w-7 items-center justify-center rounded-[8px] hover:bg-[var(--cv-float-hover)]" onClick={() => zoomTo(view.z * 1.25)}><Plus size={13} /></button>
+          {sep}
+          {/* how far in */}
+          <button type="button" aria-label={t('canvas.redraw.zoomOut')} className={toolBtn(false)} onClick={() => zoomTo(view.z / 1.25)}><Minus size={15} /></button>
+          <Tooltip label={`${t('canvas.redraw.fit')} · ${MOD}0`}>
+            <button type="button" onClick={fitView} className="h-9 min-w-[48px] rounded-[10px] px-1 text-[12px] tabular-nums text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">{Math.round(scale * 100)}%</button>
+          </Tooltip>
+          <button type="button" aria-label={t('canvas.redraw.zoomIn')} className={toolBtn(false)} onClick={() => zoomTo(view.z * 1.25)}><Plus size={15} /></button>
         </div>
 
         {/* what it should become, in one place under the picture: pictures to take from, the words, the model, send */}
         <div onPointerDown={(event) => event.stopPropagation()} className="absolute inset-x-0 bottom-4 flex cursor-default flex-col items-center px-4">
           {warn ? <div className="cv-fade mb-2 rounded-full bg-amber-500/15 px-3 py-1 text-[12px] text-amber-300">{warn}</div> : null}
           <div className={`w-[min(720px,100%)] rounded-[20px] px-3 pb-2.5 pt-2.5 transition focus-within:!border-[var(--cv-ring)] ${float}`}>
-            <div className="flex items-start gap-2">
-              {refs.map((r) => (
-                <span key={r.path} className="group/ref relative mt-0.5 h-9 w-9 shrink-0 overflow-hidden rounded-[9px] ring-1 ring-inset ring-[var(--cv-float-line)]">
-                  <img src={r.src} alt="" draggable={false} className="h-full w-full object-cover" />
-                  <button type="button" aria-label={t('canvas.redraw.removeRef')} onClick={() => setRefs((list) => list.filter((x) => x.path !== r.path))}
-                    className="absolute inset-0 flex items-center justify-center bg-black/55 text-white opacity-0 transition group-hover/ref:opacity-100"><X size={13} /></button>
-                </span>
-              ))}
-              <textarea ref={words} value={prompt} rows={1} onChange={(event) => setPrompt(event.target.value)}
-                onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void make(); } }}
-                placeholder={t(hint)}
-                className="max-h-[120px] min-h-[40px] min-w-0 flex-1 resize-none bg-transparent px-1.5 py-2 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none [field-sizing:content] placeholder:text-[var(--cv-ink-3)]" />
-            </div>
+            {/* pictures to take from, as a node's composer shows what goes in: tiles, and a + to bring one */}
+            {onAddRef || pictures?.length ? (
+              <div className="mb-1 flex items-center gap-2 px-0.5 pt-0.5">
+                {refs.map((r) => (
+                  <span key={r.path} className="group/ref relative h-12 w-12 shrink-0 overflow-hidden rounded-[12px] ring-1 ring-inset ring-[var(--cv-float-line)]">
+                    <img src={r.src} alt="" draggable={false} className="h-full w-full object-cover" />
+                    <button type="button" aria-label={t('canvas.redraw.removeRef')} onClick={() => setRefs((list) => list.filter((x) => x.path !== r.path))}
+                      className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition group-hover/ref:opacity-100"><X size={11} /></button>
+                  </span>
+                ))}
+                {(picked?.refs ?? 4) - 1 > refs.length ? (
+                  <Popover open={open === 'refs'} onOpenChange={(v) => setOpen(v ? 'refs' : null)} placement="top" align="start"
+                    trigger={(
+                      <Tooltip label={t('canvas.redraw.addRef')}>
+                        <button type="button" aria-label={t('canvas.redraw.addRef')} onClick={() => setOpen(open === 'refs' ? null : 'refs')}
+                          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] ${open === 'refs' ? 'bg-[var(--cv-float-hover)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_5%,transparent)]'}`}><Plus size={18} /></button>
+                      </Tooltip>
+                    )}>
+                    <div className={`w-[300px] p-1.5 ${float} rounded-[16px]`}>
+                      {onAddRef ? (
+                        <button type="button" onClick={() => { setOpen(null); file.current?.click(); }}
+                          className="flex h-10 w-full items-center gap-2.5 rounded-[10px] px-2 text-left text-[13.5px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
+                          <Upload size={16} className="text-[var(--cv-ink-2)]" />{t('canvas.redraw.fromComputer')}
+                        </button>
+                      ) : null}
+                      {pictures?.length ? (
+                        <>
+                          <div className="px-2 pb-1.5 pt-2 text-[11.5px] text-[var(--cv-ink-3)]">{t('canvas.redraw.fromProject')}</div>
+                          <div className="grid max-h-[220px] grid-cols-4 gap-1.5 overflow-y-auto px-1 pb-1">
+                            {pictures.filter((p) => !refs.some((r) => r.path === p.path)).map((p) => (
+                              <button key={p.path} type="button" title={p.name} onClick={() => { setRefs((list) => [...list, { path: p.path, src: p.src }]); setOpen(null); }}
+                                className="aspect-square overflow-hidden rounded-[9px] ring-1 ring-inset ring-[var(--cv-float-line)] transition hover:ring-2 hover:ring-[var(--cv-ring)]">
+                                <img src={p.src} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                  </Popover>
+                ) : null}
+                <input ref={file} type="file" accept="image/*" multiple hidden onChange={(event) => { void addRefs(event.target.files); event.target.value = ''; }} />
+              </div>
+            ) : null}
+            <textarea ref={words} value={prompt} rows={1} onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void make(); } }}
+              placeholder={t(hint)}
+              className="block max-h-[120px] min-h-[40px] w-full resize-none bg-transparent px-1.5 py-2 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none [field-sizing:content] placeholder:text-[var(--cv-ink-3)]" />
             <div className="flex items-center gap-1">
-              {onAddRef && (picked?.refs ?? 4) - 1 > refs.length ? (
-                <Tooltip label={t('canvas.redraw.addRef')}>
-                  <button type="button" aria-label={t('canvas.redraw.addRef')} onClick={() => file.current?.click()}
-                    className="flex h-8 w-8 items-center justify-center rounded-[9px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><ImagePlus size={16} /></button>
-                </Tooltip>
-              ) : null}
-              <input ref={file} type="file" accept="image/*" multiple hidden onChange={(event) => { void addRefs(event.target.files); event.target.value = ''; }} />
               {picked ? (
                 <div className="relative">
                   <button type="button" onClick={() => setOpen(open === 'models' ? null : 'models')}

@@ -24,7 +24,7 @@ export function CanvasModal({ onClose, side, children, label }: {
     return () => window.removeEventListener('keydown', key, true);
   }, [onClose]);
   return createPortal(
-    <div className="cv-fade fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-6" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="cv-fade fixed inset-0 z-[2000] flex items-center justify-center bg-black/75 p-6 backdrop-blur-[3px]" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div role="dialog" aria-label={label}
         className="cv-grow relative flex h-[min(780px,calc(100vh-48px))] w-[min(1200px,calc(100vw-48px))] overflow-hidden rounded-[24px] bg-[var(--cv-modal)] text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)]">
         {side ? <aside className="flex w-[180px] shrink-0 flex-col border-r !border-[var(--cv-float-line)] px-2 py-4">{side}</aside> : null}

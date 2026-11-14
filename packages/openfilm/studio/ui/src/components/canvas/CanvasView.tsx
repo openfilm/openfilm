@@ -1349,7 +1349,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     editing,
     edit: (id) => { if (id) willChange(); setEditing(id); },
     select: (id, add) => setNodes((list) => list.map((n) => (n.id === id ? { ...n, selected: add ? !n.selected : true } : add ? n : { ...n, selected: false }))),
-    single,
+    /* a window over the board (a picture's tool, a library): the bars round the node give way to it */
+    single: redraw || pictureTool || modal || cutoutThen ? null : single,
     choices: (kind) => choicesFor(providers, kind),
     allChoices: (kind) => allChoicesFor(providers, kind),
     fallback: (kind) => defaultChoice(providers, kind),
@@ -1404,7 +1405,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     ...(chat ? { write, writing: (id: string) => writing.get(id), stopWriting: (id: string) => writers.current.get(id)?.abort(), uploadWritingFiles: onImportFiles } : {}),
     locate,
     ...(onRefer ? { refer: (id: string) => { const node = now.current.nodes.find((n) => n.id === id); const ref = node ? refOf(node) : null; if (ref) onRefer([ref]); } } : {}),
-  }), [chat, writing, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal, onError, onImportFiles, activeUploads, shown]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [chat, writing, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, redraw, pictureTool, modal, cutoutThen, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal, onError, onImportFiles, activeUploads, shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onDrop = (event: React.DragEvent) => {
     const at = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -1861,7 +1862,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           <RedrawEditor src={sources.file(byPath.get(redraw.path)!)} start={redraw.start} onClose={() => setRedraw(null)} onMake={redrawMake}
             models={redrawModels.map((c) => ({ key: keyOfChoice(c), name: c.name, via: c.via, mask: Boolean(c.spec?.mask), markup: Boolean(c.spec?.markup), refs: c.spec?.refs ?? 1 }))}
             model={redrawFirst(redraw.id)} onSubject={() => subjectOf(redraw.path)}
-            onAddRef={async (file) => { const [path] = await onImportFiles([file]); return path ? { path, src: URL.createObjectURL(file) } : null; }} />
+            onAddRef={async (file) => { const [path] = await onImportFiles([file]); return path ? { path, src: URL.createObjectURL(file) } : null; }}
+            pictures={files.filter((f) => f.kind === 'image' && f.path !== redraw.path && !/(^|\/)(expand-|mask-|markup-)/.test(f.path)).slice(0, 80).map((f) => ({ path: f.path, src: sources.file(f), name: f.name }))} />
         ) : null}
         {/* a picture's own tools: widened, cropped and turned, colored, lit anew */}
         {pictureTool && byPath.get(pictureTool.path) ? (() => {

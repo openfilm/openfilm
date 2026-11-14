@@ -54,7 +54,7 @@ export function CutoutSetup({ onReady, onClose, onSettings }: {
   const busy = asked && !model?.failed;
 
   return createPortal(
-    <div className="cv-fade fixed inset-0 z-[310] flex items-center justify-center bg-black/45 p-6" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="cv-fade fixed inset-0 z-[2010] flex items-center justify-center bg-black/45 p-6" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div role="dialog" aria-label={t('canvas.cutout.title')}
         className="cv-grow relative w-[min(440px,100%)] overflow-hidden rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-modal)] text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)]">
         <button type="button" aria-label={t('canvas.outline.close')} onClick={onClose}
