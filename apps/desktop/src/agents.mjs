@@ -1491,6 +1491,13 @@ export class AgentSession {
     return this.conn.agent.request(acp.methods.agent.session.setMode, { sessionId: this.sessionId, modeId });
   }
 
+  /** Resolves once its process has ended (after `close`), or `ms` later. */
+  ended(ms = 3000) {
+    const child = this.child;
+    if (!child || this.exited || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+    return new Promise((done) => { child.once('exit', () => done(undefined)); setTimeout(done, ms).unref?.(); });
+  }
+
   close() {
     LIVE.delete(this);
     try { this.conn?.close(); } catch { /* gone already */ }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, renameSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readLog } from './chat-store.mjs';
@@ -110,6 +110,50 @@ setInterval(() => {}, 1000);
     await assert.rejects(agents.ask('nobody', 'hi'), /Unknown agent/);
     assert.equal(agents.lastAgent(), null, 'a question of Studio\'s is not the chat\'s conversation');
   } finally {
+    setChosenPaths({});
+  }
+});
+
+test("a project folder about to be renamed: the chat's sessions between turns in it close and their processes end, others stay", async () => {
+  /* DeepSeek Harness as a fake over ACP that only opens a session */
+  const { setChosenPaths } = await import('./agents.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'of-release-'));
+  const program = join(dir, 'dsh.mjs');
+  writeFileSync(program, `let buf = '';
+const send = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+process.stdin.on('data', (d) => {
+  buf += d;
+  let i;
+  while ((i = buf.indexOf('\\n')) >= 0) {
+    const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+    if (m.method === 'initialize') send({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] } });
+    else if (m.method === 'session/new') send({ jsonrpc: '2.0', id: m.id, result: { sessionId: 's1' } });
+    else if (m.id != null && m.method) send({ jsonrpc: '2.0', id: m.id, result: {} });
+  }
+});
+setInterval(() => {}, 1000);
+`);
+  setChosenPaths({ deepseek: program });
+  const handlers = new Map();
+  const agents = registerLocalAgentIpc({ handle: (channel, fn) => handlers.set(channel, fn) }, { trusted: () => true });
+  const event = { sender: { once() {}, isDestroyed: () => false, send() {} } };
+  const project = join(dir, 'Untitled');
+  const other = join(dir, 'Other');
+  mkdirSync(project);
+  mkdirSync(other);
+  try {
+    const here = await handlers.get('desktop:local-agents:start')(event, { agent: 'deepseek', cwd: project });
+    const there = await handlers.get('desktop:local-agents:start')(event, { agent: 'deepseek', cwd: other });
+    assert.ok(here.ok && there.ok, here.error ?? there.error);
+    await agents.release(project);
+    assert.match((await handlers.get('desktop:local-agents:prompt')(event, { key: here.key, text: 'hi' })).error, /ended/);
+    /* nothing of the app's works in the folder any more: it can be renamed (Windows refused while the agent ran) */
+    renameSync(project, join(dir, 'My Film'));
+    /* the session in another folder is not let go of */
+    assert.equal((await handlers.get('desktop:local-agents:prompt')(event, { key: there.key, text: 'hi' })).ok, true);
+    handlers.get('desktop:local-agents:close')(event, { key: there.key });
+  } finally {
+    agents.closeAll();
     setChosenPaths({});
   }
 });

@@ -116,10 +116,11 @@ export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
  * Studio's editor into a page of its own (its chat beside it) serves that one. `working`: the folders an app's agent
  * is working in right now (an app with a chat), which cannot be renamed or deleted meanwhile. `askAgent`: in an app with
  * a chat, one question answered by the person's agent's own model, for Studio's own work that needs a model
- * (translating subtitles); without it, that goes to a service connected for it. Resolves once both servers listen.
- * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent }} [options]
+ * (translating subtitles); without it, that goes to a service connected for it. `release`: an app's own processes in
+ * a project folder (its agent between turns) let go of it, before the folder is renamed. Resolves once both servers listen.
+ * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent, release?: (path: string) => Promise<void> }} [options]
  */
-export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent } = {}) {
+export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent, release } = {}) {
   void refreshCommunity();
   let COOKIE = cookieName(port);
   let FRAMED = framedCookieName(port);
@@ -748,7 +749,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (exports.list(project.id).some((job) => job.status === 'waiting' || job.status === 'running')) {
           throw new HttpError(409, 'An export is queued or running in this project: wait for it to finish or stop it first, then rename the project.', { code: 'export-running' });
         }
-        const renamed = await renameProject(project.id, String(name ?? ''));
+        /* the app's agent between turns works in the folder, and Windows will not rename it under that: let go first */
+        const renamed = await renameProject(project.id, String(name ?? ''), { release });
         if (renamed.path !== project.path || renamed.name !== project.name) {
           watchers.move(project.path, renamed.path);
           exportRoots.set(project.id, renamed.path);
