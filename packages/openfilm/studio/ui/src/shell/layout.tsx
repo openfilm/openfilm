@@ -14,7 +14,7 @@
 import * as React from 'react';
 import { useLanguage, useT } from '@/i18n';
 import { blockTitle } from '@/lib/blocks';
-import { studioHost, useHostPanel } from '@/lib/host';
+import { HOST_PANEL_WIDTH, studioHost, useHostPanel } from '@/lib/host';
 import { useStudioPlugins } from '@/lib/plugins';
 import { useWorkspaceDraft, useWorkspaceLayouts } from '@/lib/use-workspaces';
 import { defaultDockTree, dockFrames, panelMinimum, visibleDockPanels, type DockRect } from '@/lib/workspace-dock';
@@ -188,9 +188,19 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
 
   /* how the panes and the canvas's box are placed: the room kept round them where the panels are docked, and the
      canvas's box where they float */
+  /* beside the app's panel, its side follows the panel's width the moment the app tells it (--host-panel-width, before
+     React renders this), so a fast drag of the panel's seam leaves no gap between the two */
+  const besidePanel = (style: React.CSSProperties, dock: ReturnType<typeof workspaceGeometry>, layout: WorkspaceLayout): React.CSSProperties => {
+    const panel = layout.mode === workspaceMode && !layout.tree && hostPanel?.open ? hostPanel.width : 0;
+    const side = layout.chatSide;
+    const rest = dock.inset[side] - panel;
+    return panel && rest >= 0 ? { ...style, [side === 'left' ? 'marginLeft' : 'marginRight']: `calc(${HOST_PANEL_WIDTH} + ${rest}px)` } : style;
+  };
   const places = React.useMemo(() => ({
-    among: amongFree ? {} : insetStyle(amongDock), canvas: canvasFree ? {} : insetStyle(canvasDock), canvasFrame: freeBox(canvasFree?.panels[centerOf(canvasSpec)?.key ?? 'canvas']),
-  }), [amongFree, canvasFree, amongDock, canvasDock, canvasSpec]);
+    among: amongFree ? {} : besidePanel(insetStyle(amongDock), amongDock, amongPrefs),
+    canvas: canvasFree ? {} : besidePanel(insetStyle(canvasDock), canvasDock, canvasPrefs),
+    canvasFrame: freeBox(canvasFree?.panels[centerOf(canvasSpec)?.key ?? 'canvas']),
+  }), [amongFree, canvasFree, amongDock, canvasDock, canvasSpec, amongPrefs, canvasPrefs, workspaceMode, hostPanel?.open, hostPanel?.width]); // eslint-disable-line react-hooks/exhaustive-deps
   const blockBox = React.useCallback((key: string) => freeBox(amongFree?.panels[key]), [amongFree]);
 
   /* ── what the shell draws with, and what a workbench is told: each the same one until it changes ── */

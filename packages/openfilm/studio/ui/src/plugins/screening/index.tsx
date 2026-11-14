@@ -8,6 +8,7 @@
  */
 import * as React from 'react';
 import { StrictMode } from 'react';
+import { createPortal } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { ChevronLeft, ChevronRight, Play, X } from 'lucide-react';
 import { addPluginWords, useT } from '@/i18n';
@@ -20,7 +21,7 @@ import type { StageBox, StudioRef } from '@/lib/host';
 import { momentRef, regionRef } from '@/lib/studio-refs';
 import { Tooltip } from '@/components/Tooltip';
 import { chat, links, onCommand, project, toast } from '@/studio';
-import { useProject, useProvide } from '@/studio/react';
+import { useBlock, useProject, useProvide } from '@/studio/react';
 import { changedRanges, clock, cuesOf, linkOf, sameRef, timeLabel, timeOf, type Clock, type Cue, type Range, type View } from './screening-model';
 import { Scrubber, useClock, type Mark, type MarkState, type ScrubberHandle } from './Scrubber';
 import { Btn, PATH_HELP, SpeedMenu } from './Controls';
@@ -111,6 +112,7 @@ function Screening({ projectId }: { projectId: string }) {
   const preview = React.useRef<PreviewHandle>(null);
   const player = React.useRef<Player | null>(null);
   player.current ??= new Player();
+  const block = useBlock('screening', 'screening');
   const shown = state?.shown === 'screening';
   const shownRef = React.useRef(shown);
   shownRef.current = shown;
@@ -371,7 +373,8 @@ function Screening({ projectId }: { projectId: string }) {
     return () => window.removeEventListener('keydown', press, true);
   }, [shown, toggle, pause, seek, pointMoment, changes, watchChange, cycleSpeed, toggleFull, sheetOpen, watching]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!state || !folder) return <div className="h-full bg-[var(--bg-viewer)]" />;
+  /* drawn into its block, which Studio lays out among the page's panels (the chat, the library) as its arrangement has it */
+  if (!state || !folder) return createPortal(<div className="h-full bg-[var(--bg-viewer)]" />, block.slot);
   /* a film with nothing in it yet: its picture black, the bar and its controls there but out of use, as the edit's */
   const empty = film != null && !blocks.picture.length && !blocks.sound.length;
   const idle = empty || !duration;
@@ -405,7 +408,7 @@ function Screening({ projectId }: { projectId: string }) {
     </Pill>
   ) : null;
 
-  return (
+  return createPortal(
     <div ref={room} data-screening="" className={`relative flex h-full min-h-0 w-full flex-col gap-2 px-6 pb-2 pt-4 text-[var(--text)] ${full ? 'bg-black' : 'bg-[var(--bg-viewer)]'}`}>
       <Stage stage={stage} folder={folder} preview={preview} time={() => player.current?.time() ?? 0} onInfo={onInfo}
         marks={marks} clock={time} playing={playing} hint={used.box ? null : w('teachBox')}
@@ -413,38 +416,50 @@ function Screening({ projectId }: { projectId: string }) {
         idle={idle}
         onFit={setFit} onToggle={toggle} onDragStart={pause} onBox={pointBox} onRemove={(m) => unrefer(m.ref)} stateOf={stateOf} onHoverMark={hoverMark} />
       {/* under the picture and as wide: the marks and the progress bar, then the player's row of controls; with nothing
-          to play, greyed and out of use */}
+          to play, what plays it greyed and out of use (how Screening is used is not: it needs no film) */}
       {(
-        <div aria-disabled={idle || undefined} inert={idle}
-          className={`mx-auto flex w-full shrink-0 flex-col transition-opacity ${idle ? 'pointer-events-none select-none opacity-35' : ''}`} style={{ maxWidth: Math.max(560, fit) }}>
-          <Scrubber ref={scrubber} duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks} changes={changes}
+        <div className="mx-auto flex w-full shrink-0 flex-col" style={{ maxWidth: Math.max(560, fit) }}>
+          <Idle idle={idle}><Scrubber ref={scrubber} duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks} changes={changes}
             words={{
               go: w('go'), remove: w('remove'), lane: used.moment && used.range ? null : w('laneEmpty'),
               laneHints: [...(used.moment ? [] : [w('hintMoment')]), ...(used.range ? [] : [w('hintRange')])],
               barHints: used.zoom ? [] : [w('hintZoom')],
             }}
             onSeek={(t) => { pause(); seek(t); }} onMoment={pointMoment}
-            onRange={pointRange} onGo={goTo} onRemove={unrefer} stateOf={stateOf} onHoverMark={hoverMark} onView={onView} />
+            onRange={pointRange} onGo={goTo} onRemove={unrefer} stateOf={stateOf} onHoverMark={hoverMark} onView={onView} /></Idle>
           <div className="-mx-1.5 flex h-10 items-center gap-0.5 text-white">
-            <Tooltip label={playing ? w('pause') : w('play')} shortcut="Space">
-              <Btn label={playing ? w('pause') : w('play')} onClick={toggle}><Icon d={playing ? PATH_PAUSE : PATH_PLAY} /></Btn>
-            </Tooltip>
-            <VolumeControl volume={sound.volume} muted={sound.muted} titles={{ mute: w('mute'), unmute: w('unmute') }}
-              onVolumeChange={(v) => { player.current!.setVolume(v); heard(); }}
-              onToggleMute={() => { player.current!.setMuted(!player.current!.muted); heard(); }} />
-            <TimeNow source={time} decimals={decimals} duration={duration} />
+            <Idle idle={idle}>
+              <Tooltip label={playing ? w('pause') : w('play')} shortcut="Space">
+                <Btn label={playing ? w('pause') : w('play')} onClick={toggle}><Icon d={playing ? PATH_PAUSE : PATH_PLAY} /></Btn>
+              </Tooltip>
+              <VolumeControl volume={sound.volume} muted={sound.muted} titles={{ mute: w('mute'), unmute: w('unmute') }}
+                onVolumeChange={(v) => { player.current!.setVolume(v); heard(); }}
+                onToggleMute={() => { player.current!.setMuted(!player.current!.muted); heard(); }} />
+              <TimeNow source={time} decimals={decimals} duration={duration} />
+            </Idle>
             <span className="flex-1" />
-            <SpeedMenu rate={speed} label={w('speed')} normal={w('speedNormal')} onRate={rate} />
+            <Idle idle={idle}><SpeedMenu rate={speed} label={w('speed')} normal={w('speedNormal')} onRate={rate} /></Idle>
             <Tooltip label={`${w('help')} · ${w('helpHold', { mod: MOD })}`} shortcut="?">
-              <Btn label={w('help')} active={sheetOpen} onClick={() => setSheetOpen((open) => !open)}><Icon d={PATH_HELP} /></Btn>
+              <Btn label={w('help')} active={sheetOpen} onClick={() => setSheetOpen((open) => !open)}><Icon d={PATH_HELP} size={20} /></Btn>
             </Tooltip>
-            <Tooltip label={full ? w('exitFull') : w('kFull')} shortcut="F">
-              <Btn label={full ? w('exitFull') : w('kFull')} onClick={toggleFull}><Icon d={full ? PATH_FULLSCREEN_EXIT : PATH_FULLSCREEN} /></Btn>
-            </Tooltip>
+            <Idle idle={idle}>
+              <Tooltip label={full ? w('exitFull') : w('kFull')} shortcut="F">
+                <Btn label={full ? w('exitFull') : w('kFull')} onClick={toggleFull}><Icon d={full ? PATH_FULLSCREEN_EXIT : PATH_FULLSCREEN} /></Btn>
+              </Tooltip>
+            </Idle>
           </div>
         </div>
       )}
       {held || sheetOpen ? <ShortcutSheet title={w('sheetTitle')} steps={steps} keysTitle={w('keysTitle')} groups={sheet} hold={{ keys: [MOD], label: w('kHold') }} onClose={held ? undefined : () => setSheetOpen(false)} /> : null}
+    </div>
+  , block.slot);
+}
+
+/** What plays the film: greyed and out of use while there is nothing to play. */
+function Idle({ idle, children }: { idle: boolean; children: React.ReactNode }) {
+  return (
+    <div aria-disabled={idle || undefined} inert={idle} className={`contents ${idle ? '[&>*]:pointer-events-none [&>*]:select-none [&>*]:opacity-35' : ''}`}>
+      {children}
     </div>
   );
 }

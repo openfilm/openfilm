@@ -45,7 +45,8 @@ export function Stage({ stage, folder, preview, time, onInfo, marks, clock, play
   const at = (e: React.PointerEvent) => { const r = e.currentTarget.getBoundingClientRect(); return { x: Math.max(0, Math.min(r.width, e.clientX - r.left)), y: Math.max(0, Math.min(r.height, e.clientY - r.top)) }; };
   return (
     <div ref={room} className="relative grid min-h-0 flex-1 place-items-center">
-      <div className="relative overflow-hidden rounded-[8px] bg-black" style={{ width: box.w, height: box.h }}>
+      {/* the corners cut by a clip-path: a frame the browser composites apart (the film's) is not cut by a rounded overflow */}
+      <div className="relative overflow-hidden rounded-[8px] bg-black [clip-path:inset(0_round_8px)]" style={{ width: box.w, height: box.h }}>
         <Preview ref={preview} folder={folder} stage={stage} time={time} onInfo={onInfo} />
         <div data-capture-hide="" className={`absolute inset-0 ${idle ? 'pointer-events-none' : drag || !playing ? 'cursor-crosshair' : 'cursor-default'}`}
           onPointerEnter={() => setInside(true)} onPointerLeave={() => setInside(false)}

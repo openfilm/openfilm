@@ -235,7 +235,7 @@ export function ProjectView({ projectId, onProject }: {
     folder, mediaSources, listing, mediaMade, setMissingMedia, findMissing,
     projectApi, onPick, onBring, onImport, coverSet,
     slots,
-    canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, away,
+    canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes,
     libraryIndex, setRevealMedia, showFile, saveThings, onLibraryDownloadFailed,
     title,
     arrangement, openBlock,
@@ -5011,9 +5011,11 @@ export function ProjectView({ projectId, onProject }: {
       else toast.show(t('project.filmNotReady'));
     },
   });
-  const editAway = canvasOpen || away;
+  /* the film's export wherever a workbench of the film is shown (the edit, Screening…); not over the canvas, which
+     makes material and has bars of its own */
+  const exportAway = canvasOpen;
   const topBarTools = React.useMemo(() => (<>
-    {editAway ? null : (<>
+    {exportAway ? null : (<>
     <Tooltip label={t('projectMenu.export')} side="bottom">
       <button type="button" aria-label={t('projectMenu.export')} aria-haspopup="dialog" aria-expanded={exportOpen} className={TOP_BTN}
         onClick={() => barDoes.askExport()}>
@@ -5022,7 +5024,7 @@ export function ProjectView({ projectId, onProject }: {
     </Tooltip>
     </>)}
     <ExportTray ref={exportTrayRef} projectId={projectId} onError={showError} />
-  </>), [barDoes, editAway, exportOpen, projectId, showError, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  </>), [barDoes, exportAway, exportOpen, projectId, showError, t]); // eslint-disable-line react-hooks/exhaustive-deps
   /* open only for a moment: made anew by each render meanwhile */
   const topBarMenu = keyMenu ? <ContextMenu x={keyMenu.x} y={keyMenu.y} dense items={keyMenuItems} onClose={() => setKeyMenu(null)} /> : null;
   const stageW = stage.w, stageH = stage.h, filmClips = filmSummary.clips;

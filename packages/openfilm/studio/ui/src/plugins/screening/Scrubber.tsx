@@ -264,7 +264,8 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
           {span ? <span className="absolute inset-y-0 bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]" style={{ left: left(Math.min(span.a, span.b)), width: across(Math.min(span.a, span.b), Math.max(span.a, span.b)) }} /> : null}
           {marks.map((m) => ((m.ref.kind === 'time' || m.ref.kind === 'region') && seen(m.ref.time) ? <span key={`t${m.n}`} className="absolute inset-y-0 w-[1.5px] -translate-x-1/2 bg-[var(--accent)]" style={{ left: left(m.ref.time) }} /> : null))}
           {hover && !press.current ? <span className={`absolute inset-y-0 w-px ${hover.row === 'lane' ? 'bg-[var(--accent)]' : 'bg-white/50'}`} style={{ left: hover.x }} /> : null}
-          <Playhead clock={clock} at={(t) => (seen(t) ? left(t) : null)} />
+          {/* none on a film with nothing in it (its length is less than a frame) */}
+          {duration > FRAME ? <Playhead clock={clock} at={(t) => (seen(t) ? left(t) : null)} /> : null}
         </div>
       </div>
       {/* over the bar: the time under the pointer (or the stretch being picked), and how that row is used until it has been */}

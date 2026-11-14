@@ -17,6 +17,23 @@
   },
   "about": "watching the film and pointing at what to change, for the chat",
   "workbench": "screening",
+  "blocks": [
+    {
+      "id": "screening",
+      "title": {
+        "en": "Screening",
+        "zh-CN": "放映",
+        "ja": "試写",
+        "ko": "시사",
+        "es": "Proyección"
+      },
+      "edge": "center",
+      "min": [
+        320,
+        240
+      ]
+    }
+  ],
   "on": true,
   "skills": [],
   "requires": [
