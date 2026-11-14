@@ -155,62 +155,37 @@ export function HistoryModal({ projectId, uploads, onAdd, onClose }: {
 
 /* ── the material libraries: styles and effects ── */
 
-/** an effect's little scene, moving as its camera does */
-const EFFECT_CSS = `
-@keyframes cvfx-push { from { transform: scale(1); } to { transform: scale(1.7); } }
-@keyframes cvfx-pull { from { transform: scale(1.7); } to { transform: scale(1); } }
-@keyframes cvfx-orbit { 0% { transform: perspective(300px) rotateY(-35deg); } 50% { transform: perspective(300px) rotateY(35deg); } 100% { transform: perspective(300px) rotateY(-35deg); } }
-@keyframes cvfx-track { from { transform: translateX(-18%); } to { transform: translateX(18%); } }
-@keyframes cvfx-follow { 0% { transform: scale(1.25) translateY(0); } 50% { transform: scale(1.3) translateY(-3%); } 100% { transform: scale(1.25) translateY(0); } }
-@keyframes cvfx-whip { 0%, 35% { transform: translateX(0); filter: blur(0); } 45% { transform: translateX(-14%); filter: blur(5px); } 55% { transform: translateX(14%); filter: blur(5px); } 65%, 100% { transform: translateX(0); filter: blur(0); } }
-@keyframes cvfx-vertigo-bg { from { transform: scale(1); } to { transform: scale(1.8); } }
-@keyframes cvfx-rise { from { transform: translateY(0) scale(1.2); } to { transform: translateY(18%) scale(0.85); } }
-@keyframes cvfx-dive { from { transform: scale(0.8) translateY(-10%); } to { transform: scale(1.8) translateY(8%); } }
-@keyframes cvfx-clouds { 0% { opacity: 1; transform: scale(1); } 60% { opacity: 1; transform: scale(2.4); } 100% { opacity: 0; transform: scale(3); } }
-@keyframes cvfx-fpv { 0% { transform: rotate(-8deg) scale(1.2) translateX(-6%); } 50% { transform: rotate(8deg) scale(1.5) translateX(6%); } 100% { transform: rotate(-8deg) scale(1.2) translateX(-6%); } }
-@keyframes cvfx-slow { from { transform: translateY(-30%); } to { transform: translateY(30%); } }
-@keyframes cvfx-lapse { 0% { filter: brightness(1.2); } 50% { filter: brightness(0.45); } 100% { filter: brightness(1.2); } }
-@keyframes cvfx-bullet { 0% { transform: perspective(300px) rotateY(0); } 100% { transform: perspective(300px) rotateY(360deg); } }
-@keyframes cvfx-shake { 0%, 100% { transform: translate(0, 0) rotate(0); } 25% { transform: translate(1.5%, -1%) rotate(0.6deg); } 50% { transform: translate(-1%, 1.5%) rotate(-0.5deg); } 75% { transform: translate(1%, 1%) rotate(0.4deg); } }
-@keyframes cvfx-pov { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3%); } }
-@keyframes cvfx-focus-a { 0%, 40% { filter: blur(0); } 60%, 100% { filter: blur(3px); } }
-@keyframes cvfx-focus-b { 0%, 40% { filter: blur(3px); } 60%, 100% { filter: blur(0); } }
-`;
-const MOVES: Record<string, string> = {
-  push: 'cvfx-push 2.4s ease-in-out infinite alternate', pull: 'cvfx-pull 2.4s ease-in-out infinite alternate', orbit: 'cvfx-orbit 3s ease-in-out infinite',
-  track: 'cvfx-track 2.4s ease-in-out infinite alternate', follow: 'cvfx-follow 1.2s ease-in-out infinite', whip: 'cvfx-whip 1.8s ease-in-out infinite',
-  vertigo: 'cvfx-vertigo-bg 2.4s ease-in-out infinite alternate', rise: 'cvfx-rise 2.6s ease-in-out infinite alternate', dive: 'cvfx-dive 2.2s ease-in infinite',
-  clouds: '', fpv: 'cvfx-fpv 2.2s ease-in-out infinite', slow: '', lapse: 'cvfx-lapse 2s linear infinite', bullet: 'cvfx-bullet 3s linear infinite',
-  shake: 'cvfx-shake 0.5s linear infinite', pov: 'cvfx-pov 0.9s ease-in-out infinite', focus: '',
-};
-
 /** each style's picture, by its id (styles/<id>.jpg): one scene, a girl in a yellow raincoat, in every style */
 export const stylePicture = (id: string): string | undefined => STYLE_PICTURES[id];
 const STYLE_PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./styles/*.webp', { eager: true, import: 'default' }))
   .map(([path, url]) => [path.split('/').pop()!.replace(/\.webp$/, ''), url]));
 
+/** each camera move's clip and its still (moves/<id>.webm, .webp): one clay set, the same figure, filmed with each move */
+const MOVE_CLIPS: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./moves/*.webm', { eager: true, import: 'default' }))
+  .map(([path, url]) => [path.split('/').pop()!.replace(/\.webm$/, ''), url]));
+const MOVE_STILLS: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./moves/*.webp', { eager: true, import: 'default' }))
+  .map(([path, url]) => [path.split('/').pop()!.replace(/\.webp$/, ''), url]));
+
 /**
- * An effect's card: a field of dots (the world) and a white disc (what the camera looks at), moved as its camera
- * moves — a diagram of the move, not a picture of a place.
+ * A camera move as it looks: its still, and its clip playing while it is pointed at (or all along, `playing`). The clip
+ * is fetched only then, so a library of them opens at once.
  */
-export function EffectScene({ look }: { look: string }) {
-  const dots = { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.32) 1.4px, transparent 1.8px)', backgroundSize: '14px 14px', backgroundPosition: 'center' };
-  const subject = look === 'slow' ? { animation: 'cvfx-slow 4s ease-in-out infinite alternate' } : look === 'focus' ? { animation: 'cvfx-focus-b 2.4s ease-in-out infinite alternate' } : undefined;
+export function MoveClip({ id, playing = false }: { id: string; playing?: boolean }) {
+  const clip = React.useRef<HTMLVideoElement>(null);
+  const [over, setOver] = React.useState(false);
+  const on = playing || over;
+  React.useEffect(() => {
+    const video = clip.current;
+    if (!video) return;
+    if (on) { video.currentTime = 0; void video.play().catch(() => {}); } else video.pause();
+  }, [on]);
   return (
-    <span className="relative block h-full w-full overflow-hidden bg-[#181818]">
-      <span className="absolute inset-[-40%]" style={{ animation: MOVES[look] || undefined, transformOrigin: '50% 50%' }}>
-        <span className="absolute inset-0" style={{ ...dots, ...(look === 'focus' ? { animation: 'cvfx-focus-a 2.4s ease-in-out infinite alternate' } : look === 'lapse' ? { animation: 'cvfx-lapse 2s linear infinite' } : {}) }} />
-        <span className="absolute left-1/2 top-1/2 aspect-square w-[11%] -translate-x-1/2 -translate-y-1/2">
-          <span className="block h-full w-full rounded-full bg-white shadow-[0_0_24px_rgba(255,255,255,0.35)]" style={subject} />
-        </span>
-      </span>
-      {look === 'clouds' ? (
-        <span className="absolute inset-0 flex items-center justify-center">
-          <span className="h-[140%] w-[140%] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.9)_30%,rgba(255,255,255,0)_70%)]" style={{ animation: 'cvfx-clouds 2.6s ease-in infinite' }} />
-        </span>
+    <span className="relative block h-full w-full overflow-hidden bg-[#3a342d]" onPointerEnter={() => setOver(true)} onPointerLeave={() => setOver(false)}>
+      {MOVE_STILLS[id] ? <img src={MOVE_STILLS[id]} alt="" draggable={false} loading="lazy" className="absolute inset-0 h-full w-full object-cover" /> : null}
+      {MOVE_CLIPS[id] ? (
+        <video ref={clip} src={on ? MOVE_CLIPS[id] : undefined} muted loop playsInline preload="none"
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${on ? 'opacity-100' : 'opacity-0'}`} />
       ) : null}
-      {/* the frame the camera sees */}
-      <span className="pointer-events-none absolute inset-[12%] rounded-[6px] border border-white/25" />
     </span>
   );
 }
@@ -239,7 +214,6 @@ export function MaterialLibrary({ kind, onPick, onClose }: {
     .filter((i) => (group === 'all' || i.group === group) && (!q || `${nameOf(i)} ${i.words}`.toLowerCase().includes(q)));
   return (
     <CanvasModal label={t(`canvas.library.${kind}`)} onClose={onClose}>
-      <style>{EFFECT_CSS}</style>
       <div className="flex items-center gap-3 px-5 pr-16 pt-4">
         <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--cv-chip)] p-0.5">
           {(['all', 'fav', 'recent'] as const).map((key) => (
@@ -264,12 +238,12 @@ export function MaterialLibrary({ kind, onPick, onClose }: {
           <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-4">
             {listed.map((item) => {
               const liked = kept.fav.includes(item.id);
-              const [a, b] = item.look.split(',');
+              const [a, b] = (item.look ?? '').split(',');
               return (
                 <div key={item.id} className="group/card relative flex flex-col gap-1.5">
                   <button type="button" onClick={() => { noteUsed(kind, item.id); onPick(item); }} title={item.words}
                     className="relative block aspect-[4/5] w-full overflow-hidden rounded-[12px] ring-1 ring-[var(--cv-float-line)] transition hover:ring-[var(--cv-ring)]">
-                    {kind === 'effects' ? <EffectScene look={item.look} /> : (
+                    {kind === 'effects' ? <MoveClip id={item.id} /> : (
                       /* a picture of one same scene made in the style, so the styles read side by side; its colors until it loads */
                       <span className="relative block h-full w-full" style={{ background: `linear-gradient(150deg, ${a} 0%, ${b} 100%)` }}>
                         {STYLE_PICTURES[item.id] ? <img src={STYLE_PICTURES[item.id]} alt="" draggable={false} loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover/card:scale-[1.04]" /> : null}

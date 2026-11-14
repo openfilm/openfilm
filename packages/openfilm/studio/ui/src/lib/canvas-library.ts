@@ -11,8 +11,8 @@ export interface LibraryItem<G extends string> {
   id: string;
   group: G;
   words: string;
-  /** what its card is drawn with: two colors (a style), how the little scene in it moves (an effect) */
-  look: string;
+  /** a style's two colors, its card's until its picture is in */
+  look?: string;
 }
 
 export const STYLE_GROUPS: StyleGroup[] = ['photo', 'illustration', 'three', 'design', 'art'];
@@ -67,23 +67,23 @@ export const STYLES: Array<LibraryItem<StyleGroup>> = [
 
 export const EFFECT_GROUPS: EffectGroup[] = ['move', 'drone', 'time', 'feel'];
 export const EFFECTS: Array<LibraryItem<EffectGroup>> = [
-  { id: 'pushIn', group: 'move', look: 'push', words: 'the camera slowly dollies in toward the subject, steady and smooth, the background gently compressing' },
-  { id: 'pullOut', group: 'move', look: 'pull', words: 'the camera slowly dollies back, revealing more of the surroundings around the subject' },
-  { id: 'orbit', group: 'move', look: 'orbit', words: 'the camera orbits around the subject in a smooth half circle, keeping it centered' },
-  { id: 'track', group: 'move', look: 'track', words: 'the camera tracks alongside the subject at the same speed, parallel to its movement' },
-  { id: 'follow', group: 'move', look: 'follow', words: 'the camera follows the subject from behind at shoulder height, moving with it' },
-  { id: 'whip', group: 'move', look: 'whip', words: 'a fast whip pan with motion blur that lands on the next subject' },
-  { id: 'dollyZoom', group: 'move', look: 'vertigo', words: 'a dolly zoom: the camera moves in while zooming out, the subject stays the same size and the background stretches away' },
-  { id: 'craneUp', group: 'drone', look: 'rise', words: 'the camera cranes up and away, rising above the scene to a high wide view' },
-  { id: 'dive', group: 'drone', look: 'dive', words: 'an aerial drone shot diving down toward the subject from high above' },
-  { id: 'clouds', group: 'drone', look: 'clouds', words: 'the camera flies forward through clouds and breaks out above the landscape below' },
-  { id: 'fpv', group: 'drone', look: 'fpv', words: 'a fast FPV drone flight weaving close through the scene, dynamic banking turns' },
-  { id: 'slowMo', group: 'time', look: 'slow', words: 'slow motion at high frame rate, every detail of the movement visible' },
-  { id: 'timelapse', group: 'time', look: 'lapse', words: 'a time-lapse: light and shadows sweep across the scene, clouds race by, people blur' },
-  { id: 'bulletTime', group: 'time', look: 'bullet', words: 'bullet time: the action freezes mid-moment while the camera circles around it' },
-  { id: 'handheld', group: 'feel', look: 'shake', words: 'handheld camera, subtle natural shake, documentary feel, close to the action' },
-  { id: 'pov', group: 'feel', look: 'pov', words: 'first-person point of view, as seen through the eyes of the character, hands sometimes in frame' },
-  { id: 'rack', group: 'feel', look: 'focus', words: 'a rack focus from the foreground to the subject behind it' },
+  { id: 'pushIn', group: 'move', words: 'the camera slowly dollies in toward the subject, steady and smooth, the background gently compressing' },
+  { id: 'pullOut', group: 'move', words: 'the camera slowly dollies back, revealing more of the surroundings around the subject' },
+  { id: 'orbit', group: 'move', words: 'the camera orbits around the subject in a smooth half circle, keeping it centered' },
+  { id: 'track', group: 'move', words: 'the camera tracks alongside the subject at the same speed, parallel to its movement' },
+  { id: 'follow', group: 'move', words: 'the camera follows the subject from behind at shoulder height, moving with it' },
+  { id: 'whip', group: 'move', words: 'a fast whip pan with motion blur that lands on the next subject' },
+  { id: 'dollyZoom', group: 'move', words: 'a dolly zoom: the camera moves in while zooming out, the subject stays the same size and the background stretches away' },
+  { id: 'craneUp', group: 'drone', words: 'the camera cranes up and away, rising above the scene to a high wide view' },
+  { id: 'dive', group: 'drone', words: 'an aerial drone shot diving down toward the subject from high above' },
+  { id: 'clouds', group: 'drone', words: 'the camera flies forward through clouds and breaks out above the landscape below' },
+  { id: 'fpv', group: 'drone', words: 'a fast FPV drone flight weaving close through the scene, dynamic banking turns' },
+  { id: 'slowMo', group: 'time', words: 'slow motion at high frame rate, every detail of the movement visible' },
+  { id: 'timelapse', group: 'time', words: 'a time-lapse: light and shadows sweep across the scene, clouds race by, people blur' },
+  { id: 'bulletTime', group: 'time', words: 'bullet time: the action freezes mid-moment while the camera circles around it' },
+  { id: 'handheld', group: 'feel', words: 'handheld camera, subtle natural shake, documentary feel, close to the action' },
+  { id: 'pov', group: 'feel', words: 'first-person point of view, as seen through the eyes of the character, hands sometimes in frame' },
+  { id: 'rack', group: 'feel', words: 'a rack focus from the foreground to the subject behind it' },
 ];
 
 export type LibraryKind = 'styles' | 'effects';

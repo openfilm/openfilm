@@ -8,10 +8,10 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  ArrowUp, ArrowUpRight, Camera, ChevronLeft, ChevronRight, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb,
+  ArrowUp, ArrowUpRight, Camera, ChevronLeft, ChevronRight, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb, Timer, GalleryHorizontal,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
+import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
 import { PRESETS, PRESET_GROUPS, presetOf, type CanvasPreset, type PresetGroup } from '@/lib/canvas-presets';
 
 /** each preset's picture of what it makes (made for OpenFilm), by its id */
@@ -25,10 +25,9 @@ import { keepLastModel, lastModel, useBoard, type Choice, type MakeData } from '
 import { ProviderMark } from '../settings/ProviderMark';
 import { useDraft } from './words';
 import { DocSheet } from './doc';
-import { EffectScene, coverOf, stylePicture, useSubjects } from './libraries';
+import { MoveClip, coverOf, stylePicture, useSubjects } from './libraries';
 import { GROUP, cameraLook } from './camera';
 import { cameraOf, picksAnything } from '@/lib/canvas-camera';
-import { EFFECTS } from '@/lib/canvas-library';
 import type { CanvasCharacter } from '@/api';
 import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
 import { VoiceId, VoicePicker, defaultVoice, serviceOf, voicesOf } from './voices';
@@ -354,6 +353,73 @@ function Slider({ label, value, min, max, step, shown, onChange }: { label: stri
       <div className={`flex items-center justify-between ${OPTION_TITLE}`}><span>{label}</span><span className="tabular-nums text-[var(--cv-ink-2)]">{shown}</span></div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))}
         className="nodrag h-1 w-full cursor-pointer accent-[var(--cv-ink)]" />
+    </div>
+  );
+}
+
+/** each way a clip is made, as a mark */
+const MODE_ICONS: Record<VideoMode, React.ComponentType<{ size?: number }>> = { text: TypeIcon, first: ImageIcon, firstLast: GalleryHorizontal, refs: Images, omni: Images };
+
+/**
+ * How long a clip is, on a ruler: a tick each second, every fifth named; the lengths its model makes lit, the rest
+ * faint. Dragged, clicked, typed or stepped with the arrows, it keeps to what the model makes (only its own lengths,
+ * when it makes only some).
+ */
+function LengthPicker({ value, range, only, onChange }: { value: number; range: [number, number]; only?: number[]; onChange: (n: number) => void }) {
+  const t = useT();
+  const end = Math.max(5, Math.ceil(range[1] / 5) * 5);
+  const fit = (n: number) => (only?.length ? only.reduce((best, x) => (Math.abs(x - n) < Math.abs(best - n) ? x : best))
+    : Math.min(range[1], Math.max(range[0], Math.round(n))));
+  const step = (by: number) => {
+    if (!only?.length) return onChange(fit(value + by));
+    const list = [...only].sort((x, y) => x - y);
+    const i = list.indexOf(fit(value));
+    onChange(list[Math.max(0, Math.min(list.length - 1, i + by))]!);
+  };
+  const track = React.useRef<HTMLDivElement>(null);
+  const at = (x: number) => { const box = track.current!.getBoundingClientRect(); return fit(((x - box.left) / box.width) * end); };
+  const [typed, setTyped] = React.useState<string | null>(null);
+  const commit = () => { if (typed) onChange(fit(Number(typed))); setTyped(null); };
+  const pct = (n: number) => `${(n / end) * 100}%`;
+  const makes = (n: number) => (only?.length ? only.includes(n) : n >= range[0] && n <= range[1]);
+  return (
+    <div className="w-[360px] px-4 pb-3 pt-3.5">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-[13px] text-[var(--cv-ink-2)]">{t('canvas.make.length')}</span>
+        <label className="flex h-9 items-baseline gap-1 rounded-[10px] bg-[var(--cv-chip)] px-3 pt-[5px] focus-within:ring-1 focus-within:ring-[var(--cv-ring)]">
+          <input value={typed ?? String(value)} inputMode="numeric" aria-label={t('canvas.make.length')}
+            onChange={(event) => setTyped(event.target.value.replace(/\D/g, '').slice(0, 3))} onBlur={commit}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') { event.preventDefault(); commit(); }
+              else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); setTyped(null); step(event.key === 'ArrowUp' ? 1 : -1); }
+            }}
+            className="w-9 bg-transparent text-right text-[17px] font-semibold tabular-nums text-[var(--cv-ink)] outline-none" />
+          <span className="text-[12px] text-[var(--cv-ink-3)]">{t('canvas.make.secondsUnit')}</span>
+        </label>
+      </div>
+      <div ref={track} role="slider" tabIndex={0} aria-label={t('canvas.make.length')} aria-valuemin={range[0]} aria-valuemax={range[1]} aria-valuenow={value}
+        className="nodrag relative h-12 cursor-pointer touch-none select-none outline-none"
+        onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); onChange(at(event.clientX)); }}
+        onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) onChange(at(event.clientX)); }}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowRight' || event.key === 'ArrowUp') { event.preventDefault(); step(1); }
+          else if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') { event.preventDefault(); step(-1); }
+        }}>
+        {/* the bar: faint, the lengths it makes a step lighter, up to the length picked lit */}
+        <div className="absolute inset-x-0 top-2 h-3 rounded-full bg-[var(--cv-chip)]" />
+        {only?.length ? null : <div className="absolute top-2 h-3 rounded-full bg-[color-mix(in_srgb,var(--cv-ink)_8%,transparent)]" style={{ left: pct(range[0]), width: pct(range[1] - range[0]) }} />}
+        <div className="absolute left-0 top-2 h-3 rounded-full bg-[color-mix(in_srgb,var(--cv-ink)_30%,transparent)] transition-[width] duration-75" style={{ width: pct(value) }} />
+        <div className="absolute top-0 h-7 w-[6px] -translate-x-1/2 rounded-full bg-[var(--cv-ink)] shadow-[0_1px_4px_rgba(0,0,0,0.4)] transition-[left] duration-75" style={{ left: pct(value) }} />
+        {/* a tick each second (each length it makes, when only some), every fifth named */}
+        {Array.from({ length: end + 1 }, (_, n) => n).filter((n) => !only?.length || makes(n) || n % 5 === 0).map((n) => (
+          <React.Fragment key={n}>
+            <span className={`absolute top-[22px] w-px -translate-x-1/2 ${n % 5 === 0 ? 'h-2' : 'h-1'} ${makes(n) ? 'bg-[var(--cv-ink-3)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_10%,transparent)]'}`} style={{ left: pct(n) }} />
+            {n % 5 === 0 || (only?.length && makes(n)) ? (
+              <span className={`absolute top-8 -translate-x-1/2 text-[11px] tabular-nums ${n === value ? 'text-[var(--cv-ink)]' : makes(n) ? 'text-[var(--cv-ink-3)]' : 'text-[color-mix(in_srgb,var(--cv-ink)_18%,transparent)]'}`} style={{ left: pct(n) }}>{n}</span>
+            ) : null}
+          </React.Fragment>
+        ))}
+      </div>
     </div>
   );
 }
@@ -750,8 +816,10 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const pictureCount = inputs.filter((i) => i.media === 'image').length;
   const modes = data.make === 'video' ? modesFor(model) : [];
   const mode = data.make === 'video' ? modeOf(data.opts, model, pictureCount, inputs.some((i) => i.media === 'video'), inputs.some((i) => i.media === 'audio')) : null;
-  const omniInputs = ([
-    ['image', model?.refs], ['video', model?.clip], ['audio', model?.voice],
+  /* the ways shown: what the model makes, its references once (everything it takes, when it takes more than pictures) */
+  const ways = modes.filter((m) => !(m === 'refs' && modes.includes('omni')));
+  const takes = ([
+    ['image', model?.refs], ['video', modes.includes('omni') ? model?.clip : 0], ['audio', modes.includes('omni') ? model?.voice : 0],
   ] as const).filter(([, max]) => Boolean(max)).map(([kind, max]) => `${t(`canvas.history.kinds.${kind}`)} ×${Number(max)}`).join(' · ');
   const range = lengthRange(data.make, model, mode ?? undefined);
   const lengths = model?.only?.length ? model.only
@@ -778,13 +846,13 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const size = sizes ? (data.opts?.size && sizes.includes(data.opts.size) ? data.opts.size : sizes.find((z) => z === '1k' || z === '720p') ?? sizes.find((z) => z === '768p') ?? sizes[0]!) : null;
   const count = data.opts?.count ?? 1;
   const spec = [data.opts?.format && model?.formats?.includes(data.opts.format) ? data.opts.format.toUpperCase() : null, ratios ? ratio : null, quality ? t(`canvas.make.qualities.${quality}`) : null, size ? size.toUpperCase() : null,
-    lengths && sec !== null ? t('canvas.make.seconds').replace('{n}', String(sec)) : null,
+    lengths && sec !== null && data.make !== 'video' ? t('canvas.make.seconds').replace('{n}', String(sec)) : null,
     t(data.make === 'image' ? 'canvas.make.countPictures' : 'canvas.make.countOthers').replace('{n}', String(count))].filter(Boolean).join(' · ');
   const acceptsAudio = data.make === 'video' && (model?.voice || model?.needs === 'audio');
   const assetRows = board.files.filter((f) => (f.kind === 'image' || (data.make === 'video' && f.kind === 'video') || (acceptsAudio && f.kind === 'audio'))
     && !inputs.some((i) => i.path === f.path))
     .map((f) => { const src = thumb(f); return { key: f.path, value: f.path, label: f.name, note: f.dir || undefined, icon: src ? <img src={src} alt="" className="h-8 w-11 rounded object-cover" /> : <Images size={15} /> }; });
-  /* the tools over the composer, by kind: a picture takes a character, a style, a preset; a clip a character, an effect */
+  /* the tools over the composer, by kind: a picture takes a camera, a style, a preset; a clip a style and a camera move */
   const [showTools, setShowTools] = React.useState(toolsShown);
   const toggleTools = (on: boolean) => { toolsShown = on; setShowTools(on); if (!on && open === 'presets') setOpen(null); };
   /* the camera first (a subject is named with @ in the words) */
@@ -798,7 +866,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
       clear: () => setOpts({ camera: undefined }),
     } } : {}),
     ...(data.opts?.style ? { styles: { value: t(`canvas.styles.names.${data.opts.style}`), preview: stylePicture(data.opts.style) ? <img src={stylePicture(data.opts.style)} alt="" className="block aspect-[4/5] w-full object-cover" /> : undefined, clear: () => setOpts({ style: undefined }) } } : {}),
-    ...(data.opts?.effect ? { effects: { value: t(`canvas.effects.names.${data.opts.effect}`), preview: <span className="block aspect-[4/5] w-full"><EffectScene look={EFFECTS.find((e) => e.id === data.opts?.effect)?.look ?? ''} /></span>, clear: () => setOpts({ effect: undefined }) } } : {}),
+    ...(data.opts?.effect ? { effects: { value: t(`canvas.effects.names.${data.opts.effect}`), preview: <span className="block aspect-[4/5] w-full"><MoveClip id={data.opts.effect} playing /></span>, clear: () => setOpts({ effect: undefined }) } } : {}),
     ...(preset ? { presets: { value: t(`canvas.presets.names.${preset.id}`), preview: PRESET_PICTURES[preset.id] ? <img src={PRESET_PICTURES[preset.id]} alt="" className="block aspect-[3/2] w-full object-cover" /> : undefined, clear: () => set({ preset: undefined }) } } : {}),
   };
   const tools: Array<{ key: keyof typeof TONES; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; pick?: () => void }> = data.make === 'image' ? [
@@ -806,7 +874,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
     { key: 'styles', label: t('canvas.library.styleChip'), icon: Palette, pick: () => board.openLibrary('styles', id) },
     { key: 'presets', label: t('canvas.presets.title'), icon: LayoutDashboard },
   ] : data.make === 'video' ? [
-    { key: 'camera', label: t('canvas.camera.title'), icon: Camera, pick: () => board.openCamera(id) },
+    { key: 'styles', label: t('canvas.library.styleChip'), icon: Palette, pick: () => board.openLibrary('styles', id) },
     { key: 'effects', label: t('canvas.library.effectChip'), icon: Clapperboard, pick: () => board.openLibrary('effects', id) },
   ] : [];
   const addMenu = (
@@ -1081,33 +1149,41 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                 : <VoiceId value={data.opts?.voice} onPick={(v) => { setOpts({ voice: v }); setOpen(null); }} />}
             </Popover>
           ) : null}
-          {mode ? (
+          {mode && ways.length > 1 ? (
             <Popover open={open === 'mode'} onOpenChange={(v) => setOpen(v ? 'mode' : null)} placement="top"
               trigger={(
                 <button type="button" className={PICK} onClick={() => setOpen(open === 'mode' ? null : 'mode')}>
-                  <Film size={14} /><span className="truncate">{t(`canvas.modes.${mode}`)}</span><ChevronDown size={13} />
+                  {React.createElement(MODE_ICONS[mode], { size: 14 })}<span className="truncate">{t(`canvas.modes.${mode}`)}</span><ChevronDown size={13} />
                 </button>
               )}>
-              <div className={`w-[248px] p-1 ${CARD}`}>
-                <div className="flex h-7 items-center px-2 text-[12px] font-medium text-[var(--cv-ink-3)]">{t('canvas.modes.title')}</div>
-                {/* every way its model makes a clip: one that needs pictures shows where they go once picked */}
-                {VIDEO_MODES.map((m: VideoMode) => {
-                  const off = !modes.includes(m);
+              <div className={`w-[232px] p-1 ${CARD}`}>
+                <div className="flex h-7 items-center px-2 text-[12px] text-[var(--cv-ink-3)]">{t('canvas.modes.title')}</div>
+                {/* only the ways this model makes a clip; its references as one, saying what it takes */}
+                {ways.map((m) => {
+                  const on = m === mode || (m === 'omni' && mode === 'refs') || (m === 'refs' && mode === 'omni');
                   return (
-                    <button key={m} type="button" disabled={off} onClick={() => { setOpts({ mode: m, frames: undefined }); setOpen(null); }}
-                      title={off ? t('canvas.modes.notThisModel') : undefined}
-                      className={`flex w-full items-start gap-2 rounded-[8px] px-2 py-1.5 text-left ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)] hover:bg-[var(--cv-float-hover)]'} ${m === mode ? 'bg-[var(--cv-float-hover)]' : ''}`}>
+                    <button key={m} type="button" onClick={() => { setOpts({ mode: m, frames: undefined }); setOpen(null); }}
+                      className={`flex w-full items-center gap-2.5 rounded-[10px] px-2 py-1.5 text-left text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] ${on ? 'bg-[var(--cv-float-hover)]' : ''}`}>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[var(--cv-chip)] text-[var(--cv-ink-2)]">{React.createElement(MODE_ICONS[m], { size: 15 })}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-[13px] leading-5">{t(`canvas.modes.${m}`)}</span>
-                        <span className="block text-[11.5px] leading-snug text-[var(--cv-ink-3)]">
-                          {off ? t('canvas.modes.notThisModel') : m === 'omni' ? omniInputs : t(`canvas.modes.about.${m}`)}
-                        </span>
+                        <span className="block truncate text-[11.5px] leading-4 text-[var(--cv-ink-3)]">{m === 'omni' || m === 'refs' ? takes : t(`canvas.modes.about.${m}`)}</span>
                       </span>
-                      {m === mode ? <Check size={14} className="mt-0.5 shrink-0 text-[var(--cv-ink-2)]" /> : null}
+                      {on ? <Check size={14} className="shrink-0 text-[var(--cv-ink-2)]" /> : null}
                     </button>
                   );
                 })}
               </div>
+            </Popover>
+          ) : null}
+          {data.make === 'video' && range && sec !== null ? (
+            <Popover open={open === 'length'} onOpenChange={(v) => setOpen(v ? 'length' : null)} placement="top"
+              trigger={(
+                <button type="button" className={`${PICK} tabular-nums`} onClick={() => setOpen(open === 'length' ? null : 'length')}>
+                  <Timer size={14} /><span>{t('canvas.make.seconds').replace('{n}', String(sec))}</span><ChevronDown size={13} />
+                </button>
+              )}>
+              <div className={CARD}><LengthPicker value={sec} range={range} only={model?.only} onChange={(n) => setOpts({ sec: n })} /></div>
             </Popover>
           ) : null}
           {spec ? (
@@ -1176,13 +1252,8 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                       </div>
                     </div>
                   ) : null}
-                  {lengths && range && sec !== null ? (
-                    model?.only?.length || data.make !== 'video' ? (
-                      <Choices title={t('canvas.make.length')} columns={Math.min(6, lengths.length)} items={lengths.map((n) => ({ key: String(n), label: t('canvas.make.seconds').replace('{n}', String(n)), on: n === sec, pick: () => setOpts({ sec: n }) }))} />
-                    ) : (
-                      <Slider label={t('canvas.make.length')} value={sec} min={range[0]} max={range[1]} step={1}
-                        shown={t('canvas.make.seconds').replace('{n}', String(sec))} onChange={(n) => setOpts({ sec: n })} />
-                    )
+                  {lengths && sec !== null && data.make !== 'video' ? (
+                    <Choices title={t('canvas.make.length')} columns={Math.min(6, lengths.length)} items={lengths.map((n) => ({ key: String(n), label: t('canvas.make.seconds').replace('{n}', String(n)), on: n === sec, pick: () => setOpts({ sec: n }) }))} />
                   ) : null}
                   <Choices title={t('canvas.make.count')} columns={3} items={MAKE_COUNTS.map((c) => ({ key: String(c), label: t(data.make === 'image' ? 'canvas.make.countPictures' : 'canvas.make.countOthers').replace('{n}', String(c)), on: c === count, pick: () => setOpts({ count: c > 1 ? c : undefined }) }))} />
                 </div>

@@ -11,7 +11,7 @@ import React from 'react';
 import { Handle, NodeResizeControl, NodeResizer, NodeToolbar, Position, useStore, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
   AudioLines, BookmarkPlus, Bot, Clapperboard, Download, FileQuestion, Image as ImageIcon, Layers, LayoutGrid, Loader2, Maximize2, Mic, Music, Play, Plus, Scissors,
-  MessageSquareQuote, Square, Trash2, Type as TypeIcon, Ungroup, Upload, UserRound, Video,
+  MessageSquareQuote, Square, Trash2, Type as TypeIcon, Ungroup, UserRound, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { CARD_H, MAKE_MEDIA, type CanvasNode, type GroupColor } from '@/lib/canvas';
@@ -304,37 +304,6 @@ function UploadPanel({ upload }: { upload: UploadStatus }) {
     </div>
   );
 }
-
-/** A quick start in an empty node ("Try:"), as a line with its icon. */
-function TryLine({ icon: Icon, label, onClick }: { icon: React.ComponentType<{ size?: number }>; label: string; onClick: () => void }) {
-  return (
-    <button type="button" onClick={(event) => { event.stopPropagation(); onClick(); }}
-      className="nodrag flex h-8 items-center gap-1.5 rounded-full border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-chip)] px-3.5 text-[12.5px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
-      <Icon size={13} />{label}
-    </button>
-  );
-}
-
-/**
- * An empty card: one composition in its middle — its kind drawn faint, and under it what to start with, as pills —
- * whatever the card's shape.
- */
-function Empty({ icon: Icon, tries }: { icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; tries?: React.ReactNode }) {
-  const t = useT();
-  const board = useBoard();
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden p-6">
-      <span className="text-[var(--cv-ghost)]"><Icon size={44} strokeWidth={1.25} /></span>
-      {tries && !board.readOnly ? (
-        <div className="flex max-w-full flex-col items-center gap-2.5">
-          <div className="text-[12px] text-[var(--cv-ink-3)]">{t('canvas.try.title')}</div>
-          <div className="flex max-w-[420px] flex-wrap justify-center gap-2">{tries}</div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 
 /** A file of the project on the board: as its picture draws it, 350 high, until resized. */
 export function FileNodeView({ id, data, selected }: NodeProps<FileNode>) {
@@ -663,7 +632,6 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
   const board = useBoard();
   const n = useNumber(id);
   /* something wired in: it is made from that, so nothing to start with is offered */
-  const fed = useStore((s) => s.edges.some((e) => e.target === id));
   const [versionsOpen, setVersionsOpen] = React.useState(false);
   const run = board.run(id);
   const Icon = MAKE_ICON[data.make];
@@ -722,20 +690,10 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
         <div className="relative h-full w-full">
           {file ? <Shown id={id} file={file} selected={selected} words={data.make === 'tts' ? data.prompt : undefined} />
               : (
-                /* an empty picture: its mark on a soft light, everything to start with is in its composer */
-                media === 'image' ? (
-                  <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--cv-ink)_7%,var(--cv-card)),var(--cv-card)_70%)] text-[var(--cv-ghost)]">
-                    <ImageIcon size={40} strokeWidth={1.4} />
-                  </div>
-                ) : <Empty icon={Icon} tries={fed || run ? undefined : media === 'video' ? (
-                  <>
-                    <TryLine icon={Layers} label={t('canvas.try.firstLast')} onClick={() => { board.willChange(); board.setData(id, { opts: { ...data.opts, mode: 'firstLast' } }); }} />
-                    <TryLine icon={ImageIcon} label={t('canvas.try.firstFrame')} onClick={() => { board.willChange(); board.setData(id, { opts: { ...data.opts, mode: 'first' } }); }} />
-                    <TryLine icon={Upload} label={t('canvas.try.upload.video')} onClick={() => board.upload(id, 'version')} />
-                  </>
-                ) : (
-                  <TryLine icon={Upload} label={t('canvas.try.upload.audio')} onClick={() => board.upload(id, 'version')} />
-                )} />
+                /* empty: its mark on a soft light, the same for a picture, a clip and a sound; everything to start with is in its composer and the bar above */
+                <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--cv-ink)_7%,var(--cv-card)),var(--cv-card)_70%)] text-[var(--cv-ghost)]">
+                  <Icon size={40} strokeWidth={1.4} />
+                </div>
               )}
           {uploading ? <UploadPanel upload={uploading} /> : run ? (
             <Making since={run.started} typical={typical} onStop={() => board.stop(id)} />
