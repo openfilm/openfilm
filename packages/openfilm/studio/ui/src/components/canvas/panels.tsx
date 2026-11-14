@@ -126,7 +126,7 @@ function ToolTile({ label, tone, icon: Icon, picture, on, value, preview, onClea
       ) : null}
       {value && onClear ? (
         <button type="button" aria-label={t('canvas.panel.clearTool')} onClick={onClear}
-          className="absolute -right-1.5 -top-1.5 z-10 hidden h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] shadow-[0_0_0_2px_var(--cv-float-deep)] group-hover/tile:flex"><X size={11} strokeWidth={2.5} /></button>
+          className="absolute -right-1 -top-1 z-10 hidden h-[15px] w-[15px] items-center justify-center rounded-full bg-black text-white shadow-[0_0_0_1px_rgba(255,255,255,0.22)] group-hover/tile:flex"><X size={9} strokeWidth={2.75} /></button>
       ) : null}
     </div>
   );
@@ -1228,7 +1228,7 @@ function Tile({ label, children, onOpen, onRemove, removeLabel, disabled }: {
         {children}
       </button>
       <button type="button" aria-label={removeLabel} disabled={disabled} onClick={onRemove}
-        className="absolute -right-1.5 -top-1.5 z-10 hidden h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] shadow-[0_0_0_2px_var(--cv-float)] group-hover/tile:flex disabled:!hidden"><X size={11} strokeWidth={2.5} /></button>
+        className="absolute -right-1 -top-1 z-10 hidden h-[15px] w-[15px] items-center justify-center rounded-full bg-black text-white shadow-[0_0_0_1px_rgba(255,255,255,0.22)] group-hover/tile:flex disabled:!hidden"><X size={9} strokeWidth={2.75} /></button>
     </div>
   );
 }

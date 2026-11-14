@@ -2240,7 +2240,6 @@ export const ko: Words = {
       image: '이미지 생성',
       video: '영상 생성',
       audio: '오디오 생성',
-      cut: '편집으로',
     },
     loadFailed: '캔버스를 불러오지 못했습니다',
     reload: '다시 불러오기',

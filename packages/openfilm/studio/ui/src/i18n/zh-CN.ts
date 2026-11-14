@@ -2244,7 +2244,6 @@ export const zhCN: Words = {
       image: '图片生成',
       video: '视频生成',
       audio: '音频生成',
-      cut: '剪辑成片',
     },
     loadFailed: '画布没能载入',
     reload: '重新载入',

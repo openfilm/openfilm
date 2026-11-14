@@ -104,10 +104,10 @@ export function Ripples({ taps, onDone }: { taps: ReadonlyArray<{ id: number; x:
   );
 }
 
-/** the nodes the toolbar adds with a click, in the order a film is made: the words, the pictures, the sound, the clips, the cut */
+/** the nodes the toolbar adds with a click, in the order a film is made: the words, the pictures, the clips, the sound (the edit takes the cut) */
 const KINDS: ReadonlyArray<[SpawnKind, React.ComponentType<{ size?: number; strokeWidth?: number }>, string]> = [
-  ['note', TypeIcon, 'canvas.kinds.note'], ['image', ImageIcon, 'canvas.start.image'], ['music', AudioLines, 'canvas.start.audio'],
-  ['video', Video, 'canvas.start.video'], ['cut', Scissors, 'canvas.start.cut'],
+  ['note', TypeIcon, 'canvas.kinds.note'], ['image', ImageIcon, 'canvas.start.image'], ['video', Video, 'canvas.start.video'],
+  ['music', AudioLines, 'canvas.start.audio'],
 ];
 const ICON = { size: 20, strokeWidth: 1.75 } as const;
 const BAR_LINE = <span className="mx-1 h-5 w-px shrink-0 bg-[var(--cv-bar-line)]" />;
@@ -389,7 +389,7 @@ export function Viewer({ file, sources, onClose }: { file: WorkspaceResource; so
       <button type="button" aria-label={t('canvas.outline.close')} onClick={onClose}
         className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"><X size={18} /></button>
       <div className="absolute left-5 top-5 max-w-[60%] truncate text-[13px] text-white/80">{file.name}</div>
-      {file.kind === 'image' ? <img src={src} alt="" className="max-h-full max-w-full object-contain" />
+      {file.kind === 'image' ? <img src={src} alt="" className="cv-checker cv-checker-night max-h-full max-w-full object-contain" />
         : file.kind === 'video' ? <video src={src} controls autoPlay playsInline className="max-h-full max-w-full" />
           : file.kind === 'audio' ? <audio src={src} controls autoPlay className="w-[min(520px,80%)]" />
             : <div className="text-white/70">{file.name}</div>}

@@ -826,3 +826,17 @@ html[data-file-drag] iframe { pointer-events: none; }
 .cv-doc th { font-weight: 600; }
 .cv-doc th p, .cv-doc td p { min-height: 0; }
 .cv-doc p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; height: 0; color: var(--cv-ink-3); pointer-events: none; }
+
+/* Where a picture is clear: the grey and white squares every picture editor shows, so a cut-out reads as see-through
+   rather than as black. Set on the picture itself, it shows only through its clear pixels. Darker over the board in the
+   dark theme and in the viewer, which is dark in either. */
+.cv-checker {
+  background-color: #ffffff;
+  background-image: repeating-conic-gradient(#e4e4e7 0 25%, transparent 0 50%);
+  background-size: 16px 16px;
+}
+[data-theme='dark'] .cv-checker,
+.cv-checker.cv-checker-night {
+  background-color: #2c2c2c;
+  background-image: repeating-conic-gradient(#202020 0 25%, transparent 0 50%);
+}

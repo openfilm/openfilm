@@ -2243,7 +2243,6 @@ export const ja: Words = {
       image: '画像生成',
       video: '動画生成',
       audio: '音声生成',
-      cut: '編集へ',
     },
     loadFailed: 'キャンバスを読み込めませんでした',
     reload: '再読み込み',

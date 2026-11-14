@@ -278,7 +278,7 @@ export function MaterialLibrary({ kind, onPick, onClose }: {
                   </button>
                   <button type="button" aria-label={t(liked ? 'canvas.library.unlike' : 'canvas.library.like')} aria-pressed={liked}
                     onClick={() => { toggleFavorite(kind, item.id); setTick((n) => n + 1); }}
-                    className={`absolute right-2 top-2 h-7 w-7 items-center justify-center rounded-[8px] bg-black/55 text-white transition hover:bg-black/75 ${liked ? 'flex' : 'hidden group-hover/card:flex'}`}>
+                    className={`absolute right-2 top-2 h-7 w-7 items-center justify-center rounded-[8px] backdrop-blur-sm transition ${liked ? 'flex bg-white/90 text-[#ff3b5c] hover:bg-white' : 'hidden bg-black/55 text-white hover:bg-black/75 group-hover/card:flex'}`}>
                     <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
                   </button>
                   <span className="truncate px-0.5 text-[13px] text-[var(--cv-ink)]">{nameOf(item)}</span>

@@ -2243,7 +2243,6 @@ export const es: Words = {
       image: 'Imagen',
       video: 'Vídeo',
       audio: 'Audio',
-      cut: 'Montar en la edición',
     },
     loadFailed: 'No se pudo cargar el lienzo',
     reload: 'Cargar de nuevo',

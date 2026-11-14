@@ -271,7 +271,7 @@ function Making({ since, typical, onStop }: { since: number; typical: number | n
 function Shown({ id, file, selected, words }: { id: string; file: WorkspaceResource; selected: boolean; words?: string }) {
   const board = useBoard();
   const src = board.sources.file(file);
-  if (file.kind === 'image') return <img src={src} alt="" draggable={false} loading="lazy" className="block h-full w-full object-cover" />;
+  if (file.kind === 'image') return <img src={src} alt="" draggable={false} loading="lazy" className="cv-checker block h-full w-full object-cover" />;
   if (file.kind === 'video') {
     return <CanvasVideo key={src} id={id} file={file} selected={selected} />;
   }

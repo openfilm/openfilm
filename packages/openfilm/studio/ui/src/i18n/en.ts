@@ -2244,7 +2244,6 @@ export const en = {
       image: 'Picture',
       video: 'Video',
       audio: 'Audio',
-      cut: 'Cut to the edit',
     },
     loadFailed: 'The canvas could not load',
     reload: 'Load again',
