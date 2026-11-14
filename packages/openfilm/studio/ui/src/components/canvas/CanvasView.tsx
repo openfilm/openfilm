@@ -50,8 +50,8 @@ import { AddMenu, type MenuAt } from './menus';
 import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from './connections';
 import { CharacterLibrary, HistoryModal, MaterialLibrary, SUBJECT_KINDS, SUBJECT_PARTS, loadSubjects } from './libraries';
 import { CutoutSetup } from './cutout';
-import { CameraPicker, GROUP } from './camera';
-import { cameraWords, picksAnything, type CameraPick } from '@/lib/canvas-camera';
+import { CameraPicker } from './camera';
+import { cameraOf, cameraText, picksAnything } from '@/lib/canvas-camera';
 import { RedrawEditor, type RedrawJob, type RedrawStart } from './redraw';
 import { EXPAND_ASK, ExpandEditor, expandName, expandPlan, framedPicture, type Expanded } from './expand';
 import { CropEditor } from './crop';
@@ -160,9 +160,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   /* a picture's own tool open over the board */
   const [pictureTool, setPictureTool] = React.useState<{ id: string; path: string; tool: PictureTool } | null>(null);
   /* a cut-out asked for while nothing here cuts out: what to do once the way to cut out is there */
-  /* the node whose camera is being picked, and what each node was last set to while the canvas is open */
+  /* the node whose camera is being picked */
   const [cameraFor, setCameraFor] = React.useState<string | null>(null);
-  const cameraPicks = React.useRef(new Map<string, CameraPick>());
   const [cutoutThen, setCutoutThen] = React.useState<{ run: () => void; cancel?: () => void } | null>(null);
   /* the node a library was opened for (its panel's chip): what is picked goes into it */
   const [modalFor, setModalFor] = React.useState<string | null>(null);
@@ -911,28 +910,18 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
   /** a text node of the style's or effect's words, wired into the node it was picked for (or in the middle) */
   const placeMaterial = (kind: 'styles' | 'effects', item: { id: string; words: string }) => {
+    /* for a node that makes: kept on it (shown on its tool, said when it is made), not a note beside it */
+    const into = modalFor ? now.current.nodes.find((n) => n.id === modalFor) : undefined;
+    if (into?.type === 'make') {
+      willChange();
+      setNodes((list) => list.map((n) => (n.id === into.id && n.type === 'make' ? { ...n, data: { ...n.data, opts: { ...n.data.opts, [kind === 'styles' ? 'style' : 'effect']: item.id } } } : n)));
+      return;
+    }
     const text = `${t(`canvas.library.tag.${kind}`)} · ${t(`canvas.${kind}.names.${item.id}`)} — ${item.words}`;
     const target = modalFor && now.current.nodes.some((n) => n.id === modalFor) ? modalFor : null;
     const at = target ? spotBeside(target, 'target', NOTE_W) : middle();
     place({ id: canvasId('n'), type: 'note', position: target ? at : { x: at.x - NOTE_W / 2, y: at.y - NOTE_H / 2 }, width: NOTE_W, height: NOTE_H, data: { text } },
       target ? { node: target, side: 'target' } : undefined);
-  };
-  /**
-   * What a node is shot with, as words wired into it (as a style is): the same words node changed when one is wired in
-   * already, taken off when all is auto.
-   */
-  const placeCamera = (target: string, pick: CameraPick) => {
-    cameraPicks.current.set(target, pick);
-    const tag = `${t('canvas.camera.title')} · `;
-    const held = now.current.edges.filter((e) => e.target === target).map((e) => now.current.nodes.find((n) => n.id === e.source))
-      .find((n) => n?.type === 'note' && n.data.text.startsWith(tag));
-    if (!picksAnything(pick)) { if (held) remove([held.id]); return; }
-    const names = ([['body', pick.body], ['lens', pick.lens], ['focal', pick.focal], ['aperture', pick.aperture]] as const)
-      .filter(([, v]) => v !== 'auto').map(([k, v]) => (k === 'focal' ? `${v}mm` : t(`canvas.camera.${GROUP[k]}.${v}`)));
-    const text = `${tag}${names.join(' · ')} — ${cameraWords(pick)}`;
-    willChange();
-    if (held) { setNodes((list) => list.map((n) => (n.id === held.id ? { ...n, data: { ...n.data, text } } as BoardNode : n))); return; }
-    place({ id: canvasId('n'), type: 'note', position: spotBeside(target, 'target', NOTE_W), width: NOTE_W, height: NOTE_H, data: { text } }, { node: target, side: 'target' });
   };
   /**
    * A subject's pictures, copied into the project: into the node it was picked for (its main picture, named as the
@@ -1925,8 +1914,14 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           onLibrary={(which) => openLibrary(which)} onCharacters={() => openLibrary('characters')} onHistory={() => setModal('history')}
         />}
         {cameraFor ? (
-          <CameraPicker start={cameraPicks.current.get(cameraFor)} onClose={() => setCameraFor(null)}
-            onPick={(pick) => { const node = cameraFor; setCameraFor(null); placeCamera(node, pick); }} />
+          <CameraPicker start={(() => { const n = now.current.nodes.find((x) => x.id === cameraFor); return n?.type === 'make' ? cameraOf(n.data.opts?.camera) : undefined; })()} onClose={() => setCameraFor(null)}
+            onPick={(pick) => {
+              /* kept on the node (shown on its tool, said when it is made) */
+              const node = cameraFor;
+              setCameraFor(null);
+              willChange();
+              setNodes((list) => list.map((n) => (n.id === node && n.type === 'make' ? { ...n, data: { ...n.data, opts: { ...n.data.opts, camera: picksAnything(pick) ? cameraText(pick) : undefined } } } : n)));
+            }} />
         ) : null}
         {cutoutThen ? (
           <CutoutSetup onClose={() => { cutoutThen.cancel?.(); setCutoutThen(null); }} onSettings={() => { cutoutThen.cancel?.(); setCutoutThen(null); onOpenSettings(); }}

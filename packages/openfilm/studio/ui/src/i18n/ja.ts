@@ -2153,7 +2153,7 @@ export const ja: Words = {
     },
     split: { none: 'グリッド線が見つかりません。固定のグリッドを試してください' },
     panel: {
-      mentionTitle: '「@」で素材を参照', mentionAdd: '参考を追加', mentionPictures: '画像',
+      clearTool: '外す', mentionTitle: '「@」で素材を参照', mentionAdd: '参考を追加', mentionPictures: '画像',
       connect: 'サービスを接続',
       upload: 'アップロード',
       fromBoard: 'キャンバスから参照',

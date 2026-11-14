@@ -77,3 +77,10 @@ export function cameraWords(pick: CameraPick): string {
 
 /** Whether anything is picked beyond auto. */
 export const picksAnything = (pick: CameraPick) => Object.values(pick).some((v) => v !== 'auto');
+
+/** A pick as a node keeps it (`body|lens|focal|aperture`), and read back; a part not given is auto. */
+export const cameraText = (pick: CameraPick) => [pick.body, pick.lens, pick.focal, pick.aperture].join('|');
+export function cameraOf(text: string | undefined): CameraPick {
+  const [body = 'auto', lens = 'auto', focal = 'auto', aperture = 'auto'] = (text ?? '').split('|');
+  return { body, lens, focal, aperture };
+}

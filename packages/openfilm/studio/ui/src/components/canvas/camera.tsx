@@ -45,6 +45,9 @@ function ApertureMark({ id }: { id: string }) {
   );
 }
 
+/** what a pick looks like on the street: its lens's, else its camera's, else the street as it is */
+export const cameraLook = (pick: CameraPick) => LOOKS[`look-lens-${pick.lens}`] ?? LOOKS[`look-body-${pick.body}`] ?? LOOKS[`look-focal-${pick.focal}`] ?? LOOKS[`look-aperture-${pick.aperture}`] ?? LOOKS['look-auto'];
+
 function mark(wheel: Wheel, id: string) {
   if (wheel === 'focal') return <FocalMark id={id} />;
   if (wheel === 'aperture') return <ApertureMark id={id} />;

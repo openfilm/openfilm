@@ -185,6 +185,7 @@ const MOVES: Record<string, string> = {
 };
 
 /** each style's picture, by its id (styles/<id>.jpg): one scene, a girl in a yellow raincoat, in every style */
+export const stylePicture = (id: string): string | undefined => STYLE_PICTURES[id];
 const STYLE_PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./styles/*.webp', { eager: true, import: 'default' }))
   .map(([path, url]) => [path.split('/').pop()!.replace(/\.webp$/, ''), url]));
 
@@ -192,7 +193,7 @@ const STYLE_PICTURES: Record<string, string> = Object.fromEntries(Object.entries
  * An effect's card: a field of dots (the world) and a white disc (what the camera looks at), moved as its camera
  * moves — a diagram of the move, not a picture of a place.
  */
-function EffectScene({ look }: { look: string }) {
+export function EffectScene({ look }: { look: string }) {
   const dots = { backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.32) 1.4px, transparent 1.8px)', backgroundSize: '14px 14px', backgroundPosition: 'center' };
   const subject = look === 'slow' ? { animation: 'cvfx-slow 4s ease-in-out infinite alternate' } : look === 'focus' ? { animation: 'cvfx-focus-b 2.4s ease-in-out infinite alternate' } : undefined;
   return (

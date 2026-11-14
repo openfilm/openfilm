@@ -2150,7 +2150,7 @@ export const ko: Words = {
     },
     split: { none: '격자선을 찾지 못했습니다. 고정 격자를 사용해 보세요' },
     panel: {
-      mentionTitle: '“@”로 소재 참조', mentionAdd: '참고 추가', mentionPictures: '그림',
+      clearTool: '제거', mentionTitle: '“@”로 소재 참조', mentionAdd: '참고 추가', mentionPictures: '그림',
       connect: '서비스 연결',
       upload: '업로드',
       fromBoard: '캔버스에서 참조',

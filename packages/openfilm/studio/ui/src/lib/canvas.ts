@@ -3,6 +3,8 @@
  * being made laid out on a board, in groups or not, and edges between them; what an undo goes back to, what a copy
  * makes, and what a node that makes something asks `get` for. The board itself is components/canvas.
  */
+import { EFFECTS, STYLES } from './canvas-library.ts';
+import { cameraOf, cameraWords } from './canvas-camera.ts';
 import { presetOf } from './canvas-presets.ts';
 
 export interface CanvasNode {
@@ -62,6 +64,9 @@ export interface MakeOptions {
   format?: 'gif' | 'svg'; gifFrames?: number; frameMs?: number; mask?: string; markup?: string;
   /** a voice-over's voice, its id at its service (`openfilm get tts --voice`) */
   voice?: string;
+  /** a style and a camera move from the canvas's libraries (canvas-library), and a camera (canvas-camera
+      `body|lens|focal|aperture`): their words are said after the preset's */
+  style?: string; effect?: string; camera?: string;
 }
 
 /** how many a node makes at once */
@@ -404,7 +409,9 @@ export function modeOf(opts: MakeOptions | undefined, spec: ModelSpec | undefine
 export function makeRequest(node: CanvasNode & { make: MakeKind }, inputs: readonly MakeInput[], name: string, spec?: ModelSpec):
   { verb: MakeKind; args: Record<string, string | string[]>; unused: number } {
   /* a preset's words first, then the words wired in, then the node's own */
-  const words = [presetOf(node.preset)?.prompt ?? '', ...inputs.flatMap((i) => ('text' in i ? [i.text] : [])), (node.prompt ?? '').trim()].filter(Boolean).join('\n\n');
+  const look = node.opts ?? {};
+  const chosen = [STYLES.find((x) => x.id === look.style)?.words, EFFECTS.find((x) => x.id === look.effect)?.words, look.camera ? cameraWords(cameraOf(look.camera)) : ''].filter(Boolean).join(', ');
+  const words = [presetOf(node.preset)?.prompt ?? '', chosen, ...inputs.flatMap((i) => ('text' in i ? [i.text] : [])), (node.prompt ?? '').trim()].filter(Boolean).join('\n\n');
   const pictures = inputs.flatMap((i) => ('media' in i && i.media === 'image' ? [i.path] : []));
   const clips = inputs.flatMap((i) => ('media' in i && i.media === 'video' ? [i.path] : []));
   const sounds = inputs.flatMap((i) => ('media' in i && i.media === 'audio' ? [i.path] : []));

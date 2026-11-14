@@ -2154,7 +2154,7 @@ export const zhCN: Words = {
     },
     split: { none: '没有找到格线，换一个固定宫格试试' },
     panel: {
-      mentionTitle: '输入“@”引用素材', mentionAdd: '添加参考', mentionPictures: '图片',
+      clearTool: '移除', mentionTitle: '输入“@”引用素材', mentionAdd: '添加参考', mentionPictures: '图片',
       connect: '去设置连接服务',
       upload: '上传',
       fromBoard: '画布参考',

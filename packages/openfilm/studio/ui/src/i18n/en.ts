@@ -2154,7 +2154,7 @@ export const en = {
     },
     split: { none: 'No grid lines found: try a set grid' },
     panel: {
-      mentionTitle: 'Type @ to name what is in it', mentionAdd: 'Add a reference', mentionPictures: 'Pictures',
+      clearTool: 'Take it off', mentionTitle: 'Type @ to name what is in it', mentionAdd: 'Add a reference', mentionPictures: 'Pictures',
       connect: 'Connect a service',
       upload: 'Upload',
       fromBoard: 'From the canvas',

@@ -2153,7 +2153,7 @@ export const es: Words = {
     },
     split: { none: 'No se encontraron líneas de cuadrícula: prueba una cuadrícula fija' },
     panel: {
-      mentionTitle: 'Escribe @ para nombrar lo que lleva', mentionAdd: 'Añadir una referencia', mentionPictures: 'Imágenes',
+      clearTool: 'Quitar', mentionTitle: 'Escribe @ para nombrar lo que lleva', mentionAdd: 'Añadir una referencia', mentionPictures: 'Imágenes',
       connect: 'Conectar un servicio',
       upload: 'Subir',
       fromBoard: 'Del lienzo',

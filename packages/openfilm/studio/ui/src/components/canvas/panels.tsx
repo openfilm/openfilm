@@ -24,7 +24,10 @@ import { keepLastModel, lastModel, useBoard, type Choice, type MakeData } from '
 import { ProviderMark } from '../settings/ProviderMark';
 import { useDraft } from './words';
 import { DocSheet } from './doc';
-import { coverOf, useSubjects } from './libraries';
+import { EffectScene, coverOf, stylePicture, useSubjects } from './libraries';
+import { GROUP, cameraLook } from './camera';
+import { cameraOf, picksAnything } from '@/lib/canvas-camera';
+import { EFFECTS } from '@/lib/canvas-library';
 import type { CanvasCharacter } from '@/api';
 import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
 import { VoiceId, VoicePicker, defaultVoice, serviceOf, voicesOf } from './voices';
@@ -61,13 +64,14 @@ function Composer({ id, shown, expanded, setExpanded, corner, above, aboveOpen =
   const label = t(expanded ? 'canvas.panel.collapse' : 'canvas.panel.expand');
   return (
     <NodeToolbar nodeId={id} isVisible={shown} position={Position.Bottom} offset={14}>
-      <div data-canvas-composer="" className={`nodrag nopan nowheel w-[min(680px,88vw)] transition-[padding] duration-200 ease-out ${aboveOpen ? 'p-2' : 'p-0'} ${PANEL}`} onKeyDown={(event) => event.stopPropagation()}>
+      {/* its words keep one color whether the tools are open or not: closed, the panel is that color; open, a darker frame holds the tools round it */}
+      <div data-canvas-composer="" className={`nodrag nopan nowheel w-[min(680px,88vw)] transition-[padding,background-color] duration-200 ease-out ${aboveOpen ? 'p-2' : 'p-0 !bg-[color-mix(in_srgb,var(--cv-ink)_4%,var(--cv-float))]'} ${PANEL}`} onKeyDown={(event) => event.stopPropagation()}>
         {above ? (
           <div aria-hidden={!aboveOpen} className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${aboveOpen ? 'grid-rows-[1fr] opacity-100' : 'pointer-events-none grid-rows-[0fr] opacity-0'}`}>
             <div className="min-h-0 overflow-hidden">{above}</div>
           </div>
         ) : null}
-        <div className={`relative px-4 pb-3 pt-4 transition-[margin,background-color,border-radius] duration-200 ease-out ${aboveOpen ? 'mt-2 rounded-[16px] bg-[color-mix(in_srgb,var(--cv-ink)_4%,transparent)]' : 'rounded-[20px]'}`}>
+        <div className={`relative px-4 pb-3 pt-4 transition-[margin,border-radius] duration-200 ease-out ${aboveOpen ? 'mt-2 rounded-[16px] bg-[color-mix(in_srgb,var(--cv-ink)_4%,var(--cv-float))]' : 'rounded-[20px]'}`}>
           <div className="absolute right-3 top-3 flex items-center gap-0.5">
             {corner}
             <Tooltip label={label}>
@@ -90,18 +94,36 @@ function Composer({ id, shown, expanded, setExpanded, corner, above, aboveOpen =
 const TOOL_PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./tools/tool-*.webp', { eager: true, import: 'default' }))
   .map(([path, url]) => [path.split('/').pop()!.replace(/^tool-|\.webp$/g, ''), url]));
 
-/** A tool over a composer: its picture (or its mark on a colored square), its name. */
-function ToolTile({ label, tone, icon: Icon, picture, on, onClick }: { label: string; tone: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; picture?: string; on?: boolean; onClick?: () => void }) {
+/**
+ * A tool over a composer: its picture (or its mark on a colored square), its name — or, once something is picked with
+ * it, what was picked, lit; pointed at, a picture of it above and a × to take it off.
+ */
+function ToolTile({ label, tone, icon: Icon, picture, on, value, preview, onClear, onClick }: {
+  label: string; tone: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; picture?: string; on?: boolean;
+  value?: string; preview?: React.ReactNode; onClear?: () => void; onClick?: () => void;
+}) {
+  const t = useT();
   return (
-    <button type="button" onClick={onClick}
-      className={`cv-tool flex h-12 w-full min-w-0 items-center gap-2.5 rounded-[14px] px-2.5 text-[14px] text-[var(--cv-ink)] transition ${on ? 'bg-[var(--cv-float-hover)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_4%,transparent)] hover:bg-[var(--cv-float-hover)]'}`}>
-      {picture ? <img src={picture} alt="" draggable={false} className="h-9 w-9 shrink-0 object-contain drop-shadow-[0_3px_6px_rgba(0,0,0,0.35)]" /> : (
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-white shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.25)]" style={{ background: tone }}>
-          <Icon size={17} strokeWidth={2} />
-        </span>
-      )}
-      <span className="truncate">{label}</span>
-    </button>
+    <div className="group/tile relative w-full min-w-0">
+      <button type="button" onClick={onClick}
+        className={`cv-tool flex h-12 w-full min-w-0 items-center gap-2.5 rounded-[14px] px-2.5 text-[14px] transition ${on ? 'bg-[var(--cv-float-hover)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_4%,transparent)] hover:bg-[var(--cv-float-hover)]'} ${value ? 'text-[#4aa3ff]' : 'text-[var(--cv-ink)]'}`}>
+        {picture ? <img src={picture} alt="" draggable={false} className="h-7 w-7 shrink-0 object-contain" /> : (
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-white shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.25)]" style={{ background: tone }}>
+            <Icon size={15} strokeWidth={2} />
+          </span>
+        )}
+        <span className="truncate">{value ?? label}</span>
+      </button>
+      {value && preview ? (
+        <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 hidden w-[240px] -translate-x-1/2 overflow-hidden rounded-[12px] shadow-[var(--cv-float-shadow)] ring-1 ring-[var(--cv-float-line)] group-hover/tile:block">
+          {preview}
+        </div>
+      ) : null}
+      {value && onClear ? (
+        <button type="button" aria-label={t('canvas.panel.clearTool')} onClick={onClear}
+          className="absolute -right-1.5 -top-1.5 z-10 hidden h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] shadow-[0_0_0_2px_var(--cv-float)] group-hover/tile:flex"><X size={11} strokeWidth={2.5} /></button>
+      ) : null}
+    </div>
   );
 }
 const TONES = {
@@ -761,6 +783,19 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const [showTools, setShowTools] = React.useState(toolsShown);
   const toggleTools = (on: boolean) => { toolsShown = on; setShowTools(on); if (!on && open === 'presets') setOpen(null); };
   /* the camera first (a subject is named with @ in the words) */
+  /* what is picked with each tool: its name, a picture of it, how it is taken off */
+  const camera = data.opts?.camera ? cameraOf(data.opts.camera) : null;
+  const picks: Partial<Record<keyof typeof TONES, { value: string; preview?: React.ReactNode; clear: () => void }>> = {
+    ...(camera && picksAnything(camera) ? { camera: {
+      value: ([['body', camera.body], ['lens', camera.lens], ['focal', camera.focal], ['aperture', camera.aperture]] as const).filter(([, v]) => v !== 'auto')
+        .map(([k, v]) => (k === 'focal' ? `${v}mm` : t(`canvas.camera.${GROUP[k]}.${v}`))).join(', '),
+      preview: <img src={cameraLook(camera)} alt="" className="block aspect-[16/9] w-full object-cover" />,
+      clear: () => setOpts({ camera: undefined }),
+    } } : {}),
+    ...(data.opts?.style ? { styles: { value: t(`canvas.styles.names.${data.opts.style}`), preview: stylePicture(data.opts.style) ? <img src={stylePicture(data.opts.style)} alt="" className="block aspect-[4/5] w-full object-cover" /> : undefined, clear: () => setOpts({ style: undefined }) } } : {}),
+    ...(data.opts?.effect ? { effects: { value: t(`canvas.effects.names.${data.opts.effect}`), preview: <span className="block aspect-[4/5] w-full"><EffectScene look={EFFECTS.find((e) => e.id === data.opts?.effect)?.look ?? ''} /></span>, clear: () => setOpts({ effect: undefined }) } } : {}),
+    ...(preset ? { presets: { value: t(`canvas.presets.names.${preset.id}`), preview: PRESET_PICTURES[preset.id] ? <img src={PRESET_PICTURES[preset.id]} alt="" className="block aspect-[3/2] w-full object-cover" /> : undefined, clear: () => set({ preset: undefined }) } } : {}),
+  };
   const tools: Array<{ key: keyof typeof TONES; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; pick?: () => void }> = data.make === 'image' ? [
     { key: 'camera', label: t('canvas.camera.title'), icon: Camera, pick: () => board.openCamera(id) },
     { key: 'styles', label: t('canvas.library.styleChip'), icon: Palette, pick: () => board.openLibrary('styles', id) },
@@ -855,10 +890,12 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             <div key={tool.key} className="min-w-0 flex-1">
               {tool.key === 'presets' ? (
                 <Popover open={open === 'presets'} onOpenChange={(v) => setOpen(v ? 'presets' : null)} placement="top" align="center" block
-                  trigger={<ToolTile label={tool.label} tone={TONES.presets} icon={LayoutDashboard} picture={TOOL_PICTURES.preset} on={open === 'presets' || Boolean(preset)} onClick={() => setOpen(open === 'presets' ? null : 'presets')} />}>
+                  trigger={<ToolTile label={tool.label} tone={TONES.presets} icon={LayoutDashboard} picture={TOOL_PICTURES.preset} on={open === 'presets'}
+                    value={picks.presets?.value} preview={picks.presets?.preview} onClear={picks.presets?.clear} onClick={() => setOpen(open === 'presets' ? null : 'presets')} />}>
                   {presetMenu}
                 </Popover>
-              ) : <ToolTile label={tool.label} tone={TONES[tool.key]} icon={tool.icon} picture={TOOL_PICTURES[{ camera: 'camera', styles: 'style', effects: 'effects', characters: '', presets: 'preset' }[tool.key]]} onClick={tool.pick} />}
+              ) : <ToolTile label={tool.label} tone={TONES[tool.key]} icon={tool.icon} picture={TOOL_PICTURES[{ camera: 'camera', styles: 'style', effects: 'effects', characters: '', presets: 'preset' }[tool.key]]}
+                value={picks[tool.key]?.value} preview={picks[tool.key]?.preview} onClear={picks[tool.key]?.clear} onClick={tool.pick} />}
             </div>
           ))}
           <Tooltip label={t('canvas.panel.collapse')}>
@@ -893,7 +930,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                   <span className="absolute inset-x-0 bottom-0 bg-black/60 py-px text-center text-[10px] font-medium text-white">{t(`canvas.slots.${slot.label}`)}</span>
                 </Tile></span>
               ) : (
-                <Popover key={`slot-${i}`} open={open === `slot-${i}`} onOpenChange={(v) => setOpen(v ? `slot-${i}` : null)} placement="auto"
+                <Popover key={`slot-${i}`} open={open === `slot-${i}`} onOpenChange={(v) => setOpen(v ? `slot-${i}` : null)} placement="top"
                   trigger={(
                     <button type="button" onClick={() => setOpen(open === `slot-${i}` ? null : `slot-${i}`)}
                       className="flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-[10px] border border-dashed !border-[var(--cv-line)] text-[var(--cv-ink-2)] transition hover:!border-[var(--cv-ring)] hover:text-[var(--cv-ink)]">
@@ -920,7 +957,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
               );
             })}
             {/* + : a picture from the computer, a node on the board, one from the Assets */}
-            <Popover open={open === 'add' || open === 'assets'} onOpenChange={(v) => setOpen(v ? 'add' : null)} placement="auto"
+            <Popover open={open === 'add' || open === 'assets'} onOpenChange={(v) => setOpen(v ? 'add' : null)} placement="top"
               trigger={(
                 <Tooltip label={t('canvas.panel.add')}>
                   <button type="button" aria-label={t('canvas.panel.add')} onClick={() => setOpen(open === 'add' || open === 'assets' ? null : 'add')}
@@ -940,15 +977,6 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
               <button type="button" aria-label={t('canvas.redraw.remove')} onClick={() => setOpts({ mask: undefined, markup: undefined })}
                 className="-ml-0.5 hidden h-4 w-4 items-center justify-center rounded text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)] group-hover/redraw:flex"><X size={12} /></button>
               <Brush size={13} className="group-hover/redraw:hidden" />{t(data.opts?.mask ? 'canvas.redraw.withMask' : 'canvas.redraw.withMarkup')}
-            </span>
-          </div>
-        ) : null}
-        {preset ? (
-          <div className="mt-2.5 flex items-center gap-1">
-            <span className="group/preset flex h-6 items-center gap-1 rounded-[8px] bg-[color-mix(in_srgb,var(--cv-edge-lit)_18%,transparent)] px-2 text-[12.5px] text-[var(--cv-ink)]">
-              <button type="button" aria-label={t('canvas.presets.remove')} onClick={() => set({ preset: undefined })}
-                className="-ml-0.5 hidden h-4 w-4 items-center justify-center rounded text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)] group-hover/preset:flex"><X size={12} /></button>
-              <LayoutDashboard size={13} className="group-hover/preset:hidden" />{t(`canvas.presets.names.${preset.id}`)}
             </span>
           </div>
         ) : null}
@@ -1020,7 +1048,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
         </div>
         <div className={COMPOSER_FOOTER}>
           {every.length ? (
-            <Popover open={open === 'model'} onOpenChange={(v) => setOpen(v ? 'model' : null)} placement="auto"
+            <Popover open={open === 'model'} onOpenChange={(v) => setOpen(v ? 'model' : null)} placement="top"
               trigger={(
                 <button type="button" className={`${PICK} ${choices.length ? '' : 'text-amber-500 hover:text-amber-400'}`} onClick={() => setOpen(open === 'model' ? null : 'model')}>
                   {picked ?? fallback ? <ProviderMark id={(picked ?? fallback)!.via} size={16} /> : <Sparkles size={15} />}
@@ -1037,7 +1065,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             </Tooltip>
           )}
           {data.make === 'tts' && every.length ? (
-            <Popover open={open === 'voice'} onOpenChange={(v) => setOpen(v ? 'voice' : null)} placement="auto"
+            <Popover open={open === 'voice'} onOpenChange={(v) => setOpen(v ? 'voice' : null)} placement="top"
               trigger={(
                 <button type="button" className={PICK} onClick={() => setOpen(open === 'voice' ? null : 'voice')}>
                   {voice ? <span className="h-4 w-4 shrink-0 rounded-full" style={voiceLook(voice)} /> : <Mic size={14} />}
@@ -1049,7 +1077,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             </Popover>
           ) : null}
           {mode ? (
-            <Popover open={open === 'mode'} onOpenChange={(v) => setOpen(v ? 'mode' : null)} placement="auto"
+            <Popover open={open === 'mode'} onOpenChange={(v) => setOpen(v ? 'mode' : null)} placement="top"
               trigger={(
                 <button type="button" className={PICK} onClick={() => setOpen(open === 'mode' ? null : 'mode')}>
                   <Film size={14} /><span className="truncate">{t(`canvas.modes.${mode}`)}</span><ChevronDown size={13} />
