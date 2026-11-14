@@ -9,7 +9,7 @@
 import * as React from 'react';
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { ChevronLeft, ChevronRight, Crosshair, Pause, Play, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CircleHelp, Pause, Play, X } from 'lucide-react';
 import { addPluginWords, useT } from '@/i18n';
 import { projectEvents, type Film as FilmValue } from '@/api';
 import { Player } from '@/editor/player';
@@ -50,12 +50,12 @@ interface Block { clip: import('@/api').Clip; track: number; at: number; end: nu
  * Whether the person has used each way that is not seen until used (kept in this browser): until then, where it is
  * used says how, once.
  */
-type Lesson = 'box' | 'range' | 'zoom';
+type Lesson = 'box' | 'moment' | 'range' | 'zoom';
 const LESSON_KEY = (lesson: Lesson) => `openfilm.screening.used.${lesson}`;
 function useLessons(): [Record<Lesson, boolean>, (lesson: Lesson) => void] {
   const [used, setUsed] = React.useState<Record<Lesson, boolean>>(() => {
     const read = (lesson: Lesson) => { try { return localStorage.getItem(LESSON_KEY(lesson)) === '1'; } catch { return false; } };
-    return { box: read('box'), range: read('range'), zoom: read('zoom') };
+    return { box: read('box'), moment: read('moment'), range: read('range'), zoom: read('zoom') };
   });
   const learn = React.useCallback((lesson: Lesson) => {
     setUsed((was) => (was[lesson] ? was : { ...was, [lesson]: true }));
@@ -96,7 +96,6 @@ function Screening({ projectId }: { projectId: string }) {
   /* how much of the film the bar shows: closer in, times are read to a tenth or a hundredth */
   const [shownSpan, setShownSpan] = React.useState(0);
   const scrubber = React.useRef<ScrubberHandle>(null);
-  const scrubbing = React.useRef(false);
   const [cues, setCues] = React.useState<Cue[]>([]);
   /* what the message being written points at (the chat says, numbered as it numbers them); with no chat, what was copied */
   const [draft, setDraft] = React.useState<StudioRef[]>([]);
@@ -234,7 +233,12 @@ function Screening({ projectId }: { projectId: string }) {
     else setCopied((list) => list.filter((r) => r !== ref));
   }, []);
   const now = () => player.current!.time();
-  const pointMoment = React.useCallback(() => { pause(); refer(momentRef(projectId, player.current!.time() * 1000)); }, [pause, refer, projectId]);
+  /* a moment: the one shown (M), or the one double-clicked on the bar */
+  const pointMoment = React.useCallback((at?: number) => {
+    pause();
+    if (at != null) { seek(at); learn('moment'); }
+    refer(momentRef(projectId, (at ?? player.current!.time()) * 1000));
+  }, [pause, seek, learn, refer, projectId]);
   const pointBox = (box: StageBox) => {
     pause();
     learn('box');
@@ -289,6 +293,7 @@ function Screening({ projectId }: { projectId: string }) {
       if (key === ' ') { take(); toggle(); }
       else if (key === 'ArrowLeft' || key === 'ArrowRight') { take(); pause(); seek(now() + (key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? FRAME_S : STEP_S)); }
       else if (key === 'm') { take(); pointMoment(); }
+      else if (key === '?') { take(); setSheetOpen((open) => !open); }
       else if (key === 'c' && changes.length) { take(); watchChange(0); }
       else if (key === 's') { take(); cycleSpeed(); }
       else if (key === '=' || key === '+') { take(); scrubber.current?.zoomIn(); }
@@ -319,8 +324,14 @@ function Screening({ projectId }: { projectId: string }) {
   if (!state || !folder) return <div className="h-full bg-[var(--bg-viewer)]" />;
   const empty = film != null && !blocks.picture.length && !blocks.sound.length;
   const sheet = [
-    [{ keys: ['Space'], label: w('kPlay') }, { keys: ['←', '→'], label: w('kStep') }, { keys: ['⇧', '←', '→'], label: w('kFrame') }, { keys: ['S'], label: w('kSpeed') }, { keys: ['+', '−'], label: w('kZoom') }, { keys: ['0'], label: w('kWhole') }],
-    [{ keys: ['M'], label: w('kMoment') }, { keys: [w('kDrag')], label: w('kBox') }, { keys: [w('kDrag')], label: w('kRange') }, { keys: ['C'], label: w('kChanges') }],
+    { title: w('gWatch'), items: [
+      { keys: [w('kClickPicture'), 'Space'], label: w('kPlay') }, { keys: [w('kClickBar')], label: w('kGo') }, { keys: ['←', '→'], label: w('kStep') },
+      { keys: ['⇧', '←', '→'], label: w('kFrame') }, { keys: [w('kScroll'), '+', '−'], label: w('kZoom') }, { keys: ['0'], label: w('kWhole') }, { keys: ['S'], label: w('kSpeed') },
+    ] },
+    { title: w('gPoint'), items: [
+      { keys: [w('kDoubleClickBar'), 'M'], label: w('kMoment') }, { keys: [w('kDragBar')], label: w('kRange') }, { keys: [w('kDragPicture')], label: w('kBox') },
+      { keys: [w('kClickNumber')], label: w('kGoMark') }, { keys: ['C'], label: w('kChanges') }, { keys: ['Esc'], label: w('kCancel') },
+    ] },
   ];
   const floating = changes.length && !empty ? (
     <Pill>
@@ -343,7 +354,7 @@ function Screening({ projectId }: { projectId: string }) {
   ) : null;
 
   return (
-    <div data-screening="" className="relative flex h-full min-h-0 w-full flex-col gap-4 bg-[var(--bg-viewer)] px-6 pb-2 pt-5 text-[var(--text)]"
+    <div data-screening="" className="relative flex h-full min-h-0 w-full flex-col gap-4 bg-[var(--bg-viewer)] px-6 pb-4 pt-5 text-[var(--text)]"
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropping(true); } }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDropping(false); }}
       onDrop={(e) => { void drop(e); }}>
@@ -353,7 +364,7 @@ function Screening({ projectId }: { projectId: string }) {
         empty={empty ? { title: w('emptyTitle'), sub: state.chat ? w('emptySub') : w('emptyBrowserSub'), ...(state.chat && !state.chat.open ? { openChat: { label: w('openChat'), onOpen: state.chat.toggle } } : {}) } : null}
         onToggle={toggle} onDragStart={pause} onBox={pointBox} onRemove={(m) => unrefer(m.ref)} />
       {empty ? null : (
-        <div className="mx-auto flex w-full max-w-[1120px] shrink-0 flex-col items-center pb-[22px]">
+        <div className="mx-auto flex w-full max-w-[1120px] shrink-0 flex-col items-center">
           {/* the player: play, the time, the film as a strip, the speed, and pointing at this moment */}
           <div className="flex w-full items-start gap-3 rounded-[16px] border border-white/[.07] bg-[color-mix(in_srgb,var(--bg-raised)_88%,transparent)] py-2.5 pl-2.5 pr-2.5 shadow-[0_12px_40px_rgb(0_0_0/.35)] backdrop-blur-xl">
             <Tooltip label={playing ? w('pause') : w('play')} shortcut="Space">
@@ -364,8 +375,8 @@ function Screening({ projectId }: { projectId: string }) {
             </Tooltip>
             <TimeNow source={time} decimals={decimals} />
             <Scrubber ref={scrubber} duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks} changes={changes}
-              words={{ go: w('go'), remove: w('remove'), whole: w('whole'), hints: [...(used.range ? [] : [w('hintRange')]), ...(used.zoom ? [] : [w('hintZoom')])] }}
-              onSeek={(t) => { if (!scrubbing.current) pause(); seek(t); }} onScrub={(on) => { scrubbing.current = on; if (on) pause(); }}
+              words={{ go: w('go'), remove: w('remove'), hints: [...(used.moment ? [] : [w('hintMoment')]), ...(used.range ? [] : [w('hintRange')]), ...(used.zoom ? [] : [w('hintZoom')])] }}
+              onSeek={(t) => { pause(); seek(t); }} onMoment={pointMoment}
               onRange={pointRange} onGo={goTo} onRemove={unrefer} onSpan={onSpan} />
             <span className="flex h-10 w-[42px] shrink-0 items-center font-mono text-[12px] tabular-nums text-[var(--text-faint)]">{timeLabel(duration)}</span>
             <Tooltip label={w('speed')} shortcut="S">
@@ -374,17 +385,16 @@ function Screening({ projectId }: { projectId: string }) {
                 {speed}×
               </button>
             </Tooltip>
-            <span className="mt-2 h-6 w-px shrink-0 bg-white/10" />
-            <Tooltip label={w('pointTip')} shortcut="M">
-              <button type="button" aria-label={w('point')} onClick={pointMoment}
-                className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-[var(--accent)] pl-3 pr-3.5 text-[13px] font-semibold text-[var(--on-accent)] shadow-[0_4px_14px_color-mix(in_srgb,var(--accent)_45%,transparent)] transition hover:brightness-110 active:scale-95">
-                <Crosshair size={16} strokeWidth={2.2} />{w('pointShort')}
+            <Tooltip label={w('help')} shortcut="?">
+              <button type="button" aria-label={w('help')} aria-pressed={sheetOpen} onClick={() => setSheetOpen((open) => !open)}
+                className={`mt-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-full transition hover:bg-white/10 hover:text-[var(--text)] ${sheetOpen ? 'bg-white/10 text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
+                <CircleHelp size={16} />
               </button>
             </Tooltip>
           </div>
         </div>
       )}
-      {held || sheetOpen ? <ShortcutSheet title={w('sheetTitle')} groups={sheet} hold={{ keys: [MOD], label: w('kHold') }} /> : null}
+      {held || sheetOpen ? <ShortcutSheet title={w('sheetTitle')} groups={sheet} hold={{ keys: [MOD], label: w('kHold') }} onClose={held ? undefined : () => setSheetOpen(false)} /> : null}
       {dropping ? (
         <div className="pointer-events-none absolute inset-3 z-30 grid place-items-center rounded-2xl border-2 border-dashed border-[color:var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[15px] font-medium text-[var(--accent)]">
           {w('dropHere')}
