@@ -276,13 +276,21 @@ function Screening({ projectId }: { projectId: string }) {
   const goTo = (mark: Mark) => { const t = timeOf(mark.ref); if (t != null) { pause(); seek(t); } };
   const onSpan = React.useCallback((span: number) => { setShownSpan(span); if (duration && span < duration - 1e-3) learn('zoom'); }, [duration, learn]);
   const decimals = duration && shownSpan < duration - 1e-3 ? (shownSpan <= 4 ? 2 : 1) : 0;
-  /* where the film cuts from one shot to the next: the bar is parted there (the track that shows the most picture) */
-  const cuts = React.useMemo(() => {
-    const by = new Map<number, Block[]>();
-    for (const b of blocks.picture) by.set(b.track, [...(by.get(b.track) ?? []), b]);
-    const main = [...by.values()].sort((a, b) => b.reduce((s, x) => s + x.end - x.at, 0) - a.reduce((s, x) => s + x.end - x.at, 0))[0] ?? [];
-    return [...new Set(main.map((b) => b.at).filter((t) => t > 0.05))].sort((a, b) => a - b);
-  }, [blocks]);
+  /* the film's picture at `t`, for a picture standing for `step` s: the frame of the shot on top then, cut by Studio
+     from its file (to the tenth of a second, or the frame when the pictures are closer than that) */
+  const frameAt = React.useCallback((t: number, width: number, step: number) => {
+    for (let i = blocks.picture.length - 1; i >= 0; i--) {
+      const b = blocks.picture[i]!;
+      if (t < b.at || t >= b.end) continue;
+      const path = b.clip.src.split('#')[0]!;
+      const file = state?.files.find((f) => f.path === path);
+      const still = file?.kind === 'image';
+      const unit = step < 0.1 ? FRAME_S * 1000 : 100;
+      const ms = still ? 0 : Math.round(Math.round((((b.clip.time?.[0] ?? 0) + (t - b.at) * (b.clip.speed ?? 1)) * 1000) / unit) * unit);
+      return `/api/projects/${encodeURIComponent(projectId)}/media?what=frame&path=${encodeURIComponent(path)}&ms=${ms}&w=${width}${file ? `&v=${file.mtimeMs}` : ''}`;
+    }
+    return undefined;
+  }, [blocks, state?.files, projectId]);
 
   /* ── what changed since the person last looked ── */
   const changes = React.useMemo(() => changedRanges(seen, film, info?.spans ?? []), [seen, film, info]);
@@ -381,7 +389,7 @@ function Screening({ projectId }: { projectId: string }) {
       {empty ? null : (
         /* under the picture and as wide: the marks and the progress bar, then the player's row of controls */
         <div className="mx-auto flex w-full shrink-0 flex-col" style={{ maxWidth: Math.max(560, fit) }}>
-          <Scrubber ref={scrubber} duration={duration} clock={time} marks={marks} changes={changes} cuts={cuts}
+          <Scrubber ref={scrubber} duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks} changes={changes}
             words={{
               go: w('go'), remove: w('remove'), lane: used.moment && used.range ? null : w('laneEmpty'),
               laneHints: [...(used.moment ? [] : [w('hintMoment')]), ...(used.range ? [] : [w('hintRange')])],

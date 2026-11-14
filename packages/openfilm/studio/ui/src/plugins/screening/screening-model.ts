@@ -129,3 +129,21 @@ export function zoomed(view: View, at: number, factor: number, duration: number,
   const span = Math.max(Math.min(least, duration), Math.min(duration, view.span * factor));
   return fitted({ from: at - (at - view.from) * (span / view.span), span }, duration);
 }
+
+/**
+ * How much film each picture on the strip stands for, s, when `span` s fill `width` px and a picture is `tile` px wide:
+ * a frame (`frame` s) times a power of the square root of 2, the least that leaves each picture its width. The same
+ * steps at every zoom, so moving along the film shows the pictures already fetched.
+ */
+export function tileStep(span: number, width: number, tile: number, frame: number): number {
+  if (!(span > 0) || !(width > 0)) return 0;
+  const want = (tile / width) * span;
+  return frame * Math.SQRT2 ** Math.max(0, Math.ceil(2 * Math.log2(want / frame) - 1e-9));
+}
+
+/** The lines along the strip, every this many s: the least of the usual steps that leaves `px` px between them. */
+export function tickStep(span: number, width: number, px = 64): number {
+  const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
+  if (!(span > 0) || !(width > 0)) return steps[steps.length - 1]!;
+  return steps.find((s) => (s / span) * width >= px) ?? steps[steps.length - 1]!;
+}

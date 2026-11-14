@@ -1,19 +1,18 @@
 /**
- * The film along a line, as a video player has it, with a row above it for pointing:
- *  - the marks row: what the message being written points at, numbered as the chat numbers it. A click here points
- *    at that moment, a drag picks a stretch (the picture following the pointer; Esc lets go of it). A number goes to
- *    its place, its × takes it out.
- *  - the progress bar: thin, thicker under the pointer, its knob shown then; a press goes there, a drag runs the
- *    picture along. The film's cuts part it, as a player's chapters; what is pointed at and what the agent changed are
- *    marked on it.
- *  - closer in (scrolling or pinching over the bar, or the zoom control), the bar is a part of the film, down to a
- *    second across it; a line under it then shows the whole film and the part shown: its middle drags along, its ends
- *    bring the film closer or farther, a double click shows the whole film.
+ * The film along a line, as a strip of its frames, the playhead a line on it: a click goes there, a drag runs the
+ * picture along. What is pointed at and what the agent changed are marked on it. While the pointer is on it, two
+ * thin rows come round it:
+ *  - above, the marks row: a click there points at that moment, a drag picks a stretch (the picture following the
+ *    pointer; Esc lets go of it). What the message being written points at is numbered there as the chat numbers it
+ *    (shown always): a number goes to its place, its × takes it out.
+ *  - below, the zoom bar: the whole film, the part shown as its thumb. Its ends bring the film closer (down to a
+ *    second across the strip) or farther, its middle drags along, a double click shows the whole film. Scrolling or
+ *    pinching over the strip does the same around the pointer.
  */
 import * as React from 'react';
 import { X } from 'lucide-react';
 import type { StudioRef } from '@/lib/host';
-import { fitted, timeLabel, timeOf, zoomed, type Clock, type Range, type View } from './screening-model';
+import { fitted, tickStep, tileStep, timeLabel, timeOf, zoomed, type Clock, type Range, type View } from './screening-model';
 
 /** A value of a Clock, kept current in React. */
 export function useClock(source: Clock): number {
@@ -33,8 +32,10 @@ export interface ScrubberHandle {
 /** How far the pointer moves before a press on the marks row is a drag (a stretch), px. */
 const DRAG_PX = 4;
 const LANE_H = 18;
-/** The progress bar's color: the played part and the knob (the player's). */
-const PLAYED = '#f03';
+/** The strip's height, px; each picture on it is as wide as the film's shape makes it at that height. */
+const STRIP_H = 36;
+/** A frame, s. */
+const FRAME = 1 / 30;
 /** The closest the bar comes: this many seconds across it. */
 export const LEAST_S = 1;
 
@@ -46,9 +47,11 @@ export function levelOf(span: number, duration: number): number {
 
 export const Scrubber = React.forwardRef<ScrubberHandle, {
   duration: number; clock: Clock;
+  /** the film's width over its height */
+  aspect: number;
+  /** the address of the film's picture at `t` s, `w` px wide, for a picture standing for `step` s; undefined: none */
+  frameAt: (t: number, w: number, step: number) => string | undefined;
   marks: readonly Mark[]; changes: readonly Range[];
-  /** where the film cuts from one shot to the next, s: the bar is parted there */
-  cuts: readonly number[];
   /**
    * `lane`: said in the empty marks row (null: nothing); `laneHints`, `barHints`: how each is used, said under the time
    * while the pointer is on it
@@ -58,10 +61,10 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
   onGo: (mark: Mark) => void; onRemove: (ref: StudioRef) => void;
   /** how much of the film the bar shows now, s */
   onSpan: (span: number) => void;
-}>(function Scrubber({ duration, clock, marks, changes, cuts, words, onSeek, onMoment, onRange, onGo, onRemove, onSpan }, handle) {
+}>(function Scrubber({ duration, clock, aspect, frameAt, marks, changes, words, onSeek, onMoment, onRange, onGo, onRemove, onSpan }, handle) {
   const wrap = React.useRef<HTMLDivElement>(null);
-  const bar = React.useRef<HTMLDivElement>(null);
-  const width = useWidth(bar);
+  const strip = React.useRef<HTMLDivElement>(null);
+  const width = useWidth(strip);
   /* the part shown; null: the whole film */
   const [shown, setShown] = React.useState<View | null>(null);
   const v: View = shown && duration ? fitted(shown, duration) : { from: 0, span: duration };
@@ -89,20 +92,23 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
   }), [zoomAt, show, clock]);
   React.useEffect(() => { onSpan(v.span); }, [v.span, onSpan]);
 
-  /* the pointer over the marks row or the bar: which, its time, its place */
-  const [hover, setHover] = React.useState<{ row: 'lane' | 'bar'; t: number; x: number } | null>(null);
+  /* the pointer on the bar (its rows come round it then), over which row, its time and place */
+  const [inside, setInside] = React.useState(false);
+  const [hover, setHover] = React.useState<{ row: 'lane' | 'strip'; t: number; x: number } | null>(null);
   const [span, setSpan] = React.useState<{ a: number; b: number } | null>(null);
-  const press = React.useRef<{ row: 'lane' | 'bar'; x: number; t: number; moved: boolean } | null>(null);
-  const [scrubbing, setScrubbing] = React.useState(false);
+  const press = React.useRef<{ row: 'lane' | 'strip'; x: number; t: number; moved: boolean } | null>(null);
+  const [held, setHeld] = React.useState(false);
   const x = (t: number) => (v.span ? ((t - v.from) / v.span) * width : 0);
   const left = (t: number) => `${v.span ? ((t - v.from) / v.span) * 100 : 0}%`;
   const across = (a: number, b: number) => `${v.span ? (Math.max(0, Math.min(b, v.from + v.span) - Math.max(a, v.from)) / v.span) * 100 : 0}%`;
   const seen = (a: number, b = a) => b >= v.from && a <= v.from + v.span;
   const timeAt = (clientX: number) => {
-    const r = bar.current!.getBoundingClientRect();
+    const r = strip.current!.getBoundingClientRect();
     return v.from + Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * v.span;
   };
-  const xAt = (clientX: number) => clientX - bar.current!.getBoundingClientRect().left;
+  const xAt = (clientX: number) => clientX - strip.current!.getBoundingClientRect().left;
+  /* the rows round the strip: shown while the pointer is on the bar, or something on it is held */
+  const rows = inside || held || Boolean(span);
 
   /* scrolling or pinching over the bar: closer or farther around the pointer; sideways: along the film */
   React.useEffect(() => {
@@ -110,11 +116,11 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
     if (!el) return;
     const wheel = (e: WheelEvent) => {
       const { v, duration } = live.current;
-      if (!duration || !bar.current) return;
+      if (!duration || !strip.current) return;
       e.preventDefault();
       const line = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
       const dx = e.deltaX * line, dy = e.deltaY * line;
-      const r = bar.current.getBoundingClientRect();
+      const r = strip.current.getBoundingClientRect();
       if (e.ctrlKey || e.metaKey || Math.abs(dy) > Math.abs(dx)) {
         const at = v.from + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * v.span;
         /* a pinch comes as small steps with Ctrl held; a wheel as large ones */
@@ -148,20 +154,38 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
     return () => window.removeEventListener('keydown', key, true);
   }, [span]);
 
-  /* ── the bar: a press goes there, a drag runs the picture along ── */
-  const barDown = (e: React.PointerEvent) => {
+  /* the pictures along the strip: each stands for `step` s of film, placed where that film is; under each, the
+     picture the whole film's strip has there, shown until its own has come */
+  const tile = Math.max(24, Math.round(STRIP_H * (aspect || 16 / 9)));
+  const step = tileStep(v.span, width, tile, FRAME);
+  const wholeStep = tileStep(duration, width, tile, FRAME);
+  const tiles = React.useMemo(() => {
+    if (!step || !duration) return [];
+    const out: { at: number; srcs: string[] }[] = [];
+    const picture = (t: number, each: number) => frameAt(Math.min(t, duration - 1e-3), 160, each);
+    for (let k = Math.floor(v.from / step); k * step < v.from + v.span; k++) {
+      const mid = k * step + step / 2;
+      out.push({ at: k * step, srcs: [picture(mid, step), picture((Math.floor(mid / wholeStep) + 0.5) * wholeStep, wholeStep)].filter((src): src is string => Boolean(src)) });
+    }
+    return out;
+  }, [step, wholeStep, v.from, v.span, duration, frameAt]);
+  const tick = close ? tickStep(v.span, width) : 0;
+  const ticks = tick ? Array.from({ length: Math.floor((v.from + v.span) / tick) - Math.ceil(v.from / tick) + 1 }, (_, i) => (Math.ceil(v.from / tick) + i) * tick) : [];
+
+  /* ── the strip: a press goes there, a drag runs the picture along ── */
+  const stripDown = (e: React.PointerEvent) => {
     if (e.button !== 0 || !duration) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    press.current = { row: 'bar', x: e.clientX, t: timeAt(e.clientX), moved: false };
-    setScrubbing(true);
+    press.current = { row: 'strip', x: e.clientX, t: timeAt(e.clientX), moved: false };
+    setHeld(true);
     onSeek(timeAt(e.clientX));
   };
-  const barMove = (e: React.PointerEvent) => {
+  const stripMove = (e: React.PointerEvent) => {
     const t = timeAt(e.clientX);
-    setHover({ row: 'bar', t, x: xAt(e.clientX) });
-    if (press.current?.row === 'bar') onSeek(t);
+    setHover({ row: 'strip', t, x: xAt(e.clientX) });
+    if (press.current?.row === 'strip') onSeek(t);
   };
-  const barUp = () => { press.current = null; setScrubbing(false); };
+  const stripUp = () => { press.current = null; setHeld(false); };
   /* ── the marks row: a click points at that moment, a drag at a stretch, the picture following ── */
   const laneDown = (e: React.PointerEvent) => {
     if (e.button !== 0 || !duration) return;
@@ -187,30 +211,24 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
   };
   const decimals = close ? (v.span <= 4 ? 2 : 1) : 0;
   const hints = hover?.row === 'lane' ? words.laneHints : words.barHints;
-  const thick = hover?.row === 'bar' || scrubbing;
-  /* the cuts that part the bar: none closer than a few px to the one before, so short shots do not shred it */
-  const parts = React.useMemo(() => {
-    const out: number[] = [];
-    for (const c of cuts) if (c > v.from && c < v.from + v.span && (!out.length || x(c) - x(out[out.length - 1]!) >= 6) && x(c) >= 6) out.push(c);
-    return out;
-  }, [cuts, v.from, v.span, width]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fade = `transition-opacity duration-150 ${rows ? 'opacity-100' : 'pointer-events-none opacity-0'}`;
 
   return (
-    <div ref={wrap} className="relative min-w-0">
-      {/* the marks */}
-      <div data-lane="" className="group/lane relative cursor-crosshair touch-none select-none rounded-[5px] transition-colors hover:bg-white/[.05]"
-        style={{ height: LANE_H }}
+    <div ref={wrap} className="relative min-w-0" onPointerEnter={() => setInside(true)} onPointerLeave={() => { setInside(false); setHover(null); }}>
+      {/* the marks row */}
+      <div data-lane="" className="relative cursor-crosshair touch-none select-none" style={{ height: LANE_H }}
         onPointerDown={laneDown} onPointerMove={laneMove} onPointerUp={laneUp} onPointerLeave={() => setHover(null)}>
-        {!marks.length && !span && words.lane ? (
-          <span className="pointer-events-none absolute inset-0 flex items-center pl-1 text-[10.5px] text-[var(--text-faint)] transition-opacity group-hover/lane:opacity-0">{words.lane}</span>
-        ) : null}
+        <div className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[5px] ${fade} ${hover?.row === 'lane' ? 'bg-white/[.07]' : 'bg-white/[.035]'}`}>
+          {!marks.length && !span && words.lane ? <span className="absolute inset-0 flex items-center pl-1.5 text-[10.5px] text-[var(--text-faint)]">{words.lane}</span> : null}
+          {/* where a click would point */}
+          {hover?.row === 'lane' && !span ? <span className="absolute top-1/2 h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-[var(--accent)]" style={{ left: hover.x }} /> : null}
+        </div>
+        {/* what is pointed at: always shown, numbered as the chat numbers it */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           {marks.map((m) => (m.ref.kind === 'range' && m.ref.end - m.ref.start < duration - 0.05 && seen(m.ref.start, m.ref.end)
             ? <span key={`r${m.n}`} className="absolute top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-[var(--accent)] opacity-80" style={{ left: left(Math.max(m.ref.start, v.from)), width: across(m.ref.start, m.ref.end) }} />
             : null))}
           {span ? <span className="absolute top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-[var(--accent)]" style={{ left: left(Math.min(span.a, span.b)), width: across(Math.min(span.a, span.b), Math.max(span.a, span.b)) }} /> : null}
-          {/* where a click would point */}
-          {hover?.row === 'lane' && !span ? <span className="absolute top-1/2 h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-[var(--accent)]" style={{ left: hover.x }} /> : null}
         </div>
         {placeNumbers(marks, (t) => (seen(t) ? x(t) : null)).map(({ mark, x }) => (
           <span key={mark.n} className="absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2" style={{ left: x }}>
@@ -218,32 +236,34 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
           </span>
         ))}
       </div>
-      {/* the progress bar */}
-      <div ref={bar} role="slider" aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-label="film"
-        className="relative flex h-[16px] cursor-pointer touch-none select-none items-center"
-        onPointerDown={barDown} onPointerMove={barMove} onPointerUp={barUp} onPointerCancel={barUp} onPointerLeave={() => setHover(null)}>
-        <div className="pointer-events-none relative w-full transition-[height] duration-100" style={{ height: thick ? 5 : 3 }}>
-          <div className="absolute inset-0 overflow-hidden rounded-full bg-white/25">
-            {/* under the pointer, as far as it: lighter */}
-            {hover?.row === 'bar' ? <span className="absolute inset-y-0 left-0 bg-white/30" style={{ width: hover.x }} /> : null}
-            {changes.map((c, i) => (seen(c.start, c.end) ? <span key={`c${i}`} className="absolute inset-y-0 bg-[var(--warn)]" style={{ left: left(Math.max(c.start, v.from)), width: across(c.start, c.end) }} /> : null))}
-            <Played clock={clock} at={(t) => Math.max(0, Math.min(1, (t - v.from) / (v.span || 1)))} />
-            {marks.map((m) => (m.ref.kind === 'range' && m.ref.end - m.ref.start < duration - 0.05 && seen(m.ref.start, m.ref.end)
-              ? <span key={`r${m.n}`} className="absolute inset-y-0 bg-[var(--accent)]" style={{ left: left(Math.max(m.ref.start, v.from)), width: across(m.ref.start, m.ref.end) }} />
-              : null))}
-            {span ? <span className="absolute inset-y-0 bg-[var(--accent)]" style={{ left: left(Math.min(span.a, span.b)), width: across(Math.min(span.a, span.b), Math.max(span.a, span.b)) }} /> : null}
-          </div>
-          {/* the cuts, as a player parts its chapters */}
-          {parts.map((c) => <span key={c} className="absolute -inset-y-px w-[2px] -translate-x-1/2 bg-[var(--bg-viewer)]" style={{ left: x(c) }} />)}
-          {/* a moment pointed at: a tick through the bar */}
-          {marks.map((m) => ((m.ref.kind === 'time' || m.ref.kind === 'region') && seen(m.ref.time)
-            ? <span key={`t${m.n}`} className="absolute top-1/2 h-[9px] w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent)] shadow-[0_0_0_1px_var(--bg-viewer)]" style={{ left: left(m.ref.time) }} />
+      {/* the film */}
+      <div ref={strip} role="slider" aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-label="film"
+        className="relative mt-[3px] cursor-pointer touch-none select-none overflow-hidden rounded-[6px] bg-black/40"
+        style={{ height: STRIP_H }}
+        onPointerDown={stripDown} onPointerMove={stripMove} onPointerUp={stripUp} onPointerCancel={stripUp} onPointerLeave={() => setHover(null)}>
+        <div className="pointer-events-none absolute inset-0">
+          {tiles.map(({ at, srcs }) => (
+            <span key={at} className="absolute inset-y-0 bg-cover bg-[center_35%] shadow-[inset_-1px_0_0_rgb(0_0_0/.4)]"
+              style={{ left: x(at), width: (step / v.span) * width + 0.5, ...(srcs.length ? { backgroundImage: [...new Set(srcs)].map((src) => `url("${src}")`).join(', ') } : {}) }} />
+          ))}
+          <span className="absolute inset-0 rounded-[6px] shadow-[inset_0_0_0_1px_rgb(255_255_255/.08)]" />
+          {/* closer in: a line every so often, so a second can be told */}
+          {ticks.map((t) => <span key={t} className="absolute top-0 h-[5px] w-px bg-white/60" style={{ left: x(t) }} />)}
+          {/* the changes; what is pointed at, carried down from the marks */}
+          {changes.map((c, i) => (seen(c.start, c.end) ? <span key={`c${i}`} className="absolute inset-y-0 bg-[color-mix(in_srgb,var(--warn)_22%,transparent)] shadow-[inset_0_-3px_0_var(--warn)]" style={{ left: left(Math.max(c.start, v.from)), width: across(c.start, c.end) }} /> : null))}
+          {marks.map((m) => (m.ref.kind === 'range' && m.ref.end - m.ref.start < duration - 0.05 && seen(m.ref.start, m.ref.end)
+            ? <span key={`r${m.n}`} className="absolute inset-y-0 bg-[color-mix(in_srgb,var(--accent)_16%,transparent)]" style={{ left: left(Math.max(m.ref.start, v.from)), width: across(m.ref.start, m.ref.end) }} />
             : null))}
-          <Knob clock={clock} at={(t) => (seen(t) ? left(t) : null)} shown={thick} />
+          {span ? <span className="absolute inset-y-0 bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]" style={{ left: left(Math.min(span.a, span.b)), width: across(Math.min(span.a, span.b), Math.max(span.a, span.b)) }} /> : null}
+          {marks.map((m) => ((m.ref.kind === 'time' || m.ref.kind === 'region') && seen(m.ref.time) ? <span key={`t${m.n}`} className="absolute inset-y-0 w-[1.5px] -translate-x-1/2 bg-[var(--accent)]" style={{ left: left(m.ref.time) }} /> : null))}
+          {hover && !press.current ? <span className={`absolute inset-y-0 w-px ${hover.row === 'lane' ? 'bg-[var(--accent)]' : 'bg-white/50'}`} style={{ left: hover.x }} /> : null}
+          <Playhead clock={clock} at={(t) => (seen(t) ? left(t) : null)} />
         </div>
       </div>
-      {/* closer in: the whole film, the part shown on it */}
-      <div className="h-[8px]">{close ? <ZoomBar duration={duration} view={v} marks={marks} onView={show} /> : null}</div>
+      {/* the zoom bar */}
+      <div className={`mt-[3px] h-[10px] ${fade}`}>
+        <ZoomBar duration={duration} view={v} marks={marks} onView={show} onHold={setHeld} />
+      </div>
       {/* over the bar: the time under the pointer (or the stretch being picked), and how that row is used until it has been */}
       {hover && duration ? (
         <div className="pointer-events-none absolute bottom-full z-40 mb-1.5 flex -translate-x-1/2 flex-col items-center"
@@ -286,26 +306,19 @@ function placeNumbers(marks: readonly Mark[], xOf: (t: number) => number | null)
   return placed;
 }
 
-/** The played part of the bar, `at(t)` of it. */
-function Played({ clock, at }: { clock: Clock; at: (t: number) => number }) {
-  return <span className="absolute inset-y-0 left-0" style={{ width: `${at(useClock(clock)) * 100}%`, background: PLAYED }} />;
-}
-
-/** The playhead's knob, shown while the bar is under the pointer or dragged. */
-function Knob({ clock, at, shown }: { clock: Clock; at: (t: number) => string | null; shown: boolean }) {
+function Playhead({ clock, at }: { clock: Clock; at: (t: number) => string | null }) {
   const left = at(useClock(clock));
-  return left == null ? null : (
-    <span className="absolute top-1/2 h-[13px] w-[13px] -translate-x-1/2 -translate-y-1/2 rounded-full transition-transform duration-100"
-      style={{ left, background: PLAYED, transform: `translate(-50%, -50%) scale(${shown ? 1 : 0})` }} />
-  );
+  return left == null ? null : <span className="absolute inset-y-0 w-[2px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgb(0_0_0/.35),0_0_8px_rgb(255_255_255/.35)]" style={{ left }} />;
 }
 
 /**
- * The whole film under the bar while it shows a part: the part shown as a thumb. Its middle drags along, its ends
- * bring the film closer or farther, a press beside it brings that part, a double click shows the whole film. What is
- * pointed at is dotted on it, so what is out of sight can be found.
+ * The zoom bar: the whole film, the part shown as its thumb. The thumb's ends bring the film closer or farther, its
+ * middle drags along; a press beside it brings that part; a double click shows the whole film. What is pointed at is
+ * dotted on it, so what is out of sight can be found.
  */
-function ZoomBar({ duration, view, marks, onView }: { duration: number; view: View; marks: readonly Mark[]; onView: (v: View | null) => void }) {
+function ZoomBar({ duration, view, marks, onView, onHold }: {
+  duration: number; view: View; marks: readonly Mark[]; onView: (v: View | null) => void; onHold: (held: boolean) => void;
+}) {
   const track = React.useRef<HTMLDivElement>(null);
   const grab = React.useRef<{ part: 'from' | 'to' | 'move'; t: number; from: number; span: number } | null>(null);
   const pct = (t: number) => `${duration ? (t / duration) * 100 : 0}%`;
@@ -313,11 +326,14 @@ function ZoomBar({ duration, view, marks, onView }: { duration: number; view: Vi
     const r = track.current!.getBoundingClientRect();
     return Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * duration;
   };
+  const whole = !(view.span < duration - 1e-3);
+  const letGo = () => { grab.current = null; onHold(false); };
   return (
     <div data-zoom="" className="group/z relative h-full touch-none select-none"
       onPointerDown={(e) => {
         if (e.button !== 0 || !duration) return;
         e.currentTarget.setPointerCapture(e.pointerId);
+        onHold(true);
         const t = timeAt(e.clientX);
         const part = ((e.target as HTMLElement).closest('[data-end]') as HTMLElement | null)?.dataset.end as 'from' | 'to' | undefined;
         if (part) { grab.current = { part, t, from: view.from, span: view.span }; return; }
@@ -334,16 +350,16 @@ function ZoomBar({ duration, view, marks, onView }: { duration: number; view: Vi
         else if (g.part === 'from') { const from = Math.max(0, Math.min(g.from + dt, end - LEAST_S)); onView({ from, span: end - from }); }
         else { const to = Math.min(duration, Math.max(end + dt, g.from + LEAST_S)); onView({ from: g.from, span: to - g.from }); }
       }}
-      onPointerUp={() => { grab.current = null; }}
+      onPointerUp={letGo} onPointerCancel={letGo}
       onDoubleClick={() => onView(null)}>
-      <div ref={track} className="absolute inset-x-0 top-1/2 h-[2px] -translate-y-1/2 rounded-full bg-white/[.08] transition-[height] group-hover/z:h-[4px]">
-        <span className="absolute inset-y-0 cursor-grab rounded-full bg-white/45 transition-colors active:cursor-grabbing group-hover/z:bg-white/65"
+      <div ref={track} className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-white/[.07] transition-[height] group-hover/z:h-[5px]">
+        <span className={`absolute inset-y-0 cursor-grab rounded-full transition-colors active:cursor-grabbing ${whole ? 'bg-white/20 group-hover/z:bg-white/30' : 'bg-white/45 group-hover/z:bg-white/65'}`}
           style={{ left: pct(view.from), width: `max(14px, ${duration ? (view.span / duration) * 100 : 100}%)` }}>
           <span data-end="from" className="absolute -left-[5px] top-1/2 grid h-[12px] w-[10px] -translate-y-1/2 cursor-ew-resize place-items-center">
-            <span className="h-[8px] w-[3px] rounded-full bg-white opacity-0 shadow transition-opacity group-hover/z:opacity-90" />
+            <span className="h-[9px] w-[3px] rounded-full bg-white opacity-60 shadow transition-opacity group-hover/z:opacity-95" />
           </span>
           <span data-end="to" className="absolute -right-[5px] top-1/2 grid h-[12px] w-[10px] -translate-y-1/2 cursor-ew-resize place-items-center">
-            <span className="h-[8px] w-[3px] rounded-full bg-white opacity-0 shadow transition-opacity group-hover/z:opacity-90" />
+            <span className="h-[9px] w-[3px] rounded-full bg-white opacity-60 shadow transition-opacity group-hover/z:opacity-95" />
           </span>
         </span>
         {marks.map((m) => { const t = timeOf(m.ref); return t == null ? null : <span key={m.n} className="pointer-events-none absolute top-1/2 h-[4px] w-[4px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent)]" style={{ left: pct(t) }} />; })}
