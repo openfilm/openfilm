@@ -817,7 +817,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const modes = data.make === 'video' ? modesFor(model) : [];
   const mode = data.make === 'video' ? modeOf(data.opts, model, pictureCount, inputs.some((i) => i.media === 'video'), inputs.some((i) => i.media === 'audio')) : null;
   /* the ways shown: what the model makes, its references once (everything it takes, when it takes more than pictures) */
-  const ways = modes.filter((m) => !(m === 'refs' && modes.includes('omni')));
+  const ways = (['text', 'first', 'firstLast', 'omni', 'refs'] as const).filter((m) => modes.includes(m) && !(m === 'refs' && modes.includes('omni')));
   const takes = ([
     ['image', model?.refs], ['video', modes.includes('omni') ? model?.clip : 0], ['audio', modes.includes('omni') ? model?.voice : 0],
   ] as const).filter(([, max]) => Boolean(max)).map(([kind, max]) => `${t(`canvas.history.kinds.${kind}`)} ×${Number(max)}`).join(' · ');
