@@ -31,7 +31,7 @@
   "hintZoom": "Scroll to zoom",
   "kZoom": "Zoom the bar in / out",
   "kWhole": "Show the whole film",
-  "help": "How it works",
+  "help": "How it works and keys",
   "gWatch": "Watch",
   "gPoint": "Point",
   "kCancel": "Drop the stretch being picked / close",
@@ -47,5 +47,6 @@
   "sayTitle": "Say what to change",
   "sayText": "Each goes into the chat with its number; then just say what you want. When it is changed, “Watch the changes” plays each place.",
   "laneEmpty": "Click here for this moment, drag for a stretch",
-  "hintScrub": "Drag to preview"
+  "hintScrub": "Drag to preview",
+  "helpHold": "or hold {mod}"
 }

@@ -12,12 +12,14 @@ import { REGION_MIN_PX } from '@/lib/studio-refs';
 import { useClock, type Mark } from './Scrubber';
 import type { Clock } from './screening-model';
 
-export function Stage({ stage, folder, preview, time, onInfo, marks, clock, playing, hint, empty, unread, over, onToggle, onDragStart, onBox, onRemove, removeLabel }: {
+export function Stage({ stage, folder, preview, time, onInfo, marks, clock, playing, hint, empty, unread, over, onFit, onToggle, onDragStart, onBox, onRemove, removeLabel }: {
   stage: { w: number; h: number }; folder: string; preview: React.RefObject<PreviewHandle | null>; time: () => number;
   onInfo: (info: FilmInfo) => void; marks: readonly Mark[]; clock: Clock; playing: boolean;
   /** said over the picture while the pointer is on it, stopped: how to circle a part */
   hint: string | null;
   empty: { title: string; sub: string; openChat?: { label: string; onOpen: () => void } } | null; unread: string | null; over: React.ReactNode;
+  /** the picture's width on screen, px, each time it changes */
+  onFit: (width: number) => void;
   onToggle: () => void; onDragStart: () => void; onBox: (box: StageBox) => void; onRemove: (mark: Mark) => void; removeLabel: string;
 }) {
   const room = React.useRef<HTMLDivElement>(null);
@@ -33,12 +35,13 @@ export function Stage({ stage, folder, preview, time, onInfo, marks, clock, play
   }, []);
   const k = Math.max(0, Math.min(size.w / stage.w, size.h / stage.h));
   const box = { w: Math.round(stage.w * k), h: Math.round(stage.h * k) };
+  React.useEffect(() => { onFit(box.w); }, [box.w, onFit]);
   const [drag, setDrag] = React.useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [inside, setInside] = React.useState(false);
   const at = (e: React.PointerEvent) => { const r = e.currentTarget.getBoundingClientRect(); return { x: Math.max(0, Math.min(r.width, e.clientX - r.left)), y: Math.max(0, Math.min(r.height, e.clientY - r.top)) }; };
   return (
     <div ref={room} className="relative grid min-h-0 flex-1 place-items-center">
-      <div className="relative overflow-hidden rounded-[10px] bg-black shadow-[0_0_0_1px_rgb(255_255_255/.06),0_24px_60px_rgb(0_0_0/.5)]" style={{ width: box.w, height: box.h }}>
+      <div className="relative overflow-hidden rounded-[8px] bg-black shadow-[0_0_0_1px_rgb(255_255_255/.05),0_20px_50px_rgb(0_0_0/.45)]" style={{ width: box.w, height: box.h }}>
         <Preview ref={preview} folder={folder} stage={stage} time={time} onInfo={onInfo} />
         <div data-capture-hide="" className={`absolute inset-0 ${drag || !playing ? 'cursor-crosshair' : 'cursor-default'}`}
           onPointerEnter={() => setInside(true)} onPointerLeave={() => setInside(false)}

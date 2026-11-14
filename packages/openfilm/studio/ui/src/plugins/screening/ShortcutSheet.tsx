@@ -10,31 +10,40 @@ const HOLD_MS = 450;
 
 export interface Shortcut { keys: readonly string[]; label: string }
 
-/** Whether the sheet is shown: while ⌘ (Ctrl) is held alone, from `HOLD_MS` on; `active` false: never. */
+/**
+ * Whether the sheet is shown: while ⌘ (Ctrl) is held alone, from `HOLD_MS` on; `active` false: never. Held for
+ * anything else (a scroll, a click, another key: ⌘ with the wheel zooms the bar), it does not show until let go.
+ */
 export function useHeldSheet(active: boolean): boolean {
   const [held, setHeld] = React.useState(false);
   React.useEffect(() => {
     if (!active) { setHeld(false); return; }
     const modifier = MAC ? 'Meta' : 'Control';
     let timer: ReturnType<typeof setTimeout> | null = null;
+    /* the key is held for something else: no sheet until it is let go */
+    let used = false;
     const stop = () => { if (timer) clearTimeout(timer); timer = null; setHeld(false); };
+    const spoil = () => { used = true; stop(); };
     const down = (e: KeyboardEvent) => {
       if (e.key === modifier && !e.repeat && !e.shiftKey && !e.altKey) {
+        used = false;
         if (timer) clearTimeout(timer);
-        timer = setTimeout(() => setHeld(true), HOLD_MS);
-      } else stop();
+        timer = setTimeout(() => { if (!used) setHeld(true); }, HOLD_MS);
+      } else spoil();
     };
-    const up = (e: KeyboardEvent) => { if (e.key === modifier) stop(); };
+    const up = (e: KeyboardEvent) => { if (e.key === modifier) { used = false; stop(); } };
     window.addEventListener('keydown', down, true);
     window.addEventListener('keyup', up, true);
     window.addEventListener('blur', stop);
-    window.addEventListener('pointerdown', stop, true);
+    window.addEventListener('pointerdown', spoil, true);
+    window.addEventListener('wheel', spoil, { capture: true, passive: true });
     return () => {
       stop();
       window.removeEventListener('keydown', down, true);
       window.removeEventListener('keyup', up, true);
       window.removeEventListener('blur', stop);
-      window.removeEventListener('pointerdown', stop, true);
+      window.removeEventListener('pointerdown', spoil, true);
+      window.removeEventListener('wheel', spoil, true);
     };
   }, [active]);
   return held;

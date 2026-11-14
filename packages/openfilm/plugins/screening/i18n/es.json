@@ -31,7 +31,7 @@
   "hintZoom": "Desplaza para ampliar",
   "kZoom": "Ampliar / reducir la barra",
   "kWhole": "Ver toda la película",
-  "help": "Cómo funciona",
+  "help": "Cómo funciona y teclas",
   "gWatch": "Ver",
   "gPoint": "Señalar",
   "kCancel": "Dejar el tramo que eliges / cerrar",
@@ -47,5 +47,6 @@
   "sayTitle": "Di qué cambiar",
   "sayText": "Cada cosa entra en el chat con su número; luego di qué quieres. Cuando cambie, “Ver los cambios” recorre cada sitio.",
   "laneEmpty": "Clic aquí para este momento, arrastra para un tramo",
-  "hintScrub": "Arrastra para ver"
+  "hintScrub": "Arrastra para ver",
+  "helpHold": "o mantén {mod}"
 }

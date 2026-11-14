@@ -28,8 +28,8 @@ export interface ScrubberHandle { zoomIn(): void; zoomOut(): void; whole(): void
 /** How far the pointer moves before a press on the marks is a drag (a stretch), px. */
 const DRAG_PX = 4;
 /** The rows' heights, px; each picture on the strip is as wide as the film's shape makes it at its height. */
-export const LANE_H = 20;
-const STRIP_H = 40;
+const LANE_H = 18;
+const STRIP_H = 34;
 /** A frame, s; the closest the bar comes is `LEAST_S` across it. */
 const FRAME = 1 / 30;
 const LEAST_S = 1;
@@ -194,19 +194,21 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
   return (
     <div ref={wrap} className="relative min-w-0 flex-1">
       {/* the marks */}
-      <div data-lane="" className="group/lane relative mb-1 cursor-crosshair touch-none select-none rounded-[6px] bg-white/[.045] ring-1 ring-inset ring-white/[.06] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]"
+      <div data-lane="" className="group/lane relative mb-[3px] cursor-crosshair touch-none select-none rounded-[5px] transition-colors hover:bg-white/[.05]"
         style={{ height: LANE_H }}
         onPointerDown={laneDown} onPointerMove={laneMove} onPointerUp={laneUp} onPointerLeave={() => setHover(null)}>
         {!marks.length && !span && words.lane ? (
-          <span className="pointer-events-none absolute inset-0 grid place-items-center text-[10.5px] text-[var(--text-faint)] group-hover/lane:opacity-0">{words.lane}</span>
+          <span className="pointer-events-none absolute inset-0 flex items-center pl-1 text-[10.5px] text-[var(--text-faint)] transition-opacity group-hover/lane:opacity-0">{words.lane}</span>
         ) : null}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[6px]">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          {/* the row's line, which the marks sit on */}
+          <span className="absolute inset-x-0 bottom-0 h-px bg-white/[.08]" />
           {marks.map((m) => (m.ref.kind === 'range' && m.ref.end - m.ref.start < duration - 0.05 && seen(m.ref.start, m.ref.end)
-            ? <span key={`r${m.n}`} className="absolute inset-y-[3px] rounded-[5px] bg-[color-mix(in_srgb,var(--accent)_35%,transparent)] shadow-[inset_0_0_0_1.5px_var(--accent)]" style={{ left: left(Math.max(m.ref.start, v.from)), width: across(m.ref.start, m.ref.end) }} />
+            ? <span key={`r${m.n}`} className="absolute top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-[var(--accent)] opacity-80" style={{ left: left(Math.max(m.ref.start, v.from)), width: across(m.ref.start, m.ref.end) }} />
             : null))}
-          {span ? <span className="absolute inset-y-[3px] rounded-[5px] bg-[color-mix(in_srgb,var(--accent)_45%,transparent)] shadow-[inset_0_0_0_1.5px_var(--accent)]" style={{ left: left(Math.min(span.a, span.b)), width: across(Math.min(span.a, span.b), Math.max(span.a, span.b)) }} /> : null}
+          {span ? <span className="absolute top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-[var(--accent)]" style={{ left: left(Math.min(span.a, span.b)), width: across(Math.min(span.a, span.b), Math.max(span.a, span.b)) }} /> : null}
           {/* where a click would point */}
-          {hover?.row === 'lane' && !span ? <span className="absolute top-1/2 h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_30%,transparent)]" style={{ left: hover.x }} /> : null}
+          {hover?.row === 'lane' && !span ? <span className="absolute top-1/2 h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-[var(--accent)]" style={{ left: hover.x }} /> : null}
         </div>
         {pinned.map(({ mark, x }) => (
           <span key={mark.n} className="absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2" style={{ left: x }}>
@@ -216,24 +218,24 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
       </div>
       {/* the film */}
       <div ref={strip} role="slider" aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-label="film"
-        className="relative cursor-ew-resize touch-none select-none overflow-hidden rounded-[8px] bg-black/40 ring-1 ring-inset ring-white/10"
+        className="relative cursor-ew-resize touch-none select-none overflow-hidden rounded-[6px] bg-black/40"
         style={{ height: STRIP_H }}
         onPointerDown={stripDown} onPointerMove={stripMove} onPointerUp={() => { press.current = null; }} onPointerLeave={() => setHover(null)}>
         <div className="pointer-events-none absolute inset-0">
           {tiles.map(({ at, srcs }) => (
-            <span key={at} className="absolute inset-y-0 bg-cover bg-[center_35%] opacity-90 shadow-[inset_-1px_0_0_rgb(0_0_0/.35)]"
+            <span key={at} className="absolute inset-y-0 bg-cover bg-[center_35%] shadow-[inset_-1px_0_0_rgb(0_0_0/.4)]"
               style={{ left: x(at), width: (step / v.span) * width + 0.5, ...(srcs.length ? { backgroundImage: [...new Set(srcs)].map((src) => `url("${src}")`).join(', ') } : {}) }} />
           ))}
-          <span className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/25" />
+          <span className="absolute inset-0 rounded-[6px] shadow-[inset_0_0_0_1px_rgb(255_255_255/.08)]" />
           {/* closer in: a line every so often, so a second can be told */}
-          {ticks.map((t) => <span key={t} className="absolute top-0 h-[6px] w-px bg-white/55" style={{ left: x(t) }} />)}
+          {ticks.map((t) => <span key={t} className="absolute top-0 h-[5px] w-px bg-white/60" style={{ left: x(t) }} />)}
           {/* the changes; what is pointed at, carried down from the marks */}
           {changes.map((c, i) => (seen(c.start, c.end) ? <span key={`c${i}`} className="absolute inset-y-0 bg-[color-mix(in_srgb,var(--warn)_22%,transparent)] shadow-[inset_0_-3px_0_var(--warn)]" style={{ left: left(Math.max(c.start, v.from)), width: across(c.start, c.end) }} /> : null))}
           {marks.map((m) => (m.ref.kind === 'range' && m.ref.end - m.ref.start < duration - 0.05 && seen(m.ref.start, m.ref.end)
             ? <span key={`r${m.n}`} className="absolute inset-y-0 bg-[color-mix(in_srgb,var(--accent)_16%,transparent)]" style={{ left: left(Math.max(m.ref.start, v.from)), width: across(m.ref.start, m.ref.end) }} />
             : null))}
           {span ? <span className="absolute inset-y-0 bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]" style={{ left: left(Math.min(span.a, span.b)), width: across(Math.min(span.a, span.b), Math.max(span.a, span.b)) }} /> : null}
-          {marks.map((m) => ((m.ref.kind === 'time' || m.ref.kind === 'region') && seen(m.ref.time) ? <span key={`t${m.n}`} className="absolute inset-y-0 w-[2px] -translate-x-1/2 bg-[var(--accent)]" style={{ left: left(m.ref.time) }} /> : null))}
+          {marks.map((m) => ((m.ref.kind === 'time' || m.ref.kind === 'region') && seen(m.ref.time) ? <span key={`t${m.n}`} className="absolute inset-y-0 w-[1.5px] -translate-x-1/2 bg-[var(--accent)]" style={{ left: left(m.ref.time) }} /> : null))}
           {hover && !press.current ? <span className={`absolute inset-y-0 w-px ${hover.row === 'lane' ? 'bg-[var(--accent)]' : 'bg-white/50'}`} style={{ left: hover.x }} /> : null}
           <Playhead clock={clock} at={(t) => (seen(t) ? left(t) : null)} />
         </div>
@@ -242,13 +244,13 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
       <ZoomBar duration={duration} view={v} marks={marks} changes={changes} onView={show} />
       {/* over the bar: the time under the pointer (or the stretch being picked), and how that row is used until it has been */}
       {hover && duration ? (
-        <div className="pointer-events-none absolute bottom-full z-40 mb-2 flex -translate-x-1/2 flex-col items-center"
-          style={{ left: Math.max(80, Math.min(hover.x, width - 80)) }}>
-          <span className="flex flex-col items-center gap-0.5 rounded-[7px] bg-black/80 px-2 py-1 text-white shadow-[0_6px_20px_rgb(0_0_0/.35)] backdrop-blur">
-            <span className="font-mono text-[11px] tabular-nums">
+        <div className="pointer-events-none absolute bottom-full z-40 mb-1.5 flex -translate-x-1/2 flex-col items-center"
+          style={{ left: Math.max(70, Math.min(hover.x, width - 70)) }}>
+          <span className="flex flex-col items-center rounded-[6px] bg-black/75 px-1.5 py-[3px] text-white shadow-[0_4px_14px_rgb(0_0_0/.3)] backdrop-blur">
+            <span className="font-mono text-[10.5px] leading-[14px] tabular-nums">
               {span ? `${timeLabel(Math.min(span.a, span.b), decimals)} – ${timeLabel(Math.max(span.a, span.b), decimals)}` : timeLabel(hover.t, decimals)}
             </span>
-            {!span && hints.length ? <span className="whitespace-nowrap text-[10.5px] text-white/60">{hints.join(' · ')}</span> : null}
+            {!span && hints.length ? <span className="whitespace-nowrap text-[10px] leading-[14px] text-white/55">{hints.join(' · ')}</span> : null}
           </span>
         </div>
       ) : null}
@@ -304,7 +306,7 @@ function ZoomBar({ duration, view, marks, changes, onView }: {
   };
   const whole = !(view.span < duration - 1e-3);
   return (
-    <div data-zoom="" className="group/z relative mt-1.5 h-[12px] touch-none select-none"
+    <div data-zoom="" className="group/z relative mt-[3px] h-[10px] touch-none select-none"
       onPointerDown={(e) => {
         if (e.button !== 0 || !duration) return;
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -326,19 +328,19 @@ function ZoomBar({ duration, view, marks, changes, onView }: {
       }}
       onPointerUp={() => { grab.current = null; }}
       onDoubleClick={() => onView(null)}>
-      <div ref={track} className="absolute inset-x-0 top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-white/[.07]">
+      <div ref={track} className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-white/[.06] transition-[height] group-hover/z:h-[5px]">
         {changes.map((c, i) => <span key={i} className="absolute inset-y-0 bg-[var(--warn)] opacity-70" style={{ left: pct(c.start), width: pct(c.end - c.start) }} />)}
         {/* the part shown; its ends take the film closer or farther */}
-        <span className={`absolute -top-[2px] h-[8px] cursor-grab rounded-full transition-colors active:cursor-grabbing ${whole ? 'bg-white/[.14] group-hover/z:bg-white/25' : 'bg-white/45 group-hover/z:bg-white/60'}`}
+        <span className={`absolute inset-y-0 cursor-grab rounded-full transition-colors active:cursor-grabbing ${whole ? 'bg-white/[.13] group-hover/z:bg-white/25' : 'bg-white/40 group-hover/z:bg-white/60'}`}
           style={{ left: pct(view.from), width: `max(18px, ${duration ? (view.span / duration) * 100 : 100}%)` }}>
-          <span data-end="from" className="absolute -left-[3px] -top-[3px] grid h-[14px] w-[10px] cursor-ew-resize place-items-center">
-            <span className="h-[10px] w-[3px] rounded-full bg-white opacity-0 shadow transition-opacity group-hover/z:opacity-90" />
+          <span data-end="from" className="absolute -left-[4px] top-1/2 grid h-[12px] w-[10px] -translate-y-1/2 cursor-ew-resize place-items-center">
+            <span className="h-[9px] w-[3px] rounded-full bg-white opacity-0 shadow transition-opacity group-hover/z:opacity-90" />
           </span>
-          <span data-end="to" className="absolute -right-[3px] -top-[3px] grid h-[14px] w-[10px] cursor-ew-resize place-items-center">
-            <span className="h-[10px] w-[3px] rounded-full bg-white opacity-0 shadow transition-opacity group-hover/z:opacity-90" />
+          <span data-end="to" className="absolute -right-[4px] top-1/2 grid h-[12px] w-[10px] -translate-y-1/2 cursor-ew-resize place-items-center">
+            <span className="h-[9px] w-[3px] rounded-full bg-white opacity-0 shadow transition-opacity group-hover/z:opacity-90" />
           </span>
         </span>
-        {marks.map((m) => { const t = timeOf(m.ref); return t == null ? null : <span key={m.n} className="pointer-events-none absolute top-1/2 h-[5px] w-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent)]" style={{ left: pct(t) }} />; })}
+        {marks.map((m) => { const t = timeOf(m.ref); return t == null ? null : <span key={m.n} className="pointer-events-none absolute top-1/2 h-[4px] w-[4px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent)]" style={{ left: pct(t) }} />; })}
       </div>
     </div>
   );
@@ -350,11 +352,11 @@ export function MarkNumber({ mark, go, remove, onGo, onRemove }: { mark: Mark; g
   return (
     <span className="group/n relative inline-flex">
       <button type="button" aria-label={`${go} ${mark.n}`} title={go} onPointerDown={stop} onPointerUp={stop} onClick={(e) => { stop(e); onGo(); }}
-        className={`grid h-[16px] min-w-[16px] cursor-pointer place-items-center bg-[var(--accent)] px-1 text-[10.5px] font-semibold leading-none text-[var(--on-accent)] shadow-[0_1px_4px_rgb(0_0_0/.4)] transition hover:brightness-110 ${mark.ref.kind === 'region' ? 'rounded-[5px]' : 'rounded-full'}`}>
+        className={`grid h-[15px] min-w-[15px] cursor-pointer place-items-center bg-[var(--accent)] px-[3px] text-[9.5px] font-semibold leading-none text-[var(--on-accent)] shadow-[0_0_0_2px_var(--bg-viewer)] transition hover:brightness-110 ${mark.ref.kind === 'region' ? 'rounded-[4px]' : 'rounded-full'}`}>
         {mark.n}
       </button>
       <button type="button" aria-label={`${remove} ${mark.n}`} title={remove} onPointerDown={stop} onPointerUp={stop} onClick={(e) => { stop(e); onRemove(); }}
-        className="absolute -right-[9px] -top-[9px] hidden h-[14px] w-[14px] cursor-pointer place-items-center rounded-full bg-[var(--bg-raised)] text-[var(--text)] shadow ring-1 ring-[var(--border-strong)] transition hover:bg-[var(--err)] hover:text-white group-hover/n:grid">
+        className="absolute -right-[8px] -top-[8px] hidden h-[13px] w-[13px] cursor-pointer place-items-center rounded-full bg-[var(--bg-raised)] text-[var(--text)] shadow ring-1 ring-[var(--border-strong)] transition hover:bg-[var(--err)] hover:text-white group-hover/n:grid">
         <X size={8} strokeWidth={3} />
       </button>
     </span>
