@@ -21,10 +21,10 @@ import { momentRef, regionRef } from '@/lib/studio-refs';
 import { Tooltip } from '@/components/Tooltip';
 import { chat, onCommand, project, toast } from '@/studio';
 import { useProject, useProvide } from '@/studio/react';
-import { changedRanges, clock, cuesOf, linkOf, timeLabel, timeOf, type Clock, type Cue, type Range } from './screening-model';
-import { levelOf, Scrubber, useClock, type Mark, type ScrubberHandle } from './Scrubber';
-import { Btn, PATH_HELP, ZoomControl } from './Controls';
-import { Icon, PATH_FULLSCREEN, PATH_FULLSCREEN_EXIT, PATH_PAUSE, PATH_PLAY, SettingsMenu, VolumeControl } from '@/components/player-controls/controls-bar';
+import { changedRanges, clock, cuesOf, linkOf, timeLabel, timeOf, type Clock, type Cue, type Range, type View } from './screening-model';
+import { Scrubber, useClock, type Mark, type ScrubberHandle } from './Scrubber';
+import { Btn, PATH_HELP, SpeedMenu, ZoomChip } from './Controls';
+import { Icon, PATH_FULLSCREEN, PATH_FULLSCREEN_EXIT, PATH_PAUSE, PATH_PLAY, VolumeControl } from '@/components/player-controls/controls-bar';
 import { MOD, ShortcutSheet, useHeldSheet } from './ShortcutSheet';
 import { Stage } from './Stage';
 
@@ -96,7 +96,7 @@ function Screening({ projectId }: { projectId: string }) {
   const [speed, setSpeed] = React.useState<number>(1);
   const [used, learn] = useLessons();
   /* how much of the film the bar shows: closer in, times are read to a tenth or a hundredth */
-  const [shownSpan, setShownSpan] = React.useState(0);
+  const [shownView, setShownView] = React.useState<View>({ from: 0, span: 0 });
   const scrubber = React.useRef<ScrubberHandle>(null);
   /* the picture's width on screen: the bar under it is as wide */
   const [fit, setFit] = React.useState(0);
@@ -170,7 +170,6 @@ function Screening({ projectId }: { projectId: string }) {
   /* the person's volume, as the player keeps it */
   const [sound, setSound] = React.useState({ volume: 1, muted: false });
   const heard = () => setSound({ volume: player.current!.volume, muted: player.current!.muted });
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
   /* full screen: the room itself, the picture and its bar */
   const room = React.useRef<HTMLDivElement>(null);
   const [full, setFull] = React.useState(false);
@@ -274,8 +273,9 @@ function Screening({ projectId }: { projectId: string }) {
     refer({ kind: 'range', start, end, clipIds: [...blocks.picture, ...blocks.sound].filter((x) => x.end > start && x.at < end).map((x) => x.clip.id) });
   };
   const goTo = (mark: Mark) => { const t = timeOf(mark.ref); if (t != null) { pause(); seek(t); } };
-  const onSpan = React.useCallback((span: number) => { setShownSpan(span); if (duration && span < duration - 1e-3) learn('zoom'); }, [duration, learn]);
-  const decimals = duration && shownSpan < duration - 1e-3 ? (shownSpan <= 4 ? 2 : 1) : 0;
+  const onView = React.useCallback((view: View) => { setShownView(view); if (duration && view.span < duration - 1e-3) learn('zoom'); }, [duration, learn]);
+  const closer = duration > 0 && shownView.span > 0 && shownView.span < duration - 1e-3;
+  const decimals = closer ? (shownView.span <= 4 ? 2 : 1) : 0;
   /* the film's picture at `t`, for a picture standing for `step` s: the frame of the shot on top then, cut by Studio
      from its file (to the tenth of a second, or the frame when the pictures are closer than that) */
   const frameAt = React.useCallback((t: number, width: number, step: number) => {
@@ -396,7 +396,7 @@ function Screening({ projectId }: { projectId: string }) {
               barHints: used.zoom ? [] : [w('hintZoom')],
             }}
             onSeek={(t) => { pause(); seek(t); }} onMoment={pointMoment}
-            onRange={pointRange} onGo={goTo} onRemove={unrefer} onSpan={onSpan} />
+            onRange={pointRange} onGo={goTo} onRemove={unrefer} onView={onView} />
           <div className="-mx-1.5 flex h-10 items-center gap-0.5 text-white">
             <Tooltip label={playing ? w('pause') : w('play')} shortcut="Space">
               <Btn label={playing ? w('pause') : w('play')} onClick={toggle}><Icon d={playing ? PATH_PAUSE : PATH_PLAY} /></Btn>
@@ -405,10 +405,9 @@ function Screening({ projectId }: { projectId: string }) {
               onVolumeChange={(v) => { player.current!.setVolume(v); heard(); }}
               onToggleMute={() => { player.current!.setMuted(!player.current!.muted); heard(); }} />
             <TimeNow source={time} decimals={decimals} duration={duration} />
+            {closer ? <ZoomChip from={timeLabel(shownView.from, decimals)} to={timeLabel(shownView.from + shownView.span, decimals)} label={w('zoomed')} wholeLabel={w('kWhole')} onWhole={() => scrubber.current?.whole()} /> : null}
             <span className="flex-1" />
-            <ZoomControl level={levelOf(shownSpan || duration, duration)} label={w('zoomIn')} wholeLabel={w('kWhole')}
-              onLevel={(level) => (level > 0 ? scrubber.current?.setLevel(level) : scrubber.current?.whole())} />
-            <SettingsMenu open={settingsOpen} onOpenChange={setSettingsOpen} rate={speed} onRateChange={rate} />
+            <SpeedMenu rate={speed} label={w('speed')} normal={w('speedNormal')} onRate={rate} />
             <Tooltip label={`${w('help')} · ${w('helpHold', { mod: MOD })}`} shortcut="?">
               <Btn label={w('help')} active={sheetOpen} onClick={() => setSheetOpen((open) => !open)}><Icon d={PATH_HELP} /></Btn>
             </Tooltip>

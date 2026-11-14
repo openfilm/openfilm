@@ -39,7 +39,7 @@
   "keysTitle": "Teclas",
   "kHelp": "Cómo funciona",
   "watchTitle": "Ver",
-  "watchText": "Clic en la imagen o Espacio para reproducir. Arrastra por la tira para ver. Con el puntero sobre ella aparece debajo una barra de zoom: arrastra sus extremos para ampliar; o desplaza sobre la tira, o usa la lupa abajo a la derecha.",
+  "watchText": "Clic en la imagen o Espacio para reproducir. Arrastra por la tira para ver. Desplaza o pellizca sobre ella para ampliar, desliza de lado para moverte; la × junto al tiempo, o 0, vuelve a toda la película.",
   "timeTitle": "Señalar un tiempo",
   "timeText": "Con el puntero sobre la tira aparece encima la fila de marcas: un clic señala este momento, arrastrar elige un tramo, con la imagen siguiéndote.",
   "pictureTitle": "Señalar la imagen",
@@ -50,7 +50,8 @@
   "helpHold": "o mantén {mod}",
   "mute": "Silenciar",
   "unmute": "Activar sonido",
-  "zoomIn": "Ampliar la barra",
   "kFull": "Pantalla completa",
-  "exitFull": "Salir de pantalla completa"
+  "exitFull": "Salir de pantalla completa",
+  "zoomed": "Ampliado: el tramo que se ve",
+  "speedNormal": "Normal"
 }

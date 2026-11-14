@@ -1,14 +1,12 @@
 /**
  * The film along a line, as a strip of its frames, the playhead a line on it: a click goes there, a drag runs the
- * picture along. What is pointed at and what the agent changed are marked on it. While the pointer is on it, two
- * thin rows come round it:
- *  - above, the marks row: a click there points at that moment, a drag picks a stretch (the picture following the
- *    pointer; Esc lets go of it). What the message being written points at is numbered there as the chat numbers it
- *    (shown always): a number goes to its place, its × takes it out.
- *  - below, the zoom bar: the whole film, the part shown as its thumb. Its ends bring the film closer (down to a
- *    second across the strip) or farther, its middle drags along, a double click shows the whole film. Scrolling or
- *    pinching over the strip does the same around the pointer.
- */
+ * picture along. What is pointed at and what the agent changed are marked on it. Scrolling or pinching over it brings
+ * the film closer (down to a second across the strip) or farther, around the pointer; sideways (or with ⇧) moves along
+ * it, as does a drag held past either end.
+ *
+ * While the pointer is on it, the marks row shows above it: a click there points at that moment, a drag picks a
+ * stretch (the picture following the pointer; Esc lets go of it). What the message being written points at is
+ * numbered there as the chat numbers it, shown always: a number goes to its place, its × takes it out. */
 import * as React from 'react';
 import { X } from 'lucide-react';
 import type { StudioRef } from '@/lib/host';
@@ -22,12 +20,8 @@ export function useClock(source: Clock): number {
 /** What the message being written points at, with its number there. */
 export interface Mark { n: number; ref: StudioRef }
 
-/** What the bar can be asked from outside (the keys, the zoom control). */
-export interface ScrubberHandle {
-  zoomIn(): void; zoomOut(): void; whole(): void;
-  /** how close, from 0 (the whole film) to 1 (the closest), around the playhead */
-  setLevel(level: number): void;
-}
+/** What the bar can be asked from outside (the keys, the time's zoom chip). */
+export interface ScrubberHandle { zoomIn(): void; zoomOut(): void; whole(): void }
 
 /** How far the pointer moves before a press on the marks row is a drag (a stretch), px. */
 const DRAG_PX = 4;
@@ -37,13 +31,7 @@ const STRIP_H = 36;
 /** A frame, s. */
 const FRAME = 1 / 30;
 /** The closest the bar comes: this many seconds across it. */
-export const LEAST_S = 1;
-
-/** How close a view is, from 0 (the whole film) to 1 (`LEAST_S` across), on a scale that doubles evenly. */
-export function levelOf(span: number, duration: number): number {
-  const most = Math.log(Math.max(1, duration / LEAST_S));
-  return most > 0 && span > 0 ? Math.max(0, Math.min(1, Math.log(duration / span) / most)) : 0;
-}
+const LEAST_S = 1;
 
 export const Scrubber = React.forwardRef<ScrubberHandle, {
   duration: number; clock: Clock;
@@ -59,9 +47,9 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
   words: { go: string; remove: string; lane: string | null; laneHints: readonly string[]; barHints: readonly string[] };
   onSeek: (t: number) => void; onMoment: (t: number) => void; onRange: (a: number, b: number) => void;
   onGo: (mark: Mark) => void; onRemove: (ref: StudioRef) => void;
-  /** how much of the film the bar shows now, s */
-  onSpan: (span: number) => void;
-}>(function Scrubber({ duration, clock, aspect, frameAt, marks, changes, words, onSeek, onMoment, onRange, onGo, onRemove, onSpan }, handle) {
+  /** the part of the film the bar shows now */
+  onView: (view: View) => void;
+}>(function Scrubber({ duration, clock, aspect, frameAt, marks, changes, words, onSeek, onMoment, onRange, onGo, onRemove, onView }, handle) {
   const wrap = React.useRef<HTMLDivElement>(null);
   const strip = React.useRef<HTMLDivElement>(null);
   const width = useWidth(strip);
@@ -83,14 +71,8 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
     zoomIn: () => zoomAt(clock.get(), 0.5),
     zoomOut: () => zoomAt(clock.get(), 2),
     whole: () => show(null),
-    setLevel: (level) => {
-      const { v, duration } = live.current;
-      if (!duration) return;
-      const span = duration * (LEAST_S / duration) ** Math.max(0, Math.min(1, level));
-      zoomAt(v.span ? Math.max(v.from, Math.min(clock.get(), v.from + v.span)) : clock.get(), span / (v.span || duration));
-    },
   }), [zoomAt, show, clock]);
-  React.useEffect(() => { onSpan(v.span); }, [v.span, onSpan]);
+  React.useEffect(() => { onView(v); }, [v.from, v.span, onView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* the pointer on the bar (its rows come round it then), over which row, its time and place */
   const [inside, setInside] = React.useState(false);
@@ -107,7 +89,7 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
     return v.from + Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * v.span;
   };
   const xAt = (clientX: number) => clientX - strip.current!.getBoundingClientRect().left;
-  /* the rows round the strip: shown while the pointer is on the bar, or something on it is held */
+  /* the marks row: shown while the pointer is on the bar, or something on it is held */
   const rows = inside || held || Boolean(span);
 
   /* scrolling or pinching over the bar: closer or farther around the pointer; sideways: along the film */
@@ -121,7 +103,8 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
       const line = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
       const dx = e.deltaX * line, dy = e.deltaY * line;
       const r = strip.current.getBoundingClientRect();
-      if (e.ctrlKey || e.metaKey || Math.abs(dy) > Math.abs(dx)) {
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey) { if (v.span < duration) show({ from: v.from + ((dy || dx) / r.width) * v.span, span: v.span }); }
+      else if (e.ctrlKey || e.metaKey || Math.abs(dy) > Math.abs(dx)) {
         const at = v.from + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * v.span;
         /* a pinch comes as small steps with Ctrl held; a wheel as large ones */
         zoomAt(at, Math.exp(Math.max(-60, Math.min(60, dy)) * (e.ctrlKey ? 0.02 : 0.005)));
@@ -183,7 +166,12 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
   const stripMove = (e: React.PointerEvent) => {
     const t = timeAt(e.clientX);
     setHover({ row: 'strip', t, x: xAt(e.clientX) });
-    if (press.current?.row === 'strip') onSeek(t);
+    if (press.current?.row !== 'strip') return;
+    /* held past an end, closer in: the film moves along under it */
+    const r = strip.current!.getBoundingClientRect();
+    const past = e.clientX < r.left ? e.clientX - r.left : e.clientX > r.right ? e.clientX - r.right : 0;
+    if (past && close) show({ from: v.from + (past / r.width) * v.span * 0.25, span: v.span });
+    onSeek(t);
   };
   const stripUp = () => { press.current = null; setHeld(false); };
   /* ── the marks row: a click points at that moment, a drag at a stretch, the picture following ── */
@@ -260,10 +248,6 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
           <Playhead clock={clock} at={(t) => (seen(t) ? left(t) : null)} />
         </div>
       </div>
-      {/* the zoom bar */}
-      <div className={`mt-[3px] h-[10px] ${fade}`}>
-        <ZoomBar duration={duration} view={v} marks={marks} onView={show} onHold={setHeld} />
-      </div>
       {/* over the bar: the time under the pointer (or the stretch being picked), and how that row is used until it has been */}
       {hover && duration ? (
         <div className="pointer-events-none absolute bottom-full z-40 mb-1.5 flex -translate-x-1/2 flex-col items-center"
@@ -309,63 +293,6 @@ function placeNumbers(marks: readonly Mark[], xOf: (t: number) => number | null)
 function Playhead({ clock, at }: { clock: Clock; at: (t: number) => string | null }) {
   const left = at(useClock(clock));
   return left == null ? null : <span className="absolute inset-y-0 w-[2px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgb(0_0_0/.35),0_0_8px_rgb(255_255_255/.35)]" style={{ left }} />;
-}
-
-/**
- * The zoom bar: the whole film, the part shown as its thumb. The thumb's ends bring the film closer or farther, its
- * middle drags along; a press beside it brings that part; a double click shows the whole film. What is pointed at is
- * dotted on it, so what is out of sight can be found.
- */
-function ZoomBar({ duration, view, marks, onView, onHold }: {
-  duration: number; view: View; marks: readonly Mark[]; onView: (v: View | null) => void; onHold: (held: boolean) => void;
-}) {
-  const track = React.useRef<HTMLDivElement>(null);
-  const grab = React.useRef<{ part: 'from' | 'to' | 'move'; t: number; from: number; span: number } | null>(null);
-  const pct = (t: number) => `${duration ? (t / duration) * 100 : 0}%`;
-  const timeAt = (clientX: number) => {
-    const r = track.current!.getBoundingClientRect();
-    return Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * duration;
-  };
-  const whole = !(view.span < duration - 1e-3);
-  const letGo = () => { grab.current = null; onHold(false); };
-  return (
-    <div data-zoom="" className="group/z relative h-full touch-none select-none"
-      onPointerDown={(e) => {
-        if (e.button !== 0 || !duration) return;
-        e.currentTarget.setPointerCapture(e.pointerId);
-        onHold(true);
-        const t = timeAt(e.clientX);
-        const part = ((e.target as HTMLElement).closest('[data-end]') as HTMLElement | null)?.dataset.end as 'from' | 'to' | undefined;
-        if (part) { grab.current = { part, t, from: view.from, span: view.span }; return; }
-        const inside = t >= view.from && t <= view.from + view.span;
-        const from = inside ? view.from : t - view.span / 2;
-        if (!inside) onView({ from, span: view.span });
-        grab.current = { part: 'move', t, from, span: view.span };
-      }}
-      onPointerMove={(e) => {
-        const g = grab.current;
-        if (!g) return;
-        const dt = timeAt(e.clientX) - g.t, end = g.from + g.span;
-        if (g.part === 'move') onView({ from: g.from + dt, span: g.span });
-        else if (g.part === 'from') { const from = Math.max(0, Math.min(g.from + dt, end - LEAST_S)); onView({ from, span: end - from }); }
-        else { const to = Math.min(duration, Math.max(end + dt, g.from + LEAST_S)); onView({ from: g.from, span: to - g.from }); }
-      }}
-      onPointerUp={letGo} onPointerCancel={letGo}
-      onDoubleClick={() => onView(null)}>
-      <div ref={track} className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-white/[.07] transition-[height] group-hover/z:h-[5px]">
-        <span className={`absolute inset-y-0 cursor-grab rounded-full transition-colors active:cursor-grabbing ${whole ? 'bg-white/20 group-hover/z:bg-white/30' : 'bg-white/45 group-hover/z:bg-white/65'}`}
-          style={{ left: pct(view.from), width: `max(14px, ${duration ? (view.span / duration) * 100 : 100}%)` }}>
-          <span data-end="from" className="absolute -left-[5px] top-1/2 grid h-[12px] w-[10px] -translate-y-1/2 cursor-ew-resize place-items-center">
-            <span className="h-[9px] w-[3px] rounded-full bg-white opacity-60 shadow transition-opacity group-hover/z:opacity-95" />
-          </span>
-          <span data-end="to" className="absolute -right-[5px] top-1/2 grid h-[12px] w-[10px] -translate-y-1/2 cursor-ew-resize place-items-center">
-            <span className="h-[9px] w-[3px] rounded-full bg-white opacity-60 shadow transition-opacity group-hover/z:opacity-95" />
-          </span>
-        </span>
-        {marks.map((m) => { const t = timeOf(m.ref); return t == null ? null : <span key={m.n} className="pointer-events-none absolute top-1/2 h-[4px] w-[4px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent)]" style={{ left: pct(t) }} />; })}
-      </div>
-    </div>
-  );
 }
 
 /** A mark's number: a click goes to it; its × (under the pointer) takes it out. A box's number is square, as its box. */

@@ -273,7 +273,7 @@ export function VolumeControl({
  * The settings panel: a root row (playback speed) that opens a list. As YouTube: icon left, current value and a chevron
  * right; the list starts with a "‹ title" row back to the root.
  */
-export function SettingsMenu({
+function SettingsMenu({
   open,
   onOpenChange,
   rate,
