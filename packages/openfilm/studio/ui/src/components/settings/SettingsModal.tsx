@@ -29,8 +29,9 @@ import { LibraryCategoriesGroup } from './LibraryCategoriesGroup';
 export type SettingsSection = 'general' | 'agents' | 'models' | 'developer' | 'shortcuts' | 'advanced';
 
 /* the nav, in groups: what OpenFilm does, then help (Agents only inside an app with a chat: lib/host.ts `agents`;
-   Advanced for what is already set for the best experience; Developer always, for its diagnostics) */
-const NAV: Array<{ group: 'settings' | 'help'; sections: SettingsSection[] }> = [
+   Advanced for what is already set for the best experience; Developer always, for its diagnostics). Read as it is
+   shown: the app may give Studio its host after this module has run (a build split into several files) */
+const navNow = (): Array<{ group: 'settings' | 'help'; sections: SettingsSection[] }> => [
   { group: 'settings', sections: ['general', ...(studioHost?.agents ? ['agents' as const] : []), 'models'] },
   { group: 'help', sections: ['shortcuts', 'advanced', 'developer'] },
 ];
@@ -89,7 +90,7 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
     id, [t(`settings.sections.${id}`), ...[SECTION_WORDS[id]].flat().flatMap((under) => phrasesUnder(under, language))].join('\n').toLowerCase(),
   ])) as Record<SettingsSection, string>, [t, language]);
   const needle = query.trim().toLowerCase();
-  const nav = NAV.map((group) => ({ ...group, sections: group.sections.filter((id) => !needle || words[id].includes(needle)) }))
+  const nav = navNow().map((group) => ({ ...group, sections: group.sections.filter((id) => !needle || words[id].includes(needle)) }))
     .filter((group) => group.sections.length > 0);
   const found = nav.flatMap((group) => group.sections);
   const showing: SettingsSection | null = found.includes(section) ? section : found[0] ?? null;
