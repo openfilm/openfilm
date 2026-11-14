@@ -1,0 +1,22 @@
+{
+  "order": 0,
+  "icon": "clapperboard",
+  "title": {
+    "en": "Screening",
+    "zh-CN": "放映",
+    "ja": "試写",
+    "ko": "시사",
+    "es": "Proyección"
+  },
+  "summary": {
+    "en": "Watch the film, point at what to change and say it. No editing skills needed.",
+    "zh-CN": "看片子，指着要改的地方说一句。不用会剪辑。",
+    "ja": "映像を見て、直したいところを指して一言。編集の知識はいりません。",
+    "ko": "영상을 보고 고칠 곳을 가리키며 한마디. 편집을 몰라도 됩니다.",
+    "es": "Mira el vídeo, señala lo que quieres cambiar y dilo. No hace falta saber editar."
+  },
+  "about": "watching the film and pointing at what to change, for the chat",
+  "workbench": "screening",
+  "on": true,
+  "skills": []
+}
