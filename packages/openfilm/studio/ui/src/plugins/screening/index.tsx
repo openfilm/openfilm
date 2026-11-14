@@ -21,8 +21,8 @@ import { momentRef, regionRef } from '@/lib/studio-refs';
 import { Tooltip } from '@/components/Tooltip';
 import { chat, onCommand, project, toast } from '@/studio';
 import { useProject, useProvide } from '@/studio/react';
-import { changedRanges, clock, cuesOf, linkOf, timeLabel, timeOf, type Clock, type Cue, type Range, type View } from './screening-model';
-import { Scrubber, useClock, type Mark, type ScrubberHandle } from './Scrubber';
+import { changedRanges, clock, cuesOf, linkOf, placeOf, sameRef, timeLabel, timeOf, type Clock, type Cue, type Range, type View } from './screening-model';
+import { Scrubber, useClock, type Mark, type MarkState, type ScrubberHandle } from './Scrubber';
 import { Btn, PATH_HELP, SpeedMenu } from './Controls';
 import { Icon, PATH_FULLSCREEN, PATH_FULLSCREEN_EXIT, PATH_PAUSE, PATH_PLAY, VolumeControl } from '@/components/player-controls/controls-bar';
 import { MOD, ShortcutSheet, useHeldSheet } from './ShortcutSheet';
@@ -45,6 +45,8 @@ const FRAME_S = 1 / 30;
 /** Before each change watched, this much of what comes before it, s. */
 const LEAD_S = 1;
 const SPEEDS = [1, 1.5, 2] as const;
+/** How long a mark found rings, ms. */
+const FLASH_MS = 1600;
 
 /** A clip of the film where it plays, and whether it is seen or heard. */
 interface Block { clip: import('@/api').Clip; track: number; at: number; end: number; kind: 'picture' | 'sound' }
@@ -111,6 +113,8 @@ function Screening({ projectId }: { projectId: string }) {
   const player = React.useRef<Player | null>(null);
   player.current ??= new Player();
   const shown = state?.shown === 'screening';
+  const shownRef = React.useRef(shown);
+  shownRef.current = shown;
   const folder = state?.film ?? null;
   const stage = film?.stage ?? STAGE;
   const duration = info?.duration ?? 0;
@@ -222,17 +226,42 @@ function Screening({ projectId }: { projectId: string }) {
   const blocks = React.useMemo(() => blocksOf(film, info?.spans ?? []), [film, info]);
 
   /* ── what the chat's message points at; a link to the film opened here ── */
-  React.useEffect(() => onCommand((command) => { if (command.type === 'draft-refs') setDraft(command.refs); }), []);
+  /*
+   * A reference and its pill point at each other. The chat's pill under the pointer lights its mark here (`lit`); a
+   * pill pressed goes to its place here and rings its mark once (`flash`). The pointer over a mark here lights its pill
+   * in the chat; a mark's number pressed rings its pill there as well.
+   */
+  const [lit, setLit] = React.useState<StudioRef | null>(null);
+  const [flash, setFlash] = React.useState<{ ref: StudioRef; seq: number } | null>(null);
+  const found = React.useCallback((ref: StudioRef) => setFlash((was) => ({ ref, seq: (was?.seq ?? 0) + 1 })), []);
+  React.useEffect(() => { if (!flash) return; const timer = setTimeout(() => setFlash(null), FLASH_MS); return () => clearTimeout(timer); }, [flash]);
+  const stateOf = React.useCallback((ref: StudioRef): MarkState => (flash && sameRef(flash.ref, ref) ? 'flash' : lit && sameRef(lit, ref) ? 'lit' : null), [flash, lit]);
+  const hoverMark = React.useCallback((ref: StudioRef | null) => chat.hover?.(ref), []);
+  const goNow = React.useRef<(t: number) => void>(() => {});
+  goNow.current = (t) => { pause(); seek(t); };
+  React.useEffect(() => onCommand((command) => {
+    if (command.type === 'draft-refs') { setDraft(command.refs); return; }
+    if (command.type === 'highlight') { setLit(command.ref ?? null); return; }
+    if (!shownRef.current) return;
+    if (command.type === 'seek' && Number.isFinite(command.time)) { goNow.current(command.time); found({ kind: 'time', time: command.time }); }
+    else if (command.type === 'show-range' && Number.isFinite(command.start)) { goNow.current(command.start); found({ kind: 'range', start: command.start, end: command.end, clipIds: [] }); }
+    else if (command.type === 'show-box' && Number.isFinite(command.time)) { goNow.current(command.time); found({ kind: 'region', time: command.time, box: command.box, clipIds: [], texts: [] }); }
+    else if (command.type === 'select-clip' && command.seek) {
+      const block = [...blocksRef.current.picture, ...blocksRef.current.sound].find((b) => b.clip.id === command.id);
+      if (block) goNow.current(block.at);
+    }
+  }), [found]);
   const blocksRef = React.useRef(blocks);
   blocksRef.current = blocks;
+  /* a link to the film (a pill pressed in the chat, a link in a reply): its place shown, and the mark there rung */
   useProvide('screening', {
     opens: ['film.html'],
     show: (link) => {
-      const fragment = link.split('#')[1] ?? '';
-      const span = /^t=([\d.]+)/.exec(fragment);
-      if (span) { pause(); seek(Number(span[1])); return; }
-      const clip = fragment ? [...blocksRef.current.picture, ...blocksRef.current.sound].find((b) => b.clip.id === fragment) : undefined;
-      if (clip) { pause(); seek(clip.at); }
+      const place = placeOf(link.split('#')[1] ?? '');
+      if (place) { goNow.current(place.at); found(place.ref); return; }
+      const id = link.split('#')[1];
+      const clip = id ? [...blocksRef.current.picture, ...blocksRef.current.sound].find((b) => b.clip.id === id) : undefined;
+      if (clip) goNow.current(clip.at);
     },
   });
 
@@ -272,7 +301,16 @@ function Screening({ projectId }: { projectId: string }) {
     learn('range');
     refer({ kind: 'range', start, end, clipIds: [...blocks.picture, ...blocks.sound].filter((x) => x.end > start && x.at < end).map((x) => x.clip.id) });
   };
-  const goTo = (mark: Mark) => { const t = timeOf(mark.ref); if (t != null) { pause(); seek(t); } };
+  /* a mark's number pressed: its place, and its pill rung in the chat too */
+  const goTo = (mark: Mark) => {
+    const t = timeOf(mark.ref);
+    if (t == null) return;
+    pause();
+    seek(t);
+    found(mark.ref);
+    chat.hover?.(mark.ref);
+    setTimeout(() => chat.hover?.(null), FLASH_MS);
+  };
   const onView = React.useCallback((view: View) => { setShownView(view); if (duration && view.span < duration - 1e-3) learn('zoom'); }, [duration, learn]);
   const closer = duration > 0 && shownView.span > 0 && shownView.span < duration - 1e-3;
   const decimals = closer ? (shownView.span <= 4 ? 2 : 1) : 0;
@@ -385,7 +423,7 @@ function Screening({ projectId }: { projectId: string }) {
         marks={marks} clock={time} playing={playing} hint={used.box ? null : w('teachBox')}
         unread={unread ? w('notRead') : null} over={floating} removeLabel={w('remove')}
         empty={empty ? { title: w('emptyTitle'), sub: state.chat ? w('emptySub') : w('emptyBrowserSub'), ...(state.chat && !state.chat.open ? { openChat: { label: w('openChat'), onOpen: state.chat.toggle } } : {}) } : null}
-        onFit={setFit} onToggle={toggle} onDragStart={pause} onBox={pointBox} onRemove={(m) => unrefer(m.ref)} />
+        onFit={setFit} onToggle={toggle} onDragStart={pause} onBox={pointBox} onRemove={(m) => unrefer(m.ref)} stateOf={stateOf} onHoverMark={hoverMark} />
       {empty ? null : (
         /* under the picture and as wide: the marks and the progress bar, then the player's row of controls */
         <div className="mx-auto flex w-full shrink-0 flex-col" style={{ maxWidth: Math.max(560, fit) }}>
@@ -396,7 +434,7 @@ function Screening({ projectId }: { projectId: string }) {
               barHints: used.zoom ? [] : [w('hintZoom')],
             }}
             onSeek={(t) => { pause(); seek(t); }} onMoment={pointMoment}
-            onRange={pointRange} onGo={goTo} onRemove={unrefer} onView={onView} />
+            onRange={pointRange} onGo={goTo} onRemove={unrefer} stateOf={stateOf} onHoverMark={hoverMark} onView={onView} />
           <div className="-mx-1.5 flex h-10 items-center gap-0.5 text-white">
             <Tooltip label={playing ? w('pause') : w('play')} shortcut="Space">
               <Btn label={playing ? w('pause') : w('play')} onClick={toggle}><Icon d={playing ? PATH_PAUSE : PATH_PLAY} /></Btn>

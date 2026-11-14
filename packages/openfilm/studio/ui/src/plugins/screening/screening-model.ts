@@ -67,6 +67,42 @@ export function timeOf(ref: StudioRef): number | null {
   }
 }
 
+/**
+ * Whether two references point at the same thing (a pill in the chat and a mark here): the same kind, at the same
+ * times (to the hundredth of a second), a box of the same place.
+ */
+export function sameRef(a: StudioRef, b: StudioRef): boolean {
+  const near = (x: number, y: number) => Math.abs(x - y) < 0.01;
+  if (a.kind !== b.kind) return false;
+  switch (a.kind) {
+    case 'time': return b.kind === 'time' && near(a.time, b.time);
+    case 'range': return b.kind === 'range' && near(a.start, b.start) && near(a.end, b.end);
+    case 'region': return b.kind === 'region' && near(a.time, b.time)
+      && (['x', 'y', 'w', 'h'] as const).every((key) => Math.abs(a.box[key] - b.box[key]) < 1);
+    case 'file': return b.kind === 'file' && a.path === b.path;
+    default: return false;
+  }
+}
+
+/**
+ * The place a link's fragment names on the film, as a media fragment does (W3C Media Fragments URI): `t=12.5` a
+ * moment, `t=12,16` a stretch, `t=12.5&xywh=640,200,320,180` a part of the picture then (in the stage's pixels).
+ * `at`: where to go; `ref`: what it points at. Null: no place.
+ */
+export function placeOf(fragment: string): { at: number; ref: StudioRef } | null {
+  const params = new Map(fragment.split('&').map((part) => { const i = part.indexOf('='); return [part.slice(0, i), part.slice(i + 1)] as const; }));
+  const t = /^(\d+(?:\.\d+)?)(?:,(\d+(?:\.\d+)?))?$/.exec(params.get('t') ?? '');
+  if (!t) return null;
+  const start = Number(t[1]);
+  const xywh = /^(?:pixel:)?(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/.exec(params.get('xywh') ?? '');
+  if (xywh) {
+    const [x, y, w, h] = xywh.slice(1).map(Number) as [number, number, number, number];
+    return { at: start, ref: { kind: 'region', time: start, box: { x, y, w, h }, clipIds: [], texts: [] } };
+  }
+  if (t[2] != null && Number(t[2]) > start) return { at: start, ref: { kind: 'range', start, end: Number(t[2]), clipIds: [] } };
+  return { at: start, ref: { kind: 'time', time: start } };
+}
+
 /** Every clip of a film by its id. */
 const clipsOf = (film: Film | null): Map<string, Clip> => new Map((film?.tracks ?? []).flatMap((t) => t.clips.map((c) => [c.id, c] as const)));
 

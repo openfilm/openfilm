@@ -9,10 +9,10 @@ import { Clapperboard, MessageCircle, SquareDashed, X } from 'lucide-react';
 import { Preview, type FilmInfo, type PreviewHandle } from '@/editor/Preview';
 import type { StageBox } from '@/lib/host';
 import { REGION_MIN_PX } from '@/lib/studio-refs';
-import { useClock, type Mark } from './Scrubber';
+import { useClock, type Mark, type MarkState } from './Scrubber';
 import type { Clock } from './screening-model';
 
-export function Stage({ stage, folder, preview, time, onInfo, marks, clock, playing, hint, empty, unread, over, onFit, onToggle, onDragStart, onBox, onRemove, removeLabel }: {
+export function Stage({ stage, folder, preview, time, onInfo, marks, clock, playing, hint, empty, unread, over, onFit, onToggle, onDragStart, onBox, onRemove, removeLabel, stateOf, onHoverMark }: {
   stage: { w: number; h: number }; folder: string; preview: React.RefObject<PreviewHandle | null>; time: () => number;
   onInfo: (info: FilmInfo) => void; marks: readonly Mark[]; clock: Clock; playing: boolean;
   /** said over the picture while the pointer is on it, stopped: how to circle a part */
@@ -21,6 +21,8 @@ export function Stage({ stage, folder, preview, time, onInfo, marks, clock, play
   /** the picture's width on screen, px, each time it changes */
   onFit: (width: number) => void;
   onToggle: () => void; onDragStart: () => void; onBox: (box: StageBox) => void; onRemove: (mark: Mark) => void; removeLabel: string;
+  /** how each box is shown (its pill hovered or pressed in the chat); the pointer over a box here (null: off it) */
+  stateOf: (ref: Mark['ref']) => MarkState; onHoverMark: (ref: Mark['ref'] | null) => void;
 }) {
   const room = React.useRef<HTMLDivElement>(null);
   const [size, setSize] = React.useState({ w: 0, h: 0 });
@@ -63,7 +65,7 @@ export function Stage({ stage, folder, preview, time, onInfo, marks, clock, play
           }}>
           {drag && Math.abs(drag.x2 - drag.x1) >= REGION_MIN_PX ? <span className="absolute rounded-[4px] border-2 border-[color:var(--accent)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]"
             style={{ left: Math.min(drag.x1, drag.x2), top: Math.min(drag.y1, drag.y2), width: Math.abs(drag.x2 - drag.x1), height: Math.abs(drag.y2 - drag.y1) }} /> : null}
-          <Boxes marks={marks} clock={clock} k={k} onRemove={onRemove} removeLabel={removeLabel} />
+          <Boxes marks={marks} clock={clock} k={k} onRemove={onRemove} removeLabel={removeLabel} stateOf={stateOf} onHover={onHoverMark} />
         </div>
         {empty || unread ? (
           <div className="pointer-events-none absolute inset-0 grid place-items-center bg-[var(--bg-viewer)] p-8">
@@ -97,23 +99,41 @@ export function Stage({ stage, folder, preview, time, onInfo, marks, clock, play
   );
 }
 
-/** The boxes pointed at, shown at their moment (a box means the picture then). */
-function Boxes({ marks, clock, k, onRemove, removeLabel }: { marks: readonly Mark[]; clock: Clock; k: number; onRemove: (mark: Mark) => void; removeLabel: string }) {
+/**
+ * The boxes pointed at, shown at their moment (a box means the picture then); one whose pill is under the pointer in the
+ * chat is shown whatever the moment, so what the pill means is seen, and one just found rings once.
+ */
+function Boxes({ marks, clock, k, onRemove, removeLabel, stateOf, onHover }: {
+  marks: readonly Mark[]; clock: Clock; k: number; onRemove: (mark: Mark) => void; removeLabel: string;
+  stateOf: (ref: Mark['ref']) => MarkState; onHover: (ref: Mark['ref'] | null) => void;
+}) {
   const t = useClock(clock);
   return (
     <>
-      {marks.map((m) => (m.ref.kind === 'region' && Math.abs(m.ref.time - t) < 0.08 ? (
-        <span key={m.n} className="absolute rounded-[3px]"
-          style={{ left: m.ref.box.x * k, top: m.ref.box.y * k, width: m.ref.box.w * k, height: m.ref.box.h * k, border: '2px solid var(--accent)', boxShadow: '0 0 0 1px rgb(0 0 0 / .45), inset 0 0 0 1px rgb(0 0 0 / .25)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
-          <span className="pointer-events-none absolute -left-[10px] -top-[10px] grid h-5 min-w-5 place-items-center rounded-[6px] bg-[var(--accent)] px-1 text-[11px] font-semibold text-[var(--on-accent)] shadow">{m.n}</span>
-          <button type="button" aria-label={`${removeLabel} ${m.n}`} title={removeLabel}
-            onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onRemove(m); }}
-            className="absolute -right-[10px] -top-[10px] grid h-5 w-5 place-items-center rounded-full bg-[var(--bg-raised)] text-[var(--text)] shadow ring-1 ring-[var(--border-strong)] transition hover:bg-[var(--err)] hover:text-white">
-            <X size={12} strokeWidth={2.4} />
-          </button>
-        </span>
-      ) : null))}
+      {marks.map((m) => {
+        if (m.ref.kind !== 'region') return null;
+        const state = stateOf(m.ref);
+        const now = Math.abs(m.ref.time - t) < 0.08;
+        if (!now && !state) return null;
+        return (
+          <span key={m.n} className="absolute rounded-[3px] transition-[box-shadow,background-color]"
+            onPointerEnter={() => onHover(m.ref)} onPointerLeave={() => onHover(null)}
+            style={{
+              left: m.ref.box.x * k, top: m.ref.box.y * k, width: m.ref.box.w * k, height: m.ref.box.h * k,
+              border: `2px ${now ? 'solid' : 'dashed'} var(--accent)`,
+              boxShadow: state ? '0 0 0 1px rgb(0 0 0 / .45), 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 24px color-mix(in srgb, var(--accent) 45%, transparent)' : '0 0 0 1px rgb(0 0 0 / .45), inset 0 0 0 1px rgb(0 0 0 / .25)',
+              background: `color-mix(in srgb, var(--accent) ${state ? 16 : 8}%, transparent)`,
+            }}>
+            {state === 'flash' ? <span className="pointer-events-none absolute -inset-[2px] animate-ping rounded-[4px] border-2 border-[var(--accent)]" style={{ animationIterationCount: 2 }} /> : null}
+            <span className="pointer-events-none absolute -left-[10px] -top-[10px] grid h-5 min-w-5 place-items-center rounded-[6px] bg-[var(--accent)] px-1 text-[11px] font-semibold text-[var(--on-accent)] shadow">{m.n}</span>
+            <button type="button" aria-label={`${removeLabel} ${m.n}`} title={removeLabel}
+              onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onRemove(m); }}
+              className="absolute -right-[10px] -top-[10px] grid h-5 w-5 place-items-center rounded-full bg-[var(--bg-raised)] text-[var(--text)] shadow ring-1 ring-[var(--border-strong)] transition hover:bg-[var(--err)] hover:text-white">
+              <X size={12} strokeWidth={2.4} />
+            </button>
+          </span>
+        );
+      })}
     </>
   );
 }
-

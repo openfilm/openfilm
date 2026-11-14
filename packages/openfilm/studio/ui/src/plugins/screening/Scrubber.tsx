@@ -20,6 +20,12 @@ export function useClock(source: Clock): number {
 /** What the message being written points at, with its number there. */
 export interface Mark { n: number; ref: StudioRef }
 
+/**
+ * How a mark is shown besides itself: `lit` while its pill in the chat is under the pointer, `flash` a moment after
+ * its pill (or its number here) was pressed, so it is found; null: plainly.
+ */
+export type MarkState = 'lit' | 'flash' | null;
+
 /** What the bar can be asked from outside (the keys, the time's zoom chip). */
 export interface ScrubberHandle { zoomIn(): void; zoomOut(): void; whole(): void }
 
@@ -49,9 +55,11 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
   words: { go: string; remove: string; lane: string | null; laneHints: readonly string[]; barHints: readonly string[] };
   onSeek: (t: number) => void; onMoment: (t: number) => void; onRange: (a: number, b: number) => void;
   onGo: (mark: Mark) => void; onRemove: (ref: StudioRef) => void;
+  /** how each mark is shown (its pill hovered or pressed in the chat); the pointer over a mark here (null: off it) */
+  stateOf: (ref: StudioRef) => MarkState; onHoverMark: (ref: StudioRef | null) => void;
   /** the part of the film the bar shows now */
   onView: (view: View) => void;
-}>(function Scrubber({ duration, clock, aspect, frameAt, marks, changes, words, onSeek, onMoment, onRange, onGo, onRemove, onView }, handle) {
+}>(function Scrubber({ duration, clock, aspect, frameAt, marks, changes, words, onSeek, onMoment, onRange, onGo, onRemove, stateOf, onHoverMark, onView }, handle) {
   const wrap = React.useRef<HTMLDivElement>(null);
   const strip = React.useRef<HTMLDivElement>(null);
   const width = useWidth(strip);
@@ -215,7 +223,7 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
             its end, its number at its start; a moment and a box are a pin on their moment */}
         <div className="pointer-events-none absolute inset-0">
           {marks.map((m) => (m.ref.kind === 'range' && m.ref.end - m.ref.start < duration - 0.05 && seen(m.ref.start, m.ref.end)
-            ? <span key={`r${m.n}`} className="absolute rounded-full bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_60%,transparent)]"
+            ? <span key={`r${m.n}`} className={`absolute rounded-full transition-colors ${stateOf(m.ref) ? 'bg-[color-mix(in_srgb,var(--accent)_42%,transparent)] shadow-[inset_0_0_0_1.5px_var(--accent),0_0_12px_color-mix(in_srgb,var(--accent)_55%,transparent)]' : 'bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_60%,transparent)]'}`}
                 style={{ top: (LANE_H - BADGE) / 2, height: BADGE, left: left(Math.max(m.ref.start, v.from)), width: `max(${BADGE}px, ${across(m.ref.start, m.ref.end)})` }} />
             : null))}
           {span ? <span className="absolute rounded-full bg-[color-mix(in_srgb,var(--accent)_32%,transparent)] shadow-[inset_0_0_0_1px_var(--accent)]"
@@ -231,7 +239,7 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
           return t == null || !seen(t, m.ref.kind === 'range' ? m.ref.end : t) ? null : x(t) + (m.ref.kind === 'range' ? BADGE / 2 : 0);
         }).map(({ mark, x }) => (
           <span key={mark.n} className="absolute z-10 -translate-x-1/2" style={{ left: x, top: (LANE_H - BADGE) / 2 }}>
-            <MarkNumber mark={mark} go={words.go} remove={words.remove} onGo={() => onGo(mark)} onRemove={() => onRemove(mark.ref)} />
+            <MarkNumber mark={mark} state={stateOf(mark.ref)} go={words.go} remove={words.remove} onGo={() => onGo(mark)} onRemove={() => onRemove(mark.ref)} onHover={(on) => onHoverMark(on ? mark.ref : null)} />
           </span>
         ))}
       </div>
@@ -251,7 +259,7 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
           {/* the changes; what is pointed at, carried down from the marks */}
           {changes.map((c, i) => (seen(c.start, c.end) ? <span key={`c${i}`} className="absolute inset-y-0 bg-[color-mix(in_srgb,var(--warn)_22%,transparent)] shadow-[inset_0_-3px_0_var(--warn)]" style={{ left: left(Math.max(c.start, v.from)), width: across(c.start, c.end) }} /> : null))}
           {marks.map((m) => (m.ref.kind === 'range' && m.ref.end - m.ref.start < duration - 0.05 && seen(m.ref.start, m.ref.end)
-            ? <span key={`r${m.n}`} className="absolute inset-y-0 bg-[color-mix(in_srgb,var(--accent)_16%,transparent)]" style={{ left: left(Math.max(m.ref.start, v.from)), width: across(m.ref.start, m.ref.end) }} />
+            ? <span key={`r${m.n}`} className={`absolute inset-y-0 transition-colors ${stateOf(m.ref) ? 'bg-[color-mix(in_srgb,var(--accent)_34%,transparent)]' : 'bg-[color-mix(in_srgb,var(--accent)_16%,transparent)]'}`} style={{ left: left(Math.max(m.ref.start, v.from)), width: across(m.ref.start, m.ref.end) }} />
             : null))}
           {span ? <span className="absolute inset-y-0 bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]" style={{ left: left(Math.min(span.a, span.b)), width: across(Math.min(span.a, span.b), Math.max(span.a, span.b)) }} /> : null}
           {marks.map((m) => ((m.ref.kind === 'time' || m.ref.kind === 'region') && seen(m.ref.time) ? <span key={`t${m.n}`} className="absolute inset-y-0 w-[1.5px] -translate-x-1/2 bg-[var(--accent)]" style={{ left: left(m.ref.time) }} /> : null))}
@@ -309,13 +317,18 @@ function Playhead({ clock, at }: { clock: Clock; at: (t: number) => string | nul
  * A mark's number: a click goes to it; its × (under the pointer) takes it out. A moment's is a pin, its tip on the
  * strip; a box's pin has a square head, as its box; a stretch's sits at its start, in its capsule.
  */
-export function MarkNumber({ mark, go, remove, onGo, onRemove }: { mark: Mark; go: string; remove: string; onGo: () => void; onRemove: () => void }) {
+export function MarkNumber({ mark, state, go, remove, onGo, onRemove, onHover }: {
+  mark: Mark; state: MarkState; go: string; remove: string; onGo: () => void; onRemove: () => void; onHover: (on: boolean) => void;
+}) {
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   const pin = mark.ref.kind !== 'range';
+  const shape = mark.ref.kind === 'region' ? 'rounded-[5px]' : 'rounded-full';
   return (
-    <span className="group/n relative flex">
+    <span className="group/n relative flex" onPointerEnter={() => onHover(true)} onPointerLeave={() => onHover(false)}>
+      {/* found: a ring going out from it, the once */}
+      {state === 'flash' ? <span className={`pointer-events-none absolute inset-0 animate-ping bg-[var(--accent)] opacity-70 ${shape}`} style={{ animationIterationCount: 2 }} /> : null}
       <button type="button" aria-label={`${go} ${mark.n}`} title={go} onPointerDown={stop} onPointerUp={stop} onClick={(e) => { stop(e); onGo(); }}
-        className={`grid cursor-pointer place-items-center bg-[var(--accent)] px-[4px] text-[10.5px] font-semibold leading-none tabular-nums text-[var(--on-accent)] transition hover:brightness-110 ${mark.ref.kind === 'region' ? 'rounded-[5px]' : 'rounded-full'}`}
+        className={`relative grid cursor-pointer place-items-center bg-[var(--accent)] px-[4px] text-[10.5px] font-semibold leading-none tabular-nums text-[var(--on-accent)] transition hover:brightness-110 ${shape} ${state ? 'scale-110 shadow-[0_0_0_2px_var(--bg-viewer),0_0_0_3.5px_var(--accent)]' : ''}`}
         style={{ height: BADGE, minWidth: BADGE }}>
         {mark.n}
       </button>
