@@ -1,19 +1,20 @@
 #!/usr/bin/env node
 // @ts-check
 /**
- * `openfilm canvas [apply <steps>]`: the project's canvas read, or steps taken on it, through the Studio running (started
- * when needed; studio/client.mjs canvasCommand). The canvas plugin brings it (its package.json's `bin`), so it is
+ * `openfilm canvas [apply <steps> | add <file…>]`: the project's canvas read, or steps taken on it, through the Studio
+ * running (started when needed; studio/client.mjs canvasCommand). `add` is steps too: files put in a row (add.mjs). The canvas plugin brings it (its package.json's `bin`), so it is
  * there only while the plugin is on (src/plugin-commands.mjs). What it prints and its exit status are the same as when
  * it was one of OpenFilm's own commands: 0 done, 1 it failed, 2 not a project or a wrong command.
  */
 import { parseArgs } from 'node:util';
 import { canvasCommand } from '../../studio/client.mjs';
+import { addSteps } from './add.mjs';
 import { UsageError } from '../../src/shared.mjs';
 
 /* how `openfilm` is typed here (src/plugin-commands.mjs gives it) */
 const RUN = process.env.OPENFILM_RUN || 'openfilm';
 
-const HELP = `openfilm canvas [apply <steps>]
+const HELP = `openfilm canvas [apply <steps> | add <file…>]
 
   The project's canvas: a board beside the edit where the person lays out notes, the project's files and nodes that
   make a picture, a clip or a sound, wired into each other. Nothing on it is in the film until it is put on the timeline.
@@ -21,6 +22,8 @@ const HELP = `openfilm canvas [apply <steps>]
   canvas                 the board as JSON: nodes (id, x, y; a note's text, a file's path, a group's name and color,
                          a making node's make, prompt, model, opts, versions and the one shown, path) and wires
                          (from, to, order: what goes into a node, in that order)
+  canvas add <file…>     files of the project put on the board the person has open, in a row below what is there,
+                         in the order named (the pair of \`openfilm edit add\`)
   canvas apply <steps>   steps on it, all taken or none: a JSON list, a .json file, or - to read it
     {"op":"add","kind":"note|file|image|video|sfx|music|tts|cut|group","id":"…", text | path | prompt, via, model,
       preset, opts: {ratio, sec, mode, quality, size, count, voice}, name, color, x, y, w, h, group: "<group id>",
@@ -55,7 +58,18 @@ if (parsed.values.help) {
   process.exit(0);
 }
 try {
-  const result = await canvasCommand(parsed.positionals, (line) => console.error(line));
+  let words = parsed.positionals;
+  if (words[0] === 'add') {
+    /* the board read, the row worked out on it, and laid down as steps */
+    const root = process.env.OPENFILM_PROJECT;
+    if (!root) throw new UsageError('run it in a film\'s folder (one with film.html)');
+    const read = await canvasCommand([], (line) => console.error(line));
+    if (read.ok === false) { for (const line of read.lines) console.error(line); process.exit(read.usage ? 2 : 1); }
+    let steps;
+    try { steps = await addSteps(JSON.parse(read.lines.join('\n')), root, words.slice(1), { cwd: process.cwd() }); } catch (e) { throw new Error(`add: ${/** @type {Error} */ (e).message}`); }
+    words = ['apply', JSON.stringify(steps)];
+  }
+  const result = await canvasCommand(words, (line) => console.error(line));
   for (const line of result.lines) console.log(line);
   if (result.ok === false) process.exitCode = result.usage ? 2 : 1;
 } catch (e) {

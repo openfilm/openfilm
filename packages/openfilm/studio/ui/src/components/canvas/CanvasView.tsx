@@ -1367,11 +1367,23 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     onRefer(refs);
     return true;
   };
+  /* a link shown (`.film/canvases/<board>.json#<node>`): its board first, then the node on it once it is in view */
+  const focusSwitched = React.useRef(0);
+  const focusDone = React.useRef(0);
   React.useEffect(() => {
-    if (!focus || !ready) return;
+    if (!focus || !ready || !fitted || focusDone.current === focus.n) return;
+    if (focus.board && focus.board !== boardRef.current) {
+      /* tried once: a board that is not there falls back to the first, and is said gone */
+      if (focusSwitched.current !== focus.n) { focusSwitched.current = focus.n; void showBoard(focus.board); return; }
+      focusDone.current = focus.n;
+      onError(t('canvas.gone'));
+      return;
+    }
+    focusDone.current = focus.n;
+    if (!focus.id) return;
     if (!now.current.nodes.some((n) => n.id === focus.id)) { onError(t('canvas.gone')); return; }
     showNode(focus.id);
-  }, [focus, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [focus, ready, fitted, boardId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* a board copied in (an example's): laid down below what is there, and shown */
   const laid = React.useRef<number | null>(null);
@@ -1789,7 +1801,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         {outline ? (
           <Outline nodes={nodes} fileOf={board.fileOf} sources={sources} onShow={showNode} onClose={() => setOutline(false)} />
         ) : null}
-        {ready && nodes.length === 0 && !board.readOnly ? <EmptyBoard /> : null}
+        {ready && nodes.length === 0 && !board.readOnly ? <EmptyBoard shown={shown && fitted} /> : null}
         <Ripples taps={taps} onDone={(id) => setTaps((list) => list.filter((tap) => tap.id !== id))} />
         {menu ? (
           <AddMenu
@@ -1841,7 +1853,7 @@ export interface CanvasViewProps {
   /** the selected nodes into the chat as references (⌘L); none: no chat here */
   onRefer?: (refs: StudioRef[]) => void;
   /** a node to show (a chat's reference to it clicked): selected and in view; `n` is new each time */
-  focus?: { id: string; n: number } | null;
+  focus?: { id: string | null; board?: string; n: number } | null;
   /** a board to lay down below what is there (an example's canvas, copied in): its nodes new; `n` is new each time */
   insert?: { doc: CanvasDoc; n: number } | null;
   /** Files chosen in the independent project library, placed at the current board center. */

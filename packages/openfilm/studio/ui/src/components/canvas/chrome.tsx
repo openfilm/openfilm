@@ -67,16 +67,26 @@ function BrandCursor() {
   );
 }
 
-/** What an empty board says, in its middle: "double-click the canvas", a cursor double-clicking, "to add a node". */
-export function EmptyBoard() {
+/**
+ * What an empty board says, in its middle: "double-click the canvas", a cursor double-clicking, "to add a node". The
+ * cursor moves only once the board has been shown a moment (`shown`): its first frame with the rings and the shadow is
+ * costly, and drawn with the board it slowed the canvas's first showing.
+ */
+export function EmptyBoard({ shown }: { shown: boolean }) {
   const t = useT();
+  const [moving, setMoving] = React.useState(false);
+  React.useEffect(() => {
+    if (!shown) { setMoving(false); return; }
+    const timer = window.setTimeout(() => setMoving(true), 600);
+    return () => window.clearTimeout(timer);
+  }, [shown]);
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-4 text-[16px] tracking-[0.02em] text-[var(--cv-ink-2)]">
       <span>{t('canvas.empty.before')}</span>
       <span className="relative flex h-[30px] w-[30px] items-center justify-center">
-        <span className="cv-dblclick-ring" />
-        <span className="cv-dblclick-ring cv-dblclick-ring-2" />
-        <span className="cv-dblclick-arrow"><BrandCursor /></span>
+        {moving ? <span className="cv-dblclick-ring" /> : null}
+        {moving ? <span className="cv-dblclick-ring cv-dblclick-ring-2" /> : null}
+        <span className={moving ? 'cv-dblclick-arrow' : 'flex'}><BrandCursor /></span>
       </span>
       <span>{t('canvas.empty.after')}</span>
     </div>
