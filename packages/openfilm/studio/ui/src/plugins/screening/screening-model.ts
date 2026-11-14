@@ -48,12 +48,23 @@ export function linkOf(ref: StudioRef): string {
   }
 }
 
-/** A time as people read it: 1:05, or 1:02:05 past an hour. */
-export function timeLabel(t: number): string {
-  const s = Math.max(0, Math.floor(t));
+/** A time as people read it: 1:05, or 1:02:05 past an hour; with `decimals`, its tenths or hundredths too: 1:05.4. */
+export function timeLabel(t: number, decimals = 0): string {
+  const unit = 10 ** decimals;
+  const all = Math.floor(Math.max(0, t) * unit + 1e-6);
+  const s = Math.floor(all / unit);
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
   const two = (n: number) => String(n).padStart(2, '0');
-  return h ? `${h}:${two(m)}:${two(r)}` : `${m}:${two(r)}`;
+  return `${h ? `${h}:${two(m)}:${two(r)}` : `${m}:${two(r)}`}${decimals ? `.${String(all % unit).padStart(decimals, '0')}` : ''}`;
+}
+
+/** Where a reference is on the film, s: a moment, a box's moment, a stretch's, a clip's or a line's start; a file: nowhere. */
+export function timeOf(ref: StudioRef): number | null {
+  switch (ref.kind) {
+    case 'time': case 'region': return ref.time;
+    case 'range': case 'clip': case 'subtitle': return ref.start;
+    default: return null;
+  }
 }
 
 /** Every clip of a film by its id. */
@@ -103,20 +114,36 @@ export function clock(initial = 0): Clock {
   };
 }
 
-/** The ruler's marks for a film `duration` s long: a step that gives about `count` of them, and each mark's time. */
-export function ticksOf(duration: number, count = 10): { step: number; marks: number[] } {
-  if (!(duration > 0)) return { step: 1, marks: [] };
-  const steps = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
-  const step = steps.find((s) => duration / s <= count) ?? steps[steps.length - 1]!;
-  const marks: number[] = [];
-  for (let t = 0; t <= duration + 1e-6; t += step) marks.push(t);
-  return { step, marks };
+/** The part of the film the bar shows: from `from` s, `span` s of it. */
+export interface View { from: number; span: number }
+
+/** A view kept on the film: no longer than it, starting no earlier than 0 and ending no later than its end. */
+export function fitted(view: View, duration: number): View {
+  const span = Math.max(0, Math.min(view.span, duration));
+  return { from: Math.max(0, Math.min(view.from, duration - span)), span };
 }
 
-/** The part of a sound file's peaks a clip plays: from its in point (`time[0]`, s) for `seconds` of it at `speed`. */
-export function peaksOfClip(peaks: readonly number[], fileSeconds: number, inPoint: number, seconds: number, speed = 1): number[] {
-  if (!peaks.length || !(fileSeconds > 0)) return [];
-  const a = Math.max(0, Math.floor((inPoint / fileSeconds) * peaks.length));
-  const b = Math.min(peaks.length, Math.ceil(((inPoint + seconds * speed) / fileSeconds) * peaks.length));
-  return peaks.slice(a, Math.max(a + 1, b));
+/** The view `factor` times as long (under 1: closer), the time `at` s staying where it is on the bar; never shorter than `least` s. */
+export function zoomed(view: View, at: number, factor: number, duration: number, least: number): View {
+  if (!(view.span > 0)) return fitted(view, duration);
+  const span = Math.max(Math.min(least, duration), Math.min(duration, view.span * factor));
+  return fitted({ from: at - (at - view.from) * (span / view.span), span }, duration);
+}
+
+/**
+ * How much film each picture on the strip stands for, s, when `span` s fill `width` px and a picture is `tile` px wide:
+ * a frame (`frame` s) times a power of the square root of 2, the least that leaves each picture its width. The same
+ * steps at every zoom, so moving along the film shows the pictures already fetched.
+ */
+export function tileStep(span: number, width: number, tile: number, frame: number): number {
+  if (!(span > 0) || !(width > 0)) return 0;
+  const want = (tile / width) * span;
+  return frame * Math.SQRT2 ** Math.max(0, Math.ceil(2 * Math.log2(want / frame) - 1e-9));
+}
+
+/** The lines along the strip, every this many s: the least of the usual steps that leaves `px` px between them. */
+export function tickStep(span: number, width: number, px = 64): number {
+  const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
+  if (!(span > 0) || !(width > 0)) return steps[steps.length - 1]!;
+  return steps.find((s) => (s / span) * width >= px) ?? steps[steps.length - 1]!;
 }

@@ -9,7 +9,7 @@
 import * as React from 'react';
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { ChevronLeft, ChevronRight, Crosshair, MoveHorizontal, Pause, Play, SquareDashed, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Crosshair, Pause, Play, X } from 'lucide-react';
 import { addPluginWords, useT } from '@/i18n';
 import { projectEvents, type Film as FilmValue } from '@/api';
 import { Player } from '@/editor/player';
@@ -21,8 +21,8 @@ import { momentRef, regionRef } from '@/lib/studio-refs';
 import { Tooltip } from '@/components/Tooltip';
 import { chat, onCommand, project, toast } from '@/studio';
 import { useProject, useProvide } from '@/studio/react';
-import { changedRanges, clock, cuesOf, linkOf, timeLabel, type Clock, type Cue, type Range } from './screening-model';
-import { Scrubber, useClock, type Mark } from './Scrubber';
+import { changedRanges, clock, cuesOf, linkOf, timeLabel, timeOf, type Clock, type Cue, type Range } from './screening-model';
+import { Scrubber, useClock, type Mark, type ScrubberHandle } from './Scrubber';
 import { MOD, ShortcutSheet, useHeldSheet } from './ShortcutSheet';
 import { Stage } from './Stage';
 
@@ -46,9 +46,23 @@ const SPEEDS = [1, 1.5, 2] as const;
 
 /** A clip of the film where it plays, and whether it is seen or heard. */
 interface Block { clip: import('@/api').Clip; track: number; at: number; end: number; kind: 'picture' | 'sound' }
-/** Whether the person has been shown the three ways to point (kept in this browser). */
-const TAUGHT_KEY = 'openfilm.screening.taught';
-const taughtBefore = () => { try { return localStorage.getItem(TAUGHT_KEY) === '1'; } catch { return false; } };
+/**
+ * Whether the person has used each way that is not seen until used (kept in this browser): until then, where it is
+ * used says how, once.
+ */
+type Lesson = 'box' | 'range' | 'zoom';
+const LESSON_KEY = (lesson: Lesson) => `openfilm.screening.used.${lesson}`;
+function useLessons(): [Record<Lesson, boolean>, (lesson: Lesson) => void] {
+  const [used, setUsed] = React.useState<Record<Lesson, boolean>>(() => {
+    const read = (lesson: Lesson) => { try { return localStorage.getItem(LESSON_KEY(lesson)) === '1'; } catch { return false; } };
+    return { box: read('box'), range: read('range'), zoom: read('zoom') };
+  });
+  const learn = React.useCallback((lesson: Lesson) => {
+    setUsed((was) => (was[lesson] ? was : { ...was, [lesson]: true }));
+    try { localStorage.setItem(LESSON_KEY(lesson), '1'); } catch { /* this time only */ }
+  }, []);
+  return [used, learn];
+}
 
 /** The film's shots and sounds where they play (a clip not placed by the player yet is left out); the top track last. */
 function blocksOf(film: FilmValue | null, spans: readonly ClipSpan[]): { picture: Block[]; sound: Block[] } {
@@ -78,7 +92,10 @@ function Screening({ projectId }: { projectId: string }) {
   const time = React.useMemo(() => clock(0), []);
   const [playing, setPlaying] = React.useState(false);
   const [speed, setSpeed] = React.useState<number>(1);
-  const [taught, setTaught] = React.useState(taughtBefore);
+  const [used, learn] = useLessons();
+  /* how much of the film the bar shows: closer in, times are read to a tenth or a hundredth */
+  const [shownSpan, setShownSpan] = React.useState(0);
+  const scrubber = React.useRef<ScrubberHandle>(null);
   const scrubbing = React.useRef(false);
   const [cues, setCues] = React.useState<Cue[]>([]);
   /* what the message being written points at (the chat says, numbered as it numbers them); with no chat, what was copied */
@@ -202,7 +219,6 @@ function Screening({ projectId }: { projectId: string }) {
 
   /* ── pointing: a reference in the chat (opened if folded); with no chat, a link copied for the person's agent ── */
   const refer = React.useCallback((ref: StudioRef) => {
-    if (!taught) { setTaught(true); try { localStorage.setItem(TAUGHT_KEY, '1'); } catch { /* this time only */ } }
     if (chat.refer) {
       chat.refer(ref);
       if (state?.chat && !state.chat.open) state.chat.toggle();
@@ -211,7 +227,7 @@ function Screening({ projectId }: { projectId: string }) {
     void navigator.clipboard?.writeText(linkOf(ref)).catch(() => {});
     setCopied((list) => [...list, ref]);
     toast(w('copied'));
-  }, [state?.chat, w, taught]);
+  }, [state?.chat, w]);
   const marks: Mark[] = (chat.refer ? draft : copied).map((ref, i) => ({ n: i + 1, ref }));
   const unrefer = React.useCallback((ref: StudioRef) => {
     if (chat.refer) chat.unrefer?.(ref);
@@ -221,6 +237,7 @@ function Screening({ projectId }: { projectId: string }) {
   const pointMoment = React.useCallback(() => { pause(); refer(momentRef(projectId, player.current!.time() * 1000)); }, [pause, refer, projectId]);
   const pointBox = (box: StageBox) => {
     pause();
+    learn('box');
     const t = now();
     /* a box over the lower part of the picture takes in the caption shown then */
     const lines = box.y + box.h > stage.h * 0.65 ? cues.filter((c) => t >= c.start && t < c.end).map((c) => c.text) : [];
@@ -228,17 +245,23 @@ function Screening({ projectId }: { projectId: string }) {
   };
   const pointRange = (start: number, end: number) => {
     if (end - start < 0.1) return;
+    learn('range');
     refer({ kind: 'range', start, end, clipIds: [...blocks.picture, ...blocks.sound].filter((x) => x.end > start && x.at < end).map((x) => x.clip.id) });
   };
-  /* the film's picture at `t`: the frame of the shot on top then, cut by Studio from its file */
-  const frameAt = React.useCallback((t: number, width: number) => {
+  const goTo = (mark: Mark) => { const t = timeOf(mark.ref); if (t != null) { pause(); seek(t); } };
+  const onSpan = React.useCallback((span: number) => { setShownSpan(span); if (duration && span < duration - 1e-3) learn('zoom'); }, [duration, learn]);
+  const decimals = duration && shownSpan < duration - 1e-3 ? (shownSpan <= 4 ? 2 : 1) : 0;
+  /* the film's picture at `t`, for a picture standing for `step` s: the frame of the shot on top then, cut by Studio
+     from its file (to the tenth of a second, or the frame when the pictures are closer than that) */
+  const frameAt = React.useCallback((t: number, width: number, step: number) => {
     for (let i = blocks.picture.length - 1; i >= 0; i--) {
       const b = blocks.picture[i]!;
       if (t < b.at || t >= b.end) continue;
       const path = b.clip.src.split('#')[0]!;
       const file = state?.files.find((f) => f.path === path);
       const still = file?.kind === 'image';
-      const ms = still ? 0 : Math.round((((b.clip.time?.[0] ?? 0) + (t - b.at) * (b.clip.speed ?? 1)) * 1000) / 100) * 100;
+      const unit = step < 0.1 ? FRAME_S * 1000 : 100;
+      const ms = still ? 0 : Math.round(Math.round((((b.clip.time?.[0] ?? 0) + (t - b.at) * (b.clip.speed ?? 1)) * 1000) / unit) * unit);
       return `/api/projects/${encodeURIComponent(projectId)}/media?what=frame&path=${encodeURIComponent(path)}&ms=${ms}&w=${width}${file ? `&v=${file.mtimeMs}` : ''}`;
     }
     return undefined;
@@ -268,6 +291,9 @@ function Screening({ projectId }: { projectId: string }) {
       else if (key === 'm') { take(); pointMoment(); }
       else if (key === 'c' && changes.length) { take(); watchChange(0); }
       else if (key === 's') { take(); cycleSpeed(); }
+      else if (key === '=' || key === '+') { take(); scrubber.current?.zoomIn(); }
+      else if (key === '-') { take(); scrubber.current?.zoomOut(); }
+      else if (key === '0') { take(); scrubber.current?.whole(); }
       else if (key === 'Escape' && (sheetOpen || watching)) { take(); setSheetOpen(false); if (watching) { pause(); setWatching(null); } }
     };
     window.addEventListener('keydown', press, true);
@@ -293,7 +319,7 @@ function Screening({ projectId }: { projectId: string }) {
   if (!state || !folder) return <div className="h-full bg-[var(--bg-viewer)]" />;
   const empty = film != null && !blocks.picture.length && !blocks.sound.length;
   const sheet = [
-    [{ keys: ['Space'], label: w('kPlay') }, { keys: ['←', '→'], label: w('kStep') }, { keys: ['⇧', '←', '→'], label: w('kFrame') }, { keys: ['S'], label: w('kSpeed') }],
+    [{ keys: ['Space'], label: w('kPlay') }, { keys: ['←', '→'], label: w('kStep') }, { keys: ['⇧', '←', '→'], label: w('kFrame') }, { keys: ['S'], label: w('kSpeed') }, { keys: ['+', '−'], label: w('kZoom') }, { keys: ['0'], label: w('kWhole') }],
     [{ keys: ['M'], label: w('kMoment') }, { keys: [w('kDrag')], label: w('kBox') }, { keys: [w('kDrag')], label: w('kRange') }, { keys: ['C'], label: w('kChanges') }],
   ];
   const floating = changes.length && !empty ? (
@@ -317,54 +343,45 @@ function Screening({ projectId }: { projectId: string }) {
   ) : null;
 
   return (
-    <div data-screening="" className="relative flex h-full min-h-0 w-full flex-col gap-4 bg-[var(--bg-viewer)] px-6 pb-4 pt-5 text-[var(--text)]"
+    <div data-screening="" className="relative flex h-full min-h-0 w-full flex-col gap-4 bg-[var(--bg-viewer)] px-6 pb-2 pt-5 text-[var(--text)]"
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropping(true); } }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDropping(false); }}
       onDrop={(e) => { void drop(e); }}>
       <Stage stage={stage} folder={folder} preview={preview} time={() => player.current?.time() ?? 0} onInfo={onInfo}
-        marks={marks} clock={time} unread={unread ? w('notRead') : null} over={floating} removeLabel={w('remove')}
+        marks={marks} clock={time} playing={playing} hint={used.box ? null : w('teachBox')}
+        unread={unread ? w('notRead') : null} over={floating} removeLabel={w('remove')}
         empty={empty ? { title: w('emptyTitle'), sub: state.chat ? w('emptySub') : w('emptyBrowserSub'), ...(state.chat && !state.chat.open ? { openChat: { label: w('openChat'), onOpen: state.chat.toggle } } : {}) } : null}
         onToggle={toggle} onDragStart={pause} onBox={pointBox} onRemove={(m) => unrefer(m.ref)} />
       {empty ? null : (
-        <div className="mx-auto flex w-full max-w-[1120px] shrink-0 flex-col items-center gap-2.5">
+        <div className="mx-auto flex w-full max-w-[1120px] shrink-0 flex-col items-center pb-[22px]">
           {/* the player: play, the time, the film as a strip, the speed, and pointing at this moment */}
-          <div className="flex w-full items-center gap-3 rounded-[16px] border border-white/[.07] bg-[color-mix(in_srgb,var(--bg-raised)_88%,transparent)] py-2.5 pl-2.5 pr-3 shadow-[0_12px_40px_rgb(0_0_0/.35)] backdrop-blur-xl">
+          <div className="flex w-full items-start gap-3 rounded-[16px] border border-white/[.07] bg-[color-mix(in_srgb,var(--bg-raised)_88%,transparent)] py-2.5 pl-2.5 pr-2.5 shadow-[0_12px_40px_rgb(0_0_0/.35)] backdrop-blur-xl">
             <Tooltip label={playing ? w('pause') : w('play')} shortcut="Space">
               <button type="button" aria-label={playing ? w('pause') : w('play')} onClick={toggle}
                 className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-black transition hover:bg-white/90 active:scale-95">
                 {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-[2px]" />}
               </button>
             </Tooltip>
-            <TimeNow source={time} />
-            <Scrubber duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks} changes={changes} removeLabel={w('remove')}
+            <TimeNow source={time} decimals={decimals} />
+            <Scrubber ref={scrubber} duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks} changes={changes}
+              words={{ go: w('go'), remove: w('remove'), whole: w('whole'), hints: [...(used.range ? [] : [w('hintRange')]), ...(used.zoom ? [] : [w('hintZoom')])] }}
               onSeek={(t) => { if (!scrubbing.current) pause(); seek(t); }} onScrub={(on) => { scrubbing.current = on; if (on) pause(); }}
-              onRange={pointRange} onRemove={unrefer} />
-            <span className="w-[42px] shrink-0 font-mono text-[12px] tabular-nums text-[var(--text-faint)]">{timeLabel(duration)}</span>
+              onRange={pointRange} onGo={goTo} onRemove={unrefer} onSpan={onSpan} />
+            <span className="flex h-10 w-[42px] shrink-0 items-center font-mono text-[12px] tabular-nums text-[var(--text-faint)]">{timeLabel(duration)}</span>
             <Tooltip label={w('speed')} shortcut="S">
               <button type="button" onClick={cycleSpeed} aria-label={w('speed')}
-                className={`h-7 min-w-[40px] shrink-0 rounded-full px-2 font-mono text-[11.5px] font-semibold tabular-nums transition hover:bg-white/10 ${speed === 1 ? 'text-[var(--text-muted)]' : 'bg-white/10 text-[var(--text)]'}`}>
+                className={`mt-1.5 h-7 min-w-[40px] shrink-0 rounded-full px-2 font-mono text-[11.5px] font-semibold tabular-nums transition hover:bg-white/10 ${speed === 1 ? 'text-[var(--text-muted)]' : 'bg-white/10 text-[var(--text)]'}`}>
                 {speed}×
               </button>
             </Tooltip>
-            <span className="h-6 w-px shrink-0 bg-white/10" />
+            <span className="mt-2 h-6 w-px shrink-0 bg-white/10" />
             <Tooltip label={w('pointTip')} shortcut="M">
               <button type="button" aria-label={w('point')} onClick={pointMoment}
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--accent)] text-[var(--on-accent)] shadow-[0_4px_14px_color-mix(in_srgb,var(--accent)_45%,transparent)] transition hover:brightness-110 active:scale-95">
-                <Crosshair size={18} />
+                className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-[var(--accent)] pl-3 pr-3.5 text-[13px] font-semibold text-[var(--on-accent)] shadow-[0_4px_14px_color-mix(in_srgb,var(--accent)_45%,transparent)] transition hover:brightness-110 active:scale-95">
+                <Crosshair size={16} strokeWidth={2.2} />{w('pointShort')}
               </button>
             </Tooltip>
           </div>
-          {/* the three ways to point, until the person has pointed once */}
-          {/* its own height always, so the bar does not move once it goes */}
-          {!taught ? (
-            <div className="flex h-5 items-center gap-5 text-[12px] text-[var(--text-muted)]">
-              <span className="flex items-center gap-1.5"><Crosshair size={13} className="text-[var(--accent)]" />{w('teachMoment')} <kbd className="rounded border border-[color:var(--border-strong)] px-1 font-sans text-[10.5px]">M</kbd></span>
-              <span className="flex items-center gap-1.5"><SquareDashed size={13} className="text-[var(--accent)]" />{w('teachBox')}</span>
-              <span className="flex items-center gap-1.5"><MoveHorizontal size={13} className="text-[var(--accent)]" />{w('teachRange')}</span>
-              <button type="button" onClick={() => { setTaught(true); try { localStorage.setItem(TAUGHT_KEY, '1'); } catch { /* this time only */ } }}
-                className="rounded-full px-2 py-0.5 text-[var(--text-faint)] transition hover:bg-white/10 hover:text-[var(--text)]">{w('gotIt')}</button>
-            </div>
-          ) : <div className="h-5" aria-hidden />}
         </div>
       )}
       {held || sheetOpen ? <ShortcutSheet title={w('sheetTitle')} groups={sheet} hold={{ keys: [MOD], label: w('kHold') }} /> : null}
@@ -377,9 +394,9 @@ function Screening({ projectId }: { projectId: string }) {
   );
 }
 
-function TimeNow({ source }: { source: Clock }) {
+function TimeNow({ source, decimals }: { source: Clock; decimals: number }) {
   const t = useClock(source);
-  return <span className="w-[42px] shrink-0 text-right font-mono text-[12px] tabular-nums text-[var(--text)]">{timeLabel(t)}</span>;
+  return <span className="flex h-10 shrink-0 items-center justify-end font-mono text-[12px] tabular-nums text-[var(--text)]" style={{ width: 42 + decimals * 8 }}>{timeLabel(t, decimals)}</span>;
 }
 
 /** What floats over the top of the picture. */
