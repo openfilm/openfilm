@@ -712,6 +712,8 @@ html[data-file-drag] iframe { pointer-events: none; }
  * running through them on a slant, as a line being written; the edges of the field fading out
  */
 .cv-veil { background: color-mix(in srgb, var(--cv-card) 94%, transparent); }
+/* a picture, clip or sound being made: a surface of its own, lifted off the board, so the card reads as there and busy */
+.cv-veil-making { background: linear-gradient(135deg, color-mix(in srgb, var(--cv-ink) 11%, var(--cv-card)), color-mix(in srgb, var(--cv-ink) 5%, var(--cv-card)) 65%, color-mix(in srgb, var(--cv-edge-lit) 8%, var(--cv-card))); }
 .cv-dots, .cv-dots::after {
   position: absolute; inset: 0; background-size: 18px 18px; background-position: 9px 9px;
   mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 35%, transparent 100%);

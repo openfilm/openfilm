@@ -17,7 +17,7 @@ import { useT } from '@/i18n';
 import { CARD_H, MAKE_MEDIA, type CanvasNode, type GroupColor } from '@/lib/canvas';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { Tooltip } from '../Tooltip';
-import { fileCardWidth, modelTime, useBoard, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode, type UploadStatus } from './board';
+import { fileCardWidth, modelTime, numberOf, useBoard, type BoardNode, type CutNode, type FileNode, type FrameNode, type MakeNode, type NoteNode, type UploadStatus } from './board';
 import { ActionBar, CutPanel, MakePanel, NotePanel } from './panels';
 import { DocSheet, DocView, FormatBar, saveText, useDoc } from './doc';
 import { MENU } from './menu-style';
@@ -130,19 +130,15 @@ function Sides({ id, selected, ins = true, outs = true }: { id: string; selected
   );
 }
 
-/** A node's place among the board's nodes (groups aside), from 1, as its name numbers it. */
+/** A node's number among the board's nodes of its kind, from 1, as its name numbers it. */
 function useNumber(id: string): number {
-  return useStore((s) => {
-    let n = 0;
-    for (const node of s.nodes) { if (node.type === 'frame') continue; n += 1; if (node.id === id) return n; }
-    return n;
-  });
+  return useStore((s) => numberOf(s.nodes as BoardNode[], id));
 }
 
 /** What every node is drawn in: its name row above, its card, its sides. */
-function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, children, ins, outs, tone = 'card', fill, onRename, pending }: {
+function Frame({ id, selected, icon: Icon, title, meta, by, note, children, ins, outs, tone = 'card', fill, onRename, pending }: {
   id: string; selected: boolean; icon: React.ComponentType<{ size?: number; className?: string }>; title: string; meta?: string | null;
-  by?: CanvasNode['by']; note?: React.ReactNode; stack?: number; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
+  by?: CanvasNode['by']; note?: React.ReactNode; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
   /** a tint over the card (a note's color) */
   fill?: string;
   onRename?: (title: string) => void; pending?: boolean;
@@ -164,12 +160,11 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
   const cancel = React.useRef(false);
   const rename = () => { cancel.current = false; setDraft(title); };
   const card = `relative h-full w-full overflow-hidden rounded-[var(--cv-card-radius)] border transition-[border-color] duration-150 ${tone === 'quiet' ? 'bg-[var(--cv-card-2)]' : 'bg-[var(--cv-card)]'} ${selected ? '!border-[var(--cv-ring)]' : '!border-[var(--cv-card-line)]'}`;
-  const stackBorder = selected ? '!border-[var(--cv-line)]' : '!border-[var(--cv-card-line)]';
   return (
     <div className="group relative h-full w-full">
       {far && draft === null ? null : (
         <div data-canvas-node-header={onRename ? '' : undefined}
-          className={`${CARD_TITLE} ${onRename ? 'nopan cursor-grab active:cursor-grabbing' : 'pointer-events-none'} ${stack > 1 ? 'mb-3' : 'mb-0.5'}`}>
+          className={`${CARD_TITLE} ${onRename ? 'nopan cursor-grab active:cursor-grabbing' : 'pointer-events-none'} mb-0.5`}>
           <Icon size={14} className="shrink-0" />
           {onRename && draft !== null ? (
             <input data-canvas-title="" aria-label={t('canvas.video.rename')} autoFocus maxLength={120}
@@ -202,13 +197,6 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, stack = 0, chi
           {meta ? <span className="shrink-0 tabular-nums">{meta}</span> : null}
         </div>
       )}
-      {/* more than one version: the others fanned behind it */}
-      {stack > 1 ? (
-        <>
-          {stack > 2 ? <div className={`absolute inset-0 translate-x-[12px] -translate-y-[10px] rotate-[3.5deg] rounded-[var(--cv-card-radius)] border bg-[var(--cv-card-2)] opacity-60 ${stackBorder}`} /> : null}
-          <div className={`absolute inset-0 translate-x-[6px] -translate-y-[5px] rotate-[1.75deg] rounded-[var(--cv-card-radius)] border bg-[var(--cv-card-2)] ${stackBorder}`} />
-        </>
-      ) : null}
       <div data-canvas-card="" className={card} style={fill ? { backgroundImage: `linear-gradient(${fill}, ${fill})` } : undefined}>{children}</div>
       {!pending ? <Sides id={id} selected={selected} ins={ins} outs={outs} /> : null}
       {!pending && !board.readOnly && (board.single === id || board.editing === id) ? (
@@ -239,7 +227,7 @@ function Making({ since, typical, onStop }: { since: number; typical: number | n
   const round = 2 * Math.PI * r;
   return (
     <>
-      <div className="cv-veil cv-fade absolute inset-0 z-10"><div className="cv-dots" /></div>
+      <div className="cv-veil-making cv-fade absolute inset-0 z-10"><div className="cv-dots" /></div>
       <div className="cv-fade absolute left-2.5 top-2.5 z-20 flex h-8 items-center gap-2 rounded-full border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] pl-2 pr-1 text-[12.5px] text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)]">
         <svg width="16" height="16" viewBox="0 0 16 16" className={done === null ? 'animate-spin' : ''} aria-hidden>
           <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2" />
@@ -640,7 +628,6 @@ export function FrameNodeView({ id, data, selected }: NodeProps<FrameNode>) {
 export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
   const t = useT();
   const board = useBoard();
-  const far = useStore(farSelector);
   const n = useNumber(id);
   /* something wired in: it is made from that, so nothing to start with is offered */
   const fed = useStore((s) => s.edges.some((e) => e.target === id));
@@ -665,9 +652,39 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
     <div className="h-full w-full">
       <ActionBar id={id} file={file} empty={media === 'audio' ? undefined : media} />
       <MakePanel id={id} data={data} />
-      <Frame id={id} selected={selected} icon={Icon} title={data.title ?? (data.preset ? t(`canvas.presets.names.${data.preset}`) : t(`canvas.titles.${data.make}`).replace('{n}', String(n)))} meta={meta} by={data.by} stack={versions.length} onRename={rename}
+      <Frame id={id} selected={selected} icon={Icon} title={data.title ?? (data.preset ? t(`canvas.presets.names.${data.preset}`) : t(`canvas.titles.${data.make}`).replace('{n}', String(n)))} meta={meta} by={data.by} onRename={rename}
         ins={media !== 'audio'}
-        note={board.stale.has(id) ? <span className="pointer-events-auto shrink-0 text-amber-500/90" title={t('canvas.make.staleTip')}>{t('canvas.make.stale')}</span> : null}>
+        note={<>
+          {board.stale.has(id) ? <span className="pointer-events-auto shrink-0 text-amber-500/90" title={t('canvas.make.staleTip')}>{t('canvas.make.stale')}</span> : null}
+          {/* more than one version: how many, in its name row, opening them to pick the one shown */}
+          {versions.length > 1 && !board.readOnly ? (
+            <span className="relative shrink-0">
+              <button type="button" aria-expanded={versionsOpen}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => { event.stopPropagation(); setVersionsOpen((v) => !v); }}
+                className={`nodrag flex h-6 items-center gap-1 rounded-md px-1.5 tabular-nums transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] ${versionsOpen ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : ''}`}>
+                <Layers size={12} />{t('canvas.versions').replace('{n}', String(versions.length))}
+              </button>
+              {versionsOpen ? (
+                <div onPointerDown={(event) => event.stopPropagation()}
+                  className="nodrag nowheel cv-bar-bottom absolute right-0 top-full z-30 mt-1.5 grid max-h-[260px] w-max grid-cols-3 gap-1.5 overflow-y-auto rounded-xl border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+                  {versions.map((path, i) => {
+                    const version = board.fileOf(path);
+                    const thumb = version ? (version.kind === 'image' ? board.sources.file(version) : board.sources.poster?.(version)) : undefined;
+                    return (
+                      <button key={path} type="button" title={t('canvas.make.version').replace('{n}', String(i + 1)).replace('{total}', String(versions.length))}
+                        onClick={() => { board.willChange(); board.setData(id, { path }); setVersionsOpen(false); }}
+                        className={`relative h-14 w-14 overflow-hidden rounded-lg ring-2 transition ${path === data.path ? 'ring-[var(--cv-ring)]' : 'ring-transparent hover:ring-[var(--cv-line)]'}`}>
+                        {thumb ? <img src={thumb} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center bg-[var(--cv-card-2)] text-[var(--cv-ink-3)]"><Icon size={14} /></span>}
+                        <span className="absolute bottom-0.5 left-1 text-[10px] text-white drop-shadow">{i + 1}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </span>
+          ) : null}
+        </>}>
         <div className="relative h-full w-full">
           {file ? <Shown id={id} file={file} selected={selected} words={data.make === 'tts' ? data.prompt : undefined} />
               : (
@@ -686,28 +703,6 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
                   <TryLine icon={Upload} label={t('canvas.try.upload.audio')} onClick={() => board.upload(id, 'version')} />
                 )} />
               )}
-          {versions.length > 1 && !far && !board.readOnly ? (
-            <button type="button" onClick={(event) => { event.stopPropagation(); setVersionsOpen((v) => !v); }}
-              className="nodrag absolute right-2.5 top-2.5 flex h-7 items-center gap-1 rounded-lg bg-black/45 px-2 text-[12px] text-white/90 backdrop-blur-md transition hover:bg-black/65">
-              <Layers size={13} />{t('canvas.versions').replace('{n}', String(versions.length))}
-            </button>
-          ) : null}
-          {versionsOpen ? (
-            <div className="nodrag nowheel absolute right-2.5 top-11 z-10 grid max-h-[70%] grid-cols-3 gap-1.5 overflow-y-auto rounded-xl bg-black/60 p-1.5 backdrop-blur-md">
-              {versions.map((path, i) => {
-                const version = board.fileOf(path);
-                const thumb = version ? (version.kind === 'image' ? board.sources.file(version) : board.sources.poster?.(version)) : undefined;
-                return (
-                  <button key={path} type="button" title={t('canvas.make.version').replace('{n}', String(i + 1)).replace('{total}', String(versions.length))}
-                    onClick={() => { board.willChange(); board.setData(id, { path }); setVersionsOpen(false); }}
-                    className={`relative h-12 w-16 overflow-hidden rounded-md ring-2 transition ${path === data.path ? 'ring-white/90' : 'ring-transparent hover:ring-white/40'}`}>
-                    {thumb ? <img src={thumb} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-white/60"><Icon size={14} /></span>}
-                    <span className="absolute bottom-0.5 left-1 text-[10px] text-white drop-shadow">{i + 1}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
           {uploading ? <UploadPanel upload={uploading} /> : run ? (
             <Making since={run.started} typical={typical} onStop={() => board.stop(id)} />
           ) : null}

@@ -43,7 +43,7 @@ import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
   BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, lastModel, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
-  type AssistKind, type Board, type BoardNode, type FileNode, type PictureTool, type FrameData, type FrameNode, type MakeData, type MakingNode, type NoteData, type Side, type SpawnKind, type UploadStatus,
+  numberOf, type AssistKind, type Board, type BoardNode, type FileNode, type PictureTool, type FrameData, type FrameNode, type MakeData, type MakingNode, type NoteData, type Side, type SpawnKind, type UploadStatus,
 } from './board';
 import { BottomToolbar, CornerBar, Dots, EmptyBoard, Outline, Ripples, ToolCorner, Viewer } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
@@ -1343,7 +1343,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   const refOf = (n: BoardNode): StudioRef | null => {
     /* its pill says its name, as the board's name row does ("Text 2", "Picture node 1", a file's name), kept short */
     const short = (name: string) => (name.length > 16 ? `${name.slice(0, 15)}…` : name);
-    const number = () => { let k = 0; for (const node of now.current.nodes) { if (node.type === 'frame') continue; k += 1; if (node.id === n.id) break; } return String(k); };
+    const number = () => String(numberOf(now.current.nodes, n.id));
     const picture = (path: string | undefined) => {
       const file = path ? byPath.get(path) : undefined;
       const src = !file ? undefined : file.kind === 'image' ? sources.file(file) : file.kind === 'video' ? sources.poster?.(file) : file.kind === 'mg' ? sources.pagePoster?.(file) : undefined;

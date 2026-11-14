@@ -28,6 +28,19 @@ export type FrameNode = Node<FrameData, 'frame'>;
 export type MakeNode = Node<MakeData, 'make'>;
 export type CutNode = Node<CutData, 'cut'>;
 export type BoardNode = FileNode | NoteNode | FrameNode | MakeNode | CutNode;
+
+/** what a node's name counts among: texts with texts, pictures with pictures (a making node by what it makes), cuts with cuts */
+const countedAs = (node: Pick<BoardNode, 'type' | 'data'>) => (node.type === 'make' ? `make:${(node.data as MakeData).make}` : node.type ?? '');
+
+/** A node's number among the board's nodes of its kind, from 1, as its name numbers it ("Text 1", "Picture 1"). */
+export function numberOf(nodes: ReadonlyArray<Pick<BoardNode, 'id' | 'type' | 'data'>>, id: string): number {
+  const self = nodes.find((node) => node.id === id);
+  if (!self) return 0;
+  const kind = countedAs(self);
+  let n = 0;
+  for (const node of nodes) { if (countedAs(node) !== kind) continue; n += 1; if (node.id === id) break; }
+  return n;
+}
 export type MakingNode = CanvasNode & { make: MakeKind };
 
 /** The board as React Flow draws it: groups before what is in them, as it needs them. */
