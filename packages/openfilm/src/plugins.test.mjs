@@ -10,13 +10,13 @@ import { readBlocks } from './plugin-blocks.mjs';
 const home = () => mkdtempSync(join(tmpdir(), 'of-plugins-'));
 const where = (h) => ({ home: h, mine: join(h, 'mine'), official: join(h, 'official') });
 
-test('the edit and the canvas are on until the person says, Motion is not; the choice is kept by plugin', () => {
+test('the screening, the edit and the canvas are on until the person says, Motion is not; the choice is kept by plugin', () => {
   const h = home();
-  assert.deepEqual(workbenchesOn(h), ['edit', 'canvas']);
-  assert.deepEqual(pluginStates(h).filter((p) => p.workbench).map((p) => [p.id, p.on]), [['edit', true], ['canvas', true], ['motion', false]]);
+  assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'canvas']);
+  assert.deepEqual(pluginStates(h).filter((p) => p.workbench).map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['motion', false]]);
   setPluginOn('motion', true, h);
   setPluginOn('canvas', false, h);
-  assert.deepEqual(workbenchesOn(h), ['edit', 'motion']);
+  assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'motion']);
   /* only what was chosen is kept: a default changed in a later version reaches those who did not choose */
   assert.deepEqual(JSON.parse(readFileSync(join(h, 'prefs.json'), 'utf8')).plugins, { motion: true, canvas: false });
   assert.throws(() => setPluginOn('colour', true, h), /no plugin/);
@@ -26,13 +26,14 @@ test('every plugin can be off at once: no workbench is shown then', () => {
   const h = home();
   setPluginOn('canvas', false, h);
   setPluginOn('edit', false, h);
+  setPluginOn('screening', false, h);
   assert.deepEqual(workbenchesOn(h), []);
   assert.deepEqual(pluginStates(h).filter((p) => p.on), []);
   setPluginOn('canvas', true, h);
   assert.deepEqual(workbenchesOn(h), ['canvas']);
   /* a prefs.json written by hand: what is no plugin, or no true or false, is not followed; what else it holds is left */
   mkdirSync(h, { recursive: true });
-  writeFileSync(join(h, 'prefs.json'), JSON.stringify({ plugins: { edit: false, canvas: false, motion: 'yes', other: true, media: false }, kept: 1 }));
+  writeFileSync(join(h, 'prefs.json'), JSON.stringify({ plugins: { screening: false, edit: false, canvas: false, motion: 'yes', other: true, media: false }, kept: 1 }));
   assert.deepEqual(workbenchesOn(h), []);
   setPluginOn('motion', true, h);
   assert.deepEqual(workbenchesOn(h), ['motion']);
@@ -86,7 +87,7 @@ test('one of OpenFilm\'s own skills has no switch of its own: it is on while its
 test('every plugin made has a switch; what is not made yet is never on, and no agent hears of it', async () => {
   const h = home();
   const state = (id) => pluginStates(h).find((p) => p.id === id);
-  assert.deepEqual(PLUGINS.filter((p) => !p.soon).map((p) => [p.id, p.on]), [['edit', true], ['canvas', true], ['motion', false]]);
+  assert.deepEqual(PLUGINS.filter((p) => !p.soon).map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['motion', false]]);
   assert.deepEqual(PLUGINS.filter((p) => p.soon).map((p) => p.id), ['sound', 'color', 'composite']);
   const { CORE_SKILLS } = await import('./skills.mjs');
   /* the media's goes with none: it is not a plugin's, it is always given */

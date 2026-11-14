@@ -38,6 +38,8 @@ export interface StudioHost {
    * Studio's things can also be dragged into the app's composer: they carry STUDIO_REF_TYPE (see there).
    */
   refer?: (ref: StudioRef) => void;
+  /** A reference taken out of the message being written again (the person closed what it marks in Studio). */
+  unrefer?: (ref: StudioRef) => void;
   /**
    * A question for the chat, written for the person: `text` in the message being written, `refs` as its references
    * (the examples' "Explain how it's made"). Sent only when the person sends it.

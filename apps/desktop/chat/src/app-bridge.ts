@@ -26,6 +26,8 @@ interface AppBridge {
   onStudioBrowser(listener: (state: { state: 'downloading' | 'ready' | 'failed'; message?: string }) => void): () => void;
   onStudioFailed(listener: (message: string) => void): () => void;
   onRefer(listener: (ref: StudioRef) => void): () => void;
+  /** a reference Studio takes out of the message being written again */
+  onUnrefer?(listener: (ref: StudioRef) => void): () => void;
   onFfmpeg(listener: (state: FfmpegState) => void): () => void;
   /** take the person to a reference in Studio */
   showInStudio(ref: StudioRef): void;

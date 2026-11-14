@@ -168,15 +168,18 @@ export function openSettings(section: SettingsSection = 'general'): void {
 
 /**
  * The app's chat, in an app that has one (the desktop app); in a browser each is undefined. `refer`: a reference put in
- * the message being written. `select`: what is selected now and where the playhead is (its "@current selection").
+ * the message being written; `unrefer`: one taken out of it again. `select`: what is selected now and where the
+ * playhead is (its "@current selection").
  * `hover`: what the pointer is over (null: nothing), whose pills the chat lights.
  */
 export const chat: {
   readonly refer: ((ref: Ref) => void) | undefined;
+  readonly unrefer: ((ref: Ref) => void) | undefined;
   readonly select: ((selection: Selection) => void) | undefined;
   readonly hover: ((ref: Ref | null) => void) | undefined;
 } = {
   get refer() { return studioHost?.refer; },
+  get unrefer() { return studioHost?.unrefer; },
   get select() { return studioHost?.onSelection; },
   get hover() { return studioHost?.onHover; },
 };

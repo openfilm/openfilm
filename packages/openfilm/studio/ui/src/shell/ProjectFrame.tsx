@@ -309,10 +309,12 @@ export function useProjectFrame(projectId: string) {
      workbench on shows is pointed out in the library ── */
   const openLink = React.useRef<(link: string) => void>(() => {});
   openLink.current = (link) => {
-    const route = routeLink(link, workbenchOpens(), shown.workModes);
+    const showing = shown.noBench ? null : shown.surface ?? (shown.canvasOpen ? 'canvas' : 'edit');
+    /* the workbench shown first: one that shows the file too keeps the person where they are */
+    const claims = [...workbenchOpens()];
+    const route = routeLink(link, [...claims.filter(([name]) => name === showing), ...claims.filter(([name]) => name !== showing)], shown.workModes);
     if (!route) return;
     if ('file' in route) { library.showFile(route.file); return; }
-    const showing = shown.noBench ? null : shown.surface ?? (shown.canvasOpen ? 'canvas' : 'edit');
     /* the edit as it was left: in Motion's view when that is how it was (Motion is a view of the edit) */
     const motion = route.workbench === 'edit' && shown.motionOpen && shown.workModes.includes('motion');
     if (showing !== route.workbench) shown.showWorkbench(motion ? 'motion' : route.workbench);

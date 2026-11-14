@@ -545,6 +545,10 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     requestAnimationFrame(() => { composerRef.current?.insertReference(pill!); composerRef.current?.focus(); });
   }), [takeStudioRefs]);
 
+  /* a reference closed in Studio (the × on what it marks): its pills taken out of the message being written */
+  const unreferRef = React.useRef<(ref: StudioRef) => void>(() => {});
+  React.useEffect(() => app.onUnrefer?.((ref) => unreferRef.current(ref)), []);
+
   /* a question Studio wrote for the person (an example's "Explain how it's made"): in the composer, for them to send */
   React.useEffect(() => app.onAsk?.((request) => {
     const pills = takeStudioRefs(request.refs);
@@ -639,6 +643,12 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     () => draftRefs(splitPromptReferenceText(followUp).flatMap((segment) => (segment.kind === 'reference' ? [segment.id] : [])), studioRefs),
     [followUp, studioRefs],
   );
+  unreferRef.current = (ref) => {
+    for (const segment of splitPromptReferenceText(followUp)) {
+      const known = segment.kind === 'reference' ? studioRefs.get(segment.id) : undefined;
+      if (segment.kind === 'reference' && known && sameStudioThing(known, ref)) composerRef.current?.removeReference(segment.id);
+    }
+  };
   const draftKey = draft.map((ref) => refPill(undefined, ref).id).join('|');
   React.useEffect(() => { app.draftRefsInStudio(draft); }, [draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
   React.useEffect(() => () => { app.draftRefsInStudio([]); app.highlightInStudio(null); }, []);

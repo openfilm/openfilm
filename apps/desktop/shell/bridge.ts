@@ -178,6 +178,8 @@ projectReady = follow();
 /* ── between Studio and the chat: what is selected, what is referenced, what Studio is asked to show ── */
 const selection = signal<StudioSelection | null>(null);
 const refer = events<StudioRef>();
+/* a reference taken out of the message being written, from Studio (what it marked closed there) */
+const unrefer = events<StudioRef>();
 /* a skill tried in Studio's library, to be named in the message; and "Add a skill" */
 const skillPicked = events<{ name: string; description: string; title?: string; newConversation?: boolean }>();
 const skillAdd = events<void>();
@@ -297,6 +299,8 @@ export const host: StudioHost = {
     if (!layout.open) setChatOpen(true);
     pictured = pictured.then(() => withPicture(ref)).then((done) => refer.set(done));
   },
+  /* after any reference still being pictured, so one closed at once is not put back after */
+  unrefer: (ref) => { pictured = pictured.then(() => unrefer.set(ref)); },
   onSelection: (next) => selection.set(next),
   onHover: (ref) => hover.set(ref ?? null),
   onCommand: (listener) => { command = listener; },
@@ -403,6 +407,7 @@ function commandFor(ref: StudioRef): StudioCommand {
   /* Studio failing to start leaves no page to tell: the app shows that itself (src/main.mjs) */
   onStudioFailed: () => () => {},
   onRefer: refer.on,
+  onUnrefer: unrefer.on,
   onSelection: (listener: Listener<StudioSelection>) => selection.on((s) => { if (s) listener(s); }),
   onFfmpeg: native.onFfmpeg,
   showInStudio: (ref: StudioRef) => command?.(commandFor(ref)),

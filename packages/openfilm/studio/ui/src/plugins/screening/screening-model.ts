@@ -90,3 +90,33 @@ export function changedRanges(before: Film | null, after: Film | null, spans: re
   }
   return joined;
 }
+
+/** A value several are told of as it changes (the time while the film plays): read with React's useSyncExternalStore. */
+export interface Clock { get(): number; set(value: number): void; subscribe(listener: () => void): () => void }
+export function clock(initial = 0): Clock {
+  let value = initial;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => value,
+    set: (next) => { if (next === value) return; value = next; for (const listener of [...listeners]) listener(); },
+    subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
+  };
+}
+
+/** The ruler's marks for a film `duration` s long: a step that gives about `count` of them, and each mark's time. */
+export function ticksOf(duration: number, count = 10): { step: number; marks: number[] } {
+  if (!(duration > 0)) return { step: 1, marks: [] };
+  const steps = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600];
+  const step = steps.find((s) => duration / s <= count) ?? steps[steps.length - 1]!;
+  const marks: number[] = [];
+  for (let t = 0; t <= duration + 1e-6; t += step) marks.push(t);
+  return { step, marks };
+}
+
+/** The part of a sound file's peaks a clip plays: from its in point (`time[0]`, s) for `seconds` of it at `speed`. */
+export function peaksOfClip(peaks: readonly number[], fileSeconds: number, inPoint: number, seconds: number, speed = 1): number[] {
+  if (!peaks.length || !(fileSeconds > 0)) return [];
+  const a = Math.max(0, Math.floor((inPoint / fileSeconds) * peaks.length));
+  const b = Math.min(peaks.length, Math.ceil(((inPoint + seconds * speed) / fileSeconds) * peaks.length));
+  return peaks.slice(a, Math.max(a + 1, b));
+}
