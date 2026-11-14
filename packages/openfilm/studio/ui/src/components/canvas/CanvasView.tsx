@@ -51,7 +51,7 @@ import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from '.
 import { CharacterLibrary, HistoryModal, MaterialLibrary, SUBJECT_KINDS, SUBJECT_PARTS, loadSubjects } from './libraries';
 import { CutoutSetup } from './cutout';
 import { RedrawEditor, type RedrawJob, type RedrawStart } from './redraw';
-import { ExpandEditor, type Expanded } from './expand';
+import { ExpandEditor, expandName, expandPlan, framedPicture, type Expanded } from './expand';
 import { CropEditor } from './crop';
 import { AdjustEditor } from './adjust';
 import { LightPanel } from './light';
@@ -669,6 +669,27 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     }
     const choice = choiceOf(providers, node.make, node.via, node.model);
     const spec = choice?.spec;
+    /* widened: the picture wired in, placed in the shape it is made at as the mask's name says, sent with the mask;
+       what comes back cut to the canvas set */
+    if (node.preset === 'expand') {
+      const picture = inputs.find((i) => 'media' in i && i.media === 'image');
+      const plan = expandPlan(node.opts?.mask);
+      if (!picture || !('path' in picture)) return fail('canvas.makeNeeds.refs');
+      if (!plan || !node.opts?.mask) return fail('canvas.make.nothing');
+      const mask = node.opts.mask;
+      return (async () => {
+        try {
+          const framed = await framedPicture(srcOf(picture.path), srcOf(mask), plan.place);
+          const [held] = await onImportFiles([new File([framed], `expand-${Date.now().toString(36)}.png`, { type: 'image/png' })]);
+          if (!held) return false;
+          const request = makeRequest(node as MakingNode, [{ from: picture.from, path: held, media: 'image' }], makeName(node as MakingNode), spec);
+          const pick = node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
+          const ok = await startRun(projectId, folder, id, request, pick, inputsKey(node, inputs), { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') }, boardId);
+          if (ok) await cropMade(id, plan.crop).catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+          return ok;
+        } catch (e) { runErrors.set(`${projectId}/${id}`, e instanceof Error ? e.message : String(e)); runsChanged(); return false; }
+      })();
+    }
     /* a subject named with @ in its words: said as the reference picture it is (its picture wired in, named for it) */
     if (node.prompt?.includes('@')) {
       const pictures = inputs.filter((i) => 'media' in i && i.media === 'image');
@@ -1017,59 +1038,50 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     });
     requestAnimationFrame(() => requestAnimationFrame(() => { void flow.fitView({ nodes: [{ id: group }], padding: 0.2, maxZoom: 1, duration: 300 }); void makeAll(group); }));
   };
-  /** a picture widened: the picture in its larger frame and the mask kept, a new picture made from them beside it */
+  /** a picture widened: one node beside it, wired from it, made at once from it and the mask (its canvas in its name) */
   const outpaint = async (sourceId: string, expanded: Expanded) => {
     const choice = choicesFor(providers, 'image').find((c) => c.spec?.mask);
     if (!choice) { onError(t('canvas.redraw.noModel')); return; }
     try {
-      const stamp = Date.now().toString(36);
-      const [framed, mask] = await onImportFiles([
-        new File([expanded.picture], `expand-${stamp}.png`, { type: 'image/png' }),
-        new File([expanded.mask], `mask-${stamp}.png`, { type: 'image/png' }),
-      ]);
-      if (!framed || !mask) return;
+      const [mask] = await onImportFiles([new File([expanded.mask], expandName(Date.now().toString(36), expanded.place, expanded.crop), { type: 'image/png' })]);
+      if (!mask) return;
       const ratio = ratioOf(expanded.ratio, choice.spec);
-      const size = makeSize('image', ratio);
-      /* the framed picture beside the source, the new one beside it, made from it */
-      const holder = canvasId('n');
+      const size = makeSize('image', `${expanded.crop.width}:${expanded.crop.height}`);
       const id = canvasId('n');
-      const at = spotBeside(sourceId, 'source', size.w * 2 + BESIDE);
-      add({
-        nodes: [
-          { id: holder, x: at.x, y: at.y, w: size.w, h: size.h, path: framed },
-          { id, x: at.x + size.w + BESIDE, y: at.y, w: size.w, h: size.h, make: 'image', prompt: expanded.words, preset: undefined, via: choice.via, ...(choice.model ? { model: choice.model } : {}), opts: { ratio, mask } },
-        ],
-        edges: [{ id: canvasId('e'), from: sourceId, to: holder, order: 0 }, { id: canvasId('e'), from: holder, to: id, order: 0 }],
-      }, false);
+      place({ id, type: 'make', position: spotBeside(sourceId, 'source', size.w), width: size.w, height: size.h,
+        data: { make: 'image', preset: 'expand', prompt: expanded.words, via: choice.via, ...(choice.model ? { model: choice.model } : {}), opts: { ratio, mask } } },
+      { node: sourceId, side: 'source' });
       setPictureTool(null);
-      requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(id).then((ok) => (ok ? cropMade(id, expanded.crop) : undefined)); }));
+      requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(id); }));
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
+  /** a file of the project to draw, known to the board or only just brought in */
+  const srcOf = (path: string) => sources.file(byPath.get(path) ?? ({ path, name: path.split('/').pop() ?? path, kind: 'image' } as WorkspaceResource));
   /**
-   * What was made at the model's shape, cut to the canvas the person set and made its size in pixels: the node's newest
-   * version, the uncut one kept before it.
+   * What was made at the model's shape, cut to the canvas the person set and made its size in pixels: it takes the
+   * place of the uncut one as the node's newest version.
    */
   const cropMade = async (id: string, crop: Expanded['crop']) => {
+    /* the version just made reaches the board a render later */
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
     const node = now.current.nodes.find((n) => n.id === id);
     const path = node?.type === 'make' ? node.data.path : undefined;
-    const file = path ? byPath.get(path) ?? { path, name: path.split('/').pop() ?? path, kind: 'image' } : null;
-    if (!path || !file) return;
-    try {
-      const img = await new Promise<HTMLImageElement>((done, fail) => {
-        const i = new Image(); i.crossOrigin = 'anonymous';
-        i.onload = () => done(i); i.onerror = () => fail(new Error('the picture did not load')); i.src = sources.file(file as Parameters<typeof sources.file>[0]);
-      });
-      const out = document.createElement('canvas');
-      out.width = crop.width; out.height = crop.height;
-      const ctx = out.getContext('2d')!;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, crop.x * img.naturalWidth, crop.y * img.naturalHeight, crop.w * img.naturalWidth, crop.h * img.naturalHeight, 0, 0, crop.width, crop.height);
-      const blob = await new Promise<Blob | null>((done) => out.toBlob(done, 'image/png'));
-      if (!blob) return;
-      const [cut] = await onImportFiles([new File([blob], `${path.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'expanded'}-${crop.width}x${crop.height}.png`, { type: 'image/png' })]);
-      if (!cut) return;
-      setNodes((list) => list.map((n) => (n.id === id && n.type === 'make' ? { ...n, data: { ...n.data, versions: [...(n.data.versions ?? []), cut], path: cut } } : n)));
-    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    if (!path) return;
+    const img = await new Promise<HTMLImageElement>((done, fail) => {
+      const i = new Image(); i.crossOrigin = 'anonymous';
+      i.onload = () => done(i); i.onerror = () => fail(new Error('the picture did not load')); i.src = srcOf(path);
+    });
+    const out = document.createElement('canvas');
+    out.width = crop.width; out.height = crop.height;
+    const ctx = out.getContext('2d')!;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, crop.x * img.naturalWidth, crop.y * img.naturalHeight, crop.w * img.naturalWidth, crop.h * img.naturalHeight, 0, 0, crop.width, crop.height);
+    const blob = await new Promise<Blob | null>((done) => out.toBlob(done, 'image/png'));
+    if (!blob) return;
+    const [cut] = await onImportFiles([new File([blob], `${path.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'expanded'}-${crop.width}x${crop.height}.png`, { type: 'image/png' })]);
+    if (!cut) return;
+    setNodes((list) => list.map((n) => (n.id === id && n.type === 'make'
+      ? { ...n, data: { ...n.data, versions: [...(n.data.versions ?? []).filter((v) => v !== path), cut], path: cut } } : n)));
   };
   /** an edited copy of a picture (cropped, colored) brought in beside it, wired from it */
   const bringEdited = async (sourceId: string, file: File) => {

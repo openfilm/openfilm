@@ -22,12 +22,45 @@ const GROW_MAX = 4;
 /** a canvas, in the picture's pixels: the picture is at 0,0, its own size */
 interface Box { x: number; y: number; w: number; h: number }
 export interface Expanded {
-  picture: Blob; mask: Blob;
+  /** clear where the model draws, opaque on the picture: at the shape it is made at */
+  mask: Blob;
   /** the shape it is made at (one the model makes) */
   ratio: string;
   words: string;
+  /** where the picture sits in what is made, as a share of it */
+  place: { x: number; y: number; w: number; h: number };
   /** the canvas set, as a share of what is made, and its size in pixels: what is made is cut to it */
   crop: { x: number; y: number; w: number; h: number; width: number; height: number };
+}
+
+/** where the picture sits and what is cut, written into the mask's name: a node made again reads them back */
+export function expandName(stamp: string, place: Expanded['place'], crop: Expanded['crop']) {
+  const n = (r: { x: number; y: number; w: number; h: number }) => [r.x, r.y, r.w, r.h].map((v) => Math.round(v * 100000)).join('_');
+  return `expand-mask-${stamp}-p${n(place)}-c${n(crop)}-${crop.width}x${crop.height}.png`;
+}
+export function expandPlan(mask: string | undefined): { place: Expanded['place']; crop: Expanded['crop'] } | null {
+  const m = mask ? /-p(-?\d+)_(-?\d+)_(\d+)_(\d+)-c(-?\d+)_(-?\d+)_(\d+)_(\d+)-(\d+)x(\d+)\.png$/.exec(mask) : null;
+  if (!m) return null;
+  const v = m.slice(1).map(Number);
+  const k = (i: number) => v[i]! / 100000;
+  return { place: { x: k(0), y: k(1), w: k(2), h: k(3) }, crop: { x: k(4), y: k(5), w: k(6), h: k(7), width: v[8]!, height: v[9]! } };
+}
+
+/**
+ * What the model is given: the picture where it sits in the shape it is made at, on a soft blur of itself (so the new
+ * edges start from its own colors), as large as the mask.
+ */
+export async function framedPicture(picture: string, mask: string, place: Expanded['place']): Promise<Blob> {
+  const [img, m] = await Promise.all([loadImage(picture), loadImage(mask)]);
+  const W = m.naturalWidth; const H = m.naturalHeight;
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  const ctx = out.getContext('2d')!;
+  ctx.filter = 'blur(48px)';
+  ctx.drawImage(img, 0, 0, W, H);
+  ctx.filter = 'none';
+  ctx.drawImage(img, place.x * W, place.y * H, place.w * W, place.h * H);
+  return new Promise<Blob>((done, fail) => out.toBlob((x) => (x ? done(x) : fail(new Error('no picture was made'))), 'image/png'));
 }
 
 const ASK = 'Extend the picture into the empty area around it: continue the scene naturally beyond its edges with the same style, light, perspective and detail, so it reads as one seamless picture; keep the original area exactly as it is.';
@@ -182,13 +215,6 @@ export function ExpandEditor({ src, ratios, onClose, onMake }: {
       const mx = b.x - (mw - b.w) / 2; const my = b.y - (mh - b.h) / 2;
       const k = Math.min(1, LONGEST / Math.max(mw, mh));
       const PW = Math.round(mw * k); const PH = Math.round(mh * k);
-      const picture = document.createElement('canvas');
-      picture.width = PW; picture.height = PH;
-      const ctx = picture.getContext('2d')!;
-      ctx.filter = 'blur(48px)';
-      ctx.drawImage(img, 0, 0, PW, PH);
-      ctx.filter = 'none';
-      ctx.drawImage(img, -mx * k, -my * k, iw * k, ih * k);
       const mask = document.createElement('canvas');
       mask.width = PW; mask.height = PH;
       const m = mask.getContext('2d')!;
@@ -196,9 +222,10 @@ export function ExpandEditor({ src, ratios, onClose, onMake }: {
       m.fillStyle = '#000';
       const inset = Math.max(2, Math.round(Math.min(iw, ih) * k * 0.01));
       m.fillRect(-mx * k + inset, -my * k + inset, iw * k - 2 * inset, ih * k - 2 * inset);
-      const blob = (c: HTMLCanvasElement) => new Promise<Blob>((done, fail) => c.toBlob((x) => (x ? done(x) : fail(new Error('no picture was made'))), 'image/png'));
+      const blob = await new Promise<Blob>((done, fail) => mask.toBlob((x) => (x ? done(x) : fail(new Error('no mask was made'))), 'image/png'));
       await onMake({
-        picture: await blob(picture), mask: await blob(mask), ratio: made, words: [ASK, words.trim()].filter(Boolean).join('\n\n'),
+        mask: blob, ratio: made, words: [ASK, words.trim()].filter(Boolean).join('\n\n'),
+        place: { x: -mx / mw, y: -my / mh, w: iw / mw, h: ih / mh },
         crop: { x: (b.x - mx) / mw, y: (b.y - my) / mh, w: b.w / mw, h: b.h / mh, width: W, height: H },
       });
     } finally { setBusy(false); }
