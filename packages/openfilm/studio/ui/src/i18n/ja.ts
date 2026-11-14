@@ -1947,6 +1947,7 @@ export const ja: Words = {
       fromPicture: '参照画像が必要',
       groups: { story: '絵コンテ', role: 'キャラクター', scene: 'シーン', product: '商品', design: 'デザイン', edit: 'レタッチ' },
       names: {
+        cutout: '切り抜き',
         storyboard: '絵コンテ',
         grid25: '25コマ絵コンテ',
         next4: '続きの4コマ',
@@ -2029,7 +2030,8 @@ export const ja: Words = {
     write: { attach: 'ファイルを添付', unreadable: 'このファイルを読み込めません', rework: '今の内容をどう変えるか、または何を書くかを説明してください。テキスト、画像、動画、Markdown ファイルを参考として追加できます。', writing: '執筆中', stop: 'キャンセル', locate: 'キャンバスで探す', preview: 'プレビュー', attachTypes: 'テキスト、画像、動画のファイルを {n} 個まで選んでください。', placeholder: '書きたいことを説明してください。テキスト、画像、動画、Markdown ファイルを参考として追加できます。', add: '参考を追加', by: 'あなたのエージェントが書きます', busy: 'エージェントが書いています…', run: '書く', wired: '{n} 件つながっています', noAgent: 'ここで書くには、設定 → エージェントで接続してください。' },
     makeNeeds: { first: '最初のフレームを入れてください', firstLast: '最初と最後のフレームを入れてください', refs: '参考画像を 1 枚以上つないでください', omni: '対応する参照素材を少なくとも 1 つつないでください。' },
     boards: { title: 'キャンバス', numbered: 'キャンバス {n}', add: '新しいキャンバス', added: 'キャンバスを作成しました', copied: 'キャンバスを複製しました', removed: `キャンバスを${TRASH}に移しました`, more: 'その他', openApart: '新しいウィンドウで開く', rename: 'キャンバス名を変更', copy: 'キャンバスを複製', copyName: '{name} のコピー', remove: 'キャンバスを削除', onlyOne: 'プロジェクトには少なくとも 1 つのキャンバスが必要です', removeTitle: 'キャンバスを削除', removeAsk: `キャンバス「{name}」を削除しますか？内容ごと${TRASH}に移ります。`, removeYes: '削除' },
-    redraw: { removeWay: '消去', removeMake: '消去', removeHint: '任意：消したあとに何があるべきか（例：芝生）', pinHint: '番号ごとの変更を書いてください（例：1 赤い傘に、2 ここに猫を）', pen: 'ペン', arrow: '矢印', text: '文字', pin: '番号ピン', redo: 'やり直す', title: 'スマート編集', mask: '範囲を塗る', markup: '変更を描く', erase: '消しゴム', size: 'ブラシ', undo: '元に戻す', clear: 'クリア', maskHint: '塗った部分を何に変えるか（例：赤い傘に）', markupHint: '描いた印の意味（例：ここに猫を、この看板を青に）', make: '生成', noModel: '部分的な描き直しに対応するサービスがありません。OpenAI を接続するか、OpenFilm の GPT Image を使ってください。', remove: '部分変更をやめる', withMask: '塗った範囲だけ描き直す', withMarkup: '描いた印のとおりに変更' },
+    redraw: { removeWay: '消去', removeMake: '消去', removeHint: '任意：消したあとに何があるべきか（例：芝生）', pinHint: '番号ごとの変更を書いてください（例：1 赤い傘に、2 ここに猫を）', pen: 'ペン', arrow: '矢印', text: '文字', pin: '番号ピン', redo: 'やり直す', title: 'スマート編集', mask: '範囲を塗る', markup: '変更を描く', erase: '消しゴム', size: 'ブラシ', undo: '元に戻す', clear: 'クリア', maskHint: '塗った部分を何に変えるか（例：赤い傘に）', markupHint: '描いた印の意味（例：ここに猫を、この看板を青に）', make: '生成', noModel: '部分的な描き直しに対応するサービスがありません。OpenAI を接続するか、OpenFilm の GPT Image を使ってください。', remove: '部分変更をやめる', withMask: '塗った範囲だけ描き直す', withMarkup: '描いた印のとおりに変更', brush: 'ブラシ', lasso: 'なげなわ', rect: '矩形選択', box: '枠', invert: '選択を反転', show: '印を表示', hide: '印を隠す', fit: '全体を表示', zoomIn: '拡大', zoomOut: '縮小', covered: '{n}% 選択', nothingYet: 'まだ塗っていません', model: '描き直すモデル', moveHint: 'スペース + ドラッグで移動 · ピンチか ⌘ + スクロールで拡大縮小', typeHere: '入力して Enter', making: '生成中…', ideas: { color: '色を次に変える：', swap: '次に置き換える：', add: '次を加える：', look: '次のような見た目に：', follow: '印のとおりに：' } },
+    cutout: { title: 'このパソコンで切り抜く', body: '背景をこのパソコン上で取り除きます。無料で、画像はアップロードされません。初回だけ切り抜きモデルをダウンロードします。', here: 'インストール済み', installing: 'ダウンロード中 {n}%', preparing: '準備中…', failed: 'ダウンロードが完了しませんでした：{error}', other: '別のサービスを使う', install: 'ダウンロードして切り抜く', go: '切り抜く', retry: '再試行' },
     slots: { first: '最初', last: '最後' },
     history: { title: 'アセット', made: '生成履歴', uploaded: 'アップロード', thisProject: 'このプロジェクト', allProjects: 'すべてのプロジェクト', kinds: { all: 'すべて', image: '画像', video: '動画', audio: '音声' }, none: '履歴はまだありません' },
     library: { title: '素材ライブラリ', styles: 'スタイルライブラリ', effects: 'エフェクトライブラリ', short: { styles: 'スタイル', effects: 'エフェクト' }, tabs: { all: '{kind}ギャラリー', fav: 'お気に入り', recent: '最近使ったもの' }, search: { styles: 'スタイルを検索', effects: 'エフェクトを検索' }, groups: { all: 'すべて', photo: '写真', illustration: 'イラスト', three: '3D', design: 'グラフィック', move: 'カメラワーク', drone: '空撮', time: '時間', feel: '視点' }, like: 'お気に入りに追加', unlike: 'お気に入りから外す', noneLiked: 'お気に入りはまだありません', noneUsed: 'まだ使っていません', tag: { styles: 'スタイル', effects: 'カメラ' }, styleChip: 'スタイル', effectChip: 'エフェクト' },
@@ -2132,6 +2134,8 @@ export const ja: Words = {
       volume: '音量',
     },
     actions: {
+      splitAutoAbout: '画像の中の区切り線に沿って切る',
+      splitPieces: '{n} 枚',
       split: 'グリッド分割',
       splitAuto: 'グリッドを自動検出',
       splitCustom: 'カスタムグリッド',
@@ -2317,7 +2321,7 @@ export const ja: Words = {
       second: 'フィル / リムライト', secondHint: 'メインの反対側に置く弱い2灯目：背後ならリム、前ならフィル。',
       words: 'プロンプト', presets: 'プリセット', reset: 'リセット', make: '生成',
     },
-    create: { title: '作成', edit: '編集', video: '動画にする', first: 'この画像から動画', firstLast: '最初と最後のフレーム', effect: 'カメラワーク', makeN: '{n} 枚作成', ask: { expression: '表情を選ぶとすぐ作成', sizes: '作るサイズを選択', set: '作る画像を選択' }, set: { main: 'メイン', detail: 'ディテール', life: '使用シーン', ad: '広告', features: '訴求ポイント' }, about: { crop: '比率・回転・反転・傾き補正', adjust: 'ルックと光・色の微調整', split: 'グリッドに沿って1枚ずつに分割', first: 'この画像を最初のフレームに、何が起きるかを書く', firstLast: '最後のフレームにする画像を選ぶ', effect: 'エフェクトからカメラの動きを選ぶ' } },
+    create: { captions: { edit: 'このパソコンで：無料ですぐに', video: 'この画像から動画を作る', agent: 'チャットのエージェントが行います' }, count: '全 {n} 件', title: '作成', edit: '編集', video: '動画にする', first: 'この画像から動画', firstLast: '最初と最後のフレーム', effect: 'カメラワーク', makeN: '{n} 枚作成', ask: { expression: '表情を選ぶとすぐ作成', sizes: '作るサイズを選択', set: '作る画像を選択' }, set: { main: 'メイン', detail: 'ディテール', life: '使用シーン', ad: '広告', features: '訴求ポイント' }, about: { crop: '比率・回転・反転・傾き補正', adjust: 'ルックと光・色の微調整', split: 'グリッドに沿って1枚ずつに分割', first: 'この画像を最初のフレームに、何が起きるかを書く', firstLast: '最後のフレームにする画像を選ぶ', effect: 'エフェクトからカメラの動きを選ぶ' } },
   },
   timeline: {
     mediaMissing: 'メディアが見つかりません',

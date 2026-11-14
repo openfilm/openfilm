@@ -1948,6 +1948,7 @@ export const zhCN: Words = {
       fromPicture: '需参考图',
       groups: { story: '分镜', role: '角色', scene: '场景', product: '商品', design: '设计', edit: '修图' },
       names: {
+        cutout: '抠图',
         storyboard: '故事板',
         grid25: '25宫格连贯分镜',
         next4: '剧情推演四宫格',
@@ -2030,7 +2031,8 @@ export const zhCN: Words = {
     write: { attach: '上传附件', unreadable: '无法读取这个文件', rework: '说说要怎么改当前内容，或写新的。可添加文字、图片、视频或 Markdown 文件作为参考。', writing: '写作中', stop: '取消', locate: '在画布上找到它', preview: '预览', attachTypes: '请选择文本、图片或视频文件，最多 {n} 个。', placeholder: '描述你想写什么。可添加文字、图片、视频或 Markdown 文件作为参考。', add: '添加参考', by: '由你的 Agent 来写', busy: 'Agent 正在写…', run: '写', wired: '已连入 {n} 段', noAgent: '请先在设置 → Agent 中连接一个 Agent。' },
     makeNeeds: { first: '先放入首帧：在「首帧」槽位里放一张图', firstLast: '先放入首帧和尾帧：两个槽位各放一张图', refs: '至少连入一张参考图', omni: '请连入至少一个兼容的参考素材。' },
     boards: { title: '画布', numbered: '画布 {n}', add: '新建画布', added: '已创建画布', copied: '已复制画布', removed: `画布已移到${TRASH}`, more: '更多', openApart: '在新窗口打开', rename: '重命名画布', copy: '复制画布', copyName: '{name} 副本', remove: '删除画布', onlyOne: '项目至少保留一张画布', removeTitle: '删除画布', removeAsk: `确定要删除画布「{name}」吗？它和上面的内容会移到${TRASH}。`, removeYes: '删除' },
-    redraw: { removeWay: '消除', removeMake: '消除', removeHint: '可选：说说消除后那里该是什么，例如：一片草地', pinHint: '按编号说要怎么改，例如：1 换成红色的伞；2 这里加一只猫', pen: '画笔', arrow: '箭头', text: '文字', pin: '编号标记', redo: '重做', title: '智能修改', mask: '涂抹区域', markup: '画出修改', erase: '橡皮擦', size: '笔刷', undo: '撤销', clear: '清除', maskHint: '涂抹的地方改成什么，例如：换成一把红色的伞', markupHint: '你画的标记是什么意思，例如：这里加一只猫，把这块招牌改成蓝色', make: '生成', noModel: '你连接的服务都不支持局部重绘：请连接 OpenAI，或用 OpenFilm 的 GPT Image。', remove: '取消局部修改', withMask: '只重画涂抹区域', withMarkup: '按画出的标记修改' },
+    redraw: { removeWay: '消除', removeMake: '消除', removeHint: '可选：说说消除后那里该是什么，例如：一片草地', pinHint: '按编号说要怎么改，例如：1 换成红色的伞；2 这里加一只猫', pen: '画笔', arrow: '箭头', text: '文字', pin: '编号标记', redo: '重做', title: '智能修改', mask: '涂抹区域', markup: '画出修改', erase: '橡皮擦', size: '笔刷', undo: '撤销', clear: '清除', maskHint: '涂抹的地方改成什么，例如：换成一把红色的伞', markupHint: '你画的标记是什么意思，例如：这里加一只猫，把这块招牌改成蓝色', make: '生成', noModel: '你连接的服务都不支持局部重绘：请连接 OpenAI，或用 OpenFilm 的 GPT Image。', remove: '取消局部修改', withMask: '只重画涂抹区域', withMarkup: '按画出的标记修改', brush: '画笔', lasso: '套索', rect: '框选', box: '方框', invert: '反选', show: '显示标记', hide: '隐藏标记', fit: '适合窗口', zoomIn: '放大', zoomOut: '缩小', covered: '已选 {n}%', nothingYet: '还未涂抹', model: '重绘模型', moveHint: '空格 + 拖动移动 · 双指捏合或 ⌘ + 滚轮缩放', typeHere: '输入文字后按回车', making: '生成中…', ideas: { color: '把颜色改成', swap: '换成', add: '加上', look: '改成…的样子：', follow: '按标记修改：' } },
+    cutout: { title: '在本机抠图', body: '背景直接在这台电脑上去掉：免费，图片不会上传。第一次使用需要下载一次抠图模型。', here: '已安装', installing: '正在下载 {n}%', preparing: '正在准备…', failed: '下载没有完成：{error}', other: '用其他服务', install: '下载并抠图', go: '开始抠图', retry: '重试' },
     slots: { first: '首帧', last: '尾帧' },
     history: { title: '资产库', made: '生成历史', uploaded: '我上传的', thisProject: '本项目', allProjects: '全部项目', kinds: { all: '全部', image: '图片', video: '视频', audio: '音频' }, none: '暂无历史记录' },
     library: { title: '素材库', styles: '风格库', effects: '特效库', short: { styles: '风格', effects: '特效' }, tabs: { all: '{kind}广场', fav: '我的收藏', recent: '最近使用' }, search: { styles: '搜索风格名称', effects: '搜索特效名称' }, groups: { all: '全部', photo: '摄影写真', illustration: '风格插画', three: '三维', design: '平面设计', move: '运镜', drone: '航拍', time: '时间', feel: '视角' }, like: '收藏', unlike: '取消收藏', noneLiked: '还没有收藏', noneUsed: '还没有用过', tag: { styles: '风格', effects: '运镜' }, styleChip: '风格', effectChip: '特效' },
@@ -2133,6 +2135,8 @@ export const zhCN: Words = {
       volume: '音量',
     },
     actions: {
+      splitAutoAbout: '按图里找到的分隔线切开',
+      splitPieces: '{n} 张',
       split: '宫格切分',
       splitAuto: '自动识别格线',
       splitCustom: '自定义宫格',
@@ -2318,7 +2322,7 @@ export const zhCN: Words = {
       second: '补光 / 轮廓光', secondHint: '主光对面一束较弱的光：在背后时勾出轮廓，在前方时提亮暗部。',
       words: '提示词', presets: '预设', reset: '重置', make: '生成',
     },
-    create: { title: '创作', edit: '编辑', video: '做成视频', first: '首帧生成视频', firstLast: '首尾帧视频', effect: '运镜特效', makeN: '生成 {n} 张', ask: { expression: '选一种表情，直接生成', sizes: '选要做的尺寸', set: '选要做的图' }, set: { main: '白底主图', detail: '细节特写', life: '使用场景', ad: '广告大片', features: '卖点图' }, about: { crop: '比例、旋转、翻转、拉直', adjust: '风格滤镜和光影色彩细调', split: '按格线切成一张张', first: '以这张图为第一帧，写下要发生什么', firstLast: '再选一张图作为最后一帧', effect: '从运镜特效库挑一种镜头运动' } },
+    create: { captions: { edit: '在这台电脑上完成：免费、即时', video: '用这张图生成视频', agent: '由对话里的 Agent 完成' }, count: '共 {n} 个', title: '创作', edit: '编辑', video: '做成视频', first: '首帧生成视频', firstLast: '首尾帧视频', effect: '运镜特效', makeN: '生成 {n} 张', ask: { expression: '选一种表情，直接生成', sizes: '选要做的尺寸', set: '选要做的图' }, set: { main: '白底主图', detail: '细节特写', life: '使用场景', ad: '广告大片', features: '卖点图' }, about: { crop: '比例、旋转、翻转、拉直', adjust: '风格滤镜和光影色彩细调', split: '按格线切成一张张', first: '以这张图为第一帧，写下要发生什么', firstLast: '再选一张图作为最后一帧', effect: '从运镜特效库挑一种镜头运动' } },
   },
   timeline: {
     mediaMissing: '找不到媒体',

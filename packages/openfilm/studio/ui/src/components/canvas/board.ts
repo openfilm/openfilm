@@ -7,7 +7,7 @@ import React from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import { api, type CanvasCharacter } from '@/api';
 import type { RedrawStart } from './redraw';
-import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, makeRequest } from '@/lib/canvas';
+import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec } from '@/lib/canvas';
 import type { ProvidersState } from '@/lib/providers';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 
@@ -293,7 +293,7 @@ export const runsChanged = () => { runsVersion += 1; for (const watch of runWatc
 export const useRuns = () => React.useSyncExternalStore((watch) => { runWatchers.add(watch); return () => { runWatchers.delete(watch); }; }, () => runsVersion);
 
 /** Whether it made one (false: it failed, was stopped, or was being made already). */
-export async function startRun(project: string, folder: string, node: string, request: ReturnType<typeof makeRequest>, pick: { via?: string; model?: string }, key: string,
+export async function startRun(project: string, folder: string, node: string, request: { verb: string; args: Record<string, string | string[]> }, pick: { via?: string; model?: string }, key: string,
   say: { nothing: string; balance: string }, board = 'main'): Promise<boolean> {
   const id = `${project}/${node}`;
   if (runs.has(id)) return false;

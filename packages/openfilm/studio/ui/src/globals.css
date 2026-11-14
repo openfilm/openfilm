@@ -713,7 +713,7 @@ html[data-file-drag] iframe { pointer-events: none; }
  */
 .cv-veil { background: color-mix(in srgb, var(--cv-card) 94%, transparent); }
 /* a picture, clip or sound being made: a surface of its own, lifted off the board, so the card reads as there and busy */
-.cv-veil-making { background: linear-gradient(135deg, color-mix(in srgb, var(--cv-ink) 11%, var(--cv-card)), color-mix(in srgb, var(--cv-ink) 5%, var(--cv-card)) 65%, color-mix(in srgb, var(--cv-edge-lit) 8%, var(--cv-card))); }
+.cv-veil-making { background: linear-gradient(135deg, color-mix(in srgb, var(--cv-ink) 14%, var(--cv-card)), color-mix(in srgb, var(--cv-ink) 8%, var(--cv-card)) 60%, color-mix(in srgb, var(--cv-edge-lit) 12%, var(--cv-card))); }
 .cv-dots, .cv-dots::after {
   position: absolute; inset: 0; background-size: 18px 18px; background-position: 9px 9px;
   mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 35%, transparent 100%);
@@ -727,6 +727,9 @@ html[data-file-drag] iframe { pointer-events: none; }
   mask-size: 100% 100%, 260% 100%; mask-repeat: no-repeat; mask-composite: intersect;
   animation: cv-dot-wave 2.4s cubic-bezier(0.45, 0, 0.35, 1) infinite;
 }
+/* a selection being drawn (smart edit's lasso and box): its dashed edge running round it */
+@keyframes cv-ants { to { stroke-dashoffset: -40; } }
+.cv-ants { animation: cv-ants 1.2s linear infinite; }
 /* a node found from what is made from it: a ring flashing once round its card */
 @keyframes cv-flash { 0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } 30% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.55); } }
 .openfilm-canvas .react-flow__node.cv-flash [data-canvas-card] { animation: cv-flash 0.7s ease-out; }

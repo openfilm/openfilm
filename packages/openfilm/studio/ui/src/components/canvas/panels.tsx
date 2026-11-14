@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  ArrowUp, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb,
+  ArrowUp, ArrowUpRight, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -33,7 +33,7 @@ import { WRITING_ATTACHMENT_ACCEPT, WRITING_ATTACHMENT_LIMIT, writingAttachmentK
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
 /** the lengths offered for each kind, in seconds */
 const MAKE_LENGTHS: Partial<Record<MakeData['make'], number[]>> = { video: [4, 5, 6, 8, 10, 15], sfx: [1, 2, 3, 5, 10], music: [15, 30, 60, 120] };
-const CARD = 'cv-pop rounded-[12px] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
+const CARD = 'cv-pop rounded-[16px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
 /** a choice in a settings popover: a soft cell, the one in use lit with a hairline round it */
 const OPTION = 'rounded-[8px] text-[12px] transition';
 const OPTION_ON = 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)] ring-1 ring-inset ring-[color-mix(in_srgb,var(--cv-ink)_28%,transparent)]';
@@ -223,27 +223,27 @@ export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceReso
               trigger={<button type="button" className={`${btn} ${open === 'create' ? 'bg-[var(--cv-float-hover)]' : ''}`} onClick={() => setOpen(open === 'create' ? null : 'create')}><LayoutDashboard size={16} />{t('canvas.create.title')}<ChevronDown size={13} className={`transition-transform duration-200 ${open === 'create' ? 'rotate-180' : ''}`} /></button>}>
               <PresetPicker hasPicture onPick={from} tools={tools} />
             </Popover>
-            <ToolMenu label={t('canvas.create.edit')} icon={SlidersHorizontal} open={open === 'edit'} onOpen={(v) => setOpen(v ? 'edit' : null)} sections={[{ items: [
+            <ToolMenu label={t('canvas.create.edit')} caption={t('canvas.create.captions.edit')} tone="blue" icon={SlidersHorizontal} open={open === 'edit'} onOpen={(v) => setOpen(v ? 'edit' : null)} items={[
               { key: 'crop', icon: Crop, label: t('canvas.tools.crop'), about: t('canvas.create.about.crop'), run: () => board.openTool(id, file.path, 'crop') },
               { key: 'adjust', icon: Palette, label: t('canvas.tools.adjust'), about: t('canvas.create.about.adjust'), run: () => board.openTool(id, file.path, 'adjust') },
               { key: 'split', icon: Grid2x2, label: t('canvas.actions.split'), about: t('canvas.create.about.split'), more: <GridPicker onPick={(rows, cols) => { setOpen(null); board.split(id, file.path, rows, cols); }} /> },
               ...(can.mask ? [{ key: 'layers', icon: Layers, label: t('canvas.marketing.layers'), about: t('canvas.marketing.layersAbout'), run: () => board.layers(id, file.path) }] : []),
-            ] }]} />
+            ]} />
             {can.video ? (
-              <ToolMenu label={t('canvas.create.video')} icon={Clapperboard} open={open === 'video'} onOpen={(v) => setOpen(v ? 'video' : null)} sections={[{ items: [
+              <ToolMenu label={t('canvas.create.video')} caption={t('canvas.create.captions.video')} tone="violet" icon={Clapperboard} open={open === 'video'} onOpen={(v) => setOpen(v ? 'video' : null)} items={[
                 { key: 'motion', icon: Sparkles, label: t('canvas.marketing.motion'), about: t('canvas.marketing.motionAbout'), run: () => clip({ prompt: MOTION_WORDS }) },
                 { key: 'first', icon: Film, label: t('canvas.create.first'), about: t('canvas.create.about.first'), run: () => clip({}) },
                 { key: 'firstLast', icon: Repeat, label: t('canvas.create.firstLast'), about: t('canvas.create.about.firstLast'), run: () => board.pick(clip({ opts: { mode: 'firstLast' } })) },
                 { key: 'effect', icon: Orbit, label: t('canvas.create.effect'), about: t('canvas.create.about.effect'), run: () => board.openLibrary('effects', clip({})) },
-              ] }]} />
+              ]} />
             ) : null}
             {can.agent ? (
-              <ToolMenu label={t('canvas.assist.title')} icon={MessageSquareText} open={open === 'agent'} onOpen={(v) => setOpen(v ? 'agent' : null)} sections={[{ items: [
+              <ToolMenu label={t('canvas.assist.title')} caption={t('canvas.create.captions.agent')} tone="amber" icon={MessageSquareText} open={open === 'agent'} onOpen={(v) => setOpen(v ? 'agent' : null)} items={[
                 { key: 'shots', icon: Clapperboard, label: t('canvas.assist.shots'), about: t('canvas.assist.shotsAbout'), run: () => board.assist(id, file.path, 'shots') },
                 { key: 'prompt', icon: FileText, label: t('canvas.assist.prompt'), about: t('canvas.assist.promptAbout'), run: () => board.assist(id, file.path, 'prompt') },
                 { key: 'ideas', icon: Lightbulb, label: t('canvas.assist.ideas'), about: t('canvas.assist.ideasAbout'), run: () => board.assist(id, file.path, 'ideas') },
                 { key: 'text', icon: TypeIcon, label: t('canvas.marketing.editText'), about: t('canvas.marketing.editTextAbout'), run: () => board.assist(id, file.path, 'text') },
-              ] }]} />
+              ]} />
             ) : null}
             {line}
           </>
@@ -436,14 +436,18 @@ function PresetPicker({ picked, hasPicture, onPick, tools }: { picked?: string; 
     else if (k === 'swap' || k === 'blend' || k === 'upscale') tools?.[k]();
   };
   return (
-    <div className={`w-[560px] p-3 ${CARD}`}>
-      <div className="mb-3 flex flex-wrap gap-1">
-        {PRESET_GROUPS.map((group) => (
-          <button key={group} type="button" onClick={() => { setTab(group); setAsking(null); }}
-            className={`h-7 rounded-[8px] px-2.5 text-[13px] transition ${group === tab ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
-            {t(`canvas.presets.groups.${group}`)}
-          </button>
-        ))}
+    <div className={`w-[588px] p-3 ${CARD}`}>
+      {/* its kinds, as one segmented row */}
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-0.5 rounded-[11px] bg-[var(--cv-chip)] p-[3px]">
+          {PRESET_GROUPS.map((group) => (
+            <button key={group} type="button" onClick={() => { setTab(group); setAsking(null); }}
+              className={`h-7 rounded-[8px] px-2.5 text-[12.5px] transition ${group === tab ? 'bg-[var(--cv-modal)] text-[var(--cv-ink)] shadow-[0_1px_3px_rgba(0,0,0,0.25)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
+              {t(`canvas.presets.groups.${group}`)}
+            </button>
+          ))}
+        </div>
+        <span className="shrink-0 pr-1 text-[11.5px] tabular-nums text-[var(--cv-ink-3)]">{t('canvas.create.count').replace('{n}', String(cards.length))}</span>
       </div>
       <PictureCards cards={cards} picked={asking ? `tool:${asking}` : picked} hasPicture={hasPicture} onPick={pick} />
       {asking && tools ? <Asking which={asking} tools={tools} onBack={() => setAsking(null)} /> : null}
@@ -459,7 +463,7 @@ function Asking({ which, tools, onBack }: { which: keyof CardTools; tools: CardT
   const chip = (on: boolean) => `flex h-8 items-center gap-1.5 rounded-[9px] px-2.5 text-[13px] transition ${on ? 'bg-[color-mix(in_srgb,var(--cv-edge-lit)_20%,transparent)] text-[var(--cv-ink)] ring-1 ring-inset ring-[var(--cv-edge-lit)]' : 'bg-[var(--cv-chip)] text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]'}`;
   const go = 'ml-auto flex h-8 shrink-0 items-center gap-1.5 rounded-[9px] bg-[var(--cv-invert)] px-3 text-[13px] font-medium text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:opacity-40';
   return (
-    <div className="cv-fade mt-3 border-t !border-[var(--cv-float-line)] pt-3">
+    <div className="cv-fade mt-3 rounded-[12px] bg-[color-mix(in_srgb,var(--cv-ink)_3.5%,transparent)] p-3 ring-1 ring-inset ring-[var(--cv-float-line)]">
       <div className="mb-2.5 flex items-center gap-2">
         <span className="text-[13px] font-medium text-[var(--cv-ink)]">{t(TOOL_CARD[which].name)}</span>
         <span className="text-[12px] text-[var(--cv-ink-3)]">{t(`canvas.create.ask.${which}`)}</span>
@@ -505,22 +509,24 @@ type Card = { id: string; picture: string; name: string; needsPicture?: boolean 
 function PictureCards({ cards, picked, hasPicture, onPick }: { cards: Card[]; picked?: string; hasPicture: boolean; onPick: (id: string) => void }) {
   const t = useT();
   return (
-    <div className="grid max-h-[400px] grid-cols-3 gap-x-2.5 gap-y-3 overflow-y-auto">
+    <div className="-m-1 grid max-h-[400px] grid-cols-3 gap-x-1 gap-y-1.5 overflow-y-auto">
       {cards.map((c) => {
         const off = c.needsPicture && !hasPicture;
         return (
           <button key={c.id} type="button" disabled={off} onClick={() => onPick(c.id)} title={off ? t('canvas.presets.needsPicture') : undefined}
-            className="group/preset min-w-0 text-left disabled:cursor-not-allowed">
-            <span className={`relative block aspect-[3/2] overflow-hidden rounded-[10px] bg-[var(--cv-chip)] ${picked === c.id ? 'ring-2 ring-[var(--cv-ring)]' : 'ring-1 ring-inset ring-[var(--cv-float-line)]'}`}>
+            className="group/preset min-w-0 rounded-[13px] p-1 text-left transition duration-150 hover:bg-[var(--cv-float-hover)] disabled:cursor-not-allowed disabled:hover:bg-transparent">
+            <span className={`relative block aspect-[3/2] overflow-hidden rounded-[10px] bg-[var(--cv-chip)] transition duration-200 ${picked === c.id ? 'ring-2 ring-[var(--cv-ring)]' : 'ring-1 ring-inset ring-[var(--cv-float-line)] group-hover/preset:shadow-[0_6px_18px_rgba(0,0,0,0.28)]'}`}>
               {PRESET_PICTURES[c.picture] ? <img src={PRESET_PICTURES[c.picture]} alt="" draggable={false} loading="lazy"
-                className={`h-full w-full object-cover transition duration-300 ${off ? 'opacity-40' : 'group-hover/preset:scale-[1.04]'}`} /> : null}
+                className={`h-full w-full object-cover transition duration-500 ease-out ${off ? 'opacity-40 grayscale' : 'group-hover/preset:scale-[1.05]'}`} /> : null}
+              {/* a soft shade at its foot, lighter on the one pointed at */}
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/25 to-transparent opacity-60 transition group-hover/preset:opacity-0" />
               {off ? (
                 <span className="absolute left-1.5 top-1.5 flex h-5 items-center gap-1 rounded-[6px] bg-black/60 px-1.5 text-[10.5px] text-white backdrop-blur-sm">
                   <ImageIcon size={11} />{t('canvas.presets.fromPicture')}
                 </span>
               ) : null}
             </span>
-            <span className={`mt-1.5 block truncate px-0.5 text-[13px] ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)]'}`}>{c.name}</span>
+            <span className={`mt-1.5 block truncate px-1 text-[12.5px] ${off ? 'text-[var(--cv-ink-3)]' : 'text-[var(--cv-ink)]'}`}>{c.name}</span>
           </button>
         );
       })}
@@ -540,53 +546,83 @@ const EXPRESSIONS: Array<[string, string, string]> = [
 /** the shapes a picture is made again at, each with where it is used */
 const SIZES: Array<[string, string]> = [['1:1', 'square'], ['3:4', 'portrait'], ['9:16', 'story'], ['16:9', 'wide'], ['4:3', 'landscape'], ['2:3', 'poster'], ['21:9', 'banner']];
 
-type MenuItem = { key: string; icon: React.ComponentType<{ size?: number }>; label: string; about: string; run?: () => void; more?: React.ReactNode };
+type MenuItem = { key: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; label: string; about: string; run?: () => void; more?: React.ReactNode };
+/** a menu's own color: its marks tinted with it, so each menu reads as its own kind of work */
+const MENU_TONES = { blue: '#5b8cff', violet: '#a07bff', amber: '#f3a43b', green: '#34c48b' } as const;
+type Tone = keyof typeof MENU_TONES;
+/** a mark on a soft square of its menu's color */
+function ToneMark({ icon: Icon, tone, size = 34 }: { icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; tone: Tone; size?: number }) {
+  const c = MENU_TONES[tone];
+  return (
+    <span className="flex shrink-0 items-center justify-center rounded-[10px]"
+      style={{ width: size, height: size, color: `color-mix(in srgb, ${c} 75%, var(--cv-ink))`, background: `linear-gradient(140deg, color-mix(in srgb, ${c} 26%, transparent), color-mix(in srgb, ${c} 8%, transparent))`, boxShadow: `inset 0 0 0 0.5px color-mix(in srgb, ${c} 35%, transparent)` }}>
+      <Icon size={Math.round(size * 0.48)} strokeWidth={1.8} />
+    </span>
+  );
+}
 /**
- * A menu of a picture's bar: its sections, each item its mark on a soft square, its name and what it does; one that
- * asks something first opens its choices in place, under it (never a menu beside the menu).
+ * A menu of a picture's bar: its name and what its tools have in common at the top, then its tools as tiles two by
+ * two, each its mark on its menu's color, its name and what it does; one that asks something first opens its choices
+ * in place, under the tiles (never a menu beside the menu).
  */
-function ToolMenu({ label, icon: Icon, open, onOpen, sections }: {
-  label: string; icon: React.ComponentType<{ size?: number }>; open: boolean; onOpen: (open: boolean) => void;
-  sections: Array<{ title?: string; items: MenuItem[] }>;
+function ToolMenu({ label, caption, tone, icon: Icon, open, onOpen, items }: {
+  label: string; caption: string; tone: Tone; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; open: boolean; onOpen: (open: boolean) => void;
+  items: MenuItem[];
 }) {
   const [more, setMore] = React.useState<string | null>(null);
   React.useEffect(() => { if (!open) setMore(null); }, [open]);
   const btn = 'cv-tool nodrag flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
-  const shown = sections.filter((section) => section.items.length);
-  if (!shown.length) return null;
+  if (!items.length) return null;
+  const opened = items.find((item) => item.key === more);
   return (
     <Popover open={open} onOpenChange={onOpen} placement="bottom" align="start"
       trigger={<button type="button" className={`${btn} ${open ? 'bg-[var(--cv-float-hover)]' : ''}`} onClick={() => onOpen(!open)}><Icon size={16} />{label}<ChevronDown size={13} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} /></button>}>
-      <div className={`max-h-[min(70vh,620px)] w-[320px] overflow-y-auto p-1.5 ${CARD}`}>
-        {shown.map((section, si) => (
-          <div key={section.title ?? si} className={si ? 'mt-1 border-t !border-[var(--cv-float-line)] pt-1' : ''}>
-            {section.title ? <div className="px-2.5 pb-1 pt-1.5 text-[11.5px] font-medium text-[var(--cv-ink-3)]">{section.title}</div> : null}
-            {section.items.map((item) => {
-              const ItemIcon = item.icon;
-              const opened = more === item.key;
-              return (
-                <div key={item.key}>
-                  <button type="button" onClick={() => { if (item.more) setMore(opened ? null : item.key); else { onOpen(false); item.run?.(); } }}
-                    className={`flex w-full items-center gap-3 rounded-[10px] px-2 py-1.5 text-left transition hover:bg-[var(--cv-float-hover)] ${opened ? 'bg-[var(--cv-float-hover)]' : ''}`}>
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-[var(--cv-chip)] text-[var(--cv-ink)]"><ItemIcon size={16} /></span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13.5px] leading-5 text-[var(--cv-ink)]">{item.label}</span>
-                      <span className="block truncate text-[12px] leading-4 text-[var(--cv-ink-3)]">{item.about}</span>
-                    </span>
-                    {item.more ? <ChevronDown size={14} className={`shrink-0 text-[var(--cv-ink-3)] transition-transform duration-200 ${opened ? 'rotate-180' : ''}`} /> : null}
-                  </button>
-                  {item.more ? (
-                    <div className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${opened ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                      <div className="min-h-0 overflow-hidden">{opened ? <div className="px-2 pb-2 pt-1">{item.more}</div> : null}</div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        ))}
+      <div className={`w-[372px] p-2 ${CARD}`}>
+        <div className="flex items-center gap-2.5 px-2 pb-2.5 pt-1.5">
+          <ToneMark icon={Icon} tone={tone} size={28} />
+          <span className="min-w-0">
+            <span className="block text-[13.5px] font-semibold leading-5 text-[var(--cv-ink)]">{label}</span>
+            <span className="block truncate text-[11.5px] leading-4 text-[var(--cv-ink-3)]">{caption}</span>
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {items.map((item) => {
+            const on = more === item.key;
+            return (
+              <button key={item.key} type="button" onClick={() => { if (item.more) setMore(on ? null : item.key); else { onOpen(false); item.run?.(); } }}
+                className={`group/tool flex min-w-0 flex-col items-start gap-2 rounded-[12px] p-2.5 text-left transition duration-150 ${on ? 'bg-[var(--cv-float-hover)] ring-1 ring-inset ring-[color-mix(in_srgb,var(--cv-ink)_22%,transparent)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_3.5%,transparent)] hover:bg-[var(--cv-float-hover)]'}`}>
+                <span className="flex w-full items-center justify-between">
+                  <ToneMark icon={item.icon} tone={tone} size={30} />
+                  {item.more ? <ChevronDown size={14} className={`text-[var(--cv-ink-3)] transition-transform duration-200 ${on ? 'rotate-180' : ''}`} />
+                    : <ArrowUpRight size={14} className="text-[var(--cv-ink-3)] opacity-0 transition duration-150 group-hover/tool:translate-x-0.5 group-hover/tool:-translate-y-0.5 group-hover/tool:opacity-100" />}
+                </span>
+                <span className="w-full min-w-0">
+                  <span className="block truncate text-[13px] font-medium leading-5 text-[var(--cv-ink)]">{item.label}</span>
+                  <span className="line-clamp-2 block text-[11.5px] leading-[15px] text-[var(--cv-ink-3)]">{item.about}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {/* what a tile that asks first asks, under the tiles */}
+        <div className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${opened ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+          <div className="min-h-0 overflow-hidden">{opened?.more ? <div className="mt-2 rounded-[12px] bg-[color-mix(in_srgb,var(--cv-ink)_3.5%,transparent)] p-3">{opened.more}</div> : null}</div>
+        </div>
       </div>
     </Popover>
+  );
+}
+
+/** a grid's look, `cols` × `rows` small squares */
+function GridGlyph({ rows, cols, size = 22 }: { rows: number; cols: number; size?: number }) {
+  const gap = 1.5;
+  const w = (size - gap * (cols - 1)) / cols; const h = (size - gap * (rows - 1)) / rows;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+      {Array.from({ length: rows * cols }, (_, i) => (
+        <rect key={i} x={(i % cols) * (w + gap)} y={Math.floor(i / cols) * (h + gap)} width={w} height={h} rx={1.2} fill="currentColor" opacity={0.85} />
+      ))}
+    </svg>
   );
 }
 
@@ -597,29 +633,38 @@ function ToolMenu({ label, icon: Icon, open, onOpen, sections }: {
 function GridPicker({ onPick }: { onPick: (rows: number, cols: number) => void }) {
   const t = useT();
   const [over, setOver] = React.useState<{ r: number; c: number } | null>(null);
-  const cell = 'h-[18px] w-[18px] rounded-[4px] border transition-colors';
+  const tile = 'flex flex-col items-center justify-center gap-1.5 rounded-[10px] bg-[var(--cv-chip)] text-[12px] tabular-nums text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
   return (
     <div>
-      <button type="button" onClick={() => onPick(0, 0)} className={`${PICK} w-full !h-8 !text-[13px]`}><Sparkles size={14} />{t('canvas.actions.splitAuto')}</button>
-      <div className="mt-1.5 grid grid-cols-4 gap-1">
+      <button type="button" onClick={() => onPick(0, 0)}
+        className="flex w-full items-center gap-2.5 rounded-[10px] bg-[linear-gradient(120deg,color-mix(in_srgb,#5b8cff_20%,transparent),color-mix(in_srgb,#5b8cff_6%,transparent))] px-3 py-2.5 text-left transition hover:brightness-110">
+        <Sparkles size={15} className="shrink-0 text-[color-mix(in_srgb,#5b8cff_75%,var(--cv-ink))]" />
+        <span className="min-w-0">
+          <span className="block text-[13px] font-medium text-[var(--cv-ink)]">{t('canvas.actions.splitAuto')}</span>
+          <span className="block truncate text-[11.5px] text-[var(--cv-ink-3)]">{t('canvas.actions.splitAutoAbout')}</span>
+        </span>
+      </button>
+      <div className="mt-2 grid grid-cols-4 gap-1.5">
         {[2, 3, 4, 5].map((n) => (
-          <button key={n} type="button" onClick={() => onPick(n, n)} className={`h-8 ${OPTION} ${OPTION_OFF}`}>{n}×{n}</button>
+          <button key={n} type="button" onClick={() => onPick(n, n)} className={`h-[62px] ${tile}`}><GridGlyph rows={n} cols={n} />{n} × {n}</button>
         ))}
       </div>
-      <div className={`${OPTION_TITLE} mt-3 px-0.5`}>{t('canvas.actions.splitCustom')}</div>
-      <div className="relative" onMouseLeave={() => setOver(null)}>
-        <div className="grid w-max grid-cols-8 gap-1">
+      <div className="mb-2 mt-3 flex items-center justify-between px-0.5 text-[11.5px] text-[var(--cv-ink-3)]">
+        <span>{t('canvas.actions.splitCustom')}</span>
+        <span className="tabular-nums text-[var(--cv-ink)]">{over ? `${over.c} × ${over.r} · ${t('canvas.actions.splitPieces').replace('{n}', String(over.r * over.c))}` : ''}</span>
+      </div>
+      <div className="flex justify-center" onMouseLeave={() => setOver(null)}>
+        <div className="grid w-max grid-cols-8 gap-[3px] rounded-[10px] bg-[var(--cv-chip)] p-[6px]">
           {Array.from({ length: 64 }, (_, i) => {
             const r = Math.floor(i / 8) + 1;
             const c = (i % 8) + 1;
             const lit = over && r <= over.r && c <= over.c;
             return (
               <button key={i} type="button" aria-label={`${c}×${r}`} onMouseEnter={() => setOver({ r, c })} onFocus={() => setOver({ r, c })} onClick={() => onPick(r, c)}
-                className={`${cell} ${lit ? 'border-[var(--cv-edge-lit)] bg-[color-mix(in_srgb,var(--cv-edge-lit)_22%,transparent)]' : 'border-[var(--cv-float-line)] bg-[var(--cv-chip)]'}`} />
+                className={`h-[22px] w-[22px] rounded-[5px] transition-colors duration-75 ${lit ? 'bg-[color-mix(in_srgb,#5b8cff_70%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,#5b8cff_90%,white)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_7%,transparent)] hover:bg-[color-mix(in_srgb,var(--cv-ink)_14%,transparent)]'}`} />
             );
           })}
         </div>
-        <div className="mt-2 h-5 text-center text-[12.5px] tabular-nums text-[var(--cv-ink-2)]">{over ? `${over.c} × ${over.r}` : ''}</div>
       </div>
     </div>
   );

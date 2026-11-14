@@ -49,6 +49,7 @@ import { BottomToolbar, CornerBar, Dots, EmptyBoard, Outline, Ripples, ToolCorne
 import { AddMenu, type MenuAt } from './menus';
 import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from './connections';
 import { CharacterLibrary, HistoryModal, MaterialLibrary, SUBJECT_KINDS, SUBJECT_PARTS, loadSubjects } from './libraries';
+import { CutoutSetup } from './cutout';
 import { RedrawEditor, type RedrawStart, type RedrawWay } from './redraw';
 import { ExpandEditor, type Expanded } from './expand';
 import { CropEditor } from './crop';
@@ -154,6 +155,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   const [redraw, setRedraw] = React.useState<{ id: string; path: string; start?: RedrawStart } | null>(null);
   /* a picture's own tool open over the board */
   const [pictureTool, setPictureTool] = React.useState<{ id: string; path: string; tool: PictureTool } | null>(null);
+  /* a cut-out asked for while nothing here cuts out: what to do once the way to cut out is there */
+  const [cutoutThen, setCutoutThen] = React.useState<{ run: () => void } | null>(null);
   /* the node a library was opened for (its panel's chip): what is picked goes into it */
   const [modalFor, setModalFor] = React.useState<string | null>(null);
   const openLibrary = (which: 'characters' | 'styles' | 'effects', node?: string) => { setModalFor(node ?? null); setModal(which); };
@@ -655,6 +658,15 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (wired.some((n) => n && n.text != null && n.group == null && !n.text.trim())) return fail('canvas.make.emptyNote');
     if (wired.some((n) => n?.make && !n.path)) return fail('canvas.make.unmadeInput');
     const inputs = inputsOf(doc, id, mediaOf);
+    /* a cut-out: the first picture wired in, its background taken out by what cuts out here (Settings: Local services,
+       or another service); nothing does yet: the way to have it, then made */
+    if (node.preset === 'cutout') {
+      const picture = inputs.find((i) => 'media' in i && i.media === 'image');
+      if (!picture || !('path' in picture)) return fail('canvas.makeNeeds.refs');
+      if (!providers?.use.cutout) { setCutoutThen({ run: () => { void makeNow(id); } }); return Promise.resolve(false); }
+      return startRun(projectId, folder, id, { verb: 'cutout', args: { src: picture.path, out: makeName(node as MakingNode) } }, {}, inputsKey(node, inputs),
+        { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') }, boardId);
+    }
     const choice = choiceOf(providers, node.make, node.via, node.model);
     const spec = choice?.spec;
     /* a subject named with @ in its words: said as the reference picture it is (its picture wired in, named for it) */
@@ -922,14 +934,24 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     });
     requestAnimationFrame(() => requestAnimationFrame(() => { void flow.fitView({ nodes: [{ id: group }], padding: 0.15, maxZoom: 1, duration: 300 }); void makeAll(group); }));
   };
+  /* the connected models that redraw part of a picture; the one picked first: the picture's own node's model, else the
+     last picture model used, when it redraws so */
+  const redrawModels = choicesFor(providers, 'image').filter((c) => c.spec?.mask || c.spec?.markup);
+  const keyOfChoice = (c: { via: string; model?: string }) => `${c.via}/${c.model ?? ''}`;
+  const redrawFirst = (id: string) => {
+    const own = now.current.nodes.find((n) => n.id === id);
+    const mine = own?.type === 'make' && own.data.via ? { via: own.data.via, model: own.data.model } : null;
+    const last = lastModel('image');
+    return [mine, last].map((c) => (c ? keyOfChoice(c) : null)).find((k) => k && redrawModels.some((c) => keyOfChoice(c) === k)) ?? undefined;
+  };
   /**
    * A picture changed in part: what was drawn kept in the project (a mask or a markup), and a new picture made from it
    * beside it, by a model that redraws so, at once.
    */
-  const redrawMake = async (way: RedrawWay, drawn: Blob, prompt: string) => {
+  const redrawMake = async (way: RedrawWay, drawn: Blob, prompt: string, model: string) => {
     const source = redraw;
     if (!source) return;
-    const choice = choicesFor(providers, 'image').find((c) => c.spec?.[way]);
+    const choice = redrawModels.find((c) => keyOfChoice(c) === model && c.spec?.[way]) ?? redrawModels.find((c) => c.spec?.[way]);
     if (!choice) { onError(t('canvas.redraw.noModel')); return; }
     try {
       const [kept] = await onImportFiles([new File([drawn], `${way}-${Date.now().toString(36)}.png`, { type: 'image/png' })]);
@@ -1013,6 +1035,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (!folder) return;
     const source = byPath.get(path);
     if (!source) return;
+    if (!providers?.use.cutout) { setCutoutThen({ run: () => { void splitLayers(sourceId, path); } }); return; }
     const base = source.name.replace(/\.[^.]+$/, '');
     onNotice(t('canvas.marketing.parting'));
     try {
@@ -1217,12 +1240,14 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       uploadFiles(list, { at: spotBeside(id, 'source', FILE_W), from: { node: id, side: 'source' }, corner: true, wireFirstOnly: true });
     },
     cutout: (id, path) => {
-      if (!folder) return;
-      onNotice(t('canvas.actions.cutting'));
-      void api.make(folder, 'cutout', { src: path, out: `${path.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'picture'}-cutout` }, {}).then((text) => {
-        const receipt = JSON.parse(text) as { src?: string };
-        if (receipt.src) addFile(receipt.src, { at: spotBeside(id, 'source', FILE_W), from: { node: id, side: 'source' }, corner: true });
-      }, (e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+      /* a card beside it, wired from it, its shape, cut out at once (on the board as anything being made is) */
+      const picture = byPath.get(path);
+      const ratio = picture?.w && picture.h ? `${picture.w}:${picture.h}` : '1:1';
+      const size = makeSize('image', ratio);
+      const made = canvasId('n');
+      place({ id: made, type: 'make', position: spotBeside(id, 'source', size.w), width: size.w, height: size.h,
+        data: { make: 'image', prompt: '', preset: 'cutout', opts: { ratio } } }, { node: id, side: 'source' });
+      requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(made); }));
     },
     split: (id, path, rows, cols) => {
       const picture = byPath.get(path);
@@ -1763,9 +1788,14 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           onTemplates={(from) => { setContext(null); setMenu({ screen: { x: from.left, y: from.top }, above: true, at: middle(), view: 'templates' }); }}
           onLibrary={(which) => openLibrary(which)} onCharacters={() => openLibrary('characters')} onHistory={() => setModal('history')}
         />}
+        {cutoutThen ? (
+          <CutoutSetup onClose={() => setCutoutThen(null)} onSettings={() => { setCutoutThen(null); onOpenSettings(); }}
+            onReady={() => { const then = cutoutThen; setCutoutThen(null); requestAnimationFrame(() => then.run()); }} />
+        ) : null}
         {redraw && byPath.get(redraw.path) ? (
           <RedrawEditor src={sources.file(byPath.get(redraw.path)!)} start={redraw.start} onClose={() => setRedraw(null)} onMake={redrawMake}
-            can={{ mask: choicesFor(providers, 'image').some((c) => c.spec?.mask), markup: choicesFor(providers, 'image').some((c) => c.spec?.markup) }} />
+            models={redrawModels.map((c) => ({ key: keyOfChoice(c), name: c.name, via: c.via, mask: Boolean(c.spec?.mask), markup: Boolean(c.spec?.markup) }))}
+            model={redrawFirst(redraw.id)} />
         ) : null}
         {/* a picture's own tools: widened, cropped and turned, colored, lit anew */}
         {pictureTool && byPath.get(pictureTool.path) ? (() => {

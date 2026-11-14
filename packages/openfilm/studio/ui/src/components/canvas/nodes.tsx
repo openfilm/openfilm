@@ -135,12 +135,20 @@ function useNumber(id: string): number {
   return useStore((s) => numberOf(s.nodes as BoardNode[], id));
 }
 
+/** A picture's or a clip's shape, width over height, when it is known; a sound or a page has none. */
+const aspectOf = (file: WorkspaceResource | null | undefined) =>
+  file && (file.kind === 'image' || file.kind === 'video') && file.w && file.h ? file.w / file.h : undefined;
+/** A shape asked for ("16:9") as width over height. */
+const ratioAspect = (ratio: string) => { const [w, h] = ratio.split(':').map(Number); return w && h ? w / h : undefined; };
+
 /** What every node is drawn in: its name row above, its card, its sides. */
-function Frame({ id, selected, icon: Icon, title, meta, by, note, end, children, ins, outs, tone = 'card', fill, onRename, pending }: {
+function Frame({ id, selected, icon: Icon, title, meta, by, note, end, aspect, children, ins, outs, tone = 'card', fill, onRename, pending }: {
   id: string; selected: boolean; icon: React.ComponentType<{ size?: number; className?: string }>; title: string; meta?: string | null;
   by?: CanvasNode['by']; note?: React.ReactNode;
   /** what ends its name row, right of `meta` (a making node's versions) */
-  end?: React.ReactNode; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
+  end?: React.ReactNode;
+  /** a picture's or a clip's shape (width over height): the card is sized only as it, never stretched */
+  aspect?: number; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
   /** a tint over the card (a note's color) */
   fill?: string;
   onRename?: (title: string) => void; pending?: boolean;
@@ -203,8 +211,10 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, end, children,
       <div data-canvas-card="" className={card} style={fill ? { backgroundImage: `linear-gradient(${fill}, ${fill})` } : undefined}>{children}</div>
       {!pending ? <Sides id={id} selected={selected} ins={ins} outs={outs} /> : null}
       {!pending && !board.readOnly && (board.single === id || board.editing === id) ? (
-        <NodeResizeControl position="bottom-right" minWidth={160} minHeight={100} maxWidth={1600} maxHeight={1200}
-          onResizeStart={board.willChange} className={`cv-card-resize nopan z-20 !size-5 touch-none !border-0 !bg-transparent ${resizing ? 'is-resizing' : ''}`}>
+        <NodeResizeControl position="bottom-right" minWidth={160} minHeight={100} maxWidth={1600} maxHeight={1200} keepAspectRatio={Boolean(aspect)}
+          onResizeStart={board.willChange}
+          /* a card already off its picture's shape (sized before, or a version of another shape) comes back to it */
+          onResizeEnd={(_, size) => { if (aspect) board.resize(id, { w: size.width, h: Math.round(size.width / aspect) }); }} className={`cv-card-resize nopan z-20 !size-5 touch-none !border-0 !bg-transparent ${resizing ? 'is-resizing' : ''}`}>
           <span title={t('canvas.resizeCard')} className="grid size-full place-items-center">
             <span aria-hidden="true" className="size-2.5 rounded-br-[2px] border-b-2 border-r-2 !border-[var(--cv-ring)]" />
           </span>
@@ -277,7 +287,7 @@ function UploadPanel({ upload }: { upload: UploadStatus }) {
   const known = upload.progress >= 0 && upload.progress < 1;
   const label = t(upload.progress === 1 ? 'canvas.importPreparing' : 'canvas.importUploading');
   return (
-    <div role="status" className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--cv-card)] px-4 text-center text-[var(--cv-ink)]">
+    <div role="status" className="cv-veil-making absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-4 text-center text-[var(--cv-ink)]">
       <Loader2 size={22} className="animate-spin text-[var(--cv-label)]" />
       <div className="w-full truncate text-[13px]">{upload.name}</div>
       <div className="text-xs text-[var(--cv-label)]">{label}{known ? ` ${Math.floor(upload.progress * 100)}%` : ''}</div>
@@ -335,7 +345,7 @@ export function FileNodeView({ id, data, selected }: NodeProps<FileNode>) {
   return (
     <div className="h-full w-full">
       <ActionBar id={id} file={file} />
-      <Frame id={id} selected={selected} icon={Icon} title={title} meta={sizeOf(file)} by={data.by} onRename={rename} pending={Boolean(data.upload)}>
+      <Frame id={id} selected={selected} icon={Icon} title={title} meta={sizeOf(file)} by={data.by} onRename={rename} pending={Boolean(data.upload)} aspect={aspectOf(file)}>
         <div className="relative" style={boxStyle(sized, file)}>
           {data.upload ? <UploadPanel upload={data.upload} /> : file ? <Shown id={id} file={file} selected={selected} />
               : <div className="flex h-full w-full items-center justify-center gap-2 px-3 text-center text-[12px] text-[var(--cv-label)]"><FileQuestion size={14} />{t('canvas.missing')}</div>}
@@ -416,10 +426,21 @@ export function NoteNodeView({ id, data, selected }: NodeProps<NoteNode>) {
       <Frame id={id} selected={selected} icon={TypeIcon} title={title} by={data.by} onRename={rename}
         note={earlier.length && !busy ? <NoteVersions id={id} text={data.text} earlier={earlier} open={versionsOpen} onOpen={setVersionsOpen} readOnly={board.readOnly} /> : null}
         tone={editing || data.text ? 'quiet' : 'card'} fill={data.color ? FRAME_COLOR[data.color].fill : undefined}>
+        {/* being written: on the surface every card being made has, off the board, its color over it, until it is done */}
+        {busy ? (
+          <div className="cv-veil-making cv-fade pointer-events-none absolute inset-0">
+            {data.color ? <div className="absolute inset-0" style={{ background: FRAME_COLOR[data.color].fill }} /> : null}
+          </div>
+        ) : null}
         {/* its words as they read: held and moved anywhere on them, scrolled once it is selected; written in, they take the pointer */}
-        <DocView editor={editor} className={`h-full w-full px-5 py-4 ${busy ? 'cv-streaming' : ''} ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : selected ? 'nowheel overflow-y-auto' : 'overflow-hidden'}`} />
+        <DocView editor={editor} className={`relative h-full w-full px-5 py-4 ${busy ? 'cv-streaming' : ''} ${editing ? 'nodrag nopan nowheel cursor-text overflow-y-auto' : selected ? 'nowheel overflow-y-auto' : 'overflow-hidden'}`} />
         {/* veiled whole: what it said before is gone from sight, as a new one comes */}
-        {veiled ? <div className="cv-veil cv-fade absolute inset-0 z-10" style={data.color ? { backgroundImage: `linear-gradient(${FRAME_COLOR[data.color].fill}, ${FRAME_COLOR[data.color].fill})` } : undefined}><div className="cv-dots" /></div> : null}
+        {veiled ? (
+          <div className="cv-veil-making cv-fade absolute inset-0 z-10">
+            {data.color ? <div className="absolute inset-0" style={{ background: FRAME_COLOR[data.color].fill }} /> : null}
+            <div className="cv-dots" />
+          </div>
+        ) : null}
         {busy ? (
           /* at it: since when, and stopped here */
           <div role="status" className="absolute left-2.5 top-2.5 z-20 flex h-7 items-center gap-2 rounded-[8px] bg-[var(--cv-float)] pl-2.5 pr-1 text-[12.5px] text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)]">
@@ -656,6 +677,7 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
       <ActionBar id={id} file={file} empty={media === 'audio' ? undefined : media} />
       <MakePanel id={id} data={data} />
       <Frame id={id} selected={selected} icon={Icon} title={data.title ?? (data.preset ? t(`canvas.presets.names.${data.preset}`) : t(`canvas.titles.${data.make}`).replace('{n}', String(n)))} meta={meta} by={data.by} onRename={rename}
+        aspect={file ? aspectOf(file) : media === 'audio' ? undefined : ratioAspect(ratio)}
         ins={media !== 'audio'}
         note={board.stale.has(id) ? <span className="pointer-events-auto shrink-0 text-amber-500/90" title={t('canvas.make.staleTip')}>{t('canvas.make.stale')}</span> : null}
         end={<>

@@ -354,10 +354,10 @@ function Orbit({ src, light, view, color, bright, soft, fill, fillColor, onLight
 /** a choice among a few, the one taken lit */
 function Segmented<T extends string>({ options, on, onPick }: { options: Array<[T, React.ReactNode]>; on: T | null; onPick: (value: T) => void }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--cv-chip)] p-0.5">
+    <div className="flex items-center gap-0.5 rounded-[11px] bg-[var(--cv-chip)] p-[3px]">
       {options.map(([value, label]) => (
         <button key={value} type="button" onClick={() => onPick(value)}
-          className={`flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[8px] px-2.5 text-[12.5px] transition ${value === on ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
+          className={`flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[8px] px-2.5 text-[12.5px] transition ${value === on ? 'bg-[var(--cv-modal)] text-[var(--cv-ink)] shadow-[0_1px_3px_rgba(0,0,0,0.25)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
           {label}
         </button>
       ))}

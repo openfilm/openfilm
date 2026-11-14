@@ -100,7 +100,7 @@ export function ExpandEditor({ src, onClose, onMake }: { src: string; onClose: (
     } finally { setBusy(false); }
   };
 
-  const pill = (on: boolean) => `h-8 rounded-[8px] px-2.5 text-[12.5px] tabular-nums transition ${on ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]'}`;
+  const pill = (on: boolean) => `h-8 rounded-[8px] px-2.5 text-[12.5px] tabular-nums transition ${on ? 'bg-[var(--cv-modal)] text-[var(--cv-ink)] shadow-[0_1px_3px_rgba(0,0,0,0.25)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`;
   /* the frame drawn as large as fits the stage */
   const box = { w: 860, h: 470 };
   const view = Math.min(box.w / fw, box.h / fh);
@@ -108,7 +108,7 @@ export function ExpandEditor({ src, onClose, onMake }: { src: string; onClose: (
     <CanvasModal label={t('canvas.expand.title')} onClose={onClose}>
       <div className="flex flex-wrap items-center gap-2 px-5 pr-16 pt-4">
         <span className="mr-2 text-[14px] font-medium">{t('canvas.expand.title')}</span>
-        <div className="flex flex-wrap items-center gap-0.5 rounded-[10px] bg-[var(--cv-chip)] p-0.5">
+        <div className="flex flex-wrap items-center gap-0.5 rounded-[11px] bg-[var(--cv-chip)] p-[3px]">
           {FRAMES.map((f) => <button key={f} type="button" className={pill(f === frame)} onClick={() => setFrame(f)}>{f.startsWith('x') ? `×${f.slice(1)}` : f}</button>)}
         </div>
         {!grow ? (

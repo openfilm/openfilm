@@ -1944,6 +1944,7 @@ export const ko: Words = {
       fromPicture: '참조 이미지 필요',
       groups: { story: '스토리보드', role: '캐릭터', scene: '장면', product: '상품', design: '디자인', edit: '보정' },
       names: {
+        cutout: '배경 제거',
         storyboard: '스토리보드',
         grid25: '25컷 스토리보드',
         next4: '다음 네 장면',
@@ -2026,7 +2027,8 @@ export const ko: Words = {
     write: { attach: '파일 첨부', unreadable: '이 파일을 읽을 수 없습니다', rework: '지금 내용을 어떻게 바꿀지, 또는 무엇을 쓸지 설명하세요. 텍스트, 이미지, 동영상, Markdown 파일을 참고로 추가할 수 있습니다.', writing: '작성 중', stop: '취소', locate: '캔버스에서 찾기', preview: '미리보기', attachTypes: '텍스트, 이미지 또는 동영상 파일을 최대 {n}개 선택하세요.', placeholder: '무엇을 쓸지 설명하세요. 텍스트, 이미지, 동영상, Markdown 파일을 참고로 추가할 수 있습니다.', add: '참고 추가', by: '내 에이전트가 씁니다', busy: '에이전트가 쓰는 중…', run: '쓰기', wired: '{n}개 연결됨', noAgent: '여기서 작성하려면 설정 → 에이전트에서 연결하세요.' },
     makeNeeds: { first: '첫 프레임 이미지를 넣어 주세요', firstLast: '첫 프레임과 마지막 프레임 이미지를 넣어 주세요', refs: '참고 이미지를 한 장 이상 연결해 주세요', omni: '지원되는 참고 자료를 하나 이상 연결해 주세요.' },
     boards: { title: '캔버스', numbered: '캔버스 {n}', add: '새 캔버스', added: '캔버스를 만들었습니다', copied: '캔버스를 복제했습니다', removed: '캔버스를 휴지통으로 옮겼습니다', more: '더 보기', openApart: '새 창에서 열기', rename: '캔버스 이름 바꾸기', copy: '캔버스 복제', copyName: '{name} 사본', remove: '캔버스 삭제', onlyOne: '프로젝트에는 캔버스가 하나 이상 있어야 합니다', removeTitle: '캔버스 삭제', removeAsk: '캔버스 「{name}」을(를) 삭제할까요? 내용과 함께 휴지통으로 옮겨집니다.', removeYes: '삭제' },
-    redraw: { removeWay: '지우기', removeMake: '지우기', removeHint: '선택: 지운 자리에 무엇이 있어야 하는지, 예: 잔디', pinHint: '번호별로 어떻게 바꿀지 적으세요, 예: 1 빨간 우산으로, 2 여기에 고양이 추가', pen: '펜', arrow: '화살표', text: '글자', pin: '번호 표시', redo: '다시 실행', title: '스마트 편집', mask: '영역 칠하기', markup: '수정 그리기', erase: '지우개', size: '브러시', undo: '실행 취소', clear: '지우기', maskHint: '칠한 부분을 무엇으로 바꿀지, 예: 빨간 우산으로', markupHint: '그린 표시의 뜻, 예: 여기에 고양이 추가, 이 간판을 파란색으로', make: '생성', noModel: '부분 다시 그리기를 지원하는 서비스가 없습니다. OpenAI를 연결하거나 OpenFilm의 GPT Image를 사용하세요.', remove: '부분 수정 취소', withMask: '칠한 영역만 다시 그리기', withMarkup: '그린 표시대로 수정' },
+    redraw: { removeWay: '지우기', removeMake: '지우기', removeHint: '선택: 지운 자리에 무엇이 있어야 하는지, 예: 잔디', pinHint: '번호별로 어떻게 바꿀지 적으세요, 예: 1 빨간 우산으로, 2 여기에 고양이 추가', pen: '펜', arrow: '화살표', text: '글자', pin: '번호 표시', redo: '다시 실행', title: '스마트 편집', mask: '영역 칠하기', markup: '수정 그리기', erase: '지우개', size: '브러시', undo: '실행 취소', clear: '지우기', maskHint: '칠한 부분을 무엇으로 바꿀지, 예: 빨간 우산으로', markupHint: '그린 표시의 뜻, 예: 여기에 고양이 추가, 이 간판을 파란색으로', make: '생성', noModel: '부분 다시 그리기를 지원하는 서비스가 없습니다. OpenAI를 연결하거나 OpenFilm의 GPT Image를 사용하세요.', remove: '부분 수정 취소', withMask: '칠한 영역만 다시 그리기', withMarkup: '그린 표시대로 수정', brush: '브러시', lasso: '올가미', rect: '사각형 선택', box: '상자', invert: '선택 반전', show: '표시 보기', hide: '표시 숨기기', fit: '화면에 맞추기', zoomIn: '확대', zoomOut: '축소', covered: '{n}% 선택', nothingYet: '아직 칠하지 않음', model: '다시 그릴 모델', moveHint: '스페이스 + 드래그로 이동 · 핀치 또는 ⌘ + 스크롤로 확대·축소', typeHere: '입력 후 Enter', making: '생성 중…', ideas: { color: '색을 다음으로 바꾸기:', swap: '다음으로 바꾸기:', add: '다음을 추가:', look: '다음처럼 보이게:', follow: '표시대로 수정:' } },
+    cutout: { title: '이 컴퓨터에서 배경 제거', body: '배경을 이 컴퓨터에서 바로 지웁니다. 무료이며 이미지는 업로드되지 않습니다. 처음 한 번만 배경 제거 모델을 내려받습니다.', here: '설치됨', installing: '내려받는 중 {n}%', preparing: '준비 중…', failed: '내려받기가 끝나지 않았습니다: {error}', other: '다른 서비스 사용', install: '내려받고 배경 제거', go: '배경 제거', retry: '다시 시도' },
     slots: { first: '첫 프레임', last: '마지막' },
     history: { title: '에셋', made: '생성 기록', uploaded: '업로드한 항목', thisProject: '이 프로젝트', allProjects: '모든 프로젝트', kinds: { all: '전체', image: '이미지', video: '동영상', audio: '오디오' }, none: '아직 기록이 없습니다' },
     library: { title: '소재 라이브러리', styles: '스타일 라이브러리', effects: '효과 라이브러리', short: { styles: '스타일', effects: '효과' }, tabs: { all: '{kind} 갤러리', fav: '즐겨찾기', recent: '최근 사용' }, search: { styles: '스타일 검색', effects: '효과 검색' }, groups: { all: '전체', photo: '사진', illustration: '일러스트', three: '3D', design: '그래픽 디자인', move: '카메라 무빙', drone: '항공', time: '시간', feel: '시점' }, like: '즐겨찾기에 추가', unlike: '즐겨찾기에서 제거', noneLiked: '아직 즐겨찾기가 없습니다', noneUsed: '아직 사용한 항목이 없습니다', tag: { styles: '스타일', effects: '카메라' }, styleChip: '스타일', effectChip: '효과' },
@@ -2129,6 +2131,8 @@ export const ko: Words = {
       volume: '음량',
     },
     actions: {
+      splitAutoAbout: '그림에서 찾은 구분선을 따라 자르기',
+      splitPieces: '{n}장',
       split: '그리드 분할',
       splitAuto: '격자 자동 인식',
       splitCustom: '사용자 지정 격자',
@@ -2314,7 +2318,7 @@ export const ko: Words = {
       second: '보조광 / 림 라이트', secondHint: '주광 맞은편의 약한 두 번째 빛: 뒤에 있으면 림, 앞에 있으면 보조광.',
       words: '프롬프트', presets: '프리셋', reset: '초기화', make: '생성',
     },
-    create: { title: '만들기', edit: '편집', video: '영상으로', first: '이 프레임으로 영상', firstLast: '첫 프레임과 마지막 프레임', effect: '카메라 무빙', makeN: '{n}장 만들기', ask: { expression: '표정을 고르면 바로 생성', sizes: '만들 크기 선택', set: '만들 이미지 선택' }, set: { main: '대표 이미지', detail: '디테일', life: '사용 장면', ad: '광고', features: '특징' }, about: { crop: '비율, 회전, 반전, 수평 맞추기', adjust: '룩과 빛·색 미세 조정', split: '격자를 따라 한 장씩 자르기', first: '이 그림을 첫 프레임으로, 무슨 일이 일어나는지 적기', firstLast: '마지막 프레임으로 쓸 그림 고르기', effect: '효과에서 카메라 움직임 고르기' } },
+    create: { captions: { edit: '이 컴퓨터에서: 무료, 바로', video: '이 그림으로 영상 만들기', agent: '대화의 에이전트가 합니다' }, count: '모두 {n}개', title: '만들기', edit: '편집', video: '영상으로', first: '이 프레임으로 영상', firstLast: '첫 프레임과 마지막 프레임', effect: '카메라 무빙', makeN: '{n}장 만들기', ask: { expression: '표정을 고르면 바로 생성', sizes: '만들 크기 선택', set: '만들 이미지 선택' }, set: { main: '대표 이미지', detail: '디테일', life: '사용 장면', ad: '광고', features: '특징' }, about: { crop: '비율, 회전, 반전, 수평 맞추기', adjust: '룩과 빛·색 미세 조정', split: '격자를 따라 한 장씩 자르기', first: '이 그림을 첫 프레임으로, 무슨 일이 일어나는지 적기', firstLast: '마지막 프레임으로 쓸 그림 고르기', effect: '효과에서 카메라 움직임 고르기' } },
   },
   timeline: {
     mediaMissing: '미디어를 찾을 수 없음',

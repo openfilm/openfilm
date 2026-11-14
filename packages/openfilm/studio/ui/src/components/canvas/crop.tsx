@@ -334,13 +334,13 @@ function CropBody({ picture, name, onDone }: { picture: HTMLImageElement; name: 
   const b = crop.box;
   const place: React.CSSProperties = { left: b.x * v, top: b.y * v, width: b.w * v, height: b.h * v };
   const pristine = !crop.angle && crop.aspect === 'free' && crop.turn.every((n, i) => n === ID[i]) && b.x === 0 && b.y === 0 && b.w === pw && b.h === ph;
-  const seg = (on: boolean) => `h-7 rounded-[8px] px-2.5 text-[12.5px] tabular-nums transition ${on ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]'}`;
+  const seg = (on: boolean) => `h-7 rounded-[8px] px-2.5 text-[12.5px] tabular-nums transition ${on ? 'bg-[var(--cv-modal)] text-[var(--cv-ink)] shadow-[0_1px_3px_rgba(0,0,0,0.25)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`;
   const icon = 'flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';
   return (
     <>
       <div className="flex items-center gap-2 px-5 pr-16 pt-4">
         <span className="mr-2 text-[14px] font-medium">{t('canvas.crop.title')}</span>
-        <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--cv-chip)] p-0.5">
+        <div className="flex items-center gap-0.5 rounded-[11px] bg-[var(--cv-chip)] p-[3px]">
           {ASPECTS.map((a) => (
             <button key={a} type="button" aria-pressed={crop.aspect === a} className={seg(crop.aspect === a)} onClick={() => pick(a)}>
               {a === 'free' ? t('canvas.crop.free') : a === 'original' ? t('canvas.crop.original') : a}
