@@ -30,3 +30,21 @@ test('every app makes its projects in the person\'s one library', () => {
     assert.equal(flavor.sharedHome ?? join(homedir(), '.openfilm'), join(homedir(), '.openfilm'));
   }
 });
+
+test('a lane of the dev app shares nothing but the library with the dev app or another lane', async () => {
+  const { devIdentity } = await import('./flavor.mjs');
+  assert.equal(devIdentity(undefined), FLAVORS.dev);
+  assert.equal(devIdentity('Not A Name'), FLAVORS.dev);
+  const sound = devIdentity('sound');
+  const color = devIdentity('color');
+  assert.deepEqual(devIdentity('sound'), sound, 'the same lane comes back the same');
+  for (const other of [FLAVORS.release, FLAVORS.preview, FLAVORS.dev, color]) {
+    assert.notEqual(sound.productName, other.productName);
+    assert.notEqual(sound.bundleId, other.bundleId);
+    assert.notEqual(sound.studioHome, other.studioHome);
+    assert.ok(Math.abs(sound.studioPort - other.studioPort) >= 3, 'a Studio uses its port and the two after it');
+  }
+  assert.equal(sound.productName, 'OpenFilm Dev sound');
+  assert.equal(sound.library, null);
+  assert.equal(sound.sharedHome, join(homedir(), '.openfilm'));
+});
