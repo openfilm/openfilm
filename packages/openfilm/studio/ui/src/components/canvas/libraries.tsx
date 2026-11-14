@@ -185,8 +185,8 @@ const MOVES: Record<string, string> = {
 };
 
 /** each style's picture, by its id (styles/<id>.jpg): one scene, a girl in a yellow raincoat, in every style */
-const STYLE_PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./styles/*.jpg', { eager: true, import: 'default' }))
-  .map(([path, url]) => [path.split('/').pop()!.replace(/\.jpg$/, ''), url]));
+const STYLE_PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./styles/*.webp', { eager: true, import: 'default' }))
+  .map(([path, url]) => [path.split('/').pop()!.replace(/\.webp$/, ''), url]));
 
 /**
  * An effect's card: a field of dots (the world) and a white disc (what the camera looks at), moved as its camera

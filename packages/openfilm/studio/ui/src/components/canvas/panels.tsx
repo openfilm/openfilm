@@ -14,8 +14,8 @@ import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_
 import { PRESETS, PRESET_GROUPS, presetOf, type CanvasPreset, type PresetGroup } from '@/lib/canvas-presets';
 
 /** each preset's picture of what it makes (made for OpenFilm), by its id */
-const PRESET_PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./presets/*.jpg', { eager: true, import: 'default' }))
-  .map(([path, url]) => [path.slice('./presets/'.length, -'.jpg'.length), url]));
+const PRESET_PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./presets/*.webp', { eager: true, import: 'default' }))
+  .map(([path, url]) => [path.slice('./presets/'.length, -'.webp'.length), url]));
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { studioHost } from '@/lib/host';
 import { Popover } from '../Popover';
@@ -86,14 +86,20 @@ function Composer({ id, shown, expanded, setExpanded, corner, above, aboveOpen =
   );
 }
 
-/** A tool over a composer: its mark on a colored square, its name. */
-function ToolTile({ label, tone, icon: Icon, on, onClick }: { label: string; tone: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; on?: boolean; onClick?: () => void }) {
+/** each tool's own picture (tools/tool-<key>.webp), drawn in place of its mark on a colored square when there is one */
+const TOOL_PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./tools/tool-*.webp', { eager: true, import: 'default' }))
+  .map(([path, url]) => [path.split('/').pop()!.replace(/^tool-|\.webp$/g, ''), url]));
+
+/** A tool over a composer: its picture (or its mark on a colored square), its name. */
+function ToolTile({ label, tone, icon: Icon, picture, on, onClick }: { label: string; tone: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; picture?: string; on?: boolean; onClick?: () => void }) {
   return (
     <button type="button" onClick={onClick}
       className={`cv-tool flex h-12 w-full min-w-0 items-center gap-2.5 rounded-[14px] px-2.5 text-[14px] text-[var(--cv-ink)] transition ${on ? 'bg-[var(--cv-float-hover)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_4%,transparent)] hover:bg-[var(--cv-float-hover)]'}`}>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-white shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.25)]" style={{ background: tone }}>
-        <Icon size={17} strokeWidth={2} />
-      </span>
+      {picture ? <img src={picture} alt="" draggable={false} className="h-9 w-9 shrink-0 object-contain drop-shadow-[0_3px_6px_rgba(0,0,0,0.35)]" /> : (
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-white shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.25)]" style={{ background: tone }}>
+          <Icon size={17} strokeWidth={2} />
+        </span>
+      )}
       <span className="truncate">{label}</span>
     </button>
   );
@@ -849,10 +855,10 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             <div key={tool.key} className="min-w-0 flex-1">
               {tool.key === 'presets' ? (
                 <Popover open={open === 'presets'} onOpenChange={(v) => setOpen(v ? 'presets' : null)} placement="top" align="center" block
-                  trigger={<ToolTile label={tool.label} tone={TONES.presets} icon={LayoutDashboard} on={open === 'presets' || Boolean(preset)} onClick={() => setOpen(open === 'presets' ? null : 'presets')} />}>
+                  trigger={<ToolTile label={tool.label} tone={TONES.presets} icon={LayoutDashboard} picture={TOOL_PICTURES.preset} on={open === 'presets' || Boolean(preset)} onClick={() => setOpen(open === 'presets' ? null : 'presets')} />}>
                   {presetMenu}
                 </Popover>
-              ) : <ToolTile label={tool.label} tone={TONES[tool.key]} icon={tool.icon} onClick={tool.pick} />}
+              ) : <ToolTile label={tool.label} tone={TONES[tool.key]} icon={tool.icon} picture={TOOL_PICTURES[{ camera: 'camera', styles: 'style', effects: 'effects', characters: '', presets: 'preset' }[tool.key]]} onClick={tool.pick} />}
             </div>
           ))}
           <Tooltip label={t('canvas.panel.collapse')}>

@@ -31,3 +31,5 @@ What the canvas makes on the way to a picture (masks, marks, a picture framed to
 The style library shows each style as a picture of one same scene made in it, not a color and its words.
 
 A picture's and a clip's tools start with a camera: four wheels (the camera, the lens, the focal length, the aperture), each with its picture and the lens's look shown above, its words wired into the node; subjects are named with @. @ lists what is in the node already and brings a subject or a picture; what goes in is dragged into its order. The styles show each a scene of its own.
+
+The camera has more of each wheel (18 cameras, 14 lenses, 11 focal lengths, 10 apertures), each camera and lens drawn on a clear ground, and every one shown on one same street as it would make it, the wheel being turned leading what is shown. There are 46 styles in five kinds, art movements among them, each its own scene. The tools wear pictures of their own. The canvas's pictures are small WebP files.

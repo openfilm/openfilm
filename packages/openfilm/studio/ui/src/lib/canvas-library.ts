@@ -4,7 +4,7 @@
  * into the picture or clip it is for. Their names and what they say are the interface's (canvas.styles, canvas.effects).
  * What the person liked and used last is kept in this browser.
  */
-export type StyleGroup = 'photo' | 'illustration' | 'three' | 'design';
+export type StyleGroup = 'photo' | 'illustration' | 'three' | 'design' | 'art';
 export type EffectGroup = 'move' | 'drone' | 'time' | 'feel';
 
 export interface LibraryItem<G extends string> {
@@ -15,7 +15,7 @@ export interface LibraryItem<G extends string> {
   look: string;
 }
 
-export const STYLE_GROUPS: StyleGroup[] = ['photo', 'illustration', 'three', 'design'];
+export const STYLE_GROUPS: StyleGroup[] = ['photo', 'illustration', 'three', 'design', 'art'];
 export const STYLES: Array<LibraryItem<StyleGroup>> = [
   { id: 'film', group: 'photo', look: '#c08a4f,#3b2a1f', words: 'shot on 35mm film, natural film grain, soft warm highlights, slightly faded blacks, true-to-life color' },
   { id: 'cinema', group: 'photo', look: '#1f4e5f,#e0a458', words: 'cinematic film still, anamorphic widescreen look, motivated lighting, teal and orange grade, shallow depth of field' },
@@ -35,6 +35,34 @@ export const STYLES: Array<LibraryItem<StyleGroup>> = [
   { id: 'poster', group: 'design', look: '#fefae0,#283618', words: 'minimalist poster design, bold composition, generous negative space, two or three flat colors' },
   { id: 'retro', group: 'design', look: '#e76f51,#264653', words: '1970s retro print, warm faded inks, rounded shapes, risograph texture' },
   { id: 'neon', group: 'design', look: '#ff00a8,#00e5ff', words: 'neon cyberpunk night, glowing signs, wet reflective streets, magenta and cyan light, haze' },
+  { id: 'fashion', group: 'photo', look: '#7a1f2b,#f2c38b', words: 'high fashion editorial photograph, bold styling, dramatic light, striking poses' },
+  { id: 'street', group: 'photo', look: '#4a5560,#c9b79c', words: 'candid street photography, layered composition, decisive moment, natural light' },
+  { id: 'food', group: 'photo', look: '#8a4b1e,#f3d9a4', words: 'appetizing food photography, soft window light, shallow depth of field, rich textures' },
+  { id: 'architecture', group: 'photo', look: '#5d7fa3,#e8e6e1', words: 'architectural photography, clean lines, strong geometry, corrected verticals' },
+  { id: 'wildlife', group: 'photo', look: '#3d4a2f,#d9c7a1', words: 'wildlife photography, long lens, natural light, the animal sharp against a soft background' },
+  { id: 'aerial', group: 'photo', look: '#2f6b4f,#e0a85a', words: 'aerial drone photography seen from above, vivid patterns, a sense of scale' },
+  { id: 'ink', group: 'illustration', look: '#f3efe6,#2b2b2b', words: 'traditional Chinese ink wash painting, flowing brushwork, generous white space' },
+  { id: 'ukiyoe', group: 'illustration', look: '#1f4e79,#e8d5b0', words: 'ukiyo-e woodblock print style, flat colors, bold outlines, patterned waves' },
+  { id: 'picturebook', group: 'illustration', look: '#e9b872,#7aa874', words: 'gouache picture book illustration for children, warm, cozy, soft textures' },
+  { id: 'pixel', group: 'illustration', look: '#2d1b4e,#f4a259', words: '16-bit pixel art, limited palette, crisp pixels, retro game look' },
+  { id: 'crayon', group: 'illustration', look: '#fff3c4,#ff6b6b', words: 'child-like crayon drawing on paper, wobbly lines, bright colors' },
+  { id: 'manga', group: 'illustration', look: '#f2f2f2,#222222', words: 'black and white manga art, screentones, speed lines, expressive ink' },
+  { id: 'chalk', group: 'illustration', look: '#20302a,#f1e7c6', words: 'colorful chalk drawing on a blackboard, dusty strokes' },
+  { id: 'voxel', group: 'three', look: '#58c4dd,#ffd166', words: 'voxel art 3D render, cube blocks, bright colors, clean lighting' },
+  { id: 'papercraft', group: 'three', look: '#a8dadc,#f4a261', words: 'layered papercraft, paper cut-outs, soft shadows between paper layers' },
+  { id: 'isometric', group: 'three', look: '#cdb4db,#8ecae6', words: 'isometric 3D illustration, soft lighting, clean shapes, tidy details' },
+  { id: 'glass', group: 'three', look: '#1b1f3a,#9be7ff', words: 'frosted glass material 3D render, iridescent refractions, soft caustics' },
+  { id: 'cgi', group: 'three', look: '#1d2b3a,#e0b26f', words: 'photorealistic CGI render, cinematic lighting, highly detailed' },
+  { id: 'vaporwave', group: 'design', look: '#ff9ad5,#5ef2f0', words: 'vaporwave aesthetic, pastel pink and teal, retro computer graphics, palm trees and grids' },
+  { id: 'bauhaus', group: 'design', look: '#e63946,#f1c40f', words: 'Bauhaus design, primary colors, simple geometric shapes, balanced composition' },
+  { id: 'artdeco', group: 'design', look: '#0b2545,#d4af37', words: 'Art Deco style, gold and navy, symmetrical geometry, sunburst motifs' },
+  { id: 'y2k', group: 'design', look: '#ff8fd8,#c0c0c0', words: 'Y2K aesthetic, glossy chrome, bubbles and butterflies, futuristic gradients' },
+  { id: 'collage', group: 'design', look: '#e9d8a6,#3d5a80', words: 'mixed-media collage, paper cut-outs, torn edges, halftone textures' },
+  { id: 'impressionism', group: 'art', look: '#9bc1bc,#f4e285', words: 'impressionist painting, visible dabs of color, shimmering light' },
+  { id: 'popart', group: 'art', look: '#ffde00,#e4002b', words: 'pop art, bold Ben-Day dots, primary colors, thick outlines' },
+  { id: 'surreal', group: 'art', look: '#6c5b7b,#f8b195', words: 'surrealist painting, dreamlike, uncanny juxtapositions' },
+  { id: 'stainedglass', group: 'art', look: '#1e3d59,#ff6e40', words: 'stained glass art, glowing jewel colors, lead lines' },
+  { id: 'graffiti', group: 'art', look: '#2b2d42,#ef476f', words: 'graffiti street art, spray paint, drips, bold colors on a wall' },
 ];
 
 export const EFFECT_GROUPS: EffectGroup[] = ['move', 'drone', 'time', 'feel'];

@@ -9,8 +9,8 @@ import { useT } from '@/i18n';
 import { PRESETS } from '@/lib/canvas-presets';
 import { CanvasModal } from './libraries';
 
-const PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./presets/light*.jpg', { eager: true, import: 'default' }))
-  .map(([path, url]) => [path.slice('./presets/'.length, -'.jpg'.length), url]));
+const PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./presets/light*.webp', { eager: true, import: 'default' }))
+  .map(([path, url]) => [path.slice('./presets/'.length, -'.webp'.length), url]));
 const LIGHT_PRESETS = PRESETS.filter((p) => p.group === 'light');
 
 /** a light color: its swatch, and how the words name it */

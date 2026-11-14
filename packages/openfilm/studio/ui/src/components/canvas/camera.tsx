@@ -9,11 +9,10 @@ import { createPortal } from 'react-dom';
 import { useT } from '@/i18n';
 import { APERTURES, BODIES, FOCALS, LENSES, NO_CAMERA, type CameraPart, type CameraPick } from '@/lib/canvas-camera';
 
-const pictures = (glob: Record<string, string>) => Object.fromEntries(Object.entries(glob).map(([path, url]) => [path.split('/').pop()!.replace(/\.jpg$/, ''), url]));
-/** a camera's and a lens's picture, and each lens's look on one street */
-const BODY_PICTURES = pictures(import.meta.glob<string>('./camera/body-*.jpg', { eager: true, import: 'default' }));
-const LENS_PICTURES = pictures(import.meta.glob<string>('./camera/lens-*.jpg', { eager: true, import: 'default' }));
-const LOOKS = pictures(import.meta.glob<string>('./camera/look-*.jpg', { eager: true, import: 'default' }));
+const pictures = (glob: Record<string, string>) => Object.fromEntries(Object.entries(glob).map(([path, url]) => [path.split('/').pop()!.replace(/\.webp$/, ''), url]));
+/** a camera's and a lens's picture (on a clear ground), and how each camera, lens, focal length and aperture shows one same street */
+const ICONS = pictures(import.meta.glob<string>('./camera/{body,lens}-*.webp', { eager: true, import: 'default' }));
+const LOOKS = pictures(import.meta.glob<string>('./camera/look-*.webp', { eager: true, import: 'default' }));
 
 type Wheel = 'body' | 'lens' | 'focal' | 'aperture';
 /** where each wheel's names are said */
@@ -34,7 +33,7 @@ function FocalMark({ id }: { id: string }) {
 }
 /** an aperture drawn: blades round a hole, smaller the larger the f-number */
 function ApertureMark({ id }: { id: string }) {
-  const f = Number(id) || 4;
+  const f = Number(id.replace('_', '.')) || 4;
   const hole = id === 'auto' ? 10 : Math.max(3, Math.min(17, 19 - Math.log2(f) * 3.6));
   const blades = Array.from({ length: 7 }, (_, i) => (i / 7) * 360);
   return (
@@ -49,8 +48,8 @@ function ApertureMark({ id }: { id: string }) {
 function mark(wheel: Wheel, id: string) {
   if (wheel === 'focal') return <FocalMark id={id} />;
   if (wheel === 'aperture') return <ApertureMark id={id} />;
-  const src = wheel === 'body' ? BODY_PICTURES[`body-${id}`] : LENS_PICTURES[`lens-${id}`];
-  return src ? <img src={src} alt="" draggable={false} className="h-14 w-14 object-contain" /> : <FocalMark id="auto" />;
+  const src = ICONS[`${wheel}-${id}`];
+  return src ? <img src={src} alt="" draggable={false} className="h-16 w-16 object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.45)]" /> : <FocalMark id="auto" />;
 }
 
 export function CameraPicker({ start, onClose, onPick }: { start?: CameraPick; onClose: () => void; onPick: (pick: CameraPick) => void }) {
@@ -58,7 +57,7 @@ export function CameraPicker({ start, onClose, onPick }: { start?: CameraPick; o
   const [pick, setPick] = React.useState<CameraPick>(start ?? NO_CAMERA);
   const [active, setActive] = React.useState<Wheel>('body');
   const wheelAt = React.useRef(0);
-  const name = (wheel: Wheel, id: string) => (wheel === 'focal' && id !== 'auto' ? `${id}mm` : t(`canvas.camera.${GROUP[wheel]}.${id.replace('.', '_')}`));
+  const name = (wheel: Wheel, id: string) => (wheel === 'focal' && id !== 'auto' ? `${id}mm` : t(`canvas.camera.${GROUP[wheel]}.${id}`));
   const turn = (wheel: Wheel, by: number) => {
     const list = WHEELS.find(([w]) => w === wheel)![1];
     setPick((p) => {
@@ -83,7 +82,8 @@ export function CameraPicker({ start, onClose, onPick }: { start?: CameraPick; o
     window.addEventListener('keydown', key, true);
     return () => window.removeEventListener('keydown', key, true);
   });
-  const look = LOOKS[`look-${pick.lens}`] ?? LOOKS['look-auto'];
+  /* the look of what is being turned; else the lens's, the camera's, the street as it is */
+  const look = LOOKS[`look-${active}-${pick[active]}`] ?? LOOKS[`look-lens-${pick.lens}`] ?? LOOKS[`look-body-${pick.body}`] ?? LOOKS['look-auto'];
 
   return createPortal(
     <div className="cv-fade fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 p-6" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
