@@ -2,16 +2,17 @@
  * The page's top bar, and the windows of the page's own that are opened from it: the shell draws them whichever
  * workbench is shown, and with none. On the bar: the app's menu (Settings in it), the app's tabs or the project's
  * title with its card (rename, the folder shown, all the projects), the updates, the desktop app's dialog, and the
- * switch between the workbenches. Over the page: the projects window, Settings, the desktop app's dialog, and what an
- * agent asks before it spends.
+ * switch between the workbenches, and the project's version history (shell/history). Over the page: the projects window,
+ * Settings, the version history's window, the desktop app's dialog, and what an agent asks before it spends.
  *
  * What a workbench has on the bar it gives through the wiring (shell/frame `topBar`): its own buttons, drawn before
  * the switch, what it knows of the film for the project's card, and the picture at the playhead made the cover.
  * Without it the bar has the page's parts alone, the card says what the project says of itself, and no cover is made
- * from a frame. The layout's menu (shell/layout) is the page's: it is the first of the buttons on the right.
+ * from a frame. Any plugin's element puts buttons of its own there too, as a list the bar draws (openfilm/studio
+ * `topBar`), after the edit's. The layout's menu (shell/layout) is the page's: it is the first of the buttons on the right.
  */
 import * as React from 'react';
-import { MonitorDown, Scissors, Workflow } from 'lucide-react';
+import { MonitorDown, Puzzle, Scissors, Workflow } from 'lucide-react';
 import { api, ApiError, type ProjectFilm } from '@/api';
 import { useT } from '@/i18n';
 import { readCanvasDoc } from '@/lib/canvas';
@@ -20,6 +21,7 @@ import { useKeyHint } from '@/lib/keymap-store';
 import { leaveProject, openProject } from '@/lib/navigate';
 import { AppMenu } from '@/components/AppMenu';
 import { DesktopDialog } from '@/components/DesktopDialog';
+import { PLUGIN_ICONS } from '@/components/library/PluginsPane';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { ProjectsPopover } from '@/components/ProjectsLibrary';
 import { ProjectTabs } from '@/components/ProjectTabs';
@@ -30,8 +32,10 @@ import { useSettings } from '@/components/settings/use-settings';
 import { SpendAsks } from '@/components/SpendAsks';
 import { Tooltip } from '@/components/Tooltip';
 import { UpdateButton, WebUpdateButton } from '@/components/UpdateButton';
+import { commandTo, topBarTools } from '@/studio/hub';
 import type { useProjectFrame } from './ProjectFrame';
 import { useWiring } from './frame';
+import { useHistoryWindow } from './history';
 import { LayoutMenu } from './layout';
 
 /** A button of the top bar: the layout's menu, and a workbench's own beside it. */
@@ -73,6 +77,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
   } = frame;
   const [renaming, setRenaming] = React.useState(false);
   const [titleDraft, setTitleDraft] = React.useState('');
+  const history = useHistoryWindow(projectId, { projectName: title, onError: toast.showError, className: TOP_BTN });
 
   const startRename = () => { setTitleDraft(title); setRenaming(true); };
   /* the film at the playhead as the projects list will show it: the workbench's to make (none shown: not offered) */
@@ -99,7 +104,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
     actions={{ onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') }}
     onAll={() => setProjectsOpen(true)} />;
   /* The desktop's tabs share the left edge; a browser keeps the project title centered. */
-  return (
+  return (<>
     <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 bg-[var(--bg-titlebar)] px-[6px]" style={{ gridArea: 'bar', ...(studioHost?.tabs ? { gap: 0 } : {}) }} onContextMenu={event => event.preventDefault()}>
       {/* The title and arrow open the same project card on click. */}
       {!studioHost?.tabs ? <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
@@ -128,8 +133,12 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
       <div className="pointer-events-auto flex min-w-0 items-center justify-end gap-1">
         {/* how the page's panels are arranged */}
         <LayoutMenu frame={frame} className={TOP_BTN} />
-        {/* the workbench's own: for the edit its versions, its export (the canvas has its own bars) */}
+        {/* the project's version history, whichever workbench is shown */}
+        {history.button}
+        {/* the workbench's own: for the edit its export (the canvas has its own bars) */}
         {bar?.tools}
+        {/* the buttons plugins put on the bar (openfilm/studio topBar) */}
+        <PluginTools />
         {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
         {pickBench ? <ModeSwitcher now={surface ?? (canvasOpen ? 'canvas' : 'edit')} plugins={benchPlugins} onPick={showWorkbench} disabled={layoutEditing} />
           : canToggleCanvas ? <Tooltip label={[t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas'), keyHint('work-mode')].filter(Boolean).join(' · ')} side="bottom">
@@ -142,13 +151,33 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
       </div>
       <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
     </div>
-  );
+    {/* the version history's window, put over the page (on the document's body) */}
+    {history.over}
+  </>);
+}
+
+/** The buttons plugins put on the top bar (studio/hub `topBarTools`), drawn as the bar's own: an icon, or a few words. */
+function PluginTools() {
+  const tools = React.useSyncExternalStore(topBarTools.subscribe, topBarTools.get);
+  return [...tools].flatMap(([owner, list]) => list.map((tool) => {
+    const Icon = tool.icon ? PLUGIN_ICONS[tool.icon] ?? Puzzle : null;
+    return (
+      <Tooltip key={`${owner}\u0000${tool.id}`} label={tool.label} side="bottom">
+        <button type="button" aria-label={tool.label} aria-pressed={tool.pressed} disabled={tool.disabled} data-plugin-tool={`${owner}:${tool.id}`} onClick={() => tool.onClick()}
+          className={tool.text ? `flex h-[26px] shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-50 ${tool.pressed ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`
+            : `${TOP_BTN} disabled:opacity-50 ${tool.pressed ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
+          {Icon ? <Icon size={tool.text ? 14 : 16} /> : null}
+          {tool.text ?? (Icon ? null : tool.label)}
+        </button>
+      </Tooltip>
+    );
+  }));
 }
 
 /** The projects window and Settings: over the page, before the library's pane. */
 export function PageWindows({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
   const t = useT();
-  const { projectId, loaded, failure, toast, projectsOpen, setProjectsOpen, settingsOpen, setSettingsOpen, setCanvasOpen, setCanvasInsert } = frame;
+  const { projectId, loaded, failure, toast, projectsOpen, setProjectsOpen, settingsOpen, setSettingsOpen, setCanvasOpen } = frame;
   if (!loaded || failure) return null;
   return (
     <>
@@ -159,7 +188,7 @@ export function PageWindows({ frame }: { frame: ReturnType<typeof useProjectFram
           setProjectsOpen(false);
           void api.exampleCanvasInto(projectId, example.id).then((raw) => {
             setCanvasOpen(true);
-            setCanvasInsert({ doc: readCanvasDoc(raw), n: Date.now() });
+            commandTo('canvas', { type: 'lay-board', board: readCanvasDoc(raw) });
             toast.show(t('canvas.exampleCopied').replace('{folder}', `assets/examples/${example.id}/`));
           }, (e: unknown) => toast.showError(e instanceof Error ? e.message : String(e)));
         }} />

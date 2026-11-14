@@ -1,9 +1,11 @@
 import React from 'react';
-import type { WorkspaceLayout } from '@/lib/workspaces';
-import { workspacePreviewFrames } from '@/lib/workspace-preview';
+import { centerOf, type ArrangementSpec, type WorkspaceLayout } from '@/lib/workspaces';
+import { workspacePreviewFrames, type BlockRoom, type DrawnBlock } from '@/lib/workspace-preview';
 import type { DockPanel, DockRect } from '@/lib/workspace-dock';
 
-function Content({panel,rect:r}:{panel:DockPanel;rect:DockRect}) {
+/** What a panel is drawn as in a preview: the page's own, a block of the edit's or the canvas's by its kind, another block as a panel of fields. */
+type Look = 'chat' | 'library' | 'timeline' | 'canvas' | 'viewer' | 'panel';
+function Content({panel,rect:r}:{panel:Look;rect:DockRect}) {
   const p=Math.min(18,r.width*.08,r.height*.08),w=Math.max(0,r.width-2*p),h=Math.max(0,r.height-2*p);
   const header=Math.min(24,h*.12),ink='var(--text-faint)';
   const line=(x:number,y:number,width:number,height=8)=><rect x={x} y={y} width={Math.max(0,width)} height={height} rx={height/3} fill={ink} opacity=".45"/>;
@@ -31,15 +33,21 @@ function Content({panel,rect:r}:{panel:DockPanel;rect:DockRect}) {
   </g>;
 }
 
-export function WorkspacePreview({layout,viewport,hasChat,timelineFitHeight,inspectorIdle,className}:{layout:WorkspaceLayout;viewport:{width:number;height:number};hasChat:boolean;timelineFitHeight:number;inspectorIdle:boolean;className?:string}) {
-  const panels=workspacePreviewFrames(layout,viewport,{hasChat,timelineFitHeight,inspectorIdle});
+/**
+ * An arrangement drawn small, as the window would show it (`sizes`: its blocks as their workbenches draw them in a
+ * room). The main block is drawn as a picture, or a board for the canvas's; a block below or above it as a timeline.
+ */
+export function WorkspacePreview({layout,spec,viewport,hasChat,sizes,className}:{layout:WorkspaceLayout;spec:ArrangementSpec;viewport:{width:number;height:number};hasChat:boolean;sizes:(layout:WorkspaceLayout,room:BlockRoom)=>Readonly<Record<string,DrawnBlock>>;className?:string}) {
+  const panels=workspacePreviewFrames(layout,spec,viewport,{hasChat,sizes:room=>sizes(layout,room)});
+  const center=centerOf(spec)?.key;
+  const look=(panel:DockPanel):Look=>panel==='chat'||panel==='library'?panel:panel===center?(spec.name==='canvas'?'canvas':'viewer'):['top','bottom'].includes(layout.blocks[panel]?.edge??'')?'timeline':'panel';
   const id=React.useId().replace(/:/g,'');
   return <svg data-workspace-preview viewBox={`0 0 ${viewport.width} ${viewport.height}`} className={className} aria-hidden>
     <rect width={viewport.width} height={viewport.height} fill="var(--dock-line)" rx="20"/>
     {(Object.entries(panels) as [DockPanel,DockRect][]).map(([panel,r])=><React.Fragment key={panel}>
-      <defs><clipPath id={`${id}-${panel}`}><rect x={r.left+2} y={r.top+2} width={Math.max(0,r.width-4)} height={Math.max(0,r.height-4)}/></clipPath></defs>
-      <rect data-preview-panel={panel} x={r.left} y={r.top} width={r.width} height={r.height} fill={panel==='viewer'?'var(--bg-viewer)':'var(--bg-panel)'} stroke="var(--text-faint)" strokeOpacity=".35" strokeWidth="3"/>
-      <g clipPath={`url(#${id}-${panel})`}><Content panel={panel} rect={r}/></g>
+      <defs><clipPath id={`${id}-${panel.replace(':','-')}`}><rect x={r.left+2} y={r.top+2} width={Math.max(0,r.width-4)} height={Math.max(0,r.height-4)}/></clipPath></defs>
+      <rect data-preview-panel={panel} x={r.left} y={r.top} width={r.width} height={r.height} fill={look(panel)==='viewer'?'var(--bg-viewer)':'var(--bg-panel)'} stroke="var(--text-faint)" strokeOpacity=".35" strokeWidth="3"/>
+      <g clipPath={`url(#${id}-${panel.replace(':','-')})`}><Content panel={look(panel)} rect={r}/></g>
     </React.Fragment>)}
   </svg>;
 }

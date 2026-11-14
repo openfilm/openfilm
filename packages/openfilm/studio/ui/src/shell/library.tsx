@@ -18,6 +18,7 @@ import { api, type MediaMade } from '@/api';
 import { useT } from '@/i18n';
 import { HOST_PANEL_WIDTH, studioHost, type HostPanel } from '@/lib/host';
 import { BUILT_IN, fromLibrary, useLibraryIndex } from '@/lib/library';
+import type { Plugin } from '@/lib/plugins';
 import { SAVED, importIntoSaved, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { fileRef, stillUrl } from '@/lib/studio-refs';
 import type { MediaListing, MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
@@ -133,6 +134,7 @@ export function useLibraryShown(projectId: string, of: {
  * workbench is shown, so what is open in it stays as the edit gives way to the canvas.
  */
 export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
+  const t = useT();
   const library = useWiring('library')?.library;
   const {
     projectId, loaded, failure, mediaSources,
@@ -141,7 +143,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     canvasOpen, setCanvasOpen, requestCanvasFiles,
     refOfFile, referOutside, onLibraryDownloadFailed, saveFiles,
     mediaScope, switchMedia, revealMedia, mediaRevealed, scopedListing, savedListing, savedImport, skillsShown, askedInHand,
-    setSettingsOpen,
+    setSettingsOpen, toast, showWorkbench,
     libraryPane: pane, updateWorkspace, setPanelWidth,
   } = frame;
   /* a file of the media pane clicked is taken in hand by the workbench shown (its viewer shows it): by none, nothing */
@@ -149,6 +151,15 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
   const pickSavedFile = React.useCallback((file: WorkspaceResource | null) => { wiringStore.get()?.library?.pick(file, { saved: true }); }, []);
   const pauseWorkbench = React.useCallback(() => { wiringStore.get()?.pause?.(); }, []);
   const openServices = React.useCallback(() => { setSettingsOpen('models'); }, [setSettingsOpen]);
+  /* a plugin with a workbench turned on in the library: where it now is (the edit's views, Motion, on its timeline;
+     any other on the top bar's switch), with the way to show it */
+  const { show: showToast } = toast;
+  const workbenchOn = React.useCallback((plugin: Plugin) => {
+    const workbench = plugin.workbench;
+    if (!workbench) return;
+    const onTimeline = workbench !== 'edit' && plugin.blocks === 'edit';
+    showToast(t(onTimeline ? 'assetDrawer.workbenchAddedTimeline' : 'assetDrawer.workbenchAdded'), { label: t('assetDrawer.workbenchOpen'), run: () => showWorkbench(workbench) });
+  }, [showToast, showWorkbench, t]);
   /* where the drawer writes the way out of a try when no workbench has a place for it */
   const noDismiss = React.useRef<() => boolean>(() => false);
   if (!loaded || failure) return null;
@@ -231,7 +242,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
             onPreviewStart={canvasOpen ? pauseWorkbench : library?.preview.begin ?? nothing} onDownloadFailed={onLibraryDownloadFailed} shown={pane.open} under={pane.under}
             captions={library?.captions}
             speak={library?.speak}
-            onServices={openServices} projectId={projectId} showSkills={skillsShown} />
+            onServices={openServices} projectId={projectId} folder={loaded.project.path} showSkills={skillsShown} onWorkbenchOn={workbenchOn} />
       </WorkspaceLibraryPane>
     </>
   );

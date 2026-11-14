@@ -30,9 +30,9 @@ export interface SurfaceProps {
  * A plugin's surface by its workbench's name: its element (one of OpenFilm's own, or one someone made once the person
  * lets it run), the page of one someone made, or what its program serves; one this build has nothing to show for says so.
  */
-export function PluginSurface({ id, page, files, title, program, runs, inApp, element, ...props }: SurfaceProps & { id: string; page?: string; files?: string; title?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string }) {
+export function PluginSurface({ id, page, files, title, program, runs, inApp, element, keep, ...props }: SurfaceProps & { id: string; page?: string; files?: string; title?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string; keep?: boolean }) {
   const t = useT();
-  if (element) return <ElementSurface key={element} url={element} files={files} projectId={props.projectId} folder={props.folder} />;
+  if (element) return <ElementSurface key={element} url={element} plugin={id} files={files} projectId={props.projectId} folder={props.folder} keep={keep} />;
   if (inApp) return <p className={NOTE}>{t('assetDrawer.surfaceNotAllowed')}</p>;
   if (program) return <ProgramSurface key={`${id}:${props.projectId}:${runs ? 1 : 0}`} uid={id} projectId={props.projectId} title={title ?? id} />;
   if (page) return <iframe key={page} src={`${page}${files ? `?project=${encodeURIComponent(files)}` : ''}`} title={title ?? id} allow="autoplay" className="min-h-0 min-w-0 flex-1 border-0 bg-[var(--bg-panel)]" />;
@@ -86,28 +86,51 @@ export function elementTag(url: string): Promise<string> {
   return tag;
 }
 
+/* the elements kept for the page's life (a library tab's), by what each was made with; out of sight while not shown,
+   in a place of the page's own, so each stays connected and keeps what it holds */
+const keptElements = new Map<string, HTMLElement>();
+let parking: HTMLElement | null = null;
+const parked = (): HTMLElement => {
+  if (!parking) {
+    parking = document.createElement('div');
+    parking.hidden = true;
+    parking.setAttribute('data-plugin-parking', '');
+    document.body.append(parking);
+  }
+  return parking;
+};
+
 /**
  * The surface of a plugin that brings an element: its module loaded into this page, and one element of it put here.
- * It is told the project by attributes: `project-id` (for the editor's API), `project` (where the project's files are
- * read and written, as a plugin's page is told) and `folder` (the project's folder on this computer).
+ * It is told the project by attributes: `project-id` (for `openfilm/studio`), `project` (where the project's files are
+ * read and written, as a plugin's page is told) and `folder` (the project's folder on this computer); and `plugin`, its
+ * workbench's name, which others put files into it by (`openfilm/studio` addTo, provide). `keep`: one element for the
+ * page's life, moved here each time it is shown and kept out of sight meanwhile (a library tab's, which keeps its state
+ * as the person goes to another tab or closes the drawer); else one made each time, and taken out as it goes.
  */
-function ElementSurface({ url, files, projectId, folder }: { url: string; files?: string | undefined; projectId: string; folder: string }) {
+function ElementSurface({ url, plugin, files, projectId, folder, keep = false }: { url: string; plugin: string; files?: string | undefined; projectId: string; folder: string; keep?: boolean | undefined }) {
   const t = useT();
   const host = React.useRef<HTMLDivElement>(null);
   const [error, setError] = React.useState<string | null>(null);
   React.useEffect(() => {
     let live = true, element: HTMLElement | null = null;
+    const key = JSON.stringify([url, plugin, files ?? '', projectId, folder]);
     elementTag(url).then((tag) => {
       if (!live || !host.current) return;
-      element = document.createElement(tag);
-      element.setAttribute('project-id', projectId);
-      if (files) element.setAttribute('project', files);
-      if (folder) element.setAttribute('folder', folder);
-      Object.assign(element.style, { display: 'block', flex: '1 1 0', minWidth: '0', minHeight: '0' });
+      element = keep ? keptElements.get(key) ?? null : null;
+      if (!element) {
+        element = document.createElement(tag);
+        element.setAttribute('project-id', projectId);
+        element.setAttribute('plugin', plugin);
+        if (files) element.setAttribute('project', files);
+        if (folder) element.setAttribute('folder', folder);
+        Object.assign(element.style, { display: 'block', flex: '1 1 0', minWidth: '0', minHeight: '0' });
+        if (keep) keptElements.set(key, element);
+      }
       host.current.append(element);
     }, (e) => { if (live) setError(e instanceof Error ? e.message : String(e)); });
-    return () => { live = false; element?.remove(); };
-  }, [url, files, projectId, folder]);
+    return () => { live = false; if (element && keep) parked().append(element); else element?.remove(); };
+  }, [url, plugin, files, projectId, folder, keep]);
   if (error) return <p className={NOTE}>{`${t('assetDrawer.surfaceFailed')}\n\n${error}`}</p>;
   return <div ref={host} className="flex min-h-0 min-w-0 flex-1" />;
 }

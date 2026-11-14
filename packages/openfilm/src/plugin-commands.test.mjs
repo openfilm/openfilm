@@ -66,7 +66,7 @@ test('a plugin that is off runs nothing, and two of one name are told apart', ()
   setSkillOn('local/outline', false, where.home);
   const off = pluginCommand(['outline', 'list'], where);
   assert.equal(off.status, 1);
-  assert.match(off.error, /^The outline skill is off: the person turns it on in the library's Skills tab\.$/);
+  assert.match(off.error, /^The outline skill is off: the person turns it on in the library's Plugins tab\.$/);
   /* one with a surface is a plugin, and is said to be */
   plugin(join(where.mine, 'board'), 'board', { list: 'list.mjs' }, { 'list.mjs': '', 'index.html': '<p>' });
   setSkillOn('local/board', false, where.home);
@@ -87,7 +87,7 @@ test('OpenFilm\'s own plugins bring commands the same way, named by their id, an
   const found = pluginCommand(['edit', 'add', 'assets/a.mp4'], where);
   assert.deepEqual([found.command, found.file, found.rest, found.plugin.source], ['add', join(pluginsDir(), 'edit', 'add.mjs'), ['assets/a.mp4'], 'own']);
   /* its skill is what says what its commands do */
-  assert.match(pluginCommand(['edit'], where).error, /^Its commands: `openfilm edit add`\. `openfilm skill edit` says what each does\.$/);
+  assert.match(pluginCommand(['edit'], where).error, /^Its commands: `openfilm edit add`, `openfilm edit look`\. `openfilm skill edit` says what each does\.$/);
   /* one someone made with the same name does not take its place: it is named owner/name */
   plugin(join(where.mine, 'edit'), 'edit', { add: 'add.mjs' }, { 'add.mjs': '' });
   assert.equal(pluginCommand(['edit', 'add'], where).plugin.source, 'own');

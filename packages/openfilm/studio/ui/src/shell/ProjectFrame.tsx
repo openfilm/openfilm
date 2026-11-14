@@ -18,6 +18,7 @@ import { useT } from '@/i18n';
 import { batchMap } from '@/lib/batch-map';
 import { decodes, type PlayCheck } from '@/lib/decodes';
 import { studioHost, type StudioCommand } from '@/lib/host';
+import { linkOfCommand, routeLink } from '@/lib/links';
 import { mediaFetch } from '@/lib/media-queue';
 import { leaveProject } from '@/lib/navigate';
 import { recycleRefusalOf } from '@/lib/recycle';
@@ -25,7 +26,9 @@ import { factsOfProbe, mediaListingOf, srcHitsAsset, warmProjectMedia, type Medi
 import type { ImportProgress } from '@/components/MediaPool';
 import { Toast, useToast } from '@/components/Toast';
 import { BrandLoadingScreen } from '@/components/BrandLoadingScreen';
+import { forgetAsked, setOpener, showIn, tellCommand, workbenchOpens } from '@/studio/hub';
 import { usePublishFrame, wiringStore } from './frame';
+import { Arrangement } from './arrangement';
 import { LayoutOver, useLayout } from './layout';
 import { LibraryPlace, useLibraryShown } from './library';
 import { useProjectRead } from './project-read';
@@ -287,13 +290,13 @@ export function useProjectFrame(projectId: string) {
     void fetch(`${projectApi}/reveal`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, ...(original ? { original } : {}) }) });
   }, [projectApi]);
 
-  /* ── the workbench shown, and what the canvas was asked for (shell/workbenches) ── */
+  /* ── the workbench shown (shell/workbenches) ── */
   /* whether the page's panels are being rearranged: the layout's, and the workbench shown stays the one it is meanwhile */
   const rearranging = React.useRef(false);
   const shown = useWorkbenchShown(projectId, loaded?.project.id, toast.showError, rearranging);
 
   /* ── how the window is laid out: the app's panel, the library, the canvas and the workbench's panes (shell/layout) ── */
-  const layout = useLayout({ canvasOpen: shown.canvasOpen, noBench: shown.noBench, rearranging });
+  const layout = useLayout({ canvasOpen: shown.canvasOpen, noBench: shown.noBench, among: shown.among, specs: shown.specs, inPage: shown.inPage, rearranging });
 
   /* ── the library: what its pane shows of the project, whichever workbench is shown (shell/library) ── */
   const library = useLibraryShown(projectId, { listing, mediaSources, mediaMade, toast, canvasOpen: shown.canvasOpen, openLibrary: layout.openLibrary });
@@ -301,9 +304,31 @@ export function useProjectFrame(projectId: string) {
   /* ── the page's own windows (the projects, Settings, the desktop app's dialog), and the project's name (shell/top-bar) ── */
   const windows = usePageWindows(loaded);
 
-  /* ── the app's commands (lib/host.ts StudioCommand): what the page shows is done here, the rest is the workbench's ── */
+  /* ── links (lib/links): the workbench that shows the link's file (studio/hub workbenchOpens: what each said it shows,
+     `provide`'s `opens`) is shown, unless it is, and told to show it (`show`, kept until it is in the page); a file no
+     workbench on shows is pointed out in the library ── */
+  const openLink = React.useRef<(link: string) => void>(() => {});
+  openLink.current = (link) => {
+    const route = routeLink(link, workbenchOpens(), shown.workModes);
+    if (!route) return;
+    if ('file' in route) { library.showFile(route.file); return; }
+    const showing = shown.noBench ? null : shown.surface ?? (shown.canvasOpen ? 'canvas' : 'edit');
+    /* the edit as it was left: in Motion's view when that is how it was (Motion is a view of the edit) */
+    const motion = route.workbench === 'edit' && shown.motionOpen && shown.workModes.includes('motion');
+    if (showing !== route.workbench) shown.showWorkbench(motion ? 'motion' : route.workbench);
+    showIn(route.workbench, route.link);
+  };
+  /* openfilm/studio `open`, from any plugin's element */
+  React.useEffect(() => setOpener((link) => openLink.current(link)), []);
+
+  /* ── the app's commands (lib/host.ts StudioCommand): what the page shows is done here; one that names a thing a link
+     names (a clip, a moment, a stretch, a canvas's node, a file) is opened as that link, and the rest are told to
+     whoever listens (openfilm/studio onCommand: the edit) ── */
   const appCommand = React.useRef<(command: StudioCommand) => void>(() => {});
   appCommand.current = (command) => {
+    if (command.type === 'open') { if (typeof command.link === 'string') openLink.current(command.link); return; }
+    const link = linkOfCommand(command);
+    if (link) { openLink.current(link); return; }
     if (command.type === 'settings') { windows.setSettingsOpen(command.section === 'providers' ? 'models' : command.section ?? 'agents'); return; }
     if (command.type === 'show-examples') {
       /* a skill: the library's skills, on Discover or on its page; an example: the projects window's examples */
@@ -314,11 +339,11 @@ export function useProjectFrame(projectId: string) {
       } else windows.setProjectsOpen({ example: open?.kind === 'example' ? open.id : undefined });
       return;
     }
-    if (command.type === 'show-node' && typeof command.id === 'string') { shown.setCanvasOpen(true); shown.setCanvasFocus({ id: command.id, n: Date.now() }); return; }
-    if (command.type === 'show-file') { library.showFile(command.path); return; }
-    wiringStore.get()?.command?.(command);
+    tellCommand(command);
   };
   React.useEffect(() => { studioHost?.onCommand?.((command) => appCommand.current(command)); }, []);
+  /* what was asked of a workbench that was not there yet (studio/hub) is not given to one of the next project */
+  React.useEffect(() => forgetAsked, [projectId]);
 
   /* ── the page's places: what a workbench draws outside its own element goes into one of them ── */
   const [slotOver, setSlotOver] = React.useState<HTMLDivElement | null>(null);
@@ -346,7 +371,8 @@ const PLACE = { display: 'contents' } as const;
 
 /**
  * The project's page: its frame told, and the page itself, which is the shell's. The top bar is drawn first
- * (shell/top-bar); the element laid out among the page's panels (the edit's) goes where the panes are, and after it what
+ * (shell/top-bar); the arrangement among the page's panels, its blocks' slots laid out (shell/arrangement), and the
+ * elements that draw into them (the edit's, a plugin's: shell/workbenches) go where the panes are, and after them what
  * takes their place: a plugin's surface, the canvas (shell/workbenches); the page's own windows, the library's pane
  * (shell/library) and the layout's seams and editor (shell/layout) are drawn over the page; the other places are
  * filled by the workbench for now (see `slots`), each until it is the shell's own. Nothing of a workbench is drawn
@@ -376,7 +402,7 @@ export function ProjectFrame({ projectId }: { projectId: string }) {
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="relative z-10 grid min-h-0 min-w-0 flex-1 bg-[var(--dock-line)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
             <TopBar frame={state} />
-            {told && slots ? <AmongPanes frame={state} /> : null}
+            {told && slots ? <><Arrangement frame={state} /><AmongPanes frame={state} /></> : null}
             <InPanesPlace frame={state} />
           </div>
         </div>

@@ -83,8 +83,8 @@ test('real desktop panels move and resize in layout edit mode, cancel cleanly, a
     const layout=page.locator('[data-layout-menu]'),editor=page.locator('[data-workspace-editor]');
     const openMenu=async()=>{if(!await layout.count())await page.getByRole('button',{name:'Layout',exact:true}).click();};
     const beginEdit=async()=>{await openMenu();await layout.getByRole('button',{name:'Edit layout',exact:true}).click();await editor.waitFor();};
-    const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('openfilm.workspace.current.v2')).edit);
-    await page.waitForFunction(()=>localStorage.getItem('openfilm.workspace.current.v2')!==null);
+    const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('openfilm.workspace.current.v3')).arrangements.edit);
+    await page.waitForFunction(()=>localStorage.getItem('openfilm.workspace.current.v3')!==null);
     const before=await stored(),chatBefore=await chat.boundingBox();
     await openMenu();
     for(const preset of ['Library','Focus','Default']) {
@@ -161,7 +161,7 @@ test('real desktop panels move and resize in layout edit mode, cancel cleanly, a
       await layout.getByRole('button',{name:preset,exact:true}).click();await page.keyboard.press('Escape');
       for(const theme of ['light','dark']){await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;},theme);await assertThinSeams(page,`preset-${preset}/${theme}`);}
       if(preset==='Default'){
-        await page.evaluate(()=>{const profiles=JSON.parse(localStorage.getItem('openfilm.workspace.current.v2'));profiles.edit.chatSide='right';localStorage.setItem('openfilm.workspace.current.v2',JSON.stringify(profiles));window.dispatchEvent(new StorageEvent('storage',{key:'openfilm.workspace.current.v2'}));});
+        await page.evaluate(()=>{const profiles=JSON.parse(localStorage.getItem('openfilm.workspace.current.v3'));profiles.arrangements.edit.chatSide='right';localStorage.setItem('openfilm.workspace.current.v3',JSON.stringify(profiles));window.dispatchEvent(new StorageEvent('storage',{key:'openfilm.workspace.current.v3'}));});
         await page.waitForFunction(()=>document.getElementById('of-chat')?.dataset.side==='right');
         await page.reload();await page.waitForFunction(()=>document.getElementById('of-chat')?.dataset.side==='right');
         for(const theme of ['light','dark']){await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;},theme);await assertThinSeams(page,`preset-right-chat/${theme}`);}
@@ -171,11 +171,12 @@ test('real desktop panels move and resize in layout edit mode, cancel cleanly, a
     await page.keyboard.press('Escape');
     // Reproduce a library above chat, with both horizontal and vertical neighboring panels.
     await page.evaluate(()=>{
-      const profiles=JSON.parse(localStorage.getItem('openfilm.workspace.current.v2'));
-      profiles.edit={...profiles.edit,assets:true,layers:true,inspector:true,timeline:true,chat:true,libraryDock:'left',tree:{axis:'x',ratio:.26,first:{axis:'y',ratio:.6,first:{panel:'library'},second:{panel:'chat'}},second:{axis:'y',ratio:.6,first:{axis:'x',ratio:.7,first:{axis:'x',ratio:.2,first:{panel:'layers'},second:{panel:'viewer'}},second:{panel:'inspector'}},second:{panel:'timeline'}}}};
-      profiles.canvas={...profiles.canvas,assets:true,chat:true,libraryDock:'left',tree:{axis:'x',ratio:.74,first:{axis:'y',ratio:.4,first:{panel:'library'},second:{panel:'canvas'}},second:{panel:'chat'}}};
-      localStorage.setItem('openfilm.workspace.current.v2',JSON.stringify(profiles));
-      window.dispatchEvent(new StorageEvent('storage',{key:'openfilm.workspace.current.v2'}));
+      const profiles=JSON.parse(localStorage.getItem('openfilm.workspace.current.v3')),{edit}=profiles.arrangements;
+      const open=(key)=>({...edit.blocks[key],open:true});
+      profiles.arrangements.edit={...edit,assets:true,chat:true,libraryDock:'left',blocks:{...edit.blocks,layers:open('layers'),inspector:open('inspector'),timeline:open('timeline')},tree:{axis:'x',ratio:.26,first:{axis:'y',ratio:.6,first:{panel:'library'},second:{panel:'chat'}},second:{axis:'y',ratio:.6,first:{axis:'x',ratio:.7,first:{axis:'x',ratio:.2,first:{panel:'layers'},second:{panel:'viewer'}},second:{panel:'inspector'}},second:{panel:'timeline'}}}};
+      profiles.arrangements.canvas={mode:'canvas',chatSide:'left',assetsWidth:320,libraryHeight:280,chatWidth:420,blocks:{canvas:{open:true,edge:'center',size:null}},...profiles.arrangements.canvas,assets:true,chat:true,libraryDock:'left',tree:{axis:'x',ratio:.74,first:{axis:'y',ratio:.4,first:{panel:'library'},second:{panel:'canvas'}},second:{panel:'chat'}}};
+      localStorage.setItem('openfilm.workspace.current.v3',JSON.stringify(profiles));
+      window.dispatchEvent(new StorageEvent('storage',{key:'openfilm.workspace.current.v3'}));
     });
     await page.waitForFunction(()=>document.getElementById('of-chat')?.hasAttribute('data-workspace-bounds')&&document.getElementById('of-chat').getBoundingClientRect().top>32);
     await page.reload();await page.locator('[data-viewer-pane]').waitFor();

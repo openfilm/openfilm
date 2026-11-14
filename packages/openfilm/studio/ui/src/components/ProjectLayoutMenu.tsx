@@ -1,18 +1,34 @@
-/** One workspace control for the edit and canvas: presets, independent docks and portable named layouts. */
+/** One workspace control for every arrangement (the edit's, the canvas's, a plugin's): presets, independent docks and portable named layouts. */
 import React from 'react';
 import { Check, Download, GripVertical, MoreHorizontal, PanelsRightBottom, Pencil, Plus, RotateCcw, Save, Trash2, Upload, X } from 'lucide-react';
-import { useT } from '@/i18n';
-import { LEGACY_WORKSPACES_KEY, MAX_WORKSPACES, WORKSPACES_KEY, keepWorkspace, parseWorkspaces, sameWorkspace, serializeWorkspaces, workspacePresets, type SavedWorkspace, type WorkspaceLayout } from '@/lib/workspaces';
+import { useLanguage, useT } from '@/i18n';
+import { MAX_WORKSPACES, WORKSPACES_KEY, keepWorkspace, parseWorkspaces, readSavedWorkspaces, sameWorkspace, serializeWorkspaces, workspacePresets, type ArrangementSpec, type SavedWorkspace, type WorkspaceLayout } from '@/lib/workspaces';
+import type { BlockRoom, DrawnBlock } from '@/lib/workspace-preview';
+import { usePlugins } from '@/lib/plugins';
 import { WorkspacePreview } from './WorkspacePreview';
 import { Popover } from './Popover';
 import styles from './ProjectLayoutMenu.module.css';
 
-export function ProjectLayoutMenu({ className, value, onChange, onReset, hasChat, onEdit, layoutEditing, storageFailed, viewport, timelineFitHeight, inspectorIdle }: {
-  className?: string; value: WorkspaceLayout; onChange: (layout: WorkspaceLayout) => void; onReset: () => void;
-  viewport: {width:number;height:number}; timelineFitHeight:number; inspectorIdle:boolean;
+/** The words naming an arrangement's layouts and its rearranging: the edit's and the canvas's own, else with its workbench's name. */
+export function useArrangementWords(name: string, titled?: Readonly<Record<string, string>>): { layouts: string; editing: string } {
+  const t = useT();
+  const language = useLanguage();
+  /* a plugin of OpenFilm's own by the plugins listed; one someone made by the words its workbench was given (`titled`) */
+  const own = usePlugins().find((p) => p.workbench === name)?.title;
+  const words = titled ?? own;
+  const title = words?.[language] ?? words?.en ?? name;
+  return name === 'edit' ? { layouts: t('layout.editLayouts'), editing: t('layout.editingEdit') }
+    : name === 'canvas' ? { layouts: t('layout.canvasLayouts'), editing: t('layout.editingCanvas') }
+      : { layouts: t('layout.layoutsOf').replace('{name}', title), editing: t('layout.editingOf').replace('{name}', title) };
+}
+
+export function ProjectLayoutMenu({ className, value, spec, title, onChange, onReset, hasChat, onEdit, layoutEditing, storageFailed, viewport, sizes }: {
+  className?: string; value: WorkspaceLayout; spec: ArrangementSpec; title?: Readonly<Record<string, string>>; onChange: (layout: WorkspaceLayout) => void; onReset: () => void;
+  viewport: {width:number;height:number}; sizes: (layout: WorkspaceLayout, room: BlockRoom) => Readonly<Record<string, DrawnBlock>>;
   hasChat: boolean; onEdit: () => void; layoutEditing?: boolean; storageFailed?: boolean;
 }) {
   const t = useT();
+  const words = useArrangementWords(value.mode, title);
   const [open, setOpen] = React.useState(false);
   React.useEffect(() => { if (layoutEditing) setOpen(false); }, [layoutEditing]);
   const [saved, setSaved] = React.useState<SavedWorkspace[]>([]);
@@ -25,7 +41,7 @@ export function ProjectLayoutMenu({ className, value, onChange, onReset, hasChat
   const id = React.useId();
   React.useEffect(() => {
     if (!open) return;
-    try { setSaved(parseWorkspaces(localStorage.getItem(WORKSPACES_KEY) ?? localStorage.getItem(LEGACY_WORKSPACES_KEY))); } catch { setSaved([]); }
+    try { setSaved(readSavedWorkspaces(localStorage)); } catch { setSaved([]); }
     setEditing(null); setActions(null); setNotice(''); setRemoved(null);
   }, [open]);
   React.useEffect(() => { if (editing) { input.current?.focus(); input.current?.select(); } }, [Boolean(editing)]);
@@ -67,12 +83,12 @@ export function ProjectLayoutMenu({ className, value, onChange, onReset, hasChat
     trigger={<button ref={button} data-layout-trigger type="button" disabled={layoutEditing} className={className} aria-label={t('layout.title')} aria-haspopup="dialog" aria-expanded={open} aria-controls={open?id:undefined}><PanelsRightBottom size={16}/></button>}>
     <div ref={panel} id={id} data-layout-menu role="dialog" tabIndex={-1} aria-label={t('layout.title')} className={styles.menu}>
       <div className={styles.heading}><strong>{t('layout.title')}</strong><button type="button" className={styles.reset} onClick={onReset}><RotateCcw size={12}/>{t('layout.restoreDefault')}</button></div>
-      <p className={styles.modeLabel}>{t(value.mode==='edit'?'layout.editLayouts':'layout.canvasLayouts')}</p>
-      <div className={styles.presets}>{workspacePresets(value.mode).map(preset=><button key={preset.id} type="button" aria-label={t(`layout.preset_${preset.id}`)} aria-pressed={sameWorkspace(value,preset.layout,hasChat)} onClick={()=>onChange(preset.layout)}><WorkspacePreview layout={preset.layout} viewport={viewport} hasChat={hasChat} timelineFitHeight={timelineFitHeight} inspectorIdle={inspectorIdle} className={styles.preview}/><span>{t(`layout.preset_${preset.id}`)}</span></button>)}</div>
+      <p className={styles.modeLabel}>{words.layouts}</p>
+      <div className={styles.presets}>{workspacePresets(spec).map(preset=><button key={preset.id} type="button" aria-label={t(`layout.preset_${preset.id}`)} aria-pressed={sameWorkspace(value,preset.layout,hasChat,spec)} onClick={()=>onChange(preset.layout)}><WorkspacePreview layout={preset.layout} spec={spec} viewport={viewport} hasChat={hasChat} sizes={sizes} className={styles.preview}/><span>{t(`layout.preset_${preset.id}`)}</span></button>)}</div>
       <button type="button" className={styles.editLayout} onClick={()=>{show(false);onEdit();}}><GripVertical size={15}/><span>{t('layout.editLayout')}</span><Pencil size={13}/></button>
       <section className={styles.section}><div className={styles.customHeading}><h3>{t('layout.savedLayouts')}</h3><span>{saved.length}/{MAX_WORKSPACES}</span><button type="button" disabled={saved.length>=MAX_WORKSPACES} aria-label={t('layout.saveCurrentShort')} onClick={()=>begin()}><Plus size={14}/>{t('layout.saveCurrentShort')}</button></div>
         {editing?<form className={styles.nameForm} onSubmit={event=>{event.preventDefault();save();}}><input ref={input} aria-label={t('layout.name')} value={editing.name} maxLength={40} onChange={event=>setEditing({...editing,name:event.target.value})}/><button type="button" className={styles.iconButton} aria-label={t('layout.cancel')} onClick={()=>setEditing(null)}><X size={13}/></button><button type="submit" className={styles.done} disabled={!name||duplicate}>{t('layout.save')}</button></form>:null}
-        {saved.filter(row=>row.layout.mode===value.mode).map(row=><div key={row.id} className={styles.slot}><div className={styles.slotRow}><button type="button" className={styles.savedName} aria-pressed={sameWorkspace(value,row.layout,hasChat)} onClick={()=>{onChange(row.layout);setActions(null);}}><span>{row.name}</span>{sameWorkspace(value,row.layout,hasChat)?<Check size={13}/>:null}</button><button type="button" className={styles.iconButton} aria-label={t('layout.moreNamed').replace('{name}',row.name)} aria-expanded={actions===row.id} onClick={()=>setActions(actions===row.id?null:row.id)}><MoreHorizontal size={15}/></button></div>{actions===row.id?<div className={styles.actions}><button type="button" onClick={()=>begin(row)}><Pencil size={12}/>{t('layout.rename')}</button><button type="button" onClick={()=>{const next=keepWorkspace(saved,{...row,layout:value});if(next)keep(next);setActions(null);}}><Save size={12}/>{t('layout.update')}</button><button type="button" onClick={()=>{setRemoved(row);keep(saved.filter(r=>r.id!==row.id));setActions(null);}}><Trash2 size={12}/>{t('layout.removeShort')}</button></div>:null}</div>)}
+        {saved.filter(row=>row.layout.mode===value.mode).map(row=><div key={row.id} className={styles.slot}><div className={styles.slotRow}><button type="button" className={styles.savedName} aria-pressed={sameWorkspace(value,row.layout,hasChat,spec)} onClick={()=>{onChange(row.layout);setActions(null);}}><span>{row.name}</span>{sameWorkspace(value,row.layout,hasChat,spec)?<Check size={13}/>:null}</button><button type="button" className={styles.iconButton} aria-label={t('layout.moreNamed').replace('{name}',row.name)} aria-expanded={actions===row.id} onClick={()=>setActions(actions===row.id?null:row.id)}><MoreHorizontal size={15}/></button></div>{actions===row.id?<div className={styles.actions}><button type="button" onClick={()=>begin(row)}><Pencil size={12}/>{t('layout.rename')}</button><button type="button" onClick={()=>{const next=keepWorkspace(saved,{...row,layout:value});if(next)keep(next);setActions(null);}}><Save size={12}/>{t('layout.update')}</button><button type="button" onClick={()=>{setRemoved(row);keep(saved.filter(r=>r.id!==row.id));setActions(null);}}><Trash2 size={12}/>{t('layout.removeShort')}</button></div>:null}</div>)}
         {!saved.some(row=>row.layout.mode===value.mode)&&!editing?<p className={styles.hint}>{t('layout.noSaved')}</p>:null}
         {removed?<button type="button" className={styles.reset} onClick={()=>{const next=keepWorkspace(saved,removed);if(next){keep(next);setRemoved(null);}else setNotice(t('layout.nameTaken'));}}><RotateCcw size={12}/>{t('layout.undoDelete')}</button>:null}
         <div className={styles.portable}><button type="button" onClick={()=>importInput.current?.click()}><Upload size={13}/>{t('layout.import')}</button><button type="button" onClick={exportLayouts}><Download size={13}/>{t('layout.export')}</button><input ref={importInput} type="file" accept="application/json,.json" hidden onChange={event=>void importLayouts(event.target.files?.[0])}/></div>

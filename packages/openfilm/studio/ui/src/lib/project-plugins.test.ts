@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { arrangementSpecs } from './blocks.ts';
 import { skillPlugins } from './project-plugins.ts';
 import type { SkillEntry } from './project-sources.ts';
 
@@ -28,6 +29,15 @@ test('a skill with a surface is a plugin: its workbench named by its uid, its sw
   const own = skillPlugins([skill({ uid: 'local/grade', name: 'grade', inApp: true, runs: true, element: 'http://localhost:1/s/t/ui.js?v=1' })])[0]!;
   assert.deepEqual([own.workbench, own.inApp, own.runs, own.element], ['local/grade', true, true, 'http://localhost:1/s/t/ui.js?v=1']);
   assert.deepEqual(skillPlugins([skill({ uid: 'local/grade', name: 'grade', inApp: true })]).map((p) => [p.workbench, p.runs, p.element]), [['local/grade', false, undefined]]);
+  /* one that asks for a tab of the library shows its surface there, with no workbench; its commands come with it */
+  const tab = skillPlugins([skill({ uid: 'local/notes', name: 'notes', inApp: true, runs: true, element: 'http://localhost:1/s/n/ui.js?v=1', tab: { icon: 'film' }, commands: ['notes'] })])[0]!;
+  assert.deepEqual([tab.workbench, tab.tab, tab.element, tab.commands], [undefined, { icon: 'film' }, 'http://localhost:1/s/n/ui.js?v=1', ['notes']]);
+  /* its workbench is laid out in the blocks it declares, its own keyed by its uid; a tab has no workbench, so none */
+  const blocks = [{ id: 'scopes', edge: 'left' as const }, 'edit:viewer'];
+  const laid = skillPlugins([skill({ uid: 'local/grade', name: 'grade', inApp: true, runs: true, element: 'http://localhost:1/s/g/ui.js?v=1', blocks })])[0]!;
+  assert.deepEqual([laid.workbench, laid.blocks], ['local/grade', blocks]);
+  assert.deepEqual(arrangementSpecs([{ workbench: 'edit', blocks: [{ id: 'viewer', edge: 'center' }] }, laid]).get('local/grade')?.blocks.map((b) => [b.key, b.owner]), [['scopes', 'local/grade'], ['edit:viewer', 'edit']]);
+  assert.equal(skillPlugins([skill({ uid: 'local/n2', name: 'n2', inApp: true, tab: {}, blocks })])[0]!.blocks, undefined);
   /* without words of its own, its name and what it tells the agent */
   assert.deepEqual([list[1].title, list[1].summary], [{ en: 'tool' }, { en: 'A storyboard' }]);
 });

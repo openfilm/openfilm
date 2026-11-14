@@ -5,7 +5,8 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { FilmPage, FrameError, launch, serve } from './host.mjs';
 import { FILM_FILE, readFilmFile } from './film-doc.mjs';
 import { readableLink, referenceSource } from './media-links.mjs';
-import { limiterFilter } from './loudness.mjs';
+import { Bus, RATE, clipChain } from './sound-engine.mjs';
+import { renderSound } from './sound-render.mjs';
 
 /**
  * A film argument (a project folder with film.html, a folder inside one, a folder with index.html, or an .html file)
@@ -77,16 +78,29 @@ export async function open(target, opts = {}) {
   }
   /** @type {Map<string, string>} */
   const copies = new Map();
-  const site = await serve(loc.root, { swap: (file) => opts.swap?.(file) ?? copies.get(file) ?? null, missed: opts.missed });
+  /** @type {Map<string, string>} the graded copies of the film's videos graded by LUTs, by their keys (seekable.mjs) */
+  const graded = new Map();
+  /** @type {((file: string, luts: string[]) => string | null) | null} seekable.mjs gradeKey, once it is loaded */
+  let keyOf = null;
+  const site = await serve(loc.root, {
+    swap: (file, query) => opts.swap?.(file, query) ?? graded.get(query?.get('of-grade') ?? '') ?? copies.get(file) ?? null,
+    missed: opts.missed,
+    grade: opts.grade ?? ((file, luts) => { const key = keyOf?.(file, luts); return key && graded.has(key) ? { key } : null; }),
+  });
   const lent = opts.browser ?? null;
   let browser;
   try { browser = lent ?? await launch(opts.launch); }
   catch (e) { await site.close(); throw e; }
   if (opts.playable) {
     try {
-      const { browserCopies, filmVideos } = await import('./seekable.mjs');
+      const { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey } = await import('./seekable.mjs');
+      keyOf = gradeKey;
       const files = Array.isArray(opts.playable) ? opts.playable : loc.isFilm ? filmVideos(loc.root, loc.entry) : [];
       for (const [file, copy] of await browserCopies(browser, site.url, loc.root, files, { signal: opts.signal })) copies.set(file, copy);
+      /* the film's videos graded by LUTs, as the preview and an export show them (the project's film, for a page drawn
+         around it, as a render's) */
+      const film = loc.isFilm ? loc.entry : opts.root ? FILM_FILE : null;
+      if (film) for (const [key, copy] of await gradedCopies(filmGrades(loc.root, film), loc.root, { signal: opts.signal })) graded.set(key, copy);
     } catch { /* the footage as it is */ }
   }
   /** @type {FilmPage} */
@@ -135,10 +149,11 @@ export function kill(proc) {
   else proc.kill('SIGKILL');
 }
 
-/** Run ffmpeg; `timeoutMs`: stop it and fail with `what` when it has not finished by then. */
-export function ffmpeg(args, { input = false, timeoutMs = 0, what = 'ffmpeg' } = {}) {
+/** Run ffmpeg; `timeoutMs`: stop it and fail with `what` when it has not finished by then. `cwd`: the folder it runs
+    in, which a file named in a filter is read from. */
+export function ffmpeg(args, { input = false, timeoutMs = 0, what = 'ffmpeg', cwd = undefined } = {}) {
   /* -nostdin: ffmpeg never reads keys from a terminal it was started in (an agent's shell is one) */
-  const proc = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', ...args], { stdio: [input ? 'pipe' : 'ignore', 'inherit', 'pipe'], windowsHide: true });
+  const proc = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', ...args], { stdio: [input ? 'pipe' : 'ignore', 'inherit', 'pipe'], windowsHide: true, cwd });
   let err = '';
   proc.stderr.on('data', (d) => { err += d; });
   let late = false;
@@ -275,11 +290,16 @@ export function fadeFilter(fade) {
 }
 
 /**
- * Mix clips into one track of `duration` seconds. `limit`: its peaks caught under the delivery ceiling
- * (loudness.mjs limiterFilter), as a film's sound is delivered; without it, the sum as it is (to be measured).
+ * Mix clips into one track of `duration` seconds. `limit`: through the film's bus (src/sound-engine.mjs Bus, its peaks
+ * caught under the delivery ceiling), as a film's sound is delivered and the preview hears it; without it, the sum as
+ * it is (to be measured). ffmpeg mixes; the bus, and a clip's chain (`chain`, sound-engine.mjs clipChain: none has one
+ * today), are the sound engine's, run in Node on the samples (src/sound-render.mjs).
  */
 export async function mix(clips, duration, file, codec = ['-c:a', 'aac', '-b:a', '192k'], { limit = false } = {}) {
-  const { inputs, filter } = mixGraph(clips.map((c) => ({ ...c, channels: c.channels ?? audioChannels(c.file) })), duration, { limit });
+  const all = clips.map((c) => ({ ...c, channels: c.channels ?? audioChannels(c.file) }));
+  const chained = all.filter((c) => c.chain?.length);
+  const plain = chained.length ? all.filter((c) => !c.chain?.length) : all;
+  const { inputs, filter } = plain.length ? mixGraph(plain, duration) : { inputs: [], filter: '' };
   /* a mix takes seconds; one that has not ended in minutes never will */
   const timeoutMs = (120 + duration * 2) * 1000;
   /* a long graph goes in a file of its own: a command line has a limit (32,767 characters on Windows), and a film of
@@ -289,10 +309,35 @@ export async function mix(clips, duration, file, codec = ['-c:a', 'aac', '-b:a',
   if (script) writeFileSync(script, filter);
   try {
     const graph = script ? [await filterScriptOption(), script] : ['-filter_complex', filter];
-    await ffmpeg([...inputs, ...graph, '-map', '[out]', '-t', String(duration), ...codec, file], { timeoutMs, what: 'mixing the sound' }).done;
+    const source = [...inputs, ...graph, '-map', '[out]', '-t', String(duration)];
+    if (!limit && !chained.length) { await ffmpeg([...source, ...codec, file], { timeoutMs, what: 'mixing the sound' }).done; return; }
+    await renderSound({ source: plain.length ? source : null, clips: chained.map(chainClip), bus: limit ? new Bus() : null,
+      frames: Math.round(duration * RATE), out: file, codec, timeoutMs, what: 'mixing the sound' });
   } finally {
     if (script) rmSync(script, { force: true });
   }
+}
+
+/**
+ * A clip with a chain, for renderSound: its sound alone decoded by ffmpeg (cut, at its speed, on both sides, at the
+ * mix's rate), its chain run on it, then its volume and fades (fadeFilter's ramps), from where the mix places it (to
+ * the millisecond, as mixGraph's adelay).
+ * @returns {import('./sound-render.mjs').ChainClip}
+ */
+function chainClip(c) {
+  const speed = c.speed && c.speed !== 1 ? `,${tempo(c.speed)}` : '';
+  const mono = c.channels === 1 ? ',pan=stereo|c0=c0|c1=c0' : '';
+  const args = [...(c.from > 0 ? ['-ss', String(c.from)] : []), ...(c.to != null ? ['-t', String(c.to - c.from)] : []), '-vn', '-i', c.file,
+    '-af', `asetpts=PTS-STARTPTS${speed}${mono},aresample=${RATE},aformat=channel_layouts=stereo`];
+  const fade = c.fade;
+  const ramp = (/** @type {number} */ u) => {
+    let g = 1;
+    if (fade.in > 0) g *= Math.min(1, u / fade.in);
+    if (fade.out > 0) g *= Math.min(1, (fade.length - u) / fade.out);
+    return Math.max(0, Math.min(1, g));
+  };
+  return { args, start: Math.round(c.at * 1000) * (RATE / 1000), chain: /** @type {import('./sound-engine.mjs').Processor} */ (clipChain(c.chain)),
+    gain: fade && (fade.in > 0 || fade.out > 0) ? (i) => c.volume * ramp(i / RATE + fade.skip) : () => c.volume };
 }
 
 /** How long a mix's command may be before its graph goes in a file: well under Windows' limit, with room for the rest. */
@@ -303,7 +348,7 @@ export const COMMAND_ROOM = 24_000;
  * clip deep inside a long recording is not decoded from the start); one used by several is read once and split, each
  * part cut from it, so a film that uses one sound a hundred times has one input, not a hundred.
  */
-export function mixGraph(clips, duration, { limit = false } = {}) {
+export function mixGraph(clips, duration) {
   /** @type {Map<string, number[]>} */
   const uses = new Map();
   clips.forEach((c, i) => uses.set(c.file, [...(uses.get(c.file) ?? []), i]));
@@ -339,8 +384,7 @@ export function mixGraph(clips, duration, { limit = false } = {}) {
      first, from its samples (it starts at 0 and has no gaps): at times amix's frames come without any (ffmpeg 8 on
      Linux, about one mix in 25 with three inputs), and apad, which pads by them, then padded nothing and a film whose
      last sound ended before it did got a mix that ended there */
-  const limited = limit ? `,${limiterFilter()},asetpts=N/SR/TB` : '';
-  const sum = `${clips.map((_, i) => `[a${i}]`).join('')}amix=inputs=${clips.length}:normalize=0:dropout_transition=0,asetpts=N/SR/TB${limited},apad=whole_dur=${duration},atrim=0:${duration}[out]`;
+  const sum = `${clips.map((_, i) => `[a${i}]`).join('')}amix=inputs=${clips.length}:normalize=0:dropout_transition=0,asetpts=N/SR/TB,apad=whole_dur=${duration},atrim=0:${duration}[out]`;
   return { inputs, filter: [...splits, ...chains, sum].join(';') };
 }
 

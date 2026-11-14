@@ -810,6 +810,18 @@ export function declarations(style) {
   return out;
 }
 
+/**
+ * The LUT files a video clip's picture is graded by, in the order they apply: its style's `--of-lut`, one or more
+ * `url(…)` naming `.cube` files from the film's folder, as written (SPEC.md). None for another kind of clip, or none
+ * written. The host grades the picture before the clip's CSS (seekable.mjs); a browser alone shows it as it is.
+ * @param {{ src?: unknown, sound?: unknown, style?: unknown } | null | undefined} clip @returns {string[]}
+ */
+export function lutsOf(clip) {
+  if (kindOf(clip) !== 'video' || typeof clip?.style !== 'string' || !clip.style.includes('--of-lut')) return [];
+  const value = declarations(clip.style).findLast(([prop]) => prop === '--of-lut')?.[1] ?? '';
+  return [...value.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]*))\s*\)/gi)].map((m) => (m[1] ?? m[2] ?? m[3]).trim()).filter(Boolean);
+}
+
 /** A number of `unit` (`56px`, `12deg`; a bare 0 too), or NaN. */
 const amount = (v, unit) => { const m = new RegExp(`^(-?\\d+(?:\\.\\d+)?|-?\\.\\d+)${unit}$`).exec(v.trim()); return m ? Number(m[1]) : v.trim() === '0' ? 0 : NaN; };
 

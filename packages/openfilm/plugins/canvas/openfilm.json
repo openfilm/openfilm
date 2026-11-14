@@ -17,6 +17,23 @@
   },
   "about": "the board beside the edit, where material is made and laid out",
   "workbench": "canvas",
+  "blocks": [
+    {
+      "id": "canvas",
+      "title": {
+        "en": "Canvas",
+        "zh-CN": "画布",
+        "ja": "キャンバス",
+        "ko": "캔버스",
+        "es": "Lienzo"
+      },
+      "edge": "center",
+      "min": [
+        240,
+        220
+      ]
+    }
+  ],
   "on": true,
   "skills": [
     "canvas"

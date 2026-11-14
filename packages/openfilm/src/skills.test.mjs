@@ -334,6 +334,12 @@ test("a skill's openfilm.json: its version, kind, order, mark and media; anythin
   const b = skill(join(root, 'b'), 'b', 'Does b.', 'How.', { 'openfilm.json': JSON.stringify({ version: 'latest', kind: 'other', order: 'first', icon: 'Big Icon', cover: '../x.jpg' }) });
   const read = readSkill(b, 'mine');
   for (const key of ['version', 'kind', 'order', 'icon', 'cover']) assert.equal(read?.[key], undefined, key);
+  /* a plugin's surface asked for as a tab of the library */
+  assert.deepEqual(readSkill(skill(join(root, 't'), 't', 'Does t.', 'How.', { 'openfilm.json': JSON.stringify({ tab: { icon: 'film', title: 'Notes' } }) }), 'mine')?.tab, { icon: 'film', title: { en: 'Notes' } });
+  assert.equal(read?.tab, undefined);
+  /* the blocks its workbench is laid out in among the page's panels, its own and another workbench's */
+  assert.deepEqual(readSkill(skill(join(root, 'b'), 'b', 'Does b.', 'How.', { 'openfilm.json': JSON.stringify({ blocks: [{ id: 'scopes', edge: 'left', size: 300 }, 'edit:viewer', { id: 'Bad' }] }) }), 'mine')?.blocks, [{ id: 'scopes', edge: 'left', size: 300 }, 'edit:viewer']);
+  assert.equal(read?.blocks, undefined);
   mkdirSync(join(root, 'c'));
   writeFileSync(join(root, 'c', 'SKILL.md'), '---\nname: c\ndescription: Does c.\nversion: 1.4\n---\nHow.\n');
   assert.equal(readSkill(join(root, 'c'), 'mine')?.version, '1.4');

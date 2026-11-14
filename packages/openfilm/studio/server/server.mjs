@@ -67,9 +67,10 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { coreSkills, elementIn, keeps, listSkills, offeredSkills, pluginRuns, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
+import { commandsIn, coreSkills, elementIn, keeps, listSkills, offeredSkills, pluginRuns, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
 import { startPluginPages } from './plugin-pages.mjs';
 import { startPluginPrograms } from './plugin-programs.mjs';
+import { createPluginServers } from './plugin-servers.mjs';
 import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
@@ -149,6 +150,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   });
   const sweepMedia = indexMedia ? setTimeout(() => { void mediaIndex.sweep().catch(() => {}); }, 20_000) : null;
   sweepMedia?.unref();
+  /* the routes OpenFilm's own plugins bring (plugin-servers.mjs), each told to the pages of a project as it says */
+  const pluginServers = createPluginServers({ emit: (root, event) => watchers.emit(root, event) });
   /** questions about spending for the person, in the pages showing a project (see get.mjs) */
   const asks = createAsks({ emit: (root, event) => watchers.emit(root, event), roots: watchers.roots });
   /** the editor pages open right now, and whether each is in sight: `/open` switches them to a project */
@@ -508,6 +511,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* OpenFilm's plugins (src/plugins.mjs): each with whether it is on; one turned on or off (PUT plugins/:id { on }),
        answered with them all. 409 for one not made yet */
     if (parts[0] === 'plugins' && parts.length === 1 && req.method === 'GET') return json(res, 200, { plugins: pluginsShown() });
+    /* an own plugin's routes, `plugins/<id>/…`, from its server.mjs, while it is on (plugin-servers.mjs) */
+    if (parts[0] === 'plugins' && parts.length > 2) return pluginServers.route(req, res, parts[1], parts.slice(2), url);
     if (parts[0] === 'plugins' && parts.length === 2 && req.method === 'PUT') {
       const { on } = /** @type {{ on?: unknown }} */ (await readJson(req) ?? {});
       if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
@@ -601,6 +606,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           /* one with a surface (a page of its own, src/skills.mjs SKILL_PAGE) is a plugin: where its page is, on the
              plugins' origin (plugin-pages.mjs); listed for a project, where that project's files are for it; and
              whether the person lets it change them */
+          /* a plugin's surface shown as a tab of the library instead of as a workbench (src/plugins.mjs tabOf) */
+          ...(k.tab && k.installed && !k.core ? { tab: k.tab } : {}),
+          /* the blocks its workbench is laid out in among the page's panels (src/plugin-blocks.mjs) */
+          ...(k.blocks && k.installed && !k.core ? { blocks: k.blocks } : {}),
           /* the commands it brings (src/skills.mjs commandsIn), by name: `openfilm <its name> <command>` */
           ...(k.commands && k.installed && !k.core ? { commands: Object.keys(k.commands) } : {}),
           /* the program it brings (src/skills.mjs programIn) serves its surface itself, once started (`start` below),
@@ -1459,13 +1468,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   const pluginOptions = { secret: key, editorOrigin: () => origin, mayWrite: (/** @type {{ uid: string, source: string }} */ plugin, /** @type {{ id: string }} */ project) => pluginWrites(plugin, project) || pluginRuns(plugin, project) };
   const pluginPages = await startPluginPages({ port: port ? address.port + 2 : 0, ...pluginOptions }).catch(() => startPluginPages({ port: 0, ...pluginOptions }));
   /**
-   * OpenFilm's plugins as the editor is told them: each with whether it is on, and where the module of its element is
-   * (its package.json's `browser`, src/skills.mjs elementIn), on the plugins' origin as anyone's is. Its own ship with
-   * OpenFilm, so they are not asked leave to run.
+   * OpenFilm's plugins as the editor is told them: each with whether it is on, where the module of its element is
+   * (its package.json's `browser`, src/skills.mjs elementIn), on the plugins' origin as anyone's is, and the commands it
+   * brings, by name (src/skills.mjs commandsIn). Its own ship with OpenFilm, so they are not asked leave to run.
    */
   const pluginsShown = () => pluginStates().map((p) => {
-    const folder = join(pluginsDir(), p.id), module = elementIn(folder);
-    return module ? { ...p, element: pluginPages.surface({ uid: `openfilm/${p.id}`, source: 'own', folder, page: module }).page } : p;
+    const folder = join(pluginsDir(), p.id), module = elementIn(folder), commands = commandsIn(folder, p.id);
+    return { ...p, ...(module ? { element: pluginPages.surface({ uid: `openfilm/${p.id}`, source: 'own', folder, page: module }).page } : {}),
+      ...(commands ? { commands: Object.keys(commands) } : {}) };
   });
   /* the programs of plugins that bring one, started as their workbenches are shown */
   const pluginPrograms = startPluginPrograms({ bin: join(studioHome(), 'plugin-bin'), mayRun: (plugin, project) => pluginRuns(plugin, project) });

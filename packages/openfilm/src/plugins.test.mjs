@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PLUGINS, pluginOfSkill, pluginSkillDir, pluginStates, pluginsDir, pluginsOffLine, readPlugins, setPluginOn, skillsOfPluginsOff, workbenchesOn } from './plugins.mjs';
 import { offeredSkills, promptSkills, setSkillOn } from './skills.mjs';
+import { readBlocks } from './plugin-blocks.mjs';
 
 const home = () => mkdtempSync(join(tmpdir(), 'of-plugins-'));
 const where = (h) => ({ home: h, mine: join(h, 'mine'), official: join(h, 'official') });
@@ -118,6 +119,18 @@ test('a plugin is a folder with an openfilm.json that has a title; they are list
   assert.deepEqual(readPlugins(join(dir, 'none')), []);
 });
 
+test('a plugin can ask for a tab of the library: its words and mark, or its own; one not made yet has none', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-plugin-tabs-'));
+  const put = (id, json) => { mkdirSync(join(dir, id), { recursive: true }); writeFileSync(join(dir, id, 'openfilm.json'), JSON.stringify({ title: { en: id }, ...json })); };
+  put('notes', { tab: { icon: 'film', title: { en: 'Notes', 'zh-CN': '笔记', bad: 2 } } });
+  put('plain', { tab: true });
+  put('odd', { tab: { icon: 'Big Icon', title: 7 } });
+  put('none', { tab: 'yes' });
+  put('later', { tab: true, soon: true });
+  const tabs = Object.fromEntries(readPlugins(dir).map((p) => [p.id, p.tab]));
+  assert.deepEqual(tabs, { later: undefined, none: undefined, notes: { icon: 'film', title: { en: 'Notes', 'zh-CN': '笔记' } }, odd: {}, plain: {} });
+});
+
 test('an official plugin is one folder: each skill it names is in its skills/<name>/, and the edit, canvas and Motion\'s are nowhere else', async () => {
   const { coreSkills, coreSkillsDir } = await import('./skills.mjs');
   for (const p of PLUGINS) {
@@ -144,4 +157,20 @@ test('every plugin says what it is for, and names skills there are', async () =>
     for (const lang of ['en', 'zh-CN', 'ja', 'ko', 'es']) assert.ok(p.title[lang] && p.summary[lang], `${p.id}: ${lang}`);
     for (const skill of p.skills) assert.ok(own.has(skill), `${p.id}: ${skill}`);
   }
+});
+
+test('a plugin declares the blocks its workbench is laid out in, each checked; Motion is laid out as the edit is', () => {
+  const edit = PLUGINS.find((p) => p.id === 'edit');
+  assert.deepEqual(edit?.blocks?.map((b) => (typeof b === 'string' ? b : [b.id, b.edge])), [['layers', 'left'], ['viewer', 'center'], ['inspector', 'right'], ['timeline', 'bottom']]);
+  assert.deepEqual(PLUGINS.find((p) => p.id === 'canvas')?.blocks?.map((b) => (typeof b === 'string' ? b : b.id)), ['canvas']);
+  assert.equal(PLUGINS.find((p) => p.id === 'motion')?.blocks, 'edit');
+  assert.deepEqual(readBlocks([
+    { id: 'scopes', edge: 'left', size: 300, title: { en: 'Scopes', xx: 1 }, min: [200, 120], range: [10, 5] },
+    { id: 'wheels' }, { id: 'curves', edge: 'center' }, { id: 'scopes' }, { id: 'Bad' }, 'edit:viewer', 'edit:viewer', 'nope', { id: 'tall', size: 1e9, open: false },
+  ]), [
+    { id: 'scopes', edge: 'left', title: { en: 'Scopes' }, size: 300, min: [200, 120] },
+    { id: 'wheels', edge: 'center' }, { id: 'curves', edge: 'right' }, 'edit:viewer', { id: 'tall', edge: 'right', open: false },
+  ]);
+  assert.equal(readBlocks('edit'), 'edit');
+  for (const none of [undefined, [], 'Bad Name', [{ id: '' }], 3]) assert.equal(readBlocks(none), undefined);
 });

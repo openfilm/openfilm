@@ -1,33 +1,58 @@
 /**
  * The canvas, as the element its plugin brings (plugins/canvas: its package.json's `browser`): Studio's shell puts one
- * in the canvas's box (shell/workbenches) once it is warmed or shown, and what is drawn in it is the canvas's own. It
- * is told the project by its `project-id`, reads what it shows from the shell's frame, and puts files in the film
- * through the edit's wiring.
+ * in the canvas's box once it is warmed or shown, and what is drawn in it is the canvas's own. It
+ * is told the project by its `project-id`, and reaches Studio only through its public interface (`openfilm/studio`,
+ * studio/index), as a plugin someone made does: what it shows of the project, the files it brings in, the toast,
+ * Settings, the app's chat; files put in the film are the edit's `add`, and what is asked of the canvas (files put
+ * on it, a node to show, a board to lay down) comes to its own.
  */
 import * as React from 'react';
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useT } from '../../i18n';
-import { studioHost } from '../../lib/host';
+import type { CanvasDoc } from '../../lib/canvas';
+import { CANVAS_FILES, parseLink } from '../../lib/links';
 import CanvasView from '../../components/canvas/CanvasView';
 import { CanvasLoading } from '../../components/canvas/CanvasLoading';
 import { LoadBoundary } from '../../components/canvas/LoadBoundary';
-import { useFrame, wiringOf } from '../../shell/frame';
+import { addTo, chat, openSettings, project, toast } from '../../studio';
+import { useProject, useProvide } from '../../studio/react';
 
-/** The board of the project `projectId`, with what the shell holds of it. */
+/** Said in the toast: an error, or a notice. */
+const showError = (message: string) => toast(message, { error: true });
+const notice = (message: string) => toast(message);
+
+/** The board of the project `projectId`, with what Studio shows of it. */
 function Canvas({ projectId }: { projectId: string }) {
   const t = useT();
-  const { loaded, listing, mediaSources, onImport, setSettingsOpen, canvasOpen, canvasFocus, canvasInsert, canvasAddFiles, showFile, chat, toast } = useFrame(projectId);
-  const canvasFiles = React.useMemo(() => (listing ? [...listing.files, ...listing.pages] : []), [listing]);
+  const state = useProject(projectId);
+  /* what is asked of the canvas, each time anew (`n`): files put on it, a node to show (a link to its board,
+     `.film/canvas.json#<node>`), a board to lay down */
+  const [addFiles, setAddFiles] = React.useState<{ paths: string[]; n: number } | null>(null);
+  const [focus, setFocus] = React.useState<{ id: string; n: number } | null>(null);
+  const [insert, setInsert] = React.useState<{ doc: CanvasDoc; n: number } | null>(null);
+  useProvide('canvas', {
+    add: (paths) => setAddFiles({ paths: [...paths], n: performance.now() }),
+    command: (command) => {
+      if (command.type === 'lay-board') setInsert({ doc: command.board as CanvasDoc, n: Date.now() });
+    },
+    opens: CANVAS_FILES,
+    show: (link) => {
+      const id = parseLink(link)?.fragment;
+      if (id) setFocus({ id, n: Date.now() });
+    },
+  });
+  if (!state) return <CanvasLoading />;
+  const refer = chat.refer;
   return (
     <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
       <React.Suspense fallback={<CanvasLoading />}>
-        <CanvasView shown={canvasOpen} projectId={projectId} folder={loaded?.project.path ?? ''} files={canvasFiles} sources={mediaSources} onAddToFilm={(file) => { wiringOf('edit')?.addToFilm?.(file); }}
-          onImportFiles={(dropped, progress = () => {}) => onImport(dropped, 'assets', progress)} onOpenSettings={() => setSettingsOpen('models')}
-          focus={canvasFocus} insert={canvasInsert} addFiles={canvasAddFiles} onRefer={studioHost?.refer ? (refs) => { for (const ref of refs) studioHost?.refer?.(ref); } : undefined}
-          onSendToFilm={(list) => { wiringOf('edit')?.sendToFilm?.(list); }} onReveal={(path) => showFile(path, true)}
-          {...(chat ? { chat } : {})}
-          onError={toast.showError} onNotice={(message) => toast.show(message)} />
+        <CanvasView shown={state.shown === 'canvas'} projectId={projectId} folder={state.folder} files={state.files} sources={state.sources} onAddToFilm={(file) => { addTo('edit', [file.path]); }}
+          onImportFiles={(dropped, progress = () => {}) => project(projectId).importFiles(dropped, { into: 'assets', onProgress: progress })} onOpenSettings={() => openSettings('models')}
+          focus={focus} insert={insert} addFiles={addFiles} onRefer={refer ? (refs) => { for (const ref of refs) refer(ref); } : undefined}
+          onSendToFilm={(list) => { addTo('edit', list.map((file) => file.path), { show: true }); }} onReveal={(path) => project(projectId).showFile(path)}
+          {...(state.chat ? { chat: state.chat } : {})}
+          onError={showError} onNotice={notice} />
       </React.Suspense>
     </LoadBoundary>
   );
@@ -47,9 +72,13 @@ export default class CanvasWorkbench extends HTMLElement {
   }
 
   disconnectedCallback(): void {
-    const root = this.#root;
-    this.#root = null;
-    /* after the render that took the element out: a root is not unmounted while another is rendering */
-    if (root) queueMicrotask(() => root.unmount());
+    /* after the render that took the element out (a root is not unmounted while another is rendering), and only if it
+       was not put back meanwhile: an element moved keeps what it holds */
+    queueMicrotask(() => {
+      if (this.isConnected || !this.#root) return;
+      const root = this.#root;
+      this.#root = null;
+      root.unmount();
+    });
   }
 }

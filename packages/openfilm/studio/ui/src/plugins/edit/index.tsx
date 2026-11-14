@@ -1,8 +1,9 @@
 /**
  * The edit, as the element its plugin brings (plugins/edit: its package.json's `browser`; Motion's plugin brings the
  * same one, as the edit's own code draws Motion): Studio's shell loads it as it does a workbench anyone made
- * (components/surfaces elementTag, src/skills.mjs elementIn) and puts one where the page's panels are
- * (shell/workbenches), and what is drawn in it is the edit's own. It is told the project by its `project-id`.
+ * (components/surfaces elementTag, src/skills.mjs elementIn) and puts one where the page's panels are, and what is
+ * drawn in it is the edit's own. It is told the project by its `project-id`, and reaches Studio through its public
+ * interface (`openfilm/studio`) and, for what only the edit needs of the shell, studio/internal.
  */
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -23,9 +24,13 @@ export default class EditWorkbench extends HTMLElement {
   }
 
   disconnectedCallback(): void {
-    const root = this.#root;
-    this.#root = null;
-    /* after the render that took the element out: a root is not unmounted while another is rendering */
-    if (root) queueMicrotask(() => root.unmount());
+    /* after the render that took the element out (a root is not unmounted while another is rendering), and only if it
+       was not put back meanwhile: an element moved keeps what it holds */
+    queueMicrotask(() => {
+      if (this.isConnected || !this.#root) return;
+      const root = this.#root;
+      this.#root = null;
+      root.unmount();
+    });
   }
 }

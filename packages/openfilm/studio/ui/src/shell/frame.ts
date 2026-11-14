@@ -1,6 +1,8 @@
 /**
- * What crosses between Studio's shell and the workbenches in it. A workbench is an element with a React root of its
- * own (plugins/edit, plugins/canvas, components/surfaces), so no context reaches it: the sides share
+ * What crosses between Studio's shell and the edit, OpenFilm-internal: NOT part of Studio's public interface. Any
+ * workbench (the canvas, a plugin someone made) reaches the shell through `openfilm/studio` (studio/index), which is
+ * read from the frame here; the edit reaches the rest of it through studio/internal. A workbench is an element with a
+ * React root of its own (plugins/edit, plugins/canvas, components/surfaces), so no context reaches it: the sides share
  * these stores, read with useSyncExternalStore.
  *
  * The frame is what the shell holds of the project for any workbench (shell/ProjectFrame: the project as read, its
@@ -8,15 +10,16 @@
  * how the window is laid out): the shell writes it, a workbench reads it with `useFrame`. A wiring is what a workbench
  * lets others reach of its own: each workbench writes its own under its name, and the shell reads them as one, the
  * workbench shown's first (`wiringStore.get()` inside a callback or an effect, `useWiring` to draw); a workbench
- * reaches another's with `wiringOf`. So nothing of a workbench's is held here.
+ * reaches another's with `wiringOf`. So nothing of a workbench's is held here. What a workbench takes from others
+ * (files put into it, the app's commands) and its buttons on the top bar go through `openfilm/studio` (studio/hub).
  *
  * Both are written in a layout effect, so the other side is drawn with the new value before the page is painted.
  */
 import * as React from 'react';
 import type { CaptionsActions } from '@/components/library/CaptionsPane';
 import type { LibraryActions } from '@/components/library/LibraryDrawer';
-import type { StudioCommand } from '@/lib/host';
 import type { LibraryVoice, VoiceAccess } from '@/lib/library-voices';
+import type { BlockSizer } from '@/lib/workspace-preview';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import type { useProjectFrame } from './ProjectFrame';
 
@@ -102,12 +105,6 @@ export interface Wiring {
   pause?: () => void;
   /** Motion was picked: the workbench opens what Motion is worked in. */
   motionShown?: () => void;
-  /** Put a file of the canvas in the film. */
-  addToFilm?: (file: WorkspaceResource) => void;
-  /** Put a cut of the canvas in the film, its files one after the other, then show the film. */
-  sendToFilm?: (files: WorkspaceResource[]) => void;
-  /** What the app asks Studio to show (lib/host.ts StudioCommand) that is not the page's own: the shell takes them all. */
-  command?: (command: StudioCommand) => void;
   /**
    * What the workbench has on the page's top bar, which the shell draws (shell/top-bar). `tools`: its own buttons, drawn
    * before the workbench switch. `menu`: a menu of its own that pops up at the pointer, kept in the bar (a right click
@@ -122,13 +119,12 @@ export interface Wiring {
     coverFromFrame: () => void;
   };
   /**
-   * What the layout (shell/layout) reads of the workbench's own panes. `timelineFit`: the height its timeline's tracks
-   * need, and `inspectorIdle`: its inspector has nothing in hand to show (a narrow window then leaves it out); the
-   * layout's menu draws the arrangements with them. `sizes`: its panes as they are drawn now (the timeline's height,
-   * the inspector's and the layers' widths), which rearranging begins from. Without it the layout takes what it takes
-   * for a pane that is not there.
+   * How the workbench's own blocks are drawn where the panels are docked (lib/workspace-preview BlockSizer): the
+   * edit's timeline fitted to its tracks, its inspector left out of a narrow window while it has nothing in hand. The
+   * layout (shell/layout) lays the blocks out with it wherever they are, and its menu draws the arrangements with it.
+   * Without it, each block is drawn as declared.
    */
-  panes?: { timelineFit: number; inspectorIdle: boolean; sizes: () => { timeline: number; inspector: number; layers: number } };
+  blocks?: BlockSizer;
   /**
    * What the library (shell/library) does in the workbench. Without it the library is only browsed: nothing of it is
    * put in a film, taken in hand or tried.
@@ -193,7 +189,7 @@ function resolveWiring(): void {
 export function usePublishWiring(workbench: string, value: Wiring): void {
   const slot = React.useMemo(() => ({
     get: () => wirings.get(workbench) ?? null,
-    set: (next: Wiring | null) => { if (next) wirings.set(workbench, next); else wirings.delete(workbench); resolveWiring(); },
+    set: (next: Wiring | null) => { if (next) wirings.set(workbench, next); else wirings.delete(workbench); resolveWiring(); wiringsTold.set(wiringsTold.get() + 1); },
   }), [workbench]);
   usePublish(slot, value);
 }
@@ -201,6 +197,21 @@ export function usePublishWiring(workbench: string, value: Wiring): void {
 /** One workbench's own wiring (null: it told none): how one workbench reaches another, read when it is needed. */
 export function wiringOf(workbench: string): Wiring | null {
   return wirings.get(workbench) ?? null;
+}
+
+/** Each workbench's own wiring, told whenever one of them changes (`wiringOf` read with it). */
+const wiringsTold = createStore(0);
+
+/** The shell's: one field of each workbench's own wiring, by the workbench's name, to draw with; the same object until one of them changes. */
+export function useWiringsOf<K extends keyof Wiring>(field: K): ReadonlyMap<string, NonNullable<Wiring[K]>> {
+  const kept = React.useRef<Map<string, NonNullable<Wiring[K]>>>(new Map());
+  return React.useSyncExternalStore(wiringsTold.subscribe, () => {
+    const next = new Map<string, NonNullable<Wiring[K]>>();
+    for (const [name, wiring] of wirings) if (wiring[field] !== undefined) next.set(name, wiring[field] as NonNullable<Wiring[K]>);
+    const was = kept.current;
+    if (was.size !== next.size || [...next].some(([name, value]) => was.get(name) !== value)) kept.current = next;
+    return kept.current;
+  });
 }
 
 /** The shell's: tell which workbench is shown (null: none is), before the page is painted. */

@@ -2,7 +2,7 @@
 // in host.mjs); the file's own elements are the clips: an <iframe> a web page, a <video>, an <img> a still, an
 // <audio> a sound for the mix. Where each plays and sits is what film-doc.mjs reads in the file, the same reading
 // Studio plays and exports by; how each looks is the file's own CSS. Track 0, the first <section>, is on top.
-import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
+import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, lutsOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
 import { CAPTION_BASE_CSS, cueCss, cueLayout, cueNodes, readVtt, regionBox } from './captions.mjs';
 
@@ -109,12 +109,7 @@ function factsOf(src) {
 function hostFacts(href) {
   const src = new URL(href);
   if (src.origin !== location.origin) return Promise.resolve(null);
-  /* the file from the film's folder, `../` and all (an edit kept apart from its project names its files so) */
-  const here = new URL('.', location.href).pathname.split('/').slice(0, -1);
-  const there = src.pathname.split('/');
-  let same = 0;
-  while (same < here.length && same < there.length - 1 && here[same] === there[same]) same++;
-  const of = [...here.slice(same).map(() => '..'), ...there.slice(same)].join('/');
+  const of = fromFilm(src);
   return fetch(new URL(`__film/media-facts?of=${encodeURIComponent(of)}`, location.href))
     .then((r) => (r.ok ? r.json() : null)).then((f) => (f?.duration > 0 ? { duration: f.duration, w: f.w ?? 0, h: f.h ?? 0 } : null)).catch(() => null);
 }
@@ -775,6 +770,20 @@ function wake(c, from = null) {
   if (c.kind === 'page') return wakePage(c);
   const v = c.el;
   v.preload = 'auto';
+  /* graded by LUTs: its file once the host says where its graded copy is (see gradeOf) */
+  const ask = c.graded = gradeAsk(c.row);
+  if (ask) {
+    const awake = c.awake = gradeOf(ask).then((href) => new Promise((done) => {
+      /* let go meanwhile (see rest) */
+      if (c.awake !== awake) { done(); return; }
+      c.gradedSrc = href;
+      v.src = href ?? url(c.row.src).href;
+      if (from > 0) v.currentTime = from;
+      v.addEventListener('loadeddata', () => done(), { once: true });
+      v.addEventListener('error', () => { if (v.error && v.error.code !== v.error.MEDIA_ERR_NETWORK) undecoded(c.row.src); done(); }, { once: true });
+    }));
+    return awake;
+  }
   /* without the fragment: which seconds play is the film's to keep (a browser would stop the video at its end) */
   v.src = url(c.row.src).href;
   /* an exact frame's video loads at that frame: one sought at once after loading can stay on its first frame
@@ -957,6 +966,72 @@ let settleNear = 0;
 /** the moment last drawn (or being drawn): what an edit puts on there is made ready before the edit shows */
 let shownT = null;
 /** clips being made ready for an edit (see cue): their files are not let go meanwhile */
+/** A file on the film's site, from the film's folder, `../` and all (an edit kept apart from its project names its
+    files so): as the host's questions beside the film take a file. */
+function fromFilm(src) {
+  const here = new URL('.', location.href).pathname.split('/').slice(0, -1);
+  const there = src.pathname.split('/');
+  let same = 0;
+  while (same < here.length && same < there.length - 1 && here[same] === there[same]) same++;
+  return [...here.slice(same).map(() => '..'), ...there.slice(same)].join('/');
+}
+
+/*
+ * A video clip graded by LUTs (its style's --of-lut, SPEC.md) plays a graded copy the host makes of its video
+ * (seekable.mjs), asked for beside the film (`__film/graded`, host.mjs) each time the clip is given its file. While
+ * the copy is being made (a preview whose grade just changed), the clip plays its video as it is, and the host is
+ * asked again every GRADE_POLL_MS; once the copy is there, the clips playing it as it is are given it. A host that
+ * does not grade (a plain web server) answers nothing, and the video plays as it is.
+ */
+const GRADE_POLL_MS = 1000;
+/** A clip's grade as the host is asked it (its video and its LUTs, from the film's folder); null without LUTs, or for
+    a video or a LUT from another site. */
+function gradeAsk(row) {
+  const luts = lutsOf(row);
+  if (!luts.length) return null;
+  const src = url(row.src);
+  if (src.origin !== location.origin) return null;
+  const ask = new URLSearchParams({ of: fromFilm(src) });
+  for (const lut of luts) {
+    const at = url(lut);
+    if (at.origin !== location.origin) return null;
+    ask.append('lut', fromFilm(at));
+  }
+  return ask.toString();
+}
+/** What the host says of a grade: `{ src }` (its copy's address, from the film's folder, or null) and `making`. */
+const askGrade = (ask) => fetch(new URL(`__film/graded?${ask}`, location.href), { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+/** @type {Map<string, Promise<string | null>>} the grades being asked now */
+const asking = new Map();
+/** Where a graded video plays from: its graded copy's address, or null (its own) while there is none. */
+function gradeOf(ask) {
+  if (!asking.has(ask)) {
+    asking.set(ask, askGrade(ask).then((said) => {
+      if (said?.making) pollGrade(ask);
+      return said?.src ? new URL(said.src, location.href).href : null;
+    }).finally(() => asking.delete(ask)));
+  }
+  return asking.get(ask);
+}
+/** the grades whose copies are being made, asked again until they are */
+const polling = new Set();
+function pollGrade(ask) {
+  if (polling.has(ask)) return;
+  polling.add(ask);
+  const again = async () => {
+    const said = await askGrade(ask);
+    if (said?.making) { setTimeout(again, GRADE_POLL_MS); return; }
+    polling.delete(ask);
+    if (!said?.src) return;
+    /* the clips playing their video as it is let go of it, and are woken with the copy at the next frame drawn */
+    const href = new URL(said.src, location.href).href;
+    let any = false;
+    for (const c of clips) if (c.kind === 'video' && c.awake && c.graded === ask && c.gradedSrc !== href) { rest(c); any = true; }
+    if (any) window.__filmEditor.redraw?.();
+  };
+  setTimeout(again, GRADE_POLL_MS);
+}
+
 const cueing = new Set();
 /** how long an edit waits for what it puts on screen; then it shows anyway, the rest drawn as it comes */
 const CUE_MS = 5000;
@@ -1015,6 +1090,8 @@ function settle(c, row, track, ti) {
   c.span = clipSpan(row, c.native, where);
   c.end = c.at + c.span.length;
   c.fade = fittedFade(clipFade(row), c.span.length);
+  /* a video whose LUTs changed lets its file go, and is given it graded as it is now when drawn next (see wake) */
+  if (c.kind === 'video' && c.awake && gradeAsk(row) !== c.graded) { rest(c); window.__filmEditor.redraw?.(); }
   /* a page that sets no size of its own is laid out at its clip's size, else the stage's */
   if (c.kind === 'page') { const own = c.own ?? row.size ?? stage; c.nw = own.w; c.nh = own.h; }
   dress(c, row);

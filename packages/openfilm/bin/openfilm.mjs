@@ -126,7 +126,8 @@ if (RAW.length === 1 && (RAW[0] === '--version' || RAW[0] === '-v')) {
   console.log(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
   process.exit(0);
 }
-if (RAW[0] !== 'update') await updateNotice(RAW[0] === 'open');
+/* not again in a command a plugin's runs (OPENFILM_PLUGIN): the `openfilm` that ran the plugin has said it */
+if (RAW[0] !== 'update' && !process.env.OPENFILM_PLUGIN) await updateNotice(RAW[0] === 'open');
 /**
  * What the person changed in Studio while the agent worked and Studio kept, said once before a command's answer, on
  * stderr (stdout stays the command's own); Studio hears it was said once it is printed.
@@ -287,11 +288,10 @@ if (ofPlugin != null) {
 
   if (cmd === 'look' || cmd === 'render') {
     const { existsSync } = await import('node:fs');
-    const { dirname, join, resolve } = await import('node:path');
-    /* a project is made by \`open\`: look and render work in one (the one around here, or around what they look at) */
-    const around = (from) => { for (let up = resolve(from); up !== dirname(up); up = dirname(up)) if (existsSync(join(up, 'film.html'))) return up; return null; };
-    const target = args.find((a) => !/^\d+(\.\d+)?(-\d+(\.\d+)?)?$/.test(a));
-    const project = around('.') ?? (target ? around(target) : null);
+    const { join, resolve } = await import('node:path');
+    /* a project is made by \`open\`: look and render work in one (the one around here, or around what they look at),
+       found as a plugin's look finds it (src/plugin-look.mjs) */
+    const project = (await import('../src/plugin-look.mjs')).lookProject(args);
     if (!project) { console.error(`${RUN} ${cmd}: ${resolve('.')} is not in a project; \`${RUN} open\` makes one and shows it in Studio`); process.exit(2); }
     /* a project Studio has never shown (copied, cloned, forked): show it now, so the person watches from the start */
     if (!existsSync(join(project, '.film', 'opened'))) {

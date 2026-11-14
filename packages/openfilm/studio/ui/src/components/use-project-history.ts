@@ -1,14 +1,14 @@
 /**
  * A project's version history and the actions on it, for the Version history panel.
  *
- *   const history = useProjectHistory(projectId, { onError: toast.showError, beforeChange: film.settled });
+ *   const history = useProjectHistory(projectId, { onError: toast.showError, beforeChange: settleWorkbenches });
  *   // on the project's `{ type: 'history' }` event: history.refresh()
  *   <ProjectHistoryControls history={history} open={open} onClose={…} />
  *
  * It loads on mount (and when the project changes), after each of its own actions, and when `refresh()` is called.
  * A failed action is said through `onError`, but a checkout refused for changes ('dirty'), which the panel asks about.
- * A checkout or a discard tells every page of the project (`{ type: 'history', moved }`), which reads the film and
- * Studio's state of it again (ProjectView).
+ * A checkout or a discard tells every page of the project (`{ type: 'history', moved }`), whose workbenches read the
+ * film and Studio's state of it again (shell/history tells each: its `restored`).
  */
 import React from 'react';
 import { projectEvents } from '@/api';
