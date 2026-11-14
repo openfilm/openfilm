@@ -500,8 +500,19 @@ export async function locateProject(id, path) {
   });
 }
 
-/** Rename a project: its folder is renamed beside itself (the project's name is its folder's name). */
-export async function renameProject(/** @type {string} */ id, /** @type {string} */ name) {
+/** Windows refuses to rename a folder a process works in (EBUSY) or has a file of open (EPERM, EACCES). */
+const HELD = new Set(['EBUSY', 'EPERM', 'EACCES']);
+/** how long a held folder is tried again: a process that was just stopped lets go of it within this */
+const HELD_RETRY_MS = 3000;
+const HELD_STEP_MS = 250;
+
+/**
+ * Rename a project: its folder is renamed beside itself (the project's name is its folder's name). `release`, called
+ * once the rename is sure to happen, lets go of what Studio's side holds in the folder (an agent's process between
+ * turns works in it). On Windows a folder still held is tried again for a moment, then refused as `folder-busy`.
+ * @param {string} id @param {string} name @param {{ release?: (path: string) => Promise<void> | void, win?: boolean }} [o]
+ */
+export async function renameProject(id, name, { release, win = process.platform === 'win32' } = {}) {
   return exclusive(async () => {
     const state = await readState();
     const entry = state.recent.find((r) => r.id === id);
@@ -510,7 +521,17 @@ export async function renameProject(/** @type {string} */ id, /** @type {string}
     if (to === entry.path) return describe(entry);
     /* taken: retrying can't help, so it says so; the same folder in another case (on a disk that ignores it) is not */
     if (existsSync(to) && !sameFolder(to, entry.path)) throw new ProjectError(`the name "${basename(to)}" is taken: there is already a folder by that name beside this project`, 409);
-    await rename(entry.path, to);
+    await release?.(entry.path);
+    for (const until = Date.now() + HELD_RETRY_MS; ;) {
+      try { await rename(entry.path, to); break; } catch (e) {
+        const code = /** @type {NodeJS.ErrnoException} */ (e).code ?? '';
+        if (!win || !HELD.has(code)) throw e;
+        if (Date.now() >= until) {
+          throw new ProjectError(`Windows would not rename the folder (${code}): a program still has it, or a file in it, open. Close what uses it (a terminal or another app showing one of its files), then rename the project again.`, 409, 'folder-busy');
+        }
+        await new Promise((done) => setTimeout(done, HELD_STEP_MS));
+      }
+    }
     entry.path = to;
     await writeState(state);
     return describe(entry);

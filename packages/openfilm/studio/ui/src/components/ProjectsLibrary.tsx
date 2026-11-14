@@ -219,6 +219,7 @@ function useProjectLibrary(open: boolean) {
       /* a name that is taken: retrying can't help, so the message says what to do instead */
       flash(e instanceof ApiError && e.body.code === 'agent-running' ? t('projects.agentRunningRename')
         : e instanceof ApiError && e.body.code === 'export-running' ? t('projects.exportRunningRename')
+        : e instanceof ApiError && e.body.code === 'folder-busy' ? t('projects.folderBusyRename')
         : e instanceof ApiError && e.status === 409 ? t('projects.renameTaken').replace('{name}', name.trim()) : t('project.renameFailed'));
     }
   }
