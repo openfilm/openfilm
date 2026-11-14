@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/plugins/screening/skills/screening",
+  "order": 5,
+  "icon": "clapperboard",
+  "title": {
+    "en": "Screening",
+    "zh-CN": "放映",
+    "ja": "試写",
+    "ko": "시사",
+    "es": "Proyección"
+  },
+  "summary": {
+    "en": "Notes given while watching: what the person points at, changed in place, the rest kept.",
+    "zh-CN": "边看边说的意见：指到哪里改哪里，其余保持不动。",
+    "ja": "見ながらの指示：指した所だけを直し、ほかはそのまま。",
+    "ko": "보면서 주는 의견: 가리킨 곳만 고치고 나머지는 그대로.",
+    "es": "Notas mientras se mira: se cambia lo señalado y el resto se queda igual."
+  },
+  "details": {
+    "zh-CN": "什么时候用：你在放映里看片，指着某一刻、画面里圈出的一块或者一段，说要怎么改的时候。\n它教什么：把你的话当导演给剪辑师的意见，只改你指到的地方，没指的都当你已经满意；不为了给你看而导出视频，Studio 一直在实时播放；回复里带上改动处的链接，点一下就跳过去看。\n关掉后：智能体照样能改片子，只是不按这套方式理解你的指向和回复。",
+    "en": "When it is used: you watch in Screening and point at a moment, a part of the picture or a stretch, and say what to change.\nWhat it teaches: your words are a director's notes to an editor — only what you point at changes, the rest is taken as approved; no video is exported just to show you, Studio plays live; each reply links to the changed places so one click takes you there.\nTurned off: the agent still changes the film, without these ways of reading your pointers and answering."
+  }
+}

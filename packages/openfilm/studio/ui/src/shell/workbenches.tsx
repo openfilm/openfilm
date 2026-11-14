@@ -179,17 +179,36 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     document.addEventListener('visibilitychange', warm);
     return () => { live = false; cancel(); document.removeEventListener('visibilitychange', warm); };
   }, [canvasProject, toWarm]);
-  /* the edit or the canvas, from either (keymap `work-mode`, ⌘E): not while typing, nor over a dialog */
-  const workModeRef = React.useRef(() => {});
-  workModeRef.current = () => { if (surface != null) setSurface(null); else if (canToggleCanvas) setCanvasOpen(!canvasOpen); };
+  /* the workbench shown, and the one shown before it (Motion is the edit's) */
+  const nowShown = noBench ? null : surface ?? (canvasOpen ? 'canvas' : 'edit');
+  const before = React.useRef<{ now: string | null; was: string | null }>({ now: nowShown, was: null });
+  if (before.current.now !== nowShown) before.current = { now: nowShown, was: before.current.now };
+  /* keymap `work-mode` (⌘E): back to the workbench shown before (else the next one); ⌥1, ⌥2… (Alt elsewhere): the
+     workbenches in the top bar's order. Not while typing, nor over a dialog */
+  const workModeRef = React.useRef<(event: KeyboardEvent) => boolean>(() => false);
+  workModeRef.current = (event) => {
+    const names = benchPlugins.map((p) => p.workbench!);
+    const digit = event.altKey && !event.metaKey && !event.ctrlKey && /^Digit[1-9]$/.test(event.code) ? Number(event.code.slice(5)) : 0;
+    if (digit) {
+      const name = names[digit - 1];
+      if (name && name !== nowShown) showWorkbench(name);
+      return Boolean(name);
+    }
+    if (keyAction(event) !== 'work-mode') return false;
+    const was = before.current.was;
+    const next = was && was !== nowShown && names.includes(was) ? was : names[(names.indexOf(nowShown ?? '') + 1) % Math.max(1, names.length)];
+    if (next && next !== nowShown) showWorkbench(next);
+    else if (surface != null) setSurface(null);
+    else if (canToggleCanvas) setCanvasOpen(!canvasOpen);
+    return true;
+  };
   React.useEffect(() => {
     const press = (event: KeyboardEvent) => {
       const el = event.target as HTMLElement | null;
-      if (event.defaultPrevented || event.repeat || keyAction(event) !== 'work-mode' || isTypingTarget(el) || el?.closest?.('[role="dialog"]')) return;
+      if (event.defaultPrevented || event.repeat || isTypingTarget(el) || el?.closest?.('[role="dialog"]')) return;
       /* a dialog of the canvas's open (a redraw, a library): it has the keys until it closes */
       if (document.querySelector('[data-studio-canvas] [role="dialog"]')) return;
-      event.preventDefault();
-      workModeRef.current();
+      if (workModeRef.current(event)) event.preventDefault();
     };
     window.addEventListener('keydown', press, true);
     return () => window.removeEventListener('keydown', press, true);

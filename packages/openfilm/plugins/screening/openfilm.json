@@ -18,5 +18,7 @@
   "about": "watching the film and pointing at what to change, for the chat",
   "workbench": "screening",
   "on": true,
-  "skills": []
+  "skills": [
+    "screening"
+  ]
 }

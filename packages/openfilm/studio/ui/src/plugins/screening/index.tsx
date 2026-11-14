@@ -9,12 +9,12 @@
 import * as React from 'react';
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { ChevronLeft, ChevronRight, Crosshair, Film, Keyboard, Pause, Play, SquareDashed, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Crosshair, MoveHorizontal, Pause, Play, SquareDashed, X } from 'lucide-react';
 import { addPluginWords, useT } from '@/i18n';
 import { projectEvents, type Film as FilmValue } from '@/api';
 import { Player } from '@/editor/player';
 import { type FilmInfo, type PreviewHandle } from '@/editor/Preview';
-import { fileStem, filmClipKind } from '@/lib/film';
+import { filmClipKind } from '@/lib/film';
 import type { ClipSpan } from '@/lib/film-shape';
 import type { StageBox, StudioRef } from '@/lib/host';
 import { momentRef, regionRef } from '@/lib/studio-refs';
@@ -22,9 +22,9 @@ import { Tooltip } from '@/components/Tooltip';
 import { chat, onCommand, project, toast } from '@/studio';
 import { useProject, useProvide } from '@/studio/react';
 import { changedRanges, clock, cuesOf, linkOf, timeLabel, type Clock, type Cue, type Range } from './screening-model';
+import { Scrubber, useClock, type Mark } from './Scrubber';
 import { MOD, ShortcutSheet, useHeldSheet } from './ShortcutSheet';
 import { Stage } from './Stage';
-import { Strip, useClock, type Block, type Lane, type Mark } from './Strip';
 
 addPluginWords('screening', import.meta.glob('../../../../../plugins/screening/i18n/*.json', { eager: true, import: 'default' }));
 
@@ -43,6 +43,12 @@ const FRAME_S = 1 / 30;
 /** Before each change watched, this much of what comes before it, s. */
 const LEAD_S = 1;
 const SPEEDS = [1, 1.5, 2] as const;
+
+/** A clip of the film where it plays, and whether it is seen or heard. */
+interface Block { clip: import('@/api').Clip; track: number; at: number; end: number; kind: 'picture' | 'sound' }
+/** Whether the person has been shown the three ways to point (kept in this browser). */
+const TAUGHT_KEY = 'openfilm.screening.taught';
+const taughtBefore = () => { try { return localStorage.getItem(TAUGHT_KEY) === '1'; } catch { return false; } };
 
 /** The film's shots and sounds where they play (a clip not placed by the player yet is left out); the top track last. */
 function blocksOf(film: FilmValue | null, spans: readonly ClipSpan[]): { picture: Block[]; sound: Block[] } {
@@ -72,7 +78,8 @@ function Screening({ projectId }: { projectId: string }) {
   const time = React.useMemo(() => clock(0), []);
   const [playing, setPlaying] = React.useState(false);
   const [speed, setSpeed] = React.useState<number>(1);
-  const [boxing, setBoxing] = React.useState(false);
+  const [taught, setTaught] = React.useState(taughtBefore);
+  const scrubbing = React.useRef(false);
   const [cues, setCues] = React.useState<Cue[]>([]);
   /* what the message being written points at (the chat says, numbered as it numbers them); with no chat, what was copied */
   const [draft, setDraft] = React.useState<StudioRef[]>([]);
@@ -164,7 +171,7 @@ function Screening({ projectId }: { projectId: string }) {
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [playing, pause, seek, time]);
-  React.useEffect(() => { if (!shown) { pause(); setBoxing(false); setSheetOpen(false); } }, [shown, pause]);
+  React.useEffect(() => { if (!shown) { pause(); setSheetOpen(false); } }, [shown, pause]);
 
   /* ── captions: each caption track's lines ── */
   React.useEffect(() => {
@@ -195,7 +202,7 @@ function Screening({ projectId }: { projectId: string }) {
 
   /* ── pointing: a reference in the chat (opened if folded); with no chat, a link copied for the person's agent ── */
   const refer = React.useCallback((ref: StudioRef) => {
-    setBoxing(false);
+    if (!taught) { setTaught(true); try { localStorage.setItem(TAUGHT_KEY, '1'); } catch { /* this time only */ } }
     if (chat.refer) {
       chat.refer(ref);
       if (state?.chat && !state.chat.open) state.chat.toggle();
@@ -204,7 +211,7 @@ function Screening({ projectId }: { projectId: string }) {
     void navigator.clipboard?.writeText(linkOf(ref)).catch(() => {});
     setCopied((list) => [...list, ref]);
     toast(w('copied'));
-  }, [state?.chat, w]);
+  }, [state?.chat, w, taught]);
   const marks: Mark[] = (chat.refer ? draft : copied).map((ref, i) => ({ n: i + 1, ref }));
   const unrefer = React.useCallback((ref: StudioRef) => {
     if (chat.refer) chat.unrefer?.(ref);
@@ -212,28 +219,30 @@ function Screening({ projectId }: { projectId: string }) {
   }, []);
   const now = () => player.current!.time();
   const pointMoment = React.useCallback(() => { pause(); refer(momentRef(projectId, player.current!.time() * 1000)); }, [pause, refer, projectId]);
-  const pointWhole = React.useCallback(() => refer({ kind: 'range', start: 0, end: duration, clipIds: [...blocks.picture, ...blocks.sound].map((b) => b.clip.id) }), [refer, duration, blocks]);
   const pointBox = (box: StageBox) => {
     pause();
     const t = now();
-    refer(regionRef(projectId, t * 1000, box, { clipIds: blocks.picture.filter((b) => t >= b.at && t < b.end).map((b) => b.clip.id), texts: [] }, stage));
+    /* a box over the lower part of the picture takes in the caption shown then */
+    const lines = box.y + box.h > stage.h * 0.65 ? cues.filter((c) => t >= c.start && t < c.end).map((c) => c.text) : [];
+    refer(regionRef(projectId, t * 1000, box, { clipIds: blocks.picture.filter((b) => t >= b.at && t < b.end).map((b) => b.clip.id), texts: lines }, stage));
   };
-  const pointBlock = (b: Block) => {
-    const file = state?.files.find((f) => f.path === b.clip.src.split('#')[0]);
-    const poster = file && b.kind === 'picture' ? (state?.sources.poster?.(file) ?? (file.kind === 'image' ? state?.sources.file(file) : undefined)) : undefined;
-    refer({ kind: 'clip', id: b.clip.id, loc: null, label: fileStem(b.clip.src), clipKind: filmClipKind(b.clip), src: b.clip.src, start: b.at, end: b.end, track: b.track, ...(poster ? { image: { src: poster } } : {}) });
-  };
-  const pointCue = (c: Cue) => refer({ kind: 'subtitle', start: c.start, end: c.end, text: c.text, index: c.index });
-  const pointSpan = (lane: Lane, a: number, b: number) => {
-    const [start, end] = a < b ? [a, b] : [b, a];
+  const pointRange = (start: number, end: number) => {
     if (end - start < 0.1) return;
-    if (lane === 'captions') {
-      const lines = cues.filter((c) => c.end > start && c.start < end);
-      if (lines.length && lines.length <= 3) { for (const c of lines) pointCue(c); return; }
-    }
-    const pool = lane === 'sound' ? blocks.sound : lane === 'picture' ? blocks.picture : [...blocks.picture, ...blocks.sound];
-    refer({ kind: 'range', start, end, clipIds: pool.filter((x) => x.end > start && x.at < end).map((x) => x.clip.id) });
+    refer({ kind: 'range', start, end, clipIds: [...blocks.picture, ...blocks.sound].filter((x) => x.end > start && x.at < end).map((x) => x.clip.id) });
   };
+  /* the film's picture at `t`: the frame of the shot on top then, cut by Studio from its file */
+  const frameAt = React.useCallback((t: number, width: number) => {
+    for (let i = blocks.picture.length - 1; i >= 0; i--) {
+      const b = blocks.picture[i]!;
+      if (t < b.at || t >= b.end) continue;
+      const path = b.clip.src.split('#')[0]!;
+      const file = state?.files.find((f) => f.path === path);
+      const still = file?.kind === 'image';
+      const ms = still ? 0 : Math.round((((b.clip.time?.[0] ?? 0) + (t - b.at) * (b.clip.speed ?? 1)) * 1000) / 100) * 100;
+      return `/api/projects/${encodeURIComponent(projectId)}/media?what=frame&path=${encodeURIComponent(path)}&ms=${ms}&w=${width}${file ? `&v=${file.mtimeMs}` : ''}`;
+    }
+    return undefined;
+  }, [blocks, state?.files, projectId]);
 
   /* ── what changed since the person last looked ── */
   const changes = React.useMemo(() => changedRanges(seen, film, info?.spans ?? []), [seen, film, info]);
@@ -257,15 +266,13 @@ function Screening({ projectId }: { projectId: string }) {
       if (key === ' ') { take(); toggle(); }
       else if (key === 'ArrowLeft' || key === 'ArrowRight') { take(); pause(); seek(now() + (key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? FRAME_S : STEP_S)); }
       else if (key === 'm') { take(); pointMoment(); }
-      else if (key === 'b') { take(); setBoxing((on) => !on); }
-      else if (key === 'w') { take(); pointWhole(); }
       else if (key === 'c' && changes.length) { take(); watchChange(0); }
       else if (key === 's') { take(); cycleSpeed(); }
-      else if (key === 'Escape' && (boxing || sheetOpen || watching)) { take(); setBoxing(false); setSheetOpen(false); if (watching) { pause(); setWatching(null); } }
+      else if (key === 'Escape' && (sheetOpen || watching)) { take(); setSheetOpen(false); if (watching) { pause(); setWatching(null); } }
     };
     window.addEventListener('keydown', press, true);
     return () => window.removeEventListener('keydown', press, true);
-  }, [shown, toggle, pause, seek, pointMoment, pointWhole, changes, watchChange, cycleSpeed, boxing, sheetOpen, watching]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shown, toggle, pause, seek, pointMoment, changes, watchChange, cycleSpeed, sheetOpen, watching]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── files dropped: into the project, and pointed at ── */
   const drop = async (e: React.DragEvent) => {
@@ -286,76 +293,80 @@ function Screening({ projectId }: { projectId: string }) {
   if (!state || !folder) return <div className="h-full bg-[var(--bg-viewer)]" />;
   const empty = film != null && !blocks.picture.length && !blocks.sound.length;
   const sheet = [
-    [{ keys: ['Space'], label: w('kPlay') }, { keys: ['←', '→'], label: w('kStep') }, { keys: ['⇧', '←', '→'], label: w('kFrame') }, { keys: ['S'], label: w('kSpeed') }, { keys: ['Esc'], label: w('kCancel') }],
-    [{ keys: ['M'], label: w('kMoment') }, { keys: ['B'], label: w('kBox') }, { keys: ['W'], label: w('kWhole') }, { keys: ['C'], label: w('kChanges') }, { keys: [w('kDragKey')], label: w('kLane') }],
+    [{ keys: ['Space'], label: w('kPlay') }, { keys: ['←', '→'], label: w('kStep') }, { keys: ['⇧', '←', '→'], label: w('kFrame') }, { keys: ['S'], label: w('kSpeed') }],
+    [{ keys: ['M'], label: w('kMoment') }, { keys: [w('kDrag')], label: w('kBox') }, { keys: [w('kDrag')], label: w('kRange') }, { keys: ['C'], label: w('kChanges') }],
   ];
-  const floating = boxing ? (
-    <Pill>
-      <SquareDashed size={14} className="text-[var(--accent)]" />
-      <span>{w('boxHint')}</span>
-      <PillButton label={w('cancel')} onClick={() => setBoxing(false)}><X size={13} /></PillButton>
-    </Pill>
-  ) : changes.length && !empty ? (
+  const floating = changes.length && !empty ? (
     <Pill>
       <span className="h-2 w-2 rounded-full bg-[var(--warn)]" />
       <span className="tabular-nums">{watching ? `${watching.i + 1} / ${watching.ranges.length}` : changes.length === 1 ? w('changed1') : w('changed', { n: changes.length })}</span>
       {watching ? (
         <>
-          <PillButton label={w('prevChange')} onClick={() => watchChange(watching.i - 1)}><ChevronLeft size={14} /></PillButton>
-          <PillButton label={w('nextChange')} onClick={() => watchChange(watching.i + 1)}><ChevronRight size={14} /></PillButton>
+          <PillButton label={w('prevChange')} onClick={() => watchChange(watching.i - 1)}><ChevronLeft size={15} /></PillButton>
+          <PillButton label={w('nextChange')} onClick={() => watchChange(watching.i + 1)}><ChevronRight size={15} /></PillButton>
         </>
       ) : (
         <Tooltip label={w('watchChanges')} shortcut="C">
-          <button type="button" onClick={() => watchChange(0)} className="flex h-6 items-center gap-1 rounded-full bg-[var(--warn)] pl-2 pr-2.5 text-[11.5px] font-semibold text-black transition hover:brightness-110">
+          <button type="button" onClick={() => watchChange(0)} className="flex h-7 items-center gap-1.5 rounded-full bg-[var(--warn)] pl-2.5 pr-3 text-[12px] font-semibold text-black transition hover:brightness-110 active:scale-95">
             <Play size={11} fill="currentColor" />{w('watchChanges')}
           </button>
         </Tooltip>
       )}
-      <PillButton label={w('close')} onClick={closeChanges}><X size={13} /></PillButton>
+      <PillButton label={w('close')} onClick={closeChanges}><X size={14} /></PillButton>
     </Pill>
   ) : null;
 
   return (
-    <div data-screening="" className="relative flex h-full min-h-0 w-full flex-col bg-[var(--bg-viewer)] text-[var(--text)]"
+    <div data-screening="" className="relative flex h-full min-h-0 w-full flex-col gap-4 bg-[var(--bg-viewer)] px-6 pb-4 pt-5 text-[var(--text)]"
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropping(true); } }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDropping(false); }}
       onDrop={(e) => { void drop(e); }}>
-      <Stage stage={stage} folder={folder} preview={preview} time={() => player.current?.time() ?? 0} onInfo={onInfo} boxing={boxing}
+      <Stage stage={stage} folder={folder} preview={preview} time={() => player.current?.time() ?? 0} onInfo={onInfo}
         marks={marks} clock={time} unread={unread ? w('notRead') : null} over={floating} removeLabel={w('remove')}
         empty={empty ? { title: w('emptyTitle'), sub: state.chat ? w('emptySub') : w('emptyBrowserSub'), ...(state.chat && !state.chat.open ? { openChat: { label: w('openChat'), onOpen: state.chat.toggle } } : {}) } : null}
-        onToggle={toggle} onBox={pointBox} onRemove={(m) => unrefer(m.ref)} />
-      {/* the player's bar: playing on the left, pointing in the middle, the shortcuts on the right */}
-      <div className="relative flex h-12 shrink-0 items-center gap-2 border-t border-[color:var(--border)] bg-[var(--bg-panel)] px-3">
-        <Tooltip label={playing ? w('pause') : w('play')} shortcut="Space">
-          <button type="button" aria-label={playing ? w('pause') : w('play')} onClick={toggle}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--primary)] text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] active:scale-95">
-            {playing ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-[2px]" />}
-          </button>
-        </Tooltip>
-        <TimeReadout source={time} duration={duration} />
-        <Tooltip label={w('speed')} shortcut="S">
-          <button type="button" onClick={cycleSpeed} aria-label={w('speed')}
-            className={`h-6 min-w-[38px] rounded-md px-1.5 font-mono text-[11.5px] font-medium tabular-nums transition hover:bg-[var(--bg-hover)] ${speed === 1 ? 'text-[var(--text-muted)]' : 'bg-[var(--bg-hover)] text-[var(--accent)]'}`}>
-            {speed}×
-          </button>
-        </Tooltip>
-        <div role="toolbar" className="absolute left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-[color:var(--border)] bg-[var(--bg-hover)] p-[3px]">
-          <ToolButton label={w('moment')} shortcut="M" onClick={pointMoment}><Crosshair size={16} /></ToolButton>
-          <ToolButton label={w('box')} shortcut="B" on={boxing} onClick={() => setBoxing((on) => !on)}><SquareDashed size={16} /></ToolButton>
-          <ToolButton label={w('whole')} shortcut="W" onClick={pointWhole}><Film size={16} /></ToolButton>
+        onToggle={toggle} onDragStart={pause} onBox={pointBox} onRemove={(m) => unrefer(m.ref)} />
+      {empty ? null : (
+        <div className="mx-auto flex w-full max-w-[1120px] shrink-0 flex-col items-center gap-2.5">
+          {/* the player: play, the time, the film as a strip, the speed, and pointing at this moment */}
+          <div className="flex w-full items-center gap-3 rounded-[16px] border border-white/[.07] bg-[color-mix(in_srgb,var(--bg-raised)_88%,transparent)] py-2.5 pl-2.5 pr-3 shadow-[0_12px_40px_rgb(0_0_0/.35)] backdrop-blur-xl">
+            <Tooltip label={playing ? w('pause') : w('play')} shortcut="Space">
+              <button type="button" aria-label={playing ? w('pause') : w('play')} onClick={toggle}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-black transition hover:bg-white/90 active:scale-95">
+                {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-[2px]" />}
+              </button>
+            </Tooltip>
+            <TimeNow source={time} />
+            <Scrubber duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks} changes={changes} removeLabel={w('remove')}
+              onSeek={(t) => { if (!scrubbing.current) pause(); seek(t); }} onScrub={(on) => { scrubbing.current = on; if (on) pause(); }}
+              onRange={pointRange} onRemove={unrefer} />
+            <span className="w-[42px] shrink-0 font-mono text-[12px] tabular-nums text-[var(--text-faint)]">{timeLabel(duration)}</span>
+            <Tooltip label={w('speed')} shortcut="S">
+              <button type="button" onClick={cycleSpeed} aria-label={w('speed')}
+                className={`h-7 min-w-[40px] shrink-0 rounded-full px-2 font-mono text-[11.5px] font-semibold tabular-nums transition hover:bg-white/10 ${speed === 1 ? 'text-[var(--text-muted)]' : 'bg-white/10 text-[var(--text)]'}`}>
+                {speed}×
+              </button>
+            </Tooltip>
+            <span className="h-6 w-px shrink-0 bg-white/10" />
+            <Tooltip label={w('pointTip')} shortcut="M">
+              <button type="button" aria-label={w('point')} onClick={pointMoment}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--accent)] text-[var(--on-accent)] shadow-[0_4px_14px_color-mix(in_srgb,var(--accent)_45%,transparent)] transition hover:brightness-110 active:scale-95">
+                <Crosshair size={18} />
+              </button>
+            </Tooltip>
+          </div>
+          {/* the three ways to point, until the person has pointed once */}
+          {/* its own height always, so the bar does not move once it goes */}
+          {!taught ? (
+            <div className="flex h-5 items-center gap-5 text-[12px] text-[var(--text-muted)]">
+              <span className="flex items-center gap-1.5"><Crosshair size={13} className="text-[var(--accent)]" />{w('teachMoment')} <kbd className="rounded border border-[color:var(--border-strong)] px-1 font-sans text-[10.5px]">M</kbd></span>
+              <span className="flex items-center gap-1.5"><SquareDashed size={13} className="text-[var(--accent)]" />{w('teachBox')}</span>
+              <span className="flex items-center gap-1.5"><MoveHorizontal size={13} className="text-[var(--accent)]" />{w('teachRange')}</span>
+              <button type="button" onClick={() => { setTaught(true); try { localStorage.setItem(TAUGHT_KEY, '1'); } catch { /* this time only */ } }}
+                className="rounded-full px-2 py-0.5 text-[var(--text-faint)] transition hover:bg-white/10 hover:text-[var(--text)]">{w('gotIt')}</button>
+            </div>
+          ) : <div className="h-5" aria-hidden />}
         </div>
-        <div className="ml-auto flex items-center">
-          <Tooltip label={`${w('shortcuts')} · ${w('kHold')}`} shortcut={MOD}>
-            <button type="button" aria-label={w('shortcuts')} onClick={() => setSheetOpen((open) => !open)}
-              className={`grid h-7 w-7 place-items-center rounded-md transition hover:bg-[var(--bg-hover)] ${sheetOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
-              <Keyboard size={15} />
-            </button>
-          </Tooltip>
-        </div>
-      </div>
-      <Strip duration={duration} clock={time} blocks={blocks} cues={cues} marks={marks} changes={changes} state={state}
-        words={{ picture: w('lanePicture'), sound: w('laneSound'), captions: w('laneCaptions'), laneHint: w('laneHint'), pointShot: w('pointShot'), pointSound: w('pointSound'), pointLine: w('pointLine'), remove: w('remove') }}
-        onSeek={(t) => { pause(); seek(t); }} onSpan={pointSpan} onPointBlock={pointBlock} onPointCue={pointCue} onRemove={unrefer} />
+      )}
       {held || sheetOpen ? <ShortcutSheet title={w('sheetTitle')} groups={sheet} hold={{ keys: [MOD], label: w('kHold') }} /> : null}
       {dropping ? (
         <div className="pointer-events-none absolute inset-3 z-30 grid place-items-center rounded-2xl border-2 border-dashed border-[color:var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[15px] font-medium text-[var(--accent)]">
@@ -366,31 +377,15 @@ function Screening({ projectId }: { projectId: string }) {
   );
 }
 
-function TimeReadout({ source, duration }: { source: Clock; duration: number }) {
+function TimeNow({ source }: { source: Clock }) {
   const t = useClock(source);
-  return (
-    <span className="shrink-0 font-mono text-[12px] tabular-nums">
-      <span className="text-[var(--text)]">{timeLabel(t)}</span>
-      <span className="text-[var(--text-faint)]"> / {timeLabel(duration)}</span>
-    </span>
-  );
-}
-
-function ToolButton({ label, shortcut, on = false, onClick, children }: { label: string; shortcut: string; on?: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <Tooltip label={label} shortcut={shortcut}>
-      <button type="button" aria-label={label} aria-pressed={on} onClick={onClick}
-        className={`grid h-8 w-10 place-items-center rounded-full transition active:scale-95 ${on ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'text-[var(--text)] hover:bg-[var(--bg-pressed)]'}`}>
-        {children}
-      </button>
-    </Tooltip>
-  );
+  return <span className="w-[42px] shrink-0 text-right font-mono text-[12px] tabular-nums text-[var(--text)]">{timeLabel(t)}</span>;
 }
 
 /** What floats over the top of the picture. */
 function Pill({ children }: { children: React.ReactNode }) {
   return (
-    <div className="pointer-events-auto flex h-9 items-center gap-2 rounded-full border border-white/10 bg-black/70 pl-3.5 pr-1.5 text-[12.5px] font-medium text-white shadow-[0_8px_24px_rgb(0_0_0/.35)] backdrop-blur-md">
+    <div className="pointer-events-auto flex h-10 items-center gap-2.5 rounded-full border border-white/10 bg-black/65 pl-4 pr-1.5 text-[12.5px] font-medium text-white shadow-[0_10px_30px_rgb(0_0_0/.4)] backdrop-blur-xl">
       {children}
     </div>
   );
@@ -399,7 +394,7 @@ function Pill({ children }: { children: React.ReactNode }) {
 function PillButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <Tooltip label={label}>
-      <button type="button" aria-label={label} onClick={onClick} className="grid h-6 w-6 place-items-center rounded-full text-white/80 transition hover:bg-white/15 hover:text-white">{children}</button>
+      <button type="button" aria-label={label} onClick={onClick} className="grid h-7 w-7 place-items-center rounded-full text-white/75 transition hover:bg-white/15 hover:text-white">{children}</button>
     </Tooltip>
   );
 }

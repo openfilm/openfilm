@@ -9,14 +9,14 @@ import { Clapperboard, MessageCircle, X } from 'lucide-react';
 import { Preview, type FilmInfo, type PreviewHandle } from '@/editor/Preview';
 import type { StageBox } from '@/lib/host';
 import { REGION_MIN_PX } from '@/lib/studio-refs';
-import { MarkBadge, useClock, type Mark } from './Strip';
+import { useClock, type Mark } from './Scrubber';
 import type { Clock } from './screening-model';
 
-export function Stage({ stage, folder, preview, time, onInfo, boxing, marks, clock, empty, unread, over, onToggle, onBox, onRemove, removeLabel }: {
+export function Stage({ stage, folder, preview, time, onInfo, marks, clock, empty, unread, over, onToggle, onDragStart, onBox, onRemove, removeLabel }: {
   stage: { w: number; h: number }; folder: string; preview: React.RefObject<PreviewHandle | null>; time: () => number;
-  onInfo: (info: FilmInfo) => void; boxing: boolean; marks: readonly Mark[]; clock: Clock;
+  onInfo: (info: FilmInfo) => void; marks: readonly Mark[]; clock: Clock;
   empty: { title: string; sub: string; openChat?: { label: string; onOpen: () => void } } | null; unread: string | null; over: React.ReactNode;
-  onToggle: () => void; onBox: (box: StageBox) => void; onRemove: (mark: Mark) => void; removeLabel: string;
+  onToggle: () => void; onDragStart: () => void; onBox: (box: StageBox) => void; onRemove: (mark: Mark) => void; removeLabel: string;
 }) {
   const room = React.useRef<HTMLDivElement>(null);
   const [size, setSize] = React.useState({ w: 0, h: 0 });
@@ -29,26 +29,32 @@ export function Stage({ stage, folder, preview, time, onInfo, boxing, marks, clo
     watch.observe(el);
     return () => watch.disconnect();
   }, []);
-  const k = Math.max(0, Math.min((size.w - 48) / stage.w, (size.h - 40) / stage.h));
+  const k = Math.max(0, Math.min(size.w / stage.w, size.h / stage.h));
   const box = { w: Math.round(stage.w * k), h: Math.round(stage.h * k) };
   const [drag, setDrag] = React.useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const at = (e: React.PointerEvent) => { const r = e.currentTarget.getBoundingClientRect(); return { x: Math.max(0, Math.min(r.width, e.clientX - r.left)), y: Math.max(0, Math.min(r.height, e.clientY - r.top)) }; };
   return (
-    <div ref={room} className="relative grid min-h-0 flex-1 place-items-center overflow-hidden bg-[var(--bg-viewer)]">
-      <div className="relative overflow-hidden rounded-[6px] shadow-[0_0_0_1px_rgb(255_255_255/.06),0_18px_48px_rgb(0_0_0/.45)]" style={{ width: box.w, height: box.h }}>
+    <div ref={room} className="relative grid min-h-0 flex-1 place-items-center">
+      <div className="relative overflow-hidden rounded-[10px] bg-black shadow-[0_0_0_1px_rgb(255_255_255/.06),0_24px_60px_rgb(0_0_0/.5)]" style={{ width: box.w, height: box.h }}>
         <Preview ref={preview} folder={folder} stage={stage} time={time} onInfo={onInfo} />
-        <div data-capture-hide="" className={`absolute inset-0 ${boxing ? 'cursor-crosshair' : 'cursor-pointer'}`}
+        <div data-capture-hide="" className={`absolute inset-0 ${drag ? 'cursor-crosshair' : 'cursor-default'}`}
           onPointerDown={(e) => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); const p = at(e); setDrag({ x1: p.x, y1: p.y, x2: p.x, y2: p.y }); }}
-          onPointerMove={(e) => { if (!drag) return; const p = at(e); setDrag({ ...drag, x2: p.x, y2: p.y }); }}
+          onPointerMove={(e) => {
+            if (!drag) return;
+            const p = at(e);
+            /* a drag, not a click: the film stops, so the box is drawn on one picture */
+            if (Math.abs(drag.x2 - drag.x1) < REGION_MIN_PX && Math.abs(p.x - drag.x1) >= REGION_MIN_PX) onDragStart();
+            setDrag({ ...drag, x2: p.x, y2: p.y });
+          }}
           onPointerUp={() => {
             if (!drag) return;
             const d = drag;
             setDrag(null);
-            if (Math.abs(d.x2 - d.x1) < REGION_MIN_PX || Math.abs(d.y2 - d.y1) < REGION_MIN_PX) { if (!boxing) onToggle(); return; }
+            if (Math.abs(d.x2 - d.x1) < REGION_MIN_PX || Math.abs(d.y2 - d.y1) < REGION_MIN_PX) { if (Math.abs(d.x2 - d.x1) < REGION_MIN_PX && Math.abs(d.y2 - d.y1) < REGION_MIN_PX) onToggle(); return; }
             const x = Math.min(d.x1, d.x2) / k, y = Math.min(d.y1, d.y2) / k;
             onBox({ x: Math.round(x), y: Math.round(y), w: Math.round(Math.abs(d.x2 - d.x1) / k), h: Math.round(Math.abs(d.y2 - d.y1) / k) });
           }}>
-          {drag ? <span className="absolute rounded-[3px] border-2 border-[color:var(--accent)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]"
+          {drag && Math.abs(drag.x2 - drag.x1) >= REGION_MIN_PX ? <span className="absolute rounded-[4px] border-2 border-[color:var(--accent)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]"
             style={{ left: Math.min(drag.x1, drag.x2), top: Math.min(drag.y1, drag.y2), width: Math.abs(drag.x2 - drag.x1), height: Math.abs(drag.y2 - drag.y1) }} /> : null}
           <Boxes marks={marks} clock={clock} k={k} onRemove={onRemove} removeLabel={removeLabel} />
         </div>
@@ -72,7 +78,7 @@ export function Stage({ stage, folder, preview, time, onInfo, boxing, marks, clo
           </div>
         ) : null}
       </div>
-      <div data-capture-hide="" className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center px-4">{over}</div>
+      <div data-capture-hide="" className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center px-4">{over}</div>
     </div>
   );
 }
@@ -97,4 +103,3 @@ function Boxes({ marks, clock, k, onRemove, removeLabel }: { marks: readonly Mar
   );
 }
 
-export { MarkBadge };
