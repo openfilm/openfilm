@@ -50,6 +50,8 @@ import { AddMenu, type MenuAt } from './menus';
 import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from './connections';
 import { CharacterLibrary, HistoryModal, MaterialLibrary, SUBJECT_KINDS, SUBJECT_PARTS, loadSubjects } from './libraries';
 import { CutoutSetup } from './cutout';
+import { CameraPicker, GROUP } from './camera';
+import { cameraWords, picksAnything, type CameraPick } from '@/lib/canvas-camera';
 import { RedrawEditor, type RedrawJob, type RedrawStart } from './redraw';
 import { EXPAND_ASK, ExpandEditor, expandName, expandPlan, framedPicture, type Expanded } from './expand';
 import { CropEditor } from './crop';
@@ -158,6 +160,9 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   /* a picture's own tool open over the board */
   const [pictureTool, setPictureTool] = React.useState<{ id: string; path: string; tool: PictureTool } | null>(null);
   /* a cut-out asked for while nothing here cuts out: what to do once the way to cut out is there */
+  /* the node whose camera is being picked, and what each node was last set to while the canvas is open */
+  const [cameraFor, setCameraFor] = React.useState<string | null>(null);
+  const cameraPicks = React.useRef(new Map<string, CameraPick>());
   const [cutoutThen, setCutoutThen] = React.useState<{ run: () => void; cancel?: () => void } | null>(null);
   /* the node a library was opened for (its panel's chip): what is picked goes into it */
   const [modalFor, setModalFor] = React.useState<string | null>(null);
@@ -723,12 +728,13 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       })();
     }
     /* a subject named with @ in its words: said as the reference picture it is (its picture wired in, named for it) */
+    /* what is named with @ (a subject, a picture or clip wired in, by its name): said as the reference it is, by its
+       place among the pictures or clips wired in; the longest names first, so "Picture 1_Expand" is not read as "Picture 1" */
     if (node.prompt?.includes('@')) {
-      const pictures = inputs.filter((i) => 'media' in i && i.media === 'image');
-      pictures.forEach((input, k) => {
-        const title = doc.nodes.find((n) => n.id === input.from)?.title;
-        if (title) node.prompt = node.prompt!.split(`@${title}`).join(`${title} (reference picture ${k + 1})`);
-      });
+      const named = (['image', 'video'] as const).flatMap((media) => inputs.filter((i) => 'media' in i && i.media === media)
+        .map((input, k) => ({ name: (() => { const n = now.current.nodes.find((x) => x.id === input.from); return n ? nameOfNode(n) : ''; })(), as: media === 'image' ? `reference picture ${k + 1}` : `reference clip ${k + 1}` })))
+        .filter((x) => x.name).sort((a, b) => b.name.length - a.name.length);
+      for (const { name, as } of named) node.prompt = node.prompt!.split(`@${name}`).join(`${name} (${as})`);
     }
     /* a clip made from frames or references: they are there first */
     if (node.make === 'video') {
@@ -910,6 +916,23 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const at = target ? spotBeside(target, 'target', NOTE_W) : middle();
     place({ id: canvasId('n'), type: 'note', position: target ? at : { x: at.x - NOTE_W / 2, y: at.y - NOTE_H / 2 }, width: NOTE_W, height: NOTE_H, data: { text } },
       target ? { node: target, side: 'target' } : undefined);
+  };
+  /**
+   * What a node is shot with, as words wired into it (as a style is): the same words node changed when one is wired in
+   * already, taken off when all is auto.
+   */
+  const placeCamera = (target: string, pick: CameraPick) => {
+    cameraPicks.current.set(target, pick);
+    const tag = `${t('canvas.camera.title')} · `;
+    const held = now.current.edges.filter((e) => e.target === target).map((e) => now.current.nodes.find((n) => n.id === e.source))
+      .find((n) => n?.type === 'note' && n.data.text.startsWith(tag));
+    if (!picksAnything(pick)) { if (held) remove([held.id]); return; }
+    const names = ([['body', pick.body], ['lens', pick.lens], ['focal', pick.focal], ['aperture', pick.aperture]] as const)
+      .filter(([, v]) => v !== 'auto').map(([k, v]) => (k === 'focal' ? `${v}mm` : t(`canvas.camera.${GROUP[k]}.${v}`)));
+    const text = `${tag}${names.join(' · ')} — ${cameraWords(pick)}`;
+    willChange();
+    if (held) { setNodes((list) => list.map((n) => (n.id === held.id ? { ...n, data: { ...n.data, text } } as BoardNode : n))); return; }
+    place({ id: canvasId('n'), type: 'note', position: spotBeside(target, 'target', NOTE_W), width: NOTE_W, height: NOTE_H, data: { text } }, { node: target, side: 'target' });
   };
   /**
    * A subject's pictures, copied into the project: into the node it was picked for (its main picture, named as the
@@ -1402,6 +1425,11 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     make: (id) => { void makeNow(id); },
     stop: (id) => leaveRun(projectId, id),
     inputs: (id) => inputViews(now.current.nodes, now.current.edges, id, mediaOf),
+    nameOf: (id) => { const n = now.current.nodes.find((x) => x.id === id); return n ? nameOfNode(n) : ''; },
+    reorderInputs: (id, order) => {
+      willChange();
+      setEdges((list) => list.map((e) => (e.target === id && order.includes(e.id) ? { ...e, data: { ...e.data, order: order.indexOf(e.id) } } : e)));
+    },
     unwire: (edge) => { willChange(); setEdges((list) => list.filter((e) => e.id !== edge)); },
     sideMenu: (id, side, screen) => {
       setContext(null);
@@ -1443,6 +1471,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     redraw: (id, path, start) => setRedraw({ id, path, ...(start ? { start } : {}) }),
     tidy: (group) => { willChange(); setNodes((list) => tidyGroup(list, group)); },
     openSettings: onOpenSettings,
+    openCamera: (node) => setCameraFor(node),
     ...(chat ? { write, writing: (id: string) => writing.get(id), stopWriting: (id: string) => writers.current.get(id)?.abort(), uploadWritingFiles: onImportFiles } : {}),
     locate,
     ...(onRefer ? { refer: (id: string) => { const node = now.current.nodes.find((n) => n.id === id); const ref = node ? refOf(node) : null; if (ref) onRefer([ref]); } } : {}),
@@ -1895,6 +1924,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           onTemplates={(from) => { setContext(null); setMenu({ screen: { x: from.left, y: from.top }, above: true, at: middle(), view: 'templates' }); }}
           onLibrary={(which) => openLibrary(which)} onCharacters={() => openLibrary('characters')} onHistory={() => setModal('history')}
         />}
+        {cameraFor ? (
+          <CameraPicker start={cameraPicks.current.get(cameraFor)} onClose={() => setCameraFor(null)}
+            onPick={(pick) => { const node = cameraFor; setCameraFor(null); placeCamera(node, pick); }} />
+        ) : null}
         {cutoutThen ? (
           <CutoutSetup onClose={() => { cutoutThen.cancel?.(); setCutoutThen(null); }} onSettings={() => { cutoutThen.cancel?.(); setCutoutThen(null); onOpenSettings(); }}
             onReady={() => { const then = cutoutThen; setCutoutThen(null); requestAnimationFrame(() => then.run()); }} />
@@ -2050,9 +2083,9 @@ function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => 
       sources: { file: (file) => fileUrl(file.path), wave: () => '' },
       addToFilm: nothing, setData: nothing, resize: nothing, spawn: () => '', bring: nothing, cutout: nothing, split: nothing, openTool: nothing, sizes: nothing, productSet: nothing, layers: nothing, assist: nothing, remove: nothing, willChange: nothing, editing: null, edit: nothing, single: null,
       choices: () => [], allChoices: () => [], fallback: () => null, run: () => undefined, error: () => undefined, stale: NOTHING, unused: NONE,
-      make: nothing, stop: nothing, inputs: (id) => inputViews(drawn.nodes, drawn.edges, id, mediaOf), unwire: nothing, sideMenu: nothing,
+      make: nothing, stop: nothing, inputs: (id) => inputViews(drawn.nodes, drawn.edges, id, mediaOf), nameOf: () => '', reorderInputs: nothing, unwire: nothing, sideMenu: nothing,
       upload: nothing, wireIn: nothing, sendToFilm: nothing, view: nothing,
-      makesIn: () => 0, busyIn: () => false, makeAll: nothing, ungroup: nothing, keepTemplate: nothing, keepCharacter: nothing, openLibrary: nothing, useSubject: nothing, redraw: nothing, tidy: nothing, select: nothing, pick: nothing, openSettings: nothing, readOnly: true,
+      makesIn: () => 0, busyIn: () => false, makeAll: nothing, ungroup: nothing, keepTemplate: nothing, keepCharacter: nothing, openLibrary: nothing, openCamera: nothing, useSubject: nothing, redraw: nothing, tidy: nothing, select: nothing, pick: nothing, openSettings: nothing, readOnly: true,
     };
   }, [doc, fileUrl, drawn]);
   return (

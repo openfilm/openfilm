@@ -7,7 +7,7 @@
 import React from 'react';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  ArrowUp, ArrowUpRight, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb,
+  ArrowUp, ArrowUpRight, Camera, ChevronLeft, ChevronRight, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_MODES, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -24,7 +24,7 @@ import { keepLastModel, lastModel, useBoard, type Choice, type MakeData } from '
 import { ProviderMark } from '../settings/ProviderMark';
 import { useDraft } from './words';
 import { DocSheet } from './doc';
-import { KIND_ICON, coverOf, useSubjects } from './libraries';
+import { coverOf, useSubjects } from './libraries';
 import type { CanvasCharacter } from '@/api';
 import { useLibraryVoices, voiceLook } from '@/lib/library-voices';
 import { VoiceId, VoicePicker, defaultVoice, serviceOf, voicesOf } from './voices';
@@ -99,6 +99,7 @@ function ToolTile({ label, tone, icon: Icon, on, onClick }: { label: string; ton
   );
 }
 const TONES = {
+  camera: 'linear-gradient(140deg, #5d6470, #2c3038)',
   characters: 'linear-gradient(140deg, #f7a65e, #e0544c)',
   styles: 'linear-gradient(140deg, #b69cff, #6c5cf5)',
   presets: 'linear-gradient(140deg, #63c7ff, #3176f0)',
@@ -687,7 +688,9 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   /* the words written in a taller box (the panel's ↗) */
   const [expanded, setExpanded] = React.useState(false);
   const area = React.useRef<HTMLTextAreaElement>(null);
-  const [mention, setMention] = React.useState<{ at: number; query: string; index: number } | null>(null);
+  const [mention, setMention] = React.useState<{ at: number; query: string; index: number; view?: 'subjects' | 'pictures' } | null>(null);
+  /* an input being dragged to another place among them */
+  const [dragging, setDragging] = React.useState<string | null>(null);
   const subjectList = useSubjects();
   const shown = board.single === id && !board.readOnly;
   const media = MAKE_MEDIA[data.make];
@@ -751,12 +754,13 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   /* the tools over the composer, by kind: a picture takes a character, a style, a preset; a clip a character, an effect */
   const [showTools, setShowTools] = React.useState(toolsShown);
   const toggleTools = (on: boolean) => { toolsShown = on; setShowTools(on); if (!on && open === 'presets') setOpen(null); };
+  /* the camera first (a subject is named with @ in the words) */
   const tools: Array<{ key: keyof typeof TONES; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; pick?: () => void }> = data.make === 'image' ? [
-    { key: 'characters', label: t('canvas.panel.tools.characters'), icon: UserRound, pick: () => board.openLibrary('characters', id) },
+    { key: 'camera', label: t('canvas.camera.title'), icon: Camera, pick: () => board.openCamera(id) },
     { key: 'styles', label: t('canvas.library.styleChip'), icon: Palette, pick: () => board.openLibrary('styles', id) },
     { key: 'presets', label: t('canvas.presets.title'), icon: LayoutDashboard },
   ] : data.make === 'video' ? [
-    { key: 'characters', label: t('canvas.panel.tools.characters'), icon: UserRound, pick: () => board.openLibrary('characters', id) },
+    { key: 'camera', label: t('canvas.camera.title'), icon: Camera, pick: () => board.openCamera(id) },
     { key: 'effects', label: t('canvas.library.effectChip'), icon: Clapperboard, pick: () => board.openLibrary('effects', id) },
   ] : [];
   const addMenu = (
@@ -769,22 +773,56 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const presetMenu = <PresetPicker picked={preset?.id} hasPicture={hasPicture} onPick={usePreset} />;
   /* @ a subject: the list opens on an @ typed at a word's start, narrowed by what follows it */
   const takesSubjects = data.make === 'image' || data.make === 'video';
-  const matches = (subjectList ?? []).filter((c) => !mention?.query || `${c.name} ${c.about ?? ''}`.toLowerCase().includes(mention.query.toLowerCase())).slice(0, 8);
+  const q = mention?.query.toLowerCase() ?? '';
+  const matches = (subjectList ?? []).filter((c) => !q || `${c.name} ${c.about ?? ''}`.toLowerCase().includes(q)).slice(0, 8);
   const findMention = (box: HTMLTextAreaElement) => {
     const before = box.value.slice(0, box.selectionStart ?? box.value.length);
     const found = /(^|\s)@([^\s@]{0,24})$/.exec(before);
-    setMention(found ? { at: before.length - found[2]!.length - 1, query: found[2]!, index: 0 } : null);
+    setMention(found ? { at: before.length - found[2]!.length - 1, query: found[2]!, index: 0, ...(mention?.view ? { view: mention.view } : {}) } : null);
   };
-  const pickSubject = (c: CanvasCharacter) => {
+  /* a name put in for the @ being typed */
+  const putName = (name: string) => {
     const box = area.current;
     if (!box || !mention) return;
     const end = mention.at + 1 + mention.query.length;
-    prompt.set(`${box.value.slice(0, mention.at)}@${c.name} ${box.value.slice(end)}`);
-    const caret = mention.at + c.name.length + 2;
+    prompt.set(`${box.value.slice(0, mention.at)}@${name} ${box.value.slice(end)}`);
+    const caret = mention.at + name.length + 2;
     setMention(null);
-    board.useSubject(id, c);
     requestAnimationFrame(() => { box.focus(); box.setSelectionRange(caret, caret); });
   };
+  const pickSubject = (c: CanvasCharacter) => { putName(c.name); board.useSubject(id, c); };
+  /* what @ offers: what is in it already (a picture, a clip, a sound wired in), then more to bring: a subject, a picture */
+  type Offer = { key: string; label: string; thumb?: string; icon?: React.ReactNode; note?: string; more?: boolean; run: () => void };
+  const offers: Offer[] = mention?.view === 'subjects'
+    ? matches.map((c) => ({ key: c.id, label: c.name, thumb: coverOf(c) ?? undefined, note: t(`canvas.subjects.kinds.${c.kind}`), run: () => pickSubject(c) }))
+    : mention?.view === 'pictures'
+      ? assetRows.filter((r) => !q || r.label.toLowerCase().includes(q)).slice(0, 30).map((r) => ({ key: r.key, label: r.label, icon: r.icon, run: () => {
+        board.wireIn(id, { path: r.value });
+        putName(r.label.replace(/\.[^.]+$/, ''));
+      } }))
+      : [
+        ...inputs.filter((i) => i.path).map((i) => ({ key: i.edge, name: board.nameOf(i.from), file: board.fileOf(i.path!) }))
+          .filter((x) => x.name && (!q || x.name.toLowerCase().includes(q)))
+          .map((x) => ({ key: x.key, label: x.name, thumb: thumb(x.file), run: () => putName(x.name) })),
+        { key: '+subjects', label: t('canvas.subjects.title'), icon: <UserRound size={16} />, more: true, run: () => setMention(mention ? { ...mention, view: 'subjects', index: 0 } : null) },
+        { key: '+pictures', label: t('canvas.panel.mentionPictures'), icon: <ImageIcon size={16} />, more: true, run: () => setMention(mention ? { ...mention, view: 'pictures', index: 0 } : null) },
+      ];
+  /* an input dropped on another: put before it, the order of what goes in as the references are numbered */
+  const dropOn = (target: string) => {
+    if (!dragging || dragging === target) return;
+    const order = inputs.map((i) => i.edge).filter((e) => e !== dragging);
+    order.splice(order.indexOf(target), 0, dragging);
+    board.reorderInputs(id, order);
+    setDragging(null);
+  };
+  const dragProps = (edge: string) => ({
+    draggable: true,
+    onDragStart: (event: React.DragEvent) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/x-openfilm-input', edge); setDragging(edge); },
+    onDragOver: (event: React.DragEvent) => { if (dragging) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } },
+    onDrop: (event: React.DragEvent) => { event.preventDefault(); dropOn(edge); },
+    onDragEnd: () => setDragging(null),
+    className: `nodrag transition ${dragging === edge ? 'opacity-40' : ''}`,
+  });
   /* the @ button: an @ put where the caret is, the list opened */
   const startMention = () => {
     const box = area.current;
@@ -843,11 +881,11 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
               const file = input?.path ? board.fileOf(input.path) : null;
               const src = thumb(file);
               return input ? (
-                <Tile key={input.edge} label={`${t(`canvas.slots.${slot.label}`)} · ${file?.name ?? input.path ?? ''}`} onOpen={input.path ? () => board.view(input.path!) : undefined}
+                <span key={input.edge} {...dragProps(input.edge)}><Tile label={`${t(`canvas.slots.${slot.label}`)} · ${file?.name ?? input.path ?? ''}`} onOpen={input.path ? () => board.view(input.path!) : undefined}
                   onRemove={() => board.unwire(input.edge)} removeLabel={t('canvas.removeWire')}>
                   {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center bg-[var(--cv-chip)] text-[var(--cv-label)]"><Images size={17} /></span>}
                   <span className="absolute inset-x-0 bottom-0 bg-black/60 py-px text-center text-[10px] font-medium text-white">{t(`canvas.slots.${slot.label}`)}</span>
-                </Tile>
+                </Tile></span>
               ) : (
                 <Popover key={`slot-${i}`} open={open === `slot-${i}`} onOpenChange={(v) => setOpen(v ? `slot-${i}` : null)} placement="auto"
                   trigger={(
@@ -865,14 +903,14 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
               const src = thumb(file);
               const name = input.text != null ? (input.text || t('canvas.kinds.note')).slice(0, 80) : file?.name ?? input.path ?? '';
               return (
-                <Tile key={input.edge} label={input.text != null ? `${t('canvas.write.locate')} · ${name}` : `${t('canvas.write.preview')} · ${name}`}
+                <span key={input.edge} {...dragProps(input.edge)}><Tile label={input.text != null ? `${t('canvas.write.locate')} · ${name}` : `${t('canvas.write.preview')} · ${name}`}
                   onOpen={input.text != null ? (board.locate ? () => board.locate?.(input.from) : undefined) : input.path ? () => board.view(input.path!) : undefined}
                   onRemove={() => board.unwire(input.edge)} removeLabel={t('canvas.removeWire')}>
                   {src ? <img src={src} alt="" className="h-full w-full object-cover" />
                     : <span className="flex h-full w-full items-center justify-center bg-[var(--cv-chip)] text-[var(--cv-ink)]">
                       {input.text != null ? <TypeIcon size={20} strokeWidth={1.75} /> : file?.kind === 'audio' ? <Music size={18} /> : <Video size={18} />}
                     </span>}
-                </Tile>
+                </Tile></span>
               );
             })}
             {/* + : a picture from the computer, a node on the board, one from the Assets */}
@@ -922,12 +960,13 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
               if (mention && takesSubjects) {
                 if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                   event.preventDefault();
-                  const n = matches.length || 1;
+                  const n = offers.length || 1;
                   setMention({ ...mention, index: (mention.index + (event.key === 'ArrowDown' ? 1 : n - 1)) % n });
                   return;
                 }
-                if ((event.key === 'Enter' || event.key === 'Tab') && matches[mention.index]) { event.preventDefault(); pickSubject(matches[mention.index]!); return; }
-                if (event.key === 'Escape') { event.preventDefault(); setMention(null); return; }
+                if ((event.key === 'Enter' || event.key === 'Tab') && offers[mention.index]) { event.preventDefault(); offers[mention.index]!.run(); return; }
+                if (event.key === 'Escape') { event.preventDefault(); if (mention.view) setMention({ ...mention, view: undefined, index: 0 }); else setMention(null); return; }
+                if (event.key === 'ArrowLeft' && mention.view && !mention.query) { event.preventDefault(); setMention({ ...mention, view: undefined, index: 0 }); return; }
               }
               if (event.key === 'Escape') event.currentTarget.blur();
               else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); board.make(id); }
@@ -937,25 +976,39 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             className={PROMPT}
           />
           {mention && takesSubjects ? (
-            /* the subjects to name with @: a picked one goes in, its picture wired into the node */
-            <div className={`absolute bottom-full left-0 z-30 mb-1 w-[300px] p-1 ${CARD}`} onMouseDown={(event) => event.preventDefault()}>
-              <div className="flex h-7 items-center px-2 text-[12px] text-[var(--cv-ink-3)]">{t('canvas.subjects.title')}</div>
-              {matches.map((c, i) => {
-                const Icon = KIND_ICON[c.kind];
-                const cover = coverOf(c);
-                return (
-                  <button key={c.id} type="button" onMouseEnter={() => setMention({ ...mention, index: i })} onClick={() => pickSubject(c)}
-                    className={`flex h-10 w-full items-center gap-2.5 rounded-[8px] px-2 text-left text-[13px] text-[var(--cv-ink)] ${i === mention.index ? 'bg-[var(--cv-float-hover)]' : ''}`}>
-                    <span className="h-7 w-7 shrink-0 overflow-hidden rounded-[6px] bg-[var(--cv-chip)]">{cover ? <img src={cover} alt="" className="h-full w-full object-cover" /> : null}</span>
-                    <span className="min-w-0 flex-1 truncate">{c.name}</span>
-                    <span className="flex shrink-0 items-center gap-1 text-[11.5px] text-[var(--cv-ink-3)]"><Icon size={12} />{t(`canvas.subjects.kinds.${c.kind}`)}</span>
-                  </button>
-                );
-              })}
-              {!matches.length ? <div className="px-2 py-2 text-[12.5px] leading-snug text-[var(--cv-ink-3)]">{t(subjectList?.length ? 'canvas.subjects.noMatch' : 'canvas.subjects.empty')}</div> : null}
-              <div className="my-1 h-px bg-[var(--cv-float-line)]" />
-              <button type="button" onClick={() => { setMention(null); board.openLibrary('characters', id); }}
-                className="flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><Plus size={14} />{t('canvas.subjects.manage')}</button>
+            /* what @ names: what is in it already, then a subject or a picture to bring in */
+            <div className={`absolute bottom-full left-0 z-30 mb-1 w-[320px] p-1.5 ${CARD}`} onMouseDown={(event) => event.preventDefault()}>
+              <div className="flex h-7 items-center gap-1 px-2 text-[12px] text-[var(--cv-ink-3)]">
+                {mention.view ? (
+                  <button type="button" onClick={() => setMention({ ...mention, view: undefined, index: 0 })} className="-ml-1 flex h-6 w-6 items-center justify-center rounded-[6px] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><ChevronLeft size={14} /></button>
+                ) : null}
+                {mention.view === 'subjects' ? t('canvas.subjects.title') : mention.view === 'pictures' ? t('canvas.panel.mentionPictures') : t('canvas.panel.mentionTitle')}
+              </div>
+              <div className="max-h-[300px] overflow-y-auto">
+                {offers.map((o, i) => (
+                  <React.Fragment key={o.key}>
+                    {!mention.view && o.key === '+subjects' ? (
+                      <>{i > 0 ? <div className="mx-2 my-1 h-px bg-[var(--cv-float-line)]" /> : null}<div className="flex h-7 items-center px-2 text-[12px] text-[var(--cv-ink-3)]">{t('canvas.panel.mentionAdd')}</div></>
+                    ) : null}
+                    <button type="button" onMouseEnter={() => setMention({ ...mention, index: i })} onClick={o.run}
+                      className={`flex h-11 w-full items-center gap-2.5 rounded-[10px] px-2 text-left text-[13.5px] text-[var(--cv-ink)] ${i === mention.index ? 'bg-[var(--cv-float-hover)]' : ''}`}>
+                      {o.thumb ? <span className="h-8 w-8 shrink-0 overflow-hidden rounded-[8px] bg-[var(--cv-chip)]"><img src={o.thumb} alt="" className="h-full w-full object-cover" /></span>
+                        : <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[8px] text-[var(--cv-ink-2)]">{o.icon}</span>}
+                      <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                      {o.note ? <span className="shrink-0 text-[11.5px] text-[var(--cv-ink-3)]">{o.note}</span> : null}
+                      {o.more ? <ChevronRight size={15} className="shrink-0 text-[var(--cv-ink-3)]" /> : null}
+                    </button>
+                  </React.Fragment>
+                ))}
+                {!offers.length ? <div className="px-2 py-2 text-[12.5px] leading-snug text-[var(--cv-ink-3)]">{t(mention.view === 'subjects' ? (subjectList?.length ? 'canvas.subjects.noMatch' : 'canvas.subjects.empty') : 'canvas.panel.nothingInAssets')}</div> : null}
+              </div>
+              {mention.view === 'subjects' ? (
+                <>
+                  <div className="my-1 h-px bg-[var(--cv-float-line)]" />
+                  <button type="button" onClick={() => { setMention(null); board.openLibrary('characters', id); }}
+                    className="flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-[13px] text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><Plus size={14} />{t('canvas.subjects.manage')}</button>
+                </>
+              ) : null}
             </div>
           ) : null}
         </div>

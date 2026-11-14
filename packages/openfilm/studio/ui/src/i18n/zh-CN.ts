@@ -2033,6 +2033,7 @@ export const zhCN: Words = {
     makeNeeds: { first: '先放入首帧：在「首帧」槽位里放一张图', firstLast: '先放入首帧和尾帧：两个槽位各放一张图', refs: '至少连入一张参考图', omni: '请连入至少一个兼容的参考素材。' },
     boards: { title: '画布', numbered: '画布 {n}', add: '新建画布', added: '已创建画布', copied: '已复制画布', removed: `画布已移到${TRASH}`, more: '更多', openApart: '在新窗口打开', rename: '重命名画布', copy: '复制画布', copyName: '{name} 副本', remove: '删除画布', onlyOne: '项目至少保留一张画布', removeTitle: '删除画布', removeAsk: `确定要删除画布「{name}」吗？它和上面的内容会移到${TRASH}。`, removeYes: '删除' },
     names: { redraw: '改图', clip: '视频', crop: '裁剪', adjust: '调色' },
+    camera: { title: '相机', reset: '全部重置', confirm: '确认', previous: '上一个', next: '下一个', wheels: { body: '相机', lens: '镜头', focal: '焦距', aperture: '光圈' }, bodies: { auto: '自动', film35: '35mm胶片机', rangefinder: '旁轴胶片机', y2k: 'Y2K卡片机', instant: '拍立得', medium: '中画幅相机', cinema: '电影摄影机', dv: '家用DV', phone: '手机' }, lenses: { auto: '自动', standard: '标准镜头', wide: '广角镜头', fisheye: '鱼眼广角镜头', tele: '长焦镜头', macro: '微距镜头', anamorphic: '变形宽银幕镜头', tiltshift: '移轴镜头', soft: '黑柔滤镜镜头' }, focals: { auto: '自动' }, apertures: { auto: '自动', '1.2': 'f1.2极浅景深', '1.8': 'f1.8浅景深', '2.8': 'f2.8虚化背景', '5.6': 'f5.6适中景深', '8': 'f8清晰', '11': 'f11深景深', '16': 'f16全景深' } },
     redraw: { fromComputer: '从电脑上传', fromProject: '本项目的图片', more: '更多', removeWay: '消除', removeMake: '消除', removeHint: '可选：说说消除后那里该是什么，例如：一片草地', pinHint: '按编号说要怎么改，例如：1 换成红色的伞；2 这里加一只猫', pen: '画笔', arrow: '箭头', text: '文字', pin: '编号标记', redo: '重做', title: '智能修改', mask: '涂抹区域', markup: '画出修改', erase: '橡皮擦', size: '笔刷', undo: '撤销', clear: '清除', maskHint: '涂抹的地方改成什么，例如：换成一把红色的伞', markupHint: '你画的标记是什么意思，例如：这里加一只猫，把这块招牌改成蓝色', make: '生成', noModel: '你连接的服务都不支持局部重绘：请连接 OpenAI，或用 OpenFilm 的 GPT Image。', remove: '取消局部修改', withMask: '只重画涂抹区域', withMarkup: '按画出的标记修改', brush: '画笔', lasso: '套索', rect: '框选', box: '方框', invert: '反选', show: '显示标记', hide: '隐藏标记', fit: '适合窗口', zoomIn: '放大', zoomOut: '缩小', covered: '已选 {n}%', nothingYet: '还未涂抹', model: '重绘模型', moveHint: '空格 + 拖动移动 · 双指捏合或 ⌘ + 滚轮缩放', typeHere: '输入文字后按回车', making: '生成中…', intro: '用一句话说要怎么改；需要时再框出或标出位置', subject: '选择主体', grow: '扩大选区', shrink: '缩小选区', color: '标注颜色', finding: '正在识别主体…', subjectNone: '本机还不能识别主体', this: '要修改的图', addRef: '添加参考图', removeRef: '移除', markedHint: '选中或标注的地方要怎么改，例如：换成一把红色的伞', wholeHint: '说说要怎么改，例如：改成下雪的冬日傍晚', send: '发送', way: { mask: '只重画选中的区域', markup: '按标注修改', edit: '按描述修改整张图' }, cannotMarks: '这个模型看不懂标注：换个模型，或改用选区', cannotMask: '这个模型不支持局部重画：换个模型', can: { mask: '选区', markup: '标注', edit: '描述' }, ideas: { remove: '去掉它，自然补全背景', swap: '换成', color: '把颜色改成', add: '加上', look: '整张图改成…风格', light: '改成黄昏的金色光线', season: '改成下雪的冬天' } },
     cutout: { title: '在本机抠图', body: '背景直接在这台电脑上去掉：免费，图片不会上传。第一次使用需要下载一次抠图模型。', here: '已安装', installing: '正在下载 {n}%', preparing: '正在准备…', failed: '下载没有完成：{error}', other: '用其他服务', install: '下载并抠图', go: '开始抠图', retry: '重试' },
     slots: { first: '首帧', last: '尾帧' },
@@ -2153,6 +2154,7 @@ export const zhCN: Words = {
     },
     split: { none: '没有找到格线，换一个固定宫格试试' },
     panel: {
+      mentionTitle: '输入“@”引用素材', mentionAdd: '添加参考', mentionPictures: '图片',
       connect: '去设置连接服务',
       upload: '上传',
       fromBoard: '画布参考',

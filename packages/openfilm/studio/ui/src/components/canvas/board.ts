@@ -422,6 +422,10 @@ export interface Board {
   stop: (id: string) => void;
   /** what is wired into a node, in order; a wire taken out */
   inputs: (id: string) => InputView[];
+  /** a node's name as its name row shows it ("Picture 1", "Picture 1_Expand") */
+  nameOf: (id: string) => string;
+  /** what goes into a node put in this order (its wires, by id): the first is the first reference */
+  reorderInputs: (id: string, edges: readonly string[]) => void;
   unwire: (edge: string) => void;
   /** the side ⊕ of a node pressed: what to add there, joined to it */
   sideMenu: (id: string, side: Side, screen: { x: number; y: number }) => void;
@@ -448,6 +452,8 @@ export interface Board {
   /** a subject wired into a node: its main picture, named as it is (what @its name in the node's words means) */
   useSubject: (id: string, subject: CanvasCharacter) => void;
   openLibrary: (which: 'characters' | 'styles' | 'effects', node?: string) => void;
+  /** what a node is shot with, picked: words wired into it */
+  openCamera: (node: string) => void;
   openSettings: () => void;
   /** what is in a group laid out again in rows, clear of each other */
   tidy: (group: string) => void;
