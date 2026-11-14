@@ -199,6 +199,9 @@ function readMake(n: Record<string, unknown>): Omit<CanvasNode, 'id' | 'x' | 'y'
     ...(str(o.mask) ? { mask: o.mask as string } : {}),
     ...(str(o.markup) ? { markup: o.markup as string } : {}),
     ...(str(o.voice) ? { voice: o.voice as string } : {}),
+    ...(str(o.style) ? { style: o.style as string } : {}),
+    ...(str(o.effect) ? { effect: o.effect as string } : {}),
+    ...(str(o.camera) ? { camera: o.camera as string } : {}),
   };
   const versions = Array.isArray(n.versions) ? n.versions.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
   const fields = {

@@ -220,3 +220,8 @@ test('a receipt is read past the lines a service says while it works', () => {
   assert.deepEqual(receiptOf('Taking the background out on this computer with BiRefNet Lite…\n{\n "src": "assets/a-cutout.png"\n}'), { src: 'assets/a-cutout.png' });
   assert.deepEqual(receiptOf('{"src":"assets/b.png"}'), { src: 'assets/b.png' });
 });
+
+test('a node read back keeps the style, the camera move and the camera picked for it', () => {
+  const doc = readCanvasDoc({ nodes: [{ id: 'a', x: 0, y: 0, make: 'image', prompt: '', opts: { ratio: '1:1', style: 'anime', effect: 'orbit', camera: 'film35|auto|18|2_8' } }], edges: [] });
+  assert.deepEqual(doc.nodes[0]!.opts, { ratio: '1:1', style: 'anime', effect: 'orbit', camera: 'film35|auto|18|2_8' });
+});
