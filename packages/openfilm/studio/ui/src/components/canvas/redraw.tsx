@@ -198,7 +198,7 @@ export function RedrawEditor({ src, models, model: firstModel, pictures, onClose
   }, [marks, natural]);
 
   /* the picture on the stage, clear of the tools above it and the words below it */
-  const TOP = 64; const FOOT = 112;
+  const TOP = 68; const FOOT = onAddRef ? 176 : 116;
   const fit = natural && box.w ? Math.min((box.w - MARGIN * 2) / natural.w, (box.h - TOP - FOOT - 24) / natural.h, 4) : 1;
   const scale = fit * view.z;
   const pw = (natural?.w ?? 0) * scale; const ph = (natural?.h ?? 0) * scale;
@@ -463,7 +463,7 @@ export function RedrawEditor({ src, models, model: firstModel, pictures, onClose
           {onSubject ? (
             <Tooltip label={`${t('canvas.redraw.subject')} · S`}>
               <button type="button" disabled={finding} onClick={() => { void subject(); }}
-                className="flex h-9 items-center gap-1.5 rounded-[10px] px-2.5 text-[13px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] disabled:opacity-40">
+                className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[10px] px-2.5 text-[13px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] disabled:opacity-40">
                 {finding ? <Loader2 size={15} className="animate-spin" /> : <Scan size={15} strokeWidth={1.8} />}{t('canvas.redraw.subject')}
               </button>
             </Tooltip>
