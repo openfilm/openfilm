@@ -12,7 +12,7 @@ import { centerOf, type BlockSpec } from '@/lib/workspaces';
 import { attached, blockKey, drawingStore, mountOf, shownBlocks } from '@/studio/blocks';
 import type { useProjectFrame } from './ProjectFrame';
 
-/** How the arrangement among the panels is hidden while the canvas is shown over it. */
+/** How the arrangement among the panels is hidden while something else is shown over it (the canvas, a plugin's surface, the notice that none is on): what its blocks draw on top of themselves (the edit's marks on its picture) is not seen through. */
 const HIDDEN = { visibility: 'hidden', opacity: 0 } as const;
 const SLOT = 'relative flex min-h-0 min-w-0 flex-col';
 
@@ -101,7 +101,7 @@ export function Arrangement({ frame }: { frame: ReturnType<typeof useProjectFram
   const withSeam = (block: BlockSpec, style: React.CSSProperties) => (before(block) ? [slot(block, style), seam(block)] : [seam(block), slot(block, style)]);
   return (
     <section ref={colRef} inert={!shown} aria-hidden={!shown} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
-      style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...places.among, ...(canvasOpen ? HIDDEN : null) }}>
+      style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...places.among, ...(shown ? null : HIDDEN) }}>
       <div ref={rowRef} className="relative flex min-h-0 min-w-0 flex-1 flex-row" style={{ order: 2 * tops.length }}>
         {spec.blocks.filter((block) => block === center || beside.includes(block)).flatMap((block) => (!isThere(block) ? []
           : block === center ? [slot(block, { order: 50 }, true)] : withSeam(block, { width: amongDrawn[block.key]!.size, order: order(block) })))}
