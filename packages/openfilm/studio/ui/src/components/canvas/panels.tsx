@@ -1102,7 +1102,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
           <span className="flex-1" />
           {unused ? <span className="mr-1 truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.make.unused').replace('{n}', String(unused))}</span> : null}
           {run ? (
-            <Tooltip label={t('canvas.make.stop')}>
+            <Tooltip label={t('canvas.make.stopTip')} wrap>
               <button type="button" aria-label={t('canvas.make.stop')} onClick={() => board.stop(id)}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-[var(--cv-invert)] text-[var(--cv-on-invert)]"><Square size={11} fill="currentColor" /></button>
             </Tooltip>

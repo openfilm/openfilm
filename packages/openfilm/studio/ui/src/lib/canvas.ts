@@ -489,3 +489,12 @@ export function reorder(doc: CanvasDoc, to: string, first?: string): CanvasEdge[
 export function withVersion<N extends Pick<CanvasNode, 'versions' | 'path' | 'made'>>(node: N, made: { path: string; made: string }): N {
   return { ...node, versions: [...(node.versions ?? []).filter((v) => v !== made.path), made.path], path: made.path, made: made.made };
 }
+
+/**
+ * What `openfilm get` answered (studio/server/get.mjs runGet): the lines a service says while it works ("Taking the
+ * background out…"), then the receipt as JSON. The receipt, read past those lines.
+ */
+export function receiptOf<T>(text: string): T {
+  const at = text.search(/^[{[]/m);
+  return JSON.parse(at >= 0 ? text.slice(at) : text) as T;
+}

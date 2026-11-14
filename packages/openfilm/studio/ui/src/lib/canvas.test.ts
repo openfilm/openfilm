@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  canvasId, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modesFor, nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
+  canvasId, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modesFor, nextOrder, readCanvasDoc, receiptOf, redo, remember, reorder, undo, withVersion,
 } from './canvas.ts';
 
 test('a first-frame model with mixed references can send a lone reference video from canvas', () => {
@@ -214,4 +214,9 @@ test('a new edge goes after the others into its node; one can be put first', () 
 test('what a node made is its newest version, shown', () => {
   assert.deepEqual(withVersion({ versions: ['a', 'b'], path: 'a', made: 'k1' }, { path: 'c', made: 'k2' }), { versions: ['a', 'b', 'c'], path: 'c', made: 'k2' });
   assert.deepEqual(withVersion({}, { path: 'a', made: 'k' }), { versions: ['a'], path: 'a', made: 'k' });
+});
+
+test('a receipt is read past the lines a service says while it works', () => {
+  assert.deepEqual(receiptOf('Taking the background out on this computer with BiRefNet Lite…\n{\n "src": "assets/a-cutout.png"\n}'), { src: 'assets/a-cutout.png' });
+  assert.deepEqual(receiptOf('{"src":"assets/b.png"}'), { src: 'assets/b.png' });
 });

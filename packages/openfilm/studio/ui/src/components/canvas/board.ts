@@ -7,7 +7,7 @@ import React from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import { api, type CanvasCharacter } from '@/api';
 import type { RedrawStart } from './redraw';
-import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec } from '@/lib/canvas';
+import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, receiptOf } from '@/lib/canvas';
 import type { ProvidersState } from '@/lib/providers';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 
@@ -248,7 +248,8 @@ export function defaultChoice(state: ProvidersState | null, kind: MakeKind): Cho
 
 /* ── what is being made ── */
 
-export interface Run { started: number; abort: AbortController }
+/** a run: when it started; `left` once the person stopped waiting for it (what it makes still lands in the project) */
+export interface Run { started: number; abort: AbortController; left?: boolean }
 type Made = { path: string; made: string };
 /** by `project/node` */
 export const runs = new Map<string, Run>();
@@ -298,13 +299,16 @@ export async function startRun(project: string, folder: string, node: string, re
   const id = `${project}/${node}`;
   if (runs.has(id)) return false;
   const abort = new AbortController();
-  runs.set(id, { started: Date.now(), abort });
+  const run: Run = { started: Date.now(), abort };
+  runs.set(id, run);
   runErrors.delete(id);
   runsChanged();
   try {
     /* the person pressed Make on it: what it costs is not asked again, as an agent's would be */
-    const receipt = JSON.parse(await api.make(folder, request.verb, request.args, { ...pick, yes: true }, abort.signal)) as { src?: string; images?: Array<{ src?: string }> };
+    const receipt = receiptOf<{ src?: string; images?: Array<{ src?: string }> }>(await api.make(folder, request.verb, request.args, { ...pick, yes: true }, abort.signal));
     const path = receipt.src ?? receipt.images?.[0]?.src;
+    /* stopped: it was paid for once it started, so it is kept in the project (and its history), not on the node */
+    if (run.left) return false;
     if (!path) throw new Error(say.nothing);
     const made = { path, made: key };
     const shown = shownBoards.get(project);
@@ -317,12 +321,26 @@ export async function startRun(project: string, folder: string, node: string, re
     return true;
   } catch (e) {
     /* what the service's account lacked is said to the person (its dialog says where to top it up), not as told to an agent */
-    if (!abort.signal.aborted) runErrors.set(id, (e as { reason?: string })?.reason === 'balance' ? say.balance : e instanceof Error ? e.message : String(e));
+    if (!abort.signal.aborted && !run.left) runErrors.set(id, (e as { reason?: string })?.reason === 'balance' ? say.balance : e instanceof Error ? e.message : String(e));
     return false;
   } finally {
-    runs.delete(id);
+    if (runs.get(id) === run) runs.delete(id);
     runsChanged();
   }
+}
+
+/**
+ * Stop waiting for a run. What is being made is not called off: a service charges once it starts, and most cannot
+ * stop then, so it is let finish and land in the project (and its history) rather than be paid for and lost; the node
+ * is free at once to make again.
+ */
+export function leaveRun(project: string, node: string) {
+  const id = `${project}/${node}`;
+  const run = runs.get(id);
+  if (!run) return;
+  run.left = true;
+  runs.delete(id);
+  runsChanged();
 }
 
 /* ── what the nodes need of the board around them ── */

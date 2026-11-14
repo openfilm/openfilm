@@ -205,7 +205,7 @@ export function CropEditor({ src, name, onClose, onDone }: {
     <CanvasModal label={t('canvas.crop.title')} onClose={onClose}>
       {picture && picture !== 'failed' ? <CropBody picture={picture} name={name} onDone={onDone} /> : (
         <>
-          <div className="flex items-center px-5 pr-16 pt-4"><span className="text-[14px] font-medium">{t('canvas.crop.title')}</span></div>
+          <div className="flex items-center px-5 pr-16 pt-4"><span className="text-[14px] font-semibold">{t('canvas.crop.title')}</span></div>
           <div className="flex flex-1 items-center justify-center text-[13px] text-[var(--cv-ink-3)]">
             {picture === 'failed' ? t('canvas.crop.failed') : <LoaderCircle size={18} className="animate-spin motion-reduce:animate-none" />}
           </div>
@@ -339,7 +339,7 @@ function CropBody({ picture, name, onDone }: { picture: HTMLImageElement; name: 
   return (
     <>
       <div className="flex items-center gap-2 px-5 pr-16 pt-4">
-        <span className="mr-2 text-[14px] font-medium">{t('canvas.crop.title')}</span>
+        <span className="mr-2 text-[14px] font-semibold">{t('canvas.crop.title')}</span>
         <div className="flex items-center gap-0.5 rounded-[11px] bg-[var(--cv-chip)] p-[3px]">
           {ASPECTS.map((a) => (
             <button key={a} type="button" aria-pressed={crop.aspect === a} className={seg(crop.aspect === a)} onClick={() => pick(a)}>

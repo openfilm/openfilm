@@ -174,6 +174,8 @@ export function RedrawEditor({ src, models, model: firstModel, pictures, onClose
   const [open, setOpen] = React.useState<'models' | 'more' | 'refs' | null>(null);
   /* a lasso or box being drawn, shown as a line over the picture until it is let go */
   const [outline, setOutline] = React.useState<Mark | null>(null);
+  /* a stroke being drawn: the selection's lit edge waits for it to end (a filter over the whole picture each move is slow) */
+  const [stroking, setStroking] = React.useState(false);
   const selectCanvas = React.useRef<HTMLCanvasElement>(null);
   const markCanvas = React.useRef<HTMLCanvasElement>(null);
   const stage = React.useRef<HTMLDivElement>(null);
@@ -272,7 +274,7 @@ export function RedrawEditor({ src, models, model: firstModel, pictures, onClose
     event.currentTarget.setPointerCapture(event.pointerId);
     if (tool === 'lasso' || tool === 'rect') drawing.current = { kind: 'shape', layer: 'select', erase: event.altKey, points: [p] };
     else drawing.current = { kind: 'stroke', layer: tool === 'eraser' ? 'both' : 'select', erase: tool === 'eraser', color: WASH, width: brush, points: [p] };
-    if (drawing.current.kind === 'stroke') move(event);
+    if (drawing.current.kind === 'stroke') { setStroking(true); move(event); }
   };
   const move = (event: React.PointerEvent<HTMLDivElement>) => {
     moveRing(event);
@@ -308,6 +310,7 @@ export function RedrawEditor({ src, models, model: firstModel, pictures, onClose
     const done = drawing.current;
     drawing.current = null;
     setOutline(null);
+    setStroking(false);
     if (!done) return;
     if (done.kind === 'shape' && done.points.length < 3) return;
     commit(done);
@@ -429,7 +432,7 @@ export function RedrawEditor({ src, models, model: firstModel, pictures, onClose
           {natural ? (
             <>
               <canvas ref={selectCanvas} width={natural.w} height={natural.h} className="pointer-events-none absolute inset-0 h-full w-full"
-                style={{ opacity: 0.5, filter: 'drop-shadow(0 0 0.6px #fff) drop-shadow(0 0 1.5px rgb(92,140,255))' }} />
+                style={{ opacity: 0.5, filter: stroking ? undefined : 'drop-shadow(0 0 0.6px #fff) drop-shadow(0 0 1.5px rgb(92,140,255))' }} />
               <canvas ref={markCanvas} width={natural.w} height={natural.h} className="pointer-events-none absolute inset-0 h-full w-full" />
             </>
           ) : null}
@@ -447,13 +450,15 @@ export function RedrawEditor({ src, models, model: firstModel, pictures, onClose
         </div>
         {/* the brush: a ring as large as it paints, a dot in its middle */}
         {brushing && !hand && !panning ? (
-          <div ref={ring} className="pointer-events-none absolute left-0 top-0 opacity-0 transition-opacity duration-100">
+          <div ref={ring} className="pointer-events-none absolute left-0 top-0 opacity-0 transition-opacity duration-100 will-change-transform">
             <div className="absolute rounded-full border border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.45)]"
               style={{ width: ringSize, height: ringSize, left: -ringSize / 2, top: -ringSize / 2, background: tool === 'eraser' ? 'rgba(255,255,255,0.08)' : 'rgba(92,140,255,0.18)' }} />
             <div className="absolute -left-[2px] -top-[2px] h-[4px] w-[4px] rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.5)]" />
           </div>
         ) : null}
 
+        {/* its name, where every picture window has it */}
+        <div className="pointer-events-none absolute left-5 top-[22px] flex items-center gap-2 text-[14px] font-semibold text-[var(--cv-ink)]">{t('canvas.redraw.title')}</div>
         {/* the tools, over the picture */}
         <div onPointerDown={(event) => event.stopPropagation()}
           className={`absolute left-1/2 top-4 flex -translate-x-1/2 cursor-default items-center gap-0.5 rounded-[14px] p-1 ${float}`}>

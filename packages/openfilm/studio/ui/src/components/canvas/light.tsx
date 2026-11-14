@@ -434,7 +434,7 @@ export function LightPanel({ src, onClose, onMake }: {
   return (
     <CanvasModal label={t('canvas.light.title')} onClose={onClose}>
       <div className="flex items-center gap-3 px-5 pr-16 pt-4">
-        <span className="text-[14px] font-medium">{t('canvas.light.title')}</span>
+        <span className="text-[14px] font-semibold">{t('canvas.light.title')}</span>
         <span className="truncate text-[12.5px] text-[var(--cv-ink-3)]">{t('canvas.light.subtitle')}</span>
       </div>
       <div className="flex min-h-0 flex-1 gap-5 px-5 py-4">

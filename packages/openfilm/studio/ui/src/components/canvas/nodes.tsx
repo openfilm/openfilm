@@ -258,7 +258,7 @@ function Making({ since, typical, onStop }: { since: number; typical: number | n
         </svg>
         <span className="tabular-nums">{t('canvas.make.making')}{done !== null ? ` ${Math.round(done * 100)}%` : ''}</span>
         <span className="tabular-nums text-[var(--cv-ink-3)]">{Math.floor(seconds / 60)}:{String(Math.floor(seconds % 60)).padStart(2, '0')}</span>
-        <Tooltip label={t('canvas.make.stop')}>
+        <Tooltip label={t('canvas.make.stopTip')} wrap>
           <button type="button" aria-label={t('canvas.make.stop')} onClick={(event) => { event.stopPropagation(); onStop(); }}
             className="nodrag flex h-6 w-6 items-center justify-center rounded-full text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><Square size={9} fill="currentColor" /></button>
         </Tooltip>

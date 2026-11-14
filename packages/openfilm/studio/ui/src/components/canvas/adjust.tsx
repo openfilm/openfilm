@@ -327,7 +327,7 @@ export function AdjustEditor({ src, name, onClose, onDone }: {
   return (
     <CanvasModal label={t('canvas.adjust.title')} onClose={onClose}>
       <div className="flex items-center gap-2 px-5 pr-16 pt-4">
-        <span className="mr-2 text-[14px] font-medium">{t('canvas.adjust.title')}</span>
+        <span className="mr-2 text-[14px] font-semibold">{t('canvas.adjust.title')}</span>
         <span className="flex-1" />
         <button type="button" title={`${t('canvas.adjust.compare')} (\\)`} className={tool(comparing)} disabled={!source}
           onPointerDown={hold(true)} onPointerUp={hold(false)} onPointerLeave={hold(false)} onPointerCancel={hold(false)}><Eye size={14} />{t('canvas.adjust.compare')}</button>

@@ -28,7 +28,7 @@ import { useLanguage, useT } from '@/i18n';
 import { ApiError, api, projectEvents, type CanvasBoard, type CanvasCharacter, type SubjectKind } from '@/api';
 import { BoardSwitcher, boardName, nextBoardName } from './boards';
 import {
-  CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modeOf, frameRatio, ratioOf,
+  CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modeOf, frameRatio, ratioOf, receiptOf,
   nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
   type CanvasDoc, type CanvasHistory, type MediaOf,
 } from '@/lib/canvas';
@@ -42,7 +42,7 @@ import { studioHost, type StudioRef } from '@/lib/host';
 import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
-  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepLastModel, keepModelTime, lastModel, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
+  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepLastModel, keepModelTime, lastModel, leaveRun, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
   numberOf, type AssistKind, type Board, type Choice, type BoardNode, type FileNode, type PictureTool, type FrameData, type FrameNode, type MakeData, type MakingNode, type NoteData, type Side, type SpawnKind, type UploadStatus,
 } from './board';
 import { BottomToolbar, CornerBar, Dots, EmptyBoard, Outline, Ripples, ToolCorner, Viewer } from './chrome';
@@ -490,6 +490,26 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       place({ id, type: 'make', position: topLeft(placement, size.w, size.h), width: size.w, height: size.h, data: { make: kind, prompt: '', ...(model ?? {}), ...(ratio ? { opts: { ratio } } : {}) } }, placement.from, placement.wire);
     }
     return id;
+  };
+  /** a node's name as its name row shows it */
+  const nameOfNode = (n: BoardNode): string => {
+    const nth = () => String(numberOf(now.current.nodes, n.id));
+    if (n.type === 'note') return n.data.title ?? t('canvas.titles.note').replace('{n}', nth());
+    if (n.type === 'make') return n.data.title ?? (n.data.preset ? t(`canvas.presets.names.${n.data.preset}`) : t(`canvas.titles.${n.data.make}`).replace('{n}', nth()));
+    if (n.type === 'file') return n.data.title ?? (byPath.get(n.data.path)?.name ?? n.data.path.split('/').pop() ?? n.data.path).replace(/\.[^.]+$/, '');
+    if (n.type === 'frame') return n.data.label || t('canvas.group');
+    return t('canvas.titles.cut').replace('{n}', nth());
+  };
+  /**
+   * The name of what a tool makes from a node: its name, `_`, what the tool did ("Picture 1_Expand"); a number after
+   * it when that name is taken ("Picture 1_Expand 2").
+   */
+  const nameFrom = (sourceId: string, tool: string) => {
+    const source = now.current.nodes.find((n) => n.id === sourceId);
+    const base = `${source ? nameOfNode(source) : ''}_${tool}`;
+    const taken = new Set(now.current.nodes.map((n) => nameOfNode(n)));
+    if (!taken.has(base)) return base;
+    for (let k = 2; ; k++) if (!taken.has(`${base} ${k}`)) return `${base} ${k}`;
   };
   const addFile = (path: string, placement: NodePlacement, size?: { w: number; h: number }, title?: string) => {
     const width = size?.w ?? (placement.wire ? fileCardWidth(byPath.get(path)) : FILE_W);
@@ -990,7 +1010,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       const held = refs.map((path, i) => ({ id: canvasId('n'), x: at.x + i * (REF + 20), y: at.y + size.h + 72, w: REF, h: REF, path }));
       add({
         nodes: [
-          { id, x: at.x, y: at.y, w: size.w, h: size.h, make: 'image', prompt, via: choice.via, ...(choice.model ? { model: choice.model } : {}),
+          { id, x: at.x, y: at.y, w: size.w, h: size.h, make: 'image', title: nameFrom(source.id, t('canvas.names.redraw')), prompt, via: choice.via, ...(choice.model ? { model: choice.model } : {}),
             opts: { ...(ratio ? { ratio } : {}), ...(kept && way !== 'edit' ? { [way]: kept } : {}) } },
           ...held,
         ],
@@ -1007,7 +1027,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (!folder || !picture) { reject(new Error(t('canvas.missing'))); return; }
     const go = () => {
       void api.make(folder, 'cutout', { src: path, out: `${picture.name.replace(/\.[^.]+$/, '')}-subject` }, {}).then((text) => {
-        const receipt = JSON.parse(text) as { src?: string };
+        const receipt = receiptOf<{ src?: string }>(text);
         if (!receipt.src) throw new Error(t('canvas.make.nothing'));
         resolve(sources.file({ ...picture, path: receipt.src }));
       }).catch(reject);
@@ -1050,7 +1070,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       const size = makeSize('image', `${expanded.crop.width}:${expanded.crop.height}`);
       const id = canvasId('n');
       place({ id, type: 'make', position: spotBeside(sourceId, 'source', size.w), width: size.w, height: size.h,
-        data: { make: 'image', preset: 'expand', prompt: expanded.words, via: choice.via, ...(choice.model ? { model: choice.model } : {}), opts: { ratio, mask } } },
+        data: { make: 'image', preset: 'expand', title: nameFrom(sourceId, t('canvas.expand.title')), prompt: expanded.words, via: choice.via, ...(choice.model ? { model: choice.model } : {}), opts: { ratio, mask } } },
       { node: sourceId, side: 'source' });
       setPictureTool(null);
       requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(id); }));
@@ -1085,10 +1105,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       ? { ...n, data: { ...n.data, versions: [...(n.data.versions ?? []).filter((v) => v !== path), cut], path: cut } } : n)));
   };
   /** an edited copy of a picture (cropped, colored) brought in beside it, wired from it */
-  const bringEdited = async (sourceId: string, file: File) => {
+  const bringEdited = async (sourceId: string, file: File, tool: string) => {
     try {
       const [path] = await onImportFiles([file]);
-      if (path) addFile(path, { at: spotBeside(sourceId, 'source', FILE_W), from: { node: sourceId, side: 'source' }, corner: true });
+      if (path) addFile(path, { at: spotBeside(sourceId, 'source', FILE_W), from: { node: sourceId, side: 'source' }, corner: true }, undefined, nameFrom(sourceId, tool));
       setPictureTool(null);
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
@@ -1104,7 +1124,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const base = source.name.replace(/\.[^.]+$/, '');
     onNotice(t('canvas.marketing.parting'));
     try {
-      const receipt = JSON.parse(await api.make(folder, 'cutout', { src: path, out: `${base}-subject` }, {})) as { src?: string };
+      const receipt = receiptOf<{ src?: string }>(await api.make(folder, 'cutout', { src: path, out: `${base}-subject` }, {}));
       if (!receipt.src) return;
       const cut = await new Promise<HTMLImageElement>((done, fail) => {
         const img = new Image();
@@ -1292,8 +1312,11 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     },
     resize: (id, size) => setNodes((list) => unstack(list.map((n) => (n.id === id ? { ...n, width: size.w, height: size.h } : n)), [id])),
     spawn: (id, kind, data) => {
+      /* named from where it came: the picture's name and the preset, or a clip */
+      const tool = data?.title ? null : data?.preset ? t(`canvas.presets.names.${data.preset}`) : kind === 'video' ? t('canvas.names.clip') : null;
+      const named = tool ? { ...data, title: nameFrom(id, tool) } : data;
       const made = addKind(kind, { at: spotBeside(id, 'source', WIDE[kind]), from: { node: id, side: 'source' }, corner: true });
-      if (data) setNodes((list) => list.map((n) => (n.id === made ? { ...n, data: { ...n.data, ...data } } as BoardNode : n)));
+      if (named) setNodes((list) => list.map((n) => (n.id === made ? { ...n, data: { ...n.data, ...named } } as BoardNode : n)));
       return made;
     },
     openTool: (id, path, which) => setPictureTool({ id, path, tool: which }),
@@ -1311,7 +1334,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       const size = makeSize('image', ratio);
       const made = canvasId('n');
       place({ id: made, type: 'make', position: spotBeside(id, 'source', size.w), width: size.w, height: size.h,
-        data: { make: 'image', prompt: '', preset: 'cutout', opts: { ratio } } }, { node: id, side: 'source' });
+        data: { make: 'image', prompt: '', preset: 'cutout', title: nameFrom(id, t('canvas.actions.cutout')), opts: { ratio } } }, { node: id, side: 'source' });
       requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(made); }));
     },
     split: (id, path, rows, cols) => {
@@ -1359,7 +1382,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     stale: making.stale,
     unused: making.unused,
     make: (id) => { void makeNow(id); },
-    stop: (id) => runs.get(`${projectId}/${id}`)?.abort.abort(),
+    stop: (id) => leaveRun(projectId, id),
     inputs: (id) => inputViews(now.current.nodes, now.current.edges, id, mediaOf),
     unwire: (edge) => { willChange(); setEdges((list) => list.filter((e) => e.id !== edge)); },
     sideMenu: (id, side, screen) => {
@@ -1871,12 +1894,12 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           const src = sources.file(picture);
           const close = () => setPictureTool(null);
           if (pictureTool.tool === 'expand') return <ExpandEditor src={src} ratios={choicesFor(providers, 'image').find((c) => c.spec?.mask)?.spec?.ratios ?? []} onClose={close} onMake={(expanded) => outpaint(pictureTool.id, expanded)} />;
-          if (pictureTool.tool === 'crop') return <CropEditor src={src} name={picture.name} onClose={close} onDone={(file) => bringEdited(pictureTool.id, file)} />;
-          if (pictureTool.tool === 'adjust') return <AdjustEditor src={src} name={picture.name} onClose={close} onDone={(file) => bringEdited(pictureTool.id, file)} />;
+          if (pictureTool.tool === 'crop') return <CropEditor src={src} name={picture.name} onClose={close} onDone={(file) => bringEdited(pictureTool.id, file, t('canvas.names.crop'))} />;
+          if (pictureTool.tool === 'adjust') return <AdjustEditor src={src} name={picture.name} onClose={close} onDone={(file) => bringEdited(pictureTool.id, file, t('canvas.names.adjust'))} />;
           return (
             <LightPanel src={src} onClose={close} onMake={(made) => {
               const shape = frameRatio(picture.w, picture.h) ?? '1:1';
-              board.spawn(pictureTool.id, 'image', 'preset' in made ? { preset: made.preset, opts: { ratio: shape } } : { prompt: made.words, opts: { ratio: shape } });
+              board.spawn(pictureTool.id, 'image', { ...('preset' in made ? { preset: made.preset } : { prompt: made.words }), opts: { ratio: shape }, title: nameFrom(pictureTool.id, t('canvas.actions.light')) });
               close();
             }} />
           );
