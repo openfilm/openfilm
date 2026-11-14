@@ -1,16 +1,14 @@
 /**
  * The screening room's row of controls, as a video player lays it out and drawn as Studio's full-screen player draws
- * its own (the same icons and volume): play, volume, the time (and, closer in, the part shown) on the left; the speed,
+ * its own (the same icons and volume): play, volume and the time on the left; the speed,
  * how it is used and full screen on the right.
  */
 import * as React from 'react';
 import { Tooltip } from '@/components/Tooltip';
-import { X } from 'lucide-react';
 import { Icon } from '@/components/player-controls/controls-bar';
 import { PLAYBACK_SPEEDS } from '@/lib/playback-speed';
 
 /* material icons, 24×24, as the player's */
-const PATH_ZOOM_IN = 'M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zm.5-7H9v2H7v1h2v2h1v-2h2V9h-2z';
 const PATH_CHECK = 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z';
 export const PATH_HELP = 'M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z';
 
@@ -63,21 +61,5 @@ export function SpeedMenu({ rate, label, normal, onRate }: { rate: number; label
         </div>
       ) : null}
     </div>
-  );
-}
-
-/** Closer in: the part of the film the bar shows, and the way back to the whole film. */
-export function ZoomChip({ from, to, label, wholeLabel, onWhole }: { from: string; to: string; label: string; wholeLabel: string; onWhole: () => void }) {
-  return (
-    <span aria-label={label} className="ml-2 flex h-6 shrink-0 items-center gap-1 rounded-full bg-white/10 pl-2 pr-0.5 text-[11.5px] tabular-nums text-white/80">
-      <Icon d={PATH_ZOOM_IN} size={14} />
-      <span className="ml-0.5 whitespace-nowrap">{from} – {to}</span>
-      <Tooltip label={wholeLabel} shortcut="0">
-        <button type="button" aria-label={wholeLabel} onClick={onWhole} onMouseDown={(e) => e.preventDefault()}
-          className="grid h-5 w-5 place-items-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white">
-          <X size={12} strokeWidth={2.4} />
-        </button>
-      </Tooltip>
-    </span>
   );
 }

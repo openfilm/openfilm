@@ -23,7 +23,7 @@ import { chat, onCommand, project, toast } from '@/studio';
 import { useProject, useProvide } from '@/studio/react';
 import { changedRanges, clock, cuesOf, linkOf, timeLabel, timeOf, type Clock, type Cue, type Range, type View } from './screening-model';
 import { Scrubber, useClock, type Mark, type ScrubberHandle } from './Scrubber';
-import { Btn, PATH_HELP, SpeedMenu, ZoomChip } from './Controls';
+import { Btn, PATH_HELP, SpeedMenu } from './Controls';
 import { Icon, PATH_FULLSCREEN, PATH_FULLSCREEN_EXIT, PATH_PAUSE, PATH_PLAY, VolumeControl } from '@/components/player-controls/controls-bar';
 import { MOD, ShortcutSheet, useHeldSheet } from './ShortcutSheet';
 import { Stage } from './Stage';
@@ -405,7 +405,6 @@ function Screening({ projectId }: { projectId: string }) {
               onVolumeChange={(v) => { player.current!.setVolume(v); heard(); }}
               onToggleMute={() => { player.current!.setMuted(!player.current!.muted); heard(); }} />
             <TimeNow source={time} decimals={decimals} duration={duration} />
-            {closer ? <ZoomChip from={timeLabel(shownView.from, decimals)} to={timeLabel(shownView.from + shownView.span, decimals)} label={w('zoomed')} wholeLabel={w('kWhole')} onWhole={() => scrubber.current?.whole()} /> : null}
             <span className="flex-1" />
             <SpeedMenu rate={speed} label={w('speed')} normal={w('speedNormal')} onRate={rate} />
             <Tooltip label={`${w('help')} · ${w('helpHold', { mod: MOD })}`} shortcut="?">

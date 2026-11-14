@@ -8,7 +8,7 @@
  * stretch (the picture following the pointer; Esc lets go of it). What the message being written points at is
  * numbered there as the chat numbers it, shown always: a number goes to its place, its × takes it out. */
 import * as React from 'react';
-import { X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import type { StudioRef } from '@/lib/host';
 import { fitted, tickStep, tileStep, timeLabel, timeOf, zoomed, type Clock, type Range, type View } from './screening-model';
 
@@ -25,7 +25,9 @@ export interface ScrubberHandle { zoomIn(): void; zoomOut(): void; whole(): void
 
 /** How far the pointer moves before a press on the marks row is a drag (a stretch), px. */
 const DRAG_PX = 4;
-const LANE_H = 18;
+/** The marks row's height, and its numbers' (a pin's head, a capsule's height). */
+const LANE_H = 22;
+const BADGE = 18;
 /** The strip's height, px; each picture on it is as wide as the film's shape makes it at that height. */
 const STRIP_H = 36;
 /** A frame, s. */
@@ -206,27 +208,36 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
       {/* the marks row */}
       <div data-lane="" className="relative cursor-crosshair touch-none select-none" style={{ height: LANE_H }}
         onPointerDown={laneDown} onPointerMove={laneMove} onPointerUp={laneUp} onPointerLeave={() => setHover(null)}>
-        <div className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[5px] ${fade} ${hover?.row === 'lane' ? 'bg-white/[.07]' : 'bg-white/[.035]'}`}>
-          {!marks.length && !span && words.lane ? <span className="absolute inset-0 flex items-center pl-1.5 text-[10.5px] text-[var(--text-faint)]">{words.lane}</span> : null}
-          {/* where a click would point */}
-          {hover?.row === 'lane' && !span ? <span className="absolute top-1/2 h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-[var(--accent)]" style={{ left: hover.x }} /> : null}
+        <div className={`pointer-events-none absolute inset-0 overflow-hidden rounded-full ${fade} ${hover?.row === 'lane' ? 'bg-white/[.07]' : 'bg-white/[.035]'}`}>
+          {!marks.length && !span && words.lane ? <span className="absolute inset-0 flex items-center pl-3 text-[11px] text-[var(--text-faint)]">{words.lane}</span> : null}
         </div>
-        {/* what is pointed at: always shown, numbered as the chat numbers it */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {/* what is pointed at: always shown, numbered as the chat numbers it. A stretch is a capsule from its start to
+            its end, its number at its start; a moment and a box are a pin on their moment */}
+        <div className="pointer-events-none absolute inset-0">
           {marks.map((m) => (m.ref.kind === 'range' && m.ref.end - m.ref.start < duration - 0.05 && seen(m.ref.start, m.ref.end)
-            ? <span key={`r${m.n}`} className="absolute top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-[var(--accent)] opacity-80" style={{ left: left(Math.max(m.ref.start, v.from)), width: across(m.ref.start, m.ref.end) }} />
+            ? <span key={`r${m.n}`} className="absolute rounded-full bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_60%,transparent)]"
+                style={{ top: (LANE_H - BADGE) / 2, height: BADGE, left: left(Math.max(m.ref.start, v.from)), width: `max(${BADGE}px, ${across(m.ref.start, m.ref.end)})` }} />
             : null))}
-          {span ? <span className="absolute top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-[var(--accent)]" style={{ left: left(Math.min(span.a, span.b)), width: across(Math.min(span.a, span.b), Math.max(span.a, span.b)) }} /> : null}
+          {span ? <span className="absolute rounded-full bg-[color-mix(in_srgb,var(--accent)_32%,transparent)] shadow-[inset_0_0_0_1px_var(--accent)]"
+            style={{ top: (LANE_H - BADGE) / 2, height: BADGE, left: left(Math.min(span.a, span.b)), width: `max(${BADGE}px, ${across(Math.min(span.a, span.b), Math.max(span.a, span.b))})` }} /> : null}
+          {/* where a click would point */}
+          {hover?.row === 'lane' && !span ? (
+            <span className="absolute grid -translate-x-1/2 place-items-center rounded-full border border-dashed border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)]"
+              style={{ left: hover.x, top: (LANE_H - BADGE) / 2, width: BADGE, height: BADGE }}><Plus size={11} strokeWidth={2.6} /></span>
+          ) : null}
         </div>
-        {placeNumbers(marks, (t) => (seen(t) ? x(t) : null)).map(({ mark, x }) => (
-          <span key={mark.n} className="absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2" style={{ left: x }}>
+        {placeNumbers(marks, (m) => {
+          const t = m.ref.kind === 'range' ? Math.max(m.ref.start, v.from) : timeOf(m.ref);
+          return t == null || !seen(t, m.ref.kind === 'range' ? m.ref.end : t) ? null : x(t) + (m.ref.kind === 'range' ? BADGE / 2 : 0);
+        }).map(({ mark, x }) => (
+          <span key={mark.n} className="absolute z-10 -translate-x-1/2" style={{ left: x, top: (LANE_H - BADGE) / 2 }}>
             <MarkNumber mark={mark} go={words.go} remove={words.remove} onGo={() => onGo(mark)} onRemove={() => onRemove(mark.ref)} />
           </span>
         ))}
       </div>
       {/* the film */}
       <div ref={strip} role="slider" aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-label="film"
-        className="relative mt-[3px] cursor-pointer touch-none select-none overflow-hidden rounded-[6px] bg-black/40"
+        className="relative mt-[4px] cursor-pointer touch-none select-none overflow-hidden rounded-[6px] bg-black/40"
         style={{ height: STRIP_H }}
         onPointerDown={stripDown} onPointerMove={stripMove} onPointerUp={stripUp} onPointerCancel={stripUp} onPointerLeave={() => setHover(null)}>
         <div className="pointer-events-none absolute inset-0">
@@ -278,12 +289,11 @@ function useWidth(ref: React.RefObject<HTMLElement | null>): number {
   return width;
 }
 
-/** Where each shown mark's number sits on its row, px: at its time, moved along so none covers another. */
-function placeNumbers(marks: readonly Mark[], xOf: (t: number) => number | null): { mark: Mark; x: number }[] {
-  const GAP = 22;
+/** Where each shown mark's number sits on its row, px (`xOf`; null: out of sight), moved along so none covers another. */
+function placeNumbers(marks: readonly Mark[], xOf: (mark: Mark) => number | null): { mark: Mark; x: number }[] {
+  const GAP = BADGE + 4;
   const placed = marks.flatMap((mark) => {
-    const at = timeOf(mark.ref);
-    const x = at == null ? null : xOf(at);
+    const x = xOf(mark);
     return x == null ? [] : [{ mark, x }];
   }).sort((a, b) => a.x - b.x || a.mark.n - b.mark.n);
   for (let i = 1; i < placed.length; i++) placed[i]!.x = Math.max(placed[i]!.x, placed[i - 1]!.x + GAP);
@@ -295,17 +305,24 @@ function Playhead({ clock, at }: { clock: Clock; at: (t: number) => string | nul
   return left == null ? null : <span className="absolute inset-y-0 w-[2px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgb(0_0_0/.35),0_0_8px_rgb(255_255_255/.35)]" style={{ left }} />;
 }
 
-/** A mark's number: a click goes to it; its × (under the pointer) takes it out. A box's number is square, as its box. */
+/**
+ * A mark's number: a click goes to it; its × (under the pointer) takes it out. A moment's is a pin, its tip on the
+ * strip; a box's pin has a square head, as its box; a stretch's sits at its start, in its capsule.
+ */
 export function MarkNumber({ mark, go, remove, onGo, onRemove }: { mark: Mark; go: string; remove: string; onGo: () => void; onRemove: () => void }) {
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  const pin = mark.ref.kind !== 'range';
   return (
-    <span className="group/n relative inline-flex">
+    <span className="group/n relative flex">
       <button type="button" aria-label={`${go} ${mark.n}`} title={go} onPointerDown={stop} onPointerUp={stop} onClick={(e) => { stop(e); onGo(); }}
-        className={`grid h-[15px] min-w-[15px] cursor-pointer place-items-center bg-[var(--accent)] px-[3px] text-[9.5px] font-semibold leading-none text-[var(--on-accent)] shadow-[0_0_0_2px_var(--bg-viewer)] transition hover:brightness-110 ${mark.ref.kind === 'region' ? 'rounded-[4px]' : 'rounded-full'}`}>
+        className={`grid cursor-pointer place-items-center bg-[var(--accent)] px-[4px] text-[10.5px] font-semibold leading-none tabular-nums text-[var(--on-accent)] transition hover:brightness-110 ${mark.ref.kind === 'region' ? 'rounded-[5px]' : 'rounded-full'}`}
+        style={{ height: BADGE, minWidth: BADGE }}>
         {mark.n}
       </button>
+      {/* the pin's tip, down to the strip */}
+      {pin ? <span className="pointer-events-none absolute left-1/2 top-full -mt-px h-0 w-0 -translate-x-1/2 border-x-[4px] border-t-[5px] border-x-transparent border-t-[var(--accent)]" /> : null}
       <button type="button" aria-label={`${remove} ${mark.n}`} title={remove} onPointerDown={stop} onPointerUp={stop} onClick={(e) => { stop(e); onRemove(); }}
-        className="absolute -right-[8px] -top-[8px] hidden h-[13px] w-[13px] cursor-pointer place-items-center rounded-full bg-[var(--bg-raised)] text-[var(--text)] shadow ring-1 ring-[var(--border-strong)] transition hover:bg-[var(--err)] hover:text-white group-hover/n:grid">
+        className="absolute -right-[7px] -top-[7px] hidden h-[14px] w-[14px] cursor-pointer place-items-center rounded-full bg-[var(--bg-raised)] text-[var(--text)] shadow ring-1 ring-[var(--border-strong)] transition hover:bg-[var(--err)] hover:text-white group-hover/n:grid">
         <X size={8} strokeWidth={3} />
       </button>
     </span>

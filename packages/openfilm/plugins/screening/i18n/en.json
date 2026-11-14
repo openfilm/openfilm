@@ -39,7 +39,7 @@
   "keysTitle": "Keys",
   "kHelp": "How it works",
   "watchTitle": "Watch",
-  "watchText": "Click the picture or press Space to play. Drag along the strip to preview. Scroll or pinch over it to zoom in, swipe sideways to move along; the × by the time, or 0, shows the whole film again.",
+  "watchText": "Click the picture or press Space to play. Drag along the strip to preview. Scroll or pinch over it to zoom in, swipe sideways to move along; scroll back, or press 0, for the whole film.",
   "timeTitle": "Point at a time",
   "timeText": "With the pointer on the strip, the marks row shows above it: click it for this moment, drag it for a stretch, the picture following.",
   "pictureTitle": "Point at the picture",
@@ -52,6 +52,5 @@
   "unmute": "Unmute",
   "kFull": "Full screen",
   "exitFull": "Exit full screen",
-  "zoomed": "Zoomed in: the part shown",
   "speedNormal": "Normal"
 }
