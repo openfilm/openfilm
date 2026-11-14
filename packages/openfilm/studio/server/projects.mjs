@@ -16,7 +16,7 @@
  * Each part is a folder of its own, so the project's export (exports.mjs, kind 'project') takes or leaves it.
  */
 import { moveToTrash } from './trash.mjs';
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { constants, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -61,6 +61,14 @@ export function studioKey() {
   writeFileSync(file, key, { mode: 0o600 });
   return key;
 }
+
+/**
+ * The key an agent the app runs reaches Studio with (`openfilm` sends it when OPENFILM_AGENT says an agent ran it),
+ * made from Studio's own: it opens all Studio's key does but the person's own say (their services and keys, Settings,
+ * plugins and skills turned on or let write), which only the person changes, in Studio.
+ * @param {string} key
+ */
+export const agentKeyOf = (key) => createHmac('sha256', key).update('openfilm-agent').digest('hex').slice(0, 48);
 
 /** Where new projects go: the folder chosen in Settings, else ~/Movies/OpenFilm/Projects on macOS, ~/Videos/OpenFilm/Projects elsewhere (src/locations.mjs). */
 export { libraryRoot };

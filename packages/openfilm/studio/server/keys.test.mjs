@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { changeSettings, cleanKey, modelFor, providerKey, providersFile, readSettings } from './keys.mjs';
 import { listProviders } from './providers/index.mjs';
-import { startStudio } from './server.mjs';
+import { agentKeyOf } from './projects.mjs';
+import { personsSay, startStudio } from './server.mjs';
 
 /* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
 process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
@@ -207,4 +208,31 @@ test('the library is searched by meaning at OpenFilm\'s service unless turned of
   assert.equal((await api('/api/providers/library-search', { method: 'PUT', body: { on: 'yes' } })).status, 400);
   state = await (await api('/api/providers/library-search', { method: 'PUT', body: { on: true } })).json();
   assert.equal(state.librarySearch, 'openfilm');
+});
+
+test("an agent's key reads the services but does not change them, Settings, or what is on", async () => {
+  const as = (path, method = 'GET', body) => fetch(`${studio.origin}${path}`, {
+    method, headers: { 'x-studio-key': agentKeyOf(studio.key), ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined,
+  });
+  assert.equal((await as('/api/providers')).status, 200);
+  const refused = await as('/api/providers/openai/key', 'PUT', { key: 'sk-test-agent' });
+  assert.equal(refused.status, 403);
+  assert.match((await refused.json()).error, /only the person/);
+  assert.equal((await as('/api/prefs', 'PATCH', {})).status, 403);
+  assert.equal((await as('/api/providers/use', 'PUT', { verb: 'image', provider: null })).status, 403);
+  /* a key it was not given is no key */
+  const wrong = await fetch(`${studio.origin}/api/providers`, { headers: { 'x-studio-key': agentKeyOf('nope') } });
+  assert.equal(wrong.status, 401);
+});
+
+test("what is the person's own say", () => {
+  assert.equal(personsSay(['providers', 'openai', 'key'], 'PUT'), true);
+  assert.equal(personsSay(['providers'], 'GET'), false);
+  assert.equal(personsSay(['prefs'], 'PATCH'), true);
+  assert.equal(personsSay(['plugins', 'sound'], 'PUT'), true);
+  assert.equal(personsSay(['plugins', 'canvas', 'boards'], 'POST'), false);
+  assert.equal(personsSay(['skills', 'catalog'], 'POST'), false);
+  assert.equal(personsSay(['skills', 'x', 'writes'], 'PUT'), true);
+  assert.equal(personsSay(['get'], 'POST'), false);
+  assert.equal(personsSay(['canvas'], 'POST'), false);
 });

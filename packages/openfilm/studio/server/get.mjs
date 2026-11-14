@@ -371,7 +371,9 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     const noted = await noteMade(root, { verb, args, paths: Object.keys(spec.options).filter((name) => spec.options[name].path), via: provider.id, by: provider.name,
       model: runModel, files, index: result.index });
     if (noted) made?.(root);
-    return [...said, show(await receiptFor(root, verb, args, result.receipt))].join('\n');
+    const receipt = await receiptFor(root, verb, args, result.receipt);
+    const other = madeWith(provider, runModel, offered, settings, kind, verb);
+    return [...said, show(other ? { ...receipt, madeWith: other } : receipt)].join('\n');
   } catch (e) {
     if (clock.timedOut()) throw new GetError(`${provider.name} did not finish within ${spec.timeoutSec + 60} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
     if (/** @type {{ code?: string, limit?: boolean }} */ (e)?.code === 'balance' && /** @type {{ limit?: boolean }} */ (e).limit) {
@@ -387,6 +389,19 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
   } finally {
     clock.clear();
   }
+}
+
+/**
+ * When what made it is not the person's choice for this kind of media (Settings → Services: an agent's --via or
+ * --model), the service and model that made it, said in its receipt (`madeWith`) for the agent to tell them; else null.
+ * @param {import('./providers/contract.mjs').Provider} provider @param {string | undefined} model @param {{ id: string, name?: string }[]} offered
+ * @param {import('./keys.mjs').ProviderSettings} settings @param {string} kind @param {string} verb
+ */
+function madeWith(provider, model, offered, settings, kind, verb) {
+  const nameOf = (/** @type {string | undefined} */ id) => offered.find((m) => m.id === id)?.name ?? id;
+  const theirs = /** @type {Record<string, string | null | undefined>} */ (settings.use)[kind];
+  if (theirs === provider.id && modelFor(settings, provider, verb) === model) return null;
+  return `Made by ${provider.name}${model ? ` with ${nameOf(model)}` : ''}, which is not the person's choice for this in Studio's Settings${theirs ? '' : ' (none is chosen)'}: say in your reply which model you used, and why.`;
 }
 
 /** Go on when the person said yes; otherwise say what the agent does now. @param {Spend} spend @param {'allow' | 'deny' | 'timeout' | null} answer */
