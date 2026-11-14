@@ -22,7 +22,7 @@ import { Tooltip } from '@/components/Tooltip';
 import { chat, onCommand, project, toast } from '@/studio';
 import { useProject, useProvide } from '@/studio/react';
 import { changedRanges, clock, cuesOf, linkOf, timeLabel, timeOf, type Clock, type Cue, type Range } from './screening-model';
-import { Scrubber, useClock, type Mark, type ScrubberHandle } from './Scrubber';
+import { LANE_H, Scrubber, useClock, type Mark, type ScrubberHandle } from './Scrubber';
 import { MOD, ShortcutSheet, useHeldSheet } from './ShortcutSheet';
 import { Stage } from './Stage';
 
@@ -323,14 +323,14 @@ function Screening({ projectId }: { projectId: string }) {
 
   if (!state || !folder) return <div className="h-full bg-[var(--bg-viewer)]" />;
   const empty = film != null && !blocks.picture.length && !blocks.sound.length;
+  const steps = (['watch', 'time', 'picture', 'say'] as const).map((art) => ({ art, title: w(`${art}Title`), text: w(`${art}Text`) }));
   const sheet = [
     { title: w('gWatch'), items: [
-      { keys: [w('kClickPicture'), 'Space'], label: w('kPlay') }, { keys: [w('kClickBar')], label: w('kGo') }, { keys: ['←', '→'], label: w('kStep') },
-      { keys: ['⇧', '←', '→'], label: w('kFrame') }, { keys: [w('kScroll'), '+', '−'], label: w('kZoom') }, { keys: ['0'], label: w('kWhole') }, { keys: ['S'], label: w('kSpeed') },
+      { keys: ['Space'], label: w('kPlay') }, { keys: ['←', '→'], label: w('kStep') }, { keys: ['⇧', '←', '→'], label: w('kFrame') },
+      { keys: ['+', '−'], label: w('kZoom') }, { keys: ['0'], label: w('kWhole') }, { keys: ['S'], label: w('kSpeed') },
     ] },
     { title: w('gPoint'), items: [
-      { keys: [w('kDoubleClickBar'), 'M'], label: w('kMoment') }, { keys: [w('kDragBar')], label: w('kRange') }, { keys: [w('kDragPicture')], label: w('kBox') },
-      { keys: [w('kClickNumber')], label: w('kGoMark') }, { keys: ['C'], label: w('kChanges') }, { keys: ['Esc'], label: w('kCancel') },
+      { keys: ['M'], label: w('kMoment') }, { keys: ['C'], label: w('kChanges') }, { keys: ['Esc'], label: w('kCancel') }, { keys: ['?'], label: w('kHelp') },
     ] },
   ];
   const floating = changes.length && !empty ? (
@@ -366,35 +366,40 @@ function Screening({ projectId }: { projectId: string }) {
       {empty ? null : (
         <div className="mx-auto flex w-full max-w-[1120px] shrink-0 flex-col items-center">
           {/* the player: play, the time, the film as a strip, the speed, and pointing at this moment */}
+          {/* the controls sit beside the strip, under the marks row */}
           <div className="flex w-full items-start gap-3 rounded-[16px] border border-white/[.07] bg-[color-mix(in_srgb,var(--bg-raised)_88%,transparent)] py-2.5 pl-2.5 pr-2.5 shadow-[0_12px_40px_rgb(0_0_0/.35)] backdrop-blur-xl">
             <Tooltip label={playing ? w('pause') : w('play')} shortcut="Space">
-              <button type="button" aria-label={playing ? w('pause') : w('play')} onClick={toggle}
+              <button type="button" aria-label={playing ? w('pause') : w('play')} onClick={toggle} style={{ marginTop: LANE_H + 4 }}
                 className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-black transition hover:bg-white/90 active:scale-95">
                 {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-[2px]" />}
               </button>
             </Tooltip>
-            <TimeNow source={time} decimals={decimals} />
+            <TimeNow source={time} decimals={decimals} top={LANE_H + 4} />
             <Scrubber ref={scrubber} duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks} changes={changes}
-              words={{ go: w('go'), remove: w('remove'), hints: [...(used.moment ? [] : [w('hintMoment')]), ...(used.range ? [] : [w('hintRange')]), ...(used.zoom ? [] : [w('hintZoom')])] }}
+              words={{
+                go: w('go'), remove: w('remove'), lane: used.moment && used.range ? null : w('laneEmpty'),
+                laneHints: [...(used.moment ? [] : [w('hintMoment')]), ...(used.range ? [] : [w('hintRange')])],
+                stripHints: used.zoom ? [] : [w('hintScrub'), w('hintZoom')],
+              }}
               onSeek={(t) => { pause(); seek(t); }} onMoment={pointMoment}
               onRange={pointRange} onGo={goTo} onRemove={unrefer} onSpan={onSpan} />
-            <span className="flex h-10 w-[42px] shrink-0 items-center font-mono text-[12px] tabular-nums text-[var(--text-faint)]">{timeLabel(duration)}</span>
+            <span style={{ marginTop: LANE_H + 4 }} className="flex h-10 w-[42px] shrink-0 items-center font-mono text-[12px] tabular-nums text-[var(--text-faint)]">{timeLabel(duration)}</span>
             <Tooltip label={w('speed')} shortcut="S">
               <button type="button" onClick={cycleSpeed} aria-label={w('speed')}
-                className={`mt-1.5 h-7 min-w-[40px] shrink-0 rounded-full px-2 font-mono text-[11.5px] font-semibold tabular-nums transition hover:bg-white/10 ${speed === 1 ? 'text-[var(--text-muted)]' : 'bg-white/10 text-[var(--text)]'}`}>
+                style={{ marginTop: LANE_H + 10 }} className={`h-7 min-w-[40px] shrink-0 rounded-full px-2 font-mono text-[11.5px] font-semibold tabular-nums transition hover:bg-white/10 ${speed === 1 ? 'text-[var(--text-muted)]' : 'bg-white/10 text-[var(--text)]'}`}>
                 {speed}×
               </button>
             </Tooltip>
             <Tooltip label={w('help')} shortcut="?">
-              <button type="button" aria-label={w('help')} aria-pressed={sheetOpen} onClick={() => setSheetOpen((open) => !open)}
-                className={`mt-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-full transition hover:bg-white/10 hover:text-[var(--text)] ${sheetOpen ? 'bg-white/10 text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
+              <button type="button" aria-label={w('help')} aria-pressed={sheetOpen} onClick={() => setSheetOpen((open) => !open)} style={{ marginTop: LANE_H + 10 }}
+                className={`grid h-7 w-7 shrink-0 place-items-center rounded-full transition hover:bg-white/10 hover:text-[var(--text)] ${sheetOpen ? 'bg-white/10 text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
                 <CircleHelp size={16} />
               </button>
             </Tooltip>
           </div>
         </div>
       )}
-      {held || sheetOpen ? <ShortcutSheet title={w('sheetTitle')} groups={sheet} hold={{ keys: [MOD], label: w('kHold') }} onClose={held ? undefined : () => setSheetOpen(false)} /> : null}
+      {held || sheetOpen ? <ShortcutSheet title={w('sheetTitle')} steps={steps} keysTitle={w('keysTitle')} groups={sheet} hold={{ keys: [MOD], label: w('kHold') }} onClose={held ? undefined : () => setSheetOpen(false)} /> : null}
       {dropping ? (
         <div className="pointer-events-none absolute inset-3 z-30 grid place-items-center rounded-2xl border-2 border-dashed border-[color:var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[15px] font-medium text-[var(--accent)]">
           {w('dropHere')}
@@ -404,9 +409,9 @@ function Screening({ projectId }: { projectId: string }) {
   );
 }
 
-function TimeNow({ source, decimals }: { source: Clock; decimals: number }) {
+function TimeNow({ source, decimals, top }: { source: Clock; decimals: number; top: number }) {
   const t = useClock(source);
-  return <span className="flex h-10 shrink-0 items-center justify-end font-mono text-[12px] tabular-nums text-[var(--text)]" style={{ width: 42 + decimals * 8 }}>{timeLabel(t, decimals)}</span>;
+  return <span className="flex h-10 shrink-0 items-center justify-end font-mono text-[12px] tabular-nums text-[var(--text)]" style={{ width: 58, marginTop: top }}>{timeLabel(t, decimals)}</span>;
 }
 
 /** What floats over the top of the picture. */
