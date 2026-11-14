@@ -448,7 +448,7 @@ export function LightPanel({ src, onClose, onMake }: {
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[16px] bg-[var(--cv-card-2)]"
             style={{ backgroundImage: 'radial-gradient(color-mix(in srgb, var(--cv-ink) 8%, transparent) 1px, transparent 1.4px)', backgroundSize: '18px 18px' }}>
-            <div className="origin-center scale-[1.25]">
+            <div className="origin-center scale-[1.6]">
               <Orbit src={src} light={light} view={view} color={color} bright={bright} soft={soft} fill={fill} fillColor={fillColor}
                 onLight={(v) => { setLight(v); setTab('custom'); setPreset(null); }} onView={setView} onGrab={() => cancelAnimationFrame(frame.current)} />
             </div>

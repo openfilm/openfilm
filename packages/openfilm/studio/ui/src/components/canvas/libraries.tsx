@@ -184,6 +184,10 @@ const MOVES: Record<string, string> = {
   shake: 'cvfx-shake 0.5s linear infinite', pov: 'cvfx-pov 0.9s ease-in-out infinite', focus: '',
 };
 
+/** each style's picture, by its id (styles/<id>.jpg): one scene, a girl in a yellow raincoat, in every style */
+const STYLE_PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./styles/*.jpg', { eager: true, import: 'default' }))
+  .map(([path, url]) => [path.split('/').pop()!.replace(/\.jpg$/, ''), url]));
+
 /**
  * An effect's card: a field of dots (the world) and a white disc (what the camera looks at), moved as its camera
  * moves — a diagram of the move, not a picture of a place.
@@ -265,8 +269,9 @@ export function MaterialLibrary({ kind, onPick, onClose }: {
                   <button type="button" onClick={() => { noteUsed(kind, item.id); onPick(item); }} title={item.words}
                     className="relative block aspect-[4/5] w-full overflow-hidden rounded-[12px] ring-1 ring-[var(--cv-float-line)] transition hover:ring-[var(--cv-ring)]">
                     {kind === 'effects' ? <EffectScene look={item.look} /> : (
-                      <span className="flex h-full w-full flex-col justify-end p-3 text-left" style={{ background: `linear-gradient(150deg, ${a} 0%, ${b} 100%)` }}>
-                        <span className="line-clamp-4 text-[11.5px] leading-snug text-white/85 [text-shadow:0_1px_2px_rgba(0,0,0,0.5)]">{item.words}</span>
+                      /* a picture of one same scene made in the style, so the styles read side by side; its colors until it loads */
+                      <span className="relative block h-full w-full" style={{ background: `linear-gradient(150deg, ${a} 0%, ${b} 100%)` }}>
+                        {STYLE_PICTURES[item.id] ? <img src={STYLE_PICTURES[item.id]} alt="" draggable={false} loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover/card:scale-[1.04]" /> : null}
                       </span>
                     )}
                   </button>
