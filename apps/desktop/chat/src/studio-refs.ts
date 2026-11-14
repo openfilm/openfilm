@@ -231,6 +231,7 @@ export function pillCard(pill: { id: string; label: string; target?: Record<stri
       row('words', ref.text ? `“${words(ref.text, 120)}”` : ref.prompt ? `“${words(ref.prompt, 120)}”` : null);
       row('path', ref.path);
       row('versions', ref.versions);
+      row('model', ref.maker ? [ref.maker.via, ref.maker.model].filter(Boolean).join(' · ') : null);
       break;
     case 'subtitle':
       row('words', ref.text ? `“${ref.text}”` : null);
@@ -306,6 +307,8 @@ function refLine(ref: StudioRef): string {
       ref.nodeKind === 'group' ? `name ${quote(ref.label, 80)}` : null,
       ref.path ? `${ref.nodeKind === 'file' ? 'file' : 'shows'} ${ref.path}` : null,
       ref.versions ? `${ref.versions} version${ref.versions === 1 ? '' : 's'}` : null,
+      /* what it makes with: an agent making it anew makes it the same way unless asked otherwise */
+      ref.maker ? `makes with --via ${ref.maker.via}${ref.maker.model ? ` --model ${ref.maker.model}` : ''}${ref.maker.opts && Object.keys(ref.maker.opts).length ? ` (opts ${Object.entries(ref.maker.opts).map(([k, v]) => `${k} ${String(v)}`).join(', ')})` : ''}` : null,
     ].filter(Boolean).join(' · ');
     case 'subtitle': return [
       `subtitle ${ref.start.toFixed(3)}–${ref.end.toFixed(3)} s ${quote(ref.text, 300)}${ref.lang ? ` (${ref.lang})` : ''}`,

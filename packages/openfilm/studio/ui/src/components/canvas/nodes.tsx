@@ -136,9 +136,11 @@ function useNumber(id: string): number {
 }
 
 /** What every node is drawn in: its name row above, its card, its sides. */
-function Frame({ id, selected, icon: Icon, title, meta, by, note, children, ins, outs, tone = 'card', fill, onRename, pending }: {
+function Frame({ id, selected, icon: Icon, title, meta, by, note, end, children, ins, outs, tone = 'card', fill, onRename, pending }: {
   id: string; selected: boolean; icon: React.ComponentType<{ size?: number; className?: string }>; title: string; meta?: string | null;
-  by?: CanvasNode['by']; note?: React.ReactNode; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
+  by?: CanvasNode['by']; note?: React.ReactNode;
+  /** what ends its name row, right of `meta` (a making node's versions) */
+  end?: React.ReactNode; children: React.ReactNode; ins?: boolean; outs?: boolean; tone?: 'card' | 'quiet';
   /** a tint over the card (a note's color) */
   fill?: string;
   onRename?: (title: string) => void; pending?: boolean;
@@ -195,6 +197,7 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, children, ins,
           {note}
           {by ? <ByAgent by={by} /> : null}
           {meta ? <span className="shrink-0 tabular-nums">{meta}</span> : null}
+          {end}
         </div>
       )}
       <div data-canvas-card="" className={card} style={fill ? { backgroundImage: `linear-gradient(${fill}, ${fill})` } : undefined}>{children}</div>
@@ -654,11 +657,11 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
       <MakePanel id={id} data={data} />
       <Frame id={id} selected={selected} icon={Icon} title={data.title ?? (data.preset ? t(`canvas.presets.names.${data.preset}`) : t(`canvas.titles.${data.make}`).replace('{n}', String(n)))} meta={meta} by={data.by} onRename={rename}
         ins={media !== 'audio'}
-        note={<>
-          {board.stale.has(id) ? <span className="pointer-events-auto shrink-0 text-amber-500/90" title={t('canvas.make.staleTip')}>{t('canvas.make.stale')}</span> : null}
+        note={board.stale.has(id) ? <span className="pointer-events-auto shrink-0 text-amber-500/90" title={t('canvas.make.staleTip')}>{t('canvas.make.stale')}</span> : null}
+        end={<>
           {/* more than one version: how many, in its name row, opening them to pick the one shown */}
           {versions.length > 1 && !board.readOnly ? (
-            <span className="relative shrink-0">
+            <span className="relative -mr-1.5 shrink-0">
               <button type="button" aria-expanded={versionsOpen}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => { event.stopPropagation(); setVersionsOpen((v) => !v); }}

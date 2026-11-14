@@ -14,6 +14,7 @@ import { dirname, extname, join } from 'node:path';
 import { writeAtomic } from './atomic.mjs';
 import { bringIn } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
+import { readMade as readMediaMade } from './media-made.mjs';
 import { TOOL_DIR, listProjects, projectById } from './projects.mjs';
 
 export const MADE_FILE = `${TOOL_DIR}/canvas-made.json`;
@@ -49,11 +50,21 @@ export async function noteMade(root, canvas, { byFile = false } = {}) {
   const now = Date.now();
   const unknown = given.filter(({ path }) => !known.has(path) && inProject(path));
   const when = byFile ? await Promise.all(unknown.map(({ path }) => stat(join(root, path)).then((s) => Math.round(s.mtimeMs), () => 0))) : [];
-  const fresh = unknown.map(({ n, path }, i) => /** @type {Made} */ ({
-    path, make: /** @type {string} */ (n.make), at: byFile ? when[i] || now : now + i,
-    ...(typeof n.prompt === 'string' && n.prompt.trim() ? { prompt: n.prompt.trim().slice(0, PROMPT_MAX) } : {}),
-    ...(typeof n.via === 'string' ? { via: n.via } : {}), ...(typeof n.model === 'string' ? { model: n.model } : {}),
-  }));
+  /* what really made a file, when `openfilm get` made it (an agent, from the chat): its words, service and model, not
+     the node's (media-made.mjs) */
+  /** @type {Map<string, { via?: string, model?: string, args?: Record<string, unknown> }>} */
+  const got = new Map();
+  for (const m of Object.values(readMediaMade(root)).sort((a, b) => a.at - b.at)) got.set(m.path, m);
+  const fresh = unknown.map(({ n, path }, i) => {
+    const real = got.get(path);
+    const prompt = typeof real?.args?.prompt === 'string' ? real.args.prompt : n.prompt;
+    const via = real?.via || n.via, model = real ? real.model : n.model;
+    return /** @type {Made} */ ({
+      path, make: /** @type {string} */ (n.make), at: byFile ? when[i] || now : now + i,
+      ...(typeof prompt === 'string' && prompt.trim() ? { prompt: prompt.trim().slice(0, PROMPT_MAX) } : {}),
+      ...(typeof via === 'string' ? { via } : {}), ...(typeof model === 'string' ? { model } : {}),
+    });
+  });
   if (!fresh.length) return;
   if (byFile) fresh.sort((a, b) => a.at - b.at);
   await writeAtomic(join(root, MADE_FILE), `${JSON.stringify({ made: [...made, ...fresh].slice(-MADE_MAX) }, null, 1)}\n`);

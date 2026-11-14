@@ -812,7 +812,6 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
               );
             })}
             {inputs.filter((input) => !slots.some((s) => s.input?.edge === input.edge)).map((input) => {
-              const i = inputs.indexOf(input);
               const file = input.path ? board.fileOf(input.path) : null;
               const src = thumb(file);
               const name = input.text != null ? (input.text || t('canvas.kinds.note')).slice(0, 80) : file?.name ?? input.path ?? '';
@@ -824,7 +823,6 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                     : <span className="flex h-full w-full items-center justify-center bg-[var(--cv-chip)] text-[var(--cv-ink)]">
                       {input.text != null ? <TypeIcon size={20} strokeWidth={1.75} /> : file?.kind === 'audio' ? <Music size={18} /> : <Video size={18} />}
                     </span>}
-                  <span className="absolute left-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-black/70 px-1 text-[10px] font-medium text-white">{i + 1}</span>
                 </Tile>
               );
             })}

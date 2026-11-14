@@ -377,7 +377,8 @@ export interface StudioRefImage { src?: string; viewer?: boolean; crop?: StageBo
  *             when the message is sent, if not yet); `canvas` when its folder has the canvas it was made on
  *   · node     a node of the project's canvas (components/canvas): its id there, what it is (`nodeKind`: note, file,
  *             group, or what it makes: image, video, sfx, music), its words (a note's `text`, a making node's
- *             `prompt`), its file (`path`: a file, or the version a making node shows) and how many versions it made
+ *             `prompt`), its file (`path`: a file, or the version a making node shows) and how many versions it made;
+ *             a making node's `maker`: the service, model and options it makes with (what the person set on it)
  *   · subtitle a line of the film's subtitles (the subtitle panel), or words picked inside one: their span on the film,
  *             the words, the language they are in when a translation is shown (`lang`), the line's number in the panel
  *             (`index`, from 1), and each word's own span when the transcript has word times (`words`)
@@ -397,7 +398,7 @@ export type StudioRef = (
   | { kind: 'range'; start: number; end: number; clipIds: string[] }
   | { kind: 'track'; track: number; label: string; clipIds: string[] }
   | { kind: 'file'; path: string; fileKind: string; duration?: number; w?: number; h?: number; made?: { prompt?: string; by?: string; model?: string } }
-  | { kind: 'node'; id: string; nodeKind: string; label: string; text?: string; prompt?: string; path?: string; versions?: number }
+  | { kind: 'node'; id: string; nodeKind: string; label: string; text?: string; prompt?: string; path?: string; versions?: number; maker?: { via: string; model?: string; opts?: Record<string, string | number | boolean> } }
   | { kind: 'subtitle'; start: number; end: number; text: string; lang?: string | null; index?: number; words?: Array<{ text: string; start: number; end: number }> }
   | { kind: 'example'; id: string; title: string; url: string; folder?: string; start?: number; end?: number; segment?: string; description?: string; canvas?: boolean }
   | { kind: 'voice'; provider: string; service: string; id: string; name: string; via: string | null; models: string[]; language?: string | null; description?: string | null }

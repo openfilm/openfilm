@@ -1340,6 +1340,14 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
 
   /* ── the chat: nodes as references (⌘L), and a node a reference points at shown ── */
+  /* what a making node makes with, as the person set it on it (its model, else the one it falls back to): an agent
+     asked to change it makes it the same way */
+  const makerOf = (data: MakeData) => {
+    const choice = data.via ? { via: data.via, model: data.model } : defaultChoice(providers, data.make);
+    if (!choice) return {};
+    const opts = Object.fromEntries(Object.entries(data.opts ?? {}).filter((entry): entry is [string, string | number | boolean] => ['string', 'number', 'boolean'].includes(typeof entry[1])));
+    return { maker: { via: choice.via, ...(choice.model ? { model: choice.model } : {}), ...(Object.keys(opts).length ? { opts } : {}) } };
+  };
   const refOf = (n: BoardNode): StudioRef | null => {
     /* its pill says its name, as the board's name row does ("Text 2", "Picture node 1", a file's name), kept short */
     const short = (name: string) => (name.length > 16 ? `${name.slice(0, 15)}…` : name);
@@ -1358,6 +1366,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     return {
       kind: 'node', id: n.id, nodeKind: n.data.make, label: short(n.data.title ?? (n.data.preset ? t(`canvas.presets.names.${n.data.preset}`) : t(`canvas.titles.${n.data.make}`).replace('{n}', number()))), prompt: n.data.prompt ?? '',
       ...(n.data.path ? { path: n.data.path } : {}), ...(n.data.versions?.length ? { versions: n.data.versions.length } : {}), ...picture(n.data.path),
+      ...makerOf(n.data),
     };
   };
   const refer = () => {

@@ -10,7 +10,8 @@ a sound, wired into each other. Nothing on it is in the film until it is put on 
 at (`canvas node `ID``) is there. A project can have several canvases; your steps go to the one the person has open.
 
 `openfilm canvas` prints the board; `openfilm canvas apply '<steps>'` adds, changes, wires and removes nodes, all at
-once, and the person sees it at once. Its `--help` lists the steps.
+once, and the person sees it at once. Its `--help` lists the steps. `openfilm canvas add <file…>` puts files of the
+project on the board in a row.
 
 ## Laying out what the person asks for
 
@@ -29,3 +30,8 @@ once, and the person sees it at once. Its `--help` lists the steps.
 
 Lay things out and leave the making to the person (they press Make, or a group's Make all) unless they ask you to make
 them: then make each with `openfilm get` and add it as the node's version. Say what you laid out and what to press.
+
+A making node says what it makes with (`makes with --via … --model … (opts …)`, or its `via`, `model` and `opts` on the
+board): that is what the person picked for it. When you make a node's picture, clip or sound anew (another style, a
+change), make it with that `--via` and `--model` and the same ratio, quality and size, unless the person names another
+model; say which model you used.
