@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'no
 import { request } from 'node:http';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { studioHome, studioKey } from './server/projects.mjs';
+import { agentKeyOf, studioHome, studioKey } from './server/projects.mjs';
 
 const MAIN = fileURLToPath(new URL('./server/main.mjs', import.meta.url));
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -38,15 +38,18 @@ export async function running() {
   try { run = JSON.parse(readFileSync(join(studioHome(), 'run.json'), 'utf8')); } catch { /* none advertised */ }
   if (run) {
     const said = await health(run.origin);
-    if (said) return { ...run, version: said.version, ...(said.app ? { app: true } : {}) };
+    if (said) return { ...run, key: callerKey(run.key), version: said.version, ...(said.app ? { app: true } : {}) };
   }
   const given = Number(process.env.OPENFILM_STUDIO_PORT);
   const origin = `http://127.0.0.1:${Number.isInteger(given) && given > 0 ? given : 4747}`;
   const said = await health(origin);
   /* it says which home it serves as a hash of the path (the path itself is not told to anyone who asks) */
   if (said?.home !== createHash('sha256').update(studioHome()).digest('hex') || !said.filmOrigin) return null;
-  return { origin, filmOrigin: said.filmOrigin, key: studioKey(), version: said.version, ...(said.app ? { app: true } : {}) };
+  return { origin, filmOrigin: said.filmOrigin, key: callerKey(studioKey()), version: said.version, ...(said.app ? { app: true } : {}) };
 }
+
+/** The key this run reaches Studio with: an agent the app runs (OPENFILM_AGENT) its own, which leaves the person's say to them. @param {string} key */
+const callerKey = (key) => (process.env.OPENFILM_AGENT ? agentKeyOf(key) : key);
 
 /**
  * The Studio its supervisor is starting again after it ended (main.mjs): run.json names a supervisor still alive. It is
