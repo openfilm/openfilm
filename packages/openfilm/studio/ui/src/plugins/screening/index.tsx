@@ -19,9 +19,9 @@ import type { ClipSpan } from '@/lib/film-shape';
 import type { StageBox, StudioRef } from '@/lib/host';
 import { momentRef, regionRef } from '@/lib/studio-refs';
 import { Tooltip } from '@/components/Tooltip';
-import { chat, onCommand, project, toast } from '@/studio';
+import { chat, links, onCommand, project, toast } from '@/studio';
 import { useProject, useProvide } from '@/studio/react';
-import { changedRanges, clock, cuesOf, linkOf, placeOf, sameRef, timeLabel, timeOf, type Clock, type Cue, type Range, type View } from './screening-model';
+import { changedRanges, clock, cuesOf, linkOf, sameRef, timeLabel, timeOf, type Clock, type Cue, type Range, type View } from './screening-model';
 import { Scrubber, useClock, type Mark, type MarkState, type ScrubberHandle } from './Scrubber';
 import { Btn, PATH_HELP, SpeedMenu } from './Controls';
 import { Icon, PATH_FULLSCREEN, PATH_FULLSCREEN_EXIT, PATH_PAUSE, PATH_PLAY, VolumeControl } from '@/components/player-controls/controls-bar';
@@ -257,10 +257,16 @@ function Screening({ projectId }: { projectId: string }) {
   useProvide('screening', {
     opens: ['film.html'],
     show: (link) => {
-      const place = placeOf(link.split('#')[1] ?? '');
-      if (place) { goNow.current(place.at); found(place.ref); return; }
-      const id = link.split('#')[1];
-      const clip = id ? [...blocksRef.current.picture, ...blocksRef.current.sound].find((b) => b.clip.id === id) : undefined;
+      const fragment = links.parse(link)?.fragment ?? null;
+      const time = links.time(fragment), box = links.box(fragment);
+      if (time) {
+        const at = 'at' in time ? time.at : time.start;
+        goNow.current(at);
+        found(box ? { kind: 'region', time: at, box, clipIds: [], texts: [] }
+          : 'at' in time ? { kind: 'time', time: at } : { kind: 'range', start: time.start, end: time.end, clipIds: [] });
+        return;
+      }
+      const clip = fragment ? [...blocksRef.current.picture, ...blocksRef.current.sound].find((b) => b.clip.id === fragment) : undefined;
       if (clip) goNow.current(clip.at);
     },
   });

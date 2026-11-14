@@ -1,15 +1,18 @@
 /**
- * What an agent points at in Studio, in its reply. The agent writes a token in its text (src/agents.mjs tells it how)
- * and the chat draws it as a pill, the same pill the person's own references are, which opens the thing in Studio:
+ * What an agent points at in Studio, in its reply: a Markdown link to the project (lib/links in Studio), the same links
+ * the person's references reach it as. The chat draws one as a pill, the same pill the person's own references are,
+ * which lights the place in Studio under the pointer and opens it when pressed:
  *
- *   [[clip:<id>]]            a clip, by its film.html id
- *   [[t:<seconds>]]          a moment of the film
- *   [[range:<start>-<end>]]  a stretch of the film, in seconds (start before end)
- *   [[track:<index>]]        a track, by its place in film.html (0 is the first)
- *   [[file:<path>]]          a file of the project, by its path in the project
+ *   [words](film.html#s3)                              a clip, by its film.html id
+ *   [words](film.html#t=12.5)                          a moment of the film
+ *   [words](film.html#t=12,16)                         a stretch of it, in seconds
+ *   [words](film.html#t=12.5&xywh=640,200,320,180)     a part of the picture then (the stage's pixels)
+ *   [words](assets/music.mp3)                          a file of the project
  *
- * Anything else between double brackets (an unknown kind, a number that is not one, a path out of the project) stays
- * as the agent wrote it: a pill that leads nowhere would be worse than the words.
+ * Before these links, agents were taught tokens between double brackets ([[clip:<id>]], [[t:<s>]], [[range:<a>-<b>]],
+ * [[track:<n>]], [[file:<path>]]); those in conversations kept from then are still drawn as pills. Anything else
+ * between double brackets (an unknown kind, a number that is not one, a path out of the project) stays as written: a
+ * pill that leads nowhere would be worse than the words.
  *
  * Pure: no React, no bridge, so `node --test` runs it (src/agent-refs.test.mjs).
  */
@@ -17,6 +20,7 @@ import type { PromptReference as StoredPromptReference } from '@openfilm/shared'
 import type { StudioRef } from '../app-bridge';
 import { kindOf, soundRole } from 'openfilm/film-doc';
 import { refPill } from '../studio-refs.ts';
+import { boxOf, parseLink, timeOf } from 'openfilm/studio-ui/lib/links.ts';
 
 export type AgentRefSegment = { kind: 'text'; text: string } | { kind: 'ref'; ref: StudioRef; raw: string };
 
@@ -53,6 +57,29 @@ function refOf(kind: string, value: string): StudioRef | null {
     default:
       return null;
   }
+}
+
+/**
+ * The reference a link to the project stands for: on the film, a part of the picture at a moment, a moment, a stretch
+ * or a clip by its id; a file of the project (what after `#` left to Studio). Null for the film itself, a link out of
+ * the project, or a thing in a plugin's own file (a link stays a link then).
+ */
+export function refOfLink(href: string): StudioRef | null {
+  const link = parseLink(href);
+  if (!link) return null;
+  if (link.path === 'film.html') {
+    if (!link.fragment) return null;
+    const time = timeOf(link.fragment);
+    const box = boxOf(link.fragment);
+    if (time) {
+      const at = 'at' in time ? time.at : time.start;
+      if (box) return { kind: 'region', time: at, box, clipIds: [], texts: [] };
+      return 'at' in time ? { kind: 'time', time: at } : { kind: 'range', start: time.start, end: time.end, clipIds: [] };
+    }
+    return /[=&]/.test(link.fragment) ? null : refOf('clip', link.fragment);
+  }
+  if (link.path.startsWith('.film/')) return null;
+  return refOf('file', link.path);
 }
 
 /** A piece of the agent's text, split into its words and the references in it. */

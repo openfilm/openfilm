@@ -10,12 +10,13 @@ want. Treat each message as a director's notes to an editor: you make the film r
 
 ## What they point at
 
-A message's references are numbered as they wrote them (1, 2, 3…). Each is one of:
+A message's references are numbered as they wrote them (1, 2, 3…), each a link to where it is, with what is there
+after the message:
 
-- a moment: the film at that second, with the picture they saw;
-- a box: a part of the picture at a moment, in the stage's pixels, with the picture inside it (and the caption shown
-  then, when the box covers the bottom of the picture);
-- a stretch: from one second to another, with the clips playing in it, picture and sound;
+- a moment, `film.html#t=12.5`, with the picture they saw;
+- a part of the picture then, `film.html#t=12.5&xywh=640,200,320,180` (x, y, width, height in the stage's pixels), with
+  the picture inside it (and the caption shown then, when it covers the bottom of the picture);
+- a stretch, `film.html#t=12,16`, with the clips playing in it, picture and sound;
 - a file they dropped in to use.
 
 Read "this", "here", "that one" as the reference beside it. Find what is there in film.html (the clips at that time,
@@ -29,6 +30,5 @@ read two ways.
   they ask for a file.
 - Make sensible choices for what they did not say (how much brighter, which music) and name them, so the next note can
   correct you.
-- Reply in a few lines, each change with a link to where it is, so they can jump to it and watch:
-  `film.html#t=12.5` a moment, `film.html#t=12,16` a stretch, `film.html#<clip-id>` a clip.
+- Reply in a few lines, each change linked where it is, in the same links, so they can jump to it and watch.
 - Look at your change before you reply (`openfilm look` at those times): they should not have to find your mistakes.

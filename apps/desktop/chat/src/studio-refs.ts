@@ -1,13 +1,16 @@
 /**
  * What the person points at in Studio, in the chat. In the composer it is a pill (a clip by its kind, a layer, a
- * region of the picture, a moment, a range, a track, a file, a subtitle line or words in it, a voice of the library), with the picture Studio gave it; in the message the agent
- * reads it is a number in the sentence ("[1: title]") and a line of a <studio_references> block after the message,
- * saying what that number is by film.html id, time, box and file, and where its picture was put.
+ * region of the picture, a moment, a range, a track, a file, a subtitle line or words in it, a voice of the library),
+ * with the picture Studio gave it; in the message the agent reads it is a numbered link in the sentence
+ * ("[1: title](film.html#t=12.5)", the project's own links: lib/links in Studio) and a line of a <studio_references>
+ * block after the message, the same link first, saying what is there by film.html id, time, box and file, and where
+ * its picture was put. The agent points back with the same links.
  *
  * Pure: no React, no bridge, so `node --test` runs it (src/studio-refs.test.mjs).
  */
 import type { PromptPillCard, PromptReference, PromptReferenceKind } from '@/components/prompt-editor';
 import type { StudioRef, StudioRefImage, StudioSelection } from './app-bridge';
+import { linkOfCommand } from 'openfilm/studio-ui/lib/links.ts';
 
 const CLIP_KIND: Record<string, PromptReferenceKind> = {
   mg: 'clipMg', video: 'clipVideo', voice: 'clipVoice', sfx: 'clipSfx', music: 'clipMusic', caption: 'clipCaption',
@@ -45,6 +48,29 @@ const idOf = (ref: StudioRef): string => {
     case 'voice': return `studio:voice:${ref.provider}/${ref.id}`;
   }
 };
+
+/**
+ * Where a reference is, as a link to it in the project (lib/links): a clip by its id, a moment, a stretch, a part of
+ * the picture then (`t=` and `xywh=`, as W3C Media Fragments write them), a file, a node of the canvas; written as a
+ * Markdown link takes it (a space or a bracket in a path escaped). Null for what is not a place in the project (a
+ * track, an example, a voice).
+ */
+export function linkOfRef(ref: StudioRef): string | null {
+  const link = (() => {
+    switch (ref.kind) {
+      case 'clip': return linkOfCommand({ type: 'select-clip', id: ref.id, loc: ref.loc, seek: true });
+      case 'layer': return ref.box && typeof ref.time === 'number' ? linkOfCommand({ type: 'show-box', time: ref.time, box: ref.box })
+        : ref.clipId ? linkOfCommand({ type: 'select-clip', id: ref.clipId, seek: true }) : null;
+      case 'region': return linkOfCommand({ type: 'show-box', time: ref.time, box: ref.box });
+      case 'time': return linkOfCommand({ type: 'seek', time: ref.time });
+      case 'range': case 'subtitle': return linkOfCommand({ type: 'show-range', start: ref.start, end: ref.end });
+      case 'file': return linkOfCommand({ type: 'show-file', path: ref.path });
+      case 'node': return linkOfCommand({ type: 'show-node', id: ref.id });
+      default: return null;
+    }
+  })();
+  return link ? link.replace(/[ ()<>]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`) : null;
+}
 
 /** What a pill keeps of its reference to go back to it later (sent messages keep it): all of it but its picture. */
 const targetOf = (ref: StudioRef): Record<string, unknown> => {
@@ -273,9 +299,9 @@ function refLine(ref: StudioRef): string {
       ref.source ? `source ${ref.source}` : null,
       ref.loc,
     ].filter(Boolean).join(' · ');
+    /* its box is its link's `xywh=` */
     case 'region': return [
       `region of the picture at ${sec(ref.time)}`,
-      boxText(ref.box),
       ref.clipIds.length ? `clips ${ref.clipIds.join(', ')}` : null,
       ref.texts.length ? `words: ${ref.texts.map((text) => quote(text, 200)).join(', ')}` : null,
     ].filter(Boolean).join(' · ');
@@ -343,7 +369,8 @@ export function studioReferencesText(
   const size = stage ?? refs.find((ref) => ref.image?.stage)?.image?.stage;
   const lines = refs.map((ref, i) => {
     const picture = pictures[i];
-    return `[${i + 1}] ${refLine(ref)}${picture ? ` · picture: ${picture}` : ''}`;
+    const link = linkOfRef(ref);
+    return `[${i + 1}]${link ? `(${link})` : ''} ${refLine(ref)}${picture ? ` · picture: ${picture}` : ''}`;
   });
   const attrs = `film="film.html"${size ? ` stage="${Math.round(size.w)}x${Math.round(size.h)}"` : ''}`;
   return `\n\n<studio_references ${attrs}>\n${lines.join('\n')}\n</studio_references>`;

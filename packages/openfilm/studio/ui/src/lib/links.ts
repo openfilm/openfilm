@@ -6,8 +6,14 @@
  *                                writes a clip without one)
  *   film.html#t=12.5             a moment of the film, in seconds
  *   film.html#t=3,6              a stretch of it
- *   assets/a.mp4                 a file of the project
+ *   film.html#t=12.5&xywh=640,200,320,180
+ *                                a part of the picture then: x, y, width, height in the stage's pixels
+ *   assets/a.mp4                 a file of the project (`#t=3,6` a stretch of it, `#xywh=…` a part of its picture)
  *   .film/canvas.json#<node-id>  a thing in a plugin's own file, by its id
+ *
+ * After `#`, only what the web already has: an element's id (HTML), and a time and a part of the picture as W3C Media
+ * Fragments write them (`t=`, `xywh=`, joined by `&`), the `#t=` film.html's own sources are cut with. Agents know
+ * them without being taught a form of ours, and every plugin points at its things the same way.
  *
  * The shell opens one (shell/ProjectFrame): the workbench that claims its file (openfilm/studio `provide`'s `opens`)
  * is shown and told to show it; a file no workbench claims is shown in the library. The app's commands that name a
@@ -47,14 +53,35 @@ const seconds = (t: number) => String(Number(t.toFixed(6)));
 const SECONDS = '(\\d+(?:\\.\\d+)?)';
 const TIME = new RegExp(`^t=${SECONDS}(?:,${SECONDS})?$`);
 
+/** A fragment's media-fragment parts (`t=…&xywh=…`), by name; an id is none. */
+function partsOf(fragment: string | null): Map<string, string> {
+  const parts = new Map<string, string>();
+  for (const part of (fragment ?? '').split('&')) {
+    const eq = part.indexOf('=');
+    if (eq > 0) parts.set(part.slice(0, eq), part.slice(eq + 1));
+  }
+  return parts;
+}
+
 /** What `#t=…` names (a media fragment): a moment, or a stretch that ends after it starts; null when it is not one. */
 export function timeOf(fragment: string | null): { at: number } | { start: number; end: number } | null {
-  const m = fragment ? TIME.exec(fragment) : null;
+  const t = partsOf(fragment).get('t');
+  const m = t != null ? TIME.exec(`t=${t}`) : null;
   if (!m) return null;
   const start = Number(m[1]);
   if (m[2] == null) return { at: start };
   const end = Number(m[2]);
   return end > start ? { start, end } : null;
+}
+
+const XYWH = new RegExp(`^(?:pixel:)?${SECONDS},${SECONDS},${SECONDS},${SECONDS}$`);
+
+/** What `#xywh=x,y,w,h` names (a media fragment, in pixels): a part of the picture, or null when it is not one. */
+export function boxOf(fragment: string | null): { x: number; y: number; w: number; h: number } | null {
+  const m = XYWH.exec(partsOf(fragment).get('xywh') ?? '');
+  if (!m) return null;
+  const [x, y, w, h] = m.slice(1).map(Number) as [number, number, number, number];
+  return w > 0 && h > 0 ? { x, y, w, h } : null;
 }
 
 /**
@@ -115,9 +142,11 @@ export function routeLink(link: string, claims: Iterable<readonly [string, reado
  */
 export function filmCommandOf(fragment: string | null): StudioCommand | null {
   if (!fragment) return null;
-  if (fragment.startsWith('t=')) {
+  if (/(?:^|&)(?:t|xywh)=/.test(fragment)) {
     const time = timeOf(fragment);
     if (!time) return null;
+    const box = boxOf(fragment);
+    if (box) return { type: 'show-box', time: 'at' in time ? time.at : time.start, box };
     return 'at' in time ? { type: 'seek', time: time.at } : { type: 'show-range', start: time.start, end: time.end };
   }
   return { type: 'select-clip', id: fragment, loc: `${FILM}#${fragment}`, seek: true };
@@ -128,8 +157,8 @@ export const CANVAS_FILES = ['.film/canvas.json', '.film/canvases/*.json'] as co
 
 /**
  * The link an app's command stands for, when it names a thing a link names: a clip selected with the playhead taken to
- * it, a moment, a stretch, a canvas's node, a file. Null for the others (what a chat points at, a box on the picture, a
- * track, a subtitle line, a clip selected where the playhead is), which are the edit's as they were.
+ * it, a moment, a stretch, a part of the picture at a moment, a canvas's node, a file. Null for the others (what a
+ * chat points at, a track, a subtitle line, a clip selected where the playhead is), which are the edit's as they were.
  */
 export function linkOfCommand(command: StudioCommand): string | null {
   switch (command.type) {
@@ -143,6 +172,11 @@ export function linkOfCommand(command: StudioCommand): string | null {
       if (!Number.isFinite(command.start) || !Number.isFinite(command.end)) return null;
       const start = Math.max(0, Math.min(command.start, command.end)), end = Math.max(0, command.start, command.end);
       return end > start ? `${FILM}#t=${seconds(start)},${seconds(end)}` : `${FILM}#t=${seconds(start)}`;
+    }
+    case 'show-box': {
+      const { time, box } = command;
+      if (!Number.isFinite(time) || !box || ![box.x, box.y, box.w, box.h].every(Number.isFinite) || !(box.w > 0 && box.h > 0)) return null;
+      return `${FILM}#t=${seconds(Math.max(0, time))}&xywh=${[box.x, box.y, box.w, box.h].map((v) => seconds(Math.round(v * 100) / 100)).join(',')}`;
     }
     case 'show-node':
       return typeof command.id === 'string' && command.id ? `${CANVAS_FILES[0]}#${encodeURIComponent(command.id)}` : null;

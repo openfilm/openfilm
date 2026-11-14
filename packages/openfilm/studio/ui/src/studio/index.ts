@@ -8,7 +8,7 @@
  * as the edit does; the toast; Settings opened; the app's chat pointed at (`chat`, in the desktop app); the app's
  * commands (`onCommand`); files put into another plugin's workbench (`addTo`) and what one's own takes (`provide`);
  * the person sent to a thing of the project by its link (`open`: `film.html#<clip>`, `film.html#t=12.5`, a file), shown
- * by the workbench that claims its file (`provide`'s `opens` and `show`);
+ * by the workbench that claims its file (`provide`'s `opens` and `show`), and a link read (`links`);
  * buttons on the top bar (`topBar`); the blocks its workbench is laid out in, drawn where Studio places them (`blocks`);
  * a plugin's own server routes and events (`pluginApi`, lib/plugin-api).
  *
@@ -24,9 +24,18 @@ import { pluginApi, type PluginApi } from '@/lib/plugin-api';
 import { frameStore } from '@/shell/frame';
 import { addTo, onCommand, open, provide, topBarTools, type TopBarTool, type Workbench, type WorkbenchCommand } from './hub';
 import { blockKey, drawing, mountOf, shownBlocks } from './blocks';
+import { boxOf, parseLink, timeOf } from '@/lib/links';
 
 /** The version of this interface: a change that breaks a plugin written for it comes with a new one. */
 export const version = 1;
+
+/**
+ * A link read, as every workbench's `show` is given one (lib/links): `parse` its file and what after `#` (null: it
+ * names nothing in the project); of that, `time` the moment (`{ at }`) or the stretch (`{ start, end }`) of `t=`, and
+ * `box` the part of the picture of `xywh=` (in the picture's pixels), each null when the link has none. An element's
+ * id is the fragment itself. A plugin reads its links with these, so they mean the same in every workbench.
+ */
+export const links = { parse: parseLink, time: timeOf, box: boxOf };
 
 export type { ImportProgress, MediaSources, PluginApi, SettingsSection, TopBarTool, Workbench, WorkbenchCommand };
 /** A file of the project, as Studio lists it: its path in the project's folder, its kind, and what is known of it. */

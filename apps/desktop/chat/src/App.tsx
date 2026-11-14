@@ -75,7 +75,7 @@ import { AGENT_DEFINITIONS, isAgentId } from '../../src/agent-definitions.mjs';
 import type { TranscriptItem } from '@/lib/agent-transcript';
 import { app, type FfmpegState, type Project, type SkillListing, type StudioRef, type StudioSelection } from './app-bridge';
 import { Divider } from './components/Divider';
-import { draftRefs, pillCard, refFromPill, refPill, sameStudioThing, selectionMoment, selectionRange, selectionRefs, studioReferencesText } from './studio-refs';
+import { draftRefs, linkOfRef, pillCard, refFromPill, refPill, sameStudioThing, selectionMoment, selectionRange, selectionRefs, studioReferencesText } from './studio-refs';
 import { inChat } from './lib/chat-layer';
 import { escStopper } from './lib/esc-stop';
 import { useProjectChat } from './lib/chat-store';
@@ -869,8 +869,8 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     const steer = active && asset ? canSteer(asset.id) : false;
     if (active && !steer) { setQueued(sessionId); return; }
     setQueued(null);
-    /* the sentence as the agent reads it: a pill becomes "[n: name]", and what each number is follows, in a block; a
-       file brought in becomes where it is */
+    /* the sentence as the agent reads it: a pill becomes "[n: name](its link)", and what each number is follows, in a
+       block; a file brought in becomes where it is */
     const attached = attachmentsInText(composerFiles.files, followUpRefs);
     const attachedById = new Map(attached.map((f) => [f.id, f]));
     const used: StudioRef[] = [];
@@ -878,7 +878,8 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
       const ref = studioRefs.get(pillId);
       if (!ref) return null;
       used[index - 1] = ref;
-      return `[${index}: ${refPill(pillId, ref).label}]`;
+      const link = linkOfRef(ref);
+      return `[${index}: ${refPill(pillId, ref).label}]${link ? `(${link})` : ''}`;
     }, (pillId) => {
       const name = skillReferencePackage(pillId);
       if (name) return `skill “${name}”`;

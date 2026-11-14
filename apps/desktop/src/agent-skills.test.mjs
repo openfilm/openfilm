@@ -104,9 +104,9 @@ test("OpenCode: every skill denied but its own, OpenFilm's and those let in; Pi:
   mkdirSync(w.openfilmHome, { recursive: true });
   const oc = await sessionSkills('opencode', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome, allowed: ['research'] });
   const config = JSON.parse(oc.env.OPENCODE_CONFIG_CONTENT);
-  /* OpenFilm's own first, in their order (how a film is made, its media, its canvas); then the project's brand and
+  /* OpenFilm's own first, in their order (how a film is made, its media, its canvas, notes given in Screening); then the project's brand and
      lyric-pv and the one installed from Discover */
-  const names = ['openfilm-edit', 'openfilm-media', 'openfilm-canvas', 'project-brand', 'local-lyric-pv', 'openfilm-replicate'];
+  const names = ['openfilm-edit', 'openfilm-media', 'openfilm-canvas', 'openfilm-screening', 'project-brand', 'local-lyric-pv', 'openfilm-replicate'];
   assert.deepEqual(config.permission.skill, { '*': 'deny', 'customize-opencode': 'allow', ...Object.fromEntries([...names, 'research'].sort().map((n) => [n, 'allow'])) });
   assert.deepEqual(config.mcp, { search: { enabled: false } });
   assert.match(config.skills.paths[0], /agent-skills[\\/].+[\\/]skills$/);

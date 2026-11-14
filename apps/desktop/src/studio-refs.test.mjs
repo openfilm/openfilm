@@ -19,19 +19,19 @@ test('the block after the message says what each number is, with the film\'s sta
   assert.equal(text, `
 
 <studio_references film="film.html" stage="1920x1080">
-[1] clip \`s3\` (s3.html) · track 0 · 13.600–18.200 s of the film · in 2.000 s · speed 1 · film.html#0.2
-[2] region of the picture at 15.400 s · x=576 y=216 w=730 h=594 · clips s3 · words: "OpenFilm" · picture: .film/refs/local-abc-2.jpg
-[3] moment 15.400 s · picture: .film/refs/local-abc-3.jpg
-[4] range 12.600–17.200 s · clips s3, s3-logo, l3
-[5] layer <h1> "Open Film" in clip \`s3\` at 15.400 s · x=600 y=300 w=700 h=120 · source s3.html:42 · film.html#0.2
+[1](film.html#s3) clip \`s3\` (s3.html) · track 0 · 13.600–18.200 s of the film · in 2.000 s · speed 1 · film.html#0.2
+[2](film.html#t=15.4&xywh=576,216,730.4,594) region of the picture at 15.400 s · clips s3 · words: "OpenFilm" · picture: .film/refs/local-abc-2.jpg
+[3](film.html#t=15.4) moment 15.400 s · picture: .film/refs/local-abc-3.jpg
+[4](film.html#t=12.6,17.2) range 12.600–17.200 s · clips s3, s3-logo, l3
+[5](film.html#t=15.4&xywh=600,300,700,120) layer <h1> "Open Film" in clip \`s3\` at 15.400 s · x=600 y=300 w=700 h=120 · source s3.html:42 · film.html#0.2
 [6] track 1 "V1" · clips v1, v2
-[7] file assets/image/logo.png (image, 1200×400)
+[7](assets/image/logo.png) file assets/image/logo.png (image, 1200×400)
 </studio_references>`);
 });
 
 test('a file a service made says who made it and the words it was asked with', () => {
   const made = { ...file, path: 'assets/image/fox.png', made: { prompt: 'a fox in "snow"', by: 'fal.ai', model: 'flux-2' } };
-  assert.match(studioReferencesText([made], { stage: { w: 1920, h: 1080 } }), /\[1\] file assets\/image\/fox\.png \(image, 1200×400\) · made by fal\.ai flux-2 · prompt "a fox in \\"snow\\""\n/);
+  assert.match(studioReferencesText([made], { stage: { w: 1920, h: 1080 } }), /\[1\]\(assets\/image\/fox\.png\) file assets\/image\/fox\.png \(image, 1200×400\) · made by fal\.ai flux-2 · prompt "a fox in \\"snow\\""\n/);
   assert.match(studioReferencesText([{ ...made, made: { prompt: 'a fox' } }], { stage: { w: 1920, h: 1080 } }), /\(image, 1200×400\) · prompt "a fox"\n/);
   /* the pill keeps it, so a sent message still says it */
   assert.deepEqual(refFromPill(refPill(undefined, made)).made, made.made);
@@ -94,8 +94,8 @@ test('a subtitle line, or words picked in it, is its span, its words, its langua
   assert.equal(studioReferencesText([line, words], { pictures: ['.film/refs/local-abc-1.jpg'] }), `
 
 <studio_references film="film.html" stage="1920x1080">
-[1] subtitle 12.400–15.100 s "the quick brown fox" · line 7 · picture: .film/refs/local-abc-1.jpg
-[2] subtitle 12.700–13.700 s "敏捷的棕色" (zh)
+[1](film.html#t=12.4,15.1) subtitle 12.400–15.100 s "the quick brown fox" · line 7 · picture: .film/refs/local-abc-1.jpg
+[2](film.html#t=12.7,13.7) subtitle 12.700–13.700 s "敏捷的棕色" (zh)
 </studio_references>`);
   const pill = refPill(undefined, { ...line, text: 'a line far longer than any pill has room for, said slowly' });
   assert.equal(pill.kind, 'subtitle');

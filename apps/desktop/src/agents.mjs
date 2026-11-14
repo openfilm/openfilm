@@ -137,12 +137,16 @@ export function agentDefaults(id, shell = {}) {
 export const HARNESS_AGENTS = Object.freeze(['openfilm', 'byok']);
 export const isChatAgent = (id) => isAgentId(id) || HARNESS_AGENTS.includes(id);
 
-/** How the person points at things in Studio, and how the agent points back: told to every agent, the app's own too. */
-export const STUDIO_REFERENCES = `The person may name a clip, a page or a moment (in seconds) of Studio: find it in film.html and the project's
-files.
-
-In your replies, [[clip:ID]] (by its id in film.html), [[t:SECONDS]], [[range:START-END]] (in seconds), [[track:N]]
-(0 is the first) and [[file:PATH]] (a file of the project) show as links that open it in Studio.`;
+/**
+ * How the person points at things in Studio, and how the agent points back: told to every agent, the app's own too.
+ * One form both ways, links to the project (Studio's lib/links), only what the web already has after `#`: an id, and
+ * W3C Media Fragments' `t=` and `xywh=`, the `#t=` film.html's sources are cut with.
+ */
+export const STUDIO_REFERENCES = `What the person points at in Studio comes as numbered links to where it is, with what
+is there after their message. Point back the same way, with Markdown links to the project; they open it in Studio:
+[the logo](film.html#s3) a clip by its id, [here](film.html#t=12.5) a moment, [this](film.html#t=12,16) a stretch in
+seconds, [this part](film.html#t=12.5&xywh=640,200,320,180) a part of the picture then (x, y, width, height in the
+stage's pixels), [the music](assets/music.mp3) a file.`;
 
 /**
  * What an agent of someone else's is told, on top of its own instructions: to run `openfilm`, which prints OpenFilm's

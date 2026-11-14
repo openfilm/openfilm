@@ -40,7 +40,7 @@ export function linkOf(ref: StudioRef): string {
   switch (ref.kind) {
     case 'clip': return ref.id ? `film.html#${ref.id}` : `film.html#t=${round(ref.start)},${round(ref.end)}`;
     case 'time': return `film.html#t=${round(ref.time)}`;
-    case 'region': return `film.html#t=${round(ref.time)} (x ${ref.box.x}, y ${ref.box.y}, ${ref.box.w}×${ref.box.h})`;
+    case 'region': return `film.html#t=${round(ref.time)}&xywh=${[ref.box.x, ref.box.y, ref.box.w, ref.box.h].map(Math.round).join(',')}`;
     case 'range': return `film.html#t=${round(ref.start)},${round(ref.end)}`;
     case 'subtitle': return `film.html#t=${round(ref.start)},${round(ref.end)} "${ref.text}"`;
     case 'file': return ref.path;
@@ -82,25 +82,6 @@ export function sameRef(a: StudioRef, b: StudioRef): boolean {
     case 'file': return b.kind === 'file' && a.path === b.path;
     default: return false;
   }
-}
-
-/**
- * The place a link's fragment names on the film, as a media fragment does (W3C Media Fragments URI): `t=12.5` a
- * moment, `t=12,16` a stretch, `t=12.5&xywh=640,200,320,180` a part of the picture then (in the stage's pixels).
- * `at`: where to go; `ref`: what it points at. Null: no place.
- */
-export function placeOf(fragment: string): { at: number; ref: StudioRef } | null {
-  const params = new Map(fragment.split('&').map((part) => { const i = part.indexOf('='); return [part.slice(0, i), part.slice(i + 1)] as const; }));
-  const t = /^(\d+(?:\.\d+)?)(?:,(\d+(?:\.\d+)?))?$/.exec(params.get('t') ?? '');
-  if (!t) return null;
-  const start = Number(t[1]);
-  const xywh = /^(?:pixel:)?(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/.exec(params.get('xywh') ?? '');
-  if (xywh) {
-    const [x, y, w, h] = xywh.slice(1).map(Number) as [number, number, number, number];
-    return { at: start, ref: { kind: 'region', time: start, box: { x, y, w, h }, clipIds: [], texts: [] } };
-  }
-  if (t[2] != null && Number(t[2]) > start) return { at: start, ref: { kind: 'range', start, end: Number(t[2]), clipIds: [] } };
-  return { at: start, ref: { kind: 'time', time: start } };
 }
 
 /** Every clip of a film by its id. */

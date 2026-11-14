@@ -69,6 +69,11 @@ test('the edit shows a link to the film as the command it stands for', () => {
   assert.deepEqual(filmCommandOf('0.2'), { type: 'select-clip', id: '0.2', loc: 'film.html#0.2', seek: true });
   assert.deepEqual(filmCommandOf('t=12.5'), { type: 'seek', time: 12.5 });
   assert.deepEqual(filmCommandOf('t=3,6'), { type: 'show-range', start: 3, end: 6 });
+  /* a part of the picture at a moment, as a media fragment writes it, either part first */
+  assert.deepEqual(filmCommandOf('t=12.5&xywh=640,200,320,180'), { type: 'show-box', time: 12.5, box: { x: 640, y: 200, w: 320, h: 180 } });
+  assert.deepEqual(filmCommandOf('xywh=pixel:0,0,10.5,20&t=3,6'), { type: 'show-box', time: 3, box: { x: 0, y: 0, w: 10.5, h: 20 } });
+  assert.deepEqual(filmCommandOf('t=4&xywh=1,2,0,5'), { type: 'seek', time: 4 }, 'a box of no size is the moment');
+  assert.equal(filmCommandOf('xywh=1,2,3,4'), null, 'a box with no moment is no place on the film');
   assert.equal(filmCommandOf('t=6,3'), null);
   assert.equal(filmCommandOf(null), null);
 });
@@ -79,10 +84,12 @@ test('the app\'s commands that name a thing are the links they stand for, and co
     [{ type: 'select-clip', id: null, loc: 'film.html#1.0', seek: true }, 'film.html#1.0'],
     [{ type: 'seek', time: 12.5 }, 'film.html#t=12.5'],
     [{ type: 'show-range', start: 3, end: 6 }, 'film.html#t=3,6'],
+    [{ type: 'show-box', time: 12.5, box: { x: 640, y: 200, w: 320, h: 180 } }, 'film.html#t=12.5&xywh=640,200,320,180'],
     [{ type: 'show-node', id: 'n1' }, '.film/canvas.json#n1'],
     [{ type: 'show-file', path: 'assets/a #1.mp4' }, 'assets/a %231.mp4'],
   ];
   for (const [command, link] of pairs) assert.equal(linkOfCommand(command), link, command.type);
+  assert.deepEqual(filmCommandOf(parseLink('film.html#t=12.5&xywh=640,200,320,180')!.fragment), pairs[4]![0]);
   assert.deepEqual(parseLink('assets/a %231.mp4'), { path: 'assets/a #1.mp4', fragment: null });
   assert.deepEqual(filmCommandOf(parseLink(linkOfCommand({ type: 'seek', time: 1 / 3 })!)!.fragment), { type: 'seek', time: 0.333333 });
   /* a stretch given end first is the same stretch; one of no length is its moment, as the edit shows it */
@@ -93,7 +100,6 @@ test('the app\'s commands that name a thing are the links they stand for, and co
     { type: 'select-clip', id: 's3', seek: false },
     { type: 'select-clip', id: null, loc: null, seek: true },
     { type: 'show-track', track: 1 },
-    { type: 'show-box', time: 1, box: { x: 0, y: 0, w: 1, h: 1 } },
     { type: 'highlight', ref: null },
     { type: 'seek', time: Number.NaN },
   ] as StudioCommand[]) assert.equal(linkOfCommand(command), null, JSON.stringify(command));

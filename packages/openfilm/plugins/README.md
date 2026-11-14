@@ -87,20 +87,33 @@ process.exitCode = await runLook(async ({ project, what, at, range, dir, shown }
 
 ## Links
 
-A link names a thing of the project: a path in its folder and, after `#`, what in that file.
+A link names a thing of the project: a path in its folder and, after `#`, what in that file. After `#` there is only
+what the web already has, so agents write links untaught and every plugin's mean the same: an element's id (HTML), and
+a time and a part of the picture as W3C Media Fragments write them (`t=`, `xywh=`, joined by `&`), the same `#t=` the
+film's sources are cut with.
 
 | Link | What it names |
 |---|---|
 | `film.html#<clip-id>` | a clip of the film, by its id |
 | `film.html#t=12.5` | a moment of the film, in seconds |
 | `film.html#t=3,6` | a stretch of it |
-| `assets/a.mp4` | a file of the project |
+| `film.html#t=12.5&xywh=640,200,320,180` | a part of the picture then: x, y, width, height in the stage's pixels |
+| `assets/a.mp4` | a file of the project (`#t=3,6` a stretch of it, `#xywh=…` a part of its picture) |
 | `.film/canvas.json#<node-id>` | a thing in a plugin's own file, by its id |
 
-The same link is written by an agent in its reply, printed by a command (`openfilm edit add` prints each new clip's), and
-opened by a plugin (`open`, below). Opening one shows the workbench that shows its file (the edit for `film.html`, the
-canvas for its boards, a plugin's for the files it claims), which shows the thing; a file no workbench claims is pointed
-out in the library.
+It is one form both ways. What the person points at reaches the agent as numbered links to where it is (`[1: the
+logo](film.html#t=12.5&xywh=…)`, and what is there after the message); the agent points back with Markdown links to the
+project, which the chat draws as the same pills. A command prints the same links (`openfilm edit add` prints each new
+clip's), and a plugin opens them (`open`, below). Opening one shows the workbench that shows its file (the edit for
+`film.html`, the canvas for its boards, a plugin's for the files it claims), which shows the thing and lights it a
+moment; a file no workbench claims is pointed out in the library.
+
+So a plugin of yours:
+
+- keeps its things in its own files, each with an `id`; a link to one is its file and `#` its id. No other form.
+- shows its files' links in `show(link)` (`provide`, below), read with `links` (`openfilm/studio`): `t=` where its
+  things have time, `xywh=` where they have a picture, and lights what the link names for a moment, so it is found.
+- leaves the way links are written to the system prompt: a skill of yours says to link what it changed, not how.
 
 ## An element: `openfilm/studio`
 
@@ -186,6 +199,9 @@ being written; `chat.select(selection)` says what is selected and where the play
 
 - `addTo(name, paths, { show })`: put files of the project, by path, into the workbench `name` (`addTo('edit', [path])` puts
   them at the end of the film; `show: true` shows that workbench after). Kept until that workbench is there to take them.
+- `links`: a link read, as `show` is given one: `links.parse(link)` its path and what after `#` (null: it names nothing
+  in the project); `links.time(fragment)` the moment (`{ at }`) or stretch (`{ start, end }`) of its `t=`, and
+  `links.box(fragment)` the part of the picture of its `xywh=`, each null when it has none.
 - `open(link)`: send the person to what a link names (Links, above): `open('film.html#' + id)` after putting a clip in
   the film shows the edit with it selected.
 - `provide(name, { add, command, opens, show, settle, restored })`: what your own workbench takes while it is there;

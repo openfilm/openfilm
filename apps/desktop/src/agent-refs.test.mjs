@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agentRefPill, clipPillKind, parseAgentRefs } from '../chat/src/lib/agent-refs.ts';
+import { agentRefPill, clipPillKind, parseAgentRefs, refOfLink } from '../chat/src/lib/agent-refs.ts';
+import { linkOfRef } from '../chat/src/studio-refs.ts';
 
 const refs = (text) => parseAgentRefs(text).filter((s) => s.kind === 'ref').map((s) => s.ref);
 
@@ -68,4 +69,24 @@ test('a clip\'s pill kind follows its file, as the timeline colors it', () => {
   assert.equal(clipPillKind('assets/audio/sfx/whoosh.mp3'), 'clipSfx');
   assert.equal(clipPillKind('assets/audio/music/bed.mp3'), 'clipMusic');
   assert.equal(clipPillKind('assets/video/talk.mp4', true), 'clipVoice');
+});
+
+test('a link to the project an agent writes is the reference it names, and the person\'s references are those links', () => {
+  assert.deepEqual(refOfLink('film.html#t=12.5'), { kind: 'time', time: 12.5 });
+  assert.deepEqual(refOfLink('./film.html#t=12,16'), { kind: 'range', start: 12, end: 16, clipIds: [] });
+  assert.deepEqual(refOfLink('film.html#t=12.5&xywh=640,200,320,180'), { kind: 'region', time: 12.5, box: { x: 640, y: 200, w: 320, h: 180 }, clipIds: [], texts: [] });
+  assert.equal(refOfLink('film.html#s3')?.kind, 'clip');
+  assert.equal(refOfLink('film.html#s3')?.id, 's3');
+  assert.deepEqual(refOfLink('assets/a%20b.mp3'), { kind: 'file', path: 'assets/a b.mp3', fileKind: '' });
+  /* the film itself, a plugin's own file, an address, a way out of the project: a link, not a pill */
+  for (const href of ['film.html', '.film/canvas.json#n1', 'https://openfilm.dev', '../x.mp4', 'film.html#t=6,3']) assert.equal(refOfLink(href), null, href);
+  /* what the person points at reaches the agent as the link it would write back, and reads back as the same place */
+  for (const ref of [
+    { kind: 'time', time: 12.5 },
+    { kind: 'range', start: 12, end: 16, clipIds: [] },
+    { kind: 'region', time: 12.5, box: { x: 640, y: 200, w: 320, h: 180 }, clipIds: [], texts: [] },
+    { kind: 'file', path: 'assets/a (1).mp3', fileKind: '' },
+  ]) assert.deepEqual(refOfLink(linkOfRef(ref)), ref, JSON.stringify(ref));
+  assert.equal(linkOfRef({ kind: 'file', path: 'assets/a (1).mp3', fileKind: '' }), 'assets/a%20%281%29.mp3', 'a Markdown link takes it whole');
+  assert.equal(linkOfRef({ kind: 'track', track: 1, label: '', clipIds: [] }), null);
 });
