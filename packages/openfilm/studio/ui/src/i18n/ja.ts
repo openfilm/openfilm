@@ -3031,7 +3031,7 @@ export const ja: Words = {
         "copy-attrs": "属性をコピー",
         "paste-attrs": "属性をペースト",
         "refer": "チャットに追加",
-        "work-mode": "編集とキャンバスを切り替え",
+        "work-mode": "前のワークベンチに戻る",
       },
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */

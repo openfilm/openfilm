@@ -3032,7 +3032,7 @@ export const zhCN: Words = {
         "copy-attrs": "复制属性",
         "paste-attrs": "粘贴属性",
         "refer": "添加到对话",
-        "work-mode": "在剪辑和画布之间切换",
+        "work-mode": "回到上一个工作台",
       },
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */

@@ -3027,7 +3027,7 @@ export const ko: Words = {
         "copy-attrs": "속성 복사",
         "paste-attrs": "속성 붙여넣기",
         "refer": "채팅에 추가",
-        "work-mode": "편집과 캔버스 전환",
+        "work-mode": "이전 작업대로 돌아가기",
       },
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */

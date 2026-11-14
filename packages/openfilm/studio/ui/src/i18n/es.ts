@@ -3031,7 +3031,7 @@ export const es: Words = {
         "copy-attrs": "Copiar atributos",
         "paste-attrs": "Pegar atributos",
         "refer": "Añadir al chat",
-        "work-mode": "Cambiar entre edición y lienzo",
+        "work-mode": "Volver al banco de trabajo anterior",
       },
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */

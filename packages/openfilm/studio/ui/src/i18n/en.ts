@@ -3032,7 +3032,7 @@ export const en = {
         "copy-attrs": "Copy attributes",
         "paste-attrs": "Paste attributes",
         "refer": "Add to chat",
-        "work-mode": "Switch between edit and canvas",
+        "work-mode": "Back to the workbench shown before",
       },
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */
