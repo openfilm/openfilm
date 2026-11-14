@@ -189,6 +189,27 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const observer = new ResizeObserver(resize); observer.observe(root);
     return () => observer.disconnect();
   }, [fitted,shown,boardId]);
+  /* ⌘ with the wheel zooms round the pointer wherever the keys are being typed: React Flow hears of ⌘ only from a
+     keydown reaching the document, which a composer being typed in keeps to itself, and it would pan instead */
+  React.useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return undefined;
+    const wheel = (event: WheelEvent) => {
+      if (!event.metaKey || event.ctrlKey || (event.target as Element).closest('.nowheel')) return;
+      const pane = root.querySelector('.react-flow')?.getBoundingClientRect();
+      if (!pane) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const { x, y, zoom } = flow.getViewport();
+      const { minZoom, maxZoom } = flowStore.getState();
+      const step = event.deltaMode === 1 ? 0.05 : event.deltaMode ? 1 : 0.002;
+      const next = Math.min(maxZoom, Math.max(minZoom, zoom * 2 ** (-event.deltaY * step)));
+      const px = event.clientX - pane.left, py = event.clientY - pane.top;
+      void flow.setViewport({ x: px - ((px - x) * next) / zoom, y: py - ((py - y) * next) / zoom, zoom: next }, { duration: 0 });
+    };
+    root.addEventListener('wheel', wheel, { capture: true, passive: false });
+    return () => root.removeEventListener('wheel', wheel, { capture: true });
+  }, [flow, flowStore]);
   const pickerRef = React.useRef<HTMLInputElement>(null);
   const themeChanges = useThemeChanges();
   const dark = React.useMemo(() => document.documentElement.dataset.theme === 'dark', [themeChanges]); // eslint-disable-line react-hooks/exhaustive-deps

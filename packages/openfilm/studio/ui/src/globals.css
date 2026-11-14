@@ -605,6 +605,8 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-edge: #b4b4ba;
   --cv-edge-lit: #3b82f6;
   --cv-float: #ffffff;
+  /* the band round a floating panel's words that holds its tools: a step away from the panel */
+  --cv-float-deep: #f1f1f2;
   --cv-float-line: rgba(0, 0, 0, 0.08);
   --cv-float-hover: rgba(0, 0, 0, 0.05);
   --cv-chip: rgba(0, 0, 0, 0.05);
@@ -637,6 +639,7 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-edge: #6b6b6b;
   --cv-edge-lit: #3b82f6;
   --cv-float: #181818;
+  --cv-float-deep: #111111;
   --cv-float-line: rgba(255, 255, 255, 0.08);
   --cv-float-hover: rgba(255, 255, 255, 0.07);
   --cv-chip: rgba(255, 255, 255, 0.05);

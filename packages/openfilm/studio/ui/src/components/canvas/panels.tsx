@@ -65,14 +65,14 @@ function Composer({ id, shown, expanded, setExpanded, corner, above, aboveOpen =
   const label = t(expanded ? 'canvas.panel.collapse' : 'canvas.panel.expand');
   return (
     <NodeToolbar nodeId={id} isVisible={shown} position={Position.Bottom} offset={14}>
-      {/* its words keep one color whether the tools are open or not: closed, the panel is that color; open, a darker frame holds the tools round it */}
-      <div data-canvas-composer="" className={`nodrag nopan nowheel w-[min(680px,88vw)] transition-[padding,background-color] duration-200 ease-out ${aboveOpen ? 'p-2' : 'p-0 !bg-[color-mix(in_srgb,var(--cv-ink)_4%,var(--cv-float))]'} ${PANEL}`} onKeyDown={(event) => event.stopPropagation()}>
+      {/* its words keep the panel's color whether the tools are open or not; open, a deeper band above holds the tools */}
+      <div data-canvas-composer="" className={`nodrag nopan nowheel w-[min(680px,88vw)] transition-[background-color] duration-200 ease-out ${PANEL} ${aboveOpen ? '!bg-[var(--cv-float-deep)]' : ''}`} onKeyDown={(event) => event.stopPropagation()}>
         {above ? (
           <div aria-hidden={!aboveOpen} className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${aboveOpen ? 'grid-rows-[1fr] opacity-100' : 'pointer-events-none grid-rows-[0fr] opacity-0'}`}>
-            <div className="min-h-0 overflow-hidden">{above}</div>
+            <div className="min-h-0 overflow-hidden"><div className="p-2">{above}</div></div>
           </div>
         ) : null}
-        <div className={`relative px-4 pb-3 pt-4 transition-[margin,border-radius] duration-200 ease-out ${aboveOpen ? 'mt-2 rounded-[16px] bg-[color-mix(in_srgb,var(--cv-ink)_4%,var(--cv-float))]' : 'rounded-[20px]'}`}>
+        <div className={`relative rounded-[20px] bg-[var(--cv-float)] px-4 pb-3 pt-4 transition-shadow duration-200 ease-out ${aboveOpen ? 'shadow-[0_0_0_0.5px_var(--cv-float-line)]' : ''}`}>
           <div className="absolute right-3 top-3 flex items-center gap-0.5">
             {corner}
             <Tooltip label={label}>
@@ -109,7 +109,7 @@ function ToolTile({ label, tone, icon: Icon, picture, on, value, preview, onClea
   return (
     <div className="group/tile relative w-full min-w-0" onPointerEnter={(event) => setOver(event.currentTarget.getBoundingClientRect())} onPointerLeave={() => setOver(null)}>
       <button type="button" onClick={() => { setOver(null); onClick?.(); }}
-        className={`cv-tool flex h-12 w-full min-w-0 items-center gap-2.5 rounded-[14px] px-2.5 text-[14px] transition ${on ? 'bg-[var(--cv-float-hover)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_4%,transparent)] hover:bg-[var(--cv-float-hover)]'} ${value ? 'text-[#4aa3ff]' : 'text-[var(--cv-ink)]'}`}>
+        className={`cv-tool flex h-12 w-full min-w-0 items-center gap-2.5 rounded-[14px] px-2.5 text-[14px] transition ${on ? 'bg-[color-mix(in_srgb,var(--cv-ink)_9%,var(--cv-float))]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_3%,var(--cv-float))] hover:bg-[color-mix(in_srgb,var(--cv-ink)_7%,var(--cv-float))]'} ${value ? 'text-[#4aa3ff]' : 'text-[var(--cv-ink)]'}`}>
         {picture ? <img src={picture} alt="" draggable={false} className="h-7 w-7 shrink-0 object-contain" /> : (
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-white shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.25)]" style={{ background: tone }}>
             <Icon size={15} strokeWidth={2} />
@@ -118,15 +118,15 @@ function ToolTile({ label, tone, icon: Icon, picture, on, value, preview, onClea
         <span className="truncate">{value ?? label}</span>
       </button>
       {value && preview && over ? createPortal(
-        <div className="cv-fade pointer-events-none fixed z-[1900] w-[240px] -translate-x-1/2 -translate-y-full overflow-hidden rounded-[12px] shadow-[var(--cv-float-shadow)] ring-1 ring-[var(--cv-float-line)]"
-          style={{ left: over.left + over.width / 2, top: over.top - 8 }}>
+        <div className="cv-fade pointer-events-none fixed z-[1900] -translate-y-full overflow-hidden rounded-[10px] shadow-[var(--cv-float-shadow)] ring-1 ring-inset ring-[var(--cv-float-line)]"
+          style={{ left: over.left, width: over.width, top: over.top - 12 }}>
           {preview}
         </div>,
         document.body,
       ) : null}
       {value && onClear ? (
         <button type="button" aria-label={t('canvas.panel.clearTool')} onClick={onClear}
-          className="absolute -right-1.5 -top-1.5 z-10 hidden h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] shadow-[0_0_0_2px_var(--cv-float)] group-hover/tile:flex"><X size={11} strokeWidth={2.5} /></button>
+          className="absolute -right-1.5 -top-1.5 z-10 hidden h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] shadow-[0_0_0_2px_var(--cv-float-deep)] group-hover/tile:flex"><X size={11} strokeWidth={2.5} /></button>
       ) : null}
     </div>
   );
