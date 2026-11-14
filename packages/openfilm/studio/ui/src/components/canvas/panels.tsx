@@ -5,6 +5,7 @@
  * and a cut its own (onto the timeline). Floating, they keep their size however far the board is zoomed.
  */
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
   ArrowUp, ArrowUpRight, Camera, ChevronLeft, ChevronRight, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb,
@@ -103,9 +104,11 @@ function ToolTile({ label, tone, icon: Icon, picture, on, value, preview, onClea
   value?: string; preview?: React.ReactNode; onClear?: () => void; onClick?: () => void;
 }) {
   const t = useT();
+  /* the preview hangs over the board, above the card the composer belongs to: drawn in the body, where the tile is */
+  const [over, setOver] = React.useState<DOMRect | null>(null);
   return (
-    <div className="group/tile relative w-full min-w-0">
-      <button type="button" onClick={onClick}
+    <div className="group/tile relative w-full min-w-0" onPointerEnter={(event) => setOver(event.currentTarget.getBoundingClientRect())} onPointerLeave={() => setOver(null)}>
+      <button type="button" onClick={() => { setOver(null); onClick?.(); }}
         className={`cv-tool flex h-12 w-full min-w-0 items-center gap-2.5 rounded-[14px] px-2.5 text-[14px] transition ${on ? 'bg-[var(--cv-float-hover)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_4%,transparent)] hover:bg-[var(--cv-float-hover)]'} ${value ? 'text-[#4aa3ff]' : 'text-[var(--cv-ink)]'}`}>
         {picture ? <img src={picture} alt="" draggable={false} className="h-7 w-7 shrink-0 object-contain" /> : (
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-white shadow-[inset_0_0_0_0.5px_rgba(255,255,255,0.25)]" style={{ background: tone }}>
@@ -114,10 +117,12 @@ function ToolTile({ label, tone, icon: Icon, picture, on, value, preview, onClea
         )}
         <span className="truncate">{value ?? label}</span>
       </button>
-      {value && preview ? (
-        <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 hidden w-[240px] -translate-x-1/2 overflow-hidden rounded-[12px] shadow-[var(--cv-float-shadow)] ring-1 ring-[var(--cv-float-line)] group-hover/tile:block">
+      {value && preview && over ? createPortal(
+        <div className="cv-fade pointer-events-none fixed z-[1900] w-[240px] -translate-x-1/2 -translate-y-full overflow-hidden rounded-[12px] shadow-[var(--cv-float-shadow)] ring-1 ring-[var(--cv-float-line)]"
+          style={{ left: over.left + over.width / 2, top: over.top - 8 }}>
           {preview}
-        </div>
+        </div>,
+        document.body,
       ) : null}
       {value && onClear ? (
         <button type="button" aria-label={t('canvas.panel.clearTool')} onClick={onClear}
