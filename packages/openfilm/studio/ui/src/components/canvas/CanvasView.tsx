@@ -1027,9 +1027,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (!folder || !picture) { reject(new Error(t('canvas.missing'))); return; }
     const go = () => {
       void api.make(folder, 'cutout', { src: path, out: `${picture.name.replace(/\.[^.]+$/, '')}-subject` }, {}).then((text) => {
-        const receipt = receiptOf<{ src?: string }>(text);
-        if (!receipt.src) throw new Error(t('canvas.make.nothing'));
-        resolve(sources.file({ ...picture, path: receipt.src }));
+        const receipt = receiptOf<{ src?: string; images?: Array<{ src?: string }> }>(text);
+        const made = receipt.src ?? receipt.images?.[0]?.src;
+        if (!made) throw new Error(t('canvas.make.nothing'));
+        resolve(sources.file({ ...picture, path: made }));
       }).catch(reject);
     };
     if (providers?.use.cutout) go();
@@ -1124,14 +1125,15 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const base = source.name.replace(/\.[^.]+$/, '');
     onNotice(t('canvas.marketing.parting'));
     try {
-      const receipt = receiptOf<{ src?: string }>(await api.make(folder, 'cutout', { src: path, out: `${base}-subject` }, {}));
-      if (!receipt.src) return;
+      const receipt = receiptOf<{ src?: string; images?: Array<{ src?: string }> }>(await api.make(folder, 'cutout', { src: path, out: `${base}-subject` }, {}));
+      const subject = receipt.src ?? receipt.images?.[0]?.src;
+      if (!subject) return;
       const cut = await new Promise<HTMLImageElement>((done, fail) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => done(img);
         img.onerror = () => fail(new Error('the cut-out did not load'));
-        img.src = sources.file({ ...source, path: receipt.src! });
+        img.src = sources.file({ ...source, path: subject });
       });
       const W = cut.naturalWidth; const H = cut.naturalHeight;
       const canvas = document.createElement('canvas');
@@ -1159,7 +1161,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       add({
         nodes: [
           { id: group, x: at.x, y: at.y, w, h, group: t('canvas.marketing.layers'), color: 'gray' },
-          { id: canvasId('n'), parent: group, x: GROUP_PAD, y, w: size.w, h: size.h, path: receipt.src, title: t('canvas.marketing.subject') },
+          { id: canvasId('n'), parent: group, x: GROUP_PAD, y, w: size.w, h: size.h, path: subject, title: t('canvas.marketing.subject') },
           ...(choice && maskPath ? [{ id: background, parent: group, x: GROUP_PAD + size.w + gap, y, w: size.w, h: size.h, make: 'image' as const, title: t('canvas.marketing.background'),
             prompt: 'Remove the subject in the masked area completely and fill the place in with the background behind it, continuing its texture, light and perspective, with no trace of the subject and no shadow of it.',
             via: choice.via, ...(choice.model ? { model: choice.model } : {}), opts: { ratio, mask: maskPath } }] : []),
