@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentSession, CLIENT_CAPABILITIES, INSTRUCTIONS, agentDefaults, agentInstructions, closeEverySession, planProblem, probeFolder, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, codexSessionConfig, distinctOptions, errorCause, legacyOptions, optionsForModel, powerShellScript, powerShellLine, powerShellWindowLaunch, terminalScript, checkAgentProgram, readAgentStatus, setChosenPaths, signInScript, turnError, signInError, codexTooOld, ANTIGRAVITY_TESTED, antigravityTooOld, AGENTS, ownSignIn, codexServiceError, codexRefusal, codexNotice, explainFailure, stderrReason, withToolKind, OWN_GROUP, stopTree, winArg, CLAUDE_TESTED, claudeOutdated } from './agents.mjs';
+import { AgentSession, CLIENT_CAPABILITIES, INSTRUCTIONS, agentDefaults, agentInstructions, closeEverySession, planProblem, probeFolder, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, codexSessionConfig, distinctOptions, errorCause, legacyOptions, optionsForModel, powerShellScript, powerShellLine, powerShellWindowLaunch, terminalScript, checkAgentProgram, readAgentStatus, setChosenPaths, signInScript, turnError, signInError, codexTooOld, ANTIGRAVITY_TESTED, antigravityTooOld, AGENTS, ownSignIn, codexServiceError, codexRefusal, codexNotice, explainFailure, stderrReason, withToolKind, OWN_GROUP, stopTree, winArg, CLAUDE_TESTED, claudeOutdated, keyFileRules } from './agents.mjs';
 import { spawn } from 'node:child_process';
 import { acpSignedIn, signOutAgent } from './agents.mjs';
 import { openfilmCommand } from './openfilm-command.mjs';
@@ -740,4 +740,12 @@ test('a Claude Code older than the one the chat was tried with is said, with how
   assert.equal(claudeOutdated('/x/claude', at(CLAUDE_TESTED)), null);
   assert.equal(claudeOutdated('/x/claude', at('2.2.0')), null);
   assert.equal(claudeOutdated('/x/claude', at(null)), null);
+});
+
+test("Claude Code is told not to read Studio's key files, in every home it may find them; on Windows by its drive", () => {
+  assert.deepEqual(keyFileRules(['/srv/me/.openfilm-dev', '/srv/me/.openfilm', undefined, '/srv/me/.openfilm'], 'darwin'), [
+    'Read(//srv/me/.openfilm-dev/providers.json)', 'Read(//srv/me/.openfilm-dev/key)', 'Read(//srv/me/.openfilm-dev/run.json)',
+    'Read(//srv/me/.openfilm/providers.json)', 'Read(//srv/me/.openfilm/key)', 'Read(//srv/me/.openfilm/run.json)',
+  ]);
+  assert.equal(keyFileRules(['D:\\me\\.openfilm'], 'win32')[0], 'Read(//d/me/.openfilm/providers.json)');
 });

@@ -25,7 +25,7 @@
  * What Pi does goes to the chat as ACP session updates: its words and thinking as they stream, each tool call (its
  * kind, title and input) and its result, after each answer how full the context is, and a model service tried again.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { createReadStream, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import * as acp from '@agentclientprotocol/sdk';
@@ -60,6 +60,24 @@ mkdirSync(config.agentDir, { recursive: true });
 const modelsPath = join(config.agentDir, 'models.json');
 writeFileSync(modelsPath, JSON.stringify(modelsJson(models), null, 2));
 const modelRuntime = await ModelRuntime.create({ authPath: join(config.agentDir, 'auth.json'), modelsPath });
+
+/* The models' keys, in this process's memory only: they come on a pipe of their own (fd 3, agents.mjs KEYS_FD), not
+   the environment, which every command Pi runs (bash) inherits. One still in the environment (Pi started by hand) is
+   taken out of it. */
+const keys = await new Promise((resolve) => {
+  const chunks = [];
+  const pipe = createReadStream('', { fd: 3 });
+  pipe.on('data', (chunk) => chunks.push(chunk));
+  pipe.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); } catch { resolve({}); } });
+  pipe.on('error', () => resolve({}));
+});
+for (const m of models) {
+  const key = typeof keys[m.keyEnv] === 'string' && keys[m.keyEnv] ? keys[m.keyEnv] : process.env[m.keyEnv];
+  delete process.env[m.keyEnv];
+  if (!key) continue;
+  await modelRuntime.setRuntimeApiKey(providerOf(m.id), key);
+  if (m.levels.some((l) => l !== 'auto')) await modelRuntime.setRuntimeApiKey(THINKING(providerOf(m.id)), key);
+}
 
 /** Each open session: Pi's, the turn being logged, and its model (the id) and effort as the chat names them. */
 const sessions = new Map();
