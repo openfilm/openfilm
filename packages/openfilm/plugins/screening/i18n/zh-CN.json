@@ -1,9 +1,4 @@
 {
-  "emptyTitle": "说说你想拍什么",
-  "emptySub": "或者把照片、视频拖进来",
-  "emptyBrowserSub": "跟你的 agent 说，或者把照片、视频拖进来",
-  "openChat": "打开对话",
-  "dropHere": "松手，加进项目",
   "copied": "已复制，贴给你的 agent",
   "remove": "去掉",
   "teachBox": "拖动，圈出要改的地方",
@@ -17,7 +12,6 @@
   "play": "播放",
   "pause": "暂停",
   "notRead": "现在读不了 film.html。",
-  "importing": "正在加进项目…",
   "sheetTitle": "放映怎么用",
   "kPlay": "播放 / 暂停",
   "kStep": "后退 / 前进 5 秒",

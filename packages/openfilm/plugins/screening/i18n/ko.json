@@ -1,9 +1,4 @@
 {
-  "emptyTitle": "무엇을 만들고 싶나요?",
-  "emptySub": "또는 사진과 영상을 여기에 끌어다 놓으세요",
-  "emptyBrowserSub": "에이전트에게 말하거나, 사진과 영상을 끌어다 놓으세요",
-  "openChat": "채팅 열기",
-  "dropHere": "놓으면 프로젝트에 추가",
   "copied": "복사했습니다. 에이전트에게 붙여 넣으세요",
   "remove": "빼기",
   "teachBox": "드래그해서 고칠 곳을 표시",
@@ -17,7 +12,6 @@
   "play": "재생",
   "pause": "일시정지",
   "notRead": "지금은 film.html을 읽을 수 없습니다.",
-  "importing": "프로젝트에 추가하는 중…",
   "sheetTitle": "시사 사용법",
   "kPlay": "재생 / 일시정지",
   "kStep": "5초 뒤로 / 앞으로",

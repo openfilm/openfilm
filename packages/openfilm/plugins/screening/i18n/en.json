@@ -1,9 +1,4 @@
 {
-  "emptyTitle": "What do you want to make?",
-  "emptySub": "Or drop your photos and videos here",
-  "emptyBrowserSub": "Tell your agent, or drop your photos and videos here",
-  "openChat": "Open the chat",
-  "dropHere": "Drop to add to the project",
   "copied": "Copied. Paste it to your agent",
   "remove": "Remove",
   "teachBox": "Drag to circle what to change",
@@ -17,7 +12,6 @@
   "play": "Play",
   "pause": "Pause",
   "notRead": "film.html can't be read right now.",
-  "importing": "Adding to the project…",
   "sheetTitle": "How Screening works",
   "kPlay": "Play / pause",
   "kStep": "Back / forward 5 s",

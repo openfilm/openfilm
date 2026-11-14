@@ -1,9 +1,4 @@
 {
-  "emptyTitle": "何を作りたいですか？",
-  "emptySub": "または写真や動画をここにドロップ",
-  "emptyBrowserSub": "エージェントに伝えるか、写真や動画をここにドロップ",
-  "openChat": "チャットを開く",
-  "dropHere": "ドロップしてプロジェクトに追加",
   "copied": "コピーしました。エージェントに貼り付けてください",
   "remove": "外す",
   "teachBox": "ドラッグで直したい所を囲む",
@@ -17,7 +12,6 @@
   "play": "再生",
   "pause": "一時停止",
   "notRead": "film.html を読み込めません。",
-  "importing": "プロジェクトに追加中…",
   "sheetTitle": "試写の使い方",
   "kPlay": "再生 / 一時停止",
   "kStep": "5 秒戻る / 進む",

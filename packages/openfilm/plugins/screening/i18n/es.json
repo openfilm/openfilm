@@ -1,9 +1,4 @@
 {
-  "emptyTitle": "¿Qué quieres hacer?",
-  "emptySub": "O suelta aquí tus fotos y vídeos",
-  "emptyBrowserSub": "Díselo a tu agente, o suelta aquí tus fotos y vídeos",
-  "openChat": "Abrir el chat",
-  "dropHere": "Suelta para añadir al proyecto",
   "copied": "Copiado. Pégalo a tu agente",
   "remove": "Quitar",
   "teachBox": "Arrastra para marcar qué cambiar",
@@ -17,7 +12,6 @@
   "play": "Reproducir",
   "pause": "Pausa",
   "notRead": "Ahora no se puede leer film.html.",
-  "importing": "Añadiendo al proyecto…",
   "sheetTitle": "Cómo funciona Proyección",
   "kPlay": "Reproducir / pausa",
   "kStep": "Atrás / adelante 5 s",

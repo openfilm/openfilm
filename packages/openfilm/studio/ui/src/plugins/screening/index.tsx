@@ -1,8 +1,8 @@
 /**
  * The screening room, as the element its plugin brings (plugins/screening): the film played large, as it will be
  * exported, and the plainest ways to point at what to change, each a reference in the app's chat for the person to say
- * what they want there: this moment, a part of the picture circled, a stretch of picture, sound or captions dragged on
- * the strip, a shot, a sound, a caption, the whole film. Nothing here edits the film. When the film changes (the
+ * what they want there: a moment or a stretch, picked over the strip of its frames, and a part of the picture, circled
+ * on it. Nothing here edits the film, and nothing is brought in here (the chat takes files). When the film changes (the
  * agent's work), the places are counted and played one after another. It reaches Studio only through its public
  * interface (`openfilm/studio`), as any plugin's element does, and plays the film with the page's own player.
  */
@@ -107,7 +107,6 @@ function Screening({ projectId }: { projectId: string }) {
   const [draft, setDraft] = React.useState<StudioRef[]>([]);
   const [copied, setCopied] = React.useState<StudioRef[]>([]);
   const [watching, setWatching] = React.useState<{ ranges: Range[]; i: number } | null>(null);
-  const [dropping, setDropping] = React.useState(false);
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const preview = React.useRef<PreviewHandle>(null);
   const player = React.useRef<Player | null>(null);
@@ -372,24 +371,10 @@ function Screening({ projectId }: { projectId: string }) {
     return () => window.removeEventListener('keydown', press, true);
   }, [shown, toggle, pause, seek, pointMoment, changes, watchChange, cycleSpeed, toggleFull, sheetOpen, watching]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── files dropped: into the project, and pointed at ── */
-  const drop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setDropping(false);
-    const files = [...e.dataTransfer.files];
-    if (!files.length) return;
-    toast(w('importing'));
-    try {
-      const paths = await project(projectId).importFiles(files, { into: 'assets' });
-      for (const path of paths) {
-        const fileKind = /\.(mp4|mov|m4v|webm|mkv)$/i.test(path) ? 'video' : /\.(mp3|wav|m4a|aac|flac|ogg)$/i.test(path) ? 'audio' : 'image';
-        refer({ kind: 'file', path, fileKind });
-      }
-    } catch (error) { toast(error instanceof Error ? error.message : String(error), { error: true }); }
-  };
-
   if (!state || !folder) return <div className="h-full bg-[var(--bg-viewer)]" />;
+  /* a film with nothing in it yet: its picture black, the bar and its controls there but out of use, as the edit's */
   const empty = film != null && !blocks.picture.length && !blocks.sound.length;
+  const idle = empty || !duration;
   const steps = (['watch', 'time', 'picture', 'say'] as const).map((art) => ({ art, title: w(`${art}Title`), text: w(`${art}Text`) }));
   const sheet = [
     { title: w('gWatch'), items: [
@@ -421,18 +406,17 @@ function Screening({ projectId }: { projectId: string }) {
   ) : null;
 
   return (
-    <div ref={room} data-screening="" className={`relative flex h-full min-h-0 w-full flex-col gap-2 px-6 pb-2 pt-4 text-[var(--text)] ${full ? 'bg-black' : 'bg-[var(--bg-viewer)]'}`}
-      onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropping(true); } }}
-      onDragLeave={(e) => { if (e.currentTarget === e.target) setDropping(false); }}
-      onDrop={(e) => { void drop(e); }}>
+    <div ref={room} data-screening="" className={`relative flex h-full min-h-0 w-full flex-col gap-2 px-6 pb-2 pt-4 text-[var(--text)] ${full ? 'bg-black' : 'bg-[var(--bg-viewer)]'}`}>
       <Stage stage={stage} folder={folder} preview={preview} time={() => player.current?.time() ?? 0} onInfo={onInfo}
         marks={marks} clock={time} playing={playing} hint={used.box ? null : w('teachBox')}
         unread={unread ? w('notRead') : null} over={floating} removeLabel={w('remove')}
-        empty={empty ? { title: w('emptyTitle'), sub: state.chat ? w('emptySub') : w('emptyBrowserSub'), ...(state.chat && !state.chat.open ? { openChat: { label: w('openChat'), onOpen: state.chat.toggle } } : {}) } : null}
+        idle={idle}
         onFit={setFit} onToggle={toggle} onDragStart={pause} onBox={pointBox} onRemove={(m) => unrefer(m.ref)} stateOf={stateOf} onHoverMark={hoverMark} />
-      {empty ? null : (
-        /* under the picture and as wide: the marks and the progress bar, then the player's row of controls */
-        <div className="mx-auto flex w-full shrink-0 flex-col" style={{ maxWidth: Math.max(560, fit) }}>
+      {/* under the picture and as wide: the marks and the progress bar, then the player's row of controls; with nothing
+          to play, greyed and out of use */}
+      {(
+        <div aria-disabled={idle || undefined} inert={idle}
+          className={`mx-auto flex w-full shrink-0 flex-col transition-opacity ${idle ? 'pointer-events-none select-none opacity-35' : ''}`} style={{ maxWidth: Math.max(560, fit) }}>
           <Scrubber ref={scrubber} duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks} changes={changes}
             words={{
               go: w('go'), remove: w('remove'), lane: used.moment && used.range ? null : w('laneEmpty'),
@@ -461,11 +445,6 @@ function Screening({ projectId }: { projectId: string }) {
         </div>
       )}
       {held || sheetOpen ? <ShortcutSheet title={w('sheetTitle')} steps={steps} keysTitle={w('keysTitle')} groups={sheet} hold={{ keys: [MOD], label: w('kHold') }} onClose={held ? undefined : () => setSheetOpen(false)} /> : null}
-      {dropping ? (
-        <div className="pointer-events-none absolute inset-3 z-30 grid place-items-center rounded-2xl border-2 border-dashed border-[color:var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[15px] font-medium text-[var(--accent)]">
-          {w('dropHere')}
-        </div>
-      ) : null}
     </div>
   );
 }
