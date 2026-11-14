@@ -928,7 +928,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       .find((n) => n?.type === 'note' && n.data.text.startsWith(tag));
     if (!picksAnything(pick)) { if (held) remove([held.id]); return; }
     const names = ([['body', pick.body], ['lens', pick.lens], ['focal', pick.focal], ['aperture', pick.aperture]] as const)
-      .filter(([, v]) => v !== 'auto').map(([k, v]) => (k === 'focal' ? `${v}mm` : t(`canvas.camera.${GROUP[k]}.${v}`)));
+      .filter(([, v]) => v !== 'auto').map(([k, v]) => (k === 'focal' ? `${v}mm` : t(`canvas.camera.${GROUP[k]}.${v.replace('.', '_')}`)));
     const text = `${tag}${names.join(' · ')} — ${cameraWords(pick)}`;
     willChange();
     if (held) { setNodes((list) => list.map((n) => (n.id === held.id ? { ...n, data: { ...n.data, text } } as BoardNode : n))); return; }

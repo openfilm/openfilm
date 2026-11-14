@@ -58,7 +58,7 @@ export function CameraPicker({ start, onClose, onPick }: { start?: CameraPick; o
   const [pick, setPick] = React.useState<CameraPick>(start ?? NO_CAMERA);
   const [active, setActive] = React.useState<Wheel>('body');
   const wheelAt = React.useRef(0);
-  const name = (wheel: Wheel, id: string) => (wheel === 'focal' && id !== 'auto' ? `${id}mm` : t(`canvas.camera.${GROUP[wheel]}.${id}`));
+  const name = (wheel: Wheel, id: string) => (wheel === 'focal' && id !== 'auto' ? `${id}mm` : t(`canvas.camera.${GROUP[wheel]}.${id.replace('.', '_')}`));
   const turn = (wheel: Wheel, by: number) => {
     const list = WHEELS.find(([w]) => w === wheel)![1];
     setPick((p) => {
