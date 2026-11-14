@@ -135,6 +135,19 @@ test('ties go to the person: an undo back to an older value stands over a write 
   assert.deepEqual(out.kept, ['field\0t\0at']);
 });
 
+test('an agent that swaps a clip for another, then takes that one out, has it out (no edit of the person\'s at stake)', () => {
+  /* its write is as near to the version before the swap (wipe gone too) as to its own swap (glitch gone) */
+  const v0 = film([page('sweep', { at: 3 }), page('wipe', { at: 8 })], [page('title')]);
+  const v1 = mod(v0, (f) => { f.tracks[0].clips[1] = page('glitch', { at: 8 }); });
+  const out = mergeWrite({ ours: v1, write: mod(v1, (f) => { f.tracks[0].clips.pop(); }), versions: versionsOf(v0, v1), mine: [] });
+  assert.deepEqual(ids(out.value), [['sweep'], ['title']]);
+  assert.deepEqual(out.kept, []);
+  /* the person's own swap, on such a tie: their clip stays, and the writer is told */
+  const theirs = mergeWrite({ ours: v1, write: mod(v1, (f) => { f.tracks[0].clips.pop(); }), versions: versionsOf(v0, v1), mine: ['clip\0glitch'] });
+  assert.deepEqual(ids(theirs.value), [['sweep', 'glitch'], ['title']]);
+  assert.deepEqual(theirs.kept, ['clip\0glitch']);
+});
+
 test('notes the write agrees with: one naming a clip\'s unit, and one naming no clip (the stage), by the whole film', () => {
   const v0 = film([page('t', { at: 1 })]);
   const ours = mod(v0, (f) => { clip(f, 't').at = 4; f.stage = { w: 1080, h: 1920 }; });
@@ -754,7 +767,8 @@ async function run(seed, { cap = 6, steps = 60 } = {}) {
         const [t, o, w2, g] = [FT, FO, FW, FR].map((m) => m.has(`there ${id}`));
         const facts = [...FO.keys(), ...FW.keys(), ...FT.keys()].filter((k) => k.endsWith(` ${id}`) && !k.startsWith('there '));
         const changedByPerson = t && o && facts.some((k) => !same(FO.get(k), FT.get(k)) && mine.has(k));
-        if (!t && o) { assert.ok(g, `${where}: ${id}, added by the person, is gone`); continue; }
+        /* added since the writer's copy: it stays; another write's, on a tie, gives way to this write, as a field does */
+        if (!t && o) { assert.ok(g || (tie && !mine.has(`there ${id}`)), `${where}: ${id}, added ${mine.has(`there ${id}`) ? 'by the person' : 'by a write, with no tie'}, is gone`); continue; }
         if (t && !o) {
           /* removed: by the person, it stays so; by a write, the writer's changes to it bring it back */
           const wrote = w2 && facts.some((k) => !same(FW.get(k), FT.get(k)));

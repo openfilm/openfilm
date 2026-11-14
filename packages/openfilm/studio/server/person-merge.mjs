@@ -386,7 +386,8 @@ function renamed(/** @type {FilmValue} */ film, /** @type {Map<string, string>} 
 /**
  * A write of someone else's merged into `ours` (Studio's film), from the version the writer's copy is inferred to be:
  * of `versions` (kept, oldest first), the oldest of those it is closest to (`compare`), where the person's values stand
- * in every unit the others as near differ in (ties go to the person); or, where an agent passed on a note (`acks`: the
+ * in every unit the others as near differ in (ties go to the person); where those as near differ in nothing of
+ * the person's (`mine`), the newest of them; or, where an agent passed on a note (`acks`: the
  * version Studio had then, by index, and the units the note named; newest last), that version, when the write is as
  * near to it as to any, or differs from it only in what the note named (the agent knew the person's values, and
  * changed them), where the person's still stand in what the versions nearest differ from it in, but what the note
@@ -495,6 +496,14 @@ export function mergeWrite({ ours, write, versions, over = [], gaps = [], added 
     const since = compare(keepFilm(ours), versions[index]).apart;
     const has = new Set(compare(w, keepFilm(ours)).apart);
     const back = all[index].distance === 0 || all[index].apart.some((k) => since.includes(k) && !has.has(k)) ? since.filter((k) => !owns(k)) : [];
+    /* ties go to the person, where the person is: where the versions as near differ in no clip the person touched,
+       nor in the order or the stage they changed (each a write's), the newest is the copy, as an agent reads before it writes (one that swapped a clip for another and
+       takes that one out is as near to the version before its swap as to the swap) */
+    const last = tied[tied.length - 1];
+    const apart = [...unsure(index)].flatMap(asItWas);
+    const touched = new Set(apart.map((k) => k.split('\0')[1]).filter(Boolean));
+    const anyMine = mineSet && [...mineSet].some((m) => touched.has(m.split('\0')[1]) || (!m.split('\0')[1] && apart.includes(m)));
+    if (mineSet && last !== index && !anyMine) return { index: last, doubt: new Set(gapped(last)), note: -1, tied };
     return { index, doubt: new Set([...unsure(index), ...gapped(index), ...back]), note: -1, tied };
   };
   /* clips the write may have renamed (one with an id no version has, one of the same file a version has under an id the
