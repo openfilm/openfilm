@@ -9,6 +9,10 @@
  * (`--no-build` skips both). Electron gets a clean environment: run from inside Claude Code or Codex, this
  * process carries their variables, which the app's agents would inherit (src/environment.mjs). Arguments after the
  * script go to Electron as they are (e.g. --remote-debugging-port=9333).
+ *
+ * `--lane <name>` runs a lane of it instead (src/flavor.mjs devIdentity): "OpenFilm Dev <name>", its own app beside
+ * OpenFilm Dev and the other lanes, so several checkouts (a branch each) can be tried at once. Running it again
+ * restarts that lane only.
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -16,13 +20,23 @@ import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launcherEnvironment, loginShellEnvironment } from '../src/environment.mjs';
-import { FLAVORS } from '../src/flavor.mjs';
+import { devIdentity, LANE } from '../src/flavor.mjs';
 
 process.env.OPENFILM_DESKTOP_FLAVOR = 'dev';
-const identity = FLAVORS.dev;
+let args = process.argv.slice(2).filter((a) => a !== '--no-build');
+const at = args.indexOf('--lane');
+if (at >= 0) {
+  const lane = args[at + 1] ?? '';
+  if (!LANE.test(lane)) {
+    console.error('--lane takes a name: lowercase letters, digits and dashes, starting with a letter (e.g. --lane sound).');
+    process.exit(2);
+  }
+  process.env.OPENFILM_DEV_LANE = lane;
+  args = args.filter((_, i) => i !== at && i !== at + 1);
+} else delete process.env.OPENFILM_DEV_LANE;
+const identity = devIdentity(process.env.OPENFILM_DEV_LANE);
 const require = createRequire(import.meta.url);
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const args = process.argv.slice(2).filter((a) => a !== '--no-build');
 
 /** The OpenFilm Dev apps running now (their main process), wherever they were started from. */
 function running() {
@@ -59,7 +73,7 @@ if (process.platform === 'darwin') {
   const version = require('electron/package.json').version;
   const productVersion = require('../package.json').version;
   /* .dev/ is git-ignored */
-  const runtime = join(desktop, '.dev', 'runtime', `${version}-openfilm-dev-v2-${productVersion}`);
+  const runtime = join(desktop, '.dev', 'runtime', `${version}-openfilm-dev-v2-${productVersion}${process.env.OPENFILM_DEV_LANE ? `-${process.env.OPENFILM_DEV_LANE}` : ''}`);
   const bundle = join(runtime, `${identity.productName}.app`);
   const marker = join(runtime, 'ready');
   /* the executable keeps Electron's own name: Electron decides `app.isPackaged` from it. The name people see comes
@@ -82,6 +96,20 @@ if (process.platform === 'darwin') {
     execFileSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', bundle], { stdio: 'ignore' });
     execFileSync('/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister', ['-f', bundle]);
     writeFileSync(marker, version);
+  }
+}
+
+/* a lane's port is taken from its name: two names may meet, so one in use by something else is said, not fought over */
+if (process.env.OPENFILM_DEV_LANE) {
+  const { createServer } = await import('node:net');
+  const free = (/** @type {number} */ port) => new Promise((done) => {
+    const server = createServer().once('error', () => done(false)).listen(port, '127.0.0.1', () => server.close(() => done(true)));
+  });
+  for (const port of [identity.studioPort, identity.studioPort + 1, identity.studioPort + 2]) {
+    if (!(await free(port))) {
+      console.error(`Port ${port}, which ${identity.productName}'s Studio uses, is taken by another program. Pick another lane name.`);
+      process.exit(1);
+    }
   }
 }
 
