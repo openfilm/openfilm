@@ -156,6 +156,15 @@ function Frame({ id, selected, icon: Icon, title, meta, by, note, end, aspect, c
   const board = useBoard();
   const far = useStore(farSelector);
   const resizing = useStore((state) => Boolean(state.nodeLookup.get(id)?.resizing));
+  /* a card off its picture's shape (stretched before it was kept to it): put back in it, as wide as it is */
+  const shapeOff = useStore((state) => {
+    const node = state.nodeLookup.get(id);
+    const w = node?.width ?? node?.measured?.width; const h = node?.height ?? node?.measured?.height;
+    return aspect && w && h && !node?.resizing && Math.abs(w / h - aspect) / aspect > 0.02 ? Math.round(w) : 0;
+  });
+  React.useEffect(() => {
+    if (shapeOff && aspect && !board.readOnly) board.resize(id, { w: shapeOff, h: Math.round(shapeOff / aspect) });
+  }, [shapeOff, aspect]); // eslint-disable-line react-hooks/exhaustive-deps
   const updateNodeInternals = useUpdateNodeInternals();
   const handleLayout = pending ? 'pending' : board.readOnly ? 'anchors' : `${ins !== false}/${outs !== false}`;
   const previousHandleLayout = React.useRef(handleLayout);
