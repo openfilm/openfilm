@@ -1,6 +1,6 @@
 /**
  * The film along a line, as a strip of its frames, the playhead a line on it: a click goes there, a drag runs the
- * picture along. What is pointed at and what the agent changed are marked on it. Scrolling or pinching over it brings
+ * picture along. What is pointed at is marked on it. Scrolling or pinching over it brings
  * the film closer (down to a second across the strip) or farther, around the pointer; sideways (or with ⇧) moves along
  * it, as does a drag held past either end.
  *
@@ -10,7 +10,7 @@
 import * as React from 'react';
 import { Plus, X } from 'lucide-react';
 import type { StudioRef } from '@/lib/host';
-import { fitted, tickStep, tileStep, timeLabel, timeOf, zoomed, type Clock, type Range, type View } from './screening-model';
+import { fitted, tickStep, tileStep, timeLabel, timeOf, zoomed, type Clock, type View } from './screening-model';
 
 /** A value of a Clock, kept current in React. */
 export function useClock(source: Clock): number {
@@ -47,7 +47,7 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
   aspect: number;
   /** the address of the film's picture at `t` s, `w` px wide, for a picture standing for `step` s; undefined: none */
   frameAt: (t: number, w: number, step: number) => string | undefined;
-  marks: readonly Mark[]; changes: readonly Range[];
+  marks: readonly Mark[];
   /**
    * `lane`: said in the empty marks row (null: nothing); `laneHints`, `barHints`: how each is used, said under the time
    * while the pointer is on it
@@ -59,7 +59,7 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
   stateOf: (ref: StudioRef) => MarkState; onHoverMark: (ref: StudioRef | null) => void;
   /** the part of the film the bar shows now */
   onView: (view: View) => void;
-}>(function Scrubber({ duration, clock, aspect, frameAt, marks, changes, words, onSeek, onMoment, onRange, onGo, onRemove, stateOf, onHoverMark, onView }, handle) {
+}>(function Scrubber({ duration, clock, aspect, frameAt, marks, words, onSeek, onMoment, onRange, onGo, onRemove, stateOf, onHoverMark, onView }, handle) {
   const wrap = React.useRef<HTMLDivElement>(null);
   const strip = React.useRef<HTMLDivElement>(null);
   const width = useWidth(strip);
@@ -256,8 +256,7 @@ export const Scrubber = React.forwardRef<ScrubberHandle, {
           <span className="absolute inset-0 rounded-[6px] shadow-[inset_0_0_0_1px_rgb(255_255_255/.08)]" />
           {/* closer in: a line every so often, so a second can be told */}
           {ticks.map((t) => <span key={t} className="absolute top-0 h-[5px] w-px bg-white/60" style={{ left: x(t) }} />)}
-          {/* the changes; what is pointed at, carried down from the marks */}
-          {changes.map((c, i) => (seen(c.start, c.end) ? <span key={`c${i}`} className="absolute inset-y-0 bg-[color-mix(in_srgb,var(--warn)_22%,transparent)] shadow-[inset_0_-3px_0_var(--warn)]" style={{ left: left(Math.max(c.start, v.from)), width: across(c.start, c.end) }} /> : null))}
+          {/* what is pointed at, carried down from the marks */}
           {marks.map((m) => (m.ref.kind === 'range' && m.ref.end - m.ref.start < duration - 0.05 && seen(m.ref.start, m.ref.end)
             ? <span key={`r${m.n}`} className={`absolute inset-y-0 transition-colors ${stateOf(m.ref) ? 'bg-[color-mix(in_srgb,var(--accent)_34%,transparent)]' : 'bg-[color-mix(in_srgb,var(--accent)_16%,transparent)]'}`} style={{ left: left(Math.max(m.ref.start, v.from)), width: across(m.ref.start, m.ref.end) }} />
             : null))}

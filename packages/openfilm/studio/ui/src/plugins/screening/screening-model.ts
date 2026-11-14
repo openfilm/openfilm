@@ -1,16 +1,11 @@
 /**
  * What the screening room works out from the film, apart from drawing it: the lines of a caption track, a reference as
- * a link for an agent outside the app, a time as people read it, and what changed between two versions of the film.
+ * a link for an agent outside the app, and a time as people read it.
  */
-import type { Clip, Film } from '@/api';
-import type { ClipSpan } from '@/lib/film-shape';
 import type { StudioRef } from '@/lib/host';
 
 /** A line of a caption track: its span on the film (s), its words, and its number in the file (from 1). */
 export interface Cue { start: number; end: number; text: string; index: number }
-
-/** A stretch of the film, s. */
-export interface Range { start: number; end: number }
 
 const secondsOf = (stamp: string): number => {
   const parts = stamp.trim().split(':').map(Number);
@@ -82,41 +77,6 @@ export function sameRef(a: StudioRef, b: StudioRef): boolean {
     case 'file': return b.kind === 'file' && a.path === b.path;
     default: return false;
   }
-}
-
-/** Every clip of a film by its id. */
-const clipsOf = (film: Film | null): Map<string, Clip> => new Map((film?.tracks ?? []).flatMap((t) => t.clips.map((c) => [c.id, c] as const)));
-
-/**
- * Where the film changed from `before` to `after`: each clip added, taken out or changed (by its id), where it plays
- * now (a clip taken out: where the clip after it starts, a moment), joined where they touch, in order. `spans`: where
- * `after`'s clips play. Nothing when there was no film before.
- */
-export function changedRanges(before: Film | null, after: Film | null, spans: readonly ClipSpan[]): Range[] {
-  if (!before || !after || before === after) return [];
-  const was = clipsOf(before), now = clipsOf(after);
-  const placed = new Map(spans.map((s) => [s.id, s]));
-  const out: Range[] = [];
-  for (const [id, clip] of now) {
-    const old = was.get(id);
-    if (old && JSON.stringify(old) === JSON.stringify(clip)) continue;
-    const span = placed.get(id);
-    if (span) out.push({ start: span.at, end: span.end });
-  }
-  /* a clip taken out leaves a moment where it was: its own start if it had one written, else nothing to show */
-  for (const [id, clip] of was) {
-    if (now.has(id)) continue;
-    const at = clip.at ?? null;
-    if (at != null) out.push({ start: at, end: at + 0.5 });
-  }
-  out.sort((a, b) => a.start - b.start);
-  const joined: Range[] = [];
-  for (const r of out) {
-    const last = joined[joined.length - 1];
-    if (last && r.start <= last.end + 0.05) last.end = Math.max(last.end, r.end);
-    else joined.push({ ...r });
-  }
-  return joined;
 }
 
 /** A value several are told of as it changes (the time while the film plays): read with React's useSyncExternalStore. */

@@ -3,7 +3,7 @@
  * pauses it; a drag circles a part of it to point at (stopped, the pointer is a crosshair for it, and until a box has
  * been drawn once it says so). With nothing to play yet it is black, and out of use.
  * The boxes the message being written points at are drawn at their moment, each with its number and its way to take it
- * out. What is said over the picture (the changes, that hint) floats at its top, so the picture keeps its size.
+ * out. What is said over the picture (how to circle a part) floats at its top, so the picture keeps its size.
  */
 import * as React from 'react';
 import { SquareDashed, X } from 'lucide-react';
@@ -13,13 +13,13 @@ import { REGION_MIN_PX } from '@/lib/studio-refs';
 import { useClock, type Mark, type MarkState } from './Scrubber';
 import type { Clock } from './screening-model';
 
-export function Stage({ stage, folder, preview, time, onInfo, marks, clock, playing, hint, idle, unread, over, onFit, onToggle, onDragStart, onBox, onRemove, removeLabel, stateOf, onHoverMark }: {
+export function Stage({ stage, folder, preview, time, onInfo, marks, clock, playing, hint, idle, unread, onFit, onToggle, onDragStart, onBox, onRemove, removeLabel, stateOf, onHoverMark }: {
   stage: { w: number; h: number }; folder: string; preview: React.RefObject<PreviewHandle | null>; time: () => number;
   onInfo: (info: FilmInfo) => void; marks: readonly Mark[]; clock: Clock; playing: boolean;
   /** said over the picture while the pointer is on it, stopped: how to circle a part */
   hint: string | null;
   /** nothing to play yet: the picture black and out of use, as the edit's */
-  idle: boolean; unread: string | null; over: React.ReactNode;
+  idle: boolean; unread: string | null;
   /** the picture's width on screen, px, each time it changes */
   onFit: (width: number) => void;
   onToggle: () => void; onDragStart: () => void; onBox: (box: StageBox) => void; onRemove: (mark: Mark) => void; removeLabel: string;
@@ -75,7 +75,6 @@ export function Stage({ stage, folder, preview, time, onInfo, marks, clock, play
         ) : null}
       </div>
       <div data-capture-hide="" className="pointer-events-none absolute inset-x-0 top-4 z-10 flex flex-col items-center gap-2 px-4">
-        {over}
         {hint && inside && !drag && !playing && !idle && !unread ? (
           <span className="flex h-8 items-center gap-1.5 rounded-full bg-black/65 px-3.5 text-[12px] font-medium text-white shadow-[0_8px_24px_rgb(0_0_0/.35)] backdrop-blur-xl">
             <SquareDashed size={13} className="text-[var(--accent)]" />{hint}

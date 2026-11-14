@@ -2,15 +2,13 @@
  * The screening room, as the element its plugin brings (plugins/screening): the film played large, as it will be
  * exported, and the plainest ways to point at what to change, each a reference in the app's chat for the person to say
  * what they want there: a moment or a stretch, picked over the strip of its frames, and a part of the picture, circled
- * on it. Nothing here edits the film, and nothing is brought in here (the chat takes files). When the film changes (the
- * agent's work), the places are counted and played one after another. It reaches Studio only through its public
+ * on it. Nothing here edits the film, and nothing is brought in here (the chat takes files). It reaches Studio only through its public
  * interface (`openfilm/studio`), as any plugin's element does, and plays the film with the page's own player.
  */
 import * as React from 'react';
 import { StrictMode } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
-import { ChevronLeft, ChevronRight, Play, X } from 'lucide-react';
 import { addPluginWords, useT } from '@/i18n';
 import { projectEvents, type Film as FilmValue } from '@/api';
 import { Player } from '@/editor/player';
@@ -22,7 +20,7 @@ import { momentRef, regionRef } from '@/lib/studio-refs';
 import { Tooltip } from '@/components/Tooltip';
 import { chat, links, onCommand, project, toast } from '@/studio';
 import { useBlock, useProject, useProvide } from '@/studio/react';
-import { changedRanges, clock, cuesOf, linkOf, sameRef, timeLabel, timeOf, type Clock, type Cue, type Range, type View } from './screening-model';
+import { clock, cuesOf, linkOf, sameRef, timeLabel, timeOf, type Clock, type Cue, type View } from './screening-model';
 import { Scrubber, useClock, type Mark, type MarkState, type ScrubberHandle } from './Scrubber';
 import { Btn, PATH_HELP, SpeedMenu } from './Controls';
 import { Icon, PATH_FULLSCREEN, PATH_FULLSCREEN_EXIT, PATH_PAUSE, PATH_PLAY, VolumeControl } from '@/components/player-controls/controls-bar';
@@ -31,7 +29,7 @@ import { Stage } from './Stage';
 
 addPluginWords('screening', import.meta.glob('../../../../../plugins/screening/i18n/*.json', { eager: true, import: 'default' }));
 
-/** The plugin's words: `w('changed', { n: 3 })`. */
+/** The plugin's words: `w('helpHold', { mod: '⌘' })`. */
 function useWords() {
   const t = useT();
   return React.useCallback((key: string, values: Record<string, string | number> = {}) => (
@@ -43,8 +41,6 @@ const STAGE = { w: 1920, h: 1080 };
 /** How far ← → step, s; with ⇧, one frame. */
 const STEP_S = 5;
 const FRAME_S = 1 / 30;
-/** Before each change watched, this much of what comes before it, s. */
-const LEAD_S = 1;
 const SPEEDS = [1, 1.5, 2] as const;
 /** How long a mark found rings, ms. */
 const FLASH_MS = 1600;
@@ -91,8 +87,6 @@ function Screening({ projectId }: { projectId: string }) {
   const state = useProject(projectId);
   const [film, setFilm] = React.useState<FilmValue | null>(null);
   const [unread, setUnread] = React.useState(false);
-  /* the film as it was when the person last looked: what changed since is counted */
-  const [seen, setSeen] = React.useState<FilmValue | null>(null);
   const [info, setInfo] = React.useState<FilmInfo | null>(null);
   const time = React.useMemo(() => clock(0), []);
   const [playing, setPlaying] = React.useState(false);
@@ -107,7 +101,6 @@ function Screening({ projectId }: { projectId: string }) {
   /* what the message being written points at (the chat says, numbered as it numbers them); with no chat, what was copied */
   const [draft, setDraft] = React.useState<StudioRef[]>([]);
   const [copied, setCopied] = React.useState<StudioRef[]>([]);
-  const [watching, setWatching] = React.useState<{ ranges: Range[]; i: number } | null>(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const preview = React.useRef<PreviewHandle>(null);
   const player = React.useRef<Player | null>(null);
@@ -128,7 +121,6 @@ function Screening({ projectId }: { projectId: string }) {
       if (!got.value) { setUnread(!got.missing); return; }
       setUnread(false);
       setFilm(got.value as FilmValue);
-      setSeen((was) => was ?? (got.value as FilmValue));
     } catch { setUnread(true); }
   }, [projectId]);
   React.useEffect(() => { void read(); return projectEvents(projectId, (e) => { if (e.type === 'film') void read(); }); }, [projectId, read]);
@@ -187,9 +179,7 @@ function Screening({ projectId }: { projectId: string }) {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void room.current?.requestFullscreen();
   }, []);
-  /* while it plays: the time, the end, and the next change watched */
-  const watchingRef = React.useRef(watching);
-  watchingRef.current = watching;
+  /* while it plays: the time, and the end */
   React.useEffect(() => {
     if (!playing) return;
     let frame = 0;
@@ -197,21 +187,12 @@ function Screening({ projectId }: { projectId: string }) {
       const p = player.current!;
       const t = p.time();
       time.set(t);
-      const now = watchingRef.current;
-      if (now) {
-        const range = now.ranges[now.i]!;
-        if (t >= range.end + 0.3) {
-          const next = now.i + 1;
-          if (next < now.ranges.length) { setWatching({ ...now, i: next }); seek(Math.max(0, now.ranges[next]!.start - LEAD_S)); }
-          else { pause(); return; }
-        }
-      }
       if (!p.playing || t >= p.duration - 1e-3) { pause(); return; }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [playing, pause, seek, time]);
+  }, [playing, pause, time]);
   React.useEffect(() => { if (!shown) { pause(); setSheetOpen(false); } }, [shown, pause]);
 
   /* ── captions: each caption track's lines ── */
@@ -337,17 +318,6 @@ function Screening({ projectId }: { projectId: string }) {
     return undefined;
   }, [blocks, state?.files, projectId]);
 
-  /* ── what changed since the person last looked ── */
-  const changes = React.useMemo(() => changedRanges(seen, film, info?.spans ?? []), [seen, film, info]);
-  const watchChange = React.useCallback((i: number) => {
-    if (!changes.length) return;
-    const at = Math.max(0, Math.min(i, changes.length - 1));
-    setWatching({ ranges: changes, i: at });
-    seek(Math.max(0, changes[at]!.start - LEAD_S));
-    play();
-  }, [changes, seek, play]);
-  const closeChanges = React.useCallback(() => { setSeen(film); setWatching(null); }, [film]);
-
   /* ── keys, while the screening room is shown ── */
   React.useEffect(() => {
     if (!shown) return;
@@ -360,18 +330,17 @@ function Screening({ projectId }: { projectId: string }) {
       else if (key === 'ArrowLeft' || key === 'ArrowRight') { take(); pause(); seek(now() + (key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? FRAME_S : STEP_S)); }
       else if (key === 'm') { take(); pointMoment(); }
       else if (key === '?') { take(); setSheetOpen((open) => !open); }
-      else if (key === 'c' && changes.length) { take(); watchChange(0); }
       else if (key === 's') { take(); cycleSpeed(); }
       else if (key === 'k') { take(); toggle(); }
       else if (key === 'f') { take(); toggleFull(); }
       else if (key === '=' || key === '+') { take(); scrubber.current?.zoomIn(); }
       else if (key === '-') { take(); scrubber.current?.zoomOut(); }
       else if (key === '0') { take(); scrubber.current?.whole(); }
-      else if (key === 'Escape' && (sheetOpen || watching)) { take(); setSheetOpen(false); if (watching) { pause(); setWatching(null); } }
+      else if (key === 'Escape' && sheetOpen) { take(); setSheetOpen(false); }
     };
     window.addEventListener('keydown', press, true);
     return () => window.removeEventListener('keydown', press, true);
-  }, [shown, toggle, pause, seek, pointMoment, changes, watchChange, cycleSpeed, toggleFull, sheetOpen, watching]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shown, toggle, pause, seek, pointMoment, cycleSpeed, toggleFull, sheetOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* drawn into its block, which Studio lays out among the page's panels (the chat, the library) as its arrangement has it */
   if (!state || !folder) return createPortal(<div className="h-full bg-[var(--bg-viewer)]" />, block.slot);
@@ -385,41 +354,22 @@ function Screening({ projectId }: { projectId: string }) {
       { keys: ['+', '−'], label: w('kZoom') }, { keys: ['0'], label: w('kWhole') }, { keys: ['S'], label: w('kSpeed') }, { keys: ['F'], label: w('kFull') },
     ] },
     { title: w('gPoint'), items: [
-      { keys: ['M'], label: w('kMoment') }, { keys: ['C'], label: w('kChanges') }, { keys: ['Esc'], label: w('kCancel') }, { keys: ['?'], label: w('kHelp') },
+      { keys: ['M'], label: w('kMoment') }, { keys: ['Esc'], label: w('kCancel') }, { keys: ['?'], label: w('kHelp') },
     ] },
   ];
-  const floating = changes.length && !empty ? (
-    <Pill>
-      <span className="h-2 w-2 rounded-full bg-[var(--warn)]" />
-      <span className="tabular-nums">{watching ? `${watching.i + 1} / ${watching.ranges.length}` : changes.length === 1 ? w('changed1') : w('changed', { n: changes.length })}</span>
-      {watching ? (
-        <>
-          <PillButton label={w('prevChange')} onClick={() => watchChange(watching.i - 1)}><ChevronLeft size={15} /></PillButton>
-          <PillButton label={w('nextChange')} onClick={() => watchChange(watching.i + 1)}><ChevronRight size={15} /></PillButton>
-        </>
-      ) : (
-        <Tooltip label={w('watchChanges')} shortcut="C">
-          <button type="button" onClick={() => watchChange(0)} className="flex h-7 items-center gap-1.5 rounded-full bg-[var(--warn)] pl-2.5 pr-3 text-[12px] font-semibold text-black transition hover:brightness-110 active:scale-95">
-            <Play size={11} fill="currentColor" />{w('watchChanges')}
-          </button>
-        </Tooltip>
-      )}
-      <PillButton label={w('close')} onClick={closeChanges}><X size={14} /></PillButton>
-    </Pill>
-  ) : null;
 
   return createPortal(
     <div ref={room} data-screening="" className={`relative flex h-full min-h-0 w-full flex-col gap-2 px-6 pb-2 pt-4 text-[var(--text)] ${full ? 'bg-black' : 'bg-[var(--bg-viewer)]'}`}>
       <Stage stage={stage} folder={folder} preview={preview} time={() => player.current?.time() ?? 0} onInfo={onInfo}
         marks={marks} clock={time} playing={playing} hint={used.box ? null : w('teachBox')}
-        unread={unread ? w('notRead') : null} over={floating} removeLabel={w('remove')}
+        unread={unread ? w('notRead') : null} removeLabel={w('remove')}
         idle={idle}
         onFit={setFit} onToggle={toggle} onDragStart={pause} onBox={pointBox} onRemove={(m) => unrefer(m.ref)} stateOf={stateOf} onHoverMark={hoverMark} />
       {/* under the picture and as wide: the marks and the progress bar, then the player's row of controls; with nothing
           to play, what plays it greyed and out of use (how Screening is used is not: it needs no film) */}
       {(
         <div className="mx-auto flex w-full shrink-0 flex-col" style={{ maxWidth: Math.max(560, fit) }}>
-          <Idle idle={idle}><Scrubber ref={scrubber} duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks} changes={changes}
+          <Idle idle={idle}><Scrubber ref={scrubber} duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks}
             words={{
               go: w('go'), remove: w('remove'), lane: used.moment && used.range ? null : w('laneEmpty'),
               laneHints: [...(used.moment ? [] : [w('hintMoment')]), ...(used.range ? [] : [w('hintRange')])],
@@ -471,23 +421,6 @@ function TimeNow({ source, decimals, duration }: { source: Clock; decimals: numb
     <span className="ml-1.5 shrink-0 whitespace-nowrap text-[12.5px] tabular-nums text-white/90">
       {timeLabel(t, decimals)} <span className="text-white/60">/ {timeLabel(duration)}</span>
     </span>
-  );
-}
-
-/** What floats over the top of the picture. */
-function Pill({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="pointer-events-auto flex h-10 items-center gap-2.5 rounded-full border border-white/10 bg-black/65 pl-4 pr-1.5 text-[12.5px] font-medium text-white shadow-[0_10px_30px_rgb(0_0_0/.4)] backdrop-blur-xl">
-      {children}
-    </div>
-  );
-}
-
-function PillButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <Tooltip label={label}>
-      <button type="button" aria-label={label} onClick={onClick} className="grid h-7 w-7 place-items-center rounded-full text-white/75 transition hover:bg-white/15 hover:text-white">{children}</button>
-    </Tooltip>
   );
 }
 
