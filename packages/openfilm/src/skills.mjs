@@ -17,9 +17,11 @@
  *              (studio/server/skill-catalog.mjs), each the commit it was installed at, with where it came from in its
  *              `.source.json`. Every OpenFilm on this computer has the same ones.
  *
- * OpenFilm's own (coreSkills: `manual/` in this package, and its plugins' in their folders) are how a film is made,
- * its media and its canvas, which the system prompt lists (promptSkills): in every agent's hands while the plugin each goes with is on (src/plugins.mjs), never installed or
- * removed.
+ * OpenFilm's own (coreSkills: `manual/` in this package, and its plugins' in their folders) are never installed or
+ * removed. None is given to every agent: as a package names the packages it depends on, a plugin (src/plugins.mjs) and
+ * a skill name the skills they build on (openfilm.json `requires`: `film`, how a film is written; `media`), and an
+ * agent is given those the plugins on bring and require, each once, a skill after those it builds on (ownSkills). The
+ * system prompt lists them (promptSkills), saying what each builds on.
  *
  * Nothing here deletes a skill outright: one replaced or removed goes to the system's trash.
  *
@@ -36,7 +38,7 @@ import { moveToTrash } from '../studio/server/trash.mjs';
 import { pictureType } from '../studio/server/cover.mjs';
 import { parseRepoUrl } from '../studio/server/fetch-repo.mjs';
 import { libraryDefault, setSharedPref, sharedHome, sharedPref } from './locations.mjs';
-import { PLUGINS, pluginSkillDir, pluginsOffLine, skillsOfPluginsOff, tabOf } from './plugins.mjs';
+import { PLUGINS, pluginSkillDir, pluginStates, pluginsOffLine, skillNames, tabOf } from './plugins.mjs';
 import { readBlocks } from './plugin-blocks.mjs';
 
 const mkdirSyncSafe = (/** @type {string} */ dir) => mkdirSync(dir, { recursive: true });
@@ -347,8 +349,9 @@ export function parseSkillFile(text) {
  * @typedef {{ title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string> }} SkillShown
  *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title, a one-line summary and a few lines
  *   on who it is for and what it does, by language (`en`, `zh-CN`…); the SKILL.md's description is for the agent
- * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string, needs?: Record<string, string>, platforms?: SkillPlatform[], tab?: import('./plugins.mjs').PluginTab, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[] }} SkillLook
- *   where an app shows it (openfilm.json, each optional): `kind` a way of working or a look, `order` among its kind,
+ * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string, needs?: Record<string, string>, platforms?: SkillPlatform[], tab?: import('./plugins.mjs').PluginTab, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], requires?: string[] }} SkillLook
+ *   where an app shows it and what it builds on (openfilm.json, each optional): `requires` the skills an agent reads
+ *   before it (by name: ownSkills), `kind` a way of working or a look, `order` among its kind,
  *   `icon` a mark's name, `cover` a picture and `preview` a video in its folder, `repository` where its source is read,
  *   `needs` what it needs beyond OpenFilm (by language), `platforms` the computers it runs on (none: every one), `tab`
  *   a plugin's surface shown as a tab of the library instead of as a workbench (src/plugins.mjs tabOf), `blocks` the
@@ -385,6 +388,8 @@ function openfilmJson(folder) {
   if (Object.keys(needs).length) out.needs = needs;
   const platforms = Array.isArray(raw?.platforms) ? SKILL_PLATFORMS.filter((p) => raw.platforms.includes(p)) : [];
   if (platforms.length) out.platforms = platforms;
+  const requires = skillNames(raw?.requires);
+  if (requires.length) out.requires = requires;
   const tab = tabOf(raw?.tab, byLanguage);
   if (tab) out.tab = tab;
   const blocks = readBlocks(raw?.blocks);
@@ -509,8 +514,64 @@ export function usableSkills({ home, ...where } = {}) {
   return listSkills(where).filter((s) => !keeps(off, s));
 }
 
-/** OpenFilm's own skills by name, in the order agents are given them: how a film is made, its media, its canvas. */
-export const CORE_SKILLS = Object.freeze(['edit', 'media', 'canvas', 'motion', 'screening']);
+/** OpenFilm's own skills by name, in the order they are listed: how a film is written, its media, its canvas, its motion. */
+export const CORE_SKILLS = Object.freeze(['film', 'media', 'canvas', 'motion']);
+
+/** Names OpenFilm's own skills had before, read as their names now (`edit`, which became `film`). */
+const RENAMED = Object.freeze(/** @type {Record<string, string>} */ ({ edit: 'film' }));
+
+/**
+ * Skills as a package manager resolves dependencies: those `roots` name (each `[by, name]`), then what each of these
+ * requires (its `requires`), and so on, from `pool` by name; each once, a skill after those it builds on, in the order
+ * they were first named. `missing`: a name required that the pool has not, with who required it (the skill that
+ * required it is still given: told what it lacks, an agent works without it knowingly); `cycles`: skills that require
+ * each other, left out with what builds on them, so a skill is never given before what it builds on.
+ * @template {{ name: string, requires?: readonly string[] }} S
+ * @param {Iterable<readonly [string, string]>} roots @param {ReadonlyMap<string, S>} pool
+ * @returns {{ skills: S[], missing: Map<string, string[]>, cycles: string[][] }}
+ */
+export function requiredSkills(roots, pool) {
+  /** @type {S[]} */
+  const skills = [];
+  /** @type {Map<string, string[]>} */
+  const missing = new Map();
+  /** @type {string[][]} */
+  const cycles = [];
+  const done = new Set(), bad = new Set();
+  /** @param {string} name @param {string} by @param {string[]} chain @returns {boolean} whether it is given */
+  const visit = (name, by, chain) => {
+    if (done.has(name)) return true;
+    if (bad.has(name)) return false;
+    const at = chain.indexOf(name);
+    if (at >= 0) { cycles.push([...chain.slice(at), name]); for (const n of chain.slice(at)) bad.add(n); return false; }
+    const skill = pool.get(name);
+    if (!skill) { missing.set(name, [...new Set([...(missing.get(name) ?? []), by])]); return false; }
+    for (const need of skill.requires ?? []) visit(need, name, [...chain, name]);
+    /* left out when what it builds on (or it) is in a cycle; a name missing leaves it given */
+    if (bad.has(name) || (skill.requires ?? []).some((need) => bad.has(need))) { bad.add(name); return false; }
+    done.add(name);
+    skills.push(skill);
+    return true;
+  };
+  for (const [by, name] of roots) visit(name, by, []);
+  return { skills, missing, cycles };
+}
+
+/**
+ * The skills an agent is given of OpenFilm's own (requiredSkills): those the plugins on bring and require
+ * (src/plugins.mjs), and those `also` require (the person's own and a project's, given too), and what these require.
+ * @param {string} [home] @param {readonly { name: string, requires?: readonly string[] }[]} [also]
+ */
+export function ownSkills(home, also = []) {
+  /** @type {[string, string][]} */
+  const roots = [];
+  for (const p of pluginStates(home)) if (p.on) for (const name of [...p.requires, ...p.skills]) roots.push([p.id, name]);
+  for (const s of also) for (const name of s.requires ?? []) roots.push([s.name, name]);
+  return requiredSkills(roots, new Map(coreSkills().map((s) => [s.name, s])));
+}
+
+/** What a skill builds on, as an agent is told it: "(after `film`)"; empty for one that builds on none. @param {{ requires?: readonly string[] }} skill */
+const after = (skill) => (skill.requires?.length ? ` (after ${skill.requires.map((n) => `\`${n}\``).join(', ')})` : '');
 
 /**
  * OpenFilm's own skills, which every agent has unless turned off, in CORE_SKILLS's order: those in coreSkillsDir, and
@@ -539,7 +600,8 @@ export function findSkill(key, where) {
  * @param {string} key @param {Parameters<typeof listSkills>[0]} [where] @returns {Skill[]}
  */
 export function skillsNamed(key, where) {
-  const k = key.trim().toLowerCase();
+  const said = key.trim().toLowerCase();
+  const k = RENAMED[said] ?? said;
   const had = [...coreSkills(), ...listSkills(where)];
   const all = [...had, ...discoverSkills().filter((d) => !had.some((s) => s.uid === d.uid))];
   const full = /^[a-z0-9-]+[/:][a-z0-9-]+$/.test(k) ? k.replace(':', '/') : null;
@@ -576,21 +638,20 @@ export function agentNames(skills) {
 
 /**
  * OpenFilm's skills as agents are offered them, each with the name it is given by (agentNames), in this order: its own
- * whose plugin is on (src/plugins.mjs; one of them has no switch of its own) (`core`), those installed and on (`usable`),
- * then the rest of the library but those off, which a
- * message can still name (Try now). `given`: the first two, what a session has.
+ * that the plugins on and the skills given require (ownSkills) (`core`), those installed and on (`usable`), then the rest
+ * of the library but those off, which a message can still name (Try now). `given`: the first two, what a session has.
  * @param {Parameters<typeof usableSkills>[0]} [where]
  */
 export function offeredSkills({ home, ...where } = {}) {
   const off = new Set(skillsOff(home));
-  const withPlugin = skillsOfPluginsOff(home);
-  const core = coreSkills().filter((s) => !withPlugin.has(s.name));
   const known = (/** @type {Skill[]} */ list, /** @type {Skill} */ s) => list.some((k) => k.uid === s.uid);
-  const usable = usableSkills({ home, ...where }).filter((s) => !known(core, s));
+  const own = new Set(coreSkills().map((s) => s.uid));
+  const usableAll = usableSkills({ home, ...where }).filter((s) => !own.has(s.uid));
+  const core = ownSkills(home, usableAll).skills;
+  const usable = usableAll.filter((s) => !known(core, s));
   /* the rest a person may name in a conversation: those of a project or theirs turned off elsewhere, and Discover's not
      installed (tried before installing) */
   const listed = listSkills(where);
-  const own = new Set(coreSkills().map((s) => s.uid));
   const rest = [...listed, ...discoverSkills().filter((s) => !known(listed, s))].filter((s) => !keeps(off, s) && !own.has(s.uid) && !known(usable, s));
   const named = agentNames([...core, ...usable, ...rest]);
   return { named, given: named.slice(0, core.length + usable.length), usable: named.slice(core.length, core.length + usable.length) };
@@ -598,16 +659,30 @@ export function offeredSkills({ home, ...where } = {}) {
 
 /**
  * OpenFilm's own skills as the system prompt lists them (src/system-prompt.mjs; `openfilm` alone prints them after
- * it): one line for each that an agent is given, its name and what its SKILL.md says it is for, in their order; one
- * that goes with a plugin that is off is left out (an agent is not told to read what it is not given), and when
- * plugins are off, a last line says which (src/plugins.mjs).
+ * it): one line for each that an agent is given (ownSkills), its name, what it builds on and what its SKILL.md says it
+ * is for, a skill after those it builds on; one no plugin on needs is left out (an agent is not told to read what it
+ * is not given), and when plugins are off, a last line says which (src/plugins.mjs).
  * @param {string} [home]
  */
 export function promptSkills(home) {
-  const gone = skillsOfPluginsOff(home);
-  const lines = coreSkills().filter((s) => !gone.has(s.name)).map((s) => `- \`${s.name}\`: ${s.description}`);
+  const { skills, missing } = ownSkills(home);
+  const lines = skills.map((s) => `- \`${s.name}\`${after(s)}: ${s.description}`);
+  /* what a skill builds on and OpenFilm has not: said, so the agent works without it knowingly */
+  if (missing.size) lines.push(`- Not here, though required: ${[...missing].map(([name, by]) => `\`${name}\` (by ${by.join(', ')})`).join('; ')}.`);
   const said = pluginsOffLine(home);
   return `${lines.join('\n')}${said ? `\n\n${said}` : ''}\n`;
+}
+
+/**
+ * What the skills given build on, in a line (empty: none builds on another), for an agent whose program lists the
+ * skills itself (the app's own: apps/desktop agents.mjs), each by the name it is given by (`as`, agentNames).
+ * @param {readonly (Skill & { as?: string })[]} given
+ */
+export function buildsOnLine(given) {
+  const as = new Map(given.map((s) => [s.name, s.as ?? s.name]));
+  const on = given.filter((s) => s.requires?.length)
+    .map((s) => `\`${as.get(s.name)}\` after ${(s.requires ?? []).map((n) => `\`${as.get(n) ?? n}\``).join(', ')}`);
+  return on.length ? `Read a skill after those it builds on: ${on.join('; ')}.` : '';
 }
 
 /**
@@ -620,11 +695,12 @@ export const asRun = (text, run) => text.replaceAll('npx openfilm', run).replace
 
 /**
  * A skill as an agent reads it: its name, where its files are (only read: what a film uses is copied into the
- * project), and its SKILL.md whole.
+ * project), what it builds on (`requires`: read those first), and its SKILL.md whole.
  * @param {Skill} skill
  */
 export function skillText(skill) {
-  return `<skill name="${/** @type {Skill & { as?: string }} */ (skill).as ?? agentName(skill)}" full-name="${skill.uid}" folder="${skill.folder}">\n${readFileSync(skill.file, 'utf8').trim()}\n</skill>`;
+  const requires = skill.requires?.length ? ` requires="${skill.requires.join(' ')}"` : '';
+  return `<skill name="${/** @type {Skill & { as?: string }} */ (skill).as ?? agentName(skill)}" full-name="${skill.uid}" folder="${skill.folder}"${requires}>\n${readFileSync(skill.file, 'utf8').trim()}\n</skill>`;
 }
 
 /**

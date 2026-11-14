@@ -17,5 +17,8 @@
   },
   "about": "picture work by hand: stabilizing, cutouts, masks, tracking",
   "soon": true,
-  "skills": []
+  "skills": [],
+  "requires": [
+    "film"
+  ]
 }

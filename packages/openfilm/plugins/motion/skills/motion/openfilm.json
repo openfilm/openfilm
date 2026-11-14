@@ -2,6 +2,9 @@
   "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/plugins/motion/skills/motion",
   "order": 4,
   "icon": "shapes",
+  "requires": [
+    "film"
+  ],
   "title": {
     "en": "Motion",
     "zh-CN": "动效",

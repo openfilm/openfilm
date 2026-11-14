@@ -22,5 +22,8 @@
   "beta": true,
   "skills": [
     "motion"
+  ],
+  "requires": [
+    "film"
   ]
 }

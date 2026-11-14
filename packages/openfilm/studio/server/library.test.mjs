@@ -116,7 +116,7 @@ test('installed and discoverable skills can both be starred and unstarred in sha
   const was = process.env.OPENFILM_SHARED_HOME;
   process.env.OPENFILM_SHARED_HOME = home;
   try {
-    const installed = 'skill:openfilm/edit';
+    const installed = 'skill:openfilm/film';
     const discover = 'skill:community/preview';
     assert.deepEqual(setLibraryFavorites([installed, discover, discover, 'skill:../preview']), [installed, discover]);
     assert.deepEqual(libraryFavorites(), [installed, discover]);

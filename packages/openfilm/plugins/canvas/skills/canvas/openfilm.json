@@ -2,6 +2,9 @@
   "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/plugins/canvas/skills/canvas",
   "order": 3,
   "icon": "layers",
+  "requires": [
+    "media"
+  ],
   "title": {
     "en": "Canvas",
     "zh-CN": "画布",

@@ -11,7 +11,8 @@ Only in the conversation, it is a skill; also outside it, a plugin.
 ```
 my-plugin/
   SKILL.md        what an agent is taught: front matter with `name` and `description`, then the way to work
-  openfilm.json   how people see it (optional): `title`, `summary`, `icon`, by language; `tab` and `blocks`, below
+  openfilm.json   how people see it (optional): `title`, `summary`, `icon`, by language; `requires`, `tab` and
+                  `blocks`, below
   package.json    what runs (optional): `browser`, `bin`, `scripts.start`
   index.html      a page shown as its workbench (optional)
 ```
@@ -19,6 +20,23 @@ my-plugin/
 Put it in your Skills folder (`~/Movies/OpenFilm/Skills` on macOS, `~/Videos/OpenFilm/Skills` elsewhere; `OPENFILM_SKILLS`
 names another), or in a project's `skills/` folder to keep it with that project. The library's Plugins tab lists it, with
 its switch.
+
+### What it builds on: `requires`
+
+As a package names the packages it depends on, a skill or a plugin names the skills it builds on, in its openfilm.json:
+`"requires": ["film"]`. OpenFilm's own are `film` (how a film is written: film.html, its pages, looking at it) and
+`media` (the library and the services that make media). An agent is given the skills of the plugins on and of the
+skills on, and the skills these require, and so on, each once, a skill after those it builds on; it is told what each
+builds on, and reads those first. One that requires nothing is given without them: a plugin that only lays out notes
+needs no film. No skill is given to every agent; what is is the system prompt, a few lines on where the agent is, how it
+is with the person, and how things are pointed at (Links, below).
+
+So a skill of yours says only what it adds:
+
+- what the system prompt or a skill it requires already says (how film.html is written, looking before saying it
+  works, changing only what was asked, how to link) it does not say again: it requires that skill;
+- a plugin that adds no way of writing (a new way to see or point at the film) brings no skill at all, only `requires`;
+- a skill's sections are its own: one titled as a section of a skill it requires is a test's failure in OpenFilm's own.
 
 A workbench is one of three things, the first one found:
 

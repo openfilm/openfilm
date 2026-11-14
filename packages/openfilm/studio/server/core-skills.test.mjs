@@ -24,11 +24,11 @@ test("Studio lists OpenFilm's own skills first, in their order, installed, and o
   const listed = async () => (await (await api('/api/skills')).json()).skills;
   const core = (await listed()).slice(0, 4);
   assert.deepEqual(core.map((s) => [s.uid, s.as, s.core, s.installed]), [
-    ['openfilm/edit', 'openfilm-edit', true, true], ['openfilm/media', 'openfilm-media', true, true], ['openfilm/canvas', 'openfilm-canvas', true, true],
+    ['openfilm/film', 'openfilm-film', true, true], ['openfilm/media', 'openfilm-media', true, true], ['openfilm/canvas', 'openfilm-canvas', true, true],
     /* Motion is off until the person turns it on: its skill is listed, off with its plugin, and no agent calls it */
     ['openfilm/motion', undefined, true, true],
   ]);
-  assert.equal(core[0].shown.title['zh-CN'], '剪辑');
+  assert.equal(core[0].shown.title['zh-CN'], '影片');
   assert.deepEqual([core[3].off, core[3].plugin], [true, 'motion']);
   assert.ok((await listed()).slice(4).every((s) => !s.core), 'the library\'s are not');
   assert.equal((await api('/api/skills/openfilm%2Fcanvas/on', { method: 'PUT', body: { on: false } })).status, 200);

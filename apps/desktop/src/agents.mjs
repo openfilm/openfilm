@@ -176,13 +176,14 @@ export const INSTRUCTIONS = agentInstructions();
  * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): OpenFilm's
  * system prompt as an agent in the app has it (openfilm/src/system-prompt.mjs: where it is and how it talks with the
  * person; not INSTRUCTIONS, which tell another agent to go and read it), and how the person points at Studio
- * (STUDIO_REFERENCES). How each kind of work is done is OpenFilm's skills' (openfilm/skills coreSkills), which Pi
- * lists after it and the agent reads when a task needs one.
+ * (STUDIO_REFERENCES). How each kind of work is done is OpenFilm's skills' (openfilm/skills ownSkills), which Pi
+ * lists after it and the agent reads when a task needs one; `buildsOn` says which build on which (openfilm/skills
+ * buildsOnLine), as `openfilm` says it to other agents.
  */
-export function ownAgentPrompt() {
+export function ownAgentPrompt(buildsOn = '') {
   return `${systemPrompt('app').trim()}
 
-Run OpenFilm's commands as \`openfilm\`, also where a skill says \`npx openfilm\`.
+Run OpenFilm's commands as \`openfilm\`, also where a skill says \`npx openfilm\`.${buildsOn ? ` ${buildsOn}` : ''}
 
 ## Pointing at Studio
 
@@ -1268,7 +1269,7 @@ export class AgentSession {
     /* its skills and MCP servers: its maker's, OpenFilm's skills, and the person's own only those let in (agent-skills.mjs) */
     const skills = this.opts.skills
       ? await sessionSkills(this.opts.agent, { cwd: this.opts.cwd, env: shell, ...this.opts.skills }).catch(() => null) : null;
-    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt(), skills: skills?.piSkills ?? null });
+    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt(skills?.buildsOn ?? ''), skills: skills?.piSkills ?? null });
     /* Developer mode: the agent's own logging switch, so the turn log has what its model got; none when the person
        set its telemetry themselves (agent-logs.mjs) */
     this.logging = this.opts.logDir && cli && !this.spec.adapter

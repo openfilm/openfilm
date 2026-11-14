@@ -17,5 +17,8 @@
   },
   "about": "grading the film's color by hand",
   "soon": true,
-  "skills": []
+  "skills": [],
+  "requires": [
+    "film"
+  ]
 }

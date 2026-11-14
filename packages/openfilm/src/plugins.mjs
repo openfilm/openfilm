@@ -1,17 +1,19 @@
 // @ts-check
 /**
  * Plugins: what OpenFilm can do, each a folder in `plugins/` of this package, listed in the library's Plugins tab.
- * What every project stands on is no plugin and has no switch: the conversation, the project's folder, and its media
- * (the library, and `openfilm get` with the `media` skill that says how it is used).
+ * What every project stands on is no plugin and has no switch: the conversation, the project's folder and the system
+ * prompt. No skill is: the skills an agent is given are those the plugins on bring and require (src/skills.mjs
+ * ownSkills), so with only the canvas on it is not told how a film is written.
  *
  * A plugin's folder holds an `openfilm.json`, as a skill's does: how people see it (`title` and `summary` by language,
  * an `icon`, its `order` in the list), what an agent reads of it while it is off (`about`, a few English words), and
  * what it brings: a `workbench` (a whole surface of its own in Studio, named: the edit, the canvas, and any other,
  * which Studio shows in their place when picked; Motion, a view of the edit's timeline), a `tab` (a tab of the library
  * drawer, after its own, showing the element its package.json's `browser` brings: `{ "icon": …, "title": {…} }`, each
- * optional, the plugin's own when left out) and `skills` (OpenFilm's own,
- * by name: what teaches an agent that part of film making, each in the plugin's folder at `skills/<name>/`, the Agent
- * Skills layout: pluginSkillDir). Its commands are its package.json's `bin` (src/plugin-commands.mjs), so a plugin is
+ * optional, the plugin's own when left out), `skills` (OpenFilm's own,
+ * by name: what teaches an agent what the plugin adds to film making, each in the plugin's folder at `skills/<name>/`,
+ * the Agent Skills layout: pluginSkillDir; none when it adds no way of writing, only a way of seeing) and `requires`
+ * (the skills it builds on, by name, as a package names its dependencies: `film`, how a film is written; `media`). Its commands are its package.json's `bin` (src/plugin-commands.mjs), so a plugin is
  * one package: its folder holds all of it.
  *
  *   `on`      whether it is on until the person says (the edit and the canvas are, Motion is not)
@@ -47,11 +49,11 @@ const WORKBENCH = /^[a-z][a-z0-9-]{0,31}$/;
 /**
  * @typedef {{
  *   id: string, title: Record<string, string>, summary: Record<string, string>, icon?: string, about: string,
- *   workbench?: string, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], tab?: PluginTab, skills: readonly string[], on: boolean, beta?: true, soon?: true,
+ *   workbench?: string, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], tab?: PluginTab, skills: readonly string[], requires: readonly string[], on: boolean, beta?: true, soon?: true,
  * }} Plugin
  *   `id`: its folder's name; `workbench`: the way of working it shows; `blocks`: the blocks its workbench is laid out in
  *   (src/plugin-blocks.mjs); `tab`: the library's tab it shows; `skills`: OpenFilm's own skills (by name) that go with
- *   it; `on`: whether it is on until the person says
+ *   it; `requires`: the skills it builds on (by name); `on`: whether it is on until the person says
  * @typedef {{ title?: Record<string, string>, icon?: string }} PluginTab
  *   a tab of the library drawer: its name by language and its mark's name, the plugin's own where left out
  */
@@ -75,6 +77,9 @@ export function tabOf(raw, words) {
 const byLanguage = (/** @type {unknown} */ v) => (v && typeof v === 'object'
   ? Object.fromEntries(Object.entries(v).filter(([k, w]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(k) && typeof w === 'string' && w.trim()).map(([k, w]) => [k, String(w).trim().slice(0, 300)])) : {});
 
+/** Skills by name, as an openfilm.json lists them (`skills`, `requires`); anything else left out. @param {unknown} raw @returns {string[]} */
+export const skillNames = (raw) => (Array.isArray(raw) ? raw.filter((s) => typeof s === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(s)) : []);
+
 /** The plugin in one folder of `dir`, or null when it has no openfilm.json with a title. @param {string} dir @param {string} id */
 function readPlugin(dir, id) {
   let raw;
@@ -85,7 +90,7 @@ function readPlugin(dir, id) {
   /** @type {Plugin & { order: number }} */
   const plugin = {
     id, title, summary: byLanguage(raw.summary), about: typeof raw.about === 'string' ? raw.about.trim().slice(0, 200) : '',
-    skills: Array.isArray(raw.skills) ? raw.skills.filter((/** @type {unknown} */ s) => typeof s === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(s)) : [],
+    skills: skillNames(raw.skills), requires: skillNames(raw.requires),
     on: !soon && raw.on === true, order: Number.isFinite(raw.order) ? raw.order : 1000,
   };
   if (typeof raw.icon === 'string' && ICON.test(raw.icon)) plugin.icon = raw.icon;
@@ -151,11 +156,6 @@ export const pluginOfSkill = (skill) => PLUGINS.find((p) => p.skills.includes(sk
 
 /** The workbenches on, in their order. @param {string} [home] */
 export const workbenchesOn = (home) => pluginStates(home).flatMap((p) => (p.workbench && p.on ? [p.workbench] : []));
-
-/** OpenFilm's own skills that go with a plugin now off, by name: offered to no agent. @param {string} [home] @returns {Map<string, string>} skill → its plugin */
-export function skillsOfPluginsOff(home) {
-  return new Map(pluginStates(home).filter((p) => !p.on).flatMap((p) => p.skills.map((skill) => /** @type {[string, string]} */ ([skill, p.id]))));
-}
 
 /**
  * The line the system prompt's list of skills ends with when plugins are off: which, and what each is for, so an agent can say what turning

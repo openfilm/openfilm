@@ -29,7 +29,7 @@ export interface Plugin {
 
 /** The plugins there are to turn as a new install has them, until Studio answers with every plugin. */
 const DEFAULT: readonly Plugin[] = [
-  { id: 'edit', workbench: 'edit', skills: ['edit'], on: true },
+  { id: 'edit', workbench: 'edit', skills: [], on: true },
   { id: 'canvas', workbench: 'canvas', skills: ['canvas'], on: true },
   { id: 'motion', workbench: 'motion', skills: ['motion'], on: false, beta: true },
 ];

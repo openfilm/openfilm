@@ -68,9 +68,7 @@ entry, by `@keyframes <clip>--var-<name>`, and only ease when the page registers
 
 ## Doing it
 
-- Read film.html right before you change it, and change only the keyframes you mean to: the person may have dragged
-  others a moment ago.
 - Keep keyframes few: a way in, a way out, a move where something happens. Time them to the sound (a voice-over's
-  words are timed in the `.vtt` beside it) and check every move with `openfilm look` at its start, middle and end.
+  words are timed in the `.vtt` beside it) and look at every move at its start, middle and end.
 - A move the person points at in Motion is the layer's keyframes: change those, not the clip's box, so the rest of the
   move stays as it was.

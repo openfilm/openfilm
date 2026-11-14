@@ -95,7 +95,9 @@
     }
   ],
   "on": true,
-  "skills": [
-    "edit"
+  "skills": [],
+  "requires": [
+    "film",
+    "media"
   ]
 }

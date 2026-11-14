@@ -104,9 +104,9 @@ test("OpenCode: every skill denied but its own, OpenFilm's and those let in; Pi:
   mkdirSync(w.openfilmHome, { recursive: true });
   const oc = await sessionSkills('opencode', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome, allowed: ['research'] });
   const config = JSON.parse(oc.env.OPENCODE_CONFIG_CONTENT);
-  /* OpenFilm's own first, in their order (how a film is made, its media, its canvas, notes given in Screening); then the project's brand and
+  /* OpenFilm's own first, a skill after those it builds on (how a film is written, its media, its canvas); then the project's brand and
      lyric-pv and the one installed from Discover */
-  const names = ['openfilm-edit', 'openfilm-media', 'openfilm-canvas', 'openfilm-screening', 'project-brand', 'local-lyric-pv', 'openfilm-replicate'];
+  const names = ['openfilm-film', 'openfilm-media', 'openfilm-canvas', 'project-brand', 'local-lyric-pv', 'openfilm-replicate'];
   assert.deepEqual(config.permission.skill, { '*': 'deny', 'customize-opencode': 'allow', ...Object.fromEntries([...names, 'research'].sort().map((n) => [n, 'allow'])) });
   assert.deepEqual(config.mcp, { search: { enabled: false } });
   assert.match(config.skills.paths[0], /agent-skills[\\/].+[\\/]skills$/);
@@ -139,7 +139,8 @@ test("a skill the person turned off, and OpenFilm's own whose plugin is off, is 
   writeFileSync(join(w.openfilmHome, 'prefs.json'), JSON.stringify({ skillsOff: ['brand', 'openfilm/media'], plugins: { canvas: false } }));
   const pi = await sessionSkills('byok', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome });
   assert.ok(!pi.piSkills.names.includes('project-brand'));
-  assert.deepEqual(pi.piSkills.names.slice(0, 2), ['openfilm-edit', 'openfilm-media'], 'OpenFilm\'s own while their plugins are on');
+  /* the media still given: the edit needs it, whatever was kept of a switch it no longer has */
+  assert.deepEqual(pi.piSkills.names.slice(0, 2), ['openfilm-film', 'openfilm-media'], 'OpenFilm\'s own while plugins on need them');
   assert.ok(!pi.piSkills.names.includes('openfilm-canvas'));
   assert.ok(pi.piSkills.names.includes('local-lyric-pv'));
   assert.ok(!existsSync(join(pi.piSkills.paths[0], 'project-brand')), 'not in the folder the agent reads');

@@ -297,7 +297,8 @@ function defaultsFile(dir, name, settings) {
 
 /**
  * What a session of `agent` is started with for its skills and MCP servers: `{ claude?, codexConfig?,
- * additionalDirectories?, env?, args?, piSkills?, log }` (agents.mjs puts each where it goes). `log`: what the turn log
+ * additionalDirectories?, env?, args?, piSkills?, buildsOn?, log }` (agents.mjs puts each where it goes; `buildsOn`: what
+ * the skills given build on, for the app's own agent's system prompt). `log`: what the turn log
  * says of it (agents.mjs `opened.skills`). `allowed`, `mcpAllowed`: the person's own let in, by name.
  * @param {string} agent
  * `mine`: the person's own skills folder (openfilm/skills mySkillsDir); `prefsHome`: the Studio home whose prefs.json
@@ -306,9 +307,10 @@ function defaultsFile(dir, name, settings) {
  *   mcpAllowed?: string[], home?: string }} o
  */
 export async function sessionSkills(agent, { cwd, env = {}, dataDir, mine, prefsHome, allowed = [], mcpAllowed = [], home = homedir() }) {
-  const { mySkillsDir, offeredSkills } = await skillsLib();
-  /* OpenFilm's own first (how a film is made, its media, its canvas), unless turned off; then those installed and on.
-     Each by the name the agent is given it by: its own, but a second of a name told apart by whose it is */
+  const { buildsOnLine, mySkillsDir, offeredSkills } = await skillsLib();
+  /* OpenFilm's own first (those the plugins on bring and require, a skill after those it builds on); then those
+     installed and on. Each by the name the agent is given it by: its own, but a second of a name told apart by whose
+     it is */
   const openfilm = offeredSkills({ project: cwd, mine: mine ?? mySkillsDir(), ...(prefsHome ? { home: prefsHome } : {}) }).given;
   const names = openfilm.map((s) => s.as);
   const filtered = FILTERED_AGENTS.includes(agent);
@@ -355,7 +357,8 @@ export async function sessionSkills(agent, { cwd, env = {}, dataDir, mine, prefs
         log,
       };
     case 'openfilm': case 'byok':
-      return { piSkills: { paths: [join(dir, 'skills')], names }, log };
+      /* what builds on what, told in its system prompt: Pi lists the skills itself (agents.mjs ownAgentPrompt) */
+      return { piSkills: { paths: [join(dir, 'skills')], names }, buildsOn: buildsOnLine(openfilm), log };
     default:
       return { log };
   }

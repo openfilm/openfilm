@@ -17,5 +17,8 @@
   },
   "about": "a mixer for the film's sound",
   "soon": true,
-  "skills": []
+  "skills": [],
+  "requires": [
+    "film"
+  ]
 }

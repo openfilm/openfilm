@@ -24,3 +24,9 @@ test('another agent is told to run openfilm for the system prompt and the skills
 test('every agent is told how to point at Studio', () => {
   assert.ok(INSTRUCTIONS.endsWith(STUDIO_REFERENCES));
 });
+
+test("the app's own agent is told which of its skills build on which, as `openfilm` tells others", () => {
+  const line = 'Read a skill after those it builds on: `openfilm-motion` after `openfilm-film`.';
+  assert.ok(ownAgentPrompt(line).includes(line));
+  assert.ok(!ownAgentPrompt().includes('Read a skill after'), 'none said when none builds on another');
+});

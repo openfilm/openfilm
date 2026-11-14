@@ -59,7 +59,7 @@ import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCov
 import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
-import { pluginOfSkill, pluginStates, pluginsDir, setPluginOn, skillsOfPluginsOff } from '../../src/plugins.mjs';
+import { pluginOfSkill, pluginStates, pluginsDir, setPluginOn } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
@@ -67,7 +67,7 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { commandsIn, coreSkills, elementIn, keeps, listSkills, offeredSkills, pluginRuns, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
+import { commandsIn, coreSkills, elementIn, keeps, listSkills, offeredSkills, ownSkills, pluginRuns, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
 import { startPluginPages } from './plugin-pages.mjs';
 import { startPluginPrograms } from './plugin-programs.mjs';
 import { createPluginServers } from './plugin-servers.mjs';
@@ -588,7 +588,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const offered = catalogSkills(catalog).filter((k) => !had.has(k.uid));
       const origins = skillOrigins();
       const off = new Set(skillsOff());
-      const withPlugin = skillsOfPluginsOff();
+      const given = new Set(ownSkills().skills.map((k) => k.name));
       const agentsCall = new Map(offeredSkills({ project: project?.path ?? null }).named.map((k) => [k.uid, k.as]));
       const media = (/** @type {string} */ uid, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(uid)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
       const all = [...coreSkills().map((k) => ({ ...k, core: true, installed: true })), ...skills.map((k) => ({ ...k, core: false, installed: true })),
@@ -638,7 +638,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           /* turned off: offered to no agent until it is turned on again */
           ...(k.installed && !k.core && keeps(off, k) ? { off: true } : {}),
           /* one of OpenFilm's own that goes with a plugin now off (src/plugins.mjs): off with it, and on again with it */
-          ...(k.core && withPlugin.has(k.name) ? { off: true, plugin: withPlugin.get(k.name) } : {}),
+          /* one of OpenFilm's own that no plugin on brings or requires (src/skills.mjs ownSkills): given to no agent until
+             one does; turning its plugin on (the plugin it goes with, when it has one) gives it again */
+          ...(k.core && !given.has(k.name) ? { off: true, ...(pluginOfSkill(k.name) ? { plugin: pluginOfSkill(k.name) } : {}) } : {}),
         })),
       });
     }
@@ -732,10 +734,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
       if (!skill) throw new HttpError(404, 'no such skill');
       /* one of OpenFilm's own has no switch of its own: it is on while its plugin is (src/plugins.mjs), so turning it
-         turns the plugin; one that goes with no plugin (the media's) is what every project stands on, always given */
+         turns the plugin; one that goes with no plugin (`film`, `media`) is given while a plugin on requires it */
       const core = coreSkills().some((k) => k.uid === skill.uid);
       const plugin = core ? pluginOfSkill(skill.name) : undefined;
-      if (core && !plugin) throw new HttpError(409, 'This skill is part of OpenFilm itself: it has no switch.');
+      if (core && !plugin) throw new HttpError(409, 'This skill is given while a plugin that needs it is on: it has no switch of its own.');
       if (plugin) {
         try { setPluginOn(plugin, on); } catch (e) { throw new HttpError(409, /** @type {Error} */ (e).message); }
       } else {

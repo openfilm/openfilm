@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, asRun, coreSkills, isPlugin, promptSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
+import { addSkills, asRun, coreSkills, requiredSkills, isPlugin, promptSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -381,27 +381,32 @@ test("a cover's format is what its bytes are, and a cover chosen before goes whe
 test("OpenFilm's own skills: in order, each listed after the system prompt, printed with the command as run here, never in the library", async () => {
   const manual = promptSkills(mkdtempSync(join(tmpdir(), 'of-prompt-skills-')));
   const core = coreSkills();
-  assert.deepEqual(core.map((s) => s.uid), ['openfilm/edit', 'openfilm/media', 'openfilm/canvas', 'openfilm/motion', 'openfilm/screening'], 'in the order agents are given them');
+  assert.deepEqual(core.map((s) => s.uid), ['openfilm/film', 'openfilm/media', 'openfilm/canvas', 'openfilm/motion'], 'in the order they are listed');
   for (const s of core) {
     assert.ok(s.shown?.title['zh-CN'] && s.shown.summary.en, `${s.name} has a title and a summary for people`);
-    if (s.name !== 'motion') assert.ok(manual.includes(`- \`${s.name}\`: ${s.description}`), `the list names ${s.name} by what it says it is for`);
+    if (s.name !== 'motion') assert.ok(manual.includes(`- \`${s.name}\`${s.requires ? ` (after ${s.requires.map((n) => `\`${n}\``).join(', ')})` : ''}: ${s.description}`), `the list names ${s.name} by what it says it is for`);
     assert.ok(s.description.length > 40, `${s.name} says when it is read`);
   }
   assert.ok(manual.split(/\s+/).length < 400, 'a line for each: how a film is made is in the skill');
   const text = (name) => readFileSync(core.find((s) => s.name === name).file, 'utf8');
-  assert.match(text('edit'), /The one rule: the picture depends only on t/);
+  assert.match(text('film'), /The one rule: the picture depends only on t/);
   assert.match(text('media'), /--take <id>/);
   assert.match(text('canvas'), /canvas apply/);
   assert.match(text('motion'), /<clip id>--<property>/);
   /* read from their files, they say the command on the PATH (the app's own, or the one installed) */
   for (const s of core) assert.ok(!readFileSync(s.file, 'utf8').includes('npx openfilm'), `${s.name} says \`openfilm\``);
-  assert.equal(asRun('`openfilm-edit`: `openfilm look`, and `openfilm skill <name>`', 'npx -y openfilm@latest'),
-    '`openfilm-edit`: `npx -y openfilm@latest look`, and `npx -y openfilm@latest skill <name>`', 'a skill\'s name stays');
-  const printed = await skillCommand(['openfilm/edit'], 'npx -y openfilm@latest', { cwd: tmpdir() });
+  assert.equal(asRun('`openfilm-film`: `openfilm look`, and `openfilm skill <name>`', 'npx -y openfilm@latest'),
+    '`openfilm-film`: `npx -y openfilm@latest look`, and `npx -y openfilm@latest skill <name>`', 'a skill\'s name stays');
+  const printed = await skillCommand(['openfilm/film'], 'npx -y openfilm@latest', { cwd: tmpdir() });
   assert.ok(printed.ok);
   assert.ok(printed.lines[0].includes('`npx -y openfilm@latest look`') && !/npx openfilm /.test(printed.lines[0]));
   assert.equal(findSkill('openfilm-media')?.uid, 'openfilm/media', 'as an agent is given it');
-  assert.equal(agentName(core[0]), 'openfilm-edit');
+  assert.equal(agentName(core[0]), 'openfilm-film');
+  /* named as before it was the film's own skill, it is still found */
+  assert.equal(findSkill('edit')?.uid, 'openfilm/film');
+  /* printed, it says what it builds on: read those first */
+  const motion = await skillCommand(['motion'], 'openfilm', { cwd: tmpdir() });
+  assert.match(motion.lines[0], /^<skill name="openfilm-motion" [^>]* requires="film">/);
   assert.ok(!listSkills().some((s) => core.some((c) => c.name === s.name)), 'in no library');
 });
 
@@ -544,4 +549,30 @@ test('a skill with a page at its root has a surface: it is a plugin someone made
   /* a page somewhere else in it is not its surface */
   assert.equal(readSkill(skill(join(root, 'deep'), 'deep', 'Deep', 'Steps', { 'ui/index.html': '<p>' }), 'mine').page, undefined);
   rmSync(root, { recursive: true, force: true });
+});
+
+test('skills are resolved as dependencies: each once, after what it builds on; a missing one said, a cycle left out', () => {
+  const pool = new Map([
+    ['a', { name: 'a', requires: ['b'] }], ['b', { name: 'b', requires: ['a'] }], ['top', { name: 'top', requires: ['a'] }],
+    ['c', { name: 'c', requires: ['d', 'e'] }], ['e', { name: 'e', requires: ['f'] }], ['f', { name: 'f' }], ['g', { name: 'g', requires: ['f'] }],
+  ]);
+  const r = requiredSkills([['one', 'c'], ['two', 'g'], ['three', 'top'], ['four', 'nowhere']], pool);
+  assert.deepEqual(r.skills.map((s) => s.name), ['f', 'e', 'c', 'g'], 'after what each builds on, each once');
+  assert.deepEqual([...r.missing], [['d', ['c']], ['nowhere', ['four']]], 'what is required and not had, by whom; c is still given');
+  assert.deepEqual(r.cycles, [['a', 'b', 'a']]);
+  assert.ok(!r.skills.some((s) => ['a', 'b', 'top'].includes(s.name)), 'a cycle, and what builds on it, given to no agent');
+});
+
+test('a skill of OpenFilm\'s own says only what it adds: no section of a skill it requires is said again in it', () => {
+  const core = new Map(coreSkills().map((s) => [s.name, s]));
+  const sections = (name) => new Set(readFileSync(core.get(name).file, 'utf8').split('\n').filter((l) => /^#{2,3} /.test(l)).map((l) => l.replace(/^#+ /, '').trim().toLowerCase()));
+  for (const s of core.values()) {
+    for (const need of s.requires ?? []) {
+      assert.ok(core.has(need), `${s.name} requires ${need}, one of OpenFilm's own`);
+      const again = [...sections(s.name)].filter((t) => sections(need).has(t));
+      assert.deepEqual(again, [], `${s.name} says again what ${need} says`);
+    }
+    /* what the system prompt says is said once, there */
+    assert.doesNotMatch(readFileSync(s.file, 'utf8'), /never say it works|before you have looked at it/i, `${s.name} repeats the system prompt`);
+  }
 });
