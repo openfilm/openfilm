@@ -4,7 +4,7 @@
  * picture by, the picture going in as its reference. Or one of the light presets, as it is.
  */
 import React from 'react';
-import { Box, Lightbulb, RotateCcw, Sparkles, Square } from 'lucide-react';
+import { ArrowUp, Box, Lightbulb, RotateCcw, Square } from 'lucide-react';
 import { useT } from '@/i18n';
 import { PRESETS } from '@/lib/canvas-presets';
 import { CanvasModal } from './libraries';
@@ -239,7 +239,8 @@ function Orbit({ src, light, view, color, bright, soft, fill, fillColor, onLight
 
   const at = (event: React.PointerEvent) => {
     const box = event.currentTarget.getBoundingClientRect();
-    return { x: event.clientX - box.left - W / 2, y: event.clientY - box.top - H / 2 };
+    /* in its own units, however large it is drawn */
+    return { x: (event.clientX - box.left) * (W / box.width) - W / 2, y: (event.clientY - box.top) * (H / box.height) - H / 2 };
   };
   const moveLight = (x: number, y: number) => {
     const d = drag.current;
@@ -369,10 +370,10 @@ function Segmented<T extends string>({ options, on, onPick }: { options: Array<[
 function Swatches({ value, small, onPick }: { value: string; small?: boolean; onPick: (hex: string) => void }) {
   const t = useT();
   return (
-    <div className={`flex flex-wrap ${small ? 'gap-1.5' : 'gap-2'}`}>
+    <div className={`flex flex-wrap p-1 ${small ? 'gap-2' : 'gap-2.5'}`}>
       {COLORS.map((c) => (
         <button key={c.id} type="button" title={t(`canvas.light.colors.${c.id}`)} aria-label={t(`canvas.light.colors.${c.id}`)} onClick={() => onPick(c.hex)}
-          className={`${small ? 'h-5 w-5' : 'h-7 w-7'} rounded-full border transition ${c.hex === value ? 'scale-110 border-[var(--cv-ink)] ring-2 ring-[var(--cv-ring)]' : 'border-white/20 hover:scale-110'}`}
+          className={`${small ? 'h-5 w-5' : 'h-7 w-7'} rounded-full transition ${c.hex === value ? 'ring-2 ring-[var(--cv-ink)] ring-offset-2 ring-offset-[var(--cv-modal)]' : 'ring-1 ring-inset ring-white/20 hover:scale-110'}`}
           style={{ background: c.hex }} />
       ))}
     </div>
@@ -384,8 +385,8 @@ const label = 'mb-2 flex items-center justify-between text-[12px] text-[var(--cv
 export function LightPanel({ src, onClose, onMake }: {
   src: string;                    // the picture's URL
   onClose: () => void;
-  /** a preset picked (its id), or the light set by hand as words to put before the node's own */
-  onMake: (made: { preset: string } | { words: string }) => void;
+  /** a preset picked (its id), or the light set by hand as words, with the person's own words: made at once */
+  onMake: (made: { preset: string; words: string } | { words: string }) => void;
 }) {
   const t = useT();
   const [light, setLight] = React.useState<Light>(START);
@@ -397,6 +398,10 @@ export function LightPanel({ src, onClose, onMake }: {
   const [soft, setSoft] = React.useState(true);
   const [fill, setFill] = React.useState(false);
   const [fillColor, setFillColor] = React.useState(COLORS[5]!.hex);
+  /* a preset picked (made as it is), or none: the light as set by hand; and the person's own words beside it */
+  const [preset, setPreset] = React.useState<string | null>(null);
+  const [tab, setTab] = React.useState<'presets' | 'custom'>('presets');
+  const [extra, setExtra] = React.useState('');
   const frame = React.useRef(0);
   React.useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
@@ -431,111 +436,114 @@ export function LightPanel({ src, onClose, onMake }: {
     return Math.abs(want.elevation - light.elevation) < 1 && (Math.abs(want.elevation) >= 80 || Math.abs(((want.azimuth - light.azimuth + 540) % 360) - 180) < 1);
   })?.[0];
 
+  const make = () => onMake(preset && tab === 'presets' ? { preset, words: extra.trim() } : { words: [words, extra.trim()].filter(Boolean).join('\n\n') });
+  const card = 'rounded-[16px] bg-[color-mix(in_srgb,var(--cv-ink)_3.5%,transparent)] p-4';
   return (
     <CanvasModal label={t('canvas.light.title')} onClose={onClose}>
       <div className="flex items-center gap-3 px-5 pr-16 pt-4">
         <span className="text-[14px] font-semibold">{t('canvas.light.title')}</span>
-        <span className="truncate text-[12.5px] text-[var(--cv-ink-3)]">{t('canvas.light.subtitle')}</span>
       </div>
-      <div className="flex min-h-0 flex-1 gap-5 px-5 py-4">
-        {/* where the light comes from */}
-        <div className="flex w-[372px] shrink-0 flex-col gap-3">
-          <div className="relative overflow-hidden rounded-[16px] bg-[var(--cv-chip)]">
-            <Orbit src={src} light={light} view={view} color={color} bright={bright} soft={soft} fill={fill} fillColor={fillColor}
-              onLight={setLight} onView={setView} onGrab={() => cancelAnimationFrame(frame.current)} />
-            <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex justify-start">
-              <div className="pointer-events-auto">
-                <Segmented<'perspective' | 'front'> on={seen} onPick={(v) => glide(null, v === 'front' ? FRONT : PERSPECTIVE)}
-                  options={[['perspective', <><Box size={13} />{t('canvas.light.views.perspective')}</>], ['front', <><Square size={13} />{t('canvas.light.views.front')}</>]]} />
-              </div>
+      <div className="flex min-h-0 flex-1 gap-4 px-4 pb-2 pt-3">
+        {/* where the light comes from: the picture in its sphere, as large as there is room */}
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[16px] bg-[var(--cv-card-2)]"
+            style={{ backgroundImage: 'radial-gradient(color-mix(in srgb, var(--cv-ink) 8%, transparent) 1px, transparent 1.4px)', backgroundSize: '18px 18px' }}>
+            <div className="origin-center scale-[1.25]">
+              <Orbit src={src} light={light} view={view} color={color} bright={bright} soft={soft} fill={fill} fillColor={fillColor}
+                onLight={(v) => { setLight(v); setTab('custom'); setPreset(null); }} onView={setView} onGrab={() => cancelAnimationFrame(frame.current)} />
+            </div>
+            <div className="absolute left-3 top-3 z-10">
+              <Segmented<'perspective' | 'front'> on={seen} onPick={(v) => glide(null, v === 'front' ? FRONT : PERSPECTIVE)}
+                options={[['perspective', <><Box size={13} />{t('canvas.light.views.perspective')}</>], ['front', <><Square size={13} />{t('canvas.light.views.front')}</>]]} />
             </div>
             <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 text-center text-[12px] tabular-nums text-[var(--cv-ink-2)]">
-              {t('canvas.light.readout').replace('{elevation}', String(elevation)).replace('{azimuth}', String(azimuth))}
+              {t('canvas.light.readout').replace('{elevation}', String(elevation)).replace('{azimuth}', String(azimuth))} · {t('canvas.light.hint')}
             </div>
           </div>
-          <div className="grid grid-cols-6 gap-1">
+          <div className="flex items-center justify-center gap-1">
             {DIRECTIONS.map(([id, to]) => (
-              <button key={id} type="button" onClick={() => glide(to(light), null)}
-                className={`h-8 truncate rounded-[8px] px-1 text-[12px] transition ${pointed === id ? 'bg-[var(--cv-float-hover)] text-[var(--cv-ink)]' : 'bg-[var(--cv-chip)] text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]'}`}>
+              <button key={id} type="button" onClick={() => { glide(to(light), null); setTab('custom'); setPreset(null); }}
+                className={`h-8 min-w-[56px] rounded-[9px] px-3 text-[12.5px] transition ${pointed === id && tab === 'custom' ? 'bg-[var(--cv-invert)] text-[var(--cv-on-invert)]' : 'bg-[var(--cv-chip)] text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]'}`}>
                 {t(`canvas.light.directions.${id}`)}
               </button>
             ))}
           </div>
-          <p className="text-[11.5px] leading-relaxed text-[var(--cv-ink-3)]">{t('canvas.light.hint')}</p>
         </div>
 
-        {/* what the light is like, and the words it makes */}
-        <div className="flex min-w-0 flex-1 flex-col gap-5 overflow-y-auto pr-1">
-          <section>
-            <div className={label}>{t('canvas.light.color')}</div>
-            <Swatches value={color} onPick={(hex) => { setColor(hex); setTyping(null); }} />
-            <div className="mt-2.5 flex items-center gap-2">
-              <label className="relative h-7 w-7 shrink-0 cursor-pointer overflow-hidden rounded-full border border-white/20" title={t('canvas.light.custom')} style={{ background: color }}>
-                <input type="color" value={color} onChange={(event) => { setColor(event.target.value.toLowerCase()); setTyping(null); }}
-                  aria-label={t('canvas.light.custom')} className="absolute inset-0 cursor-pointer opacity-0" />
-              </label>
-              <input value={typing ?? color} spellCheck={false} aria-label={t('canvas.light.hex')}
-                onChange={(event) => { setTyping(event.target.value); const hex = hexOf(event.target.value); if (hex) setColor(hex); }}
-                onBlur={() => setTyping(null)}
-                className="h-7 w-24 rounded-[8px] bg-[var(--cv-chip)] px-2 font-mono text-[12px] uppercase text-[var(--cv-ink)] outline-none focus:ring-1 focus:ring-[var(--cv-ring)]" />
-              <span className="truncate text-[12px] text-[var(--cv-ink-3)]">
-                {COLORS.find((c) => c.hex === color) ? t(`canvas.light.colors.${COLORS.find((c) => c.hex === color)!.id}`) : null}
-              </span>
+        {/* what the light is: a preset as it is, or set by hand */}
+        <div className="flex w-[360px] shrink-0 flex-col gap-3">
+          <Segmented<'presets' | 'custom'> on={tab} onPick={setTab} options={[['presets', t('canvas.light.presets')], ['custom', t('canvas.light.customTab')]]} />
+          {tab === 'presets' ? (
+            <div className="grid min-h-0 grid-cols-2 content-start gap-2 overflow-y-auto p-0.5">
+              {LIGHT_PRESETS.map((p) => (
+                <button key={p.id} type="button" onClick={() => setPreset(preset === p.id ? null : p.id)} className="group/preset min-w-0 rounded-[13px] p-1 text-left transition hover:bg-[var(--cv-float-hover)]">
+                  <span className={`relative block aspect-[3/2] overflow-hidden rounded-[10px] bg-[var(--cv-chip)] transition ${preset === p.id ? 'ring-2 ring-[var(--cv-ring)]' : 'ring-1 ring-inset ring-[var(--cv-float-line)]'}`}>
+                    {PICTURES[p.id] ? <img src={PICTURES[p.id]} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover/preset:scale-[1.05]" /> : null}
+                  </span>
+                  <span className={`mt-1.5 block truncate px-1 text-[12.5px] ${preset === p.id ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-2)]'}`}>{t(`canvas.presets.names.${p.id}`)}</span>
+                </button>
+              ))}
             </div>
-          </section>
-          <section>
-            <div className={label}><span>{t('canvas.light.brightness')}</span><span className="tabular-nums text-[var(--cv-ink-2)]">{bright}</span></div>
-            <input type="range" min={0} max={100} value={bright} onChange={(event) => setBright(Number(event.target.value))}
-              aria-label={t('canvas.light.brightness')} className="h-1 w-full cursor-pointer accent-[var(--cv-ink)]" />
-          </section>
-          <section>
-            <div className={label}>{t('canvas.light.softness')}</div>
-            <Segmented<'hard' | 'soft'> on={soft ? 'soft' : 'hard'} onPick={(v) => setSoft(v === 'soft')}
-              options={[['hard', t('canvas.light.hard')], ['soft', t('canvas.light.soft')]]} />
-          </section>
-          <section>
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[12.5px] text-[var(--cv-ink)]">{t('canvas.light.second')}</div>
-                <div className="mt-0.5 text-[11.5px] leading-snug text-[var(--cv-ink-3)]">{t('canvas.light.secondHint')}</div>
-              </div>
-              <button type="button" role="switch" aria-checked={fill} aria-label={t('canvas.light.second')} onClick={() => setFill((v) => !v)}
-                className={`relative h-5 w-9 shrink-0 rounded-full transition ${fill ? 'bg-[var(--cv-invert)]' : 'bg-[var(--cv-chip)] ring-1 ring-inset ring-[var(--cv-float-line)]'}`}>
-                <span className={`absolute top-0.5 h-4 w-4 rounded-full transition-all ${fill ? 'left-[18px] bg-[var(--cv-on-invert)]' : 'left-0.5 bg-[var(--cv-ink-3)]'}`} />
+          ) : (
+            <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+              <section className={card}>
+                <div className={label}>{t('canvas.light.color')}<span className="text-[var(--cv-ink-2)]">{COLORS.find((c) => c.hex === color) ? t(`canvas.light.colors.${COLORS.find((c) => c.hex === color)!.id}`) : null}</span></div>
+                <Swatches value={color} onPick={(hex) => { setColor(hex); setTyping(null); }} />
+                <div className="mt-2 flex items-center gap-2 px-1">
+                  <label className="relative h-7 w-7 shrink-0 cursor-pointer overflow-hidden rounded-full ring-1 ring-inset ring-white/20" title={t('canvas.light.custom')} style={{ background: color }}>
+                    <input type="color" value={color} onChange={(event) => { setColor(event.target.value.toLowerCase()); setTyping(null); }}
+                      aria-label={t('canvas.light.custom')} className="absolute inset-0 cursor-pointer opacity-0" />
+                  </label>
+                  <input value={typing ?? color} spellCheck={false} aria-label={t('canvas.light.hex')}
+                    onChange={(event) => { setTyping(event.target.value); const hex = hexOf(event.target.value); if (hex) setColor(hex); }}
+                    onBlur={() => setTyping(null)}
+                    className="h-7 w-24 rounded-[8px] bg-[var(--cv-chip)] px-2 font-mono text-[12px] uppercase text-[var(--cv-ink)] outline-none focus:ring-1 focus:ring-[var(--cv-ring)]" />
+                </div>
+              </section>
+              <section className={card}>
+                <div className={label}><span>{t('canvas.light.brightness')}</span><span className="tabular-nums text-[var(--cv-ink-2)]">{bright}</span></div>
+                <input type="range" min={0} max={100} value={bright} onChange={(event) => setBright(Number(event.target.value))}
+                  aria-label={t('canvas.light.brightness')} className="h-1 w-full cursor-pointer accent-[var(--cv-ink)]" />
+                <div className={`${label} mt-4`}>{t('canvas.light.softness')}</div>
+                <Segmented<'hard' | 'soft'> on={soft ? 'soft' : 'hard'} onPick={(v) => setSoft(v === 'soft')}
+                  options={[['hard', t('canvas.light.hard')], ['soft', t('canvas.light.soft')]]} />
+              </section>
+              <section className={card}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[12.5px] text-[var(--cv-ink)]">{t('canvas.light.second')}</div>
+                    <div className="mt-0.5 text-[11.5px] leading-snug text-[var(--cv-ink-3)]">{t('canvas.light.secondHint')}</div>
+                  </div>
+                  <button type="button" role="switch" aria-checked={fill} aria-label={t('canvas.light.second')} onClick={() => setFill((v) => !v)}
+                    className={`relative h-5 w-9 shrink-0 rounded-full transition ${fill ? 'bg-[var(--cv-invert)]' : 'bg-[var(--cv-chip)] ring-1 ring-inset ring-[var(--cv-float-line)]'}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full transition-all ${fill ? 'left-[18px] bg-[var(--cv-on-invert)]' : 'left-0.5 bg-[var(--cv-ink-3)]'}`} />
+                  </button>
+                </div>
+                {fill ? <div className="mt-2.5"><Swatches small value={fillColor} onPick={setFillColor} /></div> : null}
+              </section>
+              <button type="button" onClick={reset}
+                className="flex h-8 items-center justify-center gap-1.5 self-start rounded-full px-3 text-[12.5px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
+                <RotateCcw size={13} />{t('canvas.light.reset')}
               </button>
             </div>
-            {fill ? <div className="mt-2.5"><Swatches small value={fillColor} onPick={setFillColor} /></div> : null}
-          </section>
-          <section className="mt-auto rounded-[12px] bg-[var(--cv-chip)] px-3 py-2.5">
-            <div className="mb-1 text-[11.5px] text-[var(--cv-ink-3)]">{t('canvas.light.words')}</div>
-            <p className="select-text text-[12px] leading-relaxed text-[var(--cv-ink-2)]">{words}</p>
-          </section>
-        </div>
-
-        {/* the presets, made as they are */}
-        <div className="flex w-[264px] shrink-0 flex-col border-l !border-[var(--cv-float-line)] pl-5">
-          <div className="mb-2.5 text-[12px] text-[var(--cv-ink-3)]">{t('canvas.light.presets')}</div>
-          <div className="grid min-h-0 grid-cols-2 content-start gap-x-2.5 gap-y-3 overflow-y-auto pb-1">
-            {LIGHT_PRESETS.map((p) => (
-              <button key={p.id} type="button" onClick={() => onMake({ preset: p.id })} className="group/preset min-w-0 text-left">
-                <span className="relative block aspect-[3/2] overflow-hidden rounded-[10px] bg-[var(--cv-chip)] ring-1 ring-inset ring-[var(--cv-float-line)] transition group-hover/preset:ring-[var(--cv-ring)]">
-                  {PICTURES[p.id] ? <img src={PICTURES[p.id]} alt="" draggable={false} loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover/preset:scale-[1.04]" /> : null}
-                </span>
-                <span className="mt-1.5 block truncate px-0.5 text-[12.5px] text-[var(--cv-ink)]">{t(`canvas.presets.names.${p.id}`)}</span>
-              </button>
-            ))}
-          </div>
+          )}
         </div>
       </div>
-      <div className="flex items-center justify-between gap-3 border-t !border-[var(--cv-float-line)] px-5 py-3.5">
-        <button type="button" onClick={reset}
-          className="flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
-          <RotateCcw size={13} />{t('canvas.light.reset')}
-        </button>
-        <button type="button" onClick={() => onMake({ words })}
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-[var(--cv-invert)] px-4 text-[13px] font-medium text-[var(--cv-on-invert)] transition hover:opacity-90">
-          <Sparkles size={13} />{t('canvas.light.make')}
-        </button>
+      {/* the person's own words beside the light, and send: made at once, as every picture window makes */}
+      <div className="px-4 pb-4 pt-2">
+        <div className="flex items-end gap-3 rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] py-2.5 pl-4 pr-2.5 shadow-[var(--cv-float-shadow)] transition focus-within:!border-[var(--cv-ring)]">
+          <span className="mb-[7px] shrink-0 rounded-full bg-[var(--cv-chip)] px-2.5 py-1 text-[12px] text-[var(--cv-ink-2)]">
+            {tab === 'presets' && preset ? t(`canvas.presets.names.${preset}`) : tab === 'presets' ? t('canvas.light.pickOne') : t('canvas.light.byHand')}
+          </span>
+          <textarea value={extra} rows={1} onChange={(event) => setExtra(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (tab === 'custom' || preset) make(); } }}
+            placeholder={t('canvas.light.extra')}
+            className="max-h-[96px] min-h-[38px] min-w-0 flex-1 resize-none bg-transparent py-2 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none [field-sizing:content] placeholder:text-[var(--cv-ink-3)]" />
+          <button type="button" aria-label={t('canvas.light.make')} disabled={tab === 'presets' && !preset} onClick={make}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]">
+            <ArrowUp size={17} />
+          </button>
+        </div>
       </div>
     </CanvasModal>
   );

@@ -290,6 +290,8 @@ export const api = {
       the film at `ms`, or none (null: its film's poster again). Each answers when it was set. */
   setCover: (id: string, from: { file: Blob } | { path: string } | { ms: number }) => call<{ cover: number | null }>(`${p(id)}/cover`,
     'file' in from ? { method: 'PUT', body: from.file, headers: { 'content-type': 'application/octet-stream' } } : { method: 'POST', json: from }).then((r) => r.cover),
+  /** a file of the project into the trash */
+  removeFile: (id: string, path: string) => call<object>(`${p(id)}/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
   clearCover: (id: string) => call<{ cover: null }>(`${p(id)}/cover`, { method: 'DELETE' }).then(() => null),
   /**
    * Something made with the person's services, as `openfilm get <verb>` makes it (studio/server/get.mjs): answered

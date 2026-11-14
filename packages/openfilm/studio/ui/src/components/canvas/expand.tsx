@@ -7,7 +7,8 @@
  * comes back is cut to the canvas set, at its size in pixels.
  */
 import React from 'react';
-import { ArrowUp, Grid3x3, Link2, Link2Off } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, Grid3x3, Link2, Link2Off } from 'lucide-react';
+import { ProviderMark } from '../settings/ProviderMark';
 import { useT } from '@/i18n';
 import { CanvasModal } from './libraries';
 
@@ -79,14 +80,23 @@ const ratioValue = (r: string) => { const [a, b] = r.split(':').map(Number); ret
 /** the shape among `ratios` nearest to `r` */
 const nearest = (r: number, ratios: readonly string[]) => ratios.reduce((best, x) => (Math.abs(Math.log(ratioValue(x) / r)) < Math.abs(Math.log(ratioValue(best) / r)) ? x : best), ratios[0] ?? '1:1');
 
-export function ExpandEditor({ src, ratios, onClose, onMake }: {
+/** a picture model, whether it fills a canvas round a picture (redraws where a mask is clear), and the shapes it makes */
+export interface ExpandModel { key: string; name: string; via: string; mask: boolean; ratios: readonly string[] }
+
+export function ExpandEditor({ src, models, model: firstModel, onClose, onMake }: {
   src: string;
-  /** the shapes the model that fills it makes */
-  ratios: readonly string[];
+  /** the connected picture models; only one that redraws where a mask is clear can widen a picture */
+  models: readonly ExpandModel[];
+  /** the one picked first */
+  model?: string;
   onClose: () => void;
-  onMake: (expanded: Expanded) => Promise<void>;
+  onMake: (expanded: Expanded, model: string) => Promise<void>;
 }) {
   const t = useT();
+  const [modelKey, setModelKey] = React.useState(firstModel ?? models.find((m) => m.mask)?.key);
+  const picked = models.find((m) => m.key === modelKey) ?? models.find((m) => m.mask) ?? models[0];
+  const [modelsOpen, setModelsOpen] = React.useState(false);
+  const ratios = picked?.ratios ?? [];
   const [img, setImg] = React.useState<HTMLImageElement | null>(null);
   const [frame, setFrame] = React.useState<Frame>('16:9');
   const [box, setBox] = React.useState<Box | null>(null);
@@ -206,7 +216,7 @@ export function ExpandEditor({ src, ratios, onClose, onMake }: {
   const made = ratios.length ? nearest(b.w / b.h, ratios) : `${W}:${H}`;
 
   const make = async () => {
-    if (!img || busy) return;
+    if (!img || busy || !picked?.mask) return;
     setBusy(true);
     try {
       /* the canvas grown to the shape the model makes, round its middle */
@@ -228,7 +238,7 @@ export function ExpandEditor({ src, ratios, onClose, onMake }: {
         mask: blob, ratio: made, words: words.trim(),
         place: { x: -mx / mw, y: -my / mh, w: iw / mw, h: ih / mh },
         crop: { x: (b.x - mx) / mw, y: (b.y - my) / mh, w: b.w / mw, h: b.h / mh, width: W, height: H },
-      });
+      }, picked.key);
     } finally { setBusy(false); }
   };
 
@@ -287,7 +297,7 @@ export function ExpandEditor({ src, ratios, onClose, onMake }: {
         <button type="button" aria-pressed={snap} onClick={() => setSnap((v) => !v)} className={toggle(snap)}><Grid3x3 size={14} />{t('canvas.expand.snap')}</button>
         <button type="button" onClick={() => setBox(held({ ...b, x: -(b.w - iw) / 2, y: -(b.h - ih) / 2 }))}
           className="flex h-8 items-center rounded-[9px] px-2.5 text-[12.5px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">{t('canvas.expand.center')}</button>
-        <span className="ml-auto truncate text-[11.5px] text-[var(--cv-ink-3)]">{t('canvas.expand.made').replace('{ratio}', made).replace('{size}', `${W} × ${H}`)}</span>
+        <span className={`ml-auto truncate text-[11.5px] ${picked?.mask ? 'text-[var(--cv-ink-3)]' : 'text-amber-400'}`}>{picked?.mask ? t('canvas.expand.made').replace('{ratio}', made).replace('{size}', `${W} × ${H}`) : t(picked ? 'canvas.expand.cannotPicked' : 'canvas.redraw.noModel')}</span>
       </div>
       <div className="px-4 pb-4 pt-2.5">
         <div className="flex items-end gap-3 rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] py-3 pl-4 pr-3 shadow-[var(--cv-float-shadow)] transition focus-within:!border-[var(--cv-ring)]">
@@ -295,7 +305,31 @@ export function ExpandEditor({ src, ratios, onClose, onMake }: {
             onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); void make(); } }}
             placeholder={t('canvas.expand.hint')}
             className="min-h-[44px] min-w-0 flex-1 resize-none bg-transparent py-1 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]" />
-          <button type="button" aria-label={t('canvas.expand.make')} disabled={!img || busy} onClick={() => { void make(); }}
+          {/* the model that fills it: one that cannot is said so, and nothing is sent */}
+          {picked ? (
+            <div className="relative shrink-0 self-end">
+              <button type="button" onClick={() => setModelsOpen((v) => !v)}
+                className="flex h-9 items-center gap-1.5 rounded-[10px] px-2.5 text-[13px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
+                <ProviderMark id={picked.via} size={15} /><span className="max-w-[180px] truncate">{picked.name}</span><ChevronDown size={13} />
+              </button>
+              {modelsOpen ? (
+                <div className="cv-bar-up absolute bottom-full right-0 z-20 mb-2 w-[280px] rounded-[16px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+                  {models.map((m) => (
+                    <button key={m.key} type="button" onClick={() => { setModelKey(m.key); setModelsOpen(false); }}
+                      className="flex h-10 w-full items-center gap-2 rounded-[9px] px-2 text-left text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
+                      <ProviderMark id={m.via} size={15} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate leading-4">{m.name}</span>
+                        {!m.mask ? <span className="block truncate text-[11px] leading-4 text-[var(--cv-ink-3)]">{t('canvas.expand.cannot')}</span> : null}
+                      </span>
+                      {m.key === picked.key ? <Check size={14} className="text-[var(--cv-ink-2)]" /> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <button type="button" aria-label={t('canvas.expand.make')} disabled={!img || busy || !picked?.mask} onClick={() => { void make(); }}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]">
             {busy ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <ArrowUp size={17} />}
           </button>

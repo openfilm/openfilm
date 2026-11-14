@@ -182,9 +182,12 @@ export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceReso
   const video = file.kind === 'video';
   const shape = frameRatio(file.w, file.h);
   /* a preset made from this picture: at the picture's own shape when it changes the picture, else at the preset's */
-  const from = (p: CanvasPreset) => {
+  const from = (p: CanvasPreset, then: 'make' | 'wait' = 'make', prompt?: string) => {
     setOpen(null);
-    return board.spawn(id, 'image', { preset: p.id, opts: { ratio: p.fromPicture && p.id !== 'panoramaFrom' ? shape ?? p.ratio : p.ratio } });
+    const made = board.spawn(id, 'image', { preset: p.id, ...(prompt ? { prompt } : {}), opts: { ratio: p.fromPicture && p.id !== 'panoramaFrom' ? shape ?? p.ratio : p.ratio } });
+    /* made at once from this picture, as every picture tool makes; one that needs more wired in first waits */
+    if (then === 'make') requestAnimationFrame(() => requestAnimationFrame(() => board.make(made)));
+    return made;
   };
   /* what the connected models can do: a tool only shows when one of them does it */
   const pictures = board.choices('image');
@@ -194,14 +197,15 @@ export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceReso
   const maker = pictures.find((c) => last && c.via === last.via && c.model === last.model) ?? board.fallback('image');
   const largest = [...(maker?.spec?.sizes ?? [])].sort((a, b) => parseFloat(b) - parseFloat(a))[0];
   const tools: CardTools = {
-    expression: (words) => { const made = from(presetOf('expression')!); board.setData(made, { prompt: words }); },
+    expression: (words) => { from(presetOf('expression')!, 'make', words); },
     sizes: (ratios) => { setOpen(null); board.sizes(id, ratios); },
     set: (parts) => { setOpen(null); board.productSet(id, parts); },
-    swap: () => board.pick(from(presetOf('productSwap')!)),
-    blend: () => board.pick(from(presetOf('blend')!)),
+    swap: () => board.pick(from(presetOf('productSwap')!, 'wait')),
+    blend: () => board.pick(from(presetOf('blend')!, 'wait')),
     upscale: () => {
       setOpen(null);
-      board.spawn(id, 'image', { preset: 'upscale', opts: { ...(shape ? { ratio: shape } : {}), ...(largest ? { size: largest } : {}), ...(maker?.spec?.qualities?.includes('high') ? { quality: 'high' } : {}) } });
+      const made = board.spawn(id, 'image', { preset: 'upscale', opts: { ...(shape ? { ratio: shape } : {}), ...(largest ? { size: largest } : {}), ...(maker?.spec?.qualities?.includes('high') ? { quality: 'high' } : {}) } });
+      requestAnimationFrame(() => requestAnimationFrame(() => board.make(made)));
     },
   };
   /* a clip made from the picture as its first frame: moving on its own, from words, to a last frame picked, with a camera move */
@@ -221,7 +225,7 @@ export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceReso
             {line}
             <Popover open={open === 'create'} onOpenChange={(v) => setOpen(v ? 'create' : null)} placement="bottom" align="start"
               trigger={<button type="button" className={`${btn} ${open === 'create' ? 'bg-[var(--cv-float-hover)]' : ''}`} onClick={() => setOpen(open === 'create' ? null : 'create')}><LayoutDashboard size={16} />{t('canvas.create.title')}<ChevronDown size={13} className={`transition-transform duration-200 ${open === 'create' ? 'rotate-180' : ''}`} /></button>}>
-              <PresetPicker hasPicture onPick={from} tools={tools} />
+              <PresetPicker hasPicture onPick={(p) => from(p)} tools={tools} />
             </Popover>
             <ToolMenu label={t('canvas.create.edit')} caption={t('canvas.create.captions.edit')} tone="blue" icon={SlidersHorizontal} open={open === 'edit'} onOpen={(v) => setOpen(v ? 'edit' : null)} items={[
               { key: 'crop', icon: Crop, label: t('canvas.tools.crop'), about: t('canvas.create.about.crop'), run: () => board.openTool(id, file.path, 'crop') },

@@ -52,7 +52,7 @@ function Canvas({ projectId }: { projectId: string }) {
     <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
       <React.Suspense fallback={<CanvasLoading />}>
         <CanvasView shown={state.shown === 'canvas'} projectId={projectId} folder={state.folder} files={state.files} sources={state.sources} onAddToFilm={(file) => { addTo('edit', [file.path]); }}
-          onImportFiles={(dropped, progress = () => {}) => project(projectId).importFiles(dropped, { into: 'assets', onProgress: progress })} onOpenSettings={() => openSettings('models')}
+          onImportFiles={(dropped, progress = () => {}, into = 'assets') => project(projectId).importFiles(dropped, { into, onProgress: progress })} onOpenSettings={() => openSettings('models')}
           focus={focus} insert={insert} addFiles={addFiles} onRefer={refer ? (refs) => { for (const ref of refs) refer(ref); } : undefined}
           onSendToFilm={(list) => { addTo('edit', list.map((file) => file.path), { show: true }); }} onReveal={(path) => project(projectId).showFile(path)}
           {...(state.chat ? { chat: state.chat } : {})}

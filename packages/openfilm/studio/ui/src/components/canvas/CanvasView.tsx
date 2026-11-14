@@ -62,6 +62,8 @@ import { SelectionToolbar } from './panels';
 import { CanvasLoading } from './CanvasLoading';
 import type { ImportProgress } from '../MediaPool';
 
+/** where the canvas keeps what it makes on the way to a picture: under assets/, in a dot folder the library never lists */
+const WORK = 'assets/.canvas';
 /** how long after the last change the board is written */
 const SAVE_AFTER_MS = 600;
 /** the project's first board, and the one shown last in this browser (a convenience: none kept, the first) */
@@ -511,6 +513,13 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (!taken.has(base)) return base;
     for (let k = 2; ; k++) if (!taken.has(`${base} ${k}`)) return `${base} ${k}`;
   };
+  /**
+   * What the canvas makes on its way to a picture (a mask, the marks, a picture framed for widening) kept out of the
+   * person's files: in `assets/.canvas`, which the library never lists, where a model can still read it.
+   */
+  const keepWork = async (blob: Blob, name: string) => (await onImportFiles([new File([blob], name, { type: 'image/png' })], undefined, WORK))[0];
+  /** a file made only on the way (a subject cut out to select, a picture before it was cut to size): into the trash */
+  const dropWork = (path: string) => { void api.removeFile(projectId, path).catch(() => {}); };
   const addFile = (path: string, placement: NodePlacement, size?: { w: number; h: number }, title?: string) => {
     const width = size?.w ?? (placement.wire ? fileCardWidth(byPath.get(path)) : FILE_W);
     place({ id: canvasId('n'), type: 'file', position: topLeft(placement, width, size?.h ?? CARD_H), data: { path, ...(title ? { title } : {}) }, ...(size ? { width: size.w, height: size.h } : {}) }, placement.from, placement.wire);
@@ -700,13 +709,15 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       return (async () => {
         try {
           const framed = await framedPicture(srcOf(picture.path), srcOf(mask), plan.place);
-          const [held] = await onImportFiles([new File([framed], `expand-${Date.now().toString(36)}.png`, { type: 'image/png' })]);
+          const held = await keepWork(framed, `expand-${Date.now().toString(36)}.png`);
           if (!held) return false;
           const asked = { ...node, prompt: [EXPAND_ASK, node.prompt?.trim()].filter(Boolean).join('\n\n') } as MakingNode;
           const request = makeRequest(asked, [{ from: picture.from, path: held, media: 'image' }], makeName(node as MakingNode), spec);
           const pick = node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
           const ok = await startRun(projectId, folder, id, request, pick, inputsKey(node, inputs), { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') }, boardId);
           if (ok) await cropMade(id, plan.crop).catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+          /* made again from the picture and the mask each time: the framed picture was only for this run */
+          dropWork(held);
           return ok;
         } catch (e) { runErrors.set(`${projectId}/${id}`, e instanceof Error ? e.message : String(e)); runsChanged(); return false; }
       })();
@@ -998,7 +1009,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (!choice) { onError(t('canvas.redraw.noModel')); return; }
     try {
       /* what was marked, kept in the project: the mask or the marks the model reads */
-      const kept = drawn ? (await onImportFiles([new File([drawn], `${way}-${Date.now().toString(36)}.png`, { type: 'image/png' })]))[0] : undefined;
+      const kept = drawn ? await keepWork(drawn, `${way}-${Date.now().toString(36)}.png`) : undefined;
       if (drawn && !kept) return;
       const picture = byPath.get(source.path);
       const ratio = picture?.w && picture.h ? ratioOf(`${picture.w}:${picture.h}`, choice.spec) : undefined;
@@ -1031,6 +1042,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         const made = receipt.src ?? receipt.images?.[0]?.src;
         if (!made) throw new Error(t('canvas.make.nothing'));
         resolve(sources.file({ ...picture, path: made }));
+        /* only to select by: gone once the editor has read it */
+        window.setTimeout(() => dropWork(made), 20_000);
       }).catch(reject);
     };
     if (providers?.use.cutout) go();
@@ -1061,11 +1074,12 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     requestAnimationFrame(() => requestAnimationFrame(() => { void flow.fitView({ nodes: [{ id: group }], padding: 0.2, maxZoom: 1, duration: 300 }); void makeAll(group); }));
   };
   /** a picture widened: one node beside it, wired from it, made at once from it and the mask (its canvas in its name) */
-  const outpaint = async (sourceId: string, expanded: Expanded) => {
-    const choice = choicesFor(providers, 'image').find((c) => c.spec?.mask);
+  const outpaint = async (sourceId: string, expanded: Expanded, model?: string) => {
+    const masking = choicesFor(providers, 'image').filter((c) => c.spec?.mask);
+    const choice = masking.find((c) => keyOfChoice(c) === model) ?? masking[0];
     if (!choice) { onError(t('canvas.redraw.noModel')); return; }
     try {
-      const [mask] = await onImportFiles([new File([expanded.mask], expandName(Date.now().toString(36), expanded.place, expanded.crop), { type: 'image/png' })]);
+      const mask = await keepWork(expanded.mask, expandName(Date.now().toString(36), expanded.place, expanded.crop));
       if (!mask) return;
       const ratio = ratioOf(expanded.ratio, choice.spec);
       const size = makeSize('image', `${expanded.crop.width}:${expanded.crop.height}`);
@@ -1104,6 +1118,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (!cut) return;
     setNodes((list) => list.map((n) => (n.id === id && n.type === 'make'
       ? { ...n, data: { ...n.data, versions: [...(n.data.versions ?? []).filter((v) => v !== path), cut], path: cut } } : n)));
+    /* the uncut one was only on the way */
+    dropWork(path);
   };
   /** an edited copy of a picture (cropped, colored) brought in beside it, wired from it */
   const bringEdited = async (sourceId: string, file: File, tool: string) => {
@@ -1147,7 +1163,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       for (let a = 0; a < 16; a++) ctx.drawImage(cut, Math.cos((a / 16) * Math.PI * 2) * grow, Math.sin((a / 16) * Math.PI * 2) * grow);
       ctx.drawImage(cut, 0, 0);
       const mask = await new Promise<Blob>((done, fail) => canvas.toBlob((b) => (b ? done(b) : fail(new Error('no mask was made'))), 'image/png'));
-      const [maskPath] = await onImportFiles([new File([mask], `${base}-layer-mask.png`, { type: 'image/png' })]);
+      const maskPath = await keepWork(mask, `${base}-layer-mask.png`);
       const choice = choicesFor(providers, 'image').find((c) => c.spec?.mask);
       const ratio = frameRatio(source.w, source.h, choice?.spec) ?? '1:1';
       const size = makeSize('image', ratio);
@@ -1895,14 +1911,19 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           const picture = byPath.get(pictureTool.path)!;
           const src = sources.file(picture);
           const close = () => setPictureTool(null);
-          if (pictureTool.tool === 'expand') return <ExpandEditor src={src} ratios={choicesFor(providers, 'image').find((c) => c.spec?.mask)?.spec?.ratios ?? []} onClose={close} onMake={(expanded) => outpaint(pictureTool.id, expanded)} />;
+          if (pictureTool.tool === 'expand') {
+            return <ExpandEditor src={src} onClose={close} onMake={(expanded, model) => outpaint(pictureTool.id, expanded, model)} model={redrawFirst(pictureTool.id)}
+              models={choicesFor(providers, 'image').map((c) => ({ key: keyOfChoice(c), name: c.name, via: c.via, mask: Boolean(c.spec?.mask), ratios: c.spec?.ratios ?? [] }))} />;
+          }
           if (pictureTool.tool === 'crop') return <CropEditor src={src} name={picture.name} onClose={close} onDone={(file) => bringEdited(pictureTool.id, file, t('canvas.names.crop'))} />;
           if (pictureTool.tool === 'adjust') return <AdjustEditor src={src} name={picture.name} onClose={close} onDone={(file) => bringEdited(pictureTool.id, file, t('canvas.names.adjust'))} />;
           return (
             <LightPanel src={src} onClose={close} onMake={(made) => {
+              /* made at once, as every picture window makes what it was set to */
               const shape = frameRatio(picture.w, picture.h) ?? '1:1';
-              board.spawn(pictureTool.id, 'image', { ...('preset' in made ? { preset: made.preset } : { prompt: made.words }), opts: { ratio: shape }, title: nameFrom(pictureTool.id, t('canvas.actions.light')) });
+              const id = board.spawn(pictureTool.id, 'image', { ...('preset' in made ? { preset: made.preset } : {}), prompt: made.words, opts: { ratio: shape }, title: nameFrom(pictureTool.id, t('canvas.actions.light')) });
               close();
+              requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(id); }));
             }} />
           );
         })() : null}
@@ -1973,7 +1994,8 @@ export interface CanvasViewProps {
   /** a cut's files onto the timeline, one after the other, in its order */
   onSendToFilm: (files: WorkspaceResource[]) => void;
   /** files of this computer brought into the project, as the Assets bring them: their paths in it */
-  onImportFiles: (files: File[], onProgress?: ImportProgress) => Promise<string[]>;
+  /** files brought into the project: into assets/, or `into` another folder under it (the canvas's own work: `assets/.canvas`, which the library never lists) */
+  onImportFiles: (files: File[], onProgress?: ImportProgress, into?: string) => Promise<string[]>;
   /** where the person connects a service to make with */
   onOpenSettings: () => void;
   /** a file shown in the Assets */
