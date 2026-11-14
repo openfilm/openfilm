@@ -145,7 +145,7 @@ export function chunkStore(renderDir, out, ext) {
   let manifest = null;
   if (!busy) {
     try { manifest = JSON.parse(readFileSync(join(folder, MANIFEST), 'utf8')); } catch { /* none, or cut off */ }
-    if (manifest && (typeof manifest.settings !== 'string' || !manifest.files || Object.entries(manifest.files).some(([file, was]) => signature(file) !== was))) manifest = null;
+    if (manifest && (typeof manifest.settings !== 'string' || !manifest.files || typeof manifest.files !== 'object' || Array.isArray(manifest.files) || Object.entries(manifest.files).some(([file, was]) => signature(file) !== was))) manifest = null;
   }
   /** @type {Record<string, string>} */
   let files = manifest?.files ?? {};
