@@ -1,21 +1,34 @@
 /**
- * A picture widened: placed in a larger frame of a shape picked (or grown by a factor), moved and sized in it, and
- * the frame around it filled by a model that redraws where a mask leaves it clear. The picture goes to the model on a
- * soft blur of itself (so the new edges start from its own colors), with a mask clear everywhere but the picture: what
- * was there stays exactly as it was.
+ * A picture widened: the canvas round it made larger as in a drawing program — its edges and corners dragged out, its
+ * size typed in pixels, or a shape picked — the picture moved in it, edges snapping to a grid and the picture's middle
+ * to the canvas's when snapping is on; then the canvas round the picture filled by a model that redraws where a mask
+ * leaves it clear. A model makes a few shapes only: the canvas is sent grown to the nearest of them (the picture on a
+ * soft blur of itself, so the new edges start from its own colors; a mask clear everywhere but the picture), and what
+ * comes back is cut to the canvas set, at its size in pixels.
  */
 import React from 'react';
-import { Sparkles } from 'lucide-react';
+import { ArrowUp, Grid3x3, Link2, Link2Off } from 'lucide-react';
 import { useT } from '@/i18n';
 import { CanvasModal } from './libraries';
 
-/** the frame's shapes offered; `×1.5` and `×2` grow it around the picture, keeping its own shape */
-const FRAMES = ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '21:9', 'x1.5', 'x2'] as const;
+/** the shapes offered; `×1.5` and `×2` grow it round the picture, keeping its own shape */
+const FRAMES = ['free', '1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '21:9', 'x1.5', 'x2'] as const;
 type Frame = typeof FRAMES[number];
 /** the longest side of what goes to the model */
 const LONGEST = 2048;
+/** the largest canvas, against the picture */
+const GROW_MAX = 4;
 
-export interface Expanded { picture: Blob; mask: Blob; ratio: string; words: string }
+/** a canvas, in the picture's pixels: the picture is at 0,0, its own size */
+interface Box { x: number; y: number; w: number; h: number }
+export interface Expanded {
+  picture: Blob; mask: Blob;
+  /** the shape it is made at (one the model makes) */
+  ratio: string;
+  words: string;
+  /** the canvas set, as a share of what is made, and its size in pixels: what is made is cut to it */
+  crop: { x: number; y: number; w: number; h: number; width: number; height: number };
+}
 
 const ASK = 'Extend the picture into the empty area around it: continue the scene naturally beyond its edges with the same style, light, perspective and detail, so it reads as one seamless picture; keep the original area exactly as it is.';
 
@@ -28,119 +41,237 @@ function loadImage(src: string) {
     img.src = src;
   });
 }
-const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+const ratioValue = (r: string) => { const [a, b] = r.split(':').map(Number); return a && b ? a / b : 1; };
+/** the shape among `ratios` nearest to `r` */
+const nearest = (r: number, ratios: readonly string[]) => ratios.reduce((best, x) => (Math.abs(Math.log(ratioValue(x) / r)) < Math.abs(Math.log(ratioValue(best) / r)) ? x : best), ratios[0] ?? '1:1');
 
-export function ExpandEditor({ src, onClose, onMake }: { src: string; onClose: () => void; onMake: (expanded: Expanded) => Promise<void> }) {
+export function ExpandEditor({ src, ratios, onClose, onMake }: {
+  src: string;
+  /** the shapes the model that fills it makes */
+  ratios: readonly string[];
+  onClose: () => void;
+  onMake: (expanded: Expanded) => Promise<void>;
+}) {
   const t = useT();
   const [img, setImg] = React.useState<HTMLImageElement | null>(null);
   const [frame, setFrame] = React.useState<Frame>('16:9');
-  /* the picture's size in the frame (1: as large as fits) and its middle, as a share of the frame */
-  const [scale, setScale] = React.useState(0.8);
-  const [middle, setMiddle] = React.useState<[number, number]>([0.5, 0.5]);
+  const [box, setBox] = React.useState<Box | null>(null);
+  const [snap, setSnap] = React.useState(true);
+  const [lock, setLock] = React.useState(true);
   const [words, setWords] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const [guides, setGuides] = React.useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
   const stage = React.useRef<HTMLDivElement>(null);
-  const drag = React.useRef<{ x: number; y: number; from: [number, number] } | null>(null);
+  const [room, setRoom] = React.useState({ w: 0, h: 0 });
+  const drag = React.useRef<{ kind: string; x: number; y: number; from: Box } | null>(null);
   React.useEffect(() => { void loadImage(src).then(setImg, () => {}); }, [src]);
+  React.useEffect(() => {
+    const el = stage.current;
+    if (!el) return;
+    const seen = new ResizeObserver(([entry]) => { if (entry) setRoom({ w: entry.contentRect.width, h: entry.contentRect.height }); });
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, []);
 
-  /* the frame, in the picture's own pixels: its shape, or the picture grown */
   const iw = img?.naturalWidth ?? 1;
   const ih = img?.naturalHeight ?? 1;
-  const fr = frame.startsWith('x') ? iw / ih : (([w, h]) => w! / h!)(frame.split(':').map(Number));
-  const grow = frame === 'x2' ? 2 : frame === 'x1.5' ? 1.5 : 0;
-  /* the frame is at least the picture: as wide or as high as it, grown by the factor */
-  let fw = grow ? iw * grow : Math.max(iw, ih * fr);
-  let fh = grow ? ih * grow : fw / fr;
-  if (!grow && fh < ih) { fh = ih; fw = fh * fr; }
-  const fit = Math.min(fw / iw, fh / ih);
-  const pw = iw * fit * (grow ? 1 / grow : scale);
-  const ph = ih * fit * (grow ? 1 / grow : scale);
-  const px = Math.min(Math.max(middle[0] * fw - pw / 2, 0), fw - pw);
-  const py = Math.min(Math.max(middle[1] * fh - ph / 2, 0), fh - ph);
+  /* the grid snapped to, in the picture's pixels: a 64th of its long side, in whole 8s */
+  const grid = Math.max(8, Math.round(Math.max(iw, ih) / 64 / 8) * 8);
+  /* the canvas a shape asks for: the least of that shape holding the picture (or the picture grown), round it */
+  const shaped = (f: Frame): Box => {
+    if (f === 'free') return { x: -iw * 0.15, y: -ih * 0.15, w: iw * 1.3, h: ih * 1.3 };
+    const grow = f === 'x2' ? 2 : f === 'x1.5' ? 1.5 : 0;
+    let w: number; let h: number;
+    if (grow) { w = iw * grow; h = ih * grow; } else {
+      const r = ratioValue(f);
+      w = Math.max(iw, ih * r); h = w / r;
+      if (h < ih) { h = ih; w = h * r; }
+      /* a shape the picture already has still widens it a little */
+      if (Math.abs(w - iw) < 1 && Math.abs(h - ih) < 1) { w *= 1.25; h *= 1.25; }
+    }
+    return { x: (iw - w) / 2, y: (ih - h) / 2, w, h };
+  };
+  React.useEffect(() => { if (img) setBox(shaped(frame)); }, [img]); // eslint-disable-line react-hooks/exhaustive-deps
+  const b = box ?? shaped(frame);
+  const aspect = lock && frame !== 'free' ? (frame.startsWith('x') ? iw / ih : ratioValue(frame)) : null;
 
-  const down = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { x: event.clientX, y: event.clientY, from: middle };
+  /* the canvas kept round the picture, no larger than GROW_MAX of it */
+  const held = (n: Box): Box => {
+    let { x, y, w, h } = n;
+    w = Math.min(Math.max(w, iw), iw * GROW_MAX); h = Math.min(Math.max(h, ih), ih * GROW_MAX);
+    x = Math.min(0, Math.max(x, iw - w)); y = Math.min(0, Math.max(y, ih - h));
+    return { x, y, w, h };
   };
-  const move = (event: React.PointerEvent<HTMLDivElement>) => {
+  /* snapped: an edge to the grid, or the picture's middle to the canvas's */
+  const snapped = (n: Box, moving: string): { box: Box; gx: number[]; gy: number[] } => {
+    if (!snap) return { box: n, gx: [], gy: [] };
+    const near = Math.max(grid * 0.6, Math.max(iw, ih) * 0.012);
+    const gx: number[] = []; const gy: number[] = [];
+    let { x, y, w, h } = n;
+    const to = (v: number) => Math.round(v / grid) * grid;
+    if (moving === 'move') {
+      const cx = -x - (w - iw) / 2; const cy = -y - (h - ih) / 2;
+      if (Math.abs(cx) < near) { x = -(w - iw) / 2; gx.push(iw / 2); }
+      if (Math.abs(cy) < near) { y = -(h - ih) / 2; gy.push(ih / 2); }
+    } else {
+      if (moving.includes('w')) { const r = x + w; x = to(x); w = r - x; }
+      if (moving.includes('e')) w = to(x + w) - x;
+      if (moving.includes('n')) { const bt = y + h; y = to(y); h = bt - y; }
+      if (moving.includes('s')) h = to(y + h) - y;
+    }
+    return { box: { x, y, w, h }, gx, gy };
+  };
+
+  const view = b.w && room.w ? Math.min((room.w - 80) / b.w, (room.h - 80) / b.h) : 0;
+  const ox = room.w / 2 - (b.x + b.w / 2) * view;
+  const oy = room.h / 2 - (b.y + b.h / 2) * view;
+
+  const down = (kind: string) => (event: React.PointerEvent) => {
+    event.stopPropagation();
+    stage.current?.setPointerCapture(event.pointerId);
+    drag.current = { kind, x: event.clientX, y: event.clientY, from: b };
+  };
+  const move = (event: React.PointerEvent) => {
     const d = drag.current;
-    const box = stage.current?.getBoundingClientRect();
-    if (!d || !box) return;
-    setMiddle([d.from[0] + (event.clientX - d.x) / box.width, d.from[1] + (event.clientY - d.y) / box.height]);
+    if (!d || !view) return;
+    const dx = (event.clientX - d.x) / view; const dy = (event.clientY - d.y) / view;
+    let n = { ...d.from };
+    if (d.kind === 'move') { n.x -= dx; n.y -= dy; }
+    else {
+      if (d.kind.includes('w')) { n.x += dx; n.w -= dx; }
+      if (d.kind.includes('e')) n.w += dx;
+      if (d.kind.includes('n')) { n.y += dy; n.h -= dy; }
+      if (d.kind.includes('s')) n.h += dy;
+      if (aspect) {
+        /* the shape kept: the side pulled leads, the other follows round the same middle */
+        const pullsW = d.kind.includes('w') || d.kind.includes('e');
+        const pullsH = d.kind.includes('n') || d.kind.includes('s');
+        if (pullsW && (!pullsH || Math.abs(dx) >= Math.abs(dy))) { const h = n.w / aspect; n.y -= (h - n.h) / 2; n.h = h; }
+        else { const w = n.h * aspect; n.x -= (w - n.w) / 2; n.w = w; }
+      }
+    }
+    const s = aspect && d.kind !== 'move' ? { box: n, gx: [], gy: [] } : snapped(n, d.kind);
+    n = held(s.box);
+    setGuides({ x: s.gx, y: s.gy });
+    setBox(n);
+    if (!aspect && d.kind !== 'move') setFrame('free');
   };
-  const ratio = (() => {
-    if (!frame.startsWith('x')) return frame;
-    const w = Math.round(fw); const h = Math.round(fh); const g = gcd(w, h) || 1;
-    return `${w / g}:${h / g}`;
-  })();
+  const up = () => { drag.current = null; setGuides({ x: [], y: [] }); };
+  const pick = (f: Frame) => { setFrame(f); setBox(held(shaped(f))); };
+  /* a size typed: the canvas grows round its middle, the other side following when the shape is kept */
+  const typed = (side: 'w' | 'h', value: number) => {
+    if (!Number.isFinite(value) || value <= 0) return;
+    const n = { ...b };
+    if (side === 'w') { n.x -= (value - n.w) / 2; n.w = value; if (aspect) { const h = value / aspect; n.y -= (h - n.h) / 2; n.h = h; } }
+    else { n.y -= (value - n.h) / 2; n.h = value; if (aspect) { const w = value * aspect; n.x -= (w - n.w) / 2; n.w = w; } }
+    setBox(held(n));
+    if (!aspect) setFrame('free');
+  };
+
+  const W = Math.round(b.w); const H = Math.round(b.h);
+  const made = ratios.length ? nearest(b.w / b.h, ratios) : `${W}:${H}`;
 
   const make = async () => {
     if (!img || busy) return;
     setBusy(true);
     try {
-      const k = Math.min(1, LONGEST / Math.max(fw, fh));
-      const W = Math.round(fw * k); const H = Math.round(fh * k);
+      /* the canvas grown to the shape the model makes, round its middle */
+      const r = ratioValue(made);
+      let mw = b.w; let mh = b.h;
+      if (mw / mh > r) mh = mw / r; else mw = mh * r;
+      const mx = b.x - (mw - b.w) / 2; const my = b.y - (mh - b.h) / 2;
+      const k = Math.min(1, LONGEST / Math.max(mw, mh));
+      const PW = Math.round(mw * k); const PH = Math.round(mh * k);
       const picture = document.createElement('canvas');
-      picture.width = W; picture.height = H;
+      picture.width = PW; picture.height = PH;
       const ctx = picture.getContext('2d')!;
-      /* the frame starts from a soft blur of the picture itself, the picture sharp on it */
       ctx.filter = 'blur(48px)';
-      ctx.drawImage(img, 0, 0, W, H);
+      ctx.drawImage(img, 0, 0, PW, PH);
       ctx.filter = 'none';
-      ctx.drawImage(img, px * k, py * k, pw * k, ph * k);
+      ctx.drawImage(img, -mx * k, -my * k, iw * k, ih * k);
       const mask = document.createElement('canvas');
-      mask.width = W; mask.height = H;
+      mask.width = PW; mask.height = PH;
       const m = mask.getContext('2d')!;
       /* clear (redrawn) all round; the picture opaque (kept), a hair inside its edge so the seam is redrawn too */
       m.fillStyle = '#000';
-      const inset = Math.max(2, Math.round(Math.min(pw, ph) * k * 0.01));
-      m.fillRect(px * k + inset, py * k + inset, pw * k - 2 * inset, ph * k - 2 * inset);
-      const blob = (c: HTMLCanvasElement) => new Promise<Blob>((done, fail) => c.toBlob((b) => (b ? done(b) : fail(new Error('no picture was made'))), 'image/png'));
-      await onMake({ picture: await blob(picture), mask: await blob(mask), ratio, words: [ASK, words.trim()].filter(Boolean).join('\n\n') });
+      const inset = Math.max(2, Math.round(Math.min(iw, ih) * k * 0.01));
+      m.fillRect(-mx * k + inset, -my * k + inset, iw * k - 2 * inset, ih * k - 2 * inset);
+      const blob = (c: HTMLCanvasElement) => new Promise<Blob>((done, fail) => c.toBlob((x) => (x ? done(x) : fail(new Error('no picture was made'))), 'image/png'));
+      await onMake({
+        picture: await blob(picture), mask: await blob(mask), ratio: made, words: [ASK, words.trim()].filter(Boolean).join('\n\n'),
+        crop: { x: (b.x - mx) / mw, y: (b.y - my) / mh, w: b.w / mw, h: b.h / mh, width: W, height: H },
+      });
     } finally { setBusy(false); }
   };
 
-  const pill = (on: boolean) => `h-8 rounded-[8px] px-2.5 text-[12.5px] tabular-nums transition ${on ? 'bg-[var(--cv-modal)] text-[var(--cv-ink)] shadow-[0_1px_3px_rgba(0,0,0,0.25)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`;
-  /* the frame drawn as large as fits the stage */
-  const box = { w: 860, h: 470 };
-  const view = Math.min(box.w / fw, box.h / fh);
+  const seg = (on: boolean) => `h-7 rounded-[8px] px-2.5 text-[12.5px] tabular-nums transition ${on ? 'bg-[var(--cv-modal)] text-[var(--cv-ink)] shadow-[0_1px_3px_rgba(0,0,0,0.25)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`;
+  const toggle = (on: boolean) => `flex h-8 items-center gap-1.5 rounded-[9px] px-2.5 text-[12.5px] transition ${on ? 'bg-[color-mix(in_srgb,var(--cv-edge-lit)_18%,transparent)] text-[var(--cv-ink)] ring-1 ring-inset ring-[color-mix(in_srgb,var(--cv-edge-lit)_45%,transparent)]' : 'text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]'}`;
+  const number = 'h-8 w-[76px] rounded-[9px] bg-[var(--cv-chip)] px-2 text-center text-[12.5px] tabular-nums text-[var(--cv-ink)] outline-none ring-1 ring-inset ring-transparent focus:ring-[var(--cv-ring)]';
+  const handles = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+  const handleAt = (k: string): React.CSSProperties => ({
+    left: k.includes('w') ? 0 : k.includes('e') ? '100%' : '50%', top: k.includes('n') ? 0 : k.includes('s') ? '100%' : '50%',
+    cursor: `${k}-resize`,
+  });
   return (
     <CanvasModal label={t('canvas.expand.title')} onClose={onClose}>
       <div className="flex flex-wrap items-center gap-2 px-5 pr-16 pt-4">
-        <span className="mr-2 text-[14px] font-medium">{t('canvas.expand.title')}</span>
+        <span className="mr-1 text-[14px] font-semibold">{t('canvas.expand.title')}</span>
         <div className="flex flex-wrap items-center gap-0.5 rounded-[11px] bg-[var(--cv-chip)] p-[3px]">
-          {FRAMES.map((f) => <button key={f} type="button" className={pill(f === frame)} onClick={() => setFrame(f)}>{f.startsWith('x') ? `×${f.slice(1)}` : f}</button>)}
+          {FRAMES.map((f) => <button key={f} type="button" className={seg(f === frame)} onClick={() => pick(f)}>{f === 'free' ? t('canvas.expand.free') : f.startsWith('x') ? `×${f.slice(1)}` : f}</button>)}
         </div>
-        {!grow ? (
-          <label className="ml-2 flex items-center gap-2 text-[12px] text-[var(--cv-ink-3)]">
-            {t('canvas.expand.size')}
-            <input type="range" min={0.3} max={1} step={0.01} value={scale} onChange={(event) => setScale(Number(event.target.value))} className="h-1 w-28 cursor-pointer accent-[var(--cv-ink)]" />
-          </label>
-        ) : null}
-        <button type="button" className={pill(false)} onClick={() => { setMiddle([0.5, 0.5]); setScale(0.8); }}>{t('canvas.expand.center')}</button>
       </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-4">
-        {img ? (
-          <div ref={stage} className="relative overflow-hidden rounded-[10px]" style={{ width: fw * view, height: fh * view,
-            backgroundImage: 'repeating-conic-gradient(color-mix(in srgb, var(--cv-ink) 10%, transparent) 0 25%, transparent 0 50%)', backgroundSize: '20px 20px' }}>
-            <div onPointerDown={down} onPointerMove={move} onPointerUp={() => { drag.current = null; }}
-              className="absolute cursor-grab touch-none shadow-[0_0_0_1px_rgba(255,255,255,0.6)] active:cursor-grabbing"
-              style={{ left: px * view, top: py * view, width: pw * view, height: ph * view }}>
+      {/* the canvas: the picture in it, dragged; its edges and corners dragged out */}
+      <div ref={stage} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+        className="relative mx-4 mt-3 min-h-0 flex-1 touch-none select-none overflow-hidden rounded-[16px] bg-[var(--cv-card-2)]"
+        style={{ backgroundImage: 'radial-gradient(color-mix(in srgb, var(--cv-ink) 9%, transparent) 1px, transparent 1.4px)', backgroundSize: '18px 18px' }}>
+        {img && view ? (
+          <div className="absolute" style={{ left: ox + b.x * view, top: oy + b.y * view, width: b.w * view, height: b.h * view }}>
+            {/* what will be made: checkered */}
+            <div className="absolute inset-0 rounded-[4px]" style={{ backgroundImage: 'repeating-conic-gradient(color-mix(in srgb, var(--cv-ink) 12%, transparent) 0 25%, color-mix(in srgb, var(--cv-ink) 4%, transparent) 0 50%)', backgroundSize: '18px 18px' }} />
+            {snap ? (
+              <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: 'linear-gradient(to right, color-mix(in srgb, var(--cv-edge-lit) 22%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--cv-edge-lit) 22%, transparent) 1px, transparent 1px)', backgroundSize: `${grid * view}px ${grid * view}px`, backgroundPosition: `${(((-b.x % grid) + grid) % grid) * view}px ${(((-b.y % grid) + grid) % grid) * view}px` }} />
+            ) : null}
+            <div onPointerDown={down('move')} className="absolute cursor-grab shadow-[0_0_0_1px_rgba(255,255,255,0.7),0_10px_30px_rgba(0,0,0,0.35)] active:cursor-grabbing"
+              style={{ left: -b.x * view, top: -b.y * view, width: iw * view, height: ih * view }}>
               <img src={src} alt="" draggable={false} className="h-full w-full select-none" />
             </div>
+            {guides.x.map((g) => <div key={`x${g}`} className="pointer-events-none absolute top-0 h-full w-px bg-[#ff4fd8]" style={{ left: (g - b.x) * view }} />)}
+            {guides.y.map((g) => <div key={`y${g}`} className="pointer-events-none absolute left-0 h-px w-full bg-[#ff4fd8]" style={{ top: (g - b.y) * view }} />)}
+            <div className="pointer-events-none absolute inset-0 rounded-[4px] ring-1 ring-[var(--cv-edge-lit)]" />
+            {handles.map((k) => (
+              <div key={k} onPointerDown={down(k)} className="absolute z-10 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center" style={handleAt(k)}>
+                <span className={`block rounded-[3px] border border-[var(--cv-edge-lit)] bg-white shadow ${k.length === 2 ? 'h-3 w-3' : k === 'n' || k === 's' ? 'h-2 w-5' : 'h-5 w-2'}`} />
+              </div>
+            ))}
+            <div className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-[6px] bg-[var(--cv-float)] px-2 py-0.5 text-[11.5px] tabular-nums text-[var(--cv-ink-2)] shadow-[var(--cv-float-shadow)]">{W} × {H}</div>
           </div>
         ) : null}
       </div>
-      <div className="flex items-end gap-3 border-t !border-[var(--cv-float-line)] px-5 py-3.5">
-        <textarea value={words} rows={2} onChange={(event) => setWords(event.target.value)}
-          onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); void make(); } }}
-          placeholder={t('canvas.expand.hint')}
-          className="min-w-0 flex-1 resize-none bg-transparent text-[13.5px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]" />
-        <span className="shrink-0 pb-2 text-[12px] tabular-nums text-[var(--cv-ink-3)]">{ratio} · {Math.round(fw)}×{Math.round(fh)}</span>
-        <button type="button" disabled={!img || busy} onClick={() => { void make(); }}
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-[var(--cv-invert)] px-4 text-[13px] font-medium text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:opacity-35">
-          <Sparkles size={13} />{t('canvas.expand.make')}
-        </button>
+      {/* its size in pixels, the shape kept or not, snapping, and what the model makes */}
+      <div className="flex flex-wrap items-center gap-2 px-5 pt-3">
+        <label className="flex items-center gap-1.5 text-[12px] text-[var(--cv-ink-3)]">W<input key={`w${W}`} defaultValue={W} inputMode="numeric" className={number}
+          onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur(); }} onBlur={(event) => typed('w', Number(event.target.value))} /></label>
+        <button type="button" title={t(lock ? 'canvas.expand.unlock' : 'canvas.expand.lock')} aria-pressed={lock} onClick={() => setLock((v) => !v)}
+          className="flex h-8 w-8 items-center justify-center rounded-[9px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">{lock ? <Link2 size={15} /> : <Link2Off size={15} />}</button>
+        <label className="flex items-center gap-1.5 text-[12px] text-[var(--cv-ink-3)]">H<input key={`h${H}`} defaultValue={H} inputMode="numeric" className={number}
+          onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur(); }} onBlur={(event) => typed('h', Number(event.target.value))} /></label>
+        <span className="mx-1 h-5 w-px bg-[var(--cv-float-line)]" />
+        <button type="button" aria-pressed={snap} onClick={() => setSnap((v) => !v)} className={toggle(snap)}><Grid3x3 size={14} />{t('canvas.expand.snap')}</button>
+        <button type="button" onClick={() => setBox(held({ ...b, x: -(b.w - iw) / 2, y: -(b.h - ih) / 2 }))}
+          className="flex h-8 items-center rounded-[9px] px-2.5 text-[12.5px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">{t('canvas.expand.center')}</button>
+        <span className="ml-auto truncate text-[11.5px] text-[var(--cv-ink-3)]">{t('canvas.expand.made').replace('{ratio}', made).replace('{size}', `${W} × ${H}`)}</span>
+      </div>
+      <div className="px-4 pb-4 pt-2.5">
+        <div className="flex items-end gap-3 rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] py-3 pl-4 pr-3 shadow-[var(--cv-float-shadow)] transition focus-within:!border-[var(--cv-ring)]">
+          <textarea value={words} rows={2} onChange={(event) => setWords(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); void make(); } }}
+            placeholder={t('canvas.expand.hint')}
+            className="min-h-[44px] min-w-0 flex-1 resize-none bg-transparent py-1 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]" />
+          <button type="button" aria-label={t('canvas.expand.make')} disabled={!img || busy} onClick={() => { void make(); }}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]">
+            {busy ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <ArrowUp size={17} />}
+          </button>
+        </div>
       </div>
     </CanvasModal>
   );

@@ -1,153 +1,154 @@
 /**
- * A picture changed in part, as the models that redraw make it: brushed, lassoed or boxed where it is to be redrawn (a
- * mask, clear where marked), the same over what is to go (with words that say to take it out and fill the place in),
- * or with the changes drawn on it (a markup: strokes, arrows, boxes, words and numbered pins on a clear picture its
- * size, the words below then able to say "1: …, 2: …"); then what it should become, in words, and the model that does
- * it. What is marked is kept as a PNG of the picture's own size; the change is a new picture, made from this one,
+ * A picture changed, said in words, and shown where on it when that helps: an area selected (brushed, lassoed, boxed,
+ * its subject picked, grown, shrunk or turned inside out) and marks drawn on it (strokes, arrows, boxes, words,
+ * numbered pins), with pictures beside it to take from. What is sent is what the model picked can take: the marks
+ * (with the selection lit among them) for one that reads a markup, the selection as a mask for one that redraws where
+ * a mask is clear, else the words alone over the whole picture. The change is a new picture, made from this one,
  * beside it.
  *
- * The picture is worked on as in a drawing program: zoomed (a pinch, ⌘ and the wheel, + and -) round the pointer,
- * moved (Space or the middle button and a drag, or two fingers), fitted again (⌘0); the brush is a ring the size it
- * paints; what is marked is a tinted wash with a lit edge, hidden for a look at the picture (H), turned inside out (I).
+ * The picture is worked on as in a drawing program: zoomed (a pinch, ⌘ and the wheel) round the pointer, moved (Space
+ * or the middle button and a drag, or two fingers), fitted again (⌘0); the brush is a ring the size it paints; the
+ * selection is a tinted wash with a lit edge; both are hidden for a look at the picture (H).
  */
 import React from 'react';
 import {
-  ArrowUpRight, Brush, Check, ChevronDown, Eraser, Eye, EyeOff, FlipHorizontal2, Lasso, MapPin, Maximize, Minus, PenLine, Plus, Redo2, Sparkles,
-  Square, SquareDashed, Trash2, Type as TypeIcon, Undo2, Wand2,
+  ArrowUp, ArrowUpRight, Brush, Check, ChevronDown, Eraser, Eye, EyeOff, FlipHorizontal2, Highlighter, Lasso, Loader2, MapPin, Maximize, Minus,
+  Plus, Redo2, Scan, Shrink, Expand as Grow, Sparkles, Square, SquareDashed, Trash2, Type as TypeIcon, Undo2, X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
 import { ProviderMark } from '../settings/ProviderMark';
+import { Tooltip } from '../Tooltip';
 import { CanvasModal } from './libraries';
 
-export type RedrawWay = 'mask' | 'markup';
-/** how the editor is opened: brushing what to redraw, brushing what to take out, or drawing the change */
+/** how the change is sent: the selection as a mask, the marks as a markup, or the words over the whole picture */
+export type RedrawWay = 'mask' | 'markup' | 'edit';
+/** how the editor is opened: selecting (the default), or drawing marks */
 export type RedrawStart = 'mask' | 'remove' | 'markup';
-/** a model that redraws part of a picture, and how */
-export interface RedrawModel { key: string; name: string; via: string; mask: boolean; markup: boolean }
+/** a picture model, and how it changes a picture */
+export interface RedrawModel { key: string; name: string; via: string; mask: boolean; markup: boolean; refs: number }
+/** what is sent to be made */
+export interface RedrawJob { way: RedrawWay; drawn: Blob | null; prompt: string; model: string; refs: string[] }
+/** a picture beside it, to take from */
+export interface RedrawRef { path: string; src: string }
 
 type Point = [number, number];
-/** something marked: a brush stroke (or an eraser's), a filled shape (lasso, box; or erased so), the whole turned
-    inside out, an arrow, a box drawn round something, words, or a numbered pin */
+/** what is selected (`select`) and what is drawn (`mark`); an eraser's stroke takes from both */
 type Mark =
-  | { kind: 'stroke'; erase: boolean; width: number; color: string; points: Point[] }
-  | { kind: 'shape'; erase: boolean; points: Point[] }
-  | { kind: 'invert' }
-  | { kind: 'arrow'; width: number; color: string; from: Point; to: Point }
-  | { kind: 'box'; width: number; color: string; from: Point; to: Point }
-  | { kind: 'text'; size: number; color: string; at: Point; text: string }
-  | { kind: 'pin'; size: number; color: string; at: Point; n: number };
+  | { kind: 'stroke'; layer: 'select' | 'mark' | 'both'; erase: boolean; width: number; color: string; points: Point[] }
+  | { kind: 'shape'; layer: 'select'; erase: boolean; points: Point[] }
+  | { kind: 'raster'; layer: 'select'; image: HTMLImageElement }
+  | { kind: 'invert'; layer: 'select' }
+  | { kind: 'grow'; layer: 'select'; px: number }
+  | { kind: 'arrow'; layer: 'mark'; width: number; color: string; from: Point; to: Point }
+  | { kind: 'box'; layer: 'mark'; width: number; color: string; from: Point; to: Point }
+  | { kind: 'text'; layer: 'mark'; size: number; color: string; at: Point; text: string }
+  | { kind: 'pin'; layer: 'mark'; size: number; color: string; at: Point; n: number };
 type Tool = 'brush' | 'lasso' | 'rect' | 'eraser' | 'pen' | 'arrow' | 'box' | 'text' | 'pin';
 
-/** the wash a mask is shown in; the markup's colors, plain ones the model reads as marks */
+/** the wash a selection is shown in; the marks' colors, plain ones the model reads as marks */
 const WASH = 'rgb(92, 140, 255)';
 const MARKS = ['#ff3b30', '#ffd60a', '#34c759', '#2f7bff', '#ffffff'];
 const MOD = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl+';
-/** the words that ask for what was marked to be taken out */
-const REMOVE_WORDS = 'Remove what is in the marked area completely and fill the place in naturally, continuing the surroundings, their texture, light and perspective, with no trace of what was there.';
-/** how far in and out the picture is zoomed, against it fitted */
+/** what the words say first, by how it is sent */
+const SAY: Record<RedrawWay, string> = {
+  mask: '',
+  markup: 'The marks drawn on the picture (strokes, arrows, boxes, words, numbered pins, and a tinted area) show where and what to change; follow them, and leave no mark in the result.',
+  edit: '',
+};
+/** how far in and out the picture is zoomed, against it fitted, and the room kept round it fitted */
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 16;
-/** the room kept round the picture fitted */
-const MARGIN = 56;
+const MARGIN = 48;
 
-function shapePath(ctx: CanvasRenderingContext2D, points: readonly Point[]) {
+const canvasOf = (w: number, h: number) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+
+function strokeLine(ctx: CanvasRenderingContext2D, points: readonly Point[], width: number) {
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = width;
   ctx.beginPath();
   points.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-  ctx.closePath();
+  if (points.length === 1) ctx.lineTo(points[0]![0] + 0.01, points[0]![1]);
+  ctx.stroke();
 }
 
-function draw(ctx: CanvasRenderingContext2D, m: Exclude<Mark, { kind: 'invert' }>) {
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  if (m.kind === 'stroke') {
-    ctx.lineWidth = m.width;
-    ctx.beginPath();
-    m.points.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-    if (m.points.length === 1) ctx.lineTo(m.points[0]![0] + 0.01, m.points[0]![1]);
-    ctx.stroke();
-  } else if (m.kind === 'shape') {
-    shapePath(ctx, m.points);
-    ctx.fill();
-  } else if (m.kind === 'arrow') {
-    const [x0, y0] = m.from; const [x1, y1] = m.to;
-    const angle = Math.atan2(y1 - y0, x1 - x0);
-    const head = m.width * 4;
-    ctx.lineWidth = m.width;
-    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 - Math.cos(angle) * head * 0.6, y1 - Math.sin(angle) * head * 0.6); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x1 - head * Math.cos(angle - 0.42), y1 - head * Math.sin(angle - 0.42));
-    ctx.lineTo(x1 - head * Math.cos(angle + 0.42), y1 - head * Math.sin(angle + 0.42));
-    ctx.closePath();
-    ctx.fill();
-  } else if (m.kind === 'box') {
-    ctx.lineWidth = m.width;
-    const x = Math.min(m.from[0], m.to[0]); const y = Math.min(m.from[1], m.to[1]);
-    const w = Math.abs(m.to[0] - m.from[0]); const h = Math.abs(m.to[1] - m.from[1]);
-    const r = Math.min(m.width * 2, w / 2, h / 2);
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, r);
-    ctx.stroke();
-  } else if (m.kind === 'text') {
-    ctx.font = `600 ${m.size}px system-ui, -apple-system, sans-serif`;
-    ctx.textBaseline = 'middle';
-    ctx.lineWidth = Math.max(2, m.size / 6);
-    const fill = ctx.fillStyle;
-    ctx.strokeStyle = m.color === '#ffffff' || m.color === '#ffd60a' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.9)';
-    ctx.strokeText(m.text, m.at[0], m.at[1]);
-    ctx.fillStyle = fill;
-    ctx.fillText(m.text, m.at[0], m.at[1]);
-  } else {
-    const r = m.size / 2;
-    ctx.beginPath(); ctx.arc(m.at[0], m.at[1], r, 0, Math.PI * 2); ctx.fill();
-    ctx.lineWidth = Math.max(2, r / 5);
-    ctx.strokeStyle = '#ffffff';
-    ctx.stroke();
-    ctx.fillStyle = m.color === '#ffffff' || m.color === '#ffd60a' ? '#000' : '#fff';
-    ctx.font = `700 ${Math.round(r * 1.15)}px system-ui, -apple-system, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(String(m.n), m.at[0], m.at[1] + r * 0.05);
-    ctx.textAlign = 'start';
-  }
-}
-
-/**
- * What was marked, at the picture's size: shown (`look`) over it, or as the file a model takes — a mask opaque but where
- * marked, a markup clear but for its marks.
- */
-function paint(ctx: CanvasRenderingContext2D, way: RedrawWay, marks: readonly Mark[], look: boolean) {
-  const { width, height } = ctx.canvas;
+/** the selection, at the picture's size: opaque (in the wash) where selected */
+function paintSelect(ctx: CanvasRenderingContext2D, marks: readonly Mark[]) {
+  const { width: W, height: H } = ctx.canvas;
   ctx.globalCompositeOperation = 'source-over';
-  ctx.clearRect(0, 0, width, height);
-  if (way === 'mask' && !look) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, width, height); }
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = WASH; ctx.strokeStyle = WASH;
   for (const m of marks) {
-    if (m.kind === 'invert') {
-      /* inside out: what is marked clear, what was clear marked */
-      ctx.globalCompositeOperation = 'xor';
-      ctx.fillStyle = look ? WASH : '#000';
-      ctx.fillRect(0, 0, width, height);
-      continue;
+    if (m.layer === 'mark') continue;
+    if (m.kind === 'stroke') { ctx.globalCompositeOperation = m.erase ? 'destination-out' : 'source-over'; strokeLine(ctx, m.points, m.width); }
+    else if (m.kind === 'shape') {
+      ctx.globalCompositeOperation = m.erase ? 'destination-out' : 'source-over';
+      ctx.beginPath(); m.points.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.fill();
+    } else if (m.kind === 'raster') {
+      /* a subject cut out: where it is opaque */
+      const tint = canvasOf(W, H); const t = tint.getContext('2d')!;
+      t.drawImage(m.image, 0, 0, W, H);
+      t.globalCompositeOperation = 'source-in'; t.fillStyle = WASH; t.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'source-over'; ctx.drawImage(tint, 0, 0);
+    } else if (m.kind === 'invert') { ctx.globalCompositeOperation = 'xor'; ctx.fillRect(0, 0, W, H); }
+    else if (m.kind === 'grow') {
+      /* grown: drawn again moved round a circle; shrunk: kept only where every move of it still covers */
+      const was = canvasOf(W, H); was.getContext('2d')!.drawImage(ctx.canvas, 0, 0);
+      const r = Math.abs(m.px);
+      ctx.globalCompositeOperation = m.px > 0 ? 'source-over' : 'destination-in';
+      for (let a = 0; a < 16; a++) ctx.drawImage(was, Math.cos((a / 16) * Math.PI * 2) * r, Math.sin((a / 16) * Math.PI * 2) * r);
     }
-    const erase = (m.kind === 'stroke' || m.kind === 'shape') && m.erase;
-    if (way === 'mask' && !look) { ctx.globalCompositeOperation = erase ? 'source-over' : 'destination-out'; ctx.strokeStyle = '#000'; ctx.fillStyle = '#000'; }
-    else {
-      ctx.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
-      const color = way === 'mask' || m.kind === 'shape' ? WASH : m.color;
-      ctx.strokeStyle = color;
-      ctx.fillStyle = color;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+}
+
+/** the marks drawn on the picture, at its size, in their colors */
+function paintMarks(ctx: CanvasRenderingContext2D, marks: readonly Mark[]) {
+  const { width: W, height: H } = ctx.canvas;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.clearRect(0, 0, W, H);
+  for (const m of marks) {
+    if (m.layer === 'select') continue;
+    ctx.globalCompositeOperation = m.kind === 'stroke' && m.erase ? 'destination-out' : 'source-over';
+    if (m.kind === 'stroke') { ctx.strokeStyle = m.color; strokeLine(ctx, m.points, m.width); }
+    else if (m.kind === 'arrow') {
+      const [x0, y0] = m.from; const [x1, y1] = m.to;
+      const angle = Math.atan2(y1 - y0, x1 - x0); const head = m.width * 4;
+      ctx.strokeStyle = m.color; ctx.fillStyle = m.color;
+      strokeLine(ctx, [m.from, [x1 - Math.cos(angle) * head * 0.6, y1 - Math.sin(angle) * head * 0.6]], m.width);
+      ctx.beginPath(); ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - head * Math.cos(angle - 0.42), y1 - head * Math.sin(angle - 0.42));
+      ctx.lineTo(x1 - head * Math.cos(angle + 0.42), y1 - head * Math.sin(angle + 0.42));
+      ctx.closePath(); ctx.fill();
+    } else if (m.kind === 'box') {
+      const x = Math.min(m.from[0], m.to[0]); const y = Math.min(m.from[1], m.to[1]);
+      const w = Math.abs(m.to[0] - m.from[0]); const h = Math.abs(m.to[1] - m.from[1]);
+      ctx.strokeStyle = m.color; ctx.lineWidth = m.width; ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.roundRect(x, y, w, h, Math.min(m.width * 2, w / 2, h / 2)); ctx.stroke();
+    } else if (m.kind === 'text') {
+      ctx.font = `600 ${m.size}px system-ui, -apple-system, sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = Math.max(2, m.size / 6); ctx.lineJoin = 'round';
+      ctx.strokeStyle = m.color === '#ffffff' || m.color === '#ffd60a' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.9)';
+      ctx.strokeText(m.text, m.at[0], m.at[1]);
+      ctx.fillStyle = m.color; ctx.fillText(m.text, m.at[0], m.at[1]);
+    } else if (m.kind === 'pin') {
+      const r = m.size / 2;
+      ctx.fillStyle = m.color;
+      ctx.beginPath(); ctx.arc(m.at[0], m.at[1], r, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = Math.max(2, r / 5); ctx.strokeStyle = '#ffffff'; ctx.stroke();
+      ctx.fillStyle = m.color === '#ffffff' || m.color === '#ffd60a' ? '#000' : '#fff';
+      ctx.font = `700 ${Math.round(r * 1.15)}px system-ui, -apple-system, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(m.n), m.at[0], m.at[1] + r * 0.05);
+      ctx.textAlign = 'start';
     }
-    draw(ctx, m);
   }
   ctx.globalCompositeOperation = 'source-over';
 }
 
-/** how much of the picture is marked, from 0 to 1, read off a small copy of what is shown */
+/** how much of the picture is selected, from 0 to 1, read off a small copy */
 function coverOf(source: HTMLCanvasElement): number {
-  const small = document.createElement('canvas');
   const k = Math.min(1, 160 / Math.max(source.width, source.height));
-  small.width = Math.max(1, Math.round(source.width * k));
-  small.height = Math.max(1, Math.round(source.height * k));
+  const small = canvasOf(Math.max(1, Math.round(source.width * k)), Math.max(1, Math.round(source.height * k)));
   const ctx = small.getContext('2d', { willReadFrequently: true });
   if (!ctx) return 0;
   ctx.drawImage(source, 0, 0, small.width, small.height);
@@ -157,29 +158,35 @@ function coverOf(source: HTMLCanvasElement): number {
   return on / (small.width * small.height);
 }
 
-export function RedrawEditor({ src, start = 'mask', models, model: firstModel, onClose, onMake }: {
+const toBlob = (c: HTMLCanvasElement) => new Promise<Blob | null>((done) => c.toBlob(done, 'image/png'));
+
+export function RedrawEditor({ src, start, models, model: firstModel, onClose, onMake, onSubject, onAddRef }: {
   src: string;
   start?: RedrawStart;
-  /** the connected models that redraw part of a picture: only the ways they redraw by are offered */
+  /** the connected picture models that take a picture to change */
   models: readonly RedrawModel[];
   /** the one picked first (the picture's own, else the last used) */
   model?: string;
   onClose: () => void;
-  /** what was marked (the PNG a model takes), what it should become, and the model: made beside the picture */
-  onMake: (way: RedrawWay, drawn: Blob, prompt: string, model: string) => Promise<void>;
+  onMake: (job: RedrawJob) => Promise<void>;
+  /** the picture's subject, cut out (its URL): selected where it is opaque */
+  onSubject?: () => Promise<string>;
+  /** a picture brought in to take from */
+  onAddRef?: (file: File) => Promise<RedrawRef | null>;
 }) {
   const t = useT();
-  const can = { mask: models.some((m) => m.mask), markup: models.some((m) => m.markup) };
-  const [mode, setMode] = React.useState<RedrawStart>(() => (start === 'markup' ? (can.markup ? 'markup' : 'mask') : can.mask ? start : 'markup'));
-  const way: RedrawWay = mode === 'markup' ? 'markup' : 'mask';
-  const [tool, setTool] = React.useState<Tool>(() => (start === 'markup' && can.markup ? 'pen' : 'brush'));
+  const [tool, setTool] = React.useState<Tool>(start === 'markup' ? 'pen' : 'brush');
   const [size, setSize] = React.useState(0);
   const [color, setColor] = React.useState(MARKS[0]!);
+  const [colorsOpen, setColorsOpen] = React.useState(false);
   const [marks, setMarks] = React.useState<Mark[]>([]);
   /* what was undone, to redo; marking anew forgets it */
   const [undone, setUndone] = React.useState<Mark[]>([]);
   const [prompt, setPrompt] = React.useState('');
+  const [refs, setRefs] = React.useState<RedrawRef[]>([]);
   const [busy, setBusy] = React.useState(false);
+  const [finding, setFinding] = React.useState(false);
+  const [problem, setProblem] = React.useState<string | null>(null);
   const [shown, setShown] = React.useState(true);
   const [cover, setCover] = React.useState(0);
   const [natural, setNatural] = React.useState<{ w: number; h: number } | null>(null);
@@ -188,17 +195,18 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
   const [view, setView] = React.useState({ z: 1, x: 0, y: 0 });
   const [hand, setHand] = React.useState(false);
   const [panning, setPanning] = React.useState(false);
-  const usable = models.filter((m) => (way === 'mask' ? m.mask : m.markup));
   const [modelKey, setModelKey] = React.useState(firstModel);
-  const picked = usable.find((m) => m.key === modelKey) ?? usable[0];
+  const picked = models.find((m) => m.key === modelKey) ?? models[0];
   const [modelsOpen, setModelsOpen] = React.useState(false);
   /* words being written where the picture was pressed, in its own pixels */
   const [typing, setTyping] = React.useState<{ at: Point; text: string } | null>(null);
   /* a shape being drawn (lasso, box, arrow), shown as a line over the picture until it is let go */
   const [outline, setOutline] = React.useState<Mark | null>(null);
-  const canvas = React.useRef<HTMLCanvasElement>(null);
+  const selectCanvas = React.useRef<HTMLCanvasElement>(null);
+  const markCanvas = React.useRef<HTMLCanvasElement>(null);
   const stage = React.useRef<HTMLDivElement>(null);
   const ring = React.useRef<HTMLDivElement>(null);
+  const file = React.useRef<HTMLInputElement>(null);
   const drawing = React.useRef<Mark | null>(null);
   const pan = React.useRef<{ x: number; y: number; from: { x: number; y: number } } | null>(null);
 
@@ -210,36 +218,39 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
     return () => seen.disconnect();
   }, []);
   React.useEffect(() => {
-    const ctx = canvas.current?.getContext('2d');
-    if (!ctx) return;
-    paint(ctx, way, marks, true);
-    if (way === 'mask' && canvas.current) setCover(coverOf(canvas.current));
-  }, [marks, way, natural]);
+    const s = selectCanvas.current?.getContext('2d'); const m = markCanvas.current?.getContext('2d');
+    if (!s || !m) return;
+    paintSelect(s, marks); paintMarks(m, marks);
+    setCover(coverOf(s.canvas));
+  }, [marks, natural]);
 
   /* the picture on the stage */
-  const fit = natural && box.w ? Math.min((box.w - MARGIN * 2) / natural.w, (box.h - MARGIN * 2) / natural.h, 4) : 1;
+  const fit = natural && box.w ? Math.min((box.w - MARGIN * 2) / natural.w, (box.h - MARGIN * 2 - 56) / natural.h, 4) : 1;
   const scale = fit * view.z;
   const pw = (natural?.w ?? 0) * scale; const ph = (natural?.h ?? 0) * scale;
-  const left = box.w / 2 + view.x - pw / 2; const top = box.h / 2 + view.y - ph / 2;
-  /* the brush, in the picture's pixels: as set, else a 24th of its short side */
+  const left = box.w / 2 + view.x - pw / 2; const top = (box.h - 56) / 2 + view.y - ph / 2;
+  /* sizes in the picture's pixels: the brush as set (else a 24th of the short side), a mark's line */
   const short = natural ? Math.min(natural.w, natural.h) : 1000;
   const brushMax = Math.max(40, Math.round(short / 3));
   const brush = size || Math.max(8, Math.round(short / 24));
   const line = Math.max(3, Math.round(short / 220));
+  const step = Math.max(2, Math.round(short / 120));
 
   /* zoomed to `z` round a point of the stage, which stays where it is */
   const zoomTo = (z: number, about?: { x: number; y: number }) => {
     const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
-    const p = about ?? { x: box.w / 2, y: box.h / 2 };
+    const p = about ?? { x: box.w / 2, y: (box.h - 56) / 2 };
     setView((v) => {
       const s0 = fit * v.z; const s1 = fit * next;
-      const l0 = box.w / 2 + v.x - (natural?.w ?? 0) * s0 / 2; const t0 = box.h / 2 + v.y - (natural?.h ?? 0) * s0 / 2;
-      const ix = (p.x - l0) / s0; const iy = (p.y - t0) / s0;
-      const l1 = p.x - ix * s1; const t1 = p.y - iy * s1;
-      return { z: next, x: l1 + (natural?.w ?? 0) * s1 / 2 - box.w / 2, y: t1 + (natural?.h ?? 0) * s1 / 2 - box.h / 2 };
+      const w = natural?.w ?? 0; const h = natural?.h ?? 0;
+      const l0 = box.w / 2 + v.x - w * s0 / 2; const t0 = (box.h - 56) / 2 + v.y - h * s0 / 2;
+      const l1 = p.x - ((p.x - l0) / s0) * s1; const t1 = p.y - ((p.y - t0) / s0) * s1;
+      return { z: next, x: l1 + w * s1 / 2 - box.w / 2, y: t1 + h * s1 / 2 - (box.h - 56) / 2 };
     });
   };
   const fitView = () => setView({ z: 1, x: 0, y: 0 });
+  const viewRef = React.useRef(view);
+  viewRef.current = view;
   React.useEffect(() => {
     const el = stage.current;
     if (!el) return;
@@ -253,18 +264,16 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
     el.addEventListener('wheel', wheel, { passive: false });
     return () => el.removeEventListener('wheel', wheel);
   });
-  const viewRef = React.useRef(view);
-  viewRef.current = view;
 
   /* where the pointer is on the picture, in its own pixels */
   const at = (event: { clientX: number; clientY: number }): Point => {
-    const r = canvas.current!.getBoundingClientRect();
+    const r = selectCanvas.current!.getBoundingClientRect();
     return [(event.clientX - r.left) * ((natural?.w ?? 1) / r.width), (event.clientY - r.top) * ((natural?.h ?? 1) / r.height)];
   };
   const pins = marks.filter((m) => m.kind === 'pin').length;
-  const commit = (m: Mark) => { setMarks((list) => [...list, m]); setUndone([]); };
+  const commit = (m: Mark) => { setMarks((list) => [...list, m]); setUndone([]); setProblem(null); };
   const commitTyping = () => {
-    if (typing?.text.trim()) commit({ kind: 'text', size: Math.max(16, Math.round(short / 28)), color, at: typing.at, text: typing.text.trim() });
+    if (typing?.text.trim()) commit({ kind: 'text', layer: 'mark', size: Math.max(16, Math.round(short / 28)), color, at: typing.at, text: typing.text.trim() });
     setTyping(null);
   };
   const brushing = tool === 'brush' || tool === 'eraser' || tool === 'pen';
@@ -277,7 +286,8 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
 
   const down = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!natural || busy) return;
-    /* moved: Space or the hand held, or the middle button */
+    setColorsOpen(false); setModelsOpen(false);
+    /* moved: Space held, or the middle button */
     if (hand || event.button === 1) {
       event.preventDefault();
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -287,18 +297,14 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
     }
     if (event.button !== 0) return;
     const p = at(event);
-    if (way === 'markup' && tool === 'text') { commitTyping(); setTyping({ at: p, text: '' }); return; }
-    if (way === 'markup' && tool === 'pin') { commit({ kind: 'pin', size: Math.max(26, Math.round(short / 18)), color, at: p, n: pins + 1 }); return; }
+    if (tool === 'text') { commitTyping(); setTyping({ at: p, text: '' }); return; }
+    if (tool === 'pin') { commit({ kind: 'pin', layer: 'mark', size: Math.max(26, Math.round(short / 18)), color, at: p, n: pins + 1 }); return; }
     event.currentTarget.setPointerCapture(event.pointerId);
-    const erase = tool === 'eraser';
-    if (tool === 'lasso' || tool === 'rect') drawing.current = { kind: 'shape', erase: event.altKey, points: [p] };
-    else if (tool === 'arrow') drawing.current = { kind: 'arrow', width: line, color, from: p, to: p };
-    else if (tool === 'box') drawing.current = { kind: 'box', width: line, color, from: p, to: p };
-    else drawing.current = { kind: 'stroke', erase, color, width: way === 'markup' && !erase ? line : brush, points: [p] };
-    if (drawing.current.kind === 'stroke') {
-      const ctx = canvas.current?.getContext('2d');
-      if (ctx) paint(ctx, way, [...marks, drawing.current], true);
-    }
+    if (tool === 'lasso' || tool === 'rect') drawing.current = { kind: 'shape', layer: 'select', erase: event.altKey, points: [p] };
+    else if (tool === 'arrow') drawing.current = { kind: 'arrow', layer: 'mark', width: line, color, from: p, to: p };
+    else if (tool === 'box') drawing.current = { kind: 'box', layer: 'mark', width: line, color, from: p, to: p };
+    else drawing.current = { kind: 'stroke', layer: tool === 'eraser' ? 'both' : tool === 'pen' ? 'mark' : 'select', erase: tool === 'eraser', color, width: tool === 'pen' ? line : brush, points: [p] };
+    if (drawing.current.kind === 'stroke') move(event);
   };
   const move = (event: React.PointerEvent<HTMLDivElement>) => {
     moveRing(event);
@@ -313,14 +319,16 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
     if (m.kind === 'stroke') {
       /* only the new piece is drawn, so a long stroke stays quick on a large picture */
       const last = m.points[m.points.length - 1]!;
-      m.points.push(p);
-      const ctx = canvas.current?.getContext('2d');
-      if (!ctx) return;
-      ctx.globalCompositeOperation = m.erase ? 'destination-out' : 'source-over';
-      ctx.strokeStyle = way === 'mask' ? WASH : m.color;
-      ctx.lineWidth = m.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.beginPath(); ctx.moveTo(last[0], last[1]); ctx.lineTo(p[0], p[1]); ctx.stroke();
-      ctx.globalCompositeOperation = 'source-over';
+      if (m.points.length > 1 || last[0] !== p[0] || last[1] !== p[1]) m.points.push(p);
+      const targets = [m.layer !== 'mark' ? selectCanvas.current : null, m.layer !== 'select' ? markCanvas.current : null];
+      for (const c of targets) {
+        const ctx = c?.getContext('2d');
+        if (!ctx) continue;
+        ctx.globalCompositeOperation = m.erase ? 'destination-out' : 'source-over';
+        ctx.strokeStyle = c === selectCanvas.current ? WASH : m.color;
+        strokeLine(ctx, [last, p], m.width);
+        ctx.globalCompositeOperation = 'source-over';
+      }
     } else if (m.kind === 'shape') {
       if (tool === 'rect') { const [x0, y0] = m.points[0]!; m.points = [[x0, y0], [p[0], y0], p, [x0, p[1]]]; }
       else m.points.push(p);
@@ -340,17 +348,28 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
   };
   const undo = () => { if (!marks.length) return; setUndone((u) => [...u, marks.at(-1)!]); setMarks((list) => list.slice(0, -1)); };
   const redo = () => { if (!undone.length) return; setMarks((list) => [...list, undone.at(-1)!]); setUndone((u) => u.slice(0, -1)); };
-  const invert = () => { if (way === 'mask') commit({ kind: 'invert' }); };
   const clear = () => { setUndone([]); setMarks([]); setTyping(null); };
-  const switchTo = (next: RedrawStart) => {
-    if ((next === 'markup') !== (way === 'markup')) { setMarks([]); setUndone([]); setTool(next === 'markup' ? 'pen' : 'brush'); }
-    setMode(next); setTyping(null); setShown(true);
+  const selected = cover > 0.0005;
+  const invert = () => commit({ kind: 'invert', layer: 'select' });
+  const grow = (px: number) => { if (selected) commit({ kind: 'grow', layer: 'select', px }); };
+  /* the subject: cut out on this computer (or by the service that cuts out), selected where it stands */
+  const subject = async () => {
+    if (!onSubject || finding) return;
+    setFinding(true); setProblem(null);
+    try {
+      const url = await onSubject();
+      const image = await new Promise<HTMLImageElement>((done, fail) => {
+        const img = new Image(); img.crossOrigin = 'anonymous';
+        img.onload = () => done(img); img.onerror = () => fail(new Error('the subject did not load')); img.src = url;
+      });
+      commit({ kind: 'raster', layer: 'select', image });
+    } catch (e) { setProblem(e instanceof Error ? e.message : String(e)); } finally { setFinding(false); }
   };
 
   const keys = React.useRef<(event: KeyboardEvent, isDown: boolean) => void>(() => {});
-  /* the dialog's own keys, not the board's under it: ⌘Z / ⇧⌘Z undo and redo; [ ] the brush; B L M E the brush, lasso,
-     box and eraser (in a markup B A R T P: pen, arrow, box, words, pin); I inside out; H hide; Space held moves;
-     ⌘0 fits, ⌘+ ⌘- zoom; in a words box, the box's own */
+  /* the dialog's own keys, not the board's under it: ⌘Z / ⇧⌘Z undo and redo; [ ] the brush; B L M the brush, lasso and
+     box; S the subject; E the eraser; I inside out; P A R T N a mark's pen, arrow, box, words, pin; H hide; Space held
+     moves; ⌘0 fits, ⌘+ ⌘- zoom; in a words box, the box's own */
   keys.current = (event, isDown) => {
     if ((event.target as HTMLElement).closest?.('textarea, input') || event.isComposing) return;
     if (event.code === 'Space') { event.preventDefault(); setHand(isDown); return; }
@@ -358,7 +377,6 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
     const mod = event.metaKey || event.ctrlKey;
     const key = event.key.toLowerCase();
     const take = (run: () => void) => { event.preventDefault(); event.stopPropagation(); run(); };
-    const markup = way === 'markup';
     if (mod && key === 'z') take(event.shiftKey ? redo : undo);
     else if (mod && key === 'y') take(redo);
     else if (mod && key === '0') take(fitView);
@@ -367,16 +385,13 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
     else if (mod) return;
     else if (key === '[') take(() => setSize(Math.max(2, Math.round(brush / 1.2))));
     else if (key === ']') take(() => setSize(Math.min(brushMax, Math.round(brush * 1.2) + 1)));
-    else if (key === 'e') take(() => setTool('eraser'));
-    else if (key === 'h') take(() => setShown((v) => !v));
-    else if (key === 'b') take(() => setTool(markup ? 'pen' : 'brush'));
-    else if (!markup && key === 'l') take(() => setTool('lasso'));
-    else if (!markup && key === 'm') take(() => setTool('rect'));
-    else if (!markup && key === 'i') take(invert);
-    else if (markup && key === 'a') take(() => setTool('arrow'));
-    else if (markup && key === 'r') take(() => setTool('box'));
-    else if (markup && key === 't') take(() => setTool('text'));
-    else if (markup && key === 'p') take(() => setTool('pin'));
+    else {
+      const pick: Record<string, () => void> = {
+        b: () => setTool('brush'), l: () => setTool('lasso'), m: () => setTool('rect'), e: () => setTool('eraser'), s: () => { void subject(); }, i: invert,
+        p: () => setTool('pen'), a: () => setTool('arrow'), r: () => setTool('box'), t: () => setTool('text'), n: () => setTool('pin'), h: () => setShown((v) => !v),
+      };
+      if (pick[key]) take(pick[key]);
+    }
   };
   React.useEffect(() => {
     const press = (event: KeyboardEvent) => keys.current(event, true);
@@ -386,59 +401,79 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
     return () => { window.removeEventListener('keydown', press, true); window.removeEventListener('keyup', lift, true); };
   }, []);
 
+  /* how it is sent: the marks when there are some and the model reads them, else the selection as a mask, else the words */
+  const all: Mark[] = typing?.text.trim() ? [...marks, { kind: 'text', layer: 'mark', size: Math.max(16, Math.round(short / 28)), color, at: typing.at, text: typing.text.trim() }] : marks;
+  const marked = all.some((m) => m.layer === 'mark' && !(m.kind === 'stroke' && m.erase));
+  const way: RedrawWay | null = !picked ? null
+    : marked ? (picked.markup ? 'markup' : null)
+    : selected ? (picked.mask ? 'mask' : picked.markup ? 'markup' : null)
+    : 'edit';
+  const ready = Boolean(way) && Boolean(prompt.trim()) && !busy && !finding && Boolean(natural);
   const make = async () => {
-    if (!natural || busy || !picked) return;
-    const all: Mark[] = typing?.text.trim() ? [...marks, { kind: 'text', size: Math.max(16, Math.round(short / 28)), color, at: typing.at, text: typing.text.trim() }] : marks;
-    const out = document.createElement('canvas');
-    out.width = natural.w;
-    out.height = natural.h;
-    paint(out.getContext('2d')!, way, all, false);
-    const blob = await new Promise<Blob | null>((done) => out.toBlob(done, 'image/png'));
-    if (!blob) return;
+    if (!ready || !natural || !picked || !way) return;
+    let drawn: Blob | null = null;
+    if (way !== 'edit') {
+      const sel = canvasOf(natural.w, natural.h); paintSelect(sel.getContext('2d')!, all);
+      const out = canvasOf(natural.w, natural.h); const ctx = out.getContext('2d')!;
+      if (way === 'mask') {
+        /* opaque but where selected */
+        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, natural.w, natural.h);
+        ctx.globalCompositeOperation = 'destination-out'; ctx.drawImage(sel, 0, 0);
+      } else {
+        /* the selection lit among the marks */
+        ctx.globalAlpha = 0.4; ctx.drawImage(sel, 0, 0); ctx.globalAlpha = 1;
+        const mk = canvasOf(natural.w, natural.h); paintMarks(mk.getContext('2d')!, all); ctx.drawImage(mk, 0, 0);
+      }
+      drawn = await toBlob(out);
+      if (!drawn) return;
+    }
     setBusy(true);
-    const words = mode === 'remove' ? [REMOVE_WORDS, prompt.trim()].filter(Boolean).join('\n\n') : prompt.trim();
-    try { await onMake(way, blob, words, picked.key); } finally { setBusy(false); }
+    try { await onMake({ way, drawn, prompt: [SAY[way], prompt.trim()].filter(Boolean).join('\n\n'), model: picked.key, refs: refs.map((r) => r.path) }); } finally { setBusy(false); }
   };
-  const drawn = way === 'mask' ? cover > 0.0005 : marks.some((m) => !(m.kind === 'stroke' && m.erase)) || Boolean(typing?.text.trim());
-  const ready = drawn && (mode === 'remove' || Boolean(prompt.trim())) && !busy && Boolean(picked);
+  const addRefs = async (files: FileList | null) => {
+    if (!files || !onAddRef) return;
+    const room = Math.max(0, (picked?.refs ?? 4) - 1 - refs.length);
+    for (const f of [...files].filter((x) => x.type.startsWith('image/')).slice(0, room)) {
+      const r = await onAddRef(f).catch(() => null);
+      if (r) setRefs((list) => [...list, r]);
+    }
+  };
 
   /* ── how it looks ── */
-  const railButton = (on: boolean) => `relative flex h-9 w-9 items-center justify-center rounded-[10px] transition ${on ? 'bg-[var(--cv-invert)] text-[var(--cv-on-invert)] shadow-sm' : 'text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]'}`;
-  const iconButton = 'flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] disabled:pointer-events-none disabled:opacity-30';
-  const tools: Array<[Tool, React.ComponentType<{ size?: number; strokeWidth?: number }>, string, string]> = way === 'mask'
-    ? [['brush', Brush, 'canvas.redraw.brush', 'B'], ['lasso', Lasso, 'canvas.redraw.lasso', 'L'], ['rect', SquareDashed, 'canvas.redraw.rect', 'M'], ['eraser', Eraser, 'canvas.redraw.erase', 'E']]
-    : [['pen', PenLine, 'canvas.redraw.pen', 'B'], ['arrow', ArrowUpRight, 'canvas.redraw.arrow', 'A'], ['box', Square, 'canvas.redraw.box', 'R'], ['text', TypeIcon, 'canvas.redraw.text', 'T'], ['pin', MapPin, 'canvas.redraw.pin', 'P'], ['eraser', Eraser, 'canvas.redraw.erase', 'E']];
-  const ways: Array<[RedrawStart, React.ComponentType<{ size?: number }>, string, boolean]> = [
-    ['mask', Brush, 'canvas.redraw.mask', can.mask], ['remove', Wand2, 'canvas.redraw.removeWay', can.mask], ['markup', PenLine, 'canvas.redraw.markup', can.markup],
+  const toolBtn = (on: boolean) => `relative flex h-9 w-9 items-center justify-center rounded-[10px] transition ${on ? 'bg-[var(--cv-invert)] text-[var(--cv-on-invert)] shadow-sm' : 'text-[var(--cv-ink-2)] hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]'}`;
+  const iconBtn = 'flex h-9 w-9 items-center justify-center rounded-[10px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] disabled:pointer-events-none disabled:opacity-30';
+  const sep = <span className="mx-1 h-6 w-px shrink-0 bg-[var(--cv-float-line)]" />;
+  const tip = (label: string, key: string | null, node: React.ReactElement, id?: string) => <Tooltip key={id} label={key ? `${label} · ${key}` : label}>{node}</Tooltip>;
+  const selectTools: Array<[Tool, React.ComponentType<{ size?: number; strokeWidth?: number }>, string, string]> = [
+    ['brush', Brush, 'canvas.redraw.brush', 'B'], ['lasso', Lasso, 'canvas.redraw.lasso', 'L'], ['rect', SquareDashed, 'canvas.redraw.rect', 'M'],
   ];
-  const ideas = mode === 'mask' ? (['color', 'swap', 'add', 'look'] as const) : mode === 'markup' ? (['follow', 'swap', 'add'] as const) : ([] as const);
+  const markTools: Array<[Tool, React.ComponentType<{ size?: number; strokeWidth?: number }>, string, string]> = [
+    ['pen', Highlighter, 'canvas.redraw.pen', 'P'], ['arrow', ArrowUpRight, 'canvas.redraw.arrow', 'A'], ['box', Square, 'canvas.redraw.box', 'R'],
+    ['text', TypeIcon, 'canvas.redraw.text', 'T'], ['pin', MapPin, 'canvas.redraw.pin', 'N'],
+  ];
+  const ideas = (selected || marked ? ['remove', 'swap', 'color', 'add'] : ['look', 'light', 'season', 'add']) as string[];
   const cursor = hand || panning ? (panning ? 'cursor-grabbing' : 'cursor-grab') : brushing ? 'cursor-none' : tool === 'text' ? 'cursor-text' : 'cursor-crosshair';
   const ringSize = (tool === 'pen' ? line : brush) * scale;
+  const says = !picked ? t('canvas.redraw.noModel')
+    : !way ? t(marked ? 'canvas.redraw.cannotMarks' : 'canvas.redraw.cannotMask')
+    : t(`canvas.redraw.way.${way}`);
 
   return (
     <CanvasModal label={t('canvas.redraw.title')} onClose={onClose}>
-      {/* the top: its name, the three ways, and the view */}
+      {/* the top: its name, and the view */}
       <div className="flex items-center gap-3 px-5 pr-16 pt-4">
         <span className="flex items-center gap-2 text-[14px] font-semibold"><Sparkles size={15} className="text-[var(--cv-edge-lit)]" />{t('canvas.redraw.title')}</span>
-        <div className="ml-2 flex items-center gap-0.5 rounded-[11px] bg-[var(--cv-chip)] p-[3px]">
-          {ways.filter(([, , , on]) => on).map(([k, Icon, label]) => (
-            <button key={k} type="button" onClick={() => switchTo(k)}
-              className={`flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-[12.5px] transition ${mode === k ? 'bg-[var(--cv-modal)] text-[var(--cv-ink)] shadow-[0_1px_3px_rgba(0,0,0,0.25)]' : 'text-[var(--cv-ink-2)] hover:text-[var(--cv-ink)]'}`}>
-              <Icon size={14} />{t(label)}
-            </button>
-          ))}
-        </div>
+        <span className="truncate text-[12px] text-[var(--cv-ink-3)]">{t('canvas.redraw.intro')}</span>
         <span className="flex-1" />
-        {/* zoomed how far, and back to all of it */}
         <div className="flex items-center gap-0.5 rounded-[10px] bg-[var(--cv-chip)] p-[3px] text-[12px] text-[var(--cv-ink-2)]">
-          <button type="button" aria-label={t('canvas.redraw.zoomOut')} title={`${t('canvas.redraw.zoomOut')} · ${MOD}-`} className={iconButton} onClick={() => zoomTo(view.z / 1.25)}><Minus size={14} /></button>
-          <button type="button" title={`${t('canvas.redraw.fit')} · ${MOD}0`} onClick={fitView} className="h-8 min-w-[52px] rounded-[8px] px-1.5 tabular-nums transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">{Math.round(scale * 100)}%</button>
-          <button type="button" aria-label={t('canvas.redraw.zoomIn')} title={`${t('canvas.redraw.zoomIn')} · ${MOD}+`} className={iconButton} onClick={() => zoomTo(view.z * 1.25)}><Plus size={14} /></button>
-          <button type="button" aria-label={t('canvas.redraw.fit')} title={`${t('canvas.redraw.fit')} · ${MOD}0`} className={iconButton} onClick={fitView}><Maximize size={13} /></button>
+          <button type="button" aria-label={t('canvas.redraw.zoomOut')} title={`${t('canvas.redraw.zoomOut')} · ${MOD}-`} className="flex h-7 w-7 items-center justify-center rounded-[7px] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]" onClick={() => zoomTo(view.z / 1.25)}><Minus size={13} /></button>
+          <button type="button" title={`${t('canvas.redraw.fit')} · ${MOD}0`} onClick={fitView} className="h-7 min-w-[48px] rounded-[7px] px-1 tabular-nums transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">{Math.round(scale * 100)}%</button>
+          <button type="button" aria-label={t('canvas.redraw.zoomIn')} title={`${t('canvas.redraw.zoomIn')} · ${MOD}+`} className="flex h-7 w-7 items-center justify-center rounded-[7px] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]" onClick={() => zoomTo(view.z * 1.25)}><Plus size={13} /></button>
+          <button type="button" aria-label={t('canvas.redraw.fit')} title={`${t('canvas.redraw.fit')} · ${MOD}0`} className="flex h-7 w-7 items-center justify-center rounded-[7px] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]" onClick={fitView}><Maximize size={12} /></button>
         </div>
       </div>
 
-      {/* the picture, on a quiet checkered stage */}
+      {/* the picture, on a quiet dotted stage, its tools along its foot */}
       <div ref={stage} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
         onPointerEnter={() => { if (ring.current) ring.current.style.opacity = '1'; }} onPointerLeave={() => { if (ring.current) ring.current.style.opacity = '0'; }}
         onContextMenu={(event) => event.preventDefault()}
@@ -448,11 +483,11 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
           <img src={src} alt="" draggable={false} onLoad={(event) => setNatural({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })}
             className="block h-full w-full select-none rounded-[6px] shadow-[0_12px_40px_rgba(0,0,0,0.35)]" style={natural ? undefined : { maxWidth: 1, opacity: 0 }} />
           {natural ? (
-            <canvas ref={canvas} width={natural.w} height={natural.h}
-              className="pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-150"
-              style={way === 'mask'
-                ? { opacity: shown ? 0.5 : 0, filter: 'drop-shadow(0 0 0.6px #fff) drop-shadow(0 0 1.5px rgb(92,140,255))' }
-                : { opacity: shown ? 1 : 0 }} />
+            <>
+              <canvas ref={selectCanvas} width={natural.w} height={natural.h} className="pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-150"
+                style={{ opacity: shown ? 0.5 : 0, filter: 'drop-shadow(0 0 0.6px #fff) drop-shadow(0 0 1.5px rgb(92,140,255))' }} />
+              <canvas ref={markCanvas} width={natural.w} height={natural.h} className="pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-150" style={{ opacity: shown ? 1 : 0 }} />
+            </>
           ) : null}
           {/* a lasso, box or arrow being drawn: its line, until it is let go */}
           {outline && natural ? (
@@ -460,10 +495,10 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
               {outline.kind === 'shape' ? (
                 <polygon points={outline.points.map((p) => p.join(',')).join(' ')} fill={outline.erase ? 'rgba(255,255,255,0.12)' : 'rgba(92,140,255,0.28)'}
                   stroke="#fff" strokeWidth={1.5 / scale} strokeDasharray={`${6 / scale} ${4 / scale}`} className="cv-ants" />
-              ) : outline.kind === 'arrow' || outline.kind === 'box' ? (
-                outline.kind === 'box'
-                  ? <rect x={Math.min(outline.from[0], outline.to[0])} y={Math.min(outline.from[1], outline.to[1])} width={Math.abs(outline.to[0] - outline.from[0])} height={Math.abs(outline.to[1] - outline.from[1])} fill="none" stroke={outline.color} strokeWidth={outline.width} rx={outline.width * 2} />
-                  : <line x1={outline.from[0]} y1={outline.from[1]} x2={outline.to[0]} y2={outline.to[1]} stroke={outline.color} strokeWidth={outline.width} strokeLinecap="round" />
+              ) : outline.kind === 'box' ? (
+                <rect x={Math.min(outline.from[0], outline.to[0])} y={Math.min(outline.from[1], outline.to[1])} width={Math.abs(outline.to[0] - outline.from[0])} height={Math.abs(outline.to[1] - outline.from[1])} fill="none" stroke={outline.color} strokeWidth={outline.width} rx={outline.width * 2} />
+              ) : outline.kind === 'arrow' ? (
+                <line x1={outline.from[0]} y1={outline.from[1]} x2={outline.to[0]} y2={outline.to[1]} stroke={outline.color} strokeWidth={outline.width} strokeLinecap="round" />
               ) : null}
             </svg>
           ) : null}
@@ -479,104 +514,139 @@ export function RedrawEditor({ src, start = 'mask', models, model: firstModel, o
               style={{ left: typing.at[0] * scale, top: typing.at[1] * scale - 16, color }}
               className="absolute z-10 h-8 min-w-[140px] rounded-[8px] border border-white/30 bg-black/55 px-2 text-[14px] font-semibold shadow-lg outline-none backdrop-blur-md placeholder:text-white/40" />
           ) : null}
+          {finding ? (
+            <div className="cv-fade pointer-events-none absolute inset-0 flex items-center justify-center rounded-[6px] bg-black/25">
+              <span className="flex h-8 items-center gap-2 rounded-full bg-[var(--cv-float)] px-3 text-[12.5px] text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)]"><Loader2 size={14} className="animate-spin" />{t('canvas.redraw.finding')}</span>
+            </div>
+          ) : null}
         </div>
         {/* the brush: a ring as large as it paints, a dot in its middle */}
         {brushing && !hand && !panning ? (
           <div ref={ring} className="pointer-events-none absolute left-0 top-0 opacity-0 transition-opacity duration-100">
             <div className="absolute rounded-full border border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.45)]"
-              style={{ width: ringSize, height: ringSize, left: -ringSize / 2, top: -ringSize / 2, background: tool === 'eraser' ? 'rgba(255,255,255,0.08)' : way === 'mask' ? 'rgba(92,140,255,0.18)' : 'transparent' }} />
+              style={{ width: ringSize, height: ringSize, left: -ringSize / 2, top: -ringSize / 2, background: tool === 'eraser' ? 'rgba(255,255,255,0.08)' : tool === 'brush' ? 'rgba(92,140,255,0.18)' : 'transparent' }} />
             <div className="absolute -left-[2px] -top-[2px] h-[4px] w-[4px] rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.5)]" />
           </div>
         ) : null}
-
-        {/* the tools, on the left */}
-        <div onPointerDown={(event) => event.stopPropagation()}
-          className="absolute left-3 top-1/2 flex -translate-y-1/2 cursor-default flex-col items-center gap-1 rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
-          {tools.map(([k, Icon, label, key]) => (
-            <button key={k} type="button" aria-label={t(label)} title={`${t(label)} · ${key}`} className={railButton(tool === k)} onClick={() => setTool(k)}><Icon size={16} strokeWidth={1.8} /></button>
-          ))}
-          {way === 'markup' ? (
-            <div className="mt-1 flex flex-col items-center gap-1.5 border-t !border-[var(--cv-float-line)] pt-2">
-              {MARKS.map((c) => (
-                <button key={c} type="button" aria-label={c} onClick={() => setColor(c)}
-                  className={`h-[18px] w-[18px] rounded-full transition ${c === color ? 'ring-2 ring-[var(--cv-ink)] ring-offset-2 ring-offset-[var(--cv-float)]' : 'ring-1 ring-black/20 hover:scale-110'}`} style={{ background: c }} />
-              ))}
-            </div>
-          ) : (
-            <div className="mt-1 flex flex-col items-center gap-1 border-t !border-[var(--cv-float-line)] pt-1.5">
-              <button type="button" aria-label={t('canvas.redraw.invert')} title={`${t('canvas.redraw.invert')} · I`} className={railButton(false)} onClick={invert}><FlipHorizontal2 size={16} strokeWidth={1.8} /></button>
-            </div>
-          )}
-        </div>
-
-        {/* the brush's size, what is marked, undo, and a look at the picture alone: below it */}
-        <div onPointerDown={(event) => event.stopPropagation()}
-          className="absolute bottom-3 left-1/2 flex -translate-x-1/2 cursor-default items-center gap-1 rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] px-2 py-1.5 shadow-[var(--cv-float-shadow)]">
-          {brushing ? (
-            <label title={`${t('canvas.redraw.size')} · [ ]`} className="flex items-center gap-2.5 pl-1.5 pr-2 text-[12px] text-[var(--cv-ink-3)]">
-              <span className="flex h-5 w-5 items-center justify-center"><span className="rounded-full bg-[var(--cv-ink-2)]" style={{ width: Math.max(3, Math.min(18, (tool === 'pen' ? line : brush) / short * 120)), height: Math.max(3, Math.min(18, (tool === 'pen' ? line : brush) / short * 120)) }} /></span>
-              <input type="range" min={2} max={brushMax} value={brush} disabled={tool === 'pen'} onChange={(event) => setSize(Number(event.target.value))}
-                className="h-1 w-32 cursor-pointer accent-[var(--cv-ink)] disabled:opacity-30" />
-              <span className="w-9 text-right tabular-nums text-[var(--cv-ink-2)]">{tool === 'pen' ? line : brush}</span>
-            </label>
-          ) : null}
-          {brushing ? <span className="mx-1 h-5 w-px bg-[var(--cv-float-line)]" /> : null}
-          <button type="button" title={`${MOD}Z`} aria-label={t('canvas.redraw.undo')} className={iconButton} disabled={!marks.length} onClick={undo}><Undo2 size={15} /></button>
-          <button type="button" title={`⇧${MOD}Z`} aria-label={t('canvas.redraw.redo')} className={iconButton} disabled={!undone.length} onClick={redo}><Redo2 size={15} /></button>
-          <button type="button" title={`${t(shown ? 'canvas.redraw.hide' : 'canvas.redraw.show')} · H`} aria-label={t(shown ? 'canvas.redraw.hide' : 'canvas.redraw.show')} className={iconButton} onClick={() => setShown((v) => !v)}>{shown ? <Eye size={15} /> : <EyeOff size={15} />}</button>
-          <button type="button" aria-label={t('canvas.redraw.clear')} title={t('canvas.redraw.clear')} className={iconButton} disabled={!marks.length} onClick={clear}><Trash2 size={15} /></button>
-          {way === 'mask' ? (
-            <span className={`ml-1 min-w-[64px] rounded-[8px] px-2 py-1 text-center text-[11.5px] tabular-nums ${cover > 0.0005 ? 'bg-[color-mix(in_srgb,rgb(92,140,255)_18%,transparent)] text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
-              {cover > 0.0005 ? t('canvas.redraw.covered').replace('{n}', cover < 0.01 ? '<1' : String(Math.round(cover * 100))) : t('canvas.redraw.nothingYet')}
-            </span>
-          ) : null}
-        </div>
-        {/* how to move round it, said once, quietly */}
         <div className="pointer-events-none absolute right-3 top-3 rounded-[8px] bg-[var(--cv-float)]/80 px-2 py-1 text-[11px] text-[var(--cv-ink-3)] backdrop-blur-sm">{t('canvas.redraw.moveHint')}</div>
-      </div>
 
-      {/* what it should become, ideas to start from, the model, and Make */}
-      <div className="px-5 pb-4 pt-3">
-        {ideas.length ? (
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            {ideas.map((k) => (
-              <button key={k} type="button" onClick={() => setPrompt((v) => (v.trim() ? `${v.trim()} ` : '') + t(`canvas.redraw.ideas.${k}`))}
-                className="h-7 rounded-full border-[0.5px] !border-[var(--cv-float-line)] px-3 text-[12px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
-                {t(`canvas.redraw.ideas.${k}`)}…
+        {/* the tools, along its foot: select · change the selection · draw marks · the brush · undo, hide, clear */}
+        <div onPointerDown={(event) => event.stopPropagation()}
+          className="absolute bottom-3 left-1/2 flex -translate-x-1/2 cursor-default items-center gap-0.5 rounded-[16px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+          {selectTools.map(([k, Icon, label, key]) => tip(t(label), key, <button type="button" aria-label={t(label)} className={toolBtn(tool === k)} onClick={() => setTool(k)}><Icon size={17} strokeWidth={1.8} /></button>, k))}
+          {onSubject ? tip(t('canvas.redraw.subject'), 'S', <button type="button" aria-label={t('canvas.redraw.subject')} className={iconBtn} disabled={finding} onClick={() => { void subject(); }}>{finding ? <Loader2 size={17} className="animate-spin" /> : <Scan size={17} strokeWidth={1.8} />}</button>) : null}
+          {tip(t('canvas.redraw.erase'), 'E', <button type="button" aria-label={t('canvas.redraw.erase')} className={toolBtn(tool === 'eraser')} onClick={() => setTool('eraser')}><Eraser size={17} strokeWidth={1.8} /></button>)}
+          {sep}
+          {tip(t('canvas.redraw.invert'), 'I', <button type="button" aria-label={t('canvas.redraw.invert')} className={iconBtn} onClick={invert}><FlipHorizontal2 size={17} strokeWidth={1.8} /></button>)}
+          {tip(t('canvas.redraw.grow'), null, <button type="button" aria-label={t('canvas.redraw.grow')} className={iconBtn} disabled={!selected} onClick={() => grow(step)}><Grow size={16} strokeWidth={1.8} /></button>)}
+          {tip(t('canvas.redraw.shrink'), null, <button type="button" aria-label={t('canvas.redraw.shrink')} className={iconBtn} disabled={!selected} onClick={() => grow(-step)}><Shrink size={16} strokeWidth={1.8} /></button>)}
+          {sep}
+          {markTools.map(([k, Icon, label, key]) => tip(t(label), key, <button type="button" aria-label={t(label)} className={toolBtn(tool === k)} onClick={() => setTool(k)}><Icon size={17} strokeWidth={1.8} /></button>, k))}
+          {/* the marks' color */}
+          <div className="relative">
+            {tip(t('canvas.redraw.color'), null, (
+              <button type="button" aria-label={t('canvas.redraw.color')} className={iconBtn} onClick={() => setColorsOpen((v) => !v)}>
+                <span className="h-[18px] w-[18px] rounded-full ring-2 ring-[var(--cv-float)] shadow-[0_0_0_1.5px_var(--cv-ink-3)]" style={{ background: color }} />
               </button>
             ))}
+            {colorsOpen ? (
+              <div className="cv-bar-up absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 gap-2 rounded-[12px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-2 shadow-[var(--cv-float-shadow)]">
+                {MARKS.map((c) => (
+                  <button key={c} type="button" aria-label={c} onClick={() => { setColor(c); setColorsOpen(false); }}
+                    className={`h-[22px] w-[22px] rounded-full transition ${c === color ? 'ring-2 ring-[var(--cv-ink)] ring-offset-2 ring-offset-[var(--cv-float)]' : 'ring-1 ring-black/20 hover:scale-110'}`} style={{ background: c }} />
+                ))}
+              </div>
+            ) : null}
           </div>
-        ) : null}
-        <div className="flex items-end gap-3 rounded-[16px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-chip)] py-2.5 pl-4 pr-2.5 transition focus-within:!border-[var(--cv-ring)]">
-          <textarea value={prompt} rows={2} onChange={(event) => setPrompt(event.target.value)}
-            onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); if (ready) void make(); } }}
-            placeholder={t(mode === 'mask' ? 'canvas.redraw.maskHint' : mode === 'remove' ? 'canvas.redraw.removeHint' : pins ? 'canvas.redraw.pinHint' : 'canvas.redraw.markupHint')}
-            className="min-h-[44px] min-w-0 flex-1 resize-none bg-transparent py-1 text-[13.5px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]" />
-          {/* the model that redraws it */}
-          {picked ? (
-            <div className="relative shrink-0">
-              <button type="button" onClick={() => setModelsOpen((v) => !v)} disabled={usable.length < 2}
-                className="flex h-9 items-center gap-1.5 rounded-full px-2.5 text-[12.5px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] disabled:hover:bg-transparent">
-                <ProviderMark id={picked.via} size={15} />{picked.name}{usable.length > 1 ? <ChevronDown size={13} /> : null}
-              </button>
-              {modelsOpen ? (
-                <div className="cv-bar-up absolute bottom-full right-0 z-20 mb-2 w-[240px] rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
-                  <div className="px-2 pb-1 pt-0.5 text-[11px] text-[var(--cv-ink-3)]">{t('canvas.redraw.model')}</div>
-                  {usable.map((m) => (
-                    <button key={m.key} type="button" onClick={() => { setModelKey(m.key); setModelsOpen(false); }}
-                      className="flex h-9 w-full items-center gap-2 rounded-[9px] px-2 text-left text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
-                      <ProviderMark id={m.via} size={16} /><span className="min-w-0 flex-1 truncate">{m.name}</span>
-                      {m.key === picked.key ? <Check size={14} className="text-[var(--cv-ink-2)]" /> : null}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+          {brushing ? (
+            <>
+              {sep}
+              <label title={`${t('canvas.redraw.size')} · [ ]`} className="flex items-center gap-2 px-1.5 text-[12px] text-[var(--cv-ink-3)]">
+                <input type="range" min={2} max={brushMax} value={tool === 'pen' ? line : brush} disabled={tool === 'pen'} onChange={(event) => setSize(Number(event.target.value))}
+                  className="h-1 w-24 cursor-pointer accent-[var(--cv-ink)] disabled:opacity-30" />
+                <span className="w-7 text-right tabular-nums text-[var(--cv-ink-2)]">{tool === 'pen' ? line : brush}</span>
+              </label>
+            </>
           ) : null}
-          <button type="button" disabled={!ready} onClick={() => { void make(); }} title={`${MOD}↵`}
-            className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-[var(--cv-invert)] px-4 text-[13px] font-medium text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:opacity-30">
-            <Sparkles size={13} />{t(busy ? 'canvas.redraw.making' : mode === 'remove' ? 'canvas.redraw.removeMake' : 'canvas.redraw.make')}
-          </button>
+          {sep}
+          {tip(t('canvas.redraw.undo'), `${MOD}Z`, <button type="button" aria-label={t('canvas.redraw.undo')} className={iconBtn} disabled={!marks.length} onClick={undo}><Undo2 size={16} /></button>)}
+          {tip(t('canvas.redraw.redo'), `⇧${MOD}Z`, <button type="button" aria-label={t('canvas.redraw.redo')} className={iconBtn} disabled={!undone.length} onClick={redo}><Redo2 size={16} /></button>)}
+          {tip(t(shown ? 'canvas.redraw.hide' : 'canvas.redraw.show'), 'H', <button type="button" aria-label={t(shown ? 'canvas.redraw.hide' : 'canvas.redraw.show')} className={iconBtn} onClick={() => setShown((v) => !v)}>{shown ? <Eye size={16} /> : <EyeOff size={16} />}</button>)}
+          {tip(t('canvas.redraw.clear'), null, <button type="button" aria-label={t('canvas.redraw.clear')} className={iconBtn} disabled={!marks.length} onClick={clear}><Trash2 size={16} /></button>)}
+        </div>
+      </div>
+
+      {/* what it should become: as a node's own composer — what it takes from, the words, the model, send */}
+      <div className="px-4 pb-4 pt-3">
+        <div className="mb-2 flex flex-wrap items-center gap-1.5 px-1">
+          {ideas.map((k) => (
+            <button key={k} type="button" onClick={() => setPrompt((v) => (v.trim() ? `${v.trim()} ` : '') + t(`canvas.redraw.ideas.${k}`))}
+              className="h-7 rounded-full border-[0.5px] !border-[var(--cv-float-line)] px-3 text-[12px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]">
+              {t(`canvas.redraw.ideas.${k}`)}
+            </button>
+          ))}
+          <span className="ml-auto truncate pl-2 text-[11.5px] tabular-nums text-[var(--cv-ink-3)]">{selected ? t('canvas.redraw.covered').replace('{n}', cover < 0.01 ? '<1' : String(Math.round(cover * 100))) : null}</span>
+        </div>
+        <div className="rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] px-4 pb-3 pt-3.5 shadow-[var(--cv-float-shadow)] transition focus-within:!border-[var(--cv-ring)]">
+          {/* the picture it changes, and pictures to take from */}
+          <div className="flex items-center gap-2">
+            <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-[12px] ring-1 ring-inset ring-[var(--cv-float-line)]" title={t('canvas.redraw.this')}>
+              <img src={src} alt="" draggable={false} className="h-full w-full object-cover" />
+            </span>
+            {refs.map((r) => (
+              <span key={r.path} className="group/ref relative h-12 w-12 shrink-0 overflow-hidden rounded-[12px] ring-1 ring-inset ring-[var(--cv-float-line)]">
+                <img src={r.src} alt="" draggable={false} className="h-full w-full object-cover" />
+                <button type="button" aria-label={t('canvas.redraw.removeRef')} onClick={() => setRefs((list) => list.filter((x) => x.path !== r.path))}
+                  className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/65 text-white opacity-0 transition group-hover/ref:opacity-100"><X size={11} /></button>
+              </span>
+            ))}
+            {onAddRef && (picked?.refs ?? 4) - 1 > refs.length ? (
+              <Tooltip label={t('canvas.redraw.addRef')}>
+                <button type="button" aria-label={t('canvas.redraw.addRef')} onClick={() => file.current?.click()}
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] bg-[color-mix(in_srgb,var(--cv-ink)_5%,transparent)] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><Plus size={18} /></button>
+              </Tooltip>
+            ) : null}
+            <input ref={file} type="file" accept="image/*" multiple hidden onChange={(event) => { void addRefs(event.target.files); event.target.value = ''; }} />
+          </div>
+          <textarea value={prompt} rows={2} onChange={(event) => setPrompt(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); void make(); } }}
+            placeholder={t(selected || marked ? (pins ? 'canvas.redraw.pinHint' : 'canvas.redraw.markedHint') : 'canvas.redraw.wholeHint')}
+            className="mt-3 block max-h-[22vh] min-h-[44px] w-full resize-none bg-transparent px-1 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]" />
+          <div className="mt-2 flex min-w-0 items-center gap-1">
+            {/* the model that changes it */}
+            {picked ? (
+              <div className="relative">
+                <button type="button" onClick={() => setModelsOpen((v) => !v)}
+                  className="flex h-9 min-w-0 items-center gap-1.5 rounded-[10px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
+                  <ProviderMark id={picked.via} size={16} /><span className="truncate">{picked.name}</span><ChevronDown size={14} className="text-[var(--cv-ink-3)]" />
+                </button>
+                {modelsOpen ? (
+                  <div className="cv-bar-up absolute bottom-full left-0 z-20 mb-2 w-[280px] rounded-[16px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]">
+                    <div className="px-2 pb-1 pt-0.5 text-[11px] text-[var(--cv-ink-3)]">{t('canvas.redraw.model')}</div>
+                    {models.map((m) => (
+                      <button key={m.key} type="button" onClick={() => { setModelKey(m.key); setModelsOpen(false); }}
+                        className="flex h-10 w-full items-center gap-2 rounded-[9px] px-2 text-left text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] bg-[var(--cv-chip)]"><ProviderMark id={m.via} size={14} /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate leading-4">{m.name}</span>
+                          <span className="block truncate text-[11px] leading-4 text-[var(--cv-ink-3)]">{[m.mask ? t('canvas.redraw.can.mask') : null, m.markup ? t('canvas.redraw.can.markup') : null, t('canvas.redraw.can.edit')].filter(Boolean).join(' · ')}</span>
+                        </span>
+                        {m.key === picked.key ? <Check size={14} className="text-[var(--cv-ink-2)]" /> : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {/* how it will be sent, said plainly */}
+            <span className={`min-w-0 flex-1 truncate px-1 text-[12px] ${way ? 'text-[var(--cv-ink-3)]' : 'text-amber-500/90'}`}>{problem ?? says}</span>
+            <Tooltip label={`${t('canvas.redraw.send')} · ${MOD}↵`}>
+              <button type="button" aria-label={t('canvas.redraw.send')} disabled={!ready} onClick={() => { void make(); }}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]">
+                {busy ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <ArrowUp size={17} />}
+              </button>
+            </Tooltip>
+          </div>
         </div>
       </div>
     </CanvasModal>

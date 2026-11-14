@@ -42,15 +42,15 @@ import { studioHost, type StudioRef } from '@/lib/host';
 import { useThemeChanges } from '@/lib/theme-changes';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import {
-  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepModelTime, lastModel, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
-  numberOf, type AssistKind, type Board, type BoardNode, type FileNode, type PictureTool, type FrameData, type FrameNode, type MakeData, type MakingNode, type NoteData, type Side, type SpawnKind, type UploadStatus,
+  BoardContext, allChoicesFor, boxOf, choiceOf, choicesFor, defaultChoice, GROUP_HELD, fileCardWidth, fitGroups, fromFlow, tidyGroup, unstack, inputViews, keepLastModel, keepModelTime, lastModel, nextCardLayer, raiseCards, runErrors, runs, runsChanged, shownBoards, startRun, toFlow, useRuns,
+  numberOf, type AssistKind, type Board, type Choice, type BoardNode, type FileNode, type PictureTool, type FrameData, type FrameNode, type MakeData, type MakingNode, type NoteData, type Side, type SpawnKind, type UploadStatus,
 } from './board';
 import { BottomToolbar, CornerBar, Dots, EmptyBoard, Outline, Ripples, ToolCorner, Viewer } from './chrome';
 import { AddMenu, type MenuAt } from './menus';
 import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from './connections';
 import { CharacterLibrary, HistoryModal, MaterialLibrary, SUBJECT_KINDS, SUBJECT_PARTS, loadSubjects } from './libraries';
 import { CutoutSetup } from './cutout';
-import { RedrawEditor, type RedrawStart, type RedrawWay } from './redraw';
+import { RedrawEditor, type RedrawJob, type RedrawStart } from './redraw';
 import { ExpandEditor, type Expanded } from './expand';
 import { CropEditor } from './crop';
 import { AdjustEditor } from './adjust';
@@ -156,7 +156,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   /* a picture's own tool open over the board */
   const [pictureTool, setPictureTool] = React.useState<{ id: string; path: string; tool: PictureTool } | null>(null);
   /* a cut-out asked for while nothing here cuts out: what to do once the way to cut out is there */
-  const [cutoutThen, setCutoutThen] = React.useState<{ run: () => void } | null>(null);
+  const [cutoutThen, setCutoutThen] = React.useState<{ run: () => void; cancel?: () => void } | null>(null);
   /* the node a library was opened for (its panel's chip): what is picked goes into it */
   const [modalFor, setModalFor] = React.useState<string | null>(null);
   const openLibrary = (which: 'characters' | 'styles' | 'effects', node?: string) => { setModalFor(node ?? null); setModal(which); };
@@ -936,7 +936,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
   /* the connected models that redraw part of a picture; the one picked first: the picture's own node's model, else the
      last picture model used, when it redraws so */
-  const redrawModels = choicesFor(providers, 'image').filter((c) => c.spec?.mask || c.spec?.markup);
+  const redrawModels = choicesFor(providers, 'image').filter((c) => c.spec?.refs !== 0);
   const keyOfChoice = (c: { via: string; model?: string }) => `${c.via}/${c.model ?? ''}`;
   const redrawFirst = (id: string) => {
     const own = now.current.nodes.find((n) => n.id === id);
@@ -948,25 +948,51 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
    * A picture changed in part: what was drawn kept in the project (a mask or a markup), and a new picture made from it
    * beside it, by a model that redraws so, at once.
    */
-  const redrawMake = async (way: RedrawWay, drawn: Blob, prompt: string, model: string) => {
+  const redrawMake = async ({ way, drawn, prompt, model, refs }: RedrawJob) => {
     const source = redraw;
     if (!source) return;
-    const choice = redrawModels.find((c) => keyOfChoice(c) === model && c.spec?.[way]) ?? redrawModels.find((c) => c.spec?.[way]);
+    const fits = (c: Choice) => (way === 'edit' ? c.spec?.refs !== 0 : Boolean(c.spec?.[way]));
+    const choice = redrawModels.find((c) => keyOfChoice(c) === model && fits(c)) ?? redrawModels.find(fits);
     if (!choice) { onError(t('canvas.redraw.noModel')); return; }
     try {
-      const [kept] = await onImportFiles([new File([drawn], `${way}-${Date.now().toString(36)}.png`, { type: 'image/png' })]);
-      if (!kept) return;
+      /* what was marked, kept in the project: the mask or the marks the model reads */
+      const kept = drawn ? (await onImportFiles([new File([drawn], `${way}-${Date.now().toString(36)}.png`, { type: 'image/png' })]))[0] : undefined;
+      if (drawn && !kept) return;
       const picture = byPath.get(source.path);
       const ratio = picture?.w && picture.h ? ratioOf(`${picture.w}:${picture.h}`, choice.spec) : undefined;
       const size = makeSize('image', ratio);
       const id = canvasId('n');
-      place({ id, type: 'make', position: spotBeside(source.id, 'source', size.w), width: size.w, height: size.h,
-        data: { make: 'image', prompt, via: choice.via, ...(choice.model ? { model: choice.model } : {}), opts: { ...(ratio ? { ratio } : {}), [way]: kept } } },
-      { node: source.id, side: 'source' });
+      const at = spotBeside(source.id, 'source', size.w);
+      /* the pictures to take from: under it, wired in after the picture it changes */
+      const REF = 220;
+      const held = refs.map((path, i) => ({ id: canvasId('n'), x: at.x + i * (REF + 20), y: at.y + size.h + 72, w: REF, h: REF, path }));
+      add({
+        nodes: [
+          { id, x: at.x, y: at.y, w: size.w, h: size.h, make: 'image', prompt, via: choice.via, ...(choice.model ? { model: choice.model } : {}),
+            opts: { ...(ratio ? { ratio } : {}), ...(kept && way !== 'edit' ? { [way]: kept } : {}) } },
+          ...held,
+        ],
+        edges: [{ id: canvasId('e'), from: source.id, to: id, order: 0 }, ...held.map((r, i) => ({ id: canvasId('e'), from: r.id, to: id, order: i + 1 }))],
+      }, false);
+      keepLastModel('image', { via: choice.via, ...(choice.model ? { model: choice.model } : {}) });
       setRedraw(null);
       requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(id); }));
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
+  /** the picture's subject cut out, for smart edit to select: by what cuts out here, once there is something that does */
+  const subjectOf = (path: string) => new Promise<string>((resolve, reject) => {
+    const picture = byPath.get(path);
+    if (!folder || !picture) { reject(new Error(t('canvas.missing'))); return; }
+    const go = () => {
+      void api.make(folder, 'cutout', { src: path, out: `${picture.name.replace(/\.[^.]+$/, '')}-subject` }, {}).then((text) => {
+        const receipt = JSON.parse(text) as { src?: string };
+        if (!receipt.src) throw new Error(t('canvas.make.nothing'));
+        resolve(sources.file({ ...picture, path: receipt.src }));
+      }).catch(reject);
+    };
+    if (providers?.use.cutout) go();
+    else setCutoutThen({ run: go, cancel: () => reject(new Error(t('canvas.redraw.subjectNone'))) });
+  });
 
   /**
    * Pictures made from one, each its own preset and shape, in a row in a group beside it, every one wired from it and
@@ -1016,7 +1042,33 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         edges: [{ id: canvasId('e'), from: sourceId, to: holder, order: 0 }, { id: canvasId('e'), from: holder, to: id, order: 0 }],
       }, false);
       setPictureTool(null);
-      requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(id); }));
+      requestAnimationFrame(() => requestAnimationFrame(() => { void makeNow(id).then((ok) => (ok ? cropMade(id, expanded.crop) : undefined)); }));
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+  /**
+   * What was made at the model's shape, cut to the canvas the person set and made its size in pixels: the node's newest
+   * version, the uncut one kept before it.
+   */
+  const cropMade = async (id: string, crop: Expanded['crop']) => {
+    const node = now.current.nodes.find((n) => n.id === id);
+    const path = node?.type === 'make' ? node.data.path : undefined;
+    const file = path ? byPath.get(path) ?? { path, name: path.split('/').pop() ?? path, kind: 'image' } : null;
+    if (!path || !file) return;
+    try {
+      const img = await new Promise<HTMLImageElement>((done, fail) => {
+        const i = new Image(); i.crossOrigin = 'anonymous';
+        i.onload = () => done(i); i.onerror = () => fail(new Error('the picture did not load')); i.src = sources.file(file as Parameters<typeof sources.file>[0]);
+      });
+      const out = document.createElement('canvas');
+      out.width = crop.width; out.height = crop.height;
+      const ctx = out.getContext('2d')!;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, crop.x * img.naturalWidth, crop.y * img.naturalHeight, crop.w * img.naturalWidth, crop.h * img.naturalHeight, 0, 0, crop.width, crop.height);
+      const blob = await new Promise<Blob | null>((done) => out.toBlob(done, 'image/png'));
+      if (!blob) return;
+      const [cut] = await onImportFiles([new File([blob], `${path.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'expanded'}-${crop.width}x${crop.height}.png`, { type: 'image/png' })]);
+      if (!cut) return;
+      setNodes((list) => list.map((n) => (n.id === id && n.type === 'make' ? { ...n, data: { ...n.data, versions: [...(n.data.versions ?? []), cut], path: cut } } : n)));
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
   /** an edited copy of a picture (cropped, colored) brought in beside it, wired from it */
@@ -1789,20 +1841,21 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           onLibrary={(which) => openLibrary(which)} onCharacters={() => openLibrary('characters')} onHistory={() => setModal('history')}
         />}
         {cutoutThen ? (
-          <CutoutSetup onClose={() => setCutoutThen(null)} onSettings={() => { setCutoutThen(null); onOpenSettings(); }}
+          <CutoutSetup onClose={() => { cutoutThen.cancel?.(); setCutoutThen(null); }} onSettings={() => { cutoutThen.cancel?.(); setCutoutThen(null); onOpenSettings(); }}
             onReady={() => { const then = cutoutThen; setCutoutThen(null); requestAnimationFrame(() => then.run()); }} />
         ) : null}
         {redraw && byPath.get(redraw.path) ? (
           <RedrawEditor src={sources.file(byPath.get(redraw.path)!)} start={redraw.start} onClose={() => setRedraw(null)} onMake={redrawMake}
-            models={redrawModels.map((c) => ({ key: keyOfChoice(c), name: c.name, via: c.via, mask: Boolean(c.spec?.mask), markup: Boolean(c.spec?.markup) }))}
-            model={redrawFirst(redraw.id)} />
+            models={redrawModels.map((c) => ({ key: keyOfChoice(c), name: c.name, via: c.via, mask: Boolean(c.spec?.mask), markup: Boolean(c.spec?.markup), refs: c.spec?.refs ?? 1 }))}
+            model={redrawFirst(redraw.id)} onSubject={() => subjectOf(redraw.path)}
+            onAddRef={async (file) => { const [path] = await onImportFiles([file]); return path ? { path, src: URL.createObjectURL(file) } : null; }} />
         ) : null}
         {/* a picture's own tools: widened, cropped and turned, colored, lit anew */}
         {pictureTool && byPath.get(pictureTool.path) ? (() => {
           const picture = byPath.get(pictureTool.path)!;
           const src = sources.file(picture);
           const close = () => setPictureTool(null);
-          if (pictureTool.tool === 'expand') return <ExpandEditor src={src} onClose={close} onMake={(expanded) => outpaint(pictureTool.id, expanded)} />;
+          if (pictureTool.tool === 'expand') return <ExpandEditor src={src} ratios={choicesFor(providers, 'image').find((c) => c.spec?.mask)?.spec?.ratios ?? []} onClose={close} onMake={(expanded) => outpaint(pictureTool.id, expanded)} />;
           if (pictureTool.tool === 'crop') return <CropEditor src={src} name={picture.name} onClose={close} onDone={(file) => bringEdited(pictureTool.id, file)} />;
           if (pictureTool.tool === 'adjust') return <AdjustEditor src={src} name={picture.name} onClose={close} onDone={(file) => bringEdited(pictureTool.id, file)} />;
           return (
