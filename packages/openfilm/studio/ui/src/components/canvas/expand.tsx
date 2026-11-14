@@ -63,7 +63,8 @@ export async function framedPicture(picture: string, mask: string, place: Expand
   return new Promise<Blob>((done, fail) => out.toBlob((x) => (x ? done(x) : fail(new Error('no picture was made'))), 'image/png'));
 }
 
-const ASK = 'Extend the picture into the empty area around it: continue the scene naturally beyond its edges with the same style, light, perspective and detail, so it reads as one seamless picture; keep the original area exactly as it is.';
+/** what a widening is asked first, before the person's own words (added when it is made, not kept in its words) */
+export const EXPAND_ASK = 'Extend the picture into the empty area around it: continue the scene naturally beyond its edges with the same style, light, perspective and detail, so it reads as one seamless picture; keep the original area exactly as it is.';
 
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((done, fail) => {
@@ -224,7 +225,7 @@ export function ExpandEditor({ src, ratios, onClose, onMake }: {
       m.fillRect(-mx * k + inset, -my * k + inset, iw * k - 2 * inset, ih * k - 2 * inset);
       const blob = await new Promise<Blob>((done, fail) => mask.toBlob((x) => (x ? done(x) : fail(new Error('no mask was made'))), 'image/png'));
       await onMake({
-        mask: blob, ratio: made, words: [ASK, words.trim()].filter(Boolean).join('\n\n'),
+        mask: blob, ratio: made, words: words.trim(),
         place: { x: -mx / mw, y: -my / mh, w: iw / mw, h: ih / mh },
         crop: { x: (b.x - mx) / mw, y: (b.y - my) / mh, w: b.w / mw, h: b.h / mh, width: W, height: H },
       });

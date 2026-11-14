@@ -51,7 +51,7 @@ import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from '.
 import { CharacterLibrary, HistoryModal, MaterialLibrary, SUBJECT_KINDS, SUBJECT_PARTS, loadSubjects } from './libraries';
 import { CutoutSetup } from './cutout';
 import { RedrawEditor, type RedrawJob, type RedrawStart } from './redraw';
-import { ExpandEditor, expandName, expandPlan, framedPicture, type Expanded } from './expand';
+import { EXPAND_ASK, ExpandEditor, expandName, expandPlan, framedPicture, type Expanded } from './expand';
 import { CropEditor } from './crop';
 import { AdjustEditor } from './adjust';
 import { LightPanel } from './light';
@@ -682,7 +682,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           const framed = await framedPicture(srcOf(picture.path), srcOf(mask), plan.place);
           const [held] = await onImportFiles([new File([framed], `expand-${Date.now().toString(36)}.png`, { type: 'image/png' })]);
           if (!held) return false;
-          const request = makeRequest(node as MakingNode, [{ from: picture.from, path: held, media: 'image' }], makeName(node as MakingNode), spec);
+          const asked = { ...node, prompt: [EXPAND_ASK, node.prompt?.trim()].filter(Boolean).join('\n\n') } as MakingNode;
+          const request = makeRequest(asked, [{ from: picture.from, path: held, media: 'image' }], makeName(node as MakingNode), spec);
           const pick = node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
           const ok = await startRun(projectId, folder, id, request, pick, inputsKey(node, inputs), { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') }, boardId);
           if (ok) await cropMade(id, plan.crop).catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
