@@ -107,35 +107,33 @@ export function ShortcutSheet({ title, steps, keysTitle, groups, hold, onClose }
 
 /** A small drawing of a way to use the room, in the room's own shapes: the marks row, the strip, the picture, a message. */
 function Art({ kind }: { kind: Step['art'] }) {
-  const frames = (
-    <span className="flex h-[22px] w-full overflow-hidden rounded-[5px] ring-1 ring-inset ring-white/10">
-      {['#3a4a5c', '#5c4636', '#2f4d47', '#4b3a58', '#5a5235', '#34485e'].map((c) => <span key={c} className="h-full flex-1 border-r border-black/30" style={{ background: c }} />)}
+  /* the progress bar, `played` of it red, its knob there */
+  const bar = (played: number, knob = false) => (
+    <span className="relative block h-[4px] w-full rounded-full bg-white/25">
+      <span className="absolute inset-y-0 left-0 rounded-full bg-[#f03]" style={{ width: `${played}%` }} />
+      {knob ? <span className="absolute top-1/2 h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#f03]" style={{ left: `${played}%` }} /> : null}
     </span>
   );
-  const lane = (children?: React.ReactNode) => <span className="relative mb-[3px] block h-[11px] w-full rounded-[4px] bg-white/[.06]">{children}</span>;
+  const lane = (children?: React.ReactNode) => <span className="relative mb-[6px] block h-[11px] w-full rounded-[4px] bg-white/[.06]">{children}</span>;
   return (
     <div className="relative grid h-[84px] place-items-center overflow-hidden rounded-[10px] bg-black/35 px-4 ring-1 ring-inset ring-white/[.06]">
       {kind === 'watch' ? (
         <span className="relative w-full">
           {lane()}
-          <span className="relative block">
-            {frames}
-            <span className="absolute inset-y-0 left-[46%] w-[2px] bg-white shadow-[0_0_6px_white]" />
-            <span className="absolute -bottom-[14px] left-[46%] -translate-x-1/2 text-[11px] leading-none text-white/80">⟷</span>
-          </span>
-          <span className="mt-[16px] block h-[4px] w-full rounded-full bg-white/10"><span className="block h-full w-[40%] translate-x-[30%] rounded-full bg-white/50" /></span>
+          {bar(46, true)}
+          <span className="mt-[6px] block text-center text-[11px] leading-none text-white/70">⟷</span>
         </span>
       ) : kind === 'time' ? (
         <span className="relative w-full">
           {lane(<>
             <span className="absolute left-[22%] top-1/2 grid h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--accent)] text-[7.5px] font-bold text-[var(--on-accent)]">1</span>
-            <span className="absolute inset-y-[1px] left-[52%] w-[30%] rounded-[3px] bg-[color-mix(in_srgb,var(--accent)_40%,transparent)] shadow-[inset_0_0_0_1px_var(--accent)]" />
+            <span className="absolute left-[52%] top-1/2 h-[3px] w-[30%] -translate-y-1/2 rounded-full bg-[var(--accent)]" />
             <span className="absolute left-[52%] top-1/2 grid h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--accent)] text-[7.5px] font-bold text-[var(--on-accent)]">2</span>
           </>)}
           <span className="relative block">
-            {frames}
-            <span className="absolute inset-y-0 left-[22%] w-[2px] -translate-x-1/2 bg-[var(--accent)]" />
-            <span className="absolute inset-y-0 left-[52%] w-[30%] bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]" />
+            {bar(30)}
+            <span className="absolute left-[22%] top-1/2 h-[8px] w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent)]" />
+            <span className="absolute left-[52%] top-0 h-[4px] w-[30%] bg-[var(--accent)]" />
           </span>
         </span>
       ) : kind === 'picture' ? (

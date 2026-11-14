@@ -39,7 +39,7 @@
   "keysTitle": "Teclas",
   "kHelp": "Cómo funciona",
   "watchTitle": "Ver",
-  "watchText": "Clic en la imagen para reproducir o pausar. Arrastra por la barra y la imagen te sigue. Desplaza, o arrastra los extremos de la barra fina de abajo, para ampliar.",
+  "watchText": "Clic en la imagen o Espacio para reproducir. Arrastra la barra de progreso para ver. Desplaza sobre ella, o usa la lupa abajo a la derecha, para ampliar.",
   "timeTitle": "Señalar un tiempo",
   "timeText": "Sobre la barra está la fila de marcas: un clic señala este momento, arrastrar elige un tramo, con la imagen siguiéndote.",
   "pictureTitle": "Señalar la imagen",
@@ -47,6 +47,10 @@
   "sayTitle": "Di qué cambiar",
   "sayText": "Cada cosa entra en el chat con su número; luego di qué quieres. Cuando cambie, “Ver los cambios” recorre cada sitio.",
   "laneEmpty": "Clic aquí para este momento, arrastra para un tramo",
-  "hintScrub": "Arrastra para ver",
-  "helpHold": "o mantén {mod}"
+  "helpHold": "o mantén {mod}",
+  "mute": "Silenciar",
+  "unmute": "Activar sonido",
+  "zoomIn": "Ampliar la barra",
+  "kFull": "Pantalla completa",
+  "exitFull": "Salir de pantalla completa"
 }

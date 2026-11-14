@@ -9,7 +9,7 @@
 import * as React from 'react';
 import { StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { ChevronLeft, ChevronRight, CircleHelp, Pause, Play, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, X } from 'lucide-react';
 import { addPluginWords, useT } from '@/i18n';
 import { projectEvents, type Film as FilmValue } from '@/api';
 import { Player } from '@/editor/player';
@@ -22,7 +22,9 @@ import { Tooltip } from '@/components/Tooltip';
 import { chat, onCommand, project, toast } from '@/studio';
 import { useProject, useProvide } from '@/studio/react';
 import { changedRanges, clock, cuesOf, linkOf, timeLabel, timeOf, type Clock, type Cue, type Range } from './screening-model';
-import { Scrubber, useClock, type Mark, type ScrubberHandle } from './Scrubber';
+import { levelOf, Scrubber, useClock, type Mark, type ScrubberHandle } from './Scrubber';
+import { Btn, PATH_HELP, ZoomControl } from './Controls';
+import { Icon, PATH_FULLSCREEN, PATH_FULLSCREEN_EXIT, PATH_PAUSE, PATH_PLAY, SettingsMenu, VolumeControl } from '@/components/player-controls/controls-bar';
 import { MOD, ShortcutSheet, useHeldSheet } from './ShortcutSheet';
 import { Stage } from './Stage';
 
@@ -161,8 +163,25 @@ function Screening({ projectId }: { projectId: string }) {
     setPlaying(true);
   }, [seek]);
   const toggle = React.useCallback(() => { if (player.current!.playing) pause(); else play(); }, [pause, play]);
+  const rate = React.useCallback((next: number) => { player.current!.setRate(next); setSpeed(next); }, []);
   const cycleSpeed = React.useCallback(() => {
     setSpeed((s) => { const next = SPEEDS[(SPEEDS.indexOf(s as 1) + 1) % SPEEDS.length]!; player.current!.setRate(next); return next; });
+  }, []);
+  /* the person's volume, as the player keeps it */
+  const [sound, setSound] = React.useState({ volume: 1, muted: false });
+  const heard = () => setSound({ volume: player.current!.volume, muted: player.current!.muted });
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  /* full screen: the room itself, the picture and its bar */
+  const room = React.useRef<HTMLDivElement>(null);
+  const [full, setFull] = React.useState(false);
+  React.useEffect(() => {
+    const change = () => setFull(document.fullscreenElement === room.current && room.current != null);
+    document.addEventListener('fullscreenchange', change);
+    return () => document.removeEventListener('fullscreenchange', change);
+  }, []);
+  const toggleFull = React.useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void room.current?.requestFullscreen();
   }, []);
   /* while it plays: the time, the end, and the next change watched */
   const watchingRef = React.useRef(watching);
@@ -257,21 +276,13 @@ function Screening({ projectId }: { projectId: string }) {
   const goTo = (mark: Mark) => { const t = timeOf(mark.ref); if (t != null) { pause(); seek(t); } };
   const onSpan = React.useCallback((span: number) => { setShownSpan(span); if (duration && span < duration - 1e-3) learn('zoom'); }, [duration, learn]);
   const decimals = duration && shownSpan < duration - 1e-3 ? (shownSpan <= 4 ? 2 : 1) : 0;
-  /* the film's picture at `t`, for a picture standing for `step` s: the frame of the shot on top then, cut by Studio
-     from its file (to the tenth of a second, or the frame when the pictures are closer than that) */
-  const frameAt = React.useCallback((t: number, width: number, step: number) => {
-    for (let i = blocks.picture.length - 1; i >= 0; i--) {
-      const b = blocks.picture[i]!;
-      if (t < b.at || t >= b.end) continue;
-      const path = b.clip.src.split('#')[0]!;
-      const file = state?.files.find((f) => f.path === path);
-      const still = file?.kind === 'image';
-      const unit = step < 0.1 ? FRAME_S * 1000 : 100;
-      const ms = still ? 0 : Math.round(Math.round((((b.clip.time?.[0] ?? 0) + (t - b.at) * (b.clip.speed ?? 1)) * 1000) / unit) * unit);
-      return `/api/projects/${encodeURIComponent(projectId)}/media?what=frame&path=${encodeURIComponent(path)}&ms=${ms}&w=${width}${file ? `&v=${file.mtimeMs}` : ''}`;
-    }
-    return undefined;
-  }, [blocks, state?.files, projectId]);
+  /* where the film cuts from one shot to the next: the bar is parted there (the track that shows the most picture) */
+  const cuts = React.useMemo(() => {
+    const by = new Map<number, Block[]>();
+    for (const b of blocks.picture) by.set(b.track, [...(by.get(b.track) ?? []), b]);
+    const main = [...by.values()].sort((a, b) => b.reduce((s, x) => s + x.end - x.at, 0) - a.reduce((s, x) => s + x.end - x.at, 0))[0] ?? [];
+    return [...new Set(main.map((b) => b.at).filter((t) => t > 0.05))].sort((a, b) => a - b);
+  }, [blocks]);
 
   /* ── what changed since the person last looked ── */
   const changes = React.useMemo(() => changedRanges(seen, film, info?.spans ?? []), [seen, film, info]);
@@ -298,6 +309,8 @@ function Screening({ projectId }: { projectId: string }) {
       else if (key === '?') { take(); setSheetOpen((open) => !open); }
       else if (key === 'c' && changes.length) { take(); watchChange(0); }
       else if (key === 's') { take(); cycleSpeed(); }
+      else if (key === 'k') { take(); toggle(); }
+      else if (key === 'f') { take(); toggleFull(); }
       else if (key === '=' || key === '+') { take(); scrubber.current?.zoomIn(); }
       else if (key === '-') { take(); scrubber.current?.zoomOut(); }
       else if (key === '0') { take(); scrubber.current?.whole(); }
@@ -305,7 +318,7 @@ function Screening({ projectId }: { projectId: string }) {
     };
     window.addEventListener('keydown', press, true);
     return () => window.removeEventListener('keydown', press, true);
-  }, [shown, toggle, pause, seek, pointMoment, changes, watchChange, cycleSpeed, sheetOpen, watching]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shown, toggle, pause, seek, pointMoment, changes, watchChange, cycleSpeed, toggleFull, sheetOpen, watching]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── files dropped: into the project, and pointed at ── */
   const drop = async (e: React.DragEvent) => {
@@ -328,8 +341,8 @@ function Screening({ projectId }: { projectId: string }) {
   const steps = (['watch', 'time', 'picture', 'say'] as const).map((art) => ({ art, title: w(`${art}Title`), text: w(`${art}Text`) }));
   const sheet = [
     { title: w('gWatch'), items: [
-      { keys: ['Space'], label: w('kPlay') }, { keys: ['←', '→'], label: w('kStep') }, { keys: ['⇧', '←', '→'], label: w('kFrame') },
-      { keys: ['+', '−'], label: w('kZoom') }, { keys: ['0'], label: w('kWhole') }, { keys: ['S'], label: w('kSpeed') },
+      { keys: ['Space', 'K'], label: w('kPlay') }, { keys: ['←', '→'], label: w('kStep') }, { keys: ['⇧', '←', '→'], label: w('kFrame') },
+      { keys: ['+', '−'], label: w('kZoom') }, { keys: ['0'], label: w('kWhole') }, { keys: ['S'], label: w('kSpeed') }, { keys: ['F'], label: w('kFull') },
     ] },
     { title: w('gPoint'), items: [
       { keys: ['M'], label: w('kMoment') }, { keys: ['C'], label: w('kChanges') }, { keys: ['Esc'], label: w('kCancel') }, { keys: ['?'], label: w('kHelp') },
@@ -356,7 +369,7 @@ function Screening({ projectId }: { projectId: string }) {
   ) : null;
 
   return (
-    <div data-screening="" className="relative flex h-full min-h-0 w-full flex-col gap-3 bg-[var(--bg-viewer)] px-6 pb-3 pt-4 text-[var(--text)]"
+    <div ref={room} data-screening="" className={`relative flex h-full min-h-0 w-full flex-col gap-2 px-6 pb-2 pt-4 text-[var(--text)] ${full ? 'bg-black' : 'bg-[var(--bg-viewer)]'}`}
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropping(true); } }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDropping(false); }}
       onDrop={(e) => { void drop(e); }}>
@@ -366,36 +379,33 @@ function Screening({ projectId }: { projectId: string }) {
         empty={empty ? { title: w('emptyTitle'), sub: state.chat ? w('emptySub') : w('emptyBrowserSub'), ...(state.chat && !state.chat.open ? { openChat: { label: w('openChat'), onOpen: state.chat.toggle } } : {}) } : null}
         onFit={setFit} onToggle={toggle} onDragStart={pause} onBox={pointBox} onRemove={(m) => unrefer(m.ref)} />
       {empty ? null : (
-        /* under the picture and as wide: the film along a line (marks, frames, zoom), then one row of controls */
+        /* under the picture and as wide: the marks and the progress bar, then the player's row of controls */
         <div className="mx-auto flex w-full shrink-0 flex-col" style={{ maxWidth: Math.max(560, fit) }}>
-          <Scrubber ref={scrubber} duration={duration} clock={time} aspect={stage.w / stage.h} frameAt={frameAt} marks={marks} changes={changes}
+          <Scrubber ref={scrubber} duration={duration} clock={time} marks={marks} changes={changes} cuts={cuts}
             words={{
               go: w('go'), remove: w('remove'), lane: used.moment && used.range ? null : w('laneEmpty'),
               laneHints: [...(used.moment ? [] : [w('hintMoment')]), ...(used.range ? [] : [w('hintRange')])],
-              stripHints: used.zoom ? [] : [w('hintScrub'), w('hintZoom')],
+              barHints: used.zoom ? [] : [w('hintZoom')],
             }}
             onSeek={(t) => { pause(); seek(t); }} onMoment={pointMoment}
             onRange={pointRange} onGo={goTo} onRemove={unrefer} onSpan={onSpan} />
-          <div className="mt-1 flex h-8 items-center gap-1">
+          <div className="-mx-1.5 flex h-10 items-center gap-0.5 text-white">
             <Tooltip label={playing ? w('pause') : w('play')} shortcut="Space">
-              <button type="button" aria-label={playing ? w('pause') : w('play')} onClick={toggle}
-                className="-ml-1.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[var(--text)] transition hover:bg-white/10 active:scale-95">
-                {playing ? <Pause size={15} fill="currentColor" strokeWidth={0} /> : <Play size={15} fill="currentColor" strokeWidth={0} className="ml-[1px]" />}
-              </button>
+              <Btn label={playing ? w('pause') : w('play')} onClick={toggle}><Icon d={playing ? PATH_PAUSE : PATH_PLAY} /></Btn>
             </Tooltip>
+            <VolumeControl volume={sound.volume} muted={sound.muted} titles={{ mute: w('mute'), unmute: w('unmute') }}
+              onVolumeChange={(v) => { player.current!.setVolume(v); heard(); }}
+              onToggleMute={() => { player.current!.setMuted(!player.current!.muted); heard(); }} />
             <TimeNow source={time} decimals={decimals} duration={duration} />
             <span className="flex-1" />
-            <Tooltip label={w('speed')} shortcut="S">
-              <button type="button" onClick={cycleSpeed} aria-label={w('speed')}
-                className={`h-6 min-w-[32px] shrink-0 rounded-[6px] px-1.5 font-mono text-[11px] tabular-nums transition hover:bg-white/10 hover:text-[var(--text)] ${speed === 1 ? 'text-[var(--text-faint)]' : 'bg-white/10 text-[var(--text)]'}`}>
-                {speed}×
-              </button>
-            </Tooltip>
+            <ZoomControl level={levelOf(shownSpan || duration, duration)} label={w('zoomIn')} wholeLabel={w('kWhole')}
+              onLevel={(level) => (level > 0 ? scrubber.current?.setLevel(level) : scrubber.current?.whole())} />
+            <SettingsMenu open={settingsOpen} onOpenChange={setSettingsOpen} rate={speed} onRateChange={rate} />
             <Tooltip label={`${w('help')} · ${w('helpHold', { mod: MOD })}`} shortcut="?">
-              <button type="button" aria-label={w('help')} aria-pressed={sheetOpen} onClick={() => setSheetOpen((open) => !open)}
-                className={`-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-full transition hover:bg-white/10 hover:text-[var(--text)] ${sheetOpen ? 'bg-white/10 text-[var(--text)]' : 'text-[var(--text-faint)]'}`}>
-                <CircleHelp size={15} />
-              </button>
+              <Btn label={w('help')} active={sheetOpen} onClick={() => setSheetOpen((open) => !open)}><Icon d={PATH_HELP} /></Btn>
+            </Tooltip>
+            <Tooltip label={full ? w('exitFull') : w('kFull')} shortcut="F">
+              <Btn label={full ? w('exitFull') : w('kFull')} onClick={toggleFull}><Icon d={full ? PATH_FULLSCREEN_EXIT : PATH_FULLSCREEN} /></Btn>
             </Tooltip>
           </div>
         </div>
@@ -414,9 +424,8 @@ function Screening({ projectId }: { projectId: string }) {
 function TimeNow({ source, decimals, duration }: { source: Clock; decimals: number; duration: number }) {
   const t = useClock(source);
   return (
-    <span className="shrink-0 font-mono text-[11.5px] tabular-nums">
-      <span className="text-[var(--text)]">{timeLabel(t, decimals)}</span>
-      <span className="text-[var(--text-faint)]"> / {timeLabel(duration)}</span>
+    <span className="ml-1.5 shrink-0 whitespace-nowrap text-[12.5px] tabular-nums text-white/90">
+      {timeLabel(t, decimals)} <span className="text-white/60">/ {timeLabel(duration)}</span>
     </span>
   );
 }

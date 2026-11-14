@@ -39,7 +39,7 @@
   "keysTitle": "Keys",
   "kHelp": "How it works",
   "watchTitle": "Watch",
-  "watchText": "Click the picture to play or pause. Drag along the bar and the picture follows. Scroll, or drag the ends of the thin bar below, to zoom in.",
+  "watchText": "Click the picture or press Space to play. Drag the progress bar to preview. Scroll over it, or use the magnifier at the bottom right, to zoom in.",
   "timeTitle": "Point at a time",
   "timeText": "Above the bar is the marks row: click it for this moment, drag it for a stretch, the picture following.",
   "pictureTitle": "Point at the picture",
@@ -47,6 +47,10 @@
   "sayTitle": "Say what to change",
   "sayText": "Each goes into the chat with its number; then just say what you want. When it is changed, “Watch the changes” plays each place.",
   "laneEmpty": "Click here for this moment, drag for a stretch",
-  "hintScrub": "Drag to preview",
-  "helpHold": "or hold {mod}"
+  "helpHold": "or hold {mod}",
+  "mute": "Mute",
+  "unmute": "Unmute",
+  "zoomIn": "Zoom the bar in",
+  "kFull": "Full screen",
+  "exitFull": "Exit full screen"
 }
