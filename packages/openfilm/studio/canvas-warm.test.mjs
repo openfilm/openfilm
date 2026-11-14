@@ -7,6 +7,7 @@ import { chromium } from 'playwright-core';
 import { filmHtml } from '../src/film-doc.mjs';
 import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
+import { showWorkbench } from './show-workbench.mjs';
 
 async function withBoard(nodes, run) {
   const scratch = await mkdtemp(join(tmpdir(), 'of-canvas-warm-'));
@@ -68,7 +69,7 @@ test('an open video node picks up a service sign-in without reloading the canvas
     const openNode = async (tab) => {
       await tab.goto(url);
       await tab.locator('[data-work-mode]').waitFor();
-      if (await tab.locator('[data-work-mode="edit"]').count()) await tab.locator('[data-work-mode="edit"]').click();
+      await showWorkbench(tab, 'canvas');
       await tab.locator('[data-studio-canvas][data-canvas-ready="1"]').waitFor();
       await tab.getByTestId('rf__node-video').click();
       await tab.getByRole('button', { name: 'Connect a service', exact: true }).waitFor();
@@ -114,7 +115,8 @@ test('new videos keep the ratio picked while the canvas stays open, including th
       await route.fulfill({ json: { ok: true, text: JSON.stringify({ src: 'assets/test-video.mp4' }) } });
     });
     await page.goto(url);
-    await page.locator('[data-work-mode="edit"]').click();
+    await page.locator('[data-work-mode="edit"]').waitFor();
+    await showWorkbench(page, 'canvas');
     await page.locator('[data-studio-canvas][data-canvas-ready="1"]').waitFor();
     await page.getByTestId('rf__node-video').click();
     const spec = (ratio) => page.getByRole('button', { name: new RegExp(`^${ratio} ·`) });
@@ -191,7 +193,7 @@ test('the edit warms a fitted hidden canvas without writing it; the first switch
       window.__editTimeline = document.querySelector('[data-workspace-timeline]');
       window.__editFrame = document.querySelector('[data-viewer-picture] iframe');
     });
-    await page.locator('[data-work-mode="edit"]').click();
+    await showWorkbench(page, 'canvas');
     assert.equal(await frame.evaluate((el) => el.getBoundingClientRect().width), size, 'the hidden editor keeps its own size');
     await page.waitForTimeout(800);
     assert.equal(await page.evaluate(() => window.__editTimeline === document.querySelector('[data-workspace-timeline]')
@@ -199,8 +201,8 @@ test('the edit warms a fitted hidden canvas without writing it; the first switch
     assert.equal(await page.locator('[data-canvas-loading]').count(), 0, 'the first switch is already prepared');
     assert.equal(await page.locator('.react-flow__node').count(), 2);
     assert.equal(await viewport.getAttribute('style'), fitted, 'no first-open refit');
-    await page.locator('[data-work-mode="canvas"]').click();
-    await page.locator('[data-work-mode="edit"]').click();
+    await showWorkbench(page, 'edit');
+    await showWorkbench(page, 'canvas');
     assert.equal(await viewport.getAttribute('style'), fitted, 'switching back also preserves the view');
     await page.waitForTimeout(800); // opening or changing layouts must stay clean past the autosave window too
     assert.equal(await readFile(file, 'utf8'), board);
@@ -221,7 +223,8 @@ test('opening before warm-up shows a canvas loading surface until an empty board
     try {
       await page.goto(url);
       // Test the first click while the board request is held, independently of frame scheduling on the runner.
-      await page.locator('[data-work-mode="edit"]').dispatchEvent('click');
+      await page.locator('[data-work-mode="edit"]').waitFor();
+      await showWorkbench(page, 'canvas', { dispatch: true });
       const loading = page.locator('[data-canvas-loading]');
       await loading.waitFor({ state: 'visible' });
       assert.equal(await loading.getAttribute('aria-busy'), 'true');

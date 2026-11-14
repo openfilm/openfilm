@@ -8,6 +8,7 @@ import { chromium } from 'playwright-core';
 import { filmHtml } from '../src/film-doc.mjs';
 import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
+import { showWorkbench } from './show-workbench.mjs';
 
 const output = process.env.OPENFILM_WORKSPACE_SCREENSHOTS;
 async function withWorkspace(run, {hasChat=true, clips=[]}={}) {
@@ -113,7 +114,7 @@ test('the clip inspector scrolls within its pane while its tabs stay in place', 
 test('dragging the chat edge with its library open keeps the library and active workspace aligned', { timeout: 45_000 }, async () => {
   await withWorkspace(async page => {
     for (const [mode, panel, delta] of [['edit', '[data-viewer-pane]', 120], ['canvas', '[data-studio-canvas]', 160]]) {
-      if (mode === 'canvas') await page.locator('[data-work-mode="edit"]').click();
+      if (mode === 'canvas') await showWorkbench(page, 'canvas');
       await page.evaluate(() => window.openfilmHost.panel.setAssetsOpen(true));
       await library(page).waitFor();
       await page.waitForFunction(mode => JSON.parse(localStorage.getItem('openfilm.workspace.current.v3'))?.arrangements?.[mode]?.assets, mode);
@@ -136,7 +137,7 @@ test('dragging the chat edge with its library open keeps the library and active 
       await aligned();
       await page.waitForFunction(({ mode, width }) => JSON.parse(localStorage.getItem('openfilm.workspace.current.v3'))?.arrangements?.[mode]?.chatWidth === width, { mode, width: start.width + delta });
     }
-    await page.locator('[data-work-mode="canvas"]').click();
+    await showWorkbench(page, 'edit');
     await page.waitForFunction(() => document.querySelector('#test-chat').getBoundingClientRect().width === 540
       && document.querySelector('[data-workspace-library]').getBoundingClientRect().width === 540);
   });
@@ -172,7 +173,7 @@ test('normal panels have no new library header and every preset stays in the cur
         assert.ok(nav.y-(await rect(library(page))).y<3,'original category navigation starts at the top');
       }
     }
-    await closeLayout(page);await page.locator('[data-work-mode="edit"]').click();
+    await closeLayout(page);await showWorkbench(page, 'canvas');
     await page.waitForFunction(()=>document.querySelector('[data-studio-canvas]')?.dataset.canvasReady==='1');
     await openLayout(page);await layout.getByText('Canvas layouts',{exact:true}).waitFor();
     assert.equal(await layout.getByRole('button',{name:'Editing',exact:true}).count(),0);
@@ -215,7 +216,7 @@ test('export progress stays in the title bar as the workspace changes', { timeou
       await queue.waitFor({ state: 'detached' });
       if (mode === 'edit') {
         await page.setViewportSize({ width: 900, height: 640 });
-        await page.locator('[data-work-mode="edit"]').click();
+        await showWorkbench(page, 'canvas');
       }
     }
   });
@@ -287,7 +288,7 @@ test('finished layouts move chat and all panel boundaries, persist and restore i
     await page.reload();await page.locator('[data-work-mode="edit"]').waitFor();
     assert.deepEqual(await profile(page),edit);
     assert.equal((await rect(page.locator('#test-chat'))).width,1800);
-    await page.locator('[data-work-mode="edit"]').click();
+    await showWorkbench(page, 'canvas');
     await page.waitForFunction(()=>document.querySelector('[data-studio-canvas]')?.dataset.canvasReady==='1');
     assert.equal(await library(page).isVisible(),false);
     assert.equal((await profile(page,'canvas')).tree,null);
@@ -303,7 +304,7 @@ test('finished layouts move chat and all panel boundaries, persist and restore i
     assert.equal(await page.locator('.react-flow__node').count(),1);
     await page.waitForFunction(()=>{const node=document.querySelector('.react-flow__node')?.getBoundingClientRect(),canvas=document.querySelector('[data-studio-canvas]')?.getBoundingClientRect();return node&&canvas&&node.left<canvas.right&&node.right>canvas.left&&node.top<canvas.bottom&&node.bottom>canvas.top;});
     await shot(page,'workspace-canvas-redesign.png');
-    await page.locator('[data-work-mode="canvas"]').click();
+    await showWorkbench(page, 'edit');
     assert.deepEqual(await profile(page),edit);
     assert.equal((await rect(page.locator('#test-chat'))).width,1800);
     assert.deepEqual(await profile(page,'canvas'),canvas);
@@ -345,7 +346,7 @@ test('named layouts keep full split trees through updates, rename, undo deletion
 test('library placement is a reversible separate switch and visibility never changes placement', {timeout:60_000},async()=>{
   await withWorkspace(async page=>{
     for(const mode of ['edit','canvas']){
-      if(mode==='canvas'){await page.locator('[data-work-mode=edit]').click();await page.waitForFunction(()=>document.querySelector('[data-studio-canvas]')?.dataset.canvasReady==='1');}
+      if(mode==='canvas'){await showWorkbench(page, 'canvas');await page.waitForFunction(()=>document.querySelector('[data-studio-canvas]')?.dataset.canvasReady==='1');}
       await beginEdit(page);
       const visibility=editor(page).locator('[data-layout-palette=library]'),inside=editor(page).getByRole('switch',{name:'Library inside chat'});
       assert.equal(await inside.getAttribute('aria-checked'),'true');
@@ -380,7 +381,7 @@ test('preset thumbnail panel bounds match actual panels at the current window si
     for(const viewport of [{width:1800,height:1100},{width:1000,height:700}]){
       await page.setViewportSize(viewport);
       for(const mode of ['edit','canvas']){
-        if(!await page.locator(`[data-work-mode=${mode}]`).count())await page.locator('[data-work-mode]').click();
+        await showWorkbench(page, mode);
         if(mode==='canvas')await page.waitForFunction(()=>document.querySelector('[data-studio-canvas]')?.dataset.canvasReady==='1');
         const layout=await openLayout(page);
         for(const preset of ['Default','Library','Focus']){

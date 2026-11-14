@@ -7,6 +7,7 @@ import { chromium } from 'playwright-core';
 import { filmHtml } from '../src/film-doc.mjs';
 import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
+import { showWorkbench } from './show-workbench.mjs';
 
 test('back on the edit, nothing of the canvas shows over the panes, and it comes back as it was', { timeout: 90_000 }, async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'of-canvas-hidden-'));
@@ -31,19 +32,17 @@ test('back on the edit, nothing of the canvas shows over the panes, and it comes
     const waitShown = () => page.waitForFunction(() => [...document.querySelectorAll('.react-flow__node')].some((el) =>
       el.textContent.includes('A note on the board') && el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })));
 
-    await mode('edit').click();
+    await mode('edit').waitFor();
+    await showWorkbench(page, 'canvas');
     await node.waitFor({ state: 'attached', timeout: 30_000 });
-    await mode('canvas').waitFor();
     await waitShown();
     assert.equal(await shows(), true, 'on the canvas');
 
-    await mode('canvas').click();
-    await mode('edit').waitFor();
+    await showWorkbench(page, 'edit');
     assert.equal(await node.count(), 1, 'kept as it was left');
     assert.equal(await shows(), false, 'on the edit');
 
-    await mode('edit').click();
-    await mode('canvas').waitFor();
+    await showWorkbench(page, 'canvas');
     await waitShown();
     assert.equal(await shows(), true, 'on the canvas again');
   } finally {

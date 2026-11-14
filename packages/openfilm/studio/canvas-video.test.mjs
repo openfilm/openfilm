@@ -8,6 +8,7 @@ import { chromium } from 'playwright-core';
 import { filmHtml } from '../src/film-doc.mjs';
 import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
+import { showWorkbench } from './show-workbench.mjs';
 
 test('a canvas video uploads in place and keeps its frame while playing, renaming, and dragging', {
   timeout: 60_000, skip: spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status !== 0,
@@ -37,7 +38,8 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     await page.route('**/files?path=*clip.webm', async (route) => { await hold; await route.continue(); });
     const openCanvas = async () => {
       await page.goto(url);
-      await page.locator('[data-work-mode="edit"]').click();
+      await page.locator('[data-work-mode="edit"]').waitFor();
+      await showWorkbench(page, 'canvas');
       await page.locator('[data-studio-canvas][data-canvas-ready="1"]').waitFor();
     };
     await openCanvas();
@@ -305,7 +307,7 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     await writeFile(canvasFile, JSON.stringify(doc));
     await page.reload();
     await page.locator('[data-work-mode]').first().waitFor();
-    if (await page.locator('[data-work-mode="edit"]').count()) await page.locator('[data-work-mode="edit"]').click();
+    await showWorkbench(page, 'canvas');
     await page.locator('[data-studio-canvas][data-canvas-ready="1"]').waitFor();
     await node.getByText('Final shot', { exact: true }).waitFor();
     const legacyBox = await node.boundingBox();

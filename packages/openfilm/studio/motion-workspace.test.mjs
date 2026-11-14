@@ -47,6 +47,9 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
     assert.equal(await motion.getAttribute('aria-checked'), 'false');
     await page.getByRole('switch', { name: 'Turn off Canvas' }).click();
     await page.getByRole('switch', { name: 'Turn on Canvas' }).waitFor();
+    assert.equal(await switcher.count(), 1, 'Screening and the edit remain: the one button switches them');
+    await page.getByRole('switch', { name: 'Turn off Screening' }).click();
+    await page.getByRole('switch', { name: 'Turn on Screening' }).waitFor();
     assert.equal(await switcher.count(), 0, 'only Edit remains');
     await motion.click();
     await page.getByRole('switch', { name: 'Turn off Motion' }).waitFor();
