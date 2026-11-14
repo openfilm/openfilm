@@ -210,3 +210,31 @@ test('a held file is tried again until it is let go or the wait ends; any other 
   await assert.rejects(removeLetGo('x', {}, { rm: () => { tries++; throw held('EISDIR'); } }), { code: 'EISDIR' });
   assert.equal(tries, 1);
 });
+
+
+test('a resume manifest with a non-record files value is discarded before reusing chunks', async () => {
+  for (const files of [42, true, [], ['not-a-file-map']]) {
+    const dir = scratch();
+    const out = join(dir, 'film.mp4');
+    const folder = chunkFolder(dir, out);
+    const chunk = { a: 0, b: 30 };
+    let store;
+    try {
+      mkdirSync(folder, { recursive: true });
+      writeFileSync(join(folder, 'resume.json'), JSON.stringify({ settings: 'same', files }));
+      writeFileSync(join(folder, 'chunk-0-30.mp4'), 'stale frames');
+      store = chunkStore(dir, out, '.mp4');
+      assert.equal(store.kept, null, JSON.stringify(files));
+      await store.start('same');
+      assert.equal(store.done(chunk), false, 'invalid metadata cannot authorize cached frames');
+      const asset = join(dir, 'a.png');
+      writeFileSync(asset, 'new picture');
+      writeFileSync(store.drawing(chunk), 'fresh frames');
+      store.finished(chunk, new Map([[asset, signature(asset)]]));
+      assert.equal(store.done(chunk), true, 'fresh chunks can still be recorded');
+    } finally {
+      store?.close(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
