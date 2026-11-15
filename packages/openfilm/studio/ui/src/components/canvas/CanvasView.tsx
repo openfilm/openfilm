@@ -464,6 +464,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
 
   const byPath = React.useMemo(() => new Map(files.map((f) => [f.path, f])), [files]);
+  /** the project's files as they are now (a file just made reaches the list a moment later) */
+  const filesNow = React.useRef(byPath);
+  filesNow.current = byPath;
+  const listed = async (path: string) => { for (let i = 0; i < 50 && !filesNow.current.has(path); i++) await new Promise((done) => setTimeout(done, 200)); };
   const mediaOf = React.useCallback<MediaOf>((path) => {
     const kind = byPath.get(path)?.kind;
     return kind === 'image' || kind === 'video' || kind === 'audio' ? kind : null;
@@ -1197,6 +1201,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (made.part) {
       try { input = (await api.clipTool(projectId, { op: 'trim', path, from: made.part[0], to: made.part[1] })).paths[0]!; }
       catch (e) { onError(e instanceof Error ? e.message : String(e)); return; }
+      /* known as a clip before it is sent as one */
+      await listed(input);
     }
     /* what goes in besides: in a column between the clip and what is made from it, each wired in its order */
     const ins = [...(made.part ? [input] : []), ...made.extras];
