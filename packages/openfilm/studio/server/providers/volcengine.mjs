@@ -149,7 +149,8 @@ async function video(args, ctx) {
 
   /** @type {Array<Record<string, unknown>>} */
   const content = [{ type: 'text', text: prompt }];
-  const picture = async (/** @type {string} */ src, /** @type {string} */ role) => content.push({ type: 'image_url', image_url: { url: await dataUri(src, ctx) }, role });
+  /* a picture as an address when the run can give one (Ark fetches it, near where it is kept), else inside the request */
+  const picture = async (/** @type {string} */ src, /** @type {string} */ role) => content.push({ type: 'image_url', image_url: { url: ctx.link ? await ctx.link(src) : await dataUri(src, ctx) }, role });
   if (first) await picture(first, 'first_frame');
   if (last) await picture(last, 'last_frame');
   for (const ref of refs) await picture(ref, 'reference_image');
@@ -172,14 +173,14 @@ async function video(args, ctx) {
   }
   const address = text(state.content?.video_url);
   if (!address) throw new Error(`${NAME} made it but gave no file.`);
-  /* a signed address of its own storage: fetched without the key */
-  const { bytes } = await download(NAME, address, ctx);
-  const facts = mp4Facts(bytes);
-  const dur = facts?.seconds ?? (seconds > 0 ? seconds : 0);
+  /* a signed address of its own storage, fetched without the key: by whoever ran it, when it fetches files itself */
+  const bytes = ctx.handOff ? null : (await download(NAME, address, ctx)).bytes;
+  const facts = bytes ? mp4Facts(bytes) : null;
+  const dur = facts?.seconds ?? number(state.duration) ?? (seconds > 0 ? seconds : 0);
   const size = facts?.w && facts.h ? { w: facts.w, h: facts.h } : {};
   const tokens = number(state.usage?.completion_tokens);
   return {
-    files: [{ path, bytes }],
+    files: [bytes ? { path, bytes } : { path, url: address, type: 'video/mp4' }],
     index: [{ src: path, kind: 'video', ...size, dur, hasAudio: true, from: {
       mode: 'generate', prompt, provider: 'volcengine', model, resolution, sec: dur,
       ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length ? { refs } : {}),

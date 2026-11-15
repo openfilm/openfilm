@@ -7,9 +7,14 @@
  * `<provider>/<its model>`, e.g. `elevenlabs/eleven_v4`. One run is one `POST /v1/media/run`: the verb, the model, the
  * flags, and the project files the flags name; the answer is what that provider made, as it made it. It runs
  * asynchronously (a clip takes minutes): a 202, then `GET /v1/media/run?key=` until it is done.
+ *
+ * Files never pass through the service where they need not: the files a run names go straight to its storage
+ * (`POST /v1/media/uploads` gives an address for each, good for minutes and that file only), and a file a model made
+ * comes straight from the address its maker keeps it at, when the service can give one (`results: 'links'`). A
+ * service that predates this gets the files inside the run and gives them back inside its answer.
  */
 import { randomUUID } from 'node:crypto';
-import { billedBy, call, list, serviceUrl, sleep } from './common.mjs';
+import { billedBy, call, failure, list, serviceUrl, sleep } from './common.mjs';
 import openai from './openai.mjs';
 import google from './google.mjs';
 import fal from './fal.mjs';
@@ -89,20 +94,66 @@ const FILE_FLAGS = /** @type {Partial<Record<Verb, string[]>>} */ ({
 });
 
 /**
- * Send every named file under the path the receiving provider will use. The caller checks that these paths are
- * inside the project. If a file can't be read, stop before submitting an incomplete run.
+ * Every named file, under the path the receiving provider will use. The caller checks that these paths are inside the
+ * project. If a file can't be read, stop before submitting an incomplete run.
  * @param {Verb} verb @param {Record<string, unknown>} args @param {RunContext} ctx
  */
-async function inputsOf(verb, args, ctx) {
+async function filesOf(verb, args, ctx) {
   const paths = new Set((FILE_FLAGS[verb] ?? []).flatMap((flag) => list(args[flag])));
-  /** @type {{ path: string, base64: string }[]} */
-  const inputs = [];
+  /** @type {{ path: string, bytes: Uint8Array }[]} */
+  const files = [];
   for (const path of paths) {
     ctx.signal.throwIfAborted();
-    const bytes = await ctx.read(path);
-    inputs.push({ path, base64: Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64') });
+    files.push({ path, bytes: await ctx.read(path) });
   }
-  return inputs;
+  return files;
+}
+
+/**
+ * The run's files as it sends them: each put at the address the service gives for it (`{ path, upload }`), or, with a
+ * service that gives none, inside the run (`{ path, base64 }`).
+ * @param {{ path: string, bytes: Uint8Array }[]} files @param {string} base @param {Record<string, string>} headers @param {RunContext} ctx
+ */
+async function inputsOf(files, base, headers, ctx) {
+  const inline = () => files.map((f) => ({ path: f.path, base64: Buffer.from(f.bytes.buffer, f.bytes.byteOffset, f.bytes.byteLength).toString('base64') }));
+  if (!files.length) return [];
+  let asked;
+  try {
+    asked = await fetch(`${base}/v1/media/uploads`, {
+      method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ files: files.map((f) => ({ path: f.path, bytes: f.bytes.byteLength })) }), signal: ctx.signal,
+    });
+  } catch (e) {
+    if (ctx.signal.aborted) throw e;
+    throw new Error(`${NAME} could not be reached (${/** @type {Error} */ (e).message}).`);
+  }
+  /* a service from before uploads */
+  if (asked.status === 404 || asked.status === 405) return inline();
+  if (!asked.ok) throw await failure(NAME, asked, ctx);
+  const { uploads } = /** @type {{ uploads: { path: string, id: string, url: string, headers?: Record<string, string> }[] }} */ (await asked.json());
+  const put = [];
+  for (const f of files) {
+    const to = uploads.find((u) => u.path === f.path);
+    if (!to) throw new Error(`${NAME} gave no place for ${f.path}.`);
+    ctx.signal.throwIfAborted();
+    const res = await fetch(to.url, { method: 'PUT', headers: to.headers ?? {}, body: f.bytes, signal: ctx.signal });
+    if (!res.ok) throw new Error(`${f.path} could not be sent to ${NAME} (${res.status}). Try again.`);
+    put.push({ path: f.path, upload: to.id });
+  }
+  return put;
+}
+
+/**
+ * What the run made: each file as sent inside the answer, or fetched from the address its maker keeps it at.
+ * @param {{ path: string, base64?: string, url?: string }[]} files @param {RunContext} ctx
+ */
+async function madeOf(files, ctx) {
+  return Promise.all(files.map(async (f) => {
+    if (typeof f.url !== 'string') return { path: f.path, bytes: new Uint8Array(Buffer.from(f.base64 ?? '', 'base64')) };
+    /* a signed address: no key goes with it */
+    const res = await call(NAME, f.url, {}, ctx);
+    return { path: f.path, bytes: new Uint8Array(await res.arrayBuffer()) };
+  }));
 }
 
 /** Where the service is: openfilm.dev, or OPENFILM_API_URL (a local one, for developing it). */
@@ -148,8 +199,9 @@ export default {
     const base = service();
     const headers = { authorization: `Bearer ${ctx.key}` };
     const runKey = randomUUID();
-    /* no model chosen: the service's default for that kind */
-    const body = { verb, ...(ctx.model ? { model: ctx.model } : {}), args, inputs: await inputsOf(verb, args, ctx) };
+    /* no model chosen: the service's default for that kind; what it makes, from its maker when it can */
+    const inputs = await inputsOf(await filesOf(verb, args, ctx), base, headers, ctx);
+    const body = { verb, ...(ctx.model ? { model: ctx.model } : {}), args, inputs, results: 'links' };
     let res = await call(NAME, `${base}/v1/media/run`, {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': runKey, prefer: 'respond-async' },
@@ -159,9 +211,9 @@ export default {
       await sleep(wait, ctx.signal);
       res = await call(NAME, `${base}/v1/media/run?key=${encodeURIComponent(runKey)}`, { headers }, ctx);
     }
-    const done = /** @type {{ files?: { path: string, base64: string }[], index?: import('./contract.mjs').IndexRow[], receipt?: Record<string, unknown> }} */ (await res.json());
+    const done = /** @type {{ files?: { path: string, base64?: string, url?: string }[], index?: import('./contract.mjs').IndexRow[], receipt?: Record<string, unknown> }} */ (await res.json());
     return {
-      files: (done.files ?? []).map((f) => ({ path: f.path, bytes: new Uint8Array(Buffer.from(f.base64, 'base64')) })),
+      files: await madeOf(done.files ?? [], ctx),
       index: done.index ?? [],
       receipt: done.receipt ?? {},
       cost: billedBy(NAME),

@@ -15,8 +15,8 @@ before(async () => {
     for await (const c of req) chunks.push(c);
     const call = { method: req.method, url: new URL(req.url, 'http://x'), headers: req.headers, body: Buffer.concat(chunks).toString() };
     seen.push(call);
-    const [status, body] = await reply(call);
-    res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
+    const [status, body, type = 'application/json'] = await reply(call);
+    res.writeHead(status, { 'content-type': type }).end(Buffer.isBuffer(body) ? body : JSON.stringify(body));
   });
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   process.env.OPENFILM_API_URL = `http://127.0.0.1:${server.address().port}`;
@@ -66,10 +66,11 @@ test('what it offers is what the service says now: the kinds it knows, voices wi
   t.mock.timers.reset();
 });
 
-test('a run: posted with the key, the files it names, async; asked after until done', async () => {
+test('a run: posted with the key, the files it names, async; asked after until done (a service from before uploads: inside the run)', async () => {
   seen.length = 0;
   let asks = 0;
   reply = (call) => {
+    if (call.url.pathname === '/v1/media/uploads') return [404, {}];
     if (call.method === 'POST') return [202, { status: 'running', idempotency_key: call.headers['idempotency-key'] }];
     asks += 1;
     if (asks < 2) return [202, { status: 'running' }];
@@ -77,6 +78,8 @@ test('a run: posted with the key, the files it names, async; asked after until d
   };
   const frame = new Uint8Array([1, 2, 3]);
   const result = await openfilm.run('video', { prompt: 'a cat. on a mat', 'first-frame': 'assets/image/cat.png', out: 'cat.mp4' }, ctx({ 'assets/image/cat.png': frame }, 'openrouter/bytedance/seedance-2.0'));
+  assert.equal(seen[0].url.pathname, '/v1/media/uploads');
+  seen.shift();
   const posted = seen[0];
   assert.equal(posted.url.pathname, '/v1/media/run');
   assert.equal(posted.headers.authorization, `Bearer ${KEY}`);
@@ -101,6 +104,7 @@ test('a Seedance run sends the clip and pictures named by its reference flags, i
     [prompt]: Uint8Array.of(7, 8, 9),
   };
   reply = (call) => {
+    if (call.url.pathname === '/v1/media/uploads') return [404, {}];
     const { args, inputs } = JSON.parse(call.body);
     const sent = new Map(inputs.map(({ path, base64 }) => [path, base64]));
     for (const path of [args.video, ...args['input-reference']]) {
@@ -114,6 +118,35 @@ test('a Seedance run sends the clip and pictures named by its reference flags, i
   const result = await openfilm.run('video', { prompt, video, 'input-reference': [picture, picture], out: 'scene' },
     ctx(files, 'openrouter/bytedance/seedance-2.0-mini'));
   assert.equal(result.receipt.dur, 5);
+});
+
+test('files go straight to the service\'s storage and come straight from where their maker keeps them', async () => {
+  seen.length = 0;
+  const base = process.env.OPENFILM_API_URL;
+  const frame = Uint8Array.of(1, 2, 3);
+  reply = (call) => {
+    if (call.url.pathname === '/v1/media/uploads') {
+      const { files } = JSON.parse(call.body);
+      return [200, { uploads: files.map((f, i) => ({ path: f.path, id: `u${i}/cat.png`, url: `${base}/put/u${i}?X-Amz-Signature=s`, headers: { 'content-type': 'image/png' } })) }];
+    }
+    if (call.url.pathname.startsWith('/put/')) return [200, {}];
+    if (call.url.pathname === '/files/a.mp4') return [200, Buffer.from('mp4'), 'video/mp4'];
+    return [200, { files: [{ path: 'assets/video/a.mp4', url: `${base}/files/a.mp4?X-Tos-Signature=s`, type: 'video/mp4' }], index: [], receipt: { dur: 5 } }];
+  };
+  const result = await openfilm.run('video', { prompt: 'a cat', 'first-frame': 'assets/image/cat.png', out: 'cat.mp4' }, ctx({ 'assets/image/cat.png': frame }, 'volcengine/doubao-seedance-2-0-fast-260128'));
+  const [asked, put, run, fetched] = seen;
+  assert.deepEqual(JSON.parse(asked.body), { files: [{ path: 'assets/image/cat.png', bytes: 3 }] }, 'only its name and size');
+  assert.equal(asked.headers.authorization, `Bearer ${KEY}`);
+  assert.equal(put.method, 'PUT');
+  assert.equal(put.headers.authorization, undefined, 'a signed address: no key goes with it');
+  assert.equal(put.headers['content-type'], 'image/png');
+  assert.deepEqual([...Buffer.from(put.body)], [1, 2, 3]);
+  const body = JSON.parse(run.body);
+  assert.deepEqual(body.inputs, [{ path: 'assets/image/cat.png', upload: 'u0/cat.png' }], 'the run names the upload, not the bytes');
+  assert.equal(body.results, 'links');
+  assert.equal(fetched.url.pathname, '/files/a.mp4');
+  assert.equal(fetched.headers.authorization, undefined);
+  assert.equal(Buffer.from(result.files[0].bytes).toString(), 'mp4');
 });
 
 test('an unreadable reference is reported locally instead of submitting an incomplete run', async () => {
