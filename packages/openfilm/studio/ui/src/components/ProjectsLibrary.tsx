@@ -1,8 +1,8 @@
 /**
  * The Projects popover (the top bar's Projects button; with the app's tabs, their `+`, and the window with no tab open):
  * a large centered dialog to switch project, start one, open a folder, get a film from GitHub, rename, delete, or
- * file projects in folders of the list; or, switched to "Examples", to start from an example (ExamplesGallery). Its
- * projects are ProjectsView; this file holds the data and actions.
+ * file projects in folders of the list; or, with "Examples" picked in its sidebar, to start from an example
+ * (ExamplesGallery). Its projects are ProjectsView; this file holds the data and actions.
  *
  * Studio's projects are folders on disk: deleting one moves its folder to the system's Trash. One whose folder or film
  * file is gone (`missing`) cannot be opened; it can be located (the folder it is in now) or taken off the list,
@@ -30,7 +30,7 @@ import { readLastSubtitleStyle } from '@/lib/subtitles';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ProjectsView, type LibraryProject } from './ProjectsView';
 import { FolderBrowserDialog, GitHubDialog } from './ProjectSources';
-import { ExamplesGallery, TitleSwitch, type ExamplePart } from './ExamplesGallery';
+import { ExamplesGallery, type ExamplePart } from './ExamplesGallery';
 import { ProjectCoverContext, posterUrl, useProjectCover } from './ProjectCover';
 import { LARGE_DIALOG_SIZE, LARGE_DIALOG_SURFACE } from './dialog-chrome';
 
@@ -226,17 +226,11 @@ function useProjectLibrary(open: boolean) {
   return { projects, folders, loaded, loadFailed, retryLoad, error, flash, reload: reloadFolders, agentRunning, workingIn, deleteProjects, renameProject, createFolder, renameFolder, moveFolder, moveProject, deleteFolder, coverChanged };
 }
 
-/** The launcher's two views: the person's projects, and the examples to start from (ExamplesGallery). */
+/** The launcher's two views, picked in its sidebar: the person's projects, and the examples to start from (ExamplesGallery). */
 export type LauncherView = 'projects' | 'examples';
 
-/** The switch between them, in the title row (the Community's is the same). */
 /** How long the projects window waits for the tab it opened to cover it before it closes anyway. */
 const COVER_WAIT_MS = 4000;
-
-export function LauncherSwitch({ view, onView }: { view: LauncherView; onView: (view: LauncherView) => void }) {
-  const t = useT();
-  return <TitleSwitch items={[{ id: 'projects' as const, label: t('launcher.projects') }, { id: 'examples' as const, label: t('launcher.examples') }]} value={view} onChange={onView} />;
-}
 
 
 export function ProjectsPopover({
@@ -269,13 +263,14 @@ export function ProjectsPopover({
   const lib = useProjectLibrary(open);
   const { flash } = lib;
   const cover = useProjectCover(lib.coverChanged, React.useCallback(() => flash(t('projects.coverFailed')), [flash, t]));
-  /* each time it opens: the projects (the examples are a switch away), or the examples when asked for */
+  /* each time it opens: the projects (the examples are a click away in the sidebar), or the examples when asked for */
   const [view, setView] = React.useState<LauncherView>('projects');
   const opensOn: LauncherView = examples ? 'examples' : 'projects';
   React.useEffect(() => { if (open) setView(opensOn); }, [open, opensOn]);
   const showView = setView;
   const [pendingDelete, setPendingDelete] = React.useState<string[] | null>(null);
   const [pendingFolder, setPendingFolder] = React.useState<ProjectFolder | null>(null);
+  const [pendingBatch, setPendingBatch] = React.useState<{ projectIds: string[]; folders: ProjectFolder[] } | null>(null);
   const [busy, setBusy] = React.useState<'creating' | 'opening' | 'duplicating' | null>(null);
   /* Studio's folder browser (no app to pick folders), "Get from GitHub", and a folder without a film to start one in */
   const [browser, setBrowser] = React.useState<{ mode: 'open' } | { mode: 'locate'; project: LibraryProject } | null>(null);
@@ -285,10 +280,10 @@ export function ProjectsPopover({
 
   React.useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !pendingDelete && !pendingFolder && !askStart) close(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !pendingDelete && !pendingFolder && !pendingBatch && !askStart) close(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, close, pendingDelete, pendingFolder, askStart]);
+  }, [open, close, pendingDelete, pendingFolder, pendingBatch, askStart]);
 
   const go = (projectId: string, kind: 'creating' | 'opening') => {
     /* the project already open: nowhere to go, and an "Opening" that would never end */
@@ -458,6 +453,36 @@ export function ProjectsPopover({
   /* what deleting it takes: its projects and those of the folders inside it */
   const folderHeld = pendingFolder ? (folderCounts(lib.projects, lib.folders)[pendingFolder.id] ?? 0) : 0;
 
+  /* the examples, beside the sidebar (alone while the projects have not been read) */
+  const gallery = (
+    <ExamplesGallery
+      key={examples?.example ?? ''}
+      heading={<h2 className="mr-auto px-2 text-[12px] font-medium text-[var(--text)]">{t('launcher.examples')}</h2>}
+      {...(examples?.example ? { initial: examples.example } : {})}
+      onClose={onClose}
+      onStart={(example) => setGithub({ url: example.url, start: true, title: example.title })}
+      /* over a film: the example pointed at in its chat, for the agent to follow (as the Community does) */
+      {...(currentProjectId && studioHost?.refer ? { onReference: (example: Example, part: ExamplePart) => {
+        void sourcesApi.exampleFolder(example.id).catch(() => {});
+        studioHost?.refer?.({
+          kind: 'example', id: example.id, title: example.title, url: example.url, ...(example.description ? { description: example.description } : {}),
+          ...(part ? { start: part.from, end: part.to, ...(part.segment ? { segment: part.segment } : {}) } : {}),
+        });
+        onClose?.();
+      } } : {})}
+      {...(currentProjectId && onUseCanvas ? { onUseCanvas } : {})}
+      /* over a film: how it was made, asked in its chat */
+      {...(currentProjectId && studioHost?.ask ? { onExplain: (example: Example, canvas: boolean) => {
+        void sourcesApi.exampleFolder(example.id).catch(() => {});
+        studioHost?.ask?.({
+          text: t(canvas ? 'gallery.explainAskCanvas' : 'gallery.explainAsk'),
+          refs: [{ kind: 'example', id: example.id, title: example.title, url: example.url, ...(example.description ? { description: example.description } : {}), ...(canvas ? { canvas: true } : {}) }],
+        });
+        onClose?.();
+      } } : {})}
+    />
+  );
+
   const content = (
     <>
       <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={close} />
@@ -471,37 +496,12 @@ export function ProjectsPopover({
       >
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           {cover.picker}
-          {view === 'examples' ? (
-            <ExamplesGallery
-              key={examples?.example ?? ''}
-              heading={<LauncherSwitch view={view} onView={showView} />}
-              {...(examples?.example ? { initial: examples.example } : {})}
-              onClose={onClose}
-              onStart={(example) => setGithub({ url: example.url, start: true, title: example.title })}
-              /* over a film: the example pointed at in its chat, for the agent to follow (as the Community does) */
-              {...(currentProjectId && studioHost?.refer ? { onReference: (example: Example, part: ExamplePart) => {
-                void sourcesApi.exampleFolder(example.id).catch(() => {});
-                studioHost?.refer?.({
-                  kind: 'example', id: example.id, title: example.title, url: example.url, ...(example.description ? { description: example.description } : {}),
-                  ...(part ? { start: part.from, end: part.to, ...(part.segment ? { segment: part.segment } : {}) } : {}),
-                });
-                onClose?.();
-              } } : {})}
-              {...(currentProjectId && onUseCanvas ? { onUseCanvas } : {})}
-              /* over a film: how it was made, asked in its chat */
-              {...(currentProjectId && studioHost?.ask ? { onExplain: (example: Example, canvas: boolean) => {
-                void sourcesApi.exampleFolder(example.id).catch(() => {});
-                studioHost?.ask?.({
-                  text: t(canvas ? 'gallery.explainAskCanvas' : 'gallery.explainAsk'),
-                  refs: [{ kind: 'example', id: example.id, title: example.title, url: example.url, ...(example.description ? { description: example.description } : {}), ...(canvas ? { canvas: true } : {}) }],
-                });
-                onClose?.();
-              } } : {})}
-            />
-          ) : lib.loaded ? (
+          {lib.loaded ? (
             <ProjectCoverContext.Provider value={cover.actions}>
             <ProjectsView
-              heading={<LauncherSwitch view={view} onView={showView} />}
+              pane={view}
+              onPane={showView}
+              examplesPane={gallery}
               projects={lib.projects}
               creating={busy !== null}
               onNewProject={(folderId) => void newProject(folderId)}
@@ -517,11 +517,21 @@ export function ProjectsPopover({
                 if (working) lib.flash(lib.agentRunning(working, ids.length));
                 else setPendingDelete(ids);
               })}
+              onDeleteItems={(projectIds, folderIds) => {
+                const selectedFolders = lib.folders.filter(f => folderIds.includes(f.id));
+                const held = new Set(lib.folders.filter(f => folderTrail(lib.folders, f.id).some(up => folderIds.includes(up.id))).map(f => f.id));
+                const allIds = [...new Set([...projectIds, ...lib.projects.filter(p => p.folderId && held.has(p.folderId)).map(p => p.id)])];
+                void lib.workingIn(allIds).then(working => {
+                  if (working) lib.flash(lib.agentRunning(working, allIds.length));
+                  else setPendingBatch({ projectIds, folders: selectedFolders });
+                });
+              }}
               folders={lib.folders}
               onCreateFolder={lib.createFolder}
               onRenameFolder={lib.renameFolder}
               onDeleteFolder={(folder) => {
-                const inside = lib.projects.filter((p) => p.folderId === folder.id).map((p) => p.id);
+                const held = new Set(lib.folders.filter(f => folderTrail(lib.folders, f.id).some(up => up.id === folder.id)).map(f => f.id));
+                const inside = lib.projects.filter((p) => p.folderId && held.has(p.folderId)).map((p) => p.id);
                 void lib.workingIn(inside).then((working) => {
                   if (working) lib.flash(lib.agentRunning(working, inside.length));
                   else setPendingFolder(folder);
@@ -532,7 +542,7 @@ export function ProjectsPopover({
               onClose={onClose}
             />
             </ProjectCoverContext.Provider>
-          ) : lib.loadFailed ? (
+          ) : view === 'examples' ? gallery : lib.loadFailed ? (
             <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 text-[13px] text-[var(--text-muted)]">
               {t('projects.loadFailed')}
               <button
@@ -628,6 +638,28 @@ export function ProjectsPopover({
             if (deleted.size) void studioHost?.tabs?.gone?.([...deleted]);
             if (deleted.has(currentProjectId)) onCurrentRemoved();
           });
+        }}
+      />
+      <ConfirmDialog
+        open={!!pendingBatch}
+        title={t('projectBrowser.deleteTitle')}
+        description={t('projectBrowser.deleteDesc')}
+        confirmLabel={t('confirm.delete')}
+        cancelLabel={t('confirm.cancel')}
+        danger
+        onCancel={() => setPendingBatch(null)}
+        onConfirm={() => {
+          const batch = pendingBatch;
+          setPendingBatch(null);
+          if (!batch) return;
+          void (async () => {
+            const deleted = new Set<string>();
+            // Independent roots only: nested selections are folded into their selected parent by ProjectsView.
+            for (const folder of batch.folders) for (const id of await lib.deleteFolder(folder)) deleted.add(id);
+            if (batch.projectIds.length) for (const id of await lib.deleteProjects(batch.projectIds)) deleted.add(id);
+            if (deleted.size) void studioHost?.tabs?.gone?.([...deleted]);
+            if (deleted.has(currentProjectId)) onCurrentRemoved();
+          })();
         }}
       />
     </>

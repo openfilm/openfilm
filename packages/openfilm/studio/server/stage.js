@@ -1771,6 +1771,10 @@
       const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
       return (hooks()?.captions?.() ?? []).map(({ el, ...cue }) => ({ ...cue, box: rect(el), text: rect(el.querySelector('.cue-text') ?? el) }));
     },
+    vision({ id }) { return hooks()?.vision?.(id) ?? { phase: 'idle' }; },
+    visionPreview(args) { hooks()?.visionPreview?.(args); },
+    async visionClear() { await hooks()?.visionClear?.(); return true; },
+    visionRetry({ id }) { hooks()?.visionRetry?.(id); },
     /**
      * Show cues of a caption track moved by (dx, dy) stage px and scaled by `k` about their middle, not kept yet (`ids`
      * null: every one; none of them: in place again).
@@ -2333,7 +2337,7 @@
       listenAll();
       /* the line being typed was drawn anew (an undo, the page rewritten): what was typed is kept, the box closes */
       if (editing && !editing.el.isConnected) finishText(true);
-      result = fn ? fn(args) ?? null : null;
+      result = fn ? (await fn(args)) ?? null : null;
     } catch (error) {
       post({ type: 'stage', seq, result: null, error: String(error?.message ?? error) });
       return;

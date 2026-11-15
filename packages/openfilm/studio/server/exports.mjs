@@ -77,7 +77,7 @@ import { homedir, setPriority, tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FilmPage, launch } from '../../src/host.mjs';
-import { alphaCompositeFilter, broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, onTheChip, prores709, proresOptions } from '../../src/encoders.mjs';
+import { alphaCompositeFilter, broken, chipDelivery, encoders, FRAMES_709, hardwareEncoder, holdsQuality, onTheChip, prores709, proresOptions, unheld } from '../../src/encoders.mjs';
 import { COMMAND_ROOM, filmSound, filterScriptOption, kill as killProcess, mix, open } from '../../src/shared.mjs';
 import { defaultWorkers, machine } from '../../src/render.mjs';
 import { isLoudness, LOUDNESS_RANGE, toLoudness } from '../../src/loudness.mjs';
@@ -132,7 +132,7 @@ export { exportsRoot };
  *   status: 'waiting' | 'running' | 'done' | 'failed' | 'cancelled', progress: number, phase: ExportPhase | null,
  *   framesDone: number, framesTotal: number, rate: number, etaMs: number | null, encoder: string | null,
  *   out?: string, outputs: string[], bytes: number | null, alpha: { any: boolean } | null, error?: string, cancelling?: boolean,
- *   at: number, startedAt: number | null, finishedAt: number | null, draftsRefused?: string, diskFull?: boolean }} ExportJob
+ *   at: number, startedAt: number | null, finishedAt: number | null, draftsRefused?: string, diskFull?: boolean, software?: boolean }} ExportJob
  */
 
 /** Whether an error is the disk being full, in ffmpeg's words or the system's (a Mac, Linux, Windows). @param {unknown} e */
@@ -668,21 +668,25 @@ const chipCodec = (codec, quality) => ((codec === 'h264' || codec === 'hevc') &&
 
 /**
  * How render should encode a codec: its encoder (for the person's list), and the container format render takes,
- * through the graphics chip's encoder when it has one that works (`hw`: hardwareEncoder for chipCodec).
- * @param {VideoCodec} codec @param {Quality} quality @param {{ w: number, h: number }} size @param {number} fps @param {Set<string>} have @param {string | null} [hw]
+ * through the graphics chip's encoder when it has one that works (`hw`: hardwareEncoder for chipCodec). `held`: the
+ * chip's H.264 or HEVC is held to the quality (holdsQuality), as x264 and x265 are to their CRF: each frame gets what
+ * its picture needs, and its file may not pass two and a half times the bitrate (chipDelivery). Else the chip is
+ * given the bitrate.
+ * @param {VideoCodec} codec @param {Quality} quality @param {{ w: number, h: number }} size @param {number} fps @param {Set<string>} have @param {string | null} [hw] @param {boolean} [held]
  */
-function encoding(codec, quality, size, fps, have, hw = null) {
+function encoding(codec, quality, size, fps, have, hw = null, held = false) {
   const bits = (/** @type {number} */ k) => Math.min(120e6, Math.max(2e6, size.w * size.h * fps * BPP[quality] * k));
   const bitrate = (/** @type {number} */ k) => `${Math.round(bits(k) / 1000)}k`;
   /* a key frame every two seconds */
   const gop = Math.round(fps * 2);
+  const chip = { gop, ...(held && quality !== 'master' ? { quality } : {}) };
   switch (codec) {
     case 'h264':
       /* with room for screen text: half again the dialog's scale */
-      if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(1.5), { gop }), ...BT709] } };
+      if (hw) return { encoder: hw, format: chipDelivery(hw, bits(1.5), chip, BT709) };
       return { encoder: 'libx264', format: { video: ['-c:v', 'libx264', '-preset', quality === 'master' ? 'slow' : 'medium', '-crf', String(H264_CRF[quality]), ...BT709] } };
     case 'hevc':
-      if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(0.8), { gop }), ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
+      if (hw) return { encoder: hw, format: { ...chipDelivery(hw, bits(0.8), chip, BT709), tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
       if (have.has('libx265')) {
         /* master in 10 bits (Main 10), with finer grain-aware encoding: small changing dither must not become one
            frozen texture. It costs more time and bytes; the smaller delivery qualities keep their settings. */
@@ -958,7 +962,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
   /** Render the film (or `target`) to `out`, with progress. @param {ExportJob} job @param {string} target @param {string} out @param {Record<string, unknown>} opts @param {AbortSignal} signal */
   const renderTo = (job, target, out, opts, signal, share = 0.96) => {
     const range = job.ask.range ? [`${num(job.ask.range[0])}-${num(job.ask.range[1])}`] : [];
-    return render([target, ...range], { ...opts, ...(job.ask.ranges ? { ranges: job.ask.ranges } : {}), out, signal, onProgress: frames(job, share) });
+    return render([target, ...range], { ...opts, ...(job.ask.ranges ? { ranges: job.ask.ranges } : {}), out, signal, onProgress: frames(job, share),
+      /* drawn without a graphics chip: said on the export while it runs, slowly */
+      onSoftware: () => update(job, { software: true }) });
   };
 
   /** @param {ExportJob} job @param {string} root @param {string} dir @param {AbortSignal} signal */
@@ -992,9 +998,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       /* a bitrate asked is held on the processor (targetEncoding) */
       const chipFor = ask.bitrate ? null : chipCodec(codec, quality);
       const hw = ask.hardware !== false && chipFor ? await hardwareEncoder(chipFor, have) : null;
+      let held = hw ? await holdsQuality(hw) : false;
       /** @param {string | null} chip */
       const how = (chip) => {
-        const { encoder, format } = ask.bitrate ? targetEncoding(codec, ask.bitrate, ask.maxrate, have) : encoding(codec, quality, size, fps ?? 30, have, chip);
+        const { encoder, format } = ask.bitrate ? targetEncoding(codec, ask.bitrate, ask.maxrate, have) : encoding(codec, quality, size, fps ?? 30, have, chip, held);
         const container = /** @type {{ pix?: string }} */ (format).pix ?? (codec === 'h264' || codec === 'hevc' ? YUV_709('yuv420p') : codec === 'vp9' ? YUV_709('yuva420p') : 'format=yuva444p10le');
         /* master: frames taken as PNG and footage read from copies near the file (`fine`), so nothing on the way bands */
         return { encoder, opts: { fps, samples: ask.samples, shutter: ask.shutter, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(quality === 'master' ? { fine: true } : {}), ...(ask.bitrate ? { partSeconds: PART_SECONDS } : {}), ...(clip || burn ? { root } : {}) } };
@@ -1028,13 +1035,27 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           }
         } catch (e) {
           /* the graphics chip's encoder gave up partway (a driver, a size it does not take, sessions or memory it ran out
-             of): the rest of this launch encodes without it, starting with this export again */
-          if (!hw || signal.aborted || !/^ffmpeg[: ]/.test(e instanceof Error ? e.message : '')) throw e;
-          broken(hw);
-          ({ encoder, opts } = how(null));
-          update(job, { encoder, framesDone: 0, progress: 0, etaMs: null });
-          const rendered = await renderTo(job, target, part, { ...opts, resumeAs: out }, signal);
-          selectedRanges = rendered.ranges ?? null;
+             of): the rest of this launch encodes without it, starting with this export again. One held to a quality is
+             first given its bitrate, as it was before it could be held */
+          const gaveUp = (/** @type {unknown} */ err) => !signal.aborted && /^ffmpeg[: ]/.test(err instanceof Error ? err.message : '');
+          if (!hw || !gaveUp(e)) throw e;
+          const again = async (/** @type {string | null} */ chip) => {
+            ({ encoder, opts } = how(chip));
+            update(job, { encoder, framesDone: 0, progress: 0, etaMs: null });
+            const rendered = await renderTo(job, target, part, { ...opts, resumeAs: out }, signal);
+            selectedRanges = rendered.ranges ?? null;
+          };
+          let failure = /** @type {unknown} */ (e);
+          if (held) {
+            unheld(hw);
+            held = false;
+            failure = await again(hw).then(() => null, (err) => err);
+            if (failure && !gaveUp(failure)) throw failure;
+          }
+          if (failure) {
+            broken(hw);
+            await again(null);
+          }
         }
         await renameSafely(part, out);
         update(job, { out, outputs: [out] });
@@ -1891,7 +1912,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
  * @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, lines: string[], ranges?: [number, number][] }>}
  */
 function render(args, opts) {
-  const { signal, onProgress, ...rest } = opts;
+  const { signal, onProgress, onSoftware, ...rest } = opts;
   return new Promise((done, fail) => {
     if (signal?.aborted) return fail(new Error('cancelled'));
     const child = fork(fileURLToPath(new URL('./render-worker.mjs', import.meta.url)), [], { stdio: ['ignore', 'inherit', 'pipe', 'ipc'] });
@@ -1910,6 +1931,7 @@ function render(args, opts) {
     signal?.addEventListener('abort', cancel, { once: true });
     child.on('message', (/** @type {any} */ m) => {
       if (m?.type === 'progress') onProgress?.(m.done, m.total);
+      else if (m?.type === 'software') onSoftware?.();
       else if (m?.type === 'done') settle(() => done(m.result));
       else if (m?.type === 'failed') settle(() => fail(new Error(m.error)));
     });
