@@ -66,9 +66,50 @@ export interface LibraryItem {
 
 export interface LibraryIndex {
   version: number;
-  groups: Partial<Record<LibraryCategory, { id: string; name: LibraryNames }[]>>;
+  /** each category's groups; a community pack is a group too (`by`, its maker) */
+  groups: Partial<Record<LibraryCategory, { id: string; name: LibraryNames; by?: string }[]>>;
   items: LibraryItem[];
+  /** OpenFilm's packs (its groups, always in the library) and the community's (in it once added) */
+  packs?: LibraryPack[];
 }
+
+/**
+ * A pack: things put together (a music pack of forty pieces). OpenFilm's are its groups (`openfilm/<category>/<group>`);
+ * the community's are by their makers (`<maker>/<name>`, or one thing listed alone: `lone`), their things in their
+ * own order (`items`), each a group of every category it has things in (`group`, the same in each).
+ */
+export interface LibraryPack {
+  id: string;
+  name: LibraryNames;
+  about?: string;
+  by?: string;
+  license?: string;
+  version?: number;
+  /** its picture, by its place in the library */
+  cover?: string;
+  items?: string[];
+  cats: LibraryCategory[];
+  group: string;
+  count: number;
+  official?: true;
+  lone?: true;
+}
+
+/** The things of a pack, in its order (OpenFilm's: as its group lists them). */
+export function packItems(index: LibraryIndex | null, pack: LibraryPack): LibraryItem[] {
+  const all = index?.items ?? [];
+  if (pack.official) return all.filter((it) => !it.by && it.cat === pack.cats[0] && it.group === pack.group);
+  const byId = new Map(all.map((it) => [it.id, it]));
+  return (pack.items ?? []).map((id) => byId.get(id)).filter((it): it is LibraryItem => Boolean(it));
+}
+
+/** The pack a thing is in. */
+export const packOf = (index: LibraryIndex | null, item: LibraryItem): LibraryPack | undefined =>
+  index?.packs?.find((p) => (p.official ? !item.by && p.cats[0] === item.cat && p.group === item.group : p.group === item.group));
+
+/** Whether a thing is in the person's library: OpenFilm's always; the community's once it or its pack is added. */
+export const inLibrary = (item: Pick<LibraryItem, 'id' | 'group' | 'by'>, added: readonly string[]): boolean =>
+  !item.by || added.includes(item.group) || added.includes(item.id);
 
 let index: LibraryIndex | null = null;
 let reading: Promise<LibraryIndex | null> | null = null;
@@ -396,6 +437,37 @@ export function failedHere(id: string): void {
 export function useLibraryHere(): (id: string, confirmed?: boolean) => HereState {
   React.useSyncExternalStore((fn) => { hereSeen.add(fn); return () => { hereSeen.delete(fn); }; }, () => hereTick, () => hereTick);
   return (id: string, confirmed = false) => (fetching.has(id) ? 'fetching' : failed.has(id) ? 'failed' : missing.has(id) || (!confirmed && asking.has(id)) ? 'missing' : 'here');
+}
+
+let added: readonly string[] | null = null;
+const addedSeen = new Set<() => void>();
+const tellAdded = () => { for (const fn of addedSeen) fn(); };
+
+/** The community's packs and things the person added to the library (ids), kept for every OpenFilm on this computer. */
+export function useLibraryAdded(): readonly string[] {
+  const seen = React.useSyncExternalStore(
+    (fn) => { addedSeen.add(fn); return () => { addedSeen.delete(fn); }; },
+    () => added,
+    () => added,
+  );
+  React.useEffect(() => {
+    if (added) return;
+    void fetch('/api/library/added', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null), () => null).then((body: { ids?: string[] } | null) => {
+      if (body && Array.isArray(body.ids)) { added = body.ids; tellAdded(); }
+    });
+  }, []);
+  return seen ?? [];
+}
+
+/** Add a pack or a thing of the community to the library, or take it out: shown at once, then kept. */
+export function setAdded(id: string, on: boolean): void {
+  const had = added ?? [];
+  if (had.includes(id) === on) return;
+  added = on ? [...had, id] : had.filter((x) => x !== id);
+  tellAdded();
+  void fetch('/api/library/added', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: added }) })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((body: { ids?: string[] } | null) => { if (body && Array.isArray(body.ids)) { added = body.ids; tellAdded(); } });
 }
 
 /** Star a thing, or take its star away: shown at once, then kept. */

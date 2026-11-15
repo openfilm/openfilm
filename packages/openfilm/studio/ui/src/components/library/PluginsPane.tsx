@@ -17,7 +17,7 @@
  */
 import React from 'react';
 import {
-  ArrowLeft, ArrowUpRight, AudioLines, Box, Check, Clapperboard, Cloud, Film, FolderOpen, Images, Languages, Layers, Loader2, Megaphone, Mic,
+  ArrowLeft, ArrowUpRight, AudioLines, Box, Check, ChevronRight, Clapperboard, Cloud, Film, FolderOpen, Images, Languages, Layers, Loader2, Megaphone, Mic, Pause, Play,
   Globe, Music, Music2, Palette, Projector, Puzzle, RefreshCw, Scissors, Send, Spline, SquareTerminal, Star, Upload, Workflow, Github, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
@@ -36,7 +36,7 @@ import { ProfileStrip } from './PluginProfile';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { COMMUNITY_ICON, FEATURE_KINDS, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
-import { libraryUrl, nameOf, posterUrl, previewUrl, templatePreviewUrl, TEXT_COMPONENT, toggleFavorite, useLibraryFavorites, useLibraryIndex, type LibraryCategory, type LibraryItem } from '@/lib/library';
+import { inLibrary, libraryUrl, mayNeedFetch, soundLook, nameOf, packItems, packOf, posterUrl, prepareLibraryItem, previewUrl, setAdded, templatePreviewUrl, TEXT_COMPONENT, toggleFavorite, useLibraryAdded, useLibraryFavorites, useLibraryIndex, type LibraryCategory, type LibraryItem, type LibraryPack } from '@/lib/library';
 import { isClipMotion } from '@/lib/clip-presets';
 import { PLAIN } from './OnPicture';
 import { TextStyleSample } from './TextStyleSample';
@@ -140,6 +140,9 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* what the person starred, in the library and here alike (one list: library ids, `skill:<uid>`) */
   const favorites = useLibraryFavorites();
   const kept = new Set(favorites);
+  /* the community's packs and things added to the library (OpenFilm's own are always there) */
+  const added = useLibraryAdded();
+  const packIn = (p: LibraryPack) => Boolean(p.official) || added.includes(p.id);
   /* a kind with thousands (OpenFilm's sounds): shown a page at a time */
   const [shown, setShown] = React.useState(STORE_PAGE);
   React.useEffect(() => { setShown(STORE_PAGE); }, [line, query]);
@@ -207,8 +210,10 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* one of the library's things: its page, with it shown as it is (`asset:<id>`) */
   const assetPage = opened?.startsWith(ASSET_PAGE) ? library?.items.find((it) => it.id === opened.slice(ASSET_PAGE.length)) : undefined;
   if (assetPage) {
-    return <AssetPage item={assetPage} lang={lang} starred={kept.has(assetPage.id)} onBack={() => open(null)}
-      onUse={() => { closePlugins(); revealInLibrary(assetPage.cat); }}
+    const pack = packOf(library, assetPage);
+    return <AssetPage item={assetPage} lang={lang} starred={kept.has(assetPage.id)} onBack={() => open(null)} here={inLibrary(assetPage, added)}
+      onUse={() => { setAdded(assetPage.id, true); closePlugins(); revealInLibrary(assetPage.cat, pack && !pack.lone ? pack.group : undefined); }}
+      {...(pack && !pack.lone ? { pack: { name: nameOf(pack.name, lang), onOpen: () => open(`${PACK_PAGE}${pack.id}`) } } : {})}
       {...(assetPage.by ? { onAuthor: () => showPluginsLine(`author:${(assetPage.by ?? '').toLowerCase()}`) } : {})} />;
   }
   /* in the film's order (the category each says it is in), else as they were */
@@ -252,7 +257,10 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     const ownSkills = ownMatched.filter((p) => !ownBench(p) && !p.soon);
     const connectors = agents.mcp.map((g) => ({ ...g, servers: g.servers.filter((k) => matches(k.name, k.detail)) })).filter((g) => g.servers.length);
     const agentSkills = agentsOwn;
-    const nothing = !benches.length && !theirBenches.length && !mine.length && !ownSkills.length && !connectors.length && !agentSkills.length;
+    /* the community's packs and things added to the library (OpenFilm's are always there, not listed) */
+    const myPacks = (library?.packs ?? []).filter((p) => !p.official && added.includes(p.id) && matches(nameOf(p.name, lang), p.by));
+    const myThings = (library?.items ?? []).filter((it) => it.by && added.includes(it.id) && !added.includes(it.group) && matches(nameOf(it.name, lang), it.by));
+    const nothing = !benches.length && !theirBenches.length && !mine.length && !ownSkills.length && !connectors.length && !agentSkills.length && !myPacks.length && !myThings.length;
     return (
       <PluginsPage title={t('assetDrawer.place_added')} note={t('assetDrawer.note_added')}>
         {error ? <p role="alert" className="mb-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
@@ -278,6 +286,26 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
             ))}
           </SettingsGroup>
         ))}
+        {myPacks.length || myThings.length ? (
+          <SettingsGroup title={<span className="inline-flex items-center gap-2"><Box size={16} aria-hidden />{t('assetDrawer.minePacks')}</span>}>
+            {myPacks.map((p) => (
+              <PluginRow key={p.id} onOpen={() => open(`${PACK_PAGE}${p.id}`)} title={nameOf(p.name, lang)}
+                mark={<span className="relative block h-11 w-11 overflow-hidden rounded-[9px] bg-[var(--bg-field)]"><PackCover pack={p} first={packItems(library, p)[0]} lang={lang} /></span>}
+                note={packIsNewer(p) ? t('assetDrawer.packUpdated').replace('{v}', String(p.version)) : p.version ? t('assetDrawer.packVersion').replace('{v}', String(p.version)) : undefined}
+                summary={[p.by, p.cats.map((c) => t(`assetDrawer.cat_${c}`)).join(t('assetDrawer.listSep')), t('assetDrawer.countItems').replace('{n}', String(p.count))].filter(Boolean).join(' · ')}
+                control={<span className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                  {packIsNewer(p) ? <SettingsButton variant="quiet" onClick={() => { seePackVersion(p); setRetry((n) => n + 1); }}>{t('assetDrawer.gotIt')}</SettingsButton> : null}
+                  <SettingsButton onClick={() => setAdded(p.id, false)}>{t('assetDrawer.removeFromLibrary')}</SettingsButton>
+                </span>} />
+            ))}
+            {myThings.map((it) => (
+              <PluginRow key={it.id} onOpen={() => open(`${ASSET_PAGE}${it.id}`)} title={nameOf(it.name, lang)}
+                mark={<span className="relative block h-11 w-11 overflow-hidden rounded-[9px] bg-[var(--bg-field)]"><AssetCover item={it} lang={lang} /></span>}
+                summary={[it.by, t(`assetDrawer.cat_${it.cat}`)].filter(Boolean).join(' · ')}
+                control={<span onClick={(e) => e.stopPropagation()}><SettingsButton onClick={() => setAdded(it.id, false)}>{t('assetDrawer.removeFromLibrary')}</SettingsButton></span>} />
+            ))}
+          </SettingsGroup>
+        ) : null}
         {nothing ? <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.addedNone')} action={q ? undefined : { label: t('assetDrawer.place_discover'), run: () => showPluginsLine(FIRST_LINE) }} /> : null}
         {/* where Discover reads from: the OpenFilm Community, and others the person added (rarely: kept out of the side) */}
         {!q ? (
@@ -345,8 +373,21 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     ...(it.by ? { author: it.by.toLowerCase(), onAuthor: () => showPluginsLine(`author:${(it.by ?? '').toLowerCase()}`) } : {}),
     cover: <AssetCover item={it} lang={lang} />, onOpen: () => open(`${ASSET_PAGE}${it.id}`),
     starred: kept.has(it.id), onStar: () => toggleFavorite(it.id),
-    action: doneMark(t('assetDrawer.inLibrary')),
+    action: inLibrary(it, added) ? doneMark(t('assetDrawer.inLibrary')) : <SettingsButton onClick={() => setAdded(it.id, true)}>{t('assetDrawer.addThing')}</SettingsButton>,
   });
+  /* a pack's card: its picture, its name, how many it holds; added whole from here */
+  const packCard = (p: LibraryPack): StoreItem => ({
+    key: `pack:${p.id}`, kind: p.cats[0] ?? 'sound', title: nameOf(p.name, lang), summary: p.about && lang === 'en' ? p.about : '',
+    note: p.by ?? t('assetDrawer.skillsOfficial'), ...(p.by ? { author: p.by.toLowerCase(), onAuthor: () => showPluginsLine(`author:${(p.by ?? '').toLowerCase()}`) } : { trust: officialMark }),
+    count: p.count, cover: <PackCover pack={p} first={packItems(library, p)[0]} lang={lang} />, onOpen: () => open(`${PACK_PAGE}${p.id}`),
+    starred: kept.has(`pack:${p.id}`), onStar: () => toggleFavorite(`pack:${p.id}`),
+    action: packIn(p) ? doneMark(t(p.official ? 'assetDrawer.inLibrary' : 'assetDrawer.packAdded'))
+      : <SettingsButton onClick={() => { setAdded(p.id, true); seePackVersion(p); }}>{t('assetDrawer.addPack')}</SettingsButton>,
+  });
+  /* the packs of a kind: OpenFilm's first, then the community's (a thing listed alone is among the things, not here) */
+  const packsOf = (kind: FeatureKind) => (library?.packs ?? [])
+    .filter((p) => !p.lone && (p.cats as readonly string[]).includes(kind) && matches(nameOf(p.name, lang), p.by))
+    .sort((a, b) => Number(Boolean(b.official)) - Number(Boolean(a.official)));
   const soonCards = SOON.filter((x) => matches(t(`assetDrawer.soon_${x.id}`), t(`assetDrawer.soon_${x.id}Note`))).map((x): StoreItem => ({
     key: `soon:${x.id}`, kind: x.kind, title: t(`assetDrawer.soon_${x.id}`), summary: t(`assetDrawer.soon_${x.id}Note`), note: t('assetDrawer.skillsOfficial'),
     cover: <GradientCover hue={x.hue} Icon={x.icon} />, action: <SoonMark />,
@@ -383,11 +424,23 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   );
   const kindName = (kind: FeatureKind) => t(isCodeKind(kind) ? `assetDrawer.view_${kind}` : `assetDrawer.cat_${kind}`);
 
+  /* a pack: what it holds, each heard or seen, and the pack added whole (`pack:<id>`) */
+  const packPage = opened?.startsWith(PACK_PAGE) ? library?.packs?.find((p) => p.id === opened.slice(PACK_PAGE.length)) : undefined;
+  if (packPage) {
+    const things = packItems(library, packPage).filter((it) => !isClipMotion(it) && it.kind !== 'textmotion');
+    return <PackPage pack={packPage} items={things} lang={lang} here={packIn(packPage)} starred={kept.has(`pack:${packPage.id}`)} favorites={kept}
+      cards={things.map((it) => <StoreCard key={it.id} item={assetCard(it)} />)} onBack={() => open(null)}
+      onAdd={(on) => { setAdded(packPage.id, on); if (on) seePackVersion(packPage); }} onOpenItem={(it) => open(`${ASSET_PAGE}${it.id}`)}
+      onUseItem={(it) => { setAdded(it.id, true); closePlugins(); revealInLibrary(it.cat, packPage.group); }}
+      onOpenInLibrary={() => { closePlugins(); revealInLibrary(packPage.cats[0] ?? 'sound', packPage.group); }}
+      {...(packPage.by ? { onAuthor: () => showPluginsLine(`author:${(packPage.by ?? '').toLowerCase()}`) } : {})} />;
+  }
   /* Favorites: what the person starred, here or in the library, by kind */
   if (line === 'favorites') {
     const byId = new Map((library?.items ?? []).map((it) => [it.id, it]));
     const cards = favorites.flatMap((id): StoreItem[] => {
       if (id.startsWith('skill:')) { const k = found.find((x) => x.uid === id.slice('skill:'.length)); return k ? [skillCard(k)] : []; }
+      if (id.startsWith('pack:')) { const p = library?.packs?.find((x) => x.id === id.slice('pack:'.length)); return p && matches(nameOf(p.name, lang), p.by) ? [packCard(p)] : []; }
       const it = byId.get(id);
       return it && matches(nameOf(it.name, lang), it.by, ...(it.tags ?? [])) ? [assetCard(it)] : [];
     });
@@ -419,6 +472,14 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
         </div>
       ) : items.length ? (
         <>
+          {/* the kind's packs, then all of its things */}
+          {!isCodeKind(kind) && packsOf(kind).length ? (
+            <>
+              <h3 className="mb-3 text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('assetDrawer.packs')}</h3>
+              <div className={`${STORE_GRID} mb-10`}>{packsOf(kind).map((p) => <StoreCard key={p.id} item={packCard(p)} />)}</div>
+              <h3 className="mb-3 text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('assetDrawer.allItems')}</h3>
+            </>
+          ) : null}
           <div className={STORE_GRID}>{items.slice(0, shown).map((item) => <StoreCard key={item.key} item={item} />)}</div>
           {items.length > shown ? (
             <div className="mt-6 flex justify-center">
@@ -619,6 +680,8 @@ type StoreItem = {
   trust?: React.ReactNode; author?: string | undefined; onAuthor?: (() => void) | undefined; installs?: number | undefined;
   /** starred (the library's favorites, shared with it), and the star's press */
   starred?: boolean; onStar?: () => void;
+  /** a pack's: how many things it holds */
+  count?: number | undefined;
 };
 
 /**
@@ -640,6 +703,17 @@ const SOON: ReadonlyArray<{ id: string; kind: FeatureKind; hue: number; icon: Lu
 const STORE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4';
 /** The page of one of the library's things: `asset:` and its id. */
 const ASSET_PAGE = 'asset:';
+/** The page of a pack: `pack:` and its id. */
+const PACK_PAGE = 'pack:';
+
+/* the version of each community pack the person last saw (added, or told of a newer one): a newer one is said in Mine */
+const SEEN_KEY = (id: string) => `openfilm.pack.seen.${id}`;
+function seePackVersion(pack: LibraryPack): void {
+  try { if (pack.version) localStorage.setItem(SEEN_KEY(pack.id), String(pack.version)); } catch { /* not kept: said again */ }
+}
+function packIsNewer(pack: LibraryPack): boolean {
+  try { const seen = Number(localStorage.getItem(SEEN_KEY(pack.id)) ?? 0); return Boolean(pack.version && seen && pack.version > seen); } catch { return false; }
+}
 /** How many cards of a kind are shown at once; more on asking. */
 const STORE_PAGE = 48;
 
@@ -648,8 +722,9 @@ const STORE_PAGE = 48;
  * picture as it was; a text style in words; a sound or music to listen to), whose it is, and where it is used (the
  * library's tab of its kind, opened from here), with its star.
  */
-function AssetPage({ item, lang, starred, onBack, onUse, onAuthor }: {
-  item: LibraryItem; lang: ReturnType<typeof useLanguage>; starred: boolean; onBack: () => void; onUse: () => void; onAuthor?: () => void;
+function AssetPage({ item, lang, starred, here, pack, onBack, onUse, onAuthor }: {
+  item: LibraryItem; lang: ReturnType<typeof useLanguage>; starred: boolean; here: boolean; pack?: { name: string; onOpen: () => void };
+  onBack: () => void; onUse: () => void; onAuthor?: () => void;
 }) {
   const t = useT();
   const kindName = t(`assetDrawer.cat_${item.cat}`);
@@ -673,15 +748,146 @@ function AssetPage({ item, lang, starred, onBack, onUse, onAuthor }: {
                 : <span>{item.by ?? t('assetDrawer.skillsOfficial')}</span>}
               <span aria-hidden>·</span>
               <span className="inline-flex items-center gap-1.5"><KindIcon kind={item.cat} size={14} />{kindName}</span>
+              {pack ? (
+                <>
+                  <span aria-hidden>·</span>
+                  <button type="button" onClick={pack.onOpen} className="inline-flex items-center gap-0.5 underline-offset-2 hover:text-[var(--text)] hover:underline">
+                    {t('assetDrawer.inPackLine').replace('{name}', pack.name)}<ChevronRight size={13} aria-hidden />
+                  </button>
+                </>
+              ) : null}
             </p>
-            <p className="mt-3 max-w-[560px] text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.assetUseNote').replaceAll('{kind}', kindName)}</p>
+            <p className="mt-3 max-w-[560px] text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t(here ? 'assetDrawer.assetUseNote' : 'assetDrawer.assetAddNote').replaceAll('{kind}', kindName)}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <SettingsButton onClick={() => toggleFavorite(item.id)} aria-pressed={starred}>
               <Star size={14} fill={starred ? 'currentColor' : 'none'} className={starred ? 'text-[#ffd35a]' : ''} aria-hidden />{t(starred ? 'assetDrawer.unstar' : 'assetDrawer.star')}
             </SettingsButton>
-            <SettingsButton variant="primary" onClick={onUse}>{t('assetDrawer.useInLibrary')}</SettingsButton>
+            <SettingsButton variant="primary" onClick={onUse}>{t(here ? 'assetDrawer.useInLibrary' : 'assetDrawer.addAndUse')}</SettingsButton>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A pack's picture: its own, else its first thing's. */
+function PackCover({ pack, first, lang }: { pack: LibraryPack; first: LibraryItem | undefined; lang: ReturnType<typeof useLanguage> }) {
+  if (pack.cover) return <img src={libraryUrl(pack.cover)} alt="" loading="lazy" draggable={false} className="absolute inset-0 h-full w-full object-cover" />;
+  if (first?.cover) return <img src={libraryUrl(first.cover)} alt="" loading="lazy" draggable={false} className="absolute inset-0 h-full w-full object-cover" />;
+  /* sounds: soft light in their group's colors, as the library's tiles */
+  if (first?.kind === 'sound' && first.cat === 'sound') {
+    return (
+      <div aria-hidden className="absolute inset-0 flex items-center justify-center" style={soundLook({ id: pack.id, group: first.group })}>
+        <AudioLines size={26} className="text-white/85" />
+      </div>
+    );
+  }
+  return first ? <AssetCover item={first} lang={lang} /> : <GradientCover hue={220} Icon={Box} />;
+}
+
+/**
+ * A pack's page: its picture, whose it is, how many it holds and what it is for; added whole (or, OpenFilm's, always
+ * there), starred, fetched whole for working offline, opened in the library on its line. Then what it holds: sounds and
+ * music as a list, each heard here, starred or used; the rest as cards, each opening its own page.
+ */
+function PackPage({ pack, items, cards, lang, here, starred, favorites, onBack, onAdd, onOpenItem, onUseItem, onOpenInLibrary, onAuthor }: {
+  pack: LibraryPack; items: LibraryItem[]; cards: React.ReactNode[]; lang: ReturnType<typeof useLanguage>; here: boolean; starred: boolean; favorites: Set<string>;
+  onBack: () => void; onAdd: (on: boolean) => void; onOpenItem: (item: LibraryItem) => void; onUseItem: (item: LibraryItem) => void; onOpenInLibrary: () => void; onAuthor?: () => void;
+}) {
+  const t = useT();
+  const audio = items.length > 0 && items.every((it) => it.kind === 'sound');
+  const [playing, setPlaying] = React.useState<string | null>(null);
+  const player = React.useRef<HTMLAudioElement | null>(null);
+  React.useEffect(() => () => { player.current?.pause(); }, []);
+  const play = (it: LibraryItem) => {
+    const a = player.current ?? (player.current = new Audio());
+    if (playing === it.id) { a.pause(); setPlaying(null); return; }
+    a.src = libraryUrl(it.id);
+    a.onended = () => setPlaying(null);
+    void a.play().then(() => setPlaying(it.id), () => setPlaying(null));
+  };
+  /* fetched whole: each thing not here yet, three at a time */
+  const toFetch = items.filter((it) => mayNeedFetch(it));
+  const [fetched, setFetched] = React.useState<{ done: number; failed: number } | null>(null);
+  const fetchAll = async () => {
+    let next = 0, done = 0, failed = 0;
+    setFetched({ done, failed });
+    const one = async (): Promise<void> => {
+      const it = toFetch[next++];
+      if (!it) return;
+      if (await prepareLibraryItem(it.id)) done++; else failed++;
+      setFetched({ done, failed });
+      return one();
+    };
+    await Promise.all([one(), one(), one()]);
+  };
+  const kinds = pack.cats.map((c) => t(`assetDrawer.cat_${c}`)).join(t('assetDrawer.listSep'));
+  const seconds = (ms?: number) => (ms ? `${Math.floor(ms / 60000)}:${String(Math.round(ms / 1000) % 60).padStart(2, '0')}` : '');
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-9">
+      <div className="mx-auto w-full max-w-[920px]">
+        <button type="button" onClick={onBack} className="-ml-1 mb-5 flex h-8 items-center gap-1.5 rounded-md pl-1.5 pr-2.5 text-[14px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+          <ArrowLeft size={14} />{t('gallery.back')}
+        </button>
+        <div className="flex flex-wrap items-start gap-6">
+          <div className="relative aspect-square w-[168px] shrink-0 overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--bg-field)]">
+            <PackCover pack={pack} first={items[0]} lang={lang} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <h2 className="truncate text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{nameOf(pack.name, lang)}</h2>
+              {pack.official ? <span className="inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[11.5px] font-medium text-[var(--accent)]" style={{ background: 'color-mix(in srgb, var(--accent) 14%, transparent)' }}>{t('gallery.trustOfficial')}</span> : null}
+            </div>
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-[14px] text-[var(--text-muted)]">
+              {pack.by && onAuthor ? <button type="button" onClick={onAuthor} className="underline-offset-2 hover:text-[var(--text)] hover:underline">{pack.by}</button>
+                : <span>{pack.by ?? t('assetDrawer.skillsOfficial')}</span>}
+              <span aria-hidden>·</span><span>{kinds}</span>
+              <span aria-hidden>·</span><span className="tabular-nums">{t('assetDrawer.countItems').replace('{n}', items.length.toLocaleString())}</span>
+              {pack.version && !pack.official ? <><span aria-hidden>·</span><span>{t('assetDrawer.packVersion').replace('{v}', String(pack.version))}</span></> : null}
+              {pack.license ? <><span aria-hidden>·</span><span>{pack.license}</span></> : null}
+            </p>
+            {pack.about ? <p className="mt-3 max-w-[560px] text-[14.5px] leading-relaxed text-[var(--text-muted)]">{pack.about}</p> : null}
+            {pack.official ? <p className="mt-3 text-[14px] text-[var(--text-muted)]">{t('assetDrawer.officialPack')}</p> : null}
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              {pack.official ? null : here
+                ? <SettingsButton onClick={() => onAdd(false)}>{t('assetDrawer.removeFromLibrary')}</SettingsButton>
+                : <SettingsButton variant="primary" onClick={() => onAdd(true)}>{t('assetDrawer.addPack')}</SettingsButton>}
+              {here ? <SettingsButton variant={pack.official ? 'primary' : 'default'} onClick={onOpenInLibrary}>{t('assetDrawer.openInLibrary')}</SettingsButton> : null}
+              <SettingsButton onClick={() => toggleFavorite(`pack:${pack.id}`)} aria-pressed={starred}>
+                <Star size={14} fill={starred ? 'currentColor' : 'none'} className={starred ? 'text-[#ffd35a]' : ''} aria-hidden />{t(starred ? 'assetDrawer.unstar' : 'assetDrawer.star')}
+              </SettingsButton>
+              {toFetch.length ? (
+                fetched && fetched.done + fetched.failed >= toFetch.length
+                  ? <span className="inline-flex h-9 items-center gap-1.5 text-[13.5px] text-[var(--text-muted)]"><Check size={15} aria-hidden />
+                      {fetched.failed ? t('assetDrawer.downloadedSome').replace('{n}', String(fetched.failed)) : t('assetDrawer.downloadedAll')}</span>
+                  : <SettingsButton variant="quiet" disabled={Boolean(fetched)} onClick={() => { void fetchAll(); }}>
+                      {fetched ? <><Loader2 size={14} className="animate-spin" aria-hidden />{t('assetDrawer.downloadingN').replace('{n}', String(fetched.done + fetched.failed)).replace('{total}', String(toFetch.length))}</> : t('assetDrawer.downloadAll')}
+                    </SettingsButton>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className="mt-9">
+          {audio ? (
+            <div className="flex flex-col">
+              {items.map((it) => (
+                <div key={it.id} className="-mx-3 flex h-12 items-center gap-3 rounded-[8px] px-3 transition hover:bg-[var(--bg-hover)]">
+                  <button type="button" onClick={() => play(it)} aria-label={t(playing === it.id ? 'assetDrawer.pauseThing' : 'assetDrawer.playThing')}
+                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${playing === it.id ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--bg-field)] text-[var(--text)]'}`}>
+                    {playing === it.id ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}
+                  </button>
+                  <button type="button" onClick={() => onOpenItem(it)} className={`min-w-0 flex-1 truncate text-left text-[14.5px] hover:underline ${playing === it.id ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{nameOf(it.name, lang)}</button>
+                  <span className="w-12 shrink-0 text-right text-[12.5px] tabular-nums text-[var(--text-faint)]">{seconds(it.durationMs)}</span>
+                  <button type="button" onClick={() => toggleFavorite(it.id)} aria-pressed={favorites.has(it.id)} aria-label={t(favorites.has(it.id) ? 'assetDrawer.unstar' : 'assetDrawer.star')}
+                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-full hover:bg-[var(--bg-pressed)] ${favorites.has(it.id) ? 'text-[#ffd35a]' : 'text-[var(--text-faint)]'}`}>
+                    <Star size={14} fill={favorites.has(it.id) ? 'currentColor' : 'none'} aria-hidden />
+                  </button>
+                  <SettingsButton variant="quiet" onClick={() => onUseItem(it)}>{t('assetDrawer.useThing')}</SettingsButton>
+                </div>
+              ))}
+            </div>
+          ) : <div className={STORE_GRID}>{cards}</div>}
         </div>
       </div>
     </div>
@@ -815,6 +1021,7 @@ function StoreCard({ item }: { item: StoreItem }) {
         {item.summary ? <p className="mt-1 line-clamp-2 min-h-[42px] text-[13.5px] leading-[21px] text-[var(--text-muted)]">{item.summary}</p> : null}
         <div className="mt-3 flex items-center justify-between gap-2">
           <span className="inline-flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--text-faint)]"><KindIcon kind={item.kind} size={14} />{t(isCodeKind(item.kind) ? `assetDrawer.kind_${item.kind}` : `assetDrawer.cat_${item.kind}`)}
+            {item.count ? <span className="tabular-nums">· {t('assetDrawer.countItems').replace('{n}', item.count.toLocaleString())}</span> : null}
             {item.installs ? <span className="tabular-nums">· {t('assetDrawer.installs').replace('{n}', item.installs.toLocaleString())}</span> : null}</span>
           {/* the button is its own: a press there does not open the page */}
           <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>{item.action}</span>

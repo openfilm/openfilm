@@ -19,8 +19,15 @@ const endpoint = () => (process.env.OPENFILM_COMMUNITY_LIBRARY_URL ??
 
 /** @typedef {{ sha256: string, bytes: number }} Blob */
 /** @typedef {{ group: string, id: string, cat: string, kind: 'sound' | 'page', name: Record<string,string>, durationMs: number, tags: string[], about: string, by: string, src?: string, place?: 'cut' }} Item */
-/** @typedef {{ items: Item[], groups: Record<string, { id: string, name: Record<string,string> }[]>, files: Map<string, Blob>, bundles: Map<string,string[]> }} Catalog */
-const empty = () => /** @type {Catalog} */ ({ items: [], groups: {}, files: new Map(), bundles: new Map() });
+/**
+ * A pack: things of one maker's put together (a music pack of forty pieces), or one thing listed alone, as a pack of
+ * its own (`lone`). Its id is `<maker>/<name>`; its things' `group` in the library is that id, so it is a group of
+ * each category it has things in.
+ * @typedef {{ id: string, name: Record<string,string>, about: string, by: string, license?: string, version: number, cover?: string, items: string[], lone?: true }} Pack
+ */
+/** @typedef {{ items: Item[], groups: Record<string, { id: string, name: Record<string,string>, by: string }[]>, packs: Pack[], files: Map<string, Blob>, bundles: Map<string,string[]> }} Catalog */
+const empty = () => /** @type {Catalog} */ ({ items: [], groups: {}, packs: [], files: new Map(), bundles: new Map() });
+const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 let catalog = empty();
 let last = '';
 let checked = 0;
@@ -52,6 +59,28 @@ function decode(json) {
   if (json?.version !== 1 || !Array.isArray(json.items) || json.items.length > 1000) throw new Error('Invalid community catalog');
   const result = empty();
   const seen = new Set();
+  /* the packs first: which pack each thing is in (one at most), the pack's things in its own order */
+  if (json.packs !== undefined && (!Array.isArray(json.packs) || json.packs.length > 200)) throw new Error('Invalid community packs');
+  /** @type {Map<string, Pack>} */
+  const packOf = new Map();
+  for (const entry of json.packs ?? []) {
+    const { id, version, revision, name, about, by, license, items, cover } = entry ?? {};
+    if (typeof id !== 'string' || id.length > 64 || !SLUG.test(id) || !Number.isSafeInteger(version) || version < 1 || !HEX.test(revision) ||
+        typeof by !== 'string' || !/^[a-zA-Z0-9-]{1,39}$/.test(by) ||
+        !name || !languages.every((lang) => typeof name[lang] === 'string' && name[lang].trim() && name[lang].length <= 60) ||
+        typeof about !== 'string' || about.length > 300 || (license !== undefined && typeof license !== 'string') ||
+        !Array.isArray(items) || !items.length || items.length > 200 || !items.every((x) => typeof x === 'string' && ITEM.test(x) && !packOf.has(x)) ||
+        new Set(items).size !== items.length) throw new Error('Invalid community pack');
+    const pack = /** @type {Pack} */ ({ id: `${by.toLowerCase()}/${id}`, name, about, by, version, items: [], ...(typeof license === 'string' ? { license } : {}) });
+    if (result.packs.some((p) => p.id === pack.id)) throw new Error('Invalid community pack');
+    if (cover !== undefined) {
+      if (!cover || typeof cover.sha256 !== 'string' || !HEX.test(cover.sha256) || !Number.isInteger(cover.bytes) || cover.bytes < 1 || cover.bytes > MAX_FILE) throw new Error('Invalid community pack cover');
+      pack.cover = `${PREFIX}/packs/${id}-v${version}-${revision}/cover.jpg`;
+      result.files.set(pack.cover, cover);
+    }
+    for (const item of items) packOf.set(item, pack);
+    result.packs.push(pack);
+  }
   for (const entry of json.items) {
     const { id, version, revision, name, about, tags, by, durationMs, files } = entry ?? {};
     const kind = typeof id === 'string' && id.length < 100 ? ITEM.exec(id)?.[1] : undefined;
@@ -76,14 +105,33 @@ function decode(json) {
       result.files.set(`${base}/${key}`, file);
     }
     if (!audio) result.bundles.set(base, ['saved.json', 'files/overlay.html'].map((key) => `${base}/${key}`));
-    result.groups[kind] ??= [{ id: 'community', name: { en: 'Community' } }];
-    result.items.push({ id: audio ? `${base}/${sound}` : base, cat: kind, group: 'community', kind: audio ? 'sound' : 'page',
+    /* its pack, or one of its own when it is listed alone */
+    let pack = packOf.get(id);
+    if (pack && pack.by.toLowerCase() !== by.toLowerCase()) throw new Error('Invalid community pack');
+    if (!pack) {
+      pack = { id: `${by.toLowerCase()}/${id.replace('/', '-')}`, name, about, by, version, items: [], lone: true };
+      if (result.packs.some((p) => p.id === pack?.id)) throw new Error('Invalid community pack');
+      result.packs.push(pack);
+    }
+    const itemId = audio ? `${base}/${sound}` : base;
+    pack.items.push(itemId);
+    const groups = (result.groups[kind] ??= []);
+    if (!groups.some((g) => g.id === pack.id)) groups.push({ id: pack.id, name: pack.name, by: pack.by });
+    result.items.push({ id: itemId, cat: kind, group: pack.id, kind: audio ? 'sound' : 'page',
       name, about, tags, by, durationMs, ...(!audio ? { src: 'overlay.html', ...(kind === 'transition' ? { place: /** @type {const} */ ('cut') } : {}) } : {}) });
   }
+  /* a pack keeps only the things the catalog has (in its own order); one left with none is no pack */
+  for (const pack of result.packs) {
+    const listed = (json.packs ?? []).find((/** @type {any} */ p) => `${String(p?.by).toLowerCase()}/${p?.id}` === pack.id);
+    if (listed) pack.items = listed.items.map((/** @type {string} */ x) => pack.items.find((it) => it.includes(`/${x}-v`))).filter(Boolean);
+  }
+  result.packs = result.packs.filter((p) => p.items.length);
   return result;
 }
 
 export const communityCatalog = () => catalog;
+/** The catalog as read from its JSON (for the tests). */
+export const decodeForTest = decode;
 export const isCommunity = (/** @type {string} */ rel) => rel.startsWith('community/');
 
 /** A failed refresh leaves the previously verified catalog in memory until a successful refresh. */

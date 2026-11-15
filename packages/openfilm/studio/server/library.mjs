@@ -243,8 +243,50 @@ export function libraryIndex() {
     }
     items.push(...(catalog.items ?? []));
   }
-  merged = { parts, index: { ...own, groups, items } };
+  merged = { parts, index: { ...own, groups, items, packs: packsOf(groups, items) } };
   return merged.index;
+}
+
+/**
+ * The library's packs: OpenFilm's own are its groups (`openfilm/<category>/<group>`, always there); the community's
+ * come from its catalog (`<maker>/<name>`, each a group of every category it has things in), there once the person
+ * adds them (libraryAdded).
+ * @param {Record<string, unknown[]>} groups @param {unknown[]} items
+ */
+function packsOf(groups, items) {
+  const community = communityCatalog().packs;
+  const theirs = new Set(community.map((p) => p.id));
+  /** @type {Map<string, number>} */
+  const count = new Map();
+  for (const item of /** @type {{ cat: string, group: string }[]} */ (items)) count.set(`${item.cat}\0${item.group}`, (count.get(`${item.cat}\0${item.group}`) ?? 0) + 1);
+  const own = Object.entries(groups).flatMap(([cat, list]) => (/** @type {{ id: string, name: Record<string, string> }[]} */ (list))
+    .filter((g) => !theirs.has(g.id) && count.get(`${cat}\0${g.id}`))
+    .map((g) => ({ id: `openfilm/${cat}/${g.id}`, name: g.name, cats: [cat], group: g.id, count: count.get(`${cat}\0${g.id}`), official: true })));
+  const byId = new Map(/** @type {{ id: string, cat: string }[]} */ (items).map((it) => [it.id, it.cat]));
+  return [...own, ...community.map((p) => ({ ...p, group: p.id, cats: [...new Set(p.items.map((id) => byId.get(id)).filter(Boolean))], count: p.items.length }))];
+}
+
+/** Where the community's packs and things the person added are kept in the shared prefs.json: their ids. */
+const ADDED = 'libraryAdded';
+
+/** The community's packs and things the person added (OpenFilm's own are always there). */
+export function libraryAdded() {
+  return addedIds(sharedPref(ADDED));
+}
+
+export function setLibraryAdded(/** @type {unknown} */ ids) {
+  const next = addedIds(ids);
+  setSharedPref(ADDED, next);
+  return next;
+}
+
+/** Ids the community's catalog has: its packs' and its things'. Kept while it cannot be read (offline: nothing lost). */
+function addedIds(/** @type {unknown} */ ids) {
+  if (!Array.isArray(ids)) return [];
+  const { packs, items } = communityCatalog();
+  if (!items.length) return [...new Set(ids.filter((id) => typeof id === 'string' && id.length < 300))];
+  const known = new Set([...packs.map((p) => p.id), ...items.map((it) => it.id)]);
+  return [...new Set(ids.filter((id) => typeof id === 'string' && known.has(id)))];
 }
 
 /** The voices as library/voices.json has them: the services (each with its voice-over models) and their voices. */
@@ -258,6 +300,7 @@ function starrable() {
   return new Set([
     ...(/** @type {{ items: { id: string }[] }} */ (libraryIndex())).items.map((item) => item.id),
     ...(/** @type {{ voices: { provider: string, id: string }[] }} */ (libraryVoices())).voices.map(voiceKey),
+    ...(/** @type {{ packs: { id: string }[] }} */ (libraryIndex())).packs.map((p) => `pack:${p.id}`),
   ]);
 }
 

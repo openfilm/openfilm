@@ -11,15 +11,18 @@
  * Enter or its "+" puts it in the film where the try showed it; a drag puts it where it is let go. A star keeps
  * it among the favorites, for every project.
  */
-import { onRevealInLibrary, takeRevealed } from '@/lib/library-reveal';
+import { onRevealInLibrary, takeRevealed, type Revealed } from '@/lib/library-reveal';
 import React from 'react';
-import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import {
   BUILT_IN, TEXT_COMPONENT, askHere, builtInItem, prepareLibraryItem, isLibraryItemReady, libraryDragItem, libraryUrl, mayNeedFetch, nameOf, posterUrl, prepareTemplatePreview, previewUrl, templateExamplePath, templatePreviewUrl, toggleFavorite,
-  useLibraryFavorites, useLibraryHere, useLibraryIndex, type HereState, type LibraryCategory, type LibraryItem,
+  inLibrary, useLibraryAdded, useLibraryFavorites, useLibraryHere, useLibraryIndex, type HereState, type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
+import { openPlugins } from '@/lib/plugins-window';
+import { FEATURE_KINDS } from '../feature-kinds';
+import { ContextMenu, type ContextMenuItem } from '../ContextMenu';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
 import { useLibraryVoices, type LibraryVoice, type VoiceAccess } from '@/lib/library-voices';
 import { ADD_COLOR, AudioArtwork, FOOT_ROOM, HereButton, MiniPlayer, MusicCard, ROUND, SoundRow, usePlayer, type LibraryHover } from './AudioList';
@@ -129,6 +132,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   const lang = useLanguage();
   const index = useLibraryIndex(true);
   const favorites = useLibraryFavorites();
+  /* the community's packs and things the person added: in the library beside OpenFilm's own */
+  const added = useLibraryAdded();
   const voices = useLibraryVoices();
   /* the categories shown, in the person's order, the tabs of the plugins on among them */
   const arranged = useLibraryArrangement();
@@ -205,8 +210,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   }, [dismissRef, closePreview, stopHover, picked, tried, player.item, voicePlayer.item]);
   const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(firstLine(next)); setQuery(''); setSource(''); closePreview(); };
   /* a category asked for from elsewhere (the Community's page of a thing in it): shown, as the drawer opens or after */
-  const showRef = React.useRef(show);
-  showRef.current = show;
+  const showRef = React.useRef<(asked: Revealed) => void>(() => {});
+  showRef.current = (asked: Revealed) => { show(asked.category); if (asked.group) { SHOWN.group[asked.category] = asked.group; setGroup(asked.group); } };
   React.useEffect(() => {
     const asked = takeRevealed();
     if (asked) showRef.current(asked);
@@ -266,7 +271,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
     const [section, of] = group.split(':');
     const starred = group === FAVORITES ? new Set(favorites) : null;
     return (index?.items ?? []).filter((item) => {
-      if (item.cat !== cat || isClipMotion(item)) return false;
+      if (item.cat !== cat || isClipMotion(item) || !inLibrary(item, added)) return false;
       const text = cat === 'text' ? textKind(item) : null;
       if (cat === 'text' && !text) return false;
       if (q) return Object.values(item.name).some((n) => n?.toLowerCase().includes(q)) || item.tags?.some((tag) => tag.toLowerCase().includes(q));
@@ -275,7 +280,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
       if (cat === 'sticker') return (section === STILL || section === LIVE) && (section === STILL) === Boolean(item.still) && (!of || item.group === of);
       return !group || item.group === group;
     }).sort((a, b) => Number(Boolean(a.still)) - Number(Boolean(b.still)));
-  }, [index, cat, q, group, starredText, favorites]);
+  }, [index, cat, q, group, starredText, favorites, added]);
   const sources = React.useMemo(() => sourcesIn(shown.map(sourceOf)), [shown]);
   const items = React.useMemo(() => source && sources.includes(source) ? shown.filter((item) => sourceOf(item) === source) : shown, [source, sources, shown]);
   const presetItems = React.useMemo(() => presets.map((p, i): LibraryItem => ({
@@ -329,9 +334,27 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   /* the library's own lines under its fold: all of it, then its groups (a voice's: the services) */
   const own = cat === 'voice'
     ? (voices?.providers ?? []).map((s) => ({ id: s.id, name: s.name }))
-    : (index?.groups[cat as LibraryCategory] ?? []).filter((g) => !clipMotionGroups.has(g.id)).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }))
+    : (index?.groups[cat as LibraryCategory] ?? []).filter((g) => !g.by && !clipMotionGroups.has(g.id)).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }))
       /* the groups of what moves first, those of stills (the emoji's) after them */
       .sort((a, b) => Number(stillGroup(a.id)) - Number(stillGroup(b.id)));
+  /* the community's packs added, each a line of its own under the library's */
+  const addedPacks = cat === 'voice' ? [] : (index?.groups[cat as LibraryCategory] ?? [])
+    .filter((g) => g.by && (index?.items ?? []).some((it) => it.cat === cat && it.group === g.id && inLibrary(it, added)))
+    .map((g) => ({ id: g.id, name: nameOf(g.name, lang) }));
+  /* a pack's line, the pack taken out of the library: all of the category instead */
+  const packGone = Boolean(group) && (index?.groups[cat as LibraryCategory] ?? []).some((g) => g.by && g.id === group) && !addedPacks.some((g) => g.id === group);
+  React.useEffect(() => { if (packGone) { SHOWN.group[cat] = ''; setGroup(''); } }, [packGone, cat]);
+  /* a kind the Community has: more of it found there, and a thing's page there (its preview, its pack) */
+  const inCommunity = (FEATURE_KINDS as readonly string[]).includes(cat);
+  const [menu, setMenu] = React.useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
+  const onListMenu = (e: React.MouseEvent) => {
+    const id = (e.target as HTMLElement).closest<HTMLElement>('[data-library-card], [data-library-audio]');
+    const thing = id?.dataset.libraryCard ?? id?.dataset.libraryAudio;
+    if (!thing || !inCommunity || !index?.items.some((it) => it.id === thing)) return;
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY, items: [{ id: 'details', label: t('assetDrawer.seeDetails'),
+      onSelect: () => openPlugins({ line: `kind:${cat as LibraryCategory}`, page: `asset:${thing}` }) }] });
+  };
   /* the text category's groups, under Word art or Templates by what they hold */
   const textGroups = React.useMemo(() => {
     const of = { [ART]: new Set<string>(), [TEMPLATES]: new Set<string>() };
@@ -505,13 +528,25 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 {folded ? null : (
                   <div className="flex flex-col pb-1">
                     <SideLine on={!group && !q} onClick={() => pickGroup('')}>{t('assetDrawer.all')}</SideLine>
-                    {own.map((g) => <SideLine key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{g.id === 'community' ? t('assetDrawer.source_community') : g.name}</SideLine>)}
-                    {group === 'community' && !q ? <a href="https://github.com/openfilm/library/blob/main/CONTRIBUTING.md" target="_blank" rel="noreferrer"
-                      className="px-2.5 py-1 text-xs text-[var(--text-muted)] underline hover:text-[var(--text)]">{t('assetDrawer.contributeAssets')}</a> : null}
+                    {own.map((g) => <SideLine key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{g.name}</SideLine>)}
                   </div>
                 )}
+                {/* the community's packs the person added, under their own heading */}
+                {addedPacks.length ? (
+                  <>
+                    <div className="px-2.5 pb-0.5 pt-2 text-[11px] text-[var(--text-faint)]">{t('assetDrawer.addedPacks')}</div>
+                    {addedPacks.map((g) => <SideLine key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{g.name}</SideLine>)}
+                  </>
+                ) : null}
               </>
             )}
+            {/* more of this kind, in the Community */}
+            {inCommunity ? (
+              <button type="button" onClick={() => openPlugins({ line: `kind:${cat as LibraryCategory}` })}
+                className="mt-auto flex h-8 shrink-0 items-center gap-1 rounded-md px-2.5 text-left text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+                {t('assetDrawer.findMore')}<ChevronRight size={13} aria-hidden />
+              </button>
+            ) : null}
           </nav>
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
@@ -549,6 +584,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 ref={list}
                 className={`min-h-0 flex-1 overflow-y-auto px-3 pt-0.5 ${!previewBar && player.item ? 'pb-3' : FOOT_ROOM}`}
                 onClick={(e) => { if (e.target === e.currentTarget) closePreview(); }}
+                onContextMenu={onListMenu}
               >
                 {cat === 'text' && group === PRESETS && !q ? (
                   presets.length ? (
@@ -596,6 +632,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 {drawn < items.length ? <div ref={nextPage} className="h-px" aria-hidden /> : null}
               </div>
               <MiniPlayer target={previewBar} player={player} name={player.item ? nameOf(player.item.name, lang) : ''} />
+              {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
               </>
               )}
             </>

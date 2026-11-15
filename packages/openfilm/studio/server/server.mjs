@@ -59,7 +59,7 @@ import { installedFonts } from './fonts.mjs';
 import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, compoundSound, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
-import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
+import { BUILT_IN, fetchItem, libraryAdded, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryAdded, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
 import { pluginOfSkill, pluginStates, pluginsDir, setPluginOn } from '../../src/plugins.mjs';
@@ -524,6 +524,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (!type) return sendMedia(req, res, file, { check: true });
         res.writeHead(200, { 'content-type': type, 'cache-control': 'private, no-cache' });
         return res.end(readFileSync(file));
+      }
+      /* the community's packs and things the person added to the library (OpenFilm's own are always in it): { ids } */
+      if (parts[1] === 'added' && parts.length === 2) {
+        if (req.method === 'GET') { await refreshCommunity(); return json(res, 200, { ids: libraryAdded() }); }
+        if (req.method === 'PUT') { await refreshCommunity(); return json(res, 200, { ids: setLibraryAdded((/** @type {{ ids?: unknown }} */ (await readJson(req) ?? {})).ids) }); }
       }
       if (parts[1] === 'favorites' && parts.length === 2) {
         if (req.method === 'GET') return json(res, 200, { ids: libraryFavorites() });
