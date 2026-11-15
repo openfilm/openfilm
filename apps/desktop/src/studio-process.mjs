@@ -60,7 +60,7 @@ parent.on('message', ({ data }) => {
   if (data?.type === 'answer-part' && typeof data.delta === 'string') hearing.get(data.id)?.(data.delta);
   if (data?.type === 'answer') asking.get(data.id)?.(data);
   if (data?.type === 'account:read') {
-    void desktopAccount({ fresh: data.fresh === true }).then(
+    void desktopAccount({ fresh: data.fresh === true, strict: true }).then(
       (account) => send({ type: 'account', id: data.id, account }),
       () => send({ type: 'account', id: data.id, error: 'The OpenFilm account could not be read.' }),
     );

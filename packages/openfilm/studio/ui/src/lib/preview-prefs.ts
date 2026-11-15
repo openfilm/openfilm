@@ -9,10 +9,11 @@
  */
 import { useSyncExternalStore } from 'react';
 
-export type PreviewPrefs = { fitPages: boolean; renders: boolean; stats: boolean };
-type Pref = keyof PreviewPrefs;
+export type EffectPreviewMode = 'auto' | 'smooth' | 'quality';
+export type PreviewPrefs = { fitPages: boolean; renders: boolean; stats: boolean; effects: EffectPreviewMode };
+type Pref = Exclude<keyof PreviewPrefs, 'effects'>;
 
-const DEFAULTS: PreviewPrefs = { fitPages: true, renders: true, stats: false };
+const DEFAULTS: PreviewPrefs = { fitPages: true, renders: true, stats: false, effects: 'auto' };
 const KEY: Record<Pref, string> = { fitPages: 'openfilm.preview.fitPages', renders: 'openfilm.preview.renders', stats: 'openfilm.preview.stats' };
 
 /** Without localStorage (private window), the choices last this session. */
@@ -28,8 +29,19 @@ function read(pref: Pref): boolean {
   return memory[pref] ?? DEFAULTS[pref];
 }
 
+function readEffectMode(): EffectPreviewMode {
+  try { const value = localStorage.getItem('openfilm.preview.effects'); if (value === 'auto' || value === 'smooth' || value === 'quality') return value; } catch {}
+  return memory.effects ?? 'auto';
+}
+export function writeEffectPreviewMode(mode: EffectPreviewMode): void {
+  memory.effects = mode;
+  try { localStorage.setItem('openfilm.preview.effects', mode); } catch {}
+  current = { ...readPreviewPrefs(), effects: mode };
+  for (const fn of listeners) fn();
+}
+
 export function readPreviewPrefs(): PreviewPrefs {
-  current ??= { fitPages: read('fitPages'), renders: read('renders'), stats: read('stats') };
+  current ??= { fitPages: read('fitPages'), renders: read('renders'), stats: read('stats'), effects: readEffectMode() };
   return current;
 }
 

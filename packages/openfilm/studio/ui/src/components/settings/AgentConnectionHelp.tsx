@@ -8,6 +8,7 @@ import { ProviderMark } from './ProviderMark';
 import { DialogClose, DialogIdentity } from './DialogIdentity';
 import { SettingsButton, SettingsLinkButton } from './ui';
 import { AgentModelMenu } from './AgentModelMenu';
+import { AgentUpdateDetails } from './AgentUpdateDetails';
 
 /** Connection instructions and opt-in diagnostics, above Settings without closing the parent dialog on Escape. */
 export function AgentConnectionHelp({ agent, status, report, checking, hint, error, notice, copied, onClose, onCheck, onLocate, onCopy, actions, connectionStatus }: {
@@ -64,6 +65,7 @@ export function AgentConnectionHelp({ agent, status, report, checking, hint, err
         <DialogIdentity name={agentName} mark={<ProviderMark id={agentMark(agent.id)} size={24} />} website={website} actions={actions} status={connectionStatus} />
       </div>
       <div className="min-h-0 overflow-y-auto overscroll-contain px-7 py-5 text-[14px] leading-relaxed text-[var(--text-muted)]">
+        <AgentUpdateDetails agent={agent} />
         <AgentModelMenu agent={agent} />
         {agent.id !== 'byok' ? <>
         <section>

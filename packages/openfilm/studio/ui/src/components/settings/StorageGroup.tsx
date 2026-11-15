@@ -1,12 +1,12 @@
 /**
- * Settings → General → Storage: the projects library, the folder every project is a folder of (studio/server's
- * locations, src/locations.mjs). It shows its folder and the free space on its disk, and can be changed (the system's
- * folder dialog), opened in the file manager, or set back to its default. When projects are in it, a change asks
- * whether they move too; left behind, they stay where they are, and in the list. Exports have no setting: the export
- * dialog picks the folder and keeps the last one.
+ * The projects window's storage card (ProjectsStorage, at the foot of its sidebar): the projects library, the folder
+ * every project is a folder of (studio/server's locations, src/locations.mjs). It shows its folder and the free space
+ * on its disk, and can be changed (the system's folder dialog), opened in the file manager, or set back to its default.
+ * When projects are in it, a change asks whether they move too; left behind, they stay where they are, and in the list.
+ * Exports have no setting: the export dialog picks the folder and keeps the last one.
  *
- * Below it, what the projects take on disk, and how much of that is cache (studio/server/storage.mjs): what the
- * preview and exports made and can make again. One button clears it; each project's share is a click away.
+ * Below it, what the projects take on disk, and how much of that is cache (studio/server/storage.mjs): what the preview
+ * and exports made and can make again. One button clears it; each project's share is a click away.
  */
 import React from 'react';
 import { useT } from '@/i18n';
@@ -18,7 +18,7 @@ import { SettingsButton, SettingsField, SettingsGroup, SettingsItem, settingsErr
 type Which = keyof StudioLocations;
 
 /** Bytes as the person reads a disk's free space: GB, or MB below one. */
-function size(bytes: number): string {
+export function size(bytes: number): string {
   return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(bytes >= 1e11 ? 0 : 1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`;
 }
 

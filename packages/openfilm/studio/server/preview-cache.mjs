@@ -17,15 +17,16 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, s
 import { setPriority } from 'node:os';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_STAGE, FILM_FILE, readFilmFile } from '../../src/film-doc.mjs';
+import { DEFAULT_STAGE, FILM_FILE, readFilmFile, filmHead } from '../../src/film-doc.mjs';
 import { mediaReferences, referenceSource } from '../../src/media-links.mjs';
+import { VISION_MODELS } from '../../src/vision-models.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { TOOL_DIR } from './projects.mjs';
 
 /** Changing how renders are made names them anew. */
-const VERSION = 1;
+const VERSION = '3:' + Object.values(VISION_MODELS).map((model) => model.sha256).join(':');
 /** Files whose change cannot change the picture. */
-const SOUNDS = new Set(['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.opus', '.flac', '.aif', '.aiff', '.aifc', '.vtt', '.srt']);
+const SOUNDS = new Set(['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.opus', '.flac', '.aif', '.aiff', '.aifc']);
 /** Most files of a project read for its fingerprint (a folder of thousands of frames is taken as a whole beyond that). */
 const MOST_FILES = 20_000;
 
@@ -79,6 +80,15 @@ export function projectPrint(root) {
 export function previewKey(root, a, b, fps, height, print = projectPrint(root)) {
   let film = '';
   try { film = readFileSync(join(root, FILM_FILE), 'utf8'); } catch { /* none: nothing renders */ }
+  const read = readFilmFile(film);
+  if (read.doc) {
+    const relevant = { ...read.doc, tracks: read.doc.tracks.map((track) => ({ ...track, clips: track.clips.filter((clip) => {
+      const start = clip.at ?? 0;
+      const duration = clip.time?.length === 2 ? (clip.time[1] - clip.time[0]) / (clip.speed ?? 1) : Infinity;
+      return start < b && start + duration > a;
+    }) })) };
+    film = filmHead(film) + JSON.stringify(relevant);
+  }
   return createHash('sha1').update(`${VERSION}\0${film}\0${print}\0${a}\0${b}\0${fps}\0${height}`).digest('hex').slice(0, 20);
 }
 
@@ -95,7 +105,7 @@ export function knownLate(root) {
 }
 const LATE_FILE = 'late.json';
 
-/** @typedef {{ state: 'waiting' | 'making' | 'ready' | 'failed', ratio?: number }} PreviewState */
+/** @typedef {{ state: 'waiting' | 'making' | 'ready' | 'failed', ratio?: number, reason?: string }} PreviewState */
 /** @typedef {PreviewState & { a: number, b: number, key: string }} PreviewRange */
 
 /**
@@ -104,6 +114,8 @@ const LATE_FILE = 'late.json';
  */
 const jobs = new Map();
 let running = false;
+const paused = new Set();
+const wanted = new Map();
 
 /**
  * Renders of `ranges` (film seconds, each put on the film's frame grid) for the project at `root`, at `fps` and
@@ -113,7 +125,7 @@ let running = false;
  * @param {(root: string, a: number, b: number, fps: number, height: number, out: string, signal: AbortSignal, progress: (ratio: number) => void) => Promise<void>} [make]
  * @returns {PreviewRange[]}
  */
-export function ensurePreviews(root, ranges, fps, height, make = renderApart) {
+export function ensurePreviews(root, ranges, fps, height, make = renderApart, { schedule = true } = {}) {
   const print = projectPrint(root);
   const dir = previewDir(root);
   /* what is known to play late, for the next session (not kept: found again as it plays) */
@@ -135,17 +147,18 @@ export function ensurePreviews(root, ranges, fps, height, make = renderApart) {
     let job = jobs.get(out);
     if (!job) {
       job = { root, a, b, fps, height, state: 'waiting' };
-      jobs.set(out, job);
+      if (schedule) jobs.set(out, job);
     }
-    states.push({ a, b, key, state: job.state, ...(job.state === 'making' ? { ratio: job.ratio ?? 0 } : {}) });
+    states.push({ a, b, key, state: job.state, ...(job.state === 'making' ? { ratio: job.ratio ?? 0 } : {}), ...(job.reason ? { reason: job.reason } : {}) });
   }
   /* the film changed: what was asked of it before is no longer wanted */
   for (const [out, job] of jobs) {
     if (job.root !== root || current.has(out)) continue;
+    if (!schedule) continue;
     job.abort?.abort();
     jobs.delete(out);
   }
-  void drain(make);
+  if (schedule) { wanted.set(root, current); void drain(make); }
   return states;
 }
 
@@ -155,7 +168,7 @@ async function drain(make) {
   running = true;
   try {
     for (;;) {
-      const next = [...jobs.entries()].find(([, job]) => job.state === 'waiting');
+      const next = [...jobs.entries()].find(([, job]) => job.state === 'waiting' && !paused.has(job.root));
       if (!next) return;
       const [out, job] = next;
       job.state = 'making';
@@ -167,18 +180,20 @@ async function drain(make) {
         await make(job.root, job.a, job.b, job.fps, job.height, part, job.abort.signal, (ratio) => { job.ratio = ratio; });
         if (job.abort.signal.aborted) throw new Error('cancelled');
         renameSync(part, out);
+        prunePreviews(job.root, out);
         jobs.delete(out);
-      } catch {
+      } catch (error) {
+        if (!job.abort.signal.aborted) job.reason = error instanceof Error ? error.message : String(error);
         rmSync(part, { force: true });
         /* let go (the film changed): forgotten; failed: said, and not tried again under this name */
-        if (jobs.get(out) === job) job.state = 'failed';
+        if (jobs.get(out) === job) job.state = job.abort.signal.aborted ? 'waiting' : 'failed';
       }
     }
   } finally { running = false; }
 }
 
 /** A number as render's range takes it: plain digits, no exponent. @param {number} n */
-const num = (n) => String(Number(n.toFixed(3)));
+const num = (n) => String(Number(n.toFixed(6)));
 
 /**
  * One stretch rendered by src/render.mjs in a process of its own (render-worker.mjs), at low priority so the editor
@@ -215,3 +230,36 @@ function renderApart(root, a, b, fps, height, out, signal, progress) {
 function filmStage(root) {
   try { return readFilmFile(readFileSync(join(root, FILM_FILE), 'utf8')).doc?.stage ?? DEFAULT_STAGE; } catch { return DEFAULT_STAGE; }
 }
+
+/** Pause active GPU work as playback starts; cancellation leaves completed cache files available. */
+/** @param {string} root @param {boolean} [on] */
+export function pausePreviews(root, on = true) {
+  if (on) { paused.add(root); for (const job of jobs.values()) if (job.root === root) job.abort?.abort(); }
+  else { paused.delete(root); void drain(renderApart); }
+}
+/** @param {string} root */
+export function cancelPreviews(root) {
+  for (const [out, job] of jobs) if (job.root === root) { job.abort?.abort(); jobs.delete(out); }
+}
+/** @param {string} root */
+export function clearPreviews(root) {
+  cancelPreviews(root); wanted.delete(root);
+  const dir = previewDir(root);
+  try { for (const name of readdirSync(dir)) if (/^[0-9a-f]{20}\.mp4$/.test(name) || name === LATE_FILE) rmSync(join(dir, name), { force: true }); } catch {}
+}
+/** @param {string} root @param {string} keep */
+function prunePreviews(root, keep) {
+  const dir = previewDir(root);
+  try {
+    const files = readdirSync(dir).filter((name) => /^[0-9a-f]{20}\.mp4$/.test(name)).map((name) => ({ path: join(dir, name), stat: statSync(join(dir, name)) })).sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
+    let bytes = files.reduce((n, file) => n + file.stat.size, 0);
+    for (const file of files.toReversed()) {
+      if (bytes <= 1024 ** 3) break;
+      if (file.path !== keep && !wanted.get(root)?.has(file.path)) { rmSync(file.path, { force: true }); bytes -= file.stat.size; }
+    }
+    if (bytes > 1024 ** 3) { rmSync(keep, { force: true }); throw new Error('Preview cache is full'); }
+  } catch (error) { if (error instanceof Error && error.message === 'Preview cache is full') throw error; }
+}
+
+/** @param {string} root */
+export function retryPreviews(root) { for (const job of jobs.values()) if (job.root === root && job.state === 'failed') { job.state = 'waiting'; delete job.reason; } }

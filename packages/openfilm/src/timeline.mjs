@@ -5,6 +5,7 @@
 import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, lutsOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
 import { CAPTION_BASE_CSS, cueCss, cueLayout, cueNodes, readVtt, regionBox } from './captions.mjs';
+import { clearVideoEffects, drawVideoEffects, hideVideoEffects, suspendVideoEffects, retryVideoEffects, videoEffectsOn, videoEffectsState, setVideoPreview, clearVideoAnalysisCache } from './video-effects.mjs';
 
 /* the file as written (without what the host puts in it), read as every reader reads it */
 const own = new URL(location.href);
@@ -468,7 +469,7 @@ async function glance(c, want) {
   if (!justLoaded && !v.seeking && Math.abs(v.currentTime - want) < SAME_TIME && v.readyState >= 2) return;
   v.currentTime = want;
   await sought(v);
-  void onScreen(c, want);
+  if (!videoEffectsOn(c)) void onScreen(c, want);
 }
 
 /** A seek done: its frame decoded (`seeked`, or the file's first data), or after a time limit. */
@@ -688,6 +689,7 @@ function idleFootage(t) {
  */
 const renders = [];
 const RENDER_HANDOVER = 0.5; // s: how long before a render ends the clips under it are drawn every frame again
+const EFFECT_HANDOVER = 0.15; // lightweight effects need only a few frames; adjacent ready renders need none
 const RENDER_WARM = 0.25;    // s: before that, they are drawn this often, out of sight (see draw)
 /** the film second the clips under a render were last drawn at */
 let warmAt = -Infinity;
@@ -807,6 +809,7 @@ function undecoded(src) {
 /** Let a video's file go: its decoder and buffers are freed. A page is closed (see restPage). */
 function rest(c) {
   if (c.kind === 'page') { restPage(c); return; }
+  clearVideoEffects(c);
   const v = c.el;
   if (!v.paused) v.pause();
   v.preload = 'none';
@@ -1301,6 +1304,7 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   hold(c, t);
   if (on) fadeAt(c, t);
   if (!on) {
+    hideVideoEffects(c);
     if (c.kind !== 'video') return;
     if (play && c.awake && c.at > t && c.at - play.now < CUE_AHEAD * play.rate) getReady(c, c.at - play.now, play.rate);
     else { if (!c.el.paused) c.el.pause(); c.lastWant = c.cued = undefined; }
@@ -1315,14 +1319,24 @@ async function drawClip(c, t, live, play, turn, coming, going) {
       /* where it should be this moment (not at the frame on its way): its own clock runs on to that frame */
       const playing = sourceAt(c.span, Math.min(Math.max(0, play.now - c.at), c.span.length), c.row);
       if (c.held) step(c, playing); else roll(c, playing, play.rate);
+      if (renderOn && (t < renderOn.end - EFFECT_HANDOVER || renders.some((r) => r !== renderOn && r.at <= renderOn.end + .001 && r.end > renderOn.end && r.el.readyState >= 2))) { suspendVideoEffects(c); return; }
+      follow(c);
+      void drawVideoEffects(c, c.el.currentTime, false, { playing: true });
       return;
     }
     const want = sourceAt(c.span, t - c.at, c.row);
     c.held = false;
-    if (live) { await glance(c, want); return; }
+    if (live) { await glance(c, want); if (c.lastWant === want) await drawVideoEffects(c, want); return; }
     if (!c.el.paused) c.el.pause();
     c.lastWant = want;
     await loaded(c);
+    if (videoEffectsOn(c)) {
+      await glance(c, want);
+      await drawVideoEffects(c, want, true);
+      videoSeen.shown++;
+      return;
+    }
+    clearVideoEffects(c);
     /* a video coming on: shown before it is sought. A frame made current in the moment it turns visible is said to
        be presented, yet the picture keeps the frame it had for a second or so (Chromium, its frames sent apart from
        the page's): the same t drew two pictures */
@@ -1801,6 +1815,7 @@ window.__filmEditor = {
       if (!c?.el || c.kind === 'sound') return;
       if (c.kind === 'page' && !c.own) { const s = size ?? c.row.size ?? stage; c.nw = s.w; c.nh = s.h; }
       place(c, box ?? c.row.box);
+      if (c.kind === 'video' && c.shown) void drawVideoEffects(c, c.lastWant ?? c.el.currentTime);
     },
     /** Show a clip in CSS of its own not kept yet (null: its own again), as an inspector's value is dragged. */
     look(id, css) {
@@ -1808,12 +1823,17 @@ window.__filmEditor = {
       if (!c?.el) return;
       wear(c, css ?? c.row.style ?? '');
       place(c, c.row.box);
+      if (c.kind === 'video' && c.shown) void drawVideoEffects(c, c.lastWant ?? c.el.currentTime);
     },
     updated: null,
     woke: null,
     /** The caption cues on the picture now, each with its element (`.cue`, its text in `.cue-text`), top track first. */
     captions: () => captionLayers.filter((l) => !l.hidden).sort((a, b) => a.ti - b.ti)
       .flatMap((l) => [...l.on].map(([cue, el]) => ({ track: l.ti, src: l.src, id: cue.id, locked: l.locked, el }))),
+    vision: (id) => { const c = clips.find((c) => c.id === id); return c ? { ...videoEffectsState(c), ...(renderOn ? { preview: 'cached', phase: 'ready' } : {}) } : { phase: 'idle' }; },
+    visionPreview: setVideoPreview,
+    visionClear: clearVideoAnalysisCache,
+    visionRetry: (id) => { const c = clips.find((c) => c.id === id); if (c) { retryVideoEffects(c); if (c.shown) void drawVideoEffects(c, c.lastWant ?? c.el.currentTime); } },
   },
   /** Set by a host (Studio's bridge) to hear of a page's own length and size learned as it first opens (see load). */
   learned: null,
@@ -1842,6 +1862,7 @@ window.__filmEditor = {
   renders(list) { setRenders(Array.isArray(list) ? list.filter((r) => r && r.b > r.a && typeof r.src === 'string') : []); },
   /** Whether a render plays in the film's place now. */
   rendering: () => renderOn != null,
+  needsDetailedPreview: (budget = 1000 / 30) => !renderOn && clips.some((c) => { if (c.kind !== 'video' || !c.shown) return false; const s = videoEffectsState(c); return s.policy === 'auto' && (s.preview === 'original' || (s.preview === 'draft' && (s.needsDetail || s.processingMs > budget * 1.3))); }),
   /** Show `overrides` on a page clip instead of its own until called with null (a drag, a typed word). */
   preview(id, overrides) {
     const c = clips.find((x) => x.id === id && x.kind === 'page');

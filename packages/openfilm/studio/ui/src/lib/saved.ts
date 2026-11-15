@@ -27,6 +27,14 @@ export function refreshSaved(): void {
   for (const fn of listeners) fn();
 }
 
+export function useSavedRevision(): number {
+  return React.useSyncExternalStore(
+    fn => { listeners.add(fn); return () => { listeners.delete(fn); }; },
+    () => version,
+    () => version,
+  );
+}
+
 const enc = (path: string) => encodeURIComponent(path);
 const media = (what: string, path: string, v: number) => `/api/saved/media?what=${what}&path=${enc(path)}&v=${v}`;
 
@@ -35,10 +43,14 @@ const media = (what: string, path: string, v: number) => `/api/saved/media?what=
 const pageAt = (rel: string) => (folder ? `${folder}${rel.split('/').map(encodeURIComponent).join('/')}` : undefined);
 
 /* a bundle with a file of its own (a clip of a sound, a video or a picture) is heard, played and pictured as that file */
-const own = (f: { path: string; bundle?: { file?: string } }) => f.bundle?.file ?? f.path;
+const own = (f: { path: string; bundle?: { file?: string } }) => f.bundle?.file?.split('#')[0] ?? f.path;
+const fragmentOf = (f: { bundle?: { file?: string } }) => {
+  const at = f.bundle?.file?.indexOf('#') ?? -1;
+  return at >= 0 ? f.bundle!.file!.slice(at) : '';
+};
 
 export const savedSources: MediaSources = {
-  file: (f) => (f.bundle && !f.bundle.file ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : `/api/saved/file?path=${enc(own(f))}&v=${Math.round(f.mtimeMs)}`),
+  file: (f) => (f.bundle && !f.bundle.file ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : `/api/saved/file?path=${enc(own(f))}&v=${Math.round(f.mtimeMs)}${fragmentOf(f)}`),
   poster: (f) => (f.bundle && (!f.bundle.file || f.kind !== 'video') ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : f.kind === 'video' ? media('poster', own(f), Math.round(f.mtimeMs)) : undefined),
   wave: (f) => media('wave', own(f), Math.round(f.mtimeMs)),
   pagePoster: (f) => (f.bundle ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : undefined),
@@ -47,12 +59,8 @@ export const savedSources: MediaSources = {
 };
 
 /** The library as the media pane lists it, once read (null before, or while `on` is false). */
-export function useSavedListing(on: boolean): MediaListing | null {
-  const seen = React.useSyncExternalStore(
-    (fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
-    () => version,
-    () => version,
-  );
+export function useSavedListing(on: boolean, probe = true): MediaListing | null {
+  const seen = useSavedRevision();
   const [raw, setRaw] = React.useState<(FilesListing & { made?: string[] }) | null>(null);
   const [facts, setFacts] = React.useState<ReadonlyMap<string, MediaFacts>>(new Map());
   React.useEffect(() => {
@@ -72,22 +80,49 @@ export function useSavedListing(on: boolean): MediaListing | null {
     window.addEventListener('focus', back);
     return () => window.removeEventListener('focus', back);
   }, [on]);
-  /* each media file's length and size, as a project's are probed */
+  /* Probe a bounded amount at a time. A large library must not enqueue one request per file or keep scanning
+     after its window closes. Visible posters keep priority through media-queue. */
   React.useEffect(() => {
-    for (const f of raw?.files ?? []) {
-      const key = `${f.path}@${f.mtime}`;
-      if (f.saved || !['video', 'audio', 'image'].includes(f.kind) || facts.has(key)) continue;
-      void mediaFetch(media('probe', f.path, f.mtime), undefined, 'background').then((r) => (r.ok ? r.json() : null)).then((probe) => {
-        if (probe) setFacts((m) => new Map(m).set(key, factsOfProbe(probe)));
-      }, () => {});
-    }
-  }, [raw]); // eslint-disable-line react-hooks/exhaustive-deps
-  return React.useMemo(() => (raw ? mediaListingOf(
-    raw,
-    (path) => facts.get(`${path}@${raw.files.find((f) => f.path === path)?.mtime}`),
-    raw.made,
-    SAVED,
-  ) : null), [raw, facts]);
+    if (!on || !probe || !raw) return;
+    let live = true;
+    let next = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const abort = new AbortController();
+    const pending = new Map<string, MediaFacts>();
+    const offline = Object.entries(raw.links ?? {}).filter(([, link]) => link.missing).map(([path]) => path);
+    const flush = () => {
+      clearTimeout(timer);
+      timer = undefined;
+      if (!live || !pending.size) return;
+      const batch = new Map(pending);
+      pending.clear();
+      setFacts(previous => new Map([...previous, ...batch]));
+    };
+    const work = async () => {
+      while (live && next < raw.files.length) {
+        const f = raw.files[next++]!;
+        const key = `${f.path}@${f.mtime}`;
+        if (f.saved || !['video', 'audio', 'image'].includes(f.kind) || facts.has(key)
+          || offline.some(path => f.path === path || f.path.startsWith(`${path}/`))) continue;
+        try {
+          const response = await mediaFetch(media('probe', f.path, f.mtime), { signal: abort.signal }, 'background');
+          const probe = response.ok ? await response.json() : null;
+          if (live && probe) {
+            pending.set(key, factsOfProbe(probe));
+            timer ??= setTimeout(flush, 120);
+          }
+        } catch { /* Offline media stays listed without facts. */ }
+      }
+      if (live) flush();
+    };
+    void Promise.all([work(), work()]);
+    return () => { live = false; abort.abort(); clearTimeout(timer); };
+  }, [raw, on, probe]); // eslint-disable-line react-hooks/exhaustive-deps
+  return React.useMemo(() => {
+    if (!raw) return null;
+    const versions = new Map(raw.files.map(file => [file.path, file.mtime]));
+    return mediaListingOf(raw, path => facts.get(`${path}@${versions.get(path)}`), raw.made, SAVED);
+  }, [raw, facts]);
 }
 
 const result = async (res: Response): Promise<MediaResult> => (res.ok ? 'ok' : res.status === 409 ? recycleRefusalOf(await res.json().catch(() => null)) ?? 'taken' : 'failed');
@@ -98,11 +133,19 @@ export const savedActions = {
   move: async (from: string, to: string) => { const r = await result(await send('PATCH', '/api/saved/files', { from, to })); refreshSaved(); return r; },
   remove: async (path: string) => { const r = await result(await fetch(`/api/saved/files?path=${enc(path)}`, { method: 'DELETE' })); refreshSaved(); return r; },
   newFolder: async (path: string) => { const r = await result(await send('POST', '/api/saved/folders', { path })); refreshSaved(); return r; },
-  reveal: (path: string) => { void send('POST', '/api/saved/reveal', { path }); },
+  reveal: (path: string, original = false) => { void send('POST', '/api/saved/reveal', { path, original }); },
+  relink: async (path: string, to: string) => { const res = await send('POST', '/api/saved/relink', { path, to }); if (!res.ok) throw new Error(String((await res.json()).error)); refreshSaved(); },
   /** Files or folders of this computer (their paths) brought in, taking no room where the disk allows (`auto`), or
    linked where they are kept (`link`). Resolves with where each landed. */
-  bring: async (paths: string[], into: string, mode: 'auto' | 'link' = 'auto'): Promise<string[]> => {
+  bring: async (paths: string[], into: string, mode: 'auto' | 'link' | 'copy' = 'auto'): Promise<string[]> => {
     const r = await send('POST', '/api/saved/files/bring', { paths, into, mode });
+    const body = await r.json().catch(() => ({})) as { landed?: string[]; error?: string };
+    refreshSaved();
+    if (!r.ok) throw new Error(body.error ?? 'failed');
+    return body.landed ?? [];
+  },
+  transfer: async (paths: string[], into: string, mode: 'copy' | 'link'): Promise<string[]> => {
+    const r = await send('POST', '/api/saved/files/transfer', { paths, into, mode });
     const body = await r.json().catch(() => ({})) as { landed?: string[]; error?: string };
     refreshSaved();
     if (!r.ok) throw new Error(body.error ?? 'failed');

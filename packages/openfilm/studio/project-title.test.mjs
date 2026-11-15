@@ -50,7 +50,7 @@ test('project cards open on click and rename in place; desktop tabs keep switchi
     const arrow = title.locator('[data-project-title-arrow]');
     const card = page.locator('[data-project-card]');
     const field = title.getByRole('textbox');
-    const projects = page.getByRole('dialog', { name: 'Projects', exact: true });
+    const projects = page.getByRole('dialog', { name: 'Resource center', exact: true });
     await button.waitFor({ state: 'visible' });
     assert.equal(await arrow.isVisible(), true, 'the project arrow remains available');
     await button.click();

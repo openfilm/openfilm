@@ -123,6 +123,10 @@ export interface StudioHost {
     install?: (id: HostAgentId) => Promise<{ ok: boolean; error?: string }>;
     useAutomatic?: (id: HostAgentId) => Promise<unknown>;
     diagnose?: (id: HostAgentId) => Promise<HostAgentDiagnosis | null>;
+    /** Public vendor metadata only; no installer or model inference is run by a check. */
+    checkUpdates?: (id?: HostAgentId) => Promise<HostAgent[]>;
+    /** Update through the detected installer, or open the owning app's update page. Busy agents queue the update. */
+    update?: (id: HostAgentId) => Promise<{ ok: boolean; external?: boolean; error?: string }>;
     /** Open the installed desktop app to complete its Code component setup. */
     openSetup?: (id: HostAgentId) => Promise<{ ok: boolean; error?: string }>;
     /** The app's part of Settings → Developer's diagnostic report: the app, and each agent's program, version and state, as text. */
@@ -254,6 +258,15 @@ export type HostAgentId = 'openfilm' | 'codex' | 'claude' | 'antigravity' | 'cop
  */
 export interface HostAgentDiagnosis { found: string | null; program?: string; hint: 'chosen-missing' | 'wsl' | 'unusable' | 'none' | null; text: string }
 
+export interface HostAgentUpdate {
+  status: 'unchecked' | 'checking' | 'current' | 'available' | 'unknown' | 'managed' | 'queued' | 'updating' | 'error';
+  version?: string | null;
+  latestVersion?: string | null;
+  checkedAt?: number;
+  error?: string | null;
+  action?: { kind: 'command' | 'link' | 'desktop'; command?: string; url?: string; managed?: boolean } | null;
+}
+
 /** The API a person's own key is for: OpenAI's Responses or Chat Completions, or Anthropic's Messages. */
 export type HostByokFormat = 'responses' | 'chat' | 'anthropic';
 
@@ -267,7 +280,7 @@ export interface HostAgent {
   id: HostAgentId;
   name: string;
   shown: boolean;
-  status: 'ready' | 'off' | 'sign-in' | 'waiting' | 'missing' | 'key' | 'unavailable' | 'checking';
+  status: 'ready' | 'off' | 'sign-in' | 'waiting' | 'missing' | 'key' | 'unavailable' | 'offline' | 'checking';
   install?: string | null;
   /** What installing it takes, when `install` is not a download: 'code-tab', Claude Code comes with the Claude app (its Code tab). */
   setupRequired?: string | null;
@@ -288,6 +301,7 @@ export interface HostAgent {
   problem?: string;
   /** Older than the chat was tried with (Claude Code): its version, the one tried, the command that updates it, and `app` when its app updates it. */
   outdated?: { version: string; tested: string; update: string | null; app?: boolean } | null;
+  update?: HostAgentUpdate;
   account?: HostAgentAccount;
   /** It signs out with its own command, so the app can switch its account (`agents.switchAccount`); else that is done in the agent itself. */
   signOut?: boolean;
