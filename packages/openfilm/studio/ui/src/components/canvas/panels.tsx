@@ -8,7 +8,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  ArrowUp, ArrowUpRight, Camera, ChevronLeft, ChevronRight, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb, Timer, GalleryHorizontal,
+  ArrowUp, ArrowUpRight, Camera, ChevronLeft, ChevronRight, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb, GalleryHorizontal,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -383,17 +383,17 @@ function LengthPicker({ value, range, only, onChange }: { value: number; range: 
   const pct = (n: number) => `${(n / end) * 100}%`;
   const makes = (n: number) => (only?.length ? only.includes(n) : n >= range[0] && n <= range[1]);
   return (
-    <div className="w-[360px] px-4 pb-3 pt-3.5">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-[13px] text-[var(--cv-ink-2)]">{t('canvas.make.length')}</span>
-        <label className="flex h-9 items-baseline gap-1 rounded-[10px] bg-[var(--cv-chip)] px-3 pt-[5px] focus-within:ring-1 focus-within:ring-[var(--cv-ring)]">
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[11.5px] text-[var(--cv-ink-3)]">{t('canvas.make.length')}</span>
+        <label className="flex h-8 items-baseline gap-1 rounded-[9px] bg-[var(--cv-chip)] px-2.5 pt-[5px] focus-within:ring-1 focus-within:ring-[var(--cv-ring)]">
           <input value={typed ?? String(value)} inputMode="numeric" aria-label={t('canvas.make.length')}
             onChange={(event) => setTyped(event.target.value.replace(/\D/g, '').slice(0, 3))} onBlur={commit}
             onKeyDown={(event) => {
               if (event.key === 'Enter') { event.preventDefault(); commit(); }
               else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); setTyped(null); step(event.key === 'ArrowUp' ? 1 : -1); }
             }}
-            className="w-9 bg-transparent text-right text-[17px] font-semibold tabular-nums text-[var(--cv-ink)] outline-none" />
+            className="w-8 bg-transparent text-right text-[15px] font-semibold tabular-nums text-[var(--cv-ink)] outline-none" />
           <span className="text-[12px] text-[var(--cv-ink-3)]">{t('canvas.make.secondsUnit')}</span>
         </label>
       </div>
@@ -817,7 +817,10 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const modes = data.make === 'video' ? modesFor(model) : [];
   const mode = data.make === 'video' ? modeOf(data.opts, model, pictureCount, inputs.some((i) => i.media === 'video'), inputs.some((i) => i.media === 'audio')) : null;
   /* the ways shown: what the model makes, its references once (everything it takes, when it takes more than pictures) */
-  const ways = (['text', 'first', 'firstLast', 'omni', 'refs'] as const).filter((m) => modes.includes(m) && !(m === 'refs' && modes.includes('omni')));
+  const references = modes.includes('omni') ? 'omni' : modes.includes('refs') ? 'refs' : null;
+  /* words alone is a way of its own only for a model that takes nothing else: with references, it is references with none */
+  const ways = (['text', 'first', 'firstLast', 'omni', 'refs'] as const).filter((m) => modes.includes(m) && !(m === 'refs' && references === 'omni') && !(m === 'text' && references));
+  const shownMode = mode === 'text' && references ? references : mode;
   const takes = ([
     ['image', model?.refs], ['video', modes.includes('omni') ? model?.clip : 0], ['audio', modes.includes('omni') ? model?.voice : 0],
   ] as const).filter(([, max]) => Boolean(max)).map(([kind, max]) => `${t(`canvas.history.kinds.${kind}`)} ×${Number(max)}`).join(' · ');
@@ -846,7 +849,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const size = sizes ? (data.opts?.size && sizes.includes(data.opts.size) ? data.opts.size : sizes.find((z) => z === '1k' || z === '720p') ?? sizes.find((z) => z === '768p') ?? sizes[0]!) : null;
   const count = data.opts?.count ?? 1;
   const spec = [data.opts?.format && model?.formats?.includes(data.opts.format) ? data.opts.format.toUpperCase() : null, ratios ? ratio : null, quality ? t(`canvas.make.qualities.${quality}`) : null, size ? size.toUpperCase() : null,
-    lengths && sec !== null && data.make !== 'video' ? t('canvas.make.seconds').replace('{n}', String(sec)) : null,
+    lengths && sec !== null ? t('canvas.make.seconds').replace('{n}', String(sec)) : null,
     t(data.make === 'image' ? 'canvas.make.countPictures' : 'canvas.make.countOthers').replace('{n}', String(count))].filter(Boolean).join(' · ');
   const acceptsAudio = data.make === 'video' && (model?.voice || model?.needs === 'audio');
   const assetRows = board.files.filter((f) => (f.kind === 'image' || (data.make === 'video' && f.kind === 'video') || (acceptsAudio && f.kind === 'audio'))
@@ -1153,14 +1156,14 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             <Popover open={open === 'mode'} onOpenChange={(v) => setOpen(v ? 'mode' : null)} placement="top"
               trigger={(
                 <button type="button" className={PICK} onClick={() => setOpen(open === 'mode' ? null : 'mode')}>
-                  {React.createElement(MODE_ICONS[mode], { size: 14 })}<span className="truncate">{t(`canvas.modes.${mode}`)}</span><ChevronDown size={13} />
+                  {React.createElement(MODE_ICONS[shownMode!], { size: 14 })}<span className="truncate">{t(`canvas.modes.${shownMode}`)}</span><ChevronDown size={13} />
                 </button>
               )}>
               <div className={`w-[232px] p-1 ${CARD}`}>
                 <div className="flex h-7 items-center px-2 text-[12px] text-[var(--cv-ink-3)]">{t('canvas.modes.title')}</div>
                 {/* only the ways this model makes a clip; its references as one, saying what it takes */}
                 {ways.map((m) => {
-                  const on = m === mode || (m === 'omni' && mode === 'refs') || (m === 'refs' && mode === 'omni');
+                  const on = m === shownMode || (m === 'omni' && shownMode === 'refs') || (m === 'refs' && shownMode === 'omni');
                   return (
                     <button key={m} type="button" onClick={() => { setOpts({ mode: m, frames: undefined }); setOpen(null); }}
                       className={`flex w-full items-center gap-2.5 rounded-[10px] px-2 py-1.5 text-left text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)] ${on ? 'bg-[var(--cv-float-hover)]' : ''}`}>
@@ -1174,16 +1177,6 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                   );
                 })}
               </div>
-            </Popover>
-          ) : null}
-          {data.make === 'video' && range && sec !== null ? (
-            <Popover open={open === 'length'} onOpenChange={(v) => setOpen(v ? 'length' : null)} placement="top"
-              trigger={(
-                <button type="button" className={`${PICK} tabular-nums`} onClick={() => setOpen(open === 'length' ? null : 'length')}>
-                  <Timer size={14} /><span>{t('canvas.make.seconds').replace('{n}', String(sec))}</span><ChevronDown size={13} />
-                </button>
-              )}>
-              <div className={CARD}><LengthPicker value={sec} range={range} only={model?.only} onChange={(n) => setOpts({ sec: n })} /></div>
             </Popover>
           ) : null}
           {spec ? (
@@ -1255,6 +1248,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                   {lengths && sec !== null && data.make !== 'video' ? (
                     <Choices title={t('canvas.make.length')} columns={Math.min(6, lengths.length)} items={lengths.map((n) => ({ key: String(n), label: t('canvas.make.seconds').replace('{n}', String(n)), on: n === sec, pick: () => setOpts({ sec: n }) }))} />
                   ) : null}
+                  {data.make === 'video' && range && sec !== null ? <LengthPicker value={sec} range={range} only={model?.only} onChange={(n) => setOpts({ sec: n })} /> : null}
                   <Choices title={t('canvas.make.count')} columns={3} items={MAKE_COUNTS.map((c) => ({ key: String(c), label: t(data.make === 'image' ? 'canvas.make.countPictures' : 'canvas.make.countOthers').replace('{n}', String(c)), on: c === count, pick: () => setOpts({ count: c > 1 ? c : undefined }) }))} />
                 </div>
               </Popover>

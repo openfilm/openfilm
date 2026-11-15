@@ -23,7 +23,7 @@ import {
   type Connection, type Edge, type FinalConnectionState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Clapperboard, Download, FolderSearch, LayoutTemplate, Maximize2, MousePointerClick, Play, Plus, Sparkles, Square, Upload, UserRound } from 'lucide-react';
+import { Clapperboard, Download, FolderSearch, LayoutTemplate, Maximize2, MousePointerClick, Play, Plus, Scissors, Sparkles, Square, Upload, UserRound } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { ApiError, api, projectEvents, type CanvasBoard, type CanvasCharacter, type SubjectKind } from '@/api';
 import { BoardSwitcher, boardName, nextBoardName } from './boards';
@@ -135,6 +135,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   const [editing, setEditing] = React.useState<string | null>(null);
   const [menu, setMenu] = React.useState<MenuAt | null>(null);
   const [context, setContext] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
+  /** a wire clicked: where, so a button there cuts it */
+  const [cutAt, setCutAt] = React.useState<{ id: string; x: number; y: number } | null>(null);
   /** the board's last press, for a double click on it */
   const boardPress = React.useRef<{ at: number; x: number; y: number } | null>(null);
   const [tool, setTool] = React.useState<'select' | 'hand'>('select');
@@ -1595,6 +1597,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (modal || redraw || pictureTool || target.closest('[role="dialog"]')) { if (target === document.body) event.stopPropagation(); return; }
     if (viewing) { if (event.key === 'Escape') { event.preventDefault(); setViewing(null); } return; }
     if (picking && event.key === 'Escape') { event.preventDefault(); setPicking(null); return; }
+    if (cutAt && event.key === 'Escape') { event.preventDefault(); setCutAt(null); return; }
     if (target.closest('input, textarea, [contenteditable="true"], [data-canvas-video-controls], [data-canvas-title]')) return;
     const mod = event.metaKey || event.ctrlKey;
     const key = event.key.toLowerCase();
@@ -1836,10 +1839,18 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           connectOnClick={false}
           onNodeContextMenu={nodeMenu}
           onPaneContextMenu={paneMenu}
-          onEdgeContextMenu={edgeMenu}
+          onEdgeContextMenu={(event, edge) => { setCutAt(null); edgeMenu(event, edge); }}
+          /* a wire clicked: a button to cut it, where it was clicked */
+          onEdgeClick={(event, edge) => {
+            if (board.readOnly) return;
+            const box = rootRef.current?.getBoundingClientRect();
+            if (box) setCutAt({ id: edge.id, x: event.clientX - box.left, y: event.clientY - box.top });
+          }}
+          onMoveStart={() => setCutAt(null)}
           /* a click on the board or on another node: done writing */
-          onPaneClick={() => { setContext(null); setEditing(null); }}
+          onPaneClick={() => { setContext(null); setEditing(null); setCutAt(null); }}
           onNodeClick={(event, node) => {
+            setCutAt(null);
             if (editing && editing !== node.id) setEditing(null);
             if (!picking) {
               if (!event.shiftKey && !event.metaKey && !event.ctrlKey && node.type !== 'frame' && !(event.target as Element).closest('[data-canvas-node-header]')) keepShown(node.id);
@@ -2022,6 +2033,13 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           />
         ) : null}
         {context ? <ContextMenu canvas x={context.x} y={context.y} items={context.items} onClose={() => setContext(null)} /> : null}
+        {cutAt && edges.some((e) => e.id === cutAt.id) ? (
+          <button type="button" aria-label={t('canvas.removeWire')} title={t('canvas.removeWire')}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => { willChange(); setEdges((list) => list.filter((e) => e.id !== cutAt.id)); setCutAt(null); }}
+            className="cv-pop absolute z-30 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)] transition hover:bg-[#e5484d] hover:text-white"
+            style={{ left: cutAt.x, top: cutAt.y }}><Scissors size={15} /></button>
+        ) : null}
         {viewed ? <Viewer file={viewed} sources={sources} onClose={() => setViewing(null)} /> : null}
         {!fitted ? <CanvasLoading /> : null}
         <input ref={pickerRef} type="file" multiple hidden />
