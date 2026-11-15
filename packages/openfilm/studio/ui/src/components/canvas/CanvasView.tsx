@@ -820,6 +820,9 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       return made;
     })();
   };
+  /** making as the board is now (a step that waits — for a file to be listed — makes with what it then knows) */
+  const makeLatest = React.useRef(makeNow);
+  makeLatest.current = makeNow;
   /**
    * Everything a group makes, in the order its wires say: what feeds another is made first, and what waits for it is
    * made after it, with it. What is made already and has not changed since is left (and so is what only it feeds); what
@@ -1235,7 +1238,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     setClipAI(null);
     await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
     void flow.fitView({ nodes: [{ id: sourceId }, { id }], padding: 0.2, maxZoom: 1, duration: 300 });
-    void makeNow(id);
+    void makeLatest.current(id);
   };
   /** a clip's shots, a still where each begins, laid out in a group beside it as wide as the clip */
   const layShots = async (sourceId: string, path: string) => {
