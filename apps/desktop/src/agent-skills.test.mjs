@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { codexServers, mergeConfig, ownMcpServers, ownSkills, sessionSkills, skillStore } from './agent-skills.mjs';
+
+/* a project's own skills reach no agent until the person allows them there (openfilm/skills allowProjectSkill) */
+const { allowProjectSkill, listSkills } = await import(pathToFileURL(createRequire(import.meta.url).resolve('openfilm/skills')).href);
 
 /* which skills are off is read from Studio's prefs.json: a scratch home, never the person's */
 process.env.OPENFILM_HOME = mkdtempSync(join(tmpdir(), 'of-agent-skills-home-'));
@@ -61,6 +66,9 @@ function world() {
   const openfilmHome = join(home, '.openfilm');
   skill(join(project, 'skills', 'brand'), 'brand');
   skill(join(openfilmHome, 'skills', 'lyric-pv'), 'lyric-pv');
+  /* the project's brand let in by the person, in the Studio home each test reads (the scratch one, or this world's) */
+  const brand = listSkills({ project }).find((s) => s.source === 'project');
+  for (const prefs of [undefined, openfilmHome]) allowProjectSkill(brand, project, true, prefs);
   return { root, home, project, openfilmHome, dataDir: join(root, 'data') };
 }
 
