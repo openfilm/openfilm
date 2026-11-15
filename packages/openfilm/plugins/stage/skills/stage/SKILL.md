@@ -82,6 +82,20 @@ import { mannequin, apply, stand, walk, run, sit, turn, mix, move, lookAt, point
   `ana.root.position.set(lerp(fx, sx, k), 0, lerp(fz, sz, k)); apply(ana, sit(k))` with `k = progress(t, a, a + 1)`.
 - Names stay the same from frame to frame: the person's references and `look` find figures by them.
 
+## Models
+
+When boxes are not enough (a car that must read as a car, a person who must look like one), place glTF files of the
+project (`.glb`, kept under `assets/models/`):
+
+- `model(scene, 'assets/models/car.glb', { name, at, turn, height })`: placed at once, filled once loaded; `height` in
+  meters scales it to size.
+- `const kim = character(scene, 'assets/models/person.glb', { name: 'kim', height: 1.7 })`: a rigged person with
+  animations, a figure like a mannequin (`move` and look work on it). In `frame`, `kim.act([{ clip: 'Walk', time: d / 1.4
+  }])` poses it (two at once with `weight`s to blend); `kim.clips` names what it has once loaded.
+- A shot that places models returns `ready: loaded()` (as the example does), so nothing is drawn before they load.
+- Only files the person gave, or free to use with no conditions (CC0: Quaternius, Kenney, Poly Haven); never Mixamo's
+  characters or animations. Ask before downloading anything. `lookAt`, `point` and the pose video are the mannequin's.
+
 ## The camera
 
 - One continuous move per shot, eased (`progress`): a push in, a pull out, a pan that follows, a slow arc, a crane up.
@@ -96,7 +110,12 @@ import { mannequin, apply, stand, walk, run, sit, turn, mix, move, lookAt, point
 ## Changes the person asks for
 
 "Lower", "slower", "she stops at the window", "another shot from outside": change the numbers in shot.js that do it,
-look, and say what changed with a link to the moment (`[at 3 s](stage/s1/index.html#t=3)`). Another shot of the same
+look, and say what changed with a link to the moment (`[at 3 s](stage/s1/index.html#t=3)`).
+
+The person may also drag in the stage's workbench, which puts a reference in their message: "In the stage, at 3 s,
+ana was dragged from x −1.13 z −2.01 to x 0.4 z −1.2" (or the camera, x y z). Make the shot put that thing there at
+that moment, and keep the rest of its move continuous: move the nearest point of its path, or its timing; for the
+camera, the key of its move nearest that moment. Then look, and answer with a link to the moment. Another shot of the same
 place: move the set into `stage/<place>.js` exported as a function both shots call, rather than copying it.
 
 ## From the white box to video

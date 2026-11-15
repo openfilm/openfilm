@@ -23,6 +23,7 @@ try {
   const { shot } = await import(`../${name}/shot.js`);
   film = shot({ pass: 'beauty' });
   if (!film?.scene || !film.camera) throw new Error('shot.js gives no scene or camera');
+  await (typeof film.ready === 'function' ? film.ready() : film.ready);
 } catch (e) {
   say({ failed: e instanceof Error ? e.message : String(e) });
   throw e;
@@ -37,6 +38,13 @@ const state = { time: 0, playing: false, moved: [], live: null };
 const figures = [];
 scene.traverse((o) => { if (o.userData?.figure) figures.push(o); });
 const inFigure = (o) => { for (let p = o; p; p = p.parent) if (p.userData?.figure) return p; return null; };
+/** Where a figure stands: a mannequin at its root, a character from a model where its body is (its animation may move it). */
+const box = new THREE.Box3();
+const whereOf = (f) => {
+  if (f.getObjectByName(`${f.name}-pelvis`)) return f.getWorldPosition(new THREE.Vector3());
+  box.setFromObject(f);
+  return box.isEmpty() ? f.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2);
+};
 const colorOf = (f) => { let c = '#d9824b'; f.traverse((o) => { if (o.isMesh && o.material?.color) c = `#${o.material.color.getHexString()}`; }); return c; };
 
 /** The shot at the moment asked, with what was dragged at that moment where it was put. */
@@ -180,7 +188,7 @@ if (mode === 'above') {
   paths = { figures: figures.map((f) => ({ name: f.name, color: colorOf(f), points: [] })), camera: [], solids: [] };
   for (let i = 0; i <= n; i++) {
     film.frame((film.duration - FRAME) * (i / n));
-    figures.forEach((f, k) => { const p = f.getWorldPosition(new THREE.Vector3()); paths.figures[k].points.push([p.x, p.z]); });
+    figures.forEach((f, k) => { const p = whereOf(f); paths.figures[k].points.push([p.x, p.z]); });
     const c = camera.getWorldPosition(new THREE.Vector3());
     paths.camera.push([c.x, c.z]);
   }
@@ -234,7 +242,7 @@ function plan() {
     : state.playing ? null : state.moved.find((m) => m.kind === kind && m.name === n && near(m.t, state.time)));
   g.font = '11px -apple-system, system-ui, sans-serif';
   for (const f of figures) {
-    const p = f.getWorldPosition(new THREE.Vector3());
+    const p = whereOf(f);
     const m = placed('figure', f.name);
     const [px, py] = at(m ? m.to[0] : p.x, m ? m.to[2] : p.z);
     const color = colorOf(f);

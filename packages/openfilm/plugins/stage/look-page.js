@@ -11,6 +11,7 @@ export async function lookInPage({ times, from, to, step }) {
   let stages = [];
   try { ({ stages } = await import(new URL('../lib/stage.js', location.href).href)); } catch { /* a shot of its own making */ }
   const film = /** @type {any} */ (window).film;
+  await (typeof film.ready === 'function' ? film.ready() : film.ready);
   const { scene, camera, frame } = film;
   if (!scene || !camera) throw new Error('the shot gives no scene or camera: shot.js returns { frame, duration, scene, camera }');
   const view = /** @type {HTMLCanvasElement} */ (document.querySelector('canvas'));
@@ -41,7 +42,20 @@ export async function lookInPage({ times, from, to, step }) {
   const head = new THREE.Vector3(), feet = new THREE.Vector3(), top = new THREE.Vector3();
   const ndc = new THREE.Vector3();
   const onScreen = (p) => { ndc.copy(p).project(camera); return ndc.z < 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1; };
-  const headOf = (fig) => { const h = fig.getObjectByName(`${fig.name}-head`); if (h) h.getWorldPosition(head); else head.copy(fig.position).setY(1.6); return head; };
+  /* a mannequin (mannequin.js) is where its root is, its head its head; any other figure (a character from a model,
+     its animation moving it inside) where its body is: the middle of its feet, and near the top of it */
+  const body = new THREE.Box3();
+  const feetOf = (fig) => {
+    if (fig.getObjectByName(`${fig.name}-pelvis`)) return fig.getWorldPosition(feet);
+    body.setFromObject(fig);
+    return body.isEmpty() ? fig.getWorldPosition(feet) : feet.set((body.min.x + body.max.x) / 2, body.min.y, (body.min.z + body.max.z) / 2);
+  };
+  const headOf = (fig) => {
+    const h = fig.getObjectByName(`${fig.name}-head`);
+    if (h) return h.getWorldPosition(head);
+    body.setFromObject(fig);
+    return body.isEmpty() ? head.copy(fig.position).setY(1.6) : head.set((body.min.x + body.max.x) / 2, body.max.y - 0.12, (body.min.z + body.max.z) / 2);
+  };
 
   // the whole length, a sample every `step` seconds
   const samples = [];
@@ -64,7 +78,7 @@ export async function lookInPage({ times, from, to, step }) {
     const [blockedBy, rays] = [...close].sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
     const s = { t: Math.min(t, to), camera: { at: cam.toArray(), fov: camera.fov, heading: Math.atan2(dir.x, dir.z), pitch: Math.asin(dir.y), inside: inside ? nameOf(inside) : null, blocked: blockedBy ? { by: blockedBy, share: rays / 35 } : null }, figures: {} };
     for (const fig of figures) {
-      fig.getWorldPosition(feet);
+      feetOf(fig);
       headOf(fig);
       top.copy(head).setY(head.y + 0.13);
       const visible = onScreen(head) || onScreen(feet.clone().setY(feet.y + 0.9));

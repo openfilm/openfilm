@@ -55,6 +55,7 @@ async function bakeInPage(/** @type {{ exporter: string, fps: number, from: numb
   const THREE = await import(new URL('../lib/three.module.min.js', location.href).href);
   const { GLTFExporter } = await import(exporter);
   const film = /** @type {any} */ (window).film;
+  await (typeof film.ready === 'function' ? film.ready() : film.ready);
   const { scene, camera, frame } = film;
   if (!scene || !camera) throw new Error('the shot gives no scene or camera: shot.js returns { frame, duration, scene, camera }');
   if (!camera.parent) scene.add(camera);

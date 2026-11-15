@@ -14,7 +14,8 @@ import { projectAround } from '../../src/skills-cli.mjs';
 /** This plugin's folder. */
 export const PLUGIN = dirname(fileURLToPath(import.meta.url));
 /** What `stage/lib/` holds, from the plugin's `lib/`. */
-export const LIB = ['three.module.min.js', 'three.core.min.js', 'three.LICENSE', 'stage.js', 'mannequin.js', 'viewer.html', 'viewer.js'];
+export const LIB = ['three.module.min.js', 'three.core.min.js', 'three.LICENSE', 'stage.js', 'mannequin.js', 'viewer.html', 'viewer.js',
+  'addons/loaders/GLTFLoader.js', 'addons/utils/BufferGeometryUtils.js', 'addons/utils/SkeletonUtils.js'];
 /** A shot's name: what its folder is called. */
 export const NAME = /^[a-z0-9][a-z0-9-]{0,47}$/;
 
@@ -60,6 +61,7 @@ export function copyLib(project) {
   const copied = [];
   for (const file of LIB) {
     if (existsSync(join(dir, file))) continue;
+    mkdirSync(dirname(join(dir, file)), { recursive: true });
     copyFileSync(join(PLUGIN, 'lib', file), join(dir, file));
     copied.push(`stage/lib/${file}`);
   }

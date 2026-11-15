@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Shot</title>
-<script type="importmap">{ "imports": { "three": "../lib/three.module.min.js" } }</script>
+<script type="importmap">{ "imports": { "three": "../lib/three.module.min.js", "three/addons/": "../lib/addons/" } }</script>
 <style>html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }</style>
 </head>
 <body>
@@ -13,6 +13,7 @@ import { shot } from './shot.js';
 window.film = shot({ pass: new URLSearchParams(location.search).get('pass') || 'beauty' });
 // opened on its own, outside OpenFilm: it plays, round and round
 if (!window.filmHost) {
+  await film.ready;
   const start = performance.now();
   const play = () => { film.frame(((performance.now() - start) / 1000) % film.duration); requestAnimationFrame(play); };
   play();

@@ -133,7 +133,7 @@ export function passPage(project, shot, pass) {
 <head>
 <meta charset="utf-8">
 <title>${pass}</title>
-<script type="importmap">{ "imports": { "three": "${url(join(project, 'stage', 'lib', 'three.module.min.js'))}" } }</script>
+<script type="importmap">{ "imports": { "three": "${url(join(project, 'stage', 'lib', 'three.module.min.js'))}", "three/addons/": "${url(join(project, 'stage', 'lib', 'addons'))}/" } }</script>
 <style>html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }</style>
 </head>
 <body>
@@ -141,6 +141,7 @@ export function passPage(project, shot, pass) {
 // stage/${shot.name} drawn as its ${pass}: written by \`openfilm stage render --${pass}\`, made again each time.
 import { shot } from '${url(join(shot.dir, 'shot.js'))}';
 const film = shot({ pass: '${pass}' });
+await (typeof film.ready === 'function' ? film.ready() : film.ready);
 ${code.trim()}
 </script>
 </body>

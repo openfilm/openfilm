@@ -1,6 +1,6 @@
 // A shot: the set, who moves how, and the camera, each a function of t (seconds). Written by `openfilm stage new`;
 // rewrite all of it. Meters, y up; the room's open side is +z, where the camera starts.
-import { createStage, room, box, lerp, progress } from '../lib/stage.js';
+import { createStage, room, box, lerp, progress, loaded } from '../lib/stage.js';
 import { mannequin, apply, walk, move, lookAt } from '../lib/mannequin.js';
 
 const DURATION = 6;
@@ -30,5 +30,5 @@ export function shot({ pass = 'beauty' } = {}) {
     camera.lookAt(lerp(-0.6, ana.root.position.x, k), lerp(1.1, 1.3, k), lerp(-2, ana.root.position.z, k));
     draw();
   }
-  return { frame, duration: DURATION, scene, camera };
+  return { frame, duration: DURATION, scene, camera, ready: loaded() };
 }

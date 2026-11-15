@@ -1,7 +1,7 @@
 // The stage plugin (plugins/stage): its figures' poses, and its commands new, look and render in a project.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { register } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -170,6 +170,49 @@ test('stage look says what a shot that fails to start said', () => {
   const looked = stage('look', 's2');
   assert.equal(looked.status, 1);
   assert.match(looked.stdout, /✗ stage\/s2 did not start: .*the set fell over/);
+});
+
+test('a shot places glTF models and plays a character\'s animation, drawn only once they loaded', () => {
+  /* a triangle, and an animation `move` taking it from x 0 to x 2 over a second */
+  const floats = new Float32Array([0, 0, 0, 0.5, 0, 0, 0, 1.7, 0, /* times */ 0, 1, /* places */ 0, 0, 0, 2, 0, 0]);
+  const gltf = {
+    asset: { version: '2.0' },
+    buffers: [{ byteLength: floats.byteLength, uri: `data:application/octet-stream;base64,${Buffer.from(floats.buffer).toString('base64')}` }],
+    bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 36 }, { buffer: 0, byteOffset: 36, byteLength: 8 }, { buffer: 0, byteOffset: 44, byteLength: 24 }],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 3, type: 'VEC3', min: [0, 0, 0], max: [0.5, 1.7, 0] },
+      { bufferView: 1, componentType: 5126, count: 2, type: 'SCALAR', min: [0], max: [1] },
+      { bufferView: 2, componentType: 5126, count: 2, type: 'VEC3' },
+    ],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+    nodes: [{ name: 'body', mesh: 0 }],
+    scenes: [{ nodes: [0] }], scene: 0,
+    animations: [{ name: 'move', samplers: [{ input: 1, output: 2 }], channels: [{ sampler: 0, target: { node: 0, path: 'translation' } }] }],
+  };
+  mkdirSync(join(project, 'assets/models'), { recursive: true });
+  writeFileSync(join(project, 'assets/models/tri.gltf'), JSON.stringify(gltf));
+  assert.equal(stage('new', 'models').status, 0);
+  writeFileSync(join(project, 'stage/models/shot.js'), `import { createStage, ground, loaded, model, character } from '../lib/stage.js';
+export function shot({ pass = 'beauty' } = {}) {
+  const { scene, camera, draw } = createStage({ pass });
+  ground(scene);
+  const kim = character(scene, 'assets/models/tri.gltf', { name: 'kim' });
+  model(scene, 'assets/models/tri.gltf', { name: 'post', at: [-2, 0, 0], height: 3.4 });
+  function frame(t) {
+    kim.act([{ clip: 'move', time: Math.min(t, 0.999) }]);
+    camera.position.set(1, 1.5, 8);
+    camera.lookAt(1, 1, 0);
+    draw();
+  }
+  return { frame, duration: 2, scene, camera, ready: loaded() };
+}
+`);
+  const looked = stage('look', 'models', '--json');
+  assert.equal(looked.status, 0, looked.stderr + looked.stdout);
+  const { shots } = JSON.parse(looked.stdout);
+  const kim = shots[0].samples.map((/** @type {any} */ s) => s.figures.kim.at[0]);
+  assert.ok(Math.abs(kim[0]) < 0.01 && kim.at(-1) > 1.9, `kim moved from ${kim[0]} to ${kim.at(-1)}`);
+  assert.deepEqual(shots[0].problems.camera, []);
 });
 
 test('stage render draws a shot, or a stretch of it, as a video beside it', () => {

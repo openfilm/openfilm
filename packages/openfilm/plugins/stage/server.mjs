@@ -44,8 +44,9 @@ export default (studio) => ({
   'GET /projects/:project/shots': async ({ params }) => {
     const { path } = await studio.project(params.project);
     const dir = join(path, 'stage');
-    /* the workbench draws a shot through stage/lib/viewer.html: a project whose shots came before it gets it */
-    if (existsSync(dir) && !existsSync(join(dir, 'lib', 'viewer.js'))) copyLib(path);
+    /* the workbench draws a shot through stage/lib/viewer.html, and shots load models with its addons: a project whose
+       shots came before them gets them */
+    if (existsSync(dir) && !existsSync(join(dir, 'lib', 'addons', 'loaders', 'GLTFLoader.js'))) copyLib(path);
     let names = [];
     try { names = readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory() && e.name !== 'lib' && existsSync(join(dir, e.name, 'index.html'))).map((e) => e.name).sort(); } catch { /* none */ }
     return {

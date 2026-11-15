@@ -2,6 +2,8 @@
 // from. Copied into a project's stage/lib/ by `openfilm stage new`; the project's copy is the project's to change.
 // Everything is in meters, y up; a figure facing +z faces the open side of a room, where the camera usually is.
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneRigged } from 'three/addons/utils/SkeletonUtils.js';
 
 /** Every stage made on this page, for the tools that look at a shot (`openfilm stage look`) to draw with its renderer. */
 export const stages = [];
@@ -175,3 +177,77 @@ export const lerp = (a, b, k) => a + (b - a) * k;
 export const ease = (x) => { const k = clamp01(x); return k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2; };
 /** How far `t` is from `start` to `end`, 0–1, eased in and out. */
 export const progress = (t, start, end) => ease((t - start) / (end - start));
+
+/* ---- models: glTF files of the project (.glb, .gltf), loaded before the first frame ---- */
+
+/** The project's folder, as this file is in its stage/lib/. */
+const ROOT = new URL('../../', import.meta.url);
+const pending = [];
+const files = new Map();
+const loader = new GLTFLoader();
+
+/** A glTF file of the project (a path from its folder), loaded once however many times it is placed. */
+function gltf(path) {
+  if (!files.has(path)) files.set(path, loader.loadAsync(new URL(path, ROOT).href));
+  return files.get(path);
+}
+
+/** Everything placed so far has loaded: a shot returns `ready: loaded()` once it has placed its models. */
+export const loaded = () => Promise.all(pending).then(() => undefined);
+
+/**
+ * A model from a glTF file of the project, `path` from its folder (`assets/models/chair.glb`): placed at once as an
+ * empty group named `name`, filled once it loads (before the first frame, when the shot returns `ready: loaded()`).
+ * `at` [x, y, z] is the middle of its bottom; `height` (meters) scales it to that height, else `scale`; `turn` around y.
+ * Every part casts and takes shadows. @returns {THREE.Group}
+ */
+export function model(parent, path, { name = path.split('/').pop().replace(/\.[^.]+$/, ''), at = [0, 0, 0], turn = 0, height, scale = 1 } = {}) {
+  const group = new THREE.Group();
+  group.name = name;
+  group.position.fromArray(at);
+  group.rotation.y = turn;
+  parent.add(group);
+  pending.push(gltf(path).then(({ scene }) => {
+    const copy = cloneRigged(scene);
+    copy.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
+    const box = new THREE.Box3().setFromObject(copy);
+    const size = box.getSize(new THREE.Vector3());
+    const k = height ? height / Math.max(1e-6, size.y) : scale;
+    copy.scale.setScalar(k);
+    /* standing on `at`, centered on it */
+    copy.position.set(-(box.min.x + size.x / 2) * k, -box.min.y * k, -(box.min.z + size.z / 2) * k);
+    group.add(copy);
+  }));
+  return group;
+}
+
+/**
+ * A rigged character from a glTF file with animations (`assets/models/person.glb`), as a figure: `{ root, clips, act }`,
+ * `root` placed and moved like a mannequin's (`move` works on it), marked a figure for look and the workbench.
+ * `act([{ clip, time, weight }])` poses it: each named animation at `time` seconds into it (loop it with `%`),
+ * weights mixing them; the same arguments give the same pose. `clips` are the names it has, once loaded.
+ */
+export function character(parent, path, { name, at = [0, 0, 0], turn = 0, height, scale = 1 } = {}) {
+  const root = model(parent, path, { name, at, turn, height, scale });
+  root.userData.figure = true;
+  const it = { name: root.name, root, clips: [], mixer: null, actions: new Map(), act };
+  pending.push(gltf(path).then(({ animations }) => {
+    it.mixer = new THREE.AnimationMixer(root);
+    it.clips = animations.map((a) => a.name);
+    for (const clip of animations) it.actions.set(clip.name, it.mixer.clipAction(clip));
+  }));
+  function act(list) {
+    if (!it.mixer) return;
+    for (const a of it.actions.values()) a.weight = 0;
+    for (const { clip, time = 0, weight = 1 } of list) {
+      const a = it.actions.get(clip);
+      if (!a) continue;
+      a.enabled = true;
+      a.play();
+      a.weight = weight;
+      a.time = time % a.getClip().duration;
+    }
+    it.mixer.update(0);
+  }
+  return it;
+}

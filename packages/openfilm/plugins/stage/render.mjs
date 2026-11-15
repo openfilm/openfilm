@@ -102,8 +102,9 @@ async function still(project, entry, t, out) {
     const tab = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
     await tab.goto(`${site.url}/${entry}`);
     await tab.waitForFunction(() => /** @type {any} */ (window).film?.frame, null, { timeout: 20_000 });
-    const png = await tab.evaluate((at) => {
+    const png = await tab.evaluate(async (at) => {
       const film = /** @type {any} */ (window).film;
+      await (typeof film.ready === 'function' ? film.ready() : film.ready);
       film.frame(Math.min(at, film.duration - 1 / 24));
       return /** @type {HTMLCanvasElement} */ (document.querySelector('canvas')).toDataURL('image/png');
     }, t);
