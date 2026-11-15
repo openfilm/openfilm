@@ -281,8 +281,8 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
       {/* its uid, owner/name: how it is told apart, shared and searched */}
       <p className="mt-4 truncate font-mono text-[12px] text-[var(--text-faint)]" title={skill.uid}>{skill.uid}</p>
       </ForDevelopers>
-      {/* one not OpenFilm's own can be reported: what it is named, by email (SECURITY.md) */}
-      {ownerOf(skill) !== 'openfilm' && skill.source !== 'mine' ? (
+      {/* one from the community (not OpenFilm's, not the person's, not the project's) can be reported: by email, naming it (SECURITY.md) */}
+      {ownerOf(skill) !== 'openfilm' && skill.source !== 'mine' && skill.source !== 'project' ? (
         <a href={`mailto:support@openfilm.dev?subject=${encodeURIComponent(`Report ${skill.uid}`)}`}
           className="mt-4 inline-flex items-center gap-1.5 text-[13.5px] text-[var(--text-faint)] transition hover:text-[var(--text)]">
           <Flag size={13} aria-hidden />{t('gallery.report')}
