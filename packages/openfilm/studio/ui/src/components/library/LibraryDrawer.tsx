@@ -1,7 +1,7 @@
 /**
  * The assets drawer's library (in the app's panel, over the chat, its composer under it), laid out as an editor's
  * library is: the categories along the top — the media (the project's and Saved, the media pane as it was), the
- * plugins and skills (PluginsPane), the voices to speak a voice-over in, then OpenFilm's own sounds, music, text,
+ * voices to speak a voice-over in, then OpenFilm's own sounds, music, text,
  * the captions a caption track is made with (CaptionsPane), stickers, filters, effects and transitions (lib/library),
  * then the tabs plugins bring (plugin-tabs) — and down the left the starred ones and the library's own,
  * its groups under it (a plugin's tab is its own, whole). What is shown is in
@@ -25,10 +25,8 @@ import { ADD_COLOR, AudioArtwork, FOOT_ROOM, HereButton, MiniPlayer, MusicCard, 
 import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
 import { Empty } from './icons';
 import { FEATURED, STARRED, VoicesPane, type VoiceSample } from './VoicesPane';
-import { ImportButton, PluginsPane, type SkillsLine } from './PluginsPane';
 import { CategoryMark, useCategoryName, usePluginTabs, withTabs } from './plugin-tabs';
 import { PluginSurface } from '../surfaces';
-import type { Plugin } from '@/lib/plugins';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 import { TextStyleSample } from './TextStyleSample';
 import { useSavedLooks } from '../CaptionPresets';
@@ -37,12 +35,13 @@ import { PLAIN } from './OnPicture';
 import { isClipMotion } from '@/lib/clip-presets';
 import { useLibraryArrangement } from './arrangement';
 
-type OwnCategory = 'media' | 'plugin' | 'voice' | 'captions' | LibraryCategory;
+type OwnCategory = 'media' | 'voice' | 'captions' | LibraryCategory;
 /** One of OpenFilm's own categories, or a plugin's tab (by its plugin's id). */
 type Category = OwnCategory | (string & {});
-/* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, the plugins (with the
-   skills), then the templates, the most a film is made with at once; the plugins' tabs come after these */
-export const CATEGORIES: OwnCategory[] = ['media', 'plugin', 'template', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
+/* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, then the templates,
+   the most a film is made with at once; the plugins' tabs come after these (the plugins themselves have a window of
+   their own, PluginsWindow) */
+export const CATEGORIES: OwnCategory[] = ['media', 'template', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
 
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
 const FAVORITES = STARRED;
@@ -77,10 +76,9 @@ const sectionOf = (line: string): TextSection | null =>
   line === FAVORITES || line === PRESETS ? 'mine' : line === ART || line.startsWith(`${ART}:`) ? ART : line === TEMPLATES || line.startsWith(`${TEMPLATES}:`) ? TEMPLATES : null;
 
 /* the category shown, the line picked in each, and whether the library's own groups are folded, kept while the
-   drawer closes and opens again; and the last skills request (`showSkills`) followed, so a drawer opened again later
-   does not follow it twice */
+   drawer closes and opens again */
 const SHOWN = {
-  cat: 'media' as Category, group: {} as Partial<Record<Category, string>>, folded: false, request: 0,
+  cat: 'media' as Category, group: {} as Partial<Record<Category, string>>, folded: false,
   /* the text category's sections opened, and which of the person's starred things are shown (looks or templates) */
   textOpen: { mine: false, art: true, tpl: false } as Record<TextSection, boolean>, starredText: ART as typeof ART | typeof TEMPLATES,
   /* the sticker category's sections opened */
@@ -96,10 +94,8 @@ export interface LibraryActions {
   tryOut: (item: LibraryItem | null) => void;
 }
 
-/** The skills shown from outside the drawer (the app's chat): Discover, or one skill's page; `n` tells one request from the next. */
-export type SkillsRequest = { name?: string; n: number };
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, folder = '', showSkills, onWorkbenchOn, under = 0, shown: isShown = true }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, folder = '', under = 0, shown: isShown = true }: {
   media: React.ReactNode;
   /** the project's own media, or Mine (the person's own, for every film) */
   mediaScope: 'project' | 'saved';
@@ -123,9 +119,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   projectId?: string | null;
   /** its folder on this computer, told to a plugin's tab */
   folder?: string;
-  showSkills?: SkillsRequest | null;
-  /** a plugin with a workbench was turned on in the Plugins tab */
-  onWorkbenchOn?: (plugin: Plugin) => void;
   /** how much of its foot the app's composer floats over: the lists run on under it, their ends scrolled clear of it
       (--drawer-under) */
   under?: number;
@@ -153,8 +146,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   const [presets, , dropPreset] = useSavedLooks();
   const [folded, setFolded] = React.useState(SHOWN.folded);
   const [query, setQuery] = React.useState('');
-  /* the page shown in place of the plugins' list: a skill's, or one of OpenFilm's own plugins' (PluginsPane) */
-  const [skillOpen, setSkillOpen] = React.useState<string | null>(null);
   /* the source the list is narrowed to (SourceChips), all of them by default */
   const [source, setSource] = React.useState<Source | ''>('');
   const [picked, setPicked] = React.useState<string | null>(null);
@@ -211,8 +202,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
     };
     return () => { dismissRef.current = () => false; };
   }, [dismissRef, closePreview, stopHover, picked, tried, player.item, voicePlayer.item]);
-  const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(firstLine(next)); setQuery(''); setSource(''); setSkillOpen(null); closePreview(); };
-  const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); setSkillOpen(null); closePreview(); };
+  const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(firstLine(next)); setQuery(''); setSource(''); closePreview(); };
+  const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); closePreview(); };
   /* a section of the text category opened or closed; opened, it shows its first line unless one of its lines is shown */
   const toggleText = (section: TextSection) => {
     const open = !textOpen[section];
@@ -227,15 +218,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
     setStickerOpen(SHOWN.stickerOpen);
     if (open && stickerSectionOf(group) !== section) pickGroup(section);
   };
-  /* a request from outside: the plugins, on Discover or on a skill's page (followed once, by its `n`) */
-  React.useEffect(() => {
-    if (!showSkills || showSkills.n === SHOWN.request) return;
-    SHOWN.request = showSkills.n;
-    if (cat !== 'plugin') show('plugin');
-    if (!showSkills.name) { SHOWN.group.plugin = 'discover'; setGroup('discover'); }
-    setSkillOpen(showSkills.name ?? null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showSkills?.n]);
   React.useEffect(() => {
     if (mediaRequest != null && cat !== 'media') show('media');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -247,10 +229,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   React.useEffect(() => () => { intent.current += 1; tryOut.current(null); }, []);
   React.useLayoutEffect(() => { if (!isShown) closePreview(); }, [isShown, closePreview]);
 
-  /* the skills' line: one of the installed (Installed alone, as kept before, is all of them), else Discover */
-  /* the skills: Discover (first opened), else the installed (any line of them kept before is that now) */
-  /* Installed first opened */
-  const skillLine: SkillsLine = group === 'discover' ? 'discover' : group === FAVORITES ? 'favorites' : 'installed';
   const q = query.trim().toLowerCase();
   /* the groups all of whose things are stills (the emoji's) */
   const stillGroups = React.useMemo(() => {
@@ -480,13 +458,6 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
                 <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mine')}</SideBox>
               </>
-            ) : cat === 'plugin' ? (
-              <>
-                {/* Installed first opened, in parts by whose they are (PluginsPane); the starred; Discover, OpenFilm's to take up */}
-                <SideBox on={skillLine === 'installed'} onClick={() => pickGroup('installed')}>{t('assetDrawer.skillsInstalled')}</SideBox>
-                <SideBox on={skillLine === 'favorites'} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
-                <SideBox on={skillLine === 'discover'} onClick={() => pickGroup('discover')}>{t('assetDrawer.skillsDiscover')}</SideBox>
-              </>
             ) : cat === 'text' ? (
               <>
                 {/* a new line of words; the person's own; the library's looks and its templates */}
@@ -538,7 +509,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
           {cat === 'media' ? media : cat === 'captions' && captions ? <CaptionsPane actions={captions} /> : (
             <>
               {/* a page has its own way back instead */}
-              <div className="flex gap-2 px-3 pb-2 pt-2.5" hidden={cat === 'plugin' && skillOpen != null}>
+              <div className="flex gap-2 px-3 pb-2 pt-2.5">
                 <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-[var(--bg-field)] px-2.5 text-[var(--text-faint)] focus-within:ring-1 focus-within:ring-[var(--accent)]">
                   <Search size={14} />
                   <input
@@ -548,10 +519,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                     className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
                   />
                 </label>
-                {/* the person's own skills come in here, the app's way (a link or a folder) */}
-                {cat === 'plugin' && skillLine === 'installed' && studioHost?.skills?.add ? <ImportButton onClick={studioHost.skills.add} /> : null}
               </div>
-              {cat !== 'plugin' && cat !== 'voice' && !(cat === 'text' && (group === NEW_TEXT || group === PRESETS)) ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
+              {cat !== 'voice' && !(cat === 'text' && (group === NEW_TEXT || group === PRESETS)) ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
               {/* the starred things of the text category: its looks, or its templates */}
               {cat === 'text' && group === FAVORITES && !q ? (
                 <div className="flex gap-1.5 px-3 pb-2">
@@ -563,8 +532,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                   ))}
                 </div>
               ) : null}
-              {cat === 'plugin' ? <PluginsPane line={skillLine} query={query} projectId={projectId} opened={skillOpen} onOpen={setSkillOpen} onDiscover={() => pickGroup('discover')} {...(onWorkbenchOn ? { onWorkbenchOn } : {})} />
-                : cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} speak={speak}
+              {cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} speak={speak}
                   player={voicePlayer} previewBar={previewBar} picked={picked} onPick={(id) => { setPicked(id); onPreviewStart(); }} onClosePreview={closePreview} /> : (
               <>
               {/* a click on nothing lets the picked thing go */}

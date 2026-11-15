@@ -227,6 +227,7 @@ export const zhCN: Words = {
   project: {
     assets: '素材',
     addAttachment: '添加文件',
+    plugins: '插件',
     close: '关闭',
     composerPlaceholder: '说说要改什么。输入 @ 可指向文件、skill、某个时刻或当前选中的内容',
     composerPlaceholderBlank: '描述你的影片。输入 @ 可加入文件或 skill',

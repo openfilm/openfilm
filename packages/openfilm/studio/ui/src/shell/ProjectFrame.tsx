@@ -31,6 +31,7 @@ import { usePublishFrame, wiringStore } from './frame';
 import { Arrangement } from './arrangement';
 import { LayoutOver, useLayout } from './layout';
 import { LibraryPlace, useLibraryShown } from './library';
+import { openPlugins } from '@/lib/plugins-window';
 import { useProjectRead } from './project-read';
 import { PageAsks, PageWindows, TopBar, usePageWindows } from './top-bar';
 import { AmongPanes, InPanesPlace, useWorkbenchShown } from './workbenches';
@@ -333,11 +334,10 @@ export function useProjectFrame(projectId: string) {
     if (link) { openLink.current(link); return; }
     if (command.type === 'settings') { windows.setSettingsOpen(command.section === 'providers' ? 'models' : command.section ?? 'agents'); return; }
     if (command.type === 'show-examples') {
-      /* a skill: the library's skills, on Discover or on its page; an example: the projects window's examples */
+      /* the plugins: their window, on Discover or on a skill's page; an example: the projects window's examples */
       const open = command.open;
-      if (open?.kind === 'discover' || open?.kind === 'skill') {
-        library.setSkillsShown({ ...(open.kind === 'skill' ? { name: open.name } : {}), n: Date.now() });
-        layout.openLibrary(true);
+      if (open?.kind === 'plugins' || open?.kind === 'discover' || open?.kind === 'skill') {
+        openPlugins(open.kind === 'skill' ? { page: open.name } : { line: open.kind === 'discover' ? 'discover' : 'installed' });
       } else windows.setProjectsOpen({ example: open?.kind === 'example' ? open.id : undefined });
       return;
     }

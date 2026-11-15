@@ -37,11 +37,9 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
     await page.locator('[data-block-kind="caption"]').first().waitFor({ state: 'visible' });
     assert.equal(await page.locator('[data-timeline-view-item="motion"]').count(), 0);
     const switcher = page.locator('[data-work-mode]');
-    /* the plugins are turned on and off in the library's Plugins tab: the library opened by the Library layout */
-    await page.getByRole('button', { name: 'Layout', exact: true }).click();
-    await page.getByRole('button', { name: /^Library/ }).first().click();
-    await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Plugins', exact: true }).click();
+    /* the plugins are turned on and off in their window, opened from the OpenFilm menu */
+    await page.getByRole('button', { name: 'OpenFilm menu', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Plugins', exact: true }).click();
     const motion = page.getByRole('switch', { name: 'Turn on Motion' });
     await motion.waitFor();
     assert.equal(await motion.getAttribute('aria-checked'), 'false');
@@ -53,10 +51,9 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
     assert.equal(await switcher.count(), 0, 'only Edit remains');
     await motion.click();
     await page.getByRole('switch', { name: 'Turn off Motion' }).waitFor();
-    /* back to the default layout, the library closed */
-    await page.getByRole('button', { name: 'Layout', exact: true }).click();
-    await page.getByRole('button', { name: /^Default/ }).first().click();
+    /* the window closed */
     await page.keyboard.press('Escape');
+    await page.locator('[data-plugins-window]').waitFor({ state: 'detached' });
     await page.reload();
     await page.locator('[data-timeline-view-item="motion"]').click();
     const layer = page.locator('[data-motion-layer="card"]');

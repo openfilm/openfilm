@@ -1,8 +1,7 @@
 /**
  * The library of the project's page: its pane and the drawer in it (components/library/LibraryDrawer), which the
  * shell draws once for whichever workbench is shown. What is browsed without a workbench is held here: the media pane
- * on the project's media or on Saved, a file asked to be found there, the skills asked to be shown, a file kept in
- * Saved or pointed at for the agent. The files themselves and the operations on them are the frame's
+ * on the project's media or on Saved, a file asked to be found there, a file kept in Saved or pointed at for the agent. The files themselves and the operations on them are the frame's
  * (shell/ProjectFrame).
  *
  * What a workbench does with the library (a file put in its film or taken in hand, a thing of the library added or
@@ -22,7 +21,8 @@ import type { Plugin } from '@/lib/plugins';
 import { SAVED, importIntoSaved, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
 import { fileRef, stillUrl } from '@/lib/studio-refs';
 import type { MediaListing, MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
-import { LibraryDrawer, type LibraryActions, type SkillsRequest } from '@/components/library/LibraryDrawer';
+import { LibraryDrawer, type LibraryActions } from '@/components/library/LibraryDrawer';
+import { PluginsWindow } from '@/components/PluginsWindow';
 import { MediaPool, type ImportProgress } from '@/components/MediaPool';
 import type { useToast } from '@/components/Toast';
 import { WorkspaceLibraryPane } from '@/components/WorkspaceLibraryPane';
@@ -118,13 +118,11 @@ export function useLibraryShown(projectId: string, of: {
     if (!highlight && library) { setAskedInHand({ path: file.path, of: library }); library.pick(file, canvasOpen ? { quiet: true } : undefined); }
     setRevealMedia((cur) => ({ path: file.path, seq: (cur?.seq ?? 0) + 1, highlight }));
   }, [listing, canvasOpen, switchMedia, openLibrary]);
-  /* the library's skills as the app's chat asked to show them (LibraryDrawer `showSkills`) */
-  const [skillsShown, setSkillsShown] = React.useState<SkillsRequest | null>(null);
 
   return {
     refOfFile, referOutside, onLibraryDownloadFailed, saveThings, saveFiles,
     mediaScope, switchMedia, revealMedia, setRevealMedia, mediaRevealed, libraryIndex, scopedListing, savedListing, savedImport,
-    showFile, askedInHand, skillsShown, setSkillsShown,
+    showFile, askedInHand,
   };
 }
 
@@ -142,7 +140,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     missingMedia, findMissing, madeWords,
     canvasOpen, setCanvasOpen, requestCanvasFiles,
     refOfFile, referOutside, onLibraryDownloadFailed, saveFiles,
-    mediaScope, switchMedia, revealMedia, mediaRevealed, scopedListing, savedListing, savedImport, skillsShown, askedInHand,
+    mediaScope, switchMedia, revealMedia, mediaRevealed, scopedListing, savedListing, savedImport, askedInHand,
     setSettingsOpen, toast, showWorkbench,
     libraryPane: pane, updateWorkspace, setPanelWidth,
   } = frame;
@@ -151,7 +149,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
   const pickSavedFile = React.useCallback((file: WorkspaceResource | null) => { wiringStore.get()?.library?.pick(file, { saved: true }); }, []);
   const pauseWorkbench = React.useCallback(() => { wiringStore.get()?.pause?.(); }, []);
   const openServices = React.useCallback(() => { setSettingsOpen('models'); }, [setSettingsOpen]);
-  /* a plugin with a workbench turned on in the library: where it now is (the edit's views, Motion, on its timeline;
+  /* a plugin with a workbench turned on in the plugins' window: where it now is (the edit's views, Motion, on its timeline;
      any other on the top bar's switch), with the way to show it */
   const { show: showToast } = toast;
   const workbenchOn = React.useCallback((plugin: Plugin) => {
@@ -241,8 +239,10 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
             onPreviewStart={canvasOpen ? pauseWorkbench : library?.preview.begin ?? nothing} onDownloadFailed={onLibraryDownloadFailed} shown={pane.open} under={pane.under}
             captions={library?.captions}
             speak={library?.speak}
-            onServices={openServices} projectId={projectId} folder={loaded.project.path} showSkills={skillsShown} onWorkbenchOn={workbenchOn} />
+            onServices={openServices} projectId={projectId} folder={loaded.project.path} />
       </WorkspaceLibraryPane>
+      {/* the plugins, in a window of their own (lib/plugins-window opens it) */}
+      <PluginsWindow projectId={projectId} onWorkbenchOn={workbenchOn} />
     </>
   );
 }

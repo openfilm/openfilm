@@ -45,7 +45,7 @@ test('an agent is given the skills the plugins on bring and require, each after 
   const names = () => offeredSkills(where(h)).given.map((s) => s.name);
   /* as made: the edit, the canvas and Screening on; the film and the media are theirs to need, motion is off */
   assert.deepEqual(names(), ['film', 'media', 'canvas']);
-  assert.equal(pluginsOffLine(h).startsWith('Plugins the person has turned off (the library\'s Plugins tab turns one on): motion ('), true);
+  assert.equal(pluginsOffLine(h).startsWith('Plugins the person has turned off (Plugins, in the OpenFilm menu, turns one on): motion ('), true);
   assert.match(promptSkills(h), /^- `canvas` \(after `media`\):/m);
 
   setPluginOn('motion', true, h);

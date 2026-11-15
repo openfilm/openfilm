@@ -452,15 +452,16 @@ export type StudioCommand =
   | { type: 'draft-refs'; refs: StudioRef[] }
   /* the app's chat sends the person to Settings (an agent to set up) */
   | { type: 'settings'; section?: 'agents' | 'providers' }
-  /* the app's chat shows the library's skills (on Discover, or a skill's page) or the projects window's examples
-     (an example's page); none: the examples */
+  /* the app's chat shows the plugins' window (the installed, Discover, or a skill's page) or the projects window's
+     examples (an example's page); none: the examples */
   | { type: 'show-examples'; open?: CommunityItem };
 
 /**
- * A skill or an example to open on its page (a pill of one clicked); or `discover`, OpenFilm's skills to install (an
- * empty project's "More skills"); or `examples`, the examples to start from (its "Start from an example").
+ * A skill or an example to open on its page (a pill of one clicked); `plugins`, the plugins' window (the chat's button);
+ * `discover`, OpenFilm's skills to install (an empty project's "More skills"); or `examples`, the examples to start
+ * from (its "Start from an example").
  */
-export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string } | { kind: 'discover' } | { kind: 'examples' };
+export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string } | { kind: 'discover' } | { kind: 'plugins' } | { kind: 'examples' };
 
 const hostOfPage = (): StudioHost | null => (globalThis as { openfilmHost?: StudioHost }).openfilmHost ?? null;
 /**

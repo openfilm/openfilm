@@ -1,43 +1,37 @@
 /**
- * The library's plugins, in the drawer: everything that teaches OpenFilm one more kind of work, in one list. A plugin
- * is a package (skills, commands, a surface); one that shows only in the conversation is a skill, one that also shows
- * outside it is a plugin (lib/project-plugins isPlugin). People look for what OpenFilm can do, not for which of the two
- * it is, so both are here, each in the one category of what it helps make (lib/plugin-profile): material, the cut,
- * the picture, the sound, a whole way of making a kind of film, and other tools. The list is in parts by category, in
- * the order a film is made; chips across the top show one category. Where a thing comes from is a small tag on its
- * line (the person's own, a project's, the community's, an agent's own), and OpenFilm's still being made are in their
- * category with no switch, so the whole of it is in sight. OpenFilm's own system skills are not lines of their own:
- * each is on the page of the plugin it goes with.
+ * The plugins (in their own window, components/PluginsWindow): everything that teaches OpenFilm one more kind of work.
+ * A plugin is a package (skills, commands, a surface); one that shows only in the conversation is a skill, one that
+ * also shows outside it is a plugin (lib/project-plugins isPlugin). People look for what OpenFilm can do, not for which
+ * of the two it is, so both are here, each in the one category of what it helps make (lib/plugin-profile).
  *
- * Each is a line: its mark, its title, what it is for under it, and its switch (a plugin: on, its workbench or its tab
- * of the library is shown and agents are given its skills; a skill: on, agents take it up when it fits; off, neither,
- * and a film made with it plays and exports the same). A click opens its page, which sums it up at the top as a
- * model's page does (library/PluginProfile: how hard it is to start with, how little work a result takes, what it
- * costs, how it is used, who it is for), then says what it does, how to use it and what it brings: a plugin of
- * OpenFilm's own here, any other its skill's (SkillPage). The side bar picks the installed ones, the starred, or
- * Discover (OpenFilm's and the community's still to install). Discover is a gallery of tiles to browse: cover, title,
- * what it is for; under the pointer a star and a "+", which names it in the chat's message (its page has Install). A
- * star keeps a skill among the favorites, as the library's things are. Turning on a plugin with a workbench says where
- * it now is, with the way to show it (`onWorkbenchOn`).
+ * The installed are cards, in the order a film is made, each category under its plain name: a card is its mark, its
+ * title, what it is for, and its switch (a plugin: on, its workbench or its tab of the library is shown and agents are
+ * given its skills; a skill: on, agents take it up when it fits; off, neither, and a film made with it plays and
+ * exports the same). Where one comes from, when it is not OpenFilm's own, is a word after its title; OpenFilm's still
+ * being made are last, with no switch. A click opens its page, which sums it up at the top as a model's page does
+ * (library/PluginProfile), then says what it does, where to open it and what it brings: a plugin of OpenFilm's own
+ * here, any other its skill's (SkillPage). Discover is a gallery of tiles to install from: cover, title, what it is
+ * for, and a "+" under the pointer that names it in the chat's message (its page has Install). Turning on a plugin
+ * with a workbench says where it now is, with the way to show it (`onWorkbenchOn`).
  */
 import React from 'react';
 import {
-  ArrowLeft, AudioLines, Box, ChevronDown, Clapperboard, Compass, Film, FolderDown, FolderOpen, Layers, Palette, Plus, Projector, Puzzle, RefreshCw, Scissors, Spline, Star, Workflow,
+  ArrowLeft, AudioLines, Box, Clapperboard, Film, FolderOpen, Layers, Palette, Plus, Projector, Puzzle, RefreshCw, Scissors, Spline, Workflow,
   type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
-import { toggleFavorite, useLibraryFavorites } from '@/lib/library';
 import { setPluginOn, usePlugins, type Plugin } from '@/lib/plugins';
+import type { PluginsLine } from '@/lib/plugins-window';
 import { isPlugin, pluginOfSkill } from '@/lib/project-plugins';
 import { communityOf, forgetSeenSkills, makerOf, seenCatalog, seenSkills, sourcesApi, SourceError, watchSkills, type SkillEntry } from '@/lib/project-sources';
 import {
   BringsLine, byOrder, CommandChips, HowToUse, inLanguage, PageSection, SkillCover, SkillMark, SkillPage, useSkillWords,
 } from '../SkillPage';
 import { CATEGORIES, categoryOfPlugin, categoryOfSkill, usesOfPlugin, type Category } from '@/lib/plugin-profile';
-import { CATEGORY_ICONS, CategoryTag, ProfileStrip } from './PluginProfile';
+import { CategoryTag, ProfileStrip } from './PluginProfile';
 import { SettingsSwitch } from '../settings/ui';
-import { ADD_COLOR, PANEL_ROUND, ROUND } from './AudioList';
+import { ADD_COLOR, ROUND } from './AudioList';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
 
 export const PLUGIN_ICONS: Record<string, LucideIcon> = {
@@ -71,11 +65,6 @@ const Beta = ({ children }: { children: React.ReactNode }) => (
 /** Where a workbench is picked: the edit's views (Motion: laid out in the edit's arrangement, lib/blocks) at the top of its timeline, any other at the top right. */
 const pickedOnTimeline = (plugin: Plugin) => plugin.workbench !== 'edit' && plugin.blocks === 'edit';
 
-/** The side bar's lines. */
-export type SkillsLine = 'favorites' | 'installed' | 'discover';
-/** The chips across the top: all, or one category. */
-export type PluginFilter = 'all' | Category;
-
 /** A page asked for of one of OpenFilm's own plugins: `plugin:<id>` (anything else names a skill). */
 export const PLUGIN_PAGE = 'plugin:';
 
@@ -88,21 +77,12 @@ const FRESH_MS = 60 * 1000;
 let discoverFailed: 'failed' | 'partial' | null = null;
 let discoverRequest = 0;
 
-/** A skill among the library's favorites (lib/library), by its uid. */
-const starOf = (skill: SkillEntry) => `skill:${skill.uid}`;
-
-/* the parts folded and the chip picked, kept while Studio is open */
-const FOLDED = new Set<string>();
-const SHOWN: { filter: PluginFilter } = { filter: 'all' };
-
 /** One of an agent's own skills, and whether OpenFilm lets it in. */
 type AgentSkill = { name: string; description: string; allowed: boolean };
 type AgentGroup = { id: HostAgentId; name: string; skills: AgentSkill[] };
 
-export function PluginsPane({ line, query, projectId, opened, onOpen, onDiscover, onWorkbenchOn }: {
-  line: SkillsLine;
-  /** Discover, from the community's invitation */
-  onDiscover: () => void;
+export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenchOn }: {
+  line: PluginsLine;
   query: string;
   projectId: string | null;
   /** the page shown (a skill's uid or the name agents know it by; `plugin:<id>` one of OpenFilm's own plugins), none: the list */
@@ -122,8 +102,6 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onDiscover
     const stop = watchSkills(projectId, (list) => { if (live) setSkills(list); });
     return () => { live = false; stop(); };
   }, [projectId]);
-  const [filter, setFilterState] = React.useState<PluginFilter>(SHOWN.filter);
-  const setFilter = (next: PluginFilter) => { SHOWN.filter = next; setFilterState(next); };
   const [error, setError] = React.useState<string | null>(null);
   /* the plugin's page a skill's page was opened from, which its Back returns to */
   const [from, setFrom] = React.useState<string | null>(null);
@@ -146,10 +124,6 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onDiscover
   }, [line, retry]);
 
   const installed = line === 'installed';
-  const favorites = useLibraryFavorites();
-  const starred = (skill: SkillEntry) => favorites.includes(starOf(skill));
-  const [, refold] = React.useReducer((n: number) => n + 1, 0);
-  const fold = (key: string) => { if (FOLDED.has(key)) FOLDED.delete(key); else FOLDED.add(key); refold(); };
   const agents = useAgentSkills(installed);
   const q = query.trim().toLowerCase();
   const matches = (...said: (string | undefined)[]) => !q || said.some((w) => w?.toLowerCase().includes(q));
@@ -157,21 +131,14 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onDiscover
     .filter((k) => !k.core)
     .filter((k) => matches(words(k).title, words(k).summary, k.name, k.uid))
     .sort(byOrder);
-  const inFilter = (category: Category) => filter === 'all' || filter === category;
-  const shown = (k: SkillEntry) => inFilter(categoryOfSkill(k));
-  /* OpenFilm's own plugins: those made, and those still being made (no switch) */
   const ownMatched = own.filter((p) => matches(pluginWords(p).title, pluginWords(p).summary, p.id));
-  /* Discover's installed: OpenFilm's own, then the community's (each made by someone else, under their name) */
-  const listed = installed ? found.filter((k) => k.source === 'official' && installedOf(k)) : [];
-  const official = listed.filter((k) => !communityOf(k));
-  const community = listed.filter(communityOf);
-  const mine = installed ? found.filter((k) => k.source !== 'official') : [];
+  const listed = installed ? found.filter((k) => installedOf(k)) : [];
   const offered = line === 'discover' ? found.filter((k) => k.source === 'official' && !installedOf(k)) : [];
   /* Discover by whose: OpenFilm's own, the community's, or all (chips only when both are there) */
   const [whose, setWhose] = React.useState<Source | ''>('');
   const sourceOf = (k: SkillEntry): Source => (communityOf(k) ? 'community' : 'official');
   const whoseThere = sourcesIn(offered.map(sourceOf));
-  const toInstall = (whose && whoseThere.includes(whose) ? offered.filter((k) => sourceOf(k) === whose) : offered).filter(shown);
+  const toInstall = whose && whoseThere.includes(whose) ? offered.filter((k) => sourceOf(k) === whose) : offered;
   const agentsOwn = agents.groups
     .map((g) => ({ ...g, skills: g.skills.filter((k) => matches(k.name, k.description)) }))
     .filter((g) => g.skills.length);
@@ -199,25 +166,6 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onDiscover
   const addIt = studioHost?.useSkill
     ? (skill: SkillEntry) => studioHost?.useSkill?.({ name: skill.as ?? skill.uid.replace('/', '-'), description: skill.description, title: words(skill).title })
     : undefined;
-  const tileOf = (skill: SkillEntry) => (
-    <SkillTile key={skill.uid} skill={skill} kept={starred(skill)} onOpen={() => open(skill.uid)} {...(addIt ? { onAdd: () => addIt(skill) } : {})} />
-  );
-  /* the chips: all, and each category there is something of in this line (the one picked kept, though it has none now) */
-  const present = (categories: Iterable<Category>) => {
-    const there = new Set(categories);
-    return CATEGORIES.filter((c) => there.has(c) || c === filter);
-  };
-  const chipsOf = (categories: Iterable<Category>) => (
-    <div className="flex shrink-0 flex-wrap gap-1.5 px-3 pb-2.5" role="group" aria-label={t('assetDrawer.filterLabel')}>
-      {(['all', ...present(categories)] as PluginFilter[]).map((f) => (
-        <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} data-plugin-filter={f}
-          className={`flex h-[26px] items-center gap-1 rounded-full px-2.5 text-[11.5px] transition ${filter === f
-            ? 'bg-[var(--text)] font-medium text-[var(--bg-panel)]' : 'bg-[var(--bg-field)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}>
-          {f === 'all' ? t('assetDrawer.filter_all') : t(`assetDrawer.category_${f}`)}
-        </button>
-      ))}
-    </div>
-  );
 
   /* a page: one of OpenFilm's own plugins, or a skill asked for by uid or by the name agents know it by (the chat's) */
   const ownPage = opened?.startsWith(PLUGIN_PAGE) ? own.find((p) => p.id === opened.slice(PLUGIN_PAGE.length)) : undefined;
@@ -227,8 +175,12 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onDiscover
   }
   const page = opened && !opened.startsWith(PLUGIN_PAGE) ? skills.find((k) => k.uid === opened) ?? skills.find((k) => (k.as ?? k.name) === opened) : undefined;
   if (page) {
-    return <SkillPage key={page.uid} skill={page} setSkills={setSkills} projectId={projectId} onBack={() => open(from)}
-      onOn={() => { if (isPlugin(page)) workbenchOn(pluginOfSkill(page)); }} {...(studioHost?.useSkill ? { onTry: tryIt } : {})} />;
+    return (
+      <div className="mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col">
+        <SkillPage key={page.uid} skill={page} setSkills={setSkills} projectId={projectId} onBack={() => open(from)}
+          onOn={() => { if (isPlugin(page)) workbenchOn(pluginOfSkill(page)); }} {...(studioHost?.useSkill ? { onTry: tryIt } : {})} />
+      </div>
+    );
   }
   if (line === 'discover') {
     /* what Discover could not read now: the skills it had when it last could, said with when; none ever read */
@@ -240,110 +192,80 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onDiscover
     /* the first read under way: the tiles' places, said as Discover being read */
     const waiting = discover === 'reading' && !toInstall.length && !q;
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        {chipsOf(offered.map(categoryOfSkill))}
+      <div className="flex min-h-0 flex-1 flex-col px-2">
         {note ? <div role="status" className="flex shrink-0 items-start gap-2 px-3 pb-2 text-[12px] leading-[18px] text-[var(--text-muted)]"><p className="min-w-0 flex-1">{note}</p><button type="button" onClick={() => setRetry((n) => n + 1)} className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 text-[var(--text)] hover:bg-[var(--bg-hover)]"><RefreshCw size={12} />{t('assetDrawer.discoverRetry')}</button></div> : null}
         <SourceChips sources={whoseThere} value={whose} onChange={setWhose} />
         {toInstall.length || waiting ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5" {...(waiting ? { role: 'status', 'aria-label': t('assetDrawer.discoverReading') } : {})}>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-0.5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-3 gap-y-4" {...(waiting ? { role: 'status', 'aria-label': t('assetDrawer.discoverReading') } : {})}>
               {waiting ? Array.from({ length: 6 }, (_, i) => (
                 <div key={i} aria-hidden className="flex flex-col gap-1.5">
                   <div className="skeleton aspect-video w-full rounded-[8px]" />
                   <div className="skeleton h-3 w-2/3 rounded" />
                 </div>
-              )) : toInstall.map(tileOf)}
+              )) : toInstall.map((skill) => <SkillTile key={skill.uid} skill={skill} onOpen={() => open(skill.uid)} {...(addIt ? { onAdd: () => addIt(skill) } : {})} />)}
             </div>
           </div>
-        ) : note && !read ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : filter !== 'all' && offered.length ? 'assetDrawer.filterNone' : anyThere ? 'assetDrawer.allSkillsInstalled' : 'assetDrawer.discoverNone')} />}
+        ) : note && !read ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : anyThere ? 'assetDrawer.allSkillsInstalled' : 'assetDrawer.discoverNone')} />}
       </div>
     );
   }
-  /* a skill's line: where it comes from on a tag, when it is not OpenFilm's own */
-  const tagOf = (skill: SkillEntry) => (communityOf(skill) ? `${t('assetDrawer.source_community')} · ${makerOf(skill)}`
+
+  /* the installed: each a card in its category, OpenFilm's own plugins first, then the skills installed, each agent's
+     own (a tool: off until let in); OpenFilm's still being made last, apart */
+  type Card = { category: Category; key: string; node: React.ReactNode };
+  const fromOf = (skill: SkillEntry) => (communityOf(skill) ? makerOf(skill)
     : skill.source === 'mine' ? t('assetDrawer.source_mine') : skill.source === 'project' ? t('assetDrawer.skillProject') : undefined);
-  const lineOf = (skill: SkillEntry) => (
-    <PluginLine key={skill.uid} mark={<SkillMark skill={skill} />} title={words(skill).title} tag={tagOf(skill)}
-      under={skill.update ? t('gallery.updateOut').replace('{version}', skill.update.version) : skill.retired ? `${t('gallery.retiredMark')} · ${words(skill).summary}` : words(skill).summary}
-      tip={words(skill).summary} on={!skill.off} onOpen={() => open(skill.uid)} kept={starred(skill)} onStar={() => toggleFavorite(starOf(skill))}
-      label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(skill).title)} onChange={(on) => turnSkill(skill, on)} />
-  );
-  const ownLineOf = (p: Plugin) => {
-    const { title, summary } = pluginWords(p);
-    return (
-      <PluginLine key={p.id} mark={<PluginMark plugin={p} />} title={title} beta={p.beta ? t('assetDrawer.pluginBeta') : undefined}
-        tag={p.soon ? t('assetDrawer.pluginsSoon') : undefined}
-        under={summary} tip={summary} on={p.soon ? undefined : p.on} onOpen={() => open(`${PLUGIN_PAGE}${p.id}`)}
-        label={t(p.on ? 'assetDrawer.pluginTurnOff' : 'assetDrawer.pluginTurnOn').replace('{name}', title)} onChange={(on) => turnPlugin(p, on)} />
-    );
-  };
-  if (line === 'favorites') {
-    /* the starred: those installed as lines (their switch), those still to install as Discover's tiles */
-    const starredAll = found.filter(starred);
-    const kept = starredAll.filter(shown);
-    const lines = kept.filter(installedOf), tiles = kept.filter((k) => !installedOf(k));
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        {starredAll.length ? chipsOf(starredAll.map(categoryOfSkill)) : null}
-        {!kept.length ? <Empty text={t(q ? 'assetDrawer.noSkillsFound' : starredAll.length ? 'assetDrawer.filterNone' : 'assetDrawer.noFavorites')} /> : (
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
-            {lines.length ? <div>{lines.map(lineOf)}</div> : null}
-            {tiles.length ? <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-x-2.5 gap-y-3.5">{tiles.map(tileOf)}</div> : null}
-          </div>
-        )}
-      </div>
-    );
-  }
-  const importSkill = studioHost?.skills?.add;
-  /* everything installed, each in its category: OpenFilm's own plugins first, then the skills from OpenFilm, the
-     community's, the person's own and a project's, each agent's own (a tool: off until let in), and last OpenFilm's
-     still being made */
-  type Item = { category: Category; key: string; node: React.ReactNode };
-  const items: Item[] = [
-    ...ownMatched.filter((p) => !p.soon).map((p) => ({ category: categoryOfPlugin(p), key: p.id, node: ownLineOf(p) })),
-    ...[...official, ...community, ...mine].map((k) => ({ category: categoryOfSkill(k), key: k.uid, node: lineOf(k) })),
+  const cards: Card[] = [
+    ...ownMatched.filter((p) => !p.soon).map((p) => {
+      const { title, summary } = pluginWords(p);
+      return {
+        category: categoryOfPlugin(p), key: p.id,
+        node: <PluginCard key={p.id} mark={<PluginMark plugin={p} />} title={title} note={p.beta ? t('assetDrawer.pluginBeta') : undefined} summary={summary}
+          on={p.on} onOpen={() => open(`${PLUGIN_PAGE}${p.id}`)}
+          label={t(p.on ? 'assetDrawer.pluginTurnOff' : 'assetDrawer.pluginTurnOn').replace('{name}', title)} onChange={(on) => turnPlugin(p, on)} />,
+      };
+    }),
+    ...listed.map((k) => ({
+      category: categoryOfSkill(k), key: k.uid,
+      node: <PluginCard key={k.uid} mark={<SkillMark skill={k} />} title={words(k).title} note={fromOf(k)}
+        summary={k.update ? t('gallery.updateOut').replace('{version}', k.update.version) : words(k).summary}
+        on={!k.off} onOpen={() => open(k.uid)}
+        label={t(k.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(k).title)} onChange={(on) => turnSkill(k, on)} />,
+    })),
     ...agentsOwn.flatMap((g) => g.skills.map((k) => ({
       category: 'tool' as const, key: `${g.id}:${k.name}`,
-      node: <PluginLine key={`${g.id}:${k.name}`} mark={<SkillMark skill={{}} />} title={k.name} tag={t('assetDrawer.skillsAgentOwn').replace('{name}', g.name)}
-        under={k.description} tip={k.description} on={k.allowed}
+      node: <PluginCard key={`${g.id}:${k.name}`} mark={<SkillMark skill={{}} />} title={k.name} note={t('assetDrawer.skillsAgentOwn').replace('{name}', g.name)}
+        summary={k.description} on={k.allowed}
         label={t(k.allowed ? 'gallery.turnOff' : 'gallery.turnOn').replace('{name}', k.name)} onChange={(on) => agents.allow(g.id, k.name, on)} />,
     }))),
-    ...ownMatched.filter((p) => p.soon).map((p) => ({ category: categoryOfPlugin(p), key: p.id, node: ownLineOf(p) })),
   ];
-  const parts = CATEGORIES.filter(inFilter).map((category) => ({ category, lines: items.filter((i) => i.category === category) })).filter((p) => p.lines.length);
-  /* the invitations, after the list: one's own to import, the community's to browse (none of either yet; not while searching) */
-  const invitations = !q && filter === 'all' ? [
-    ...(mine.length ? [] : [<Invitation key="mine" icon={<FolderDown size={16} strokeWidth={1.75} />} title={t('assetDrawer.mineEmptyTitle')}
-      text={t(importSkill ? 'assetDrawer.mineEmpty' : 'assetDrawer.mineEmptyCli')}
-      {...(importSkill ? { action: { label: t('assetDrawer.mineImport'), run: importSkill } } : {})} />]),
-    ...(community.length || official.length ? [] : [<Invitation key="community" icon={<Compass size={16} strokeWidth={1.75} />} title={t('assetDrawer.communityEmptyTitle')}
-      text={t('assetDrawer.communityEmpty')} action={{ label: t('assetDrawer.communityBrowse'), run: onDiscover }} />]),
-  ] : [];
+  const soon = ownMatched.filter((p) => p.soon);
+  const parts = CATEGORIES.map((category) => ({ category, cards: cards.filter((c) => c.category === category) })).filter((p) => p.cards.length);
+  const grid = 'grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-2.5';
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {chipsOf(items.map((i) => i.category))}
-      {error ? <p role="alert" className="px-4 pb-2 text-[12px] text-[var(--warn)]">{error}</p> : null}
-      {!parts.length && !invitations.length ? <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.filterNone')} /> : (
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+12px)] pt-0.5">
-          {parts.map(({ category, lines }) => {
-            const folded = FOLDED.has(category) && !q;
-            const Mark = CATEGORY_ICONS[category];
-            return (
-              <section key={category} data-plugins-part={category}>
-                {/* its head: the category, how many, and what it is for; a press folds it (a search shows every part) */}
-                <button type="button" onClick={() => fold(category)} aria-expanded={!folded}
-                  className="group/head mb-1 flex w-full items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-[var(--bg-hover)]">
-                  <Mark size={14} strokeWidth={1.9} aria-hidden className="shrink-0 text-[var(--text-muted)]" />
-                  <span className="text-[13px] font-semibold text-[var(--text)]">{t(`assetDrawer.category_${category}`)}</span>
-                  <span className="tabular-nums text-[11.5px] text-[var(--text-faint)]">{lines.length}</span>
-                  <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--text-faint)]">{t(`assetDrawer.categoryNote_${category}`)}</span>
-                  <ChevronDown size={13} className={`shrink-0 text-[var(--text-faint)] transition-transform ${folded ? '-rotate-90' : ''}`} />
-                </button>
-                {folded ? null : lines.map((l) => <React.Fragment key={l.key}>{l.node}</React.Fragment>)}
-              </section>
-            );
-          })}
-          {invitations.length ? <div className="flex flex-col gap-2">{invitations}</div> : null}
+      {error ? <p role="alert" className="px-5 pb-2 text-[12px] text-[var(--warn)]">{error}</p> : null}
+      {!parts.length && !soon.length ? <Empty text={t('assetDrawer.noSkillsFound')} /> : (
+        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 pb-6 pt-1">
+          {parts.map(({ category, cards: inIt }) => (
+            <section key={category} data-plugins-part={category}>
+              <h3 className="mb-2 text-[12px] font-medium text-[var(--text-faint)]">{t(`assetDrawer.category_${category}`)}</h3>
+              <div className={grid}>{inIt.map((c) => <React.Fragment key={c.key}>{c.node}</React.Fragment>)}</div>
+            </section>
+          ))}
+          {/* OpenFilm's still being made, so the whole of it is in sight: no switch */}
+          {soon.length ? (
+            <section data-plugins-part="soon">
+              <h3 className="mb-2 text-[12px] font-medium text-[var(--text-faint)]">{t('assetDrawer.pluginsSoon')}</h3>
+              <div className={grid}>
+                {soon.map((p) => {
+                  const { title, summary } = pluginWords(p);
+                  return <PluginCard key={p.id} mark={<PluginMark plugin={p} />} title={title} summary={summary} on={undefined} onOpen={() => open(`${PLUGIN_PAGE}${p.id}`)} label={title} onChange={() => {}} />;
+                })}
+              </div>
+            </section>
+          ) : null}
         </div>
       )}
     </div>
@@ -370,12 +292,12 @@ function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn }: {
   const how = plugin.workbench ? (pickedOnTimeline(plugin) ? 'assetDrawer.howTimeline' : 'assetDrawer.howWorkbench') : plugin.tab ? 'assetDrawer.howTab' : null;
   return (
     <>
-      <div className="flex shrink-0 px-3 pb-2 pt-2.5">
+      <div className="flex shrink-0 px-[max(12px,calc((100%-760px)/2))] pb-2">
         <button type="button" onClick={onBack} className="-ml-1 flex h-8 items-center gap-1.5 rounded-md pl-1.5 pr-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
           <ArrowLeft size={14} />{t('gallery.back')}
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--drawer-under,0px)+16px)] pt-0.5" data-plugin-page={plugin.id}>
+      <div className="min-h-0 flex-1 overflow-y-auto px-[max(12px,calc((100%-760px)/2))] pb-6 pt-0.5" data-plugin-page={plugin.id}>
         <div className="flex items-start gap-3">
           <PluginMark plugin={plugin} big />
           <div className="min-w-0 flex-1">
@@ -442,71 +364,37 @@ function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn }: {
   );
 }
 
-/** A part with none yet: what it is for and the one thing to do, in a dashed frame where its lines would be. */
-function Invitation({ icon, title, text, action }: { icon: React.ReactNode; title: string; text: string; action?: { label: string; run: () => void } }) {
-  return (
-    <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-dashed border-[var(--border-strong)] px-3 py-3">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[var(--bg-field)] text-[var(--text-muted)]">{icon}</span>
-      <div className="min-w-[150px] flex-1">
-        <div className="text-[12.5px] font-medium leading-[17px] text-[var(--text)]">{title}</div>
-        <div className="mt-0.5 text-[11.5px] leading-[16px] text-[var(--text-faint)]">{text}</div>
-      </div>
-      {action ? (
-        <button type="button" onClick={action.run}
-          className="h-7 shrink-0 rounded-md bg-[var(--bg-field)] px-2.5 text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]">{action.label}</button>
-      ) : null}
-    </div>
-  );
-}
-
 /** Nothing to list: a word in the middle. */
 function Empty({ text }: { text: string }) {
-  return <p className="px-4 pt-12 text-center text-[12.5px] leading-relaxed text-[var(--text-faint)]">{text}</p>;
+  return <p className="px-4 pt-16 text-center text-[12.5px] leading-relaxed text-[var(--text-faint)]">{text}</p>;
 }
 
 /**
- * A plugin or a skill: its mark, its title (and Beta, and where it comes from when it is not OpenFilm's own), what it
- * is for under it, its star (under the pointer, or kept) and its switch (none: one not made yet); a click opens its
- * page (an agent's own has neither page nor star).
+ * A plugin or a skill as a card: its mark and its switch (none: one not made yet) across the top, its title (with a
+ * word after it: Beta, or where it comes from), what it is for under it; a click opens its page (an agent's own has none).
  */
-function PluginLine({ mark, title, beta, tag, under, tip, on, label, onChange, onOpen, kept = false, onStar }: {
-  mark: React.ReactNode; title: string; beta?: string | undefined; tag?: string | undefined; under: string; tip?: string; on: boolean | undefined; label: string;
-  onChange: (on: boolean) => void; onOpen?: () => void; kept?: boolean; onStar?: () => void;
+function PluginCard({ mark, title, note, summary, on, label, onChange, onOpen }: {
+  mark: React.ReactNode; title: string; note?: string | undefined; summary: string; on: boolean | undefined; label: string;
+  onChange: (on: boolean) => void; onOpen?: () => void;
 }) {
-  const t = useT();
-  const lit = on !== false;
+  const dim = on === undefined;
   return (
-    <div role={onOpen ? 'button' : undefined} tabIndex={onOpen ? 0 : undefined} title={tip} data-plugin-line={title}
+    <div role={onOpen ? 'button' : undefined} tabIndex={onOpen ? 0 : undefined} data-plugin-line={title}
       onClick={onOpen} onKeyDown={(e) => { if (onOpen && e.key === 'Enter' && e.target === e.currentTarget) onOpen(); }}
-      className={`group flex items-center gap-3 rounded-[10px] px-1.5 py-2 outline-none ${onOpen ? 'cursor-pointer hover:bg-[var(--bg-hover)] focus-visible:ring-1 focus-visible:ring-[var(--accent)]' : ''}`}>
-      <span className={lit && on !== undefined ? '' : 'opacity-45'}>{mark}</span>
-      <div className="min-w-0 flex-1">
-        <div className={`flex min-w-0 items-center gap-1.5 text-[13px] font-medium leading-[18px] ${lit && on !== undefined ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
-          <span className="truncate">{title}</span>{beta ? <Beta>{beta}</Beta> : null}{tag ? <Beta>{tag}</Beta> : null}
-        </div>
-        <div className="mt-0.5 truncate text-[11.5px] leading-[16px] text-[var(--text-faint)]">{under}</div>
+      className={`flex min-w-0 flex-col gap-2.5 rounded-[12px] border border-[var(--border)] p-3.5 outline-none transition ${onOpen ? 'cursor-pointer hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] focus-visible:ring-1 focus-visible:ring-[var(--accent)]' : ''}`}>
+      <div className="flex items-start justify-between gap-2">
+        <span className={dim ? 'opacity-45' : ''}>{mark}</span>
+        {/* the switch is its own: a press there does not open the page */}
+        {on === undefined ? null : <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}><SettingsSwitch checked={on} onChange={onChange} label={label} /></span>}
       </div>
-      {onStar ? (
-        <button type="button" aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')} aria-pressed={kept}
-          onClick={(e) => { e.stopPropagation(); onStar(); }}
-          className={`${PANEL_ROUND} ${kept ? 'grid text-[#ffd35a]' : 'hidden text-[var(--text)] group-hover:grid'}`}>
-          <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
-        </button>
-      ) : null}
-      {/* the switch is its own: a press there does not open the page */}
-      {on === undefined ? null : <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}><SettingsSwitch checked={on} onChange={onChange} label={label} /></span>}
+      <div className="min-w-0">
+        <div className={`flex min-w-0 items-baseline gap-2 text-[13.5px] font-medium leading-[19px] ${dim ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>
+          <span className="truncate">{title}</span>
+          {note ? <span className="shrink-0 text-[11px] font-normal text-[var(--text-faint)]">{note}</span> : null}
+        </div>
+        <p className="mt-1 line-clamp-2 text-[12px] leading-[17px] text-[var(--text-faint)]">{summary}</p>
+      </div>
     </div>
-  );
-}
-
-/** Adding one of the person's own (the app's dialog: a link or a folder). */
-export function ImportButton({ onClick }: { onClick: () => void }) {
-  const t = useT();
-  return (
-    <button type="button" onClick={onClick}
-      className="flex h-8 shrink-0 items-center gap-1 rounded-md bg-[var(--bg-field)] px-2.5 text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]">
-      <Plus size={14} />{t('assetDrawer.skillImport')}
-    </button>
   );
 }
 
@@ -533,9 +421,9 @@ function useAgentSkills(shown: boolean) {
 
 /**
  * One skill to install, in Discover: its cover (its preview under the pointer), its title and what it is for under it;
- * over the cover's corner, as a library card's, a star and a "+" that names it in the chat (Install is on its page).
+ * over the cover's corner a "+" that names it in the chat (Install is on its page).
  */
-function SkillTile({ skill, kept, onOpen, onAdd }: { skill: SkillEntry; kept: boolean; onOpen: () => void; onAdd?: () => void }) {
+function SkillTile({ skill, onOpen, onAdd }: { skill: SkillEntry; onOpen: () => void; onAdd?: () => void }) {
   const t = useT();
   const { title, summary } = useSkillWords()(skill);
   const [hover, setHover] = React.useState(false);
@@ -547,11 +435,6 @@ function SkillTile({ skill, kept, onOpen, onAdd }: { skill: SkillEntry; kept: bo
         {/* the community's wear who made it on the corner */}
         {communityOf(skill) ? <SourceBadge source="community" by={makerOf(skill)} /> : null}
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
-          <button type="button" aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')} aria-pressed={kept}
-            onClick={(e) => { e.stopPropagation(); toggleFavorite(starOf(skill)); }}
-            className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`}>
-            <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
-          </button>
           {onAdd ? (
             <button type="button" title={t('assetDrawer.skillAdd')} aria-label={t('assetDrawer.skillAdd')} onClick={(e) => { e.stopPropagation(); onAdd(); }}
               className={`${ROUND} ${ADD_COLOR} hidden group-hover:grid focus-visible:grid`}>

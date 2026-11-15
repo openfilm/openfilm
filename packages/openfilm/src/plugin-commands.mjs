@@ -43,7 +43,7 @@ export function pluginCommand(words, { cwd = '.', home, plugins = pluginsDir(), 
   if (having.length > 1) return { status: 2, error: `Two are named ${key}: say which, ${having.map((s) => `\`openfilm ${s.uid}\``).join(' or ')}.` };
   const plugin = having[0], commands = plugin.commands;
   const off = plugin.source === 'own' ? !pluginStates(home).find((p) => p.id === plugin.name)?.on : keeps(new Set(skillsOff(home)), plugin);
-  if (off) return { status: 1, error: `The ${plugin.name} ${plugin.kind} is off: the person turns it on in the library's Plugins tab.` };
+  if (off) return { status: 1, error: `The ${plugin.name} ${plugin.kind} is off: the person turns it on in Plugins (the OpenFilm menu).` };
   /* one command named after the plugin: `openfilm <plugin> …` is it; else the next word says which */
   const names = Object.keys(commands);
   const whole = names.length === 1 && names[0] === plugin.name;
