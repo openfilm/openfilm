@@ -2113,7 +2113,7 @@ export const ko: Words = {
     importPreparing: '미디어 준비 중…',
     clipTools: {
       partOf: '어느 구간을 쓸지 (모델은 최대 {max}초, 원본 {s}초)', part: '구간',
-      about: { edit: '바꿀 것만 말하면 카메라, 동작, 타이밍은 그대로', extend: '마지막 프레임에서 이어서 촬영', motion: '이 영상의 카메라 무빙과 동작으로 새 인물이나 화면을', restyle: '구도, 연기, 리듬은 두고 다른 화풍으로', recast: '영상 속 인물을 고른 사람으로 교체', lipsync: '인물이 이 녹음대로 말하게' },
+      about: { edit: '바꿀 것만 말하면 카메라, 동작, 타이밍은 그대로', extend: '마지막 프레임에서 이어 찍어 원본 뒤에 붙임', motion: '이 영상의 카메라 무빙과 동작으로 새 인물이나 화면을', restyle: '구도, 연기, 리듬은 두고 다른 화풍으로', recast: '영상 속 인물을 고른 사람으로 교체', lipsync: '인물이 이 녹음대로 말하게' },
       hint: { edit: '바꿀 것 (예: 빨간 코트를 흰 정장으로)', extend: '이어서 일어날 일 (선택)', motion: '화면에 대한 추가 요청 (선택)', restyle: '스타일에 대한 추가 요청 (선택)', recast: '추가 요청 (선택)', lipsync: '추가 요청 (선택)' },
       needs: { edit: '먼저 바꿀 것을 적으세요', extend: '', motion: '먼저 이미지를 고르세요', restyle: '먼저 스타일을 고르세요', recast: '먼저 넣을 사람을 고르세요', lipsync: '먼저 녹음을 고르세요' },
       extendBy: '얼마나 더 늘릴지 (원본 {s}초)', pickStyle: '스타일 선택', pickAudio: '녹음 선택', pickPeople: '넣을 사람 선택', pickLook: '새 인물이나 화면 선택', pickPictures: '참고 이미지 (선택)',

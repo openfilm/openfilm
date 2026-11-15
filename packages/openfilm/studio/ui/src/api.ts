@@ -293,7 +293,7 @@ export const api = {
   /** a file of the project into the trash */
   removeFile: (id: string, path: string) => call<object>(`${p(id)}/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
   /** A clip trimmed, its sound or its shots taken out, cropped to a shape, on this computer (studio/server/clip-tools.mjs). */
-  clipTool: (id: string, body: { op: 'trim' | 'audio' | 'crop' | 'shots'; path: string; from?: number; to?: number; ratio?: string; most?: number; work?: boolean }) =>
+  clipTool: (id: string, body: { op: 'trim' | 'audio' | 'crop' | 'shots' | 'join'; path: string; from?: number; to?: number; ratio?: string; most?: number; work?: boolean; then?: string }) =>
     call<{ paths: string[]; times?: number[] }>(`${p(id)}/clip-tools`, { method: 'POST', json: body }),
   clearCover: (id: string) => call<{ cover: null }>(`${p(id)}/cover`, { method: 'DELETE' }).then(() => null),
   /**

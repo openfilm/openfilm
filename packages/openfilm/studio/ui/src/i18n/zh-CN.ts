@@ -2117,7 +2117,7 @@ export const zhCN: Words = {
     importPreparing: '正在准备素材…',
     clipTools: {
       partOf: '参考哪一段（模型最多参考 {max} 秒，原视频 {s} 秒）', part: '片段',
-      about: { edit: '说出要改什么，镜头、动作和时间都不变', extend: '接着视频的最后一帧继续往下拍', motion: '用这段视频的运镜和动作，换成新的人物或画面', restyle: '保留构图、表演和节奏，换一种画风', recast: '把视频里的人换成你选的人', lipsync: '让视频里的人按这段录音说话' },
+      about: { edit: '说出要改什么，镜头、动作和时间都不变', extend: '接着最后一帧继续往下拍，拍好后接在原视频后面', motion: '用这段视频的运镜和动作，换成新的人物或画面', restyle: '保留构图、表演和节奏，换一种画风', recast: '把视频里的人换成你选的人', lipsync: '让视频里的人按这段录音说话' },
       hint: { edit: '要改什么，比如：把红色外套换成白色西装', extend: '接下来发生什么（可不写）', motion: '补充画面要求（可不写）', restyle: '补充风格要求（可不写）', recast: '补充要求（可不写）', lipsync: '补充要求（可不写）' },
       needs: { edit: '先写下要改什么', extend: '', motion: '先选一张图片', restyle: '先选一种风格', recast: '先选要换上的人', lipsync: '先选一段录音' },
       extendBy: '再往后延长多久（原视频 {s} 秒）', pickStyle: '选择风格', pickAudio: '选择录音', pickPeople: '选择要换上的人', pickLook: '选择新的人物或画面', pickPictures: '参考图片（可不选）',

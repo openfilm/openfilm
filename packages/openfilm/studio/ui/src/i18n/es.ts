@@ -2116,7 +2116,7 @@ export const es: Words = {
     importPreparing: 'Preparando medios…',
     clipTools: {
       partOf: 'Qué parte (los modelos toman hasta {max} s; el clip dura {s} s)', part: 'Parte',
-      about: { edit: 'Di qué cambiar; la cámara, el movimiento y el ritmo se quedan', extend: 'Sigue desde el último fotograma del clip', motion: 'La cámara y el movimiento del clip, con otras personas u otro aspecto', restyle: 'El encuadre, la actuación y el ritmo en otro estilo', recast: 'Las personas que elijas en lugar de las del clip', lipsync: 'Que la persona diga esta grabación' },
+      about: { edit: 'Di qué cambiar; la cámara, el movimiento y el ritmo se quedan', extend: 'Sigue desde el último fotograma y se une tras el clip', motion: 'La cámara y el movimiento del clip, con otras personas u otro aspecto', restyle: 'El encuadre, la actuación y el ritmo en otro estilo', recast: 'Las personas que elijas en lugar de las del clip', lipsync: 'Que la persona diga esta grabación' },
       hint: { edit: 'Qué cambiar, p. ej. el abrigo rojo por un traje blanco', extend: 'Qué pasa después (opcional)', motion: 'Algo más sobre el aspecto (opcional)', restyle: 'Algo más sobre el estilo (opcional)', recast: 'Algo más (opcional)', lipsync: 'Algo más (opcional)' },
       needs: { edit: 'Primero di qué cambiar', extend: '', motion: 'Primero elige una imagen', restyle: 'Primero elige un estilo', recast: 'Primero elige a quién poner', lipsync: 'Primero elige una grabación' },
       extendBy: 'Cuánto más (el clip dura {s} s)', pickStyle: 'Estilo', pickAudio: 'Grabación', pickPeople: 'A quién poner', pickLook: 'Las nuevas personas o el aspecto', pickPictures: 'Imágenes de referencia (opcional)',

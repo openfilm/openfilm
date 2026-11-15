@@ -2117,7 +2117,7 @@ export const en = {
     importPreparing: 'Preparing media…',
     clipTools: {
       partOf: 'Which part (models take up to {max} s; the clip is {s} s)', part: 'Part',
-      about: { edit: 'Say what to change; the camera, motion and timing stay', extend: 'Carry on from the clip\'s last frame', motion: 'The clip\'s camera and motion, with new people or a new look', restyle: 'Keep the framing, performance and rhythm in another style', recast: 'Put the people you pick in place of the clip\'s', lipsync: 'Make the person speak this recording' },
+      about: { edit: 'Say what to change; the camera, motion and timing stay', extend: 'Carry on from the last frame, joined on after the clip', motion: 'The clip\'s camera and motion, with new people or a new look', restyle: 'Keep the framing, performance and rhythm in another style', recast: 'Put the people you pick in place of the clip\'s', lipsync: 'Make the person speak this recording' },
       hint: { edit: 'What to change, e.g. the red coat into a white suit', extend: 'What happens next (optional)', motion: 'Anything else about the look (optional)', restyle: 'Anything else about the style (optional)', recast: 'Anything else (optional)', lipsync: 'Anything else (optional)' },
       needs: { edit: 'Say what to change first', extend: '', motion: 'Pick a picture first', restyle: 'Pick a style first', recast: 'Pick who goes in first', lipsync: 'Pick a recording first' },
       extendBy: 'How much longer (the clip is {s} s)', pickStyle: 'Style', pickAudio: 'Recording', pickPeople: 'Who goes in', pickLook: 'The new people or look', pickPictures: 'Reference pictures (optional)',

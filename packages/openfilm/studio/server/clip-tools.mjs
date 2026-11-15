@@ -1,7 +1,8 @@
 // @ts-check
 /**
  * What the canvas does to a clip on this computer, with ffmpeg, free: a part of it cut out (`trim`), its sound alone
- * (`audio`, as MP3), its picture cropped to a shape (`crop`), and its shots, each a still where the picture cuts (`shots`).
+ * (`audio`, as MP3), its picture cropped to a shape (`crop`), its shots, each a still where the picture cuts (`shots`), and
+ * another clip joined on after it (`join`: a clip and its continuation, as one).
  * What it makes lands in `assets/`, named after the clip and the tool, never over a file that is there.
  *
  *   POST /api/projects/:id/clip-tools  { op, path, from?, to?, ratio?, most? }  →  { paths: [...], times?: [...] }
@@ -50,7 +51,7 @@ const even = (/** @type {number} */ n) => Math.max(2, Math.floor(n / 2) * 2);
 
 /**
  * @param {string} root the project
- * @param {{ op?: unknown, path?: unknown, from?: unknown, to?: unknown, ratio?: unknown, most?: unknown, work?: unknown }} body
+ * @param {{ op?: unknown, path?: unknown, from?: unknown, to?: unknown, ratio?: unknown, most?: unknown, work?: unknown, then?: unknown }} body
  * @returns {Promise<{ paths: string[], times?: number[] }>}
  */
 export async function clipTool(root, body) {
@@ -111,7 +112,22 @@ export async function clipTool(root, body) {
       throw e;
     }
   }
-  throw new HttpError(400, 'op: trim, audio, crop or shots');
+  if (body.op === 'join') {
+    if (typeof body.then !== 'string') throw new HttpError(400, 'then: the clip to join on');
+    const next = readable(root, body.then);
+    const more = await probe(root, body.then);
+    /* both at the first's size and rate; one with no sound gets silence, so the joined clip has sound throughout */
+    const W = even(facts.width), H = even(facts.height ?? 0), fps = facts.fps || 24;
+    const fit = `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p`;
+    const quiet = (/** @type {number} */ s) => ['-f', 'lavfi', '-t', String(s || 0.1), '-i', 'anullsrc=r=48000:cl=stereo'];
+    const sound = (/** @type {boolean} */ has, /** @type {number} */ i, /** @type {number} */ q) => `[${has ? `${i}:a:0` : `${q}:a`}]aresample=48000,aformat=channel_layouts=stereo[a${i}]`;
+    const out = freeName(root, rel, 'extended', '.mp4');
+    await ffmpeg(['-i', src, '-i', next, ...quiet(length), ...quiet(more.duration ?? 0),
+      '-filter_complex', `[0:v]${fit}[v0];[1:v]${fit}[v1];${sound(facts.audio, 0, 2)};${sound(more.audio, 1, 3)};[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]`,
+      '-map', '[v]', '-map', '[a]', ...H264, ...AAC, inside(root, out)]);
+    return { paths: [out] };
+  }
+  throw new HttpError(400, 'op: trim, audio, crop, shots or join');
 }
 
 /**

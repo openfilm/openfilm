@@ -1241,7 +1241,19 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     setClipAI(null);
     await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
     void flow.fitView({ nodes: [{ id: sourceId }, { id }], padding: 0.2, maxZoom: 1, duration: 300 });
-    void makeLatest.current(id);
+    const ok = await makeLatest.current(id);
+    /* carried on: the clip and its continuation joined, shown as the card's newest version (the continuation alone before it) */
+    if (!ok || tool.key !== 'extend') return;
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+    const node = now.current.nodes.find((n) => n.id === id);
+    const continued = node?.type === 'make' ? node.data.path : undefined;
+    if (!continued) return;
+    try {
+      const whole = (await api.clipTool(projectId, { op: 'join', path, then: continued })).paths[0]!;
+      await listed(whole);
+      setNodes((list) => list.map((n) => (n.id === id && n.type === 'make'
+        ? { ...n, data: { ...n.data, versions: [...(n.data.versions ?? [continued]).filter((v) => v !== whole), whole], path: whole } } : n)));
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
   /** a clip's shots, a still where each begins, laid out in a group beside it as wide as the clip */
   const layShots = async (sourceId: string, path: string) => {

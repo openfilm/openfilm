@@ -37,6 +37,13 @@ test('a clip: a part cut out, its sound alone, cropped to a shape, its shots whe
   assert.ok(existsSync(join(root, 'assets/clip-shots/shot-02.png')));
   /* the shots the agent reads stay out of the library */
   assert.equal((await clipTool(root, { op: 'shots', path: 'assets/clip.mp4', work: true })).paths[0], 'assets/.canvas/clip-shots/shot-01.png');
+  /* a clip and its continuation as one: the continuation (smaller, silent) at the first's size, with silence */
+  execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=green:s=160x90:d=1.5:r=30', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(root, 'assets/more.mp4')]);
+  const joined = await clipTool(root, { op: 'join', path: 'assets/clip.mp4', then: 'assets/more.mp4' });
+  assert.deepEqual(joined.paths, ['assets/clip-extended.mp4']);
+  const whole = await probe(root, 'assets/clip-extended.mp4');
+  assert.ok(Math.abs(whole.duration - 5.5) < 0.15);
+  assert.deepEqual([whole.width, whole.height, whole.audio], [320, 180, true]);
   await assert.rejects(clipTool(root, { op: 'trim', path: '../outside.mp4', from: 0, to: 1 }));
   await assert.rejects(clipTool(root, { op: 'spin', path: 'assets/clip.mp4' }), /op:/);
 });
