@@ -54,8 +54,13 @@ const QUALITY = /** @type {Record<string, string[]>} */ ({
   'openai/gpt-image-2.6-flare': ['low', 'medium', 'high', 'xhigh', 'max'], 'openai/gpt-image-2.6-sunburst': ['low', 'medium', 'high', 'xhigh', 'max'],
   'openai/gpt-image-2.5-flare': ['low', 'medium', 'high', 'xhigh', 'max'], 'openai/gpt-image-2.5-sunburst': ['low', 'medium', 'high', 'xhigh', 'max'],
 });
-/** The most pictures a new one is made from. */
+/** The most pictures a new one is made from, and models that take fewer (OpenRouter's images/models list). */
 const MAX_REFS = 16;
+const REFS = /** @type {Record<string, number>} */ ({
+  'google/gemini-nano-banana-2.1': 14, 'google/gemini-3-pro-image': 14, 'bytedance-seed/seedream-5-0-pro': 14, 'black-forest-labs/flux-3-image': 10,
+});
+/** The models that make fewer sizes than 1K, 2K and 4K. */
+const SIZES = /** @type {Record<string, string[]>} */ ({ 'bytedance-seed/seedream-5-0-pro': ['1k', '2k'] });
 const HEYGEN = 'heygen/heygen-video-1';
 const HEYGEN_INLINE_IMAGE_MAX_BYTES = 5_000_000;
 const SEEDANCE_20_REFERENCES = /** @type {const} */ ({ refs: 9, voice: 3, voiceNeedsVisual: true, clip: 'reference', clips: 3 });
@@ -80,8 +85,9 @@ const VIDEO = {
   'minimax/hailuo-3': { name: 'Hailuo', seconds: [5, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 9, clip: 'reference', clips: 3, voice: 3, voiceNeedsVisual: true, maxClipSeconds: 15, sizes: ['2K'], resolution: '2K' },
   'minimax/hailuo-3-max': { name: 'Hailuo', seconds: [5, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], refs: 0, sizes: ['480p', '768p'], resolution: '768p', audio: false },
   [HEYGEN]: {
-    name: 'HeyGen', seconds: [5, 30], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
-    frames: 'first', refs: 9, referenceMaxSeconds: 15, referenceInputSeconds: 15,
+    /* 30 s clips need a prompt enhancement asked for, which is not sent: up to 15 s; 15 s is the reference clips' total */
+    name: 'HeyGen', seconds: [5, 15], ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+    frames: 'first', refs: 9, referenceInputSeconds: 15,
     clip: 'reference', clips: 3, voice: 3, voiceNeedsVisual: true, sizes: ['480p', '768p', '1080p', '2K'], resolution: '768p', audio: false,
   },
   'kwaivgi/kling-v3.0-std': { name: 'Kling', seconds: [3, 15], ratios: ['16:9', '9:16', '1:1'], refs: 0, sizes: ['720p'] },
@@ -91,7 +97,7 @@ const VIDEO = {
   'x-ai/grok-imagine-video-1.5-lite': { name: 'Grok Imagine Video 1.5 Lite', seconds: [1, 15], frames: 'first', ratios: ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3'], refs: 0, sizes: ['480p', '720p', '1080p'], audio: false },
 };
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
-for (const model of MODELS.image) Object.assign(model, { spec: { ratios: RATIOS, refs: MAX_REFS, sizes: ['1k', '2k', '4k'], ...(QUALITY[model.id] ? { qualities: QUALITY[model.id], transparent: true } : {}) } });
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: RATIOS, refs: REFS[model.id] ?? MAX_REFS, sizes: SIZES[model.id] ?? ['1k', '2k', '4k'], ...(QUALITY[model.id] ? { qualities: QUALITY[model.id], transparent: true } : {}) } });
 for (const model of MODELS.video) Object.assign(model, { spec: videoModelSpec(model.id) });
 
 /** The inputs usable on this route. OpenRouter video and audio URLs need OpenFilm's file relay. */
@@ -178,15 +184,19 @@ async function picture(args, ctx) {
   const name = MODELS.image.find((x) => x.id === model)?.name ?? model;
   pngOnly(args, `${name} here`);
   const has = QUALITY[model];
-  const size = text(args.size) || '1k';
+  const sizes = SIZES[model] ?? ['1k', '2k', '4k'];
+  const askedSize = text(args.size) || '1k';
+  const size = sizes.includes(askedSize) ? askedSize : sizes[sizes.length - 1];
   const refs = list(args.ref);
-  if (refs.length > MAX_REFS) throw new Error(`--ref: at most ${MAX_REFS} pictures.`);
+  const most = REFS[model] ?? MAX_REFS;
+  if (refs.length > most) throw new Error(`--ref: ${name} takes at most ${most} pictures.`);
   const asked = text(args.quality);
   const quality = has && asked ? (has.includes(asked) ? asked : has[has.length - 1]) : null;
   const said = [
     ...(args.transparent && !has ? [`--transparent: ${name} makes opaque pictures`] : []),
     ...(asked && asked !== 'low' && !has ? [`--quality: ${name} has one quality`] : []),
     ...(quality && quality !== asked ? [`--quality ${asked}: ${name}'s finest is ${quality}`] : []),
+    ...(size !== askedSize ? [`--size ${askedSize}: ${name} makes ${sizes.join(', ')}: ${size}`] : []),
   ];
   const pixels = /** @type {{ width: number, height: number }} */ (pictureSize(ratio, size));
   const body = {
@@ -281,8 +291,13 @@ async function video(args, ctx) {
         : spec.ratios.includes('16:9') ? '16:9' : spec.ratios[0];
   if (aspect && aspect !== ratio) said.push(`${spec.name} makes ${spec.ratios.join(', ')} clips: ${aspect}`);
   const askedSize = text(args.resolution);
-  const resolution = sizeOf(spec, askedSize);
+  let resolution = sizeOf(spec, askedSize);
   if (askedSize && resolution !== askedSize) said.push(`${spec.name} makes ${(spec.sizes ?? [resolution]).join(', ')}: ${resolution}`);
+  /* HeyGen makes 1080p and 2K only wide or tall when not from a first frame */
+  if (model === HEYGEN && !first && ['1080p', '2K'].includes(resolution) && aspect && !['16:9', '9:16'].includes(aspect)) {
+    said.push(`${spec.name} makes ${resolution} only at 16:9 or 9:16: 768p`);
+    resolution = '768p';
+  }
 
   const imageUrl = async (/** @type {string} */ src) => {
     if (model !== HEYGEN) return dataUri(src, ctx);

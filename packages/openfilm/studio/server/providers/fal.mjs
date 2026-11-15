@@ -102,14 +102,15 @@ const FROM_SPEECH = {
 };
 
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
-for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0, sizes: ['1k', '2k', '4k'] } });
+/* FLUX.2 makes at most 4 megapixels (a larger size is scaled down), so 2K is its largest */
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0, sizes: ['1k', '2k'] } });
 for (const model of MODELS.video) {
   const v = VIDEO[model.id];
   const c = FROM_CLIP[model.id];
   const s = FROM_SPEECH[model.id];
   const spec = v ? { ratios: v.ratios, seconds: v.seconds, refs: v.reference ? 9 : 0, frames: true,
     ...(v.reference ? { clip: true, voice: true, voiceNeedsVisual: true } : {}) }
-    : c ? { seconds: c.clip, refs: c.way === 'recast' ? 4 : 0, needs: 'clip' }
+    : c ? { seconds: c.clip, refs: c.way === 'modify' ? 0 : 4, needs: 'clip' }
     : s ? { seconds: s.seconds, refs: s.from === 'picture' ? 1 : 0, needs: 'audio' } : null;
   if (spec) Object.assign(model, { spec });
 }

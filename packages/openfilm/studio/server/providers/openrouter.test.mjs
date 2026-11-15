@@ -219,7 +219,8 @@ test('HeyGen sends video, picture and audio references together and keeps the te
   assert.deepEqual(JSON.parse(seen[0].body).input_references.map((r) => r.type), ['video_url']);
   seen.length = 0;
   await openrouter.run('video', { ...args, 'first-frame': picture, duration: 22 }, runCtx);
-  assert.equal(JSON.parse(seen[0].body).duration, 22);
+  /* longer than 15 s needs a prompt enhancement, which is not asked for */
+  assert.equal(JSON.parse(seen[0].body).duration, 15);
   assert.deepEqual(JSON.parse(seen[0].body).frame_images.map((r) => r.frame_type), ['first_frame']);
   seen.length = 0;
   await assert.rejects(openrouter.run('video', { ...args, voice }, runCtx), /needs a reference image or video/);
@@ -339,4 +340,13 @@ test('a clip edited or continued (Gemini Omni): sent as a video reference with i
   assert.match(followed.receipt.notes.join(' '), /--last-frame: Seedance made from a reference clip takes no last frame/);
   assert.equal(followed.index[0].from.clip, 'assets/video/take.mp4');
   rmSync(root, { recursive: true, force: true });
+});
+
+test('each picture model takes as many references and the sizes OpenRouter lists for it; HeyGen up to 15 s', () => {
+  const spec = (kind, id) => openrouter.models[kind].find((m) => m.id === id).spec;
+  assert.equal(spec('image', 'google/gemini-nano-banana-2.1').refs, 14);
+  assert.equal(spec('image', 'black-forest-labs/flux-3-image').refs, 10);
+  assert.deepEqual(spec('image', 'bytedance-seed/seedream-5-0-pro').sizes, ['1k', '2k']);
+  assert.equal(spec('image', 'openai/gpt-image-2.6-flare').refs, 16);
+  assert.deepEqual(spec('video', 'heygen/heygen-video-1').seconds, [5, 15]);
 });
