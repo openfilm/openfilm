@@ -1,33 +1,61 @@
-/**
- * The contents of the Projects popover (see ProjectsLibrary): a compact header (title, search, sort, view, new folder,
- * close), the folders and the projects as cards or a list, with "New project" as the first cell (and, under it, "Open
- * folder…" and "Get from GitHub…": an existing film), then the examples. Inside a folder a breadcrumb leads back to
- * all. Data and actions come from the popover.
- */
+/** Project browser: sidebar folders, history, path, and direct file selection. */
 import React from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ArrowLeft, Check, ChevronDown, ChevronRight, Clock3, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, Github, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Trash2, Video, X,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ClipboardPaste,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Clapperboard,
+  Folder,
+  FolderInput,
+  FolderOpen,
+  FolderPlus,
+  Github,
+  LayoutGrid,
+  List,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Scissors,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  Video,
+  X,
 } from 'lucide-react';
 import type { Example } from '@/lib/project-sources';
 import { ExamplesSection } from './ProjectSources';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { limitTitleWidth, TITLE_MAX_WIDTH } from '@/lib/title';
 import { api, type Project } from '@/api';
-import { folderCounts, folderPosters, folderTrail, listStarts, parentOf, visibleProjects, type LibrarySort, type ProjectFolder } from '@/lib/project-folders';
-import { opensOnClick, posterRetryDelay, posterTry } from '@/lib/projects-page';
+import {
+  folderCounts,
+  folderTrail,
+  listStarts,
+  parentOf,
+  visibleProjects,
+  type LibrarySort,
+  type ProjectFolder,
+} from '@/lib/project-folders';
+import { posterRetryDelay, posterTry } from '@/lib/projects-page';
 import { ContextMenu } from './ContextMenu';
-import { ProjectMenu } from './ProjectMenu';
+import { projectMenuItems } from './ProjectMenu';
+import type { ContextMenuEntry } from './ContextMenu';
+import { browserSelectionRoots, selectBrowserItems } from '@/lib/project-browser';
+import styles from './ProjectsView.module.css';
 import { ProjectCoverContext } from './ProjectCover';
 import { Tooltip } from './Tooltip';
+import { ProjectsStorage } from './ProjectsStorage';
 
 /**
  * A project as the popover lists it: `poster` (an image URL; a gradient when it fails), `duration` (seconds, when
  * Studio knows the film's length), `createdAt` (when its folder was made) and `folderId` (its folder in the list).
  */
 export type LibraryProject = Project & { poster?: string; duration?: number; createdAt?: number; folderId?: string };
-
-type LibraryViewMode = 'cards' | 'list';
 
 export function ProjectsView({
   projects,
@@ -44,6 +72,7 @@ export function ProjectsView({
   onRename,
   onDuplicate,
   onDelete,
+  onDeleteItems,
   folders,
   onCreateFolder,
   onRenameFolder,
@@ -51,7 +80,9 @@ export function ProjectsView({
   onMoveToFolder,
   onMoveFolder,
   onClose,
-  heading,
+  pane = 'projects',
+  onPane,
+  examplesPane,
 }: {
   projects: LibraryProject[];
   /** A project is being created or opened; "New project" does not take a second click meanwhile. */
@@ -75,6 +106,7 @@ export function ProjectsView({
   onDuplicate: (project: LibraryProject) => void;
   /** Ask to delete these projects (the popover confirms first). */
   onDelete: (projectIds: string[]) => void;
+  onDeleteItems: (projectIds: string[], folderIds: string[]) => void;
   /** The list's folders. */
   folders: ProjectFolder[];
   /** Make a folder; resolves to it (null: it could not be made). */
@@ -90,303 +122,970 @@ export function ProjectsView({
   onMoveFolder: (folderId: string, parentId: string | null) => void;
   /** Missing: no close button (Studio has no project to go back to). */
   onClose?: () => void;
-  /** The title row's left, in place of "Projects" (the launcher's switch between the projects and the examples). */
-  heading?: React.ReactNode;
+  /** What the window shows beside the sidebar: the projects, or the examples (`examplesPane`), picked in the sidebar. */
+  pane?: 'projects' | 'examples';
+  onPane?: (pane: 'projects' | 'examples') => void;
+  examplesPane?: React.ReactNode;
 }) {
   const t = useT();
-  /* recently opened first: someone coming back to the list most likely wants the one they just had */
-  const [sort, setSort] = React.useState<LibrarySort>('recent');
-  const [view, setView] = React.useState<LibraryViewMode>('cards');
+  const language = useLanguage();
+  const cover = React.useContext(ProjectCoverContext);
+  const [sort, setSort] = React.useState<LibrarySort>(() =>
+    readPreference('sort', 'recent', ['recent', 'newest', 'oldest', 'duration', 'title']),
+  );
+  const [reversed, setReversed] = React.useState(
+    () => readPreference('reversed', 'false', ['true', 'false']) === 'true',
+  );
+  const [view, setView] = React.useState<'cards' | 'list'>(() => readPreference('view', 'cards', ['cards', 'list']));
   const [query, setQuery] = React.useState('');
-  const [selecting, setSelecting] = React.useState(false);
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
-  /** The card being renamed in place. One at a time; clicking the cover still opens the project. */
-  const [renamingId, setRenamingId] = React.useState<string | null>(null);
-  /* folders: the one being looked at (null = all), the project a folder is being picked for, the folder being named */
-  const [folderId, setFolderId] = React.useState<string | null>(null);
-  /* what the folder picker moves: a project, or a folder of the list */
-  const [moving, setMoving] = React.useState<{ project: LibraryProject } | { folder: ProjectFolder } | null>(null);
-  const [renamingFolderId, setRenamingFolderId] = React.useState<string | null>(null);
-  /* the folder looked at was deleted (here or elsewhere): back to all */
-  React.useEffect(() => {
-    if (folderId && !folders.some((f) => f.id === folderId)) setFolderId(null);
-  }, [folderId, folders]);
+  const [location, setLocation] = React.useState<{ entries: (string | null)[]; index: number }>({
+    entries: [null],
+    index: 0,
+  });
+  const folderId = location.entries[location.index] ?? null;
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [cut, setCut] = React.useState<string[]>([]);
+  const anchor = React.useRef<string | null>(null);
+  const [renaming, setRenaming] = React.useState<string | null>(null);
+  const [moving, setMoving] = React.useState<string[] | null>(null);
+  const [context, setContext] = React.useState<{ x: number; y: number; keys: string[] } | null>(null);
+  const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
+  const surface = React.useRef<HTMLDivElement>(null);
+  const search = React.useRef<HTMLInputElement>(null);
+  const dragging = React.useRef<string[]>([]);
+  const [dropTarget, setDropTarget] = React.useState<string | null | undefined>(undefined);
+  const [marquee, setMarquee] = React.useState<{ left: number; top: number; width: number; height: number } | null>(
+    null,
+  );
+  const boxStart = React.useRef<{ x: number; y: number; selected: Set<string> } | null>(null);
+  const typed = React.useRef({ text: '', at: 0 });
 
+  React.useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    surface.current?.focus({ preventScroll: true });
+    return () => {
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, []);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('openfilm.projects.view', view);
+      localStorage.setItem('openfilm.projects.sort', sort);
+      localStorage.setItem('openfilm.projects.reversed', String(reversed));
+    } catch {
+      /* private browser */
+    }
+  }, [view, sort, reversed]);
+  const sortColumn = (next: LibrarySort) => {
+    setReversed(next === sort ? !reversed : false);
+    setSort(next);
+  };
+  React.useEffect(() => {
+    surface.current?.scrollTo(0, 0);
+  }, [folderId, query]);
+  /* back from the examples: the keys work on the projects again */
+  React.useEffect(() => {
+    if (pane === 'projects') surface.current?.focus({ preventScroll: true });
+  }, [pane]);
+  const navigate = (id: string | null) => {
+    if (id !== folderId)
+      setLocation((was) => ({ entries: [...was.entries.slice(0, was.index + 1), id], index: was.index + 1 }));
+    setQuery('');
+    setSelected(new Set());
+    setRenaming(null);
+    anchor.current = null;
+    surface.current?.focus({ preventScroll: true });
+  };
+  const history = (step: number) => {
+    setLocation((was) => ({ ...was, index: Math.max(0, Math.min(was.entries.length - 1, was.index + step)) }));
+    setQuery('');
+    setSelected(new Set());
+    setRenaming(null);
+    anchor.current = null;
+    surface.current?.focus({ preventScroll: true });
+  };
+  React.useEffect(() => {
+    if (folderId && !folders.some((f) => f.id === folderId)) {
+      setLocation((was) => ({ ...was, entries: was.entries.map((id) => (id === folderId ? null : id)) }));
+      setSelected(new Set());
+    }
+  }, [folderId, folders]);
+  const trail = folderTrail(folders, folderId);
+  const counts = folderCounts(projects, folders);
   const visible = React.useMemo(
     () => visibleProjects(projects, { query, folderId, sort, folders, titleOf: (p) => titleOf(p, t) }),
     [projects, query, folderId, sort, folders, t],
   );
-  /* folder cards only at the top level and not while searching: inside a folder is its content, a search its results */
-  /* the folders here: the top level's, or those inside the folder open (a search shows projects only) */
-  const showFolders = !query.trim();
-  const levelFolders = React.useMemo(() => folders.filter((f) => parentOf(f, folders) === folderId), [folders, folderId]);
-  const currentFolder = folders.find((f) => f.id === folderId) ?? null;
-  const trail = React.useMemo(() => folderTrail(folders, folderId), [folders, folderId]);
-  const counts = React.useMemo(() => folderCounts(projects, folders), [projects, folders]);
-  const posters = React.useMemo(() => folderPosters(projects, folders), [projects, folders]);
-
-  /** A card's open: on a click, a key press or its menu, not on the second click of a double-click (lib/projects-page). */
-  const opening = (run: () => void) => (event?: { detail: number }) => { if (!event || opensOnClick(event)) run(); };
-
-  async function newFolder() {
-    const created = await onCreateFolder(t('projects.untitledFolder'), folderId);
-    if (created) setRenamingFolderId(created.id);
-  }
-
-  function folderProps(folder: ProjectFolder): FolderItemProps {
-    return {
-      folder,
-      count: counts[folder.id] ?? 0,
-      posters: posters[folder.id] ?? [],
-      renaming: renamingFolderId === folder.id,
-      onOpen: opening(() => setFolderId(folder.id)),
-      onStartRename: () => setRenamingFolderId(folder.id),
-      onCommitRename: (name: string) => {
-        setRenamingFolderId(null);
-        if (name && name !== folder.name) onRenameFolder(folder.id, name);
-      },
-      onCancelRename: () => setRenamingFolderId(null),
-      onDelete: () => onDeleteFolder(folder),
-      onMove: () => setMoving({ folder }),
-    };
-  }
-
-  const selectableIds = React.useMemo(() => visible.map((project) => project.id), [visible]);
-  const selectedCount = selectedIds.size;
-  const allVisibleSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
-
-  const exitSelecting = React.useCallback(() => {
-    setSelecting(false);
-    setSelectedIds(new Set());
-  }, []);
-
-  /* selected projects left the list (deleted): drop them from the selection; none left → leave select mode, its job
-     is done and an empty select mode only costs one more click to get back to opening projects */
+  const entries = React.useMemo<BrowserEntry[]>(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    const listedFolders = folders
+      .filter((f) => (needle ? f.name.toLocaleLowerCase().includes(needle) : parentOf(f, folders) === folderId))
+      .sort((a, b) =>
+        sort === 'newest'
+          ? b.createdAt - a.createdAt
+          : sort === 'oldest'
+          ? a.createdAt - b.createdAt
+          : a.name.localeCompare(b.name, language, { numeric: true }),
+      );
+    return [
+      ...(reversed ? listedFolders.reverse() : listedFolders).map((folder) => ({
+        key: `folder:${folder.id}`,
+        name: folder.name,
+        folder,
+      })),
+      ...(reversed ? [...visible].reverse() : visible).map((project) => ({
+        key: `project:${project.id}`,
+        name: titleOf(project, t),
+        project,
+      })),
+    ];
+  }, [folders, folderId, query, sort, reversed, language, visible, t]);
+  const keys = entries.map((entry) => entry.key);
+  const order = keys.join('\n');
   React.useEffect(() => {
-    if (!selecting) return;
-    const alive = new Set(projects.map((project) => project.id));
-    const kept = [...selectedIds].filter((id) => alive.has(id));
-    if (kept.length === selectedIds.size) return;
-    if (kept.length === 0) {
-      exitSelecting();
+    const alive = new Set(keys);
+    setSelected((was) =>
+      [...was].some((key) => !alive.has(key)) ? new Set([...was].filter((key) => alive.has(key))) : was,
+    );
+    if (anchor.current && !alive.has(anchor.current)) anchor.current = null;
+  }, [order]); // selection follows the visible location, not a hidden search result
+
+  const roots = (picked: string[]) => browserSelectionRoots(picked, folders, projects);
+  const excluded = (picked: string[]) =>
+    new Set(
+      folders
+        .filter((f) => folderTrail(folders, f.id).some((up) => picked.includes(`folder:${up.id}`)))
+        .map((f) => f.id),
+    );
+  const openEntry = (entry: BrowserEntry) => {
+    if ('folder' in entry) navigate(entry.folder.id);
+    else onOpen(entry.project);
+  };
+  const rename = (entry: BrowserEntry) => {
+    if ('project' in entry && entry.project.missing) return;
+    setRenaming(entry.key);
+  };
+  const remove = (picked: string[]) => {
+    const items = roots(picked);
+    const projectIds = items.filter((k) => k.startsWith('project:')).map((k) => k.slice(8));
+    const folderIds = items.filter((k) => k.startsWith('folder:')).map((k) => k.slice(7));
+    if (!folderIds.length) {
+      if (projectIds.length) onDelete(projectIds);
+    } else if (folderIds.length === 1 && !projectIds.length) {
+      const folder = folders.find((f) => f.id === folderIds[0]);
+      if (folder) onDeleteFolder(folder);
+    } else onDeleteItems(projectIds, folderIds);
+  };
+  const move = (picked: string[], destination: string | null) => {
+    if (destination && excluded(picked).has(destination)) return;
+    for (const key of roots(picked)) {
+      if (key.startsWith('folder:')) {
+        const folder = folders.find((f) => f.id === key.slice(7));
+        if (folder && parentOf(folder, folders) !== destination) onMoveFolder(folder.id, destination);
+      } else {
+        const project = projects.find((p) => p.id === key.slice(8));
+        if (project && (project.folderId ?? null) !== destination) onMoveToFolder(project.id, destination);
+      }
+    }
+    setSelected(new Set());
+    setCut([]);
+  };
+  async function newFolder() {
+    setQuery('');
+    const folder = await onCreateFolder(t('projects.untitledFolder'), folderId);
+    if (folder) {
+      const key = `folder:${folder.id}`;
+      setSelected(new Set([key]));
+      setRenaming(key);
+      anchor.current = key;
+    }
+  }
+  const choose = (entry: BrowserEntry, event: React.MouseEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest('button,input')) return;
+    setSelected((was) => selectBrowserItems(keys, was, entry.key, anchor.current, event));
+    if (!event.shiftKey) anchor.current = entry.key;
+    event.currentTarget.focus({ preventScroll: true });
+  };
+  const dropProps = (destination: string | null) => ({
+    onDragOver: (event: React.DragEvent) => {
+      if (!event.dataTransfer.types.includes(BROWSER_DRAG)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const allowed = !destination || !excluded(dragging.current).has(destination);
+      event.dataTransfer.dropEffect = allowed ? 'move' : 'none';
+      setDropTarget(allowed ? destination : undefined);
+    },
+    onDragLeave: (event: React.DragEvent) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropTarget(undefined);
+    },
+    onDrop: (event: React.DragEvent) => {
+      if (!event.dataTransfer.types.includes(BROWSER_DRAG)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      // Only this browser's current drag may rearrange its library.
+      if (dragging.current.length) move(dragging.current, destination);
+      dragging.current = [];
+      setDropTarget(undefined);
+    },
+  });
+  const selectionActions = (picked: string[]): ContextMenuEntry[] => {
+    const single = entries.find((e) => e.key === picked[0]);
+    if (picked.length === 1 && single) {
+      if ('project' in single) {
+        const project = single.project;
+        return projectMenuItems(
+          t,
+          project.missing
+            ? { onLocate: () => onLocate(project), onRemove: () => remove(picked) }
+            : {
+                onOpen: () => onOpen(project),
+                onRename: () => rename(single),
+                onDuplicate: () => onDuplicate(project),
+                onCut: () => setCut(picked),
+                onMoveToFolder: () => setMoving(picked),
+                onChangeCover: cover ? () => cover.change(project) : undefined,
+                onRestoreCover: cover && project.cover ? () => cover.restore(project) : undefined,
+                onReveal: () => void api.revealProject(project.id).catch(() => {}),
+                onDelete: () => remove(picked),
+              },
+        );
+      }
+      return [
+        { id: 'open', icon: <FolderOpen size={14} />, label: t('projectMenu.open'), onSelect: () => openEntry(single) },
+        {
+          id: 'rename',
+          icon: <Pencil size={14} />,
+          label: t('projectMenu.rename'),
+          shortcut: 'F2',
+          onSelect: () => rename(single),
+        },
+        { id: 'cut', icon: <Scissors size={14} />, label: t('projectBrowser.cut'), onSelect: () => setCut(picked) },
+        { id: 'move', icon: <FolderInput size={14} />, label: t('projects.moveTo'), onSelect: () => setMoving(picked) },
+        { id: 'sep', separator: true },
+        {
+          id: 'delete',
+          icon: <Trash2 size={14} />,
+          label: t('projectMenu.delete'),
+          danger: true,
+          onSelect: () => remove(picked),
+        },
+      ];
+    }
+    return [
+      { id: 'cut', icon: <Scissors size={14} />, label: t('projectBrowser.cut'), onSelect: () => setCut(picked) },
+      { id: 'move', icon: <FolderInput size={14} />, label: t('projects.moveTo'), onSelect: () => setMoving(picked) },
+      {
+        id: 'delete',
+        icon: <Trash2 size={14} />,
+        label: t('library.deleteSelected'),
+        danger: true,
+        onSelect: () => remove(picked),
+      },
+    ];
+  };
+  const backgroundActions: ContextMenuEntry[] = [
+    {
+      id: 'new',
+      icon: <Plus size={14} />,
+      label: t('projects.newProject'),
+      disabled: creating,
+      onSelect: () => onNewProject(folderId),
+    },
+    { id: 'folder', icon: <FolderPlus size={14} />, label: t('projects.newFolder'), onSelect: () => void newFolder() },
+    { id: 'import', icon: <FolderOpen size={14} />, label: t('projects.openFolder'), onSelect: onOpenFolder },
+    {
+      id: 'paste',
+      icon: <ClipboardPaste size={14} />,
+      label: t('projectBrowser.paste'),
+      disabled: !cut.length || !!(folderId && excluded(cut).has(folderId)),
+      onSelect: () => move(cut, folderId),
+    },
+    { id: 'sep', separator: true },
+    { id: 'all', label: t('library.selectAll'), disabled: !keys.length, onSelect: () => setSelected(new Set(keys)) },
+  ];
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.defaultPrevented || moving || context || (event.target as HTMLElement).closest('[role="menu"]')) return;
+    const mod = event.metaKey || event.ctrlKey;
+    if (mod && event.key.toLowerCase() === 'f') {
+      event.preventDefault();
+      search.current?.focus();
+      search.current?.select();
       return;
     }
-    setSelectedIds(new Set(kept));
-  }, [projects, selecting, selectedIds, exitSelecting]);
-
-  /* Escape leaves select mode only. On the document, so it comes before the Projects window's own Escape (on the
-     window), which a handled Escape (defaultPrevented) does not close */
-  React.useEffect(() => {
-    if (!selecting) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
-      event.preventDefault();
-      exitSelecting();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [selecting, exitSelecting]);
-
-  function toggleSelected(id: string) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleSelectAllVisible() {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      for (const id of selectableIds) {
-        if (allVisibleSelected) next.delete(id);
-        else next.add(id);
+    if (pane === 'examples') return;
+    const typing = (event.target as HTMLElement).closest('input,textarea,[contenteditable=true]');
+    if (typing) {
+      if (event.key === 'Escape' && event.target === search.current && query) {
+        event.preventDefault();
+        setQuery('');
       }
-      return next;
-    });
-  }
-
-  /** "Select" on a card's menu enters select mode with that card already ticked: it is the one being pointed at. */
-  function startSelecting(project: LibraryProject) {
-    setRenamingId(null);
-    setSelecting(true);
-    setSelectedIds(new Set([project.id]));
-  }
-
-  function itemProps(project: LibraryProject): ItemProps {
-    return {
-      project,
-      title: titleOf(project, t),
-      selecting,
-      selected: selectedIds.has(project.id),
-      renaming: renamingId === project.id,
-      onToggleSelect: () => toggleSelected(project.id),
-      onOpen: opening(() => onOpen(project)),
-      onDuplicate: () => onDuplicate(project),
-      onStartRename: () => { if (!selecting) setRenamingId(project.id); },
-      onCommitRename: (name: string) => {
-        setRenamingId((current) => (current === project.id ? null : current));
-        /* empty or unchanged: nothing to do (a project is its folder, and a folder needs a name) */
-        if (!name || name === project.name.trim()) return;
-        onRename(project.id, name);
-      },
-      onCancelRename: () => setRenamingId((current) => (current === project.id ? null : current)),
-      onStartSelect: () => startSelecting(project),
-      onMoveToFolder: () => setMoving({ project }),
-      onLocate: () => onLocate(project),
-      onDelete: () => onDelete([project.id]),
-    };
-  }
-
+      return;
+    }
+    if (mod && event.shiftKey && event.key.toLowerCase() === 'n') {
+      event.preventDefault();
+      void newFolder();
+      return;
+    }
+    if (event.altKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp'].includes(event.key)) {
+      event.preventDefault();
+      if (event.key === 'ArrowUp') navigate(trail.length > 1 ? trail[trail.length - 2]!.id : null);
+      else history(event.key === 'ArrowLeft' ? -1 : 1);
+      return;
+    }
+    if (event.key === 'Escape' && (selected.size || cut.length)) {
+      event.preventDefault();
+      setSelected(new Set());
+      setCut([]);
+      anchor.current = null;
+      return;
+    }
+    if (!surface.current?.contains(event.target as Node)) return;
+    if ((event.target as HTMLElement).closest('button') && (event.key === 'Enter' || event.key === ' ')) return;
+    const activeKey = (event.target as HTMLElement).closest<HTMLElement>('[data-browser-item]')?.dataset.browserItem;
+    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      event.preventDefault();
+      const picked = activeKey && !selected.has(activeKey) ? [activeKey] : [...selected];
+      setSelected(new Set(picked));
+      const bounds = (event.target as HTMLElement).getBoundingClientRect();
+      setContext({ x: bounds.left, y: bounds.bottom, keys: picked });
+      return;
+    }
+    if (mod && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      setSelected(new Set(keys));
+      return;
+    }
+    if (mod && event.key.toLowerCase() === 'x' && selected.size) {
+      event.preventDefault();
+      setCut([...selected]);
+      return;
+    }
+    if (mod && event.key.toLowerCase() === 'v' && cut.length) {
+      event.preventDefault();
+      move(cut, folderId);
+      return;
+    }
+    const single = selected.size === 1 ? entries.find((e) => selected.has(e.key)) : undefined;
+    if (event.key === 'F2' && single) {
+      event.preventDefault();
+      rename(single);
+      return;
+    }
+    if (mod && event.key.toLowerCase() === 'd' && single && 'project' in single && !single.project.missing) {
+      event.preventDefault();
+      onDuplicate(single.project);
+      return;
+    }
+    if ((event.key === 'Delete' || (mod && event.key === 'Backspace')) && selected.size) {
+      event.preventDefault();
+      remove([...selected]);
+      return;
+    }
+    if (event.key === 'Enter' && single) {
+      event.preventDefault();
+      openEntry(single);
+      return;
+    }
+    if (event.key === ' ' && activeKey) {
+      event.preventDefault();
+      setSelected((was) => selectBrowserItems(keys, was, activeKey, anchor.current, { ctrlKey: true }));
+      anchor.current = activeKey;
+      return;
+    }
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key) && keys.length) {
+      event.preventDefault();
+      const grid = surface.current.querySelector<HTMLElement>(`.${styles.grid}`);
+      const columns = grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').length : 1;
+      const at = keys.indexOf(activeKey ?? [...selected].at(-1) ?? '');
+      const step =
+        event.key === 'ArrowUp' ? -columns : event.key === 'ArrowDown' ? columns : event.key === 'ArrowLeft' ? -1 : 1;
+      const index =
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+          ? keys.length - 1
+          : at < 0
+          ? 0
+          : Math.max(0, Math.min(keys.length - 1, at + step));
+      const key = keys[index]!;
+      if (!mod || event.shiftKey)
+        setSelected((was) =>
+          selectBrowserItems(keys, was, key, anchor.current, { shiftKey: event.shiftKey, ctrlKey: mod }),
+        );
+      if (!event.shiftKey) anchor.current = key;
+      surface.current.querySelector<HTMLElement>(`[data-browser-index="${index}"]`)?.focus();
+      return;
+    }
+    if (!mod && !event.altKey && event.key.length === 1 && !event.nativeEvent.isComposing) {
+      const now = Date.now();
+      typed.current = {
+        text: (now - typed.current.at < 750 ? typed.current.text : '') + event.key.toLocaleLowerCase(),
+        at: now,
+      };
+      const index = entries.findIndex((entry) => entry.name.toLocaleLowerCase().startsWith(typed.current.text));
+      if (index >= 0) {
+        event.preventDefault();
+        const key = keys[index]!;
+        setSelected(new Set([key]));
+        anchor.current = key;
+        surface.current.querySelector<HTMLElement>(`[data-browser-index="${index}"]`)?.focus();
+      }
+    }
+  };
+  const renderTree = (parent: string | null, depth: number, seen = new Set<string>()): React.ReactNode =>
+    folders
+      .filter((f) => parentOf(f, folders) === parent && !seen.has(f.id))
+      .sort((a, b) => a.name.localeCompare(b.name, language, { numeric: true }))
+      .map((folder) => {
+        const hasChildren = folders.some((f) => parentOf(f, folders) === folder.id);
+        const expanded = !collapsed.has(folder.id);
+        return (
+          <React.Fragment key={folder.id}>
+            <div
+              className={`${styles.treeRow} ${dropTarget === folder.id ? styles.dropTarget : ''}`}
+              data-active={pane === 'projects' && folderId === folder.id}
+              style={{ paddingLeft: depth * 13 }}
+              {...dropProps(folder.id)}
+            >
+              <button
+                type="button"
+                className={styles.treeToggle}
+                aria-label={t(expanded ? 'projectBrowser.collapse' : 'projectBrowser.expand').replace(
+                  '{name}',
+                  folder.name,
+                )}
+                disabled={!hasChildren}
+                onClick={() =>
+                  setCollapsed((was) => {
+                    const next = new Set(was);
+                    if (expanded) next.add(folder.id);
+                    else next.delete(folder.id);
+                    return next;
+                  })
+                }
+              >
+                {hasChildren ? (
+                  <ChevronRight size={12} style={{ transform: expanded ? 'rotate(90deg)' : undefined }} />
+                ) : null}
+              </button>
+              <button
+                type="button"
+                aria-current={pane === 'projects' && folderId === folder.id ? 'page' : undefined}
+                onClick={() => { onPane?.('projects'); navigate(folder.id); }}
+              >
+                <Folder size={15} />
+                <span>{folder.name}</span>
+                <small>{counts[folder.id] || ''}</small>
+              </button>
+            </div>
+            {expanded ? renderTree(folder.id, depth + 1, new Set([...seen, folder.id])) : null}
+          </React.Fragment>
+        );
+      });
   const starts = listStarts({ folderId, query });
-  const showNew = starts.newProject;
+  const single = selected.size === 1 ? entries.find((e) => selected.has(e.key)) : undefined;
+  const movingParents =
+    moving?.map((key) => {
+      if (key.startsWith('folder:')) {
+        const folder = folders.find((f) => f.id === key.slice(7));
+        return folder ? parentOf(folder, folders) : null;
+      }
+      const id = projects.find((p) => p.id === key.slice(8))?.folderId;
+      return folders.some((f) => f.id === id) ? id! : null;
+    }) ?? [];
+  const movingCurrent = new Set(movingParents).size === 1 ? movingParents[0] : undefined;
+  const itemName = (entry: BrowserEntry) =>
+    renaming === entry.key ? (
+      <InlineNameInput
+        key={entry.key}
+        initial={entry.name}
+        onCommit={(name) => {
+          setRenaming(null);
+          if (name && name !== entry.name) {
+            if ('folder' in entry) onRenameFolder(entry.folder.id, name);
+            else onRename(entry.project.id, limitTitleWidth(name, TITLE_MAX_WIDTH));
+          }
+          surface.current?.focus({ preventScroll: true });
+        }}
+        onCancel={() => {
+          setRenaming(null);
+          surface.current?.focus({ preventScroll: true });
+        }}
+        className="h-6 w-full min-w-0 rounded border border-[var(--accent)] bg-[var(--bg-raised)] px-1 text-[12px] text-[var(--text)] outline-none"
+      />
+    ) : (
+      <span title={'project' in entry ? entry.project.path : entry.name}>{entry.name}</span>
+    );
+  const itemMenu = (entry: BrowserEntry) => (
+    <button
+      type="button"
+      className={styles.iconButton}
+      tabIndex={selected.has(entry.key) ? 0 : -1}
+      aria-label={t('projectMenu.more')}
+      aria-haspopup="menu"
+      onClick={(event) => {
+        event.stopPropagation();
+        const picked = selected.has(entry.key) ? [...selected] : [entry.key];
+        setSelected(new Set(picked));
+        const rect = event.currentTarget.getBoundingClientRect();
+        setContext({ x: rect.right, y: rect.bottom, keys: picked });
+      }}
+    >
+      <MoreHorizontal size={14} />
+    </button>
+  );
+  const renderEntry = (entry: BrowserEntry, index: number) => {
+    const folder = 'folder' in entry ? entry.folder : null;
+    const project = 'project' in entry ? entry.project : null;
+    const date = project?.openedAt ?? folder!.createdAt;
+    const status = project?.missing
+      ? t(project.missingReason === 'film' ? 'projects.missingFilm' : 'projects.missing')
+      : project?.working
+      ? t('projects.agentRunning')
+      : '';
+    return (
+      <div
+        key={entry.key}
+        role="option"
+        aria-label={entry.name}
+        aria-selected={selected.has(entry.key)}
+        tabIndex={selected.has(entry.key) || (!selected.size && index === 0) ? 0 : -1}
+        data-browser-item={entry.key}
+        data-browser-index={index}
+        data-browser-folder={folder?.id}
+        className={`${styles.item} ${view === 'cards' ? styles.card : styles.row} ${
+          folder && dropTarget === folder.id ? styles.dropTarget : ''
+        } ${cut.includes(entry.key) ? styles.cut : ''}`}
+        onClick={(event) => choose(entry, event)}
+        onDoubleClick={(event) => {
+          if (!(event.target as HTMLElement).closest('button,input') && !event.ctrlKey && !event.metaKey)
+            openEntry(entry);
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const picked = selected.has(entry.key) ? [...selected] : [entry.key];
+          setSelected(new Set(picked));
+          setContext({ x: event.clientX, y: event.clientY, keys: picked });
+        }}
+        draggable={renaming !== entry.key}
+        onDragStart={(event) => {
+          if ((event.target as HTMLElement).closest('button,input')) {
+            event.preventDefault();
+            return;
+          }
+          const picked = selected.has(entry.key) ? [...selected] : [entry.key];
+          dragging.current = picked;
+          setSelected(new Set(picked));
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData(BROWSER_DRAG, JSON.stringify(picked));
+        }}
+        onDragEnd={() => {
+          dragging.current = [];
+          setDropTarget(undefined);
+        }}
+        {...(folder ? dropProps(folder.id) : {})}
+      >
+        {view === 'cards' ? (
+          <>
+            <div className={`${styles.cover} ${folder ? styles.folderCover : ''}`}>
+              {folder ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <FolderGlyph className="h-[78%] w-[78%]" />
+                </div>
+              ) : (
+                <PosterMedia project={project!} />
+              )}
+              {project?.duration ? <span className={styles.duration}>{formatDuration(project.duration)}</span> : null}
+            </div>
+            <div className={styles.name}>
+              {itemName(entry)}
+              <div className={styles.itemMenu}>{itemMenu(entry)}</div>
+            </div>
+            <div className={`${styles.meta} ${project?.missing ? styles.error : ''}`}>
+              {status ||
+                (folder
+                  ? t(counts[folder.id] === 1 ? 'projects.folderCountOne' : 'projects.folderCount').replace(
+                      '{n}',
+                      String(counts[folder.id] ?? 0),
+                    )
+                  : formatDate(date, language))}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={styles.name}>
+              {folder ? (
+                <Folder size={23} className="mr-2" />
+              ) : (
+                <div className={styles.thumbnail}>
+                  <PosterMedia project={project!} />
+                </div>
+              )}
+              {itemName(entry)}
+            </div>
+            <span>{formatDate(date, language)}</span>
+            <span>{t(folder ? 'projectBrowser.folder' : 'projectBrowser.project')}</span>
+            <span className={project?.missing ? styles.error : ''} title={status}>
+              {status || (project?.duration ? formatDuration(project.duration) : '—')}
+            </span>
+            <div className={styles.itemMenu}>{itemMenu(entry)}</div>
+          </>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      {/* the header stays out of the scroll area: inside it, the list view's scrollbar would narrow the header */}
-      <header className="flex shrink-0 flex-col gap-3 px-6 pb-4 pt-5">
-        <div className="flex min-h-8 items-center gap-2">
-          {/* inside a folder the title is the way back: "Projects / test", on the same line, so what is in the folder
-              starts where the projects do */}
-          {currentFolder ? (
-            <FolderCrumb
-              folder={currentFolder}
-              above={trail.slice(0, -1)}
-              count={counts[currentFolder.id] ?? 0}
-              onGo={setFolderId}
-              onRename={(name) => onRenameFolder(currentFolder.id, name)}
-              onDelete={() => onDeleteFolder(currentFolder)}
-              onMove={() => setMoving({ folder: currentFolder })}
+    <div className={styles.browser} onKeyDown={onKeyDown}>
+      <div className={styles.body}>
+        <aside className={styles.sidebar} aria-label={t('projectBrowser.sidebar')}>
+          <label className={styles.search}>
+            <Search size={14} />
+            <input
+              ref={search}
+              type="search"
+              aria-label={t('projectBrowser.search')}
+              placeholder={t('projectBrowser.search')}
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setSelected(new Set());
+                /* a search is through the projects */
+                onPane?.('projects');
+              }}
             />
-          ) : (
-            heading ?? <h2 className="mr-auto text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('nav.projects')}</h2>
-          )}
-          {projects.length > 0 ? (
-            <>
-              <label className="relative w-[240px] shrink-0">
-                <span className="sr-only">{t('library.searchPlaceholder')}</span>
-                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-faint)]" />
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder={t('library.searchPlaceholder')}
-                  className="h-8 w-full rounded-lg bg-[var(--bg-field)] pl-8 pr-3 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--border-strong)]"
-                />
-              </label>
-              <SortButton sort={sort} onSort={setSort} />
-              <div className="flex h-8 shrink-0 items-center gap-0.5 rounded-lg bg-[var(--bg-field)] px-[3px]" aria-label={t('library.viewLabel')}>
-                <ViewButton active={view === 'cards'} label={t('library.viewCards')} onClick={() => setView('cards')} icon={<LayoutGrid size={14} />} />
-                <ViewButton active={view === 'list'} label={t('library.viewList')} onClick={() => setView('list')} icon={<List size={14} />} />
-              </div>
-              {/* at the top level or inside a folder: a folder can hold folders */}
-              <Tooltip label={t('projects.newFolder')} side="bottom">
-                <button
-                  type="button"
-                  aria-label={t('projects.newFolder')}
-                  onClick={() => void newFolder()}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
-                >
-                  <FolderPlus size={15} strokeWidth={1.9} />
-                </button>
-              </Tooltip>
-            </>
+          </label>
+          <div className={styles.sideLabel}>OPENFILM</div>
+          <div
+            className={`${styles.treeRow} ${dropTarget === null ? styles.dropTarget : ''}`}
+            data-active={pane === 'projects' && folderId === null && !query}
+            {...dropProps(null)}
+          >
+            <button type="button" className="pl-3" onClick={() => { onPane?.('projects'); navigate(null); }}>
+              <FolderOpen size={16} />
+              <span>{t('launcher.projects')}</span>
+              <small>{projects.length}</small>
+            </button>
+          </div>
+          {onPane ? (
+            <div className={styles.treeRow} data-active={pane === 'examples'}>
+              <button type="button" className="pl-3" aria-current={pane === 'examples' ? 'page' : undefined} onClick={() => onPane('examples')}>
+                <Clapperboard size={16} />
+                <span>{t('launcher.examples')}</span>
+              </button>
+            </div>
           ) : null}
-          {onClose ? (
+          <div className={styles.sideLabel}>{t('projectBrowser.folders')}</div>
+          <nav aria-label={t('projectBrowser.folders')}>{renderTree(null, 0)}</nav>
+          <button
+            type="button"
+            className={`${styles.action} mt-2 w-full justify-start`}
+            onClick={() => void newFolder()}
+          >
+            <FolderPlus size={14} />
+            {t('projects.newFolder')}
+          </button>
+          <ProjectsStorage className={styles.storage} />
+        </aside>
+        {pane === 'examples' ? examplesPane : null}
+        <main className={styles.main} hidden={pane === 'examples'}>
+          <div className={styles.navigation}>
             <button
               type="button"
-              onClick={onClose}
-              aria-label={t('project.close')}
-              className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+              className={styles.iconButton}
+              aria-label={t('projectBrowser.back')}
+              disabled={location.index === 0}
+              onClick={() => history(-1)}
             >
-              <X size={16} strokeWidth={1.75} />
+              <ArrowLeft size={16} />
             </button>
-          ) : null}
-        </div>
-      </header>
-
-      {/* the one scroll area; the scrollbar gutter is reserved so cards keep their width either way */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]">
-        <div className="w-full flex-1 px-6 pb-6">
-          {visible.length === 0 && !showNew && !(showFolders && levelFolders.length > 0) ? (
-            <div className="flex min-h-[42vh] items-center justify-center text-[14px] text-[var(--text-muted)]">
-              {t('library.noMatches')}
-            </div>
-          ) : view === 'cards' ? (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
-              {showNew ? <NewProjectCard creating={creating} onNewProject={() => onNewProject(folderId)} {...(folderId === null ? { onOpenFolder, onGetFromGitHub } : {})} /> : null}
-              {showFolders ? levelFolders.map((folder) => <FolderCard key={`folder:${folder.id}`} {...folderProps(folder)} />) : null}
-              {visible.map((project) => <ProjectCard key={project.id} {...itemProps(project)} />)}
-            </div>
-          ) : (
-            <div className="flex flex-col divide-y divide-[var(--border)]">
-              {showNew ? <NewProjectListRow creating={creating} onNewProject={() => onNewProject(folderId)} {...(folderId === null ? { onOpenFolder, onGetFromGitHub } : {})} /> : null}
-              {showFolders ? levelFolders.map((folder) => <FolderListRow key={`folder:${folder.id}`} {...folderProps(folder)} />) : null}
-              {visible.map((project) => <ProjectListRow key={project.id} {...itemProps(project)} />)}
-            </div>
-          )}
-          {starts.examples && onOpenExample ? (
-            <ExamplesSection examples={examples} collapsed={examplesCollapsed} onToggle={() => onToggleExamples?.()} onOpen={onOpenExample} view={view} />
-          ) : null}
-        </div>
-
-        {selecting ? (
-          <div className="pointer-events-none sticky bottom-0 z-20 flex justify-center pb-5">
-            <div
-              className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-[var(--border)] bg-[var(--bg-raised)] py-1.5 pl-4 pr-1.5 shadow-[var(--shadow-lg)]"
-              style={{ animation: 'openfilm-rise 0.16s ease-out both' }}
+            <button
+              type="button"
+              className={styles.iconButton}
+              aria-label={t('projectBrowser.forward')}
+              disabled={location.index === location.entries.length - 1}
+              onClick={() => history(1)}
             >
-              <span className="text-[13px] font-medium tabular-nums text-[var(--text)]">
-                {t('library.selectedCount').replace('{n}', String(selectedCount))}
-              </span>
-              <span className="mx-2 h-4 w-px bg-[var(--border)]" />
+              <ArrowRight size={16} />
+            </button>
+            <button
+              type="button"
+              className={styles.iconButton}
+              aria-label={t('projects.folderUp')}
+              disabled={!folderId}
+              onClick={() => navigate(trail.length > 1 ? trail[trail.length - 2]!.id : null)}
+            >
+              <ArrowUp size={16} />
+            </button>
+            <nav className={styles.path} aria-label={t('projectBrowser.path')}>
+              <button type="button" onClick={() => navigate(null)} {...dropProps(null)}>
+                <FolderOpen size={14} />
+                <span>{t('launcher.projects')}</span>
+              </button>
+              {trail.map((folder) => (
+                <React.Fragment key={folder.id}>
+                  <ChevronRight size={12} />
+                  <button type="button" onClick={() => navigate(folder.id)} {...dropProps(folder.id)}>
+                    <span>{folder.name}</span>
+                  </button>
+                </React.Fragment>
+              ))}
+              {query ? (
+                <>
+                  <ChevronRight size={12} />
+                  <span className="px-1 text-[var(--text-muted)]">{t('projectBrowser.results')}</span>
+                </>
+              ) : null}
+            </nav>
+            {onClose ? (
+              <button type="button" className={styles.iconButton} aria-label={t('project.close')} onClick={onClose}>
+                <X size={17} />
+              </button>
+            ) : null}
+          </div>
+          <div className={styles.toolbar}>
+            <button
+              type="button"
+              className={`${styles.action} ${styles.primary}`}
+              disabled={creating}
+              onClick={() => onNewProject(folderId)}
+            >
+              <Plus size={15} />
+              {t('projects.newProject')}
+            </button>
+            <button type="button" className={styles.action} onClick={() => void newFolder()}>
+              <FolderPlus size={15} />
+              {t('projects.newFolder')}
+            </button>
+            <ImportMenu
+              creating={creating}
+              onOpenFolder={onOpenFolder}
+              onGetFromGitHub={onGetFromGitHub}
+              className="h-[30px] px-2 text-[12px]"
+            />
+            <span className={styles.divider} />
+            <Tooltip label={t('projectMenu.rename')}>
               <button
                 type="button"
-                onClick={toggleSelectAllVisible}
-                disabled={selectableIds.length === 0}
-                className="h-8 rounded-xl px-2.5 text-[12.5px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-40"
+                className={styles.iconButton}
+                aria-label={t('projectMenu.rename')}
+                disabled={!single || ('project' in single && single.project.missing)}
+                onClick={() => single && rename(single)}
               >
-                {allVisibleSelected ? t('library.deselectAll') : t('library.selectAll')}
+                <Pencil size={14} />
               </button>
+            </Tooltip>
+            <Tooltip label={t('projects.moveTo')}>
               <button
                 type="button"
-                onClick={() => { if (selectedIds.size) onDelete([...selectedIds]); }}
-                className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-[var(--err)] px-3 text-[12.5px] font-semibold text-[var(--on-accent)] transition hover:brightness-110"
+                className={styles.iconButton}
+                aria-label={t('projects.moveTo')}
+                disabled={!selected.size}
+                onClick={() => setMoving([...selected])}
               >
-                <Trash2 size={13} />
-                {t('library.deleteSelected')}
+                <FolderInput size={15} />
               </button>
-              <Tooltip label={t('library.cancelSelect')}>
-                <button
-                  type="button"
-                  onClick={exitSelecting}
-                  aria-label={t('library.cancelSelect')}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
-                >
-                  <X size={15} />
-                </button>
-              </Tooltip>
+            </Tooltip>
+            <Tooltip label={t('projectMenu.delete')}>
+              <button
+                type="button"
+                className={styles.iconButton}
+                aria-label={t('projectMenu.delete')}
+                disabled={!selected.size}
+                onClick={() => remove([...selected])}
+              >
+                <Trash2 size={14} />
+              </button>
+            </Tooltip>
+            <div className="ml-auto" />
+            <SortButton
+              sort={sort}
+              onSort={(next) => {
+                setSort(next);
+                setReversed(false);
+              }}
+            />
+            <div className={styles.views}>
+              <ViewButton
+                active={view === 'cards'}
+                label={t('library.viewCards')}
+                onClick={() => setView('cards')}
+                icon={<LayoutGrid size={14} />}
+              />
+              <ViewButton
+                active={view === 'list'}
+                label={t('library.viewList')}
+                onClick={() => setView('list')}
+                icon={<List size={14} />}
+              />
             </div>
           </div>
-        ) : null}
+          <div
+            ref={surface}
+            className={styles.surface}
+            tabIndex={0}
+            aria-label={t('projectBrowser.contents')}
+            {...dropProps(folderId)}
+            onContextMenu={(event) => {
+              if ((event.target as HTMLElement).closest('[data-browser-item]')) return;
+              event.preventDefault();
+              setSelected(new Set());
+              setContext({ x: event.clientX, y: event.clientY, keys: [] });
+            }}
+            onPointerDown={(event) => {
+              if (event.button !== 0 || (event.target as HTMLElement).closest('[data-browser-item],button,input'))
+                return;
+              surface.current?.focus({ preventScroll: true });
+              const rect = event.currentTarget.getBoundingClientRect();
+              boxStart.current = {
+                x: event.clientX - rect.left + event.currentTarget.scrollLeft,
+                y: event.clientY - rect.top + event.currentTarget.scrollTop,
+                selected: new Set(event.ctrlKey || event.metaKey || event.shiftKey ? selected : []),
+              };
+              if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
+                setSelected(new Set());
+                anchor.current = null;
+              }
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              const start = boxStart.current;
+              if (!start) return;
+              const rect = event.currentTarget.getBoundingClientRect();
+              const x = event.clientX - rect.left + event.currentTarget.scrollLeft,
+                y = event.clientY - rect.top + event.currentTarget.scrollTop;
+              if (Math.abs(x - start.x) + Math.abs(y - start.y) < 5) return;
+              const box = {
+                left: Math.min(start.x, x),
+                top: Math.min(start.y, y),
+                width: Math.abs(x - start.x),
+                height: Math.abs(y - start.y),
+              };
+              setMarquee(box);
+              const picked = new Set(start.selected);
+              event.currentTarget.querySelectorAll<HTMLElement>('[data-browser-item]').forEach((el) => {
+                const bounds = el.getBoundingClientRect();
+                const left = bounds.left - rect.left + event.currentTarget.scrollLeft,
+                  top = bounds.top - rect.top + event.currentTarget.scrollTop;
+                if (
+                  left < box.left + box.width &&
+                  left + bounds.width > box.left &&
+                  top < box.top + box.height &&
+                  top + bounds.height > box.top
+                )
+                  picked.add(el.dataset.browserItem!);
+              });
+              setSelected(picked);
+            }}
+            onPointerUp={(event) => {
+              boxStart.current = null;
+              setMarquee(null);
+              if (event.currentTarget.hasPointerCapture(event.pointerId))
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+            onPointerCancel={() => {
+              boxStart.current = null;
+              setMarquee(null);
+            }}
+          >
+            {view === 'list' ? (
+              <div className={styles.list}>
+                <div className={styles.listHeader}>
+                  <button type="button" onClick={() => sortColumn('title')}>
+                    {t('projectBrowser.name')}
+                    {sort === 'title' ? (
+                      <ChevronDown size={11} style={{ transform: reversed ? 'rotate(180deg)' : undefined }} />
+                    ) : null}
+                  </button>
+                  <button type="button" onClick={() => sortColumn('recent')}>
+                    {t('projectBrowser.lastOpened')}
+                    {sort === 'recent' ? (
+                      <ChevronDown size={11} style={{ transform: reversed ? 'rotate(180deg)' : undefined }} />
+                    ) : null}
+                  </button>
+                  <span>{t('projectBrowser.kind')}</span>
+                  <button type="button" onClick={() => sortColumn('duration')}>
+                    {t('projectBrowser.duration')}
+                    {sort === 'duration' ? (
+                      <ChevronDown size={11} style={{ transform: reversed ? 'rotate(180deg)' : undefined }} />
+                    ) : null}
+                  </button>
+                  <span />
+                </div>
+                <div role="listbox" aria-label={t('projectBrowser.contents')} aria-multiselectable="true">
+                  {entries.map(renderEntry)}
+                </div>
+              </div>
+            ) : (
+              <div
+                className={styles.grid}
+                role="listbox"
+                aria-label={t('projectBrowser.contents')}
+                aria-multiselectable="true"
+              >
+                {entries.map(renderEntry)}
+              </div>
+            )}
+            {!entries.length ? (
+              <div className={styles.empty}>
+                <FolderOpen size={36} strokeWidth={1} />
+                <span>{t(query ? 'library.noMatches' : 'projectBrowser.empty')}</span>
+                {!query ? (
+                  <button type="button" className={styles.action} onClick={() => onNewProject(folderId)}>
+                    <Plus size={14} />
+                    {t('projects.newProject')}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            {starts.examples && onOpenExample ? (
+              <div className="px-5">
+                <ExamplesSection
+                  examples={examples}
+                  collapsed={examplesCollapsed}
+                  onToggle={() => onToggleExamples?.()}
+                  onOpen={onOpenExample}
+                  view={view}
+                />
+              </div>
+            ) : null}
+            {marquee ? <div className={styles.marquee} style={marquee} /> : null}
+          </div>
+          <footer className={styles.status} aria-live="polite">
+            <span>{t('projectBrowser.itemCount').replace('{n}', String(entries.length))}</span>
+            {selected.size ? <span>{t('library.selectedCount').replace('{n}', String(selected.size))}</span> : null}
+            <span className={styles.hint}>{t('projectBrowser.hint')}</span>
+          </footer>
+        </main>
       </div>
-
+      {context ? (
+        <ContextMenu
+          x={context.x}
+          y={context.y}
+          items={context.keys.length ? selectionActions(context.keys) : backgroundActions}
+          onClose={() => {
+            setContext(null);
+            surface.current?.focus({ preventScroll: true });
+          }}
+        />
+      ) : null}
       {moving ? (
         <FolderPicker
-          title={'project' in moving ? titleOf(moving.project, t) : moving.folder.name}
+          title={
+            moving.length === 1
+              ? entries.find((e) => e.key === moving[0])?.name ?? ''
+              : t('library.selectedCount').replace('{n}', String(moving.length))
+          }
           folders={folders}
-          current={'project' in moving
-            ? (moving.project.folderId && folders.some((f) => f.id === moving.project.folderId) ? moving.project.folderId : null)
-            : parentOf(moving.folder, folders)}
-          /* a folder never goes into itself or a folder inside it */
-          exclude={'folder' in moving ? new Set([moving.folder.id, ...folders.filter((f) => folderTrail(folders, f.id).some((up) => up.id === moving.folder.id)).map((f) => f.id)]) : new Set()}
-          onMove={(fid) => {
-            if ('project' in moving) onMoveToFolder(moving.project.id, fid);
-            else onMoveFolder(moving.folder.id, fid);
+          current={movingCurrent}
+          exclude={excluded(moving)}
+          onMove={(id) => {
+            move(moving, id);
             setMoving(null);
           }}
-          onCreate={(name, parentId) => onCreateFolder(name, parentId)}
+          onCreate={onCreateFolder}
           onClose={() => setMoving(null)}
         />
       ) : null}
@@ -394,228 +1093,22 @@ export function ProjectsView({
   );
 }
 
-interface ItemProps {
-  project: LibraryProject;
-  /** The name shown ("Untitled" when empty). */
-  title: string;
-  selecting: boolean;
-  selected: boolean;
-  renaming: boolean;
-  onToggleSelect: () => void;
-  onOpen: (event?: { detail: number }) => void;
-  onDuplicate: () => void;
-  onStartRename: () => void;
-  onCommitRename: (name: string) => void;
-  onCancelRename: () => void;
-  onStartSelect: () => void;
-  onMoveToFolder: () => void;
-  onLocate: () => void;
-  onDelete: () => void;
-}
-
-function SelectionCheck({ selected }: { selected: boolean }) {
-  return (
-    <span
-      aria-hidden
-      className={`flex h-5 w-5 items-center justify-center rounded-md border transition ${
-        selected
-          ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)]'
-          : 'border-white/60 bg-black/35 text-transparent backdrop-blur-sm hover:border-white'
-      }`}
-    >
-      <Check size={12} strokeWidth={2.5} />
-    </span>
-  );
-}
-
-/** The tick at the cover's top left: only in select mode. */
-function SelectToggle({
-  selecting,
-  selected,
-  onToggle,
-  label,
-}: {
-  selecting: boolean;
-  selected: boolean;
-  onToggle: () => void;
-  label: string;
-}) {
-  if (!selecting) return null;
-  return (
-    <button
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        onToggle();
-      }}
-      aria-label={label}
-      aria-pressed={selected}
-      className="absolute left-2 top-2 z-10 rounded-md"
-    >
-      <SelectionCheck selected={selected} />
-    </button>
-  );
-}
-
-function ProjectCardTitle({
-  display,
-  stored,
-  renaming,
-  size,
-  onOpen,
-  onCommit,
-  onCancel,
-}: {
-  display: string;
-  stored: string;
-  renaming: boolean;
-  size: 'card' | 'list';
-  onOpen: (event?: { detail: number }) => void;
-  onCommit: (title: string) => void;
-  onCancel: () => void;
-}) {
-  const t = useT();
-  const [draft, setDraft] = React.useState(stored);
-  const committed = React.useRef(false);
-
-  React.useEffect(() => {
-    if (!renaming) return;
-    committed.current = false;
-    setDraft(stored);
-  }, [renaming, stored]);
-
-  const textClass =
-    size === 'card'
-      ? 'text-[13px] font-semibold text-[var(--text)]'
-      : 'text-[14px] font-semibold text-[var(--text)]';
-
-  function commit() {
-    if (committed.current) return;
-    committed.current = true;
-    onCommit(limitTitleWidth(draft.replace(/\s+/g, ' ').trim(), TITLE_MAX_WIDTH));
+type BrowserEntry =
+  | { key: string; name: string; folder: ProjectFolder }
+  | { key: string; name: string; project: LibraryProject };
+const BROWSER_DRAG = 'application/x-openfilm-project-items';
+function readPreference<T extends string>(key: string, fallback: T, allowed: readonly T[]): T {
+  try {
+    const value = localStorage.getItem(`openfilm.projects.${key}`) as T;
+    return allowed.includes(value) ? value : fallback;
+  } catch {
+    return fallback;
   }
-
-  function cancel() {
-    if (committed.current) return;
-    committed.current = true;
-    onCancel();
-  }
-
-  if (renaming) {
-    return (
-      <input
-        autoFocus
-        value={draft}
-        aria-label={t('projectMenu.rename')}
-        placeholder={t('project.untitled')}
-        onChange={(event) => {
-          const next = event.target.value;
-          /* mid-composition (IME) the text is not final: limit it once composition ends */
-          if ((event.nativeEvent as InputEvent).isComposing) {
-            setDraft(next);
-            return;
-          }
-          setDraft(limitTitleWidth(next, TITLE_MAX_WIDTH));
-        }}
-        onCompositionEnd={(event) => {
-          setDraft(limitTitleWidth(event.currentTarget.value, TITLE_MAX_WIDTH));
-        }}
-        onFocus={(event) => event.currentTarget.select()}
-        onBlur={() => commit()}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            if (event.nativeEvent.isComposing) return;
-            event.preventDefault();
-            commit();
-          }
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            /* the popover would close on this Escape too */
-            event.stopPropagation();
-            cancel();
-          }
-        }}
-        onClick={(event) => event.stopPropagation()}
-        className={`box-border w-full min-w-0 bg-transparent outline-none placeholder:text-[var(--text-faint)] ${textClass}`}
-      />
-    );
-  }
-
-  return (
-    <button type="button" onClick={onOpen} className="min-w-0 w-full text-left">
-      {/* the folder's name as it is: two spaces stay two (HTML would show one) */}
-      <h2 className={`truncate ${textClass}`} style={{ whiteSpace: 'pre' }}>{display}</h2>
-    </button>
-  );
 }
 
-type NewProjectProps = {
-  creating: boolean;
-  onNewProject: () => void;
-  /* starting from a film that exists: at the top level only (what they make is not filed in a folder) */
-  onOpenFolder?: () => void;
-  onGetFromGitHub?: () => void;
-};
+type NewProjectProps = { creating: boolean; onOpenFolder: () => void; onGetFromGitHub: () => void };
 
-/** The grid's first cell: start a new project, card-sized, so "new ones start here" reads at a glance. */
-function NewProjectCard({ creating, onNewProject, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
-  const t = useT();
-  return (
-    <article className="group min-w-0">
-      <button
-        type="button"
-        onClick={onNewProject}
-        disabled={creating}
-        aria-busy={creating}
-        className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60"
-      >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--bg-field)] text-[var(--text)] transition group-hover:scale-105">
-          <Plus size={18} strokeWidth={2.2} />
-        </span>
-        <span className="text-[13px] font-medium">{t('projects.newProject')}</span>
-      </button>
-      {/* where the other cards have their name: starting from a film that exists */}
-      <div className="mt-2 flex">
-        {onOpenFolder && onGetFromGitHub ? <ImportMenu creating={creating} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} className="-ml-1.5 h-7 px-1.5 text-[12.5px]" /> : null}
-      </div>
-    </article>
-  );
-}
-
-/** "New project" in the list view: the same entries, as a row. */
-function NewProjectListRow({ creating, onNewProject, onOpenFolder, onGetFromGitHub }: NewProjectProps) {
-  const t = useT();
-  return (
-    <article className="group flex min-w-0 items-center gap-3 py-4 sm:gap-4">
-      <button
-        type="button"
-        onClick={onNewProject}
-        disabled={creating}
-        aria-busy={creating}
-        className="flex aspect-video w-28 shrink-0 items-center justify-center rounded-md border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] transition hover:border-[var(--text-faint)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-60 sm:w-36"
-        aria-label={t('projects.newProject')}
-      >
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-field)] text-[var(--text)] transition group-hover:scale-105">
-          <Plus size={16} strokeWidth={2.2} />
-        </span>
-      </button>
-      <div className="min-w-0 flex-1">
-        <button
-          type="button"
-          onClick={onNewProject}
-          disabled={creating}
-          className="text-left text-[14px] font-medium text-[var(--text)] hover:underline disabled:opacity-60"
-        >
-          {t('projects.newProject')}
-        </button>
-      </div>
-      {onOpenFolder && onGetFromGitHub ? <ImportMenu creating={creating} onOpenFolder={onOpenFolder} onGetFromGitHub={onGetFromGitHub} className="h-8 px-2.5 text-[12.5px]" /> : null}
-    </article>
-  );
-}
-
-/** "Import from ⌄": the ways to start from a film that exists, a folder on this computer or a repository on GitHub. */
-function ImportMenu({ creating, onOpenFolder, onGetFromGitHub, className }: Required<Omit<NewProjectProps, 'onNewProject'>> & { className: string }) {
+function ImportMenu({ creating, onOpenFolder, onGetFromGitHub, className }: NewProjectProps & { className: string }) {
   const t = useT();
   const [anchor, setAnchor] = React.useState<{ x: number; y: number; top: number } | null>(null);
   const button = React.useRef<HTMLButtonElement>(null);
@@ -653,210 +1146,6 @@ function ImportMenu({ creating, onOpenFolder, onGetFromGitHub, className }: Requ
   );
 }
 
-function ProjectCard({
-  project,
-  title,
-  selecting,
-  selected,
-  renaming,
-  onToggleSelect,
-  onOpen,
-  onDuplicate,
-  onStartRename,
-  onCommitRename,
-  onCancelRename,
-  onStartSelect,
-  onMoveToFolder,
-  onLocate,
-  onDelete,
-}: ItemProps) {
-  const t = useT();
-  const language = useLanguage();
-  const open = selecting ? onToggleSelect : onOpen;
-  return (
-    <article className="group min-w-0">
-      <div className="relative">
-        <button
-          type="button"
-          onClick={open}
-          className="relative block aspect-video w-full overflow-hidden rounded-lg bg-[var(--bg-field)] text-left ring-1 ring-[var(--border)] transition duration-200 hover:brightness-[1.04]"
-          aria-label={title}
-          aria-pressed={selecting ? selected : undefined}
-        >
-          <PosterMedia project={project} shade />
-          {/* chosen: an outline drawn inside the card, over its picture, so the list's edge never cuts it */}
-          {selected ? <span aria-hidden className="pointer-events-none absolute inset-0 z-[1] rounded-lg ring-2 ring-inset ring-[var(--accent)]" /> : null}
-          {project.missing ? <span aria-hidden className="absolute inset-0 bg-black/45" /> : null}
-          {project.duration && !project.missing ? (
-            <div className="absolute bottom-2 right-2 text-[10.5px] font-medium text-white/80">
-              <span className="flex items-center gap-1 rounded bg-black/40 px-1.5 py-0.5 tabular-nums backdrop-blur-sm">
-                <Clock3 size={10} />
-                {formatDuration(project.duration)}
-              </span>
-            </div>
-          ) : null}
-        </button>
-        <SelectToggle selecting={selecting} selected={selected} onToggle={onToggleSelect} label={t('library.toggleSelect')} />
-        {project.missing && !selecting ? <MissingActions reason={project.missingReason} onLocate={onLocate} onRemove={onDelete} /> : null}
-      </div>
-
-      <div className="mt-2 flex min-w-0 items-start gap-1.5">
-        <div className="min-w-0 flex-1 text-left">
-          <ProjectCardTitle
-            display={title}
-            stored={project.name}
-            renaming={renaming}
-            size="card"
-            onOpen={open}
-            onCommit={onCommitRename}
-            onCancel={onCancelRename}
-          />
-          <button
-            type="button"
-            onClick={open}
-            className="mt-0.5 flex w-full items-center gap-1.5 text-left text-[11.5px] text-[var(--text-faint)]"
-          >
-            <Video size={11} />
-            {formatDate(project.openedAt, language)}
-            {project.missing ? <span className="truncate text-[var(--err)]">· {t(project.missingReason === 'film' ? 'projects.missingFilm' : 'projects.missing')}</span> : null}
-            {project.working ? <span className="truncate text-[var(--accent)]">· {t('projects.agentRunning')}</span> : null}
-          </button>
-        </div>
-        {!selecting ? <ItemMenu project={project} onOpen={onOpen} onDuplicate={onDuplicate} onStartRename={onStartRename} onStartSelect={onStartSelect} onMoveToFolder={onMoveToFolder} onLocate={onLocate} onDelete={onDelete} size={14} /> : null}
-      </div>
-    </article>
-  );
-}
-
-/**
- * On the cover of a project whose folder is gone: "Folder not found", and the two things to do about it: point it at
- * the folder it is in now (it keeps its place, and its history goes with the folder), or take it off the list.
- */
-function MissingActions({ reason, onLocate, onRemove, compact = false }: { reason?: Project['missingReason']; onLocate: () => void; onRemove: () => void; compact?: boolean }) {
-  const t = useT();
-  const button = 'inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium transition';
-  return (
-    <div className={compact ? 'flex items-center gap-1' : 'pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 p-2'}>
-      {compact ? null : <span className="text-[12px] font-semibold text-white drop-shadow">{t(reason === 'film' ? 'projects.missingFilm' : 'projects.missing')}</span>}
-      <div className="pointer-events-auto flex items-center gap-1.5">
-        <button type="button" onClick={onLocate} className={`${button} bg-[var(--bg-raised)] text-[var(--text)] shadow hover:brightness-95`}>
-          <FolderSearch size={13} />
-          {t('projects.locate')}
-        </button>
-        <button
-          type="button"
-          onClick={onRemove}
-          className={`${button} ${compact ? 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]' : 'bg-black/40 text-white backdrop-blur-sm hover:bg-black/55'}`}
-        >
-          {t('projects.removeFromList')}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * A card's or row's "…", with Reveal to show where its folder is. A project whose folder is gone can be located or
- * leave the list: there is nothing to open, rename or reveal.
- */
-function ItemMenu({
-  project,
-  onOpen,
-  onDuplicate,
-  onStartRename,
-  onStartSelect,
-  onMoveToFolder,
-  onLocate,
-  onDelete,
-  size,
-}: Pick<ItemProps, 'project' | 'onOpen' | 'onDuplicate' | 'onStartRename' | 'onStartSelect' | 'onMoveToFolder' | 'onLocate' | 'onDelete'> & { size: number }) {
-  const cover = React.useContext(ProjectCoverContext);
-  if (project.missing) return <ProjectMenu onLocate={onLocate} onRemove={onDelete} size={size} />;
-  return (
-    <ProjectMenu
-      onOpen={onOpen}
-      onRename={onStartRename}
-      onDuplicate={onDuplicate}
-      onSelect={onStartSelect}
-      onMoveToFolder={onMoveToFolder}
-      onChangeCover={cover ? () => cover.change(project) : undefined}
-      onRestoreCover={cover && project.cover ? () => cover.restore(project) : undefined}
-      onReveal={() => void api.revealProject(project.id).catch(() => {})}
-      onDelete={onDelete}
-      size={size}
-    />
-  );
-}
-
-/** A row in the list view; the folder's path stands where a description would. */
-function ProjectListRow({
-  project,
-  title,
-  selecting,
-  selected,
-  renaming,
-  onToggleSelect,
-  onOpen,
-  onDuplicate,
-  onStartRename,
-  onCommitRename,
-  onCancelRename,
-  onStartSelect,
-  onMoveToFolder,
-  onLocate,
-  onDelete,
-}: ItemProps) {
-  const t = useT();
-  const language = useLanguage();
-  const open = selecting ? onToggleSelect : onOpen;
-  return (
-    <article className={`group flex min-w-0 items-center gap-3 py-4 sm:gap-4 ${selected ? 'bg-[var(--bg-hover)]/40' : ''}`}>
-      <div className="relative shrink-0">
-        <button
-          type="button"
-          onClick={open}
-          className="relative block aspect-video w-28 overflow-hidden rounded-md bg-[var(--bg-field)] ring-1 ring-[var(--border)] sm:w-36"
-          aria-label={title}
-        >
-          <PosterMedia project={project} />
-          {selected ? <span aria-hidden className="pointer-events-none absolute inset-0 z-[1] rounded-md ring-2 ring-inset ring-[var(--accent)]" /> : null}
-        </button>
-        <SelectToggle selecting={selecting} selected={selected} onToggle={onToggleSelect} label={t('library.toggleSelect')} />
-      </div>
-      <div className="min-w-0 flex-1 text-left">
-        <ProjectCardTitle
-          display={title}
-          stored={project.name}
-          renaming={renaming}
-          size="list"
-          onOpen={open}
-          onCommit={onCommitRename}
-          onCancel={onCancelRename}
-        />
-        <button type="button" onClick={open} className="w-full text-left">
-          <p className="mt-1 line-clamp-2 break-all text-[12.5px] leading-relaxed text-[var(--text-muted)]">
-            {project.path}
-          </p>
-          <p className="mt-2 flex items-center gap-2 text-[11.5px] text-[var(--text-faint)]">
-            {formatDate(project.openedAt, language)}
-            {project.missing ? <span className="text-[var(--err)]">· {t(project.missingReason === 'film' ? 'projects.missingFilm' : 'projects.missing')}</span> : null}
-            {project.working ? <span className="text-[var(--accent)]">· {t('projects.agentRunning')}</span> : null}
-          </p>
-        </button>
-      </div>
-      {project.missing && !selecting ? <MissingActions compact reason={project.missingReason} onLocate={onLocate} onRemove={onDelete} /> : null}
-      {!selecting ? <ItemMenu project={project} onOpen={onOpen} onDuplicate={onDuplicate} onStartRename={onStartRename} onStartSelect={onStartSelect} onMoveToFolder={onMoveToFolder} onLocate={onLocate} onDelete={onDelete} size={15} /> : null}
-    </article>
-  );
-}
-
-/**
- * A folder's picture: a folder with some depth (a back panel with its tab, the front panel over it, a highlight along
- * its top). Not lucide's outline Folder: an outline drawn for 16 px buttons, blown up to a third of a card, looks like
- * a placeholder. Three grays (`--folder-*`) per theme and no hue: the covers around it carry the color.
- *
- * Its width comes from `className`; the height follows at 72:56.
- */
 function FolderGlyph({ className }: { className?: string }) {
   const id = React.useId();
   return (
@@ -877,326 +1166,6 @@ function FolderGlyph({ className }: { className?: string }) {
   );
 }
 
-interface FolderItemProps {
-  folder: ProjectFolder;
-  count: number;
-  /** its newest projects, up to four, with their covers when they have one */
-  posters: { id: string; poster?: string }[];
-  renaming: boolean;
-  onOpen: (event?: { detail: number }) => void;
-  onStartRename: () => void;
-  onCommitRename: (name: string) => void;
-  onCancelRename: () => void;
-  onDelete: () => void;
-  onMove: () => void;
-}
-
-/**
- * A folder's face: the covers of its newest projects (as many cells as covers: one fills the face, three put the first
- * beside the other two, so no cell is blank), or the folder picture when it holds none. The card's, and the list row's
- * thumbnail (`small`: tighter margins).
- */
-function FolderFace({ posters, small = false }: { posters: FolderItemProps['posters']; small?: boolean }) {
-  if (!posters.length) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center">
-        <FolderGlyph className="w-[34%] transition-transform duration-200 group-hover:-translate-y-0.5" />
-      </div>
-    );
-  }
-  return (
-    <div className={`absolute grid ${small ? 'inset-1.5 gap-1' : 'inset-3 gap-1.5'} ${posters.length === 1 ? 'grid-cols-1' : posters.length === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'}`}>
-      {posters.slice(0, 4).map((cover, i) => (
-        <div key={cover.id} className={`relative overflow-hidden ${small ? 'rounded-[3px]' : 'rounded-[5px]'} bg-[var(--bg-pressed)] ${posters.length === 3 && i === 0 ? 'row-span-2' : ''}`}>
-          <MiniPoster id={cover.id} url={cover.poster} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/**
- * A folder's 16:9 box drawn as a folder, so it doesn't read as a project: the back's tab (`--folder-back`, as in the
- * folder picture) at the top left, and the front under it, which holds the face and anything over it (`children`).
- * The card's, and the list row's thumbnail (`small`).
- */
-function FolderFrame({ small = false, children }: { small?: boolean; children: React.ReactNode }) {
-  return (
-    <>
-      <span aria-hidden className={`absolute left-0 top-0 h-1/2 w-[38%] bg-[var(--folder-back)] ${small ? 'rounded-[5px]' : 'rounded-lg'}`} />
-      <span
-        className={`absolute inset-x-0 bottom-0 overflow-hidden bg-[var(--bg-field)] ring-1 ring-[var(--border)] transition duration-200 group-hover/frame:bg-[var(--bg-pressed)] group-hover/frame:ring-[var(--border-strong)] ${small ? 'top-[9%] rounded-md' : 'top-[7%] rounded-lg'}`}
-      >
-        {children}
-      </span>
-    </>
-  );
-}
-
-/**
- * A folder card: the project card's size (a 16:9 box and a name under it), drawn as a folder (FolderFrame), its face
- * the covers of its newest projects, so what it holds shows at a glance; an empty one shows the folder picture.
- */
-function FolderCard({
-  folder,
-  count,
-  posters,
-  renaming,
-  onOpen,
-  onStartRename,
-  onCommitRename,
-  onCancelRename,
-  onDelete,
-  onMove,
-}: FolderItemProps) {
-  const t = useT();
-  const language = useLanguage();
-  return (
-    <article className="group min-w-0">
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={folder.name}
-        className="group/frame relative block aspect-video w-full text-left"
-      >
-        <FolderFrame>
-          <FolderFace posters={posters} />
-          {/* the count: dark glass over covers; on the plain face a dark patch is too heavy, so the face's own style */}
-          <span
-            className={`absolute bottom-2 right-2 rounded-full px-1.5 py-0.5 text-[10.5px] font-medium tabular-nums ${
-              posters.length > 0
-                ? 'bg-black/45 text-white/90 backdrop-blur-sm'
-                : 'border border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-muted)]'
-            }`}
-          >
-            {count}
-          </span>
-        </FolderFrame>
-      </button>
-      {/* the same two lines as a project card (name, then a dated line); no folder icon before the name: the face says
-          it is a folder already, and an icon would put this name out of line with the projects'. A click on the name
-          opens the folder, as a project's opens the project, so it is renamed from "…" or from the open folder's
-          title, not by a double-click (the first click would already have opened it) */}
-      <div className="mt-2 flex min-w-0 items-start gap-1.5">
-        <div className="min-w-0 flex-1 text-left">
-          {renaming ? (
-            <InlineNameInput
-              initial={folder.name}
-              onCommit={onCommitRename}
-              onCancel={onCancelRename}
-              className="h-6 w-full rounded-md border border-[var(--text)] bg-[var(--bg-raised)] px-1.5 text-[13px] font-semibold text-[var(--text)] outline-none"
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={onOpen}
-              className="block w-full truncate text-left text-[13px] font-semibold text-[var(--text)]"
-            >
-              {folder.name}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onOpen}
-            className="mt-0.5 flex w-full items-center gap-1.5 text-left text-[11.5px] text-[var(--text-faint)]"
-          >
-            <Clock3 size={11} />
-            {formatDate(folder.createdAt, language)}
-          </button>
-        </div>
-        <FolderMenu onRename={onStartRename} onMove={onMove} onDelete={onDelete} />
-      </div>
-      <span className="sr-only">{t('projects.folderAll')}</span>
-    </article>
-  );
-}
-
-/**
- * One of a folder card's small covers: the project's poster, or (none, or it failed to load) the same face its own
- * card shows. The cell stays plain while the poster loads.
- */
-function MiniPoster({ id, url }: { id: string; url?: string }) {
-  const [state, setState] = React.useState<'loading' | 'ready' | 'failed'>('loading');
-  if (!url || state === 'failed') return <div className="absolute inset-0 opacity-80" style={{ background: gradientForId(id) }} />;
-  return (
-    <img
-      src={url}
-      alt=""
-      loading="lazy"
-      draggable={false}
-      onLoad={() => setState('ready')}
-      onError={() => setState('failed')}
-      className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${state === 'ready' ? 'opacity-100' : 'opacity-0'}`}
-    />
-  );
-}
-
-/** A folder in the list view; its thumbnail is the project rows' size, so the column of thumbnails lines up. */
-function FolderListRow({
-  folder,
-  count,
-  posters,
-  renaming,
-  onOpen,
-  onStartRename,
-  onCommitRename,
-  onCancelRename,
-  onDelete,
-  onMove,
-}: FolderItemProps) {
-  const t = useT();
-  const language = useLanguage();
-  return (
-    <div className="group flex min-w-0 items-center gap-3 py-4 sm:gap-4">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="group/frame relative block aspect-video w-28 shrink-0 sm:w-36"
-        aria-label={folder.name}
-      >
-        <FolderFrame small>
-          <FolderFace posters={posters} small />
-        </FolderFrame>
-      </button>
-      <div className="min-w-0 flex-1">
-        {renaming ? (
-          <InlineNameInput
-            initial={folder.name}
-            onCommit={onCommitRename}
-            onCancel={onCancelRename}
-            className="h-7 w-[240px] rounded-md border border-[var(--text)] bg-[var(--bg-raised)] px-2 text-[14px] font-semibold text-[var(--text)] outline-none"
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={onOpen}
-            className="block max-w-full truncate text-left text-[14px] font-semibold text-[var(--text)]"
-          >
-            {folder.name}
-          </button>
-        )}
-        <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--text-muted)]">
-          {t(count === 1 ? 'projects.folderCountOne' : 'projects.folderCount').replace('{n}', String(count))}
-        </p>
-        <p className="mt-2 text-[11.5px] text-[var(--text-faint)]">
-          {formatDate(folder.createdAt, language)}
-        </p>
-      </div>
-      <FolderMenu onRename={onStartRename} onMove={onMove} onDelete={onDelete} />
-    </div>
-  );
-}
-
-/** A folder's "…": rename, delete. The project card's menu, in looks and placement (see ProjectMenu). */
-function FolderMenu({ onRename, onMove, onDelete }: { onRename: () => void; onMove: () => void; onDelete: () => void }) {
-  const t = useT();
-  const [anchor, setAnchor] = React.useState<{ x: number; y: number; top: number } | null>(null);
-  const button = React.useRef<HTMLButtonElement>(null);
-  return (
-    <>
-      <button
-        ref={button}
-        type="button"
-        aria-label={t('projectMenu.more')}
-        aria-expanded={anchor != null}
-        aria-haspopup="menu"
-        onClick={(event) => {
-          event.stopPropagation();
-          const box = event.currentTarget.getBoundingClientRect();
-          setAnchor((cur) => (cur ? null : { x: box.right, y: box.bottom + 4, top: box.top - 4 }));
-        }}
-        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
-      >
-        <MoreHorizontal size={14} />
-      </button>
-      {anchor ? (
-        <ContextMenu
-          x={anchor.x}
-          y={anchor.y}
-          flipTo={anchor.top}
-          align="end"
-          trigger={button}
-          onClose={() => setAnchor(null)}
-          items={[
-            { id: 'rename', icon: <Pencil size={14} />, label: t('projects.renameFolder'), onSelect: onRename },
-            { id: 'move', icon: <FolderInput size={14} />, label: t('projects.moveTo'), onSelect: onMove },
-            { id: 'sep', separator: true },
-            { id: 'delete', icon: <Trash2 size={14} />, label: t('projects.deleteFolder'), danger: true, onSelect: onDelete },
-          ]}
-        />
-      ) : null}
-    </>
-  );
-}
-
-/**
- * Inside a folder, in the title's place: "← Projects / Clients / Acme  count  …", each folder above it a way back to
- * it, the arrow one level up. Double-click the name to rename.
- */
-function FolderCrumb({
-  folder,
-  above,
-  count,
-  onGo,
-  onRename,
-  onDelete,
-  onMove,
-}: {
-  folder: ProjectFolder;
-  /** the folders it is in, the outermost first */
-  above: ProjectFolder[];
-  count: number;
-  /** go to a folder of the trail (null: all projects) */
-  onGo: (folderId: string | null) => void;
-  onRename: (name: string) => void;
-  onDelete: () => void;
-  onMove: () => void;
-}) {
-  const t = useT();
-  const [renaming, setRenaming] = React.useState(false);
-  const step = 'inline-flex h-8 min-w-0 items-center rounded-lg px-1.5 text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]';
-  return (
-    <h2 className="mr-auto flex min-w-0 items-center gap-1 text-[17px] font-semibold tracking-[-0.01em]">
-      <button type="button" onClick={() => onGo(above.length ? above[above.length - 1]!.id : null)} aria-label={t('projects.folderUp')}
-        className="-ml-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-        <ArrowLeft size={15} />
-      </button>
-      <button type="button" onClick={() => onGo(null)} className={`${step} shrink-0`}>{t('nav.projects')}</button>
-      {above.map((up) => (
-        <React.Fragment key={up.id}>
-          <span className="shrink-0 font-normal text-[var(--text-faint)]">/</span>
-          <button type="button" onClick={() => onGo(up.id)} className={`${step} max-w-[160px]`}><span className="truncate">{up.name}</span></button>
-        </React.Fragment>
-      ))}
-      <span className="shrink-0 font-normal text-[var(--text-faint)]">/</span>
-      <Folder size={16} strokeWidth={1.9} className="shrink-0 text-[var(--text-faint)]" />
-      {renaming ? (
-        <InlineNameInput
-          initial={folder.name}
-          onCommit={(name) => {
-            setRenaming(false);
-            if (name && name !== folder.name) onRename(name);
-          }}
-          onCancel={() => setRenaming(false)}
-          className="h-8 w-[220px] rounded-lg border border-[var(--text)] bg-[var(--bg-raised)] px-2.5 text-[15px] font-semibold text-[var(--text)] outline-none"
-        />
-      ) : (
-        <button
-          type="button"
-          onDoubleClick={() => setRenaming(true)}
-          className="min-w-0 truncate text-[var(--text)]"
-          title={t('projects.renameFolder')}
-        >
-          {folder.name}
-        </button>
-      )}
-      <span className="shrink-0 text-[12.5px] font-normal tabular-nums text-[var(--text-faint)]">{count}</span>
-      <FolderMenu onRename={() => setRenaming(true)} onMove={onMove} onDelete={onDelete} />
-    </h2>
-  );
-}
-
-/** A name typed in place: Enter or leaving the field keeps it, Escape cancels (and does not close the popover). */
 function InlineNameInput({
   initial,
   placeholder,
@@ -1227,6 +1196,8 @@ function InlineNameInput({
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
           if (event.nativeEvent.isComposing) return;
+          event.preventDefault();
+          event.stopPropagation();
           commit();
         } else if (event.key === 'Escape') {
           event.preventDefault();
@@ -1238,7 +1209,10 @@ function InlineNameInput({
       onBlur={commit}
       onFocus={(event) => event.currentTarget.select()}
       onClick={(event) => event.stopPropagation()}
-      className={className ?? 'h-8 w-[160px] rounded-lg border border-[var(--text)] bg-[var(--bg-raised)] px-2.5 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]'}
+      className={
+        className ??
+        'h-8 w-[160px] rounded-lg border border-[var(--text)] bg-[var(--bg-raised)] px-2.5 text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]'
+      }
     />
   );
 }
@@ -1261,7 +1235,7 @@ function FolderPicker({
 }: {
   title: string;
   folders: ProjectFolder[];
-  current: string | null;
+  current: string | null | undefined;
   exclude: ReadonlySet<string>;
   onMove: (folderId: string | null) => void;
   onCreate: (name: string, parentId: string | null) => Promise<ProjectFolder | null>;
@@ -1269,13 +1243,17 @@ function FolderPicker({
 }) {
   const t = useT();
   /* null is the project list itself (no folder) */
-  const [picked, setPicked] = React.useState<string | null>(current);
+  const [picked, setPicked] = React.useState<string | null>(current ?? null);
   const [shut, setShut] = React.useState<ReadonlySet<string>>(new Set());
   /* a new folder being named, inside this place (undefined: none) */
   const [naming, setNaming] = React.useState<string | null | undefined>(undefined);
-  const children = React.useCallback((parent: string | null) => folders
-    .filter((f) => parentOf(f, folders) === parent && !exclude.has(f.id))
-    .sort((a, b) => a.name.localeCompare(b.name)), [folders, exclude]);
+  const children = React.useCallback(
+    (parent: string | null) =>
+      folders
+        .filter((f) => parentOf(f, folders) === parent && !exclude.has(f.id))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [folders, exclude],
+  );
   React.useEffect(() => {
     /* this Escape closes the picker, not the popover under it */
     const onKey = (event: KeyboardEvent) => {
@@ -1288,11 +1266,24 @@ function FolderPicker({
   }, [onClose]);
 
   const canMove = picked !== current;
-  const move = (to: string | null) => { if (to !== current) onMove(to); };
-  const toggle = (id: string) => setShut((was) => { const next = new Set(was); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const move = (to: string | null) => {
+    if (to !== current) onMove(to);
+  };
+  const toggle = (id: string) =>
+    setShut((was) => {
+      const next = new Set(was);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const startNew = () => {
     setNaming(picked);
-    if (picked) setShut((was) => { const next = new Set(was); next.delete(picked); return next; });
+    if (picked)
+      setShut((was) => {
+        const next = new Set(was);
+        next.delete(picked);
+        return next;
+      });
   };
   const named = async (name: string) => {
     const parent = naming ?? null;
@@ -1322,14 +1313,27 @@ function FolderPicker({
           }`}
         >
           {kids.length && id !== null ? (
-            <button type="button" aria-label={label} onClick={(event) => { event.stopPropagation(); toggle(id); }}
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded opacity-70 hover:opacity-100">
+            <button
+              type="button"
+              aria-label={label}
+              onClick={(event) => {
+                event.stopPropagation();
+                toggle(id);
+              }}
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded opacity-70 hover:opacity-100"
+            >
               <ChevronRight size={13} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
             </button>
-          ) : <span className="w-4 shrink-0" />}
+          ) : (
+            <span className="w-4 shrink-0" />
+          )}
           <span className={`shrink-0 ${isPicked ? '' : 'text-[var(--text-muted)]'}`}>{icon}</span>
           <span className="min-w-0 flex-1 truncate">{label}</span>
-          {here ? <span className={`shrink-0 text-[11.5px] ${isPicked ? 'opacity-80' : 'text-[var(--text-faint)]'}`}>{t('projects.hereNow')}</span> : null}
+          {here ? (
+            <span className={`shrink-0 text-[11.5px] ${isPicked ? 'opacity-80' : 'text-[var(--text-faint)]'}`}>
+              {t('projects.hereNow')}
+            </span>
+          ) : null}
         </div>
         {open ? (
           <>
@@ -1367,12 +1371,17 @@ function FolderPicker({
         className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-raised)] shadow-[var(--shadow-lg)]"
         style={{ animation: 'openfilm-pop 0.16s ease-out both' }}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && naming === undefined && canMove && !(event.target instanceof HTMLInputElement)) { event.preventDefault(); move(picked); }
+          if (event.key === 'Enter' && naming === undefined && canMove && !(event.target instanceof HTMLInputElement)) {
+            event.preventDefault();
+            move(picked);
+          }
         }}
       >
         <div className="flex items-start gap-3 px-5 pb-3 pt-4">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-semibold text-[var(--text)]">{t('projects.moveToTitle').replace('{name}', title)}</p>
+            <p className="truncate text-[15px] font-semibold text-[var(--text)]">
+              {t('projects.moveToTitle').replace('{name}', title)}
+            </p>
             <p className="mt-0.5 text-[12.5px] text-[var(--text-muted)]">{t('projects.moveHint')}</p>
           </div>
           <button
@@ -1385,20 +1394,39 @@ function FolderPicker({
           </button>
         </div>
 
-        <div role="tree" tabIndex={0} className="mx-5 h-[260px] overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-1 outline-none">
+        <div
+          role="tree"
+          tabIndex={0}
+          className="mx-5 h-[260px] overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-1 outline-none"
+        >
           {place(null, 0, <LayoutGrid size={15} strokeWidth={1.7} />, t('nav.projects'))}
         </div>
 
         <div className="flex items-center gap-2 px-5 py-4">
-          <button type="button" onClick={startNew}
-            className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 text-[12.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]">
-            <FolderPlus size={14} strokeWidth={1.8} />{t('projects.newFolder')}
+          <button
+            type="button"
+            onClick={startNew}
+            className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 text-[12.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]"
+          >
+            <FolderPlus size={14} strokeWidth={1.8} />
+            {t('projects.newFolder')}
           </button>
           <span className="flex-1" />
-          <button type="button" onClick={onClose}
-            className="h-8 rounded-lg border border-[var(--border)] px-3 text-[12.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{t('confirm.cancel')}</button>
-          <button type="button" disabled={!canMove} onClick={() => move(picked)}
-            className="h-8 rounded-lg bg-[var(--primary)] px-4 text-[12.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-40">{t('projects.move')}</button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-8 rounded-lg border border-[var(--border)] px-3 text-[12.5px] text-[var(--text)] transition hover:bg-[var(--bg-hover)]"
+          >
+            {t('confirm.cancel')}
+          </button>
+          <button
+            type="button"
+            disabled={!canMove}
+            onClick={() => move(picked)}
+            className="h-8 rounded-lg bg-[var(--primary)] px-4 text-[12.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-40"
+          >
+            {t('projects.move')}
+          </button>
         </div>
       </div>
     </div>,
@@ -1416,7 +1444,8 @@ function PosterMedia({ project, shade = false }: { project: LibraryProject; shad
   /* the try asked for now (0: the first) and whether it failed, for this poster */
   const [attempt, setAttempt] = React.useState<{ url: string; n: number; failed: boolean } | null>(null);
   const [loadedUrl, setLoadedUrl] = React.useState<string | null>(null);
-  const tried = attempt && attempt.url === project.poster ? attempt : { url: project.poster ?? '', n: 0, failed: false };
+  const tried =
+    attempt && attempt.url === project.poster ? attempt : { url: project.poster ?? '', n: 0, failed: false };
   const again = tried.failed ? posterRetryDelay(tried.n) : null;
   React.useEffect(() => {
     if (again == null) return undefined;
@@ -1424,14 +1453,24 @@ function PosterMedia({ project, shade = false }: { project: LibraryProject; shad
     return () => clearTimeout(timer);
   }, [again, tried.url, tried.n]);
   /* `shade`: darker toward the bottom, under the length badge; only over a picture (on the plain face it is a smudge) */
-  const shadow = shade ? <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-90" /> : null;
+  const shadow = shade ? (
+    <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-90" />
+  ) : null;
   const face = <div className="absolute inset-0 opacity-80" style={{ background: gradientForId(project.id) }} />;
-  if (!project.poster || (tried.failed && again == null)) return <>{face}{shadow}</>;
+  if (!project.poster || (tried.failed && again == null))
+    return (
+      <>
+        {face}
+        {shadow}
+      </>
+    );
   const src = posterTry(project.poster, tried.n);
   const ready = loadedUrl === src;
   return (
     <>
-      {ready ? null : tried.n > 0 || tried.failed ? face : (
+      {ready ? null : tried.n > 0 || tried.failed ? (
+        face
+      ) : (
         <span aria-hidden className="absolute inset-0 flex items-center justify-center text-[var(--text-faint)]">
           <Video size={22} strokeWidth={1.5} />
         </span>
@@ -1444,7 +1483,9 @@ function PosterMedia({ project, shade = false }: { project: LibraryProject; shad
         draggable={false}
         onLoad={() => setLoadedUrl(src)}
         onError={() => setAttempt({ url: tried.url, n: tried.n, failed: true })}
-        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ${ready ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ${
+          ready ? 'opacity-100' : 'opacity-0'
+        }`}
       />
       {ready ? shadow : null}
     </>
@@ -1460,13 +1501,7 @@ const SORT_OPTIONS: ReadonlyArray<{ id: LibrarySort; labelKey: string }> = [
 ];
 
 /** The sort button: a small card of options, one ticked. */
-function SortButton({
-  sort,
-  onSort,
-}: {
-  sort: LibrarySort;
-  onSort: (next: LibrarySort) => void;
-}) {
+function SortButton({ sort, onSort }: { sort: LibrarySort; onSort: (next: LibrarySort) => void }) {
   const t = useT();
   const [anchor, setAnchor] = React.useState<{ left: number; top: number } | null>(null);
   const toggle = (event: React.MouseEvent) => {
@@ -1519,22 +1554,29 @@ function SortButton({
       </Tooltip>
       {anchor
         ? createPortal(
-          <div
-            role="dialog"
-            className="fixed z-[10060] w-[200px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-raised)] pb-1.5 shadow-[var(--shadow-lg)]"
-            style={{ left: anchor.left, top: anchor.top, animation: 'openfilm-rise 0.14s ease-out both' }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <p className="px-3 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-faint)]">{t('library.sortLabel')}</p>
-            {SORT_OPTIONS.map((option) => (
-              <button key={option.id} type="button" onClick={() => onSort(option.id)} className={row(option.id === sort)}>
-                <Check size={14} className={option.id === sort ? 'text-[var(--text)]' : 'text-transparent'} />
-                {t(option.labelKey)}
-              </button>
-            ))}
-          </div>,
-          document.body,
-        )
+            <div
+              role="dialog"
+              className="fixed z-[10060] w-[200px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-raised)] pb-1.5 shadow-[var(--shadow-lg)]"
+              style={{ left: anchor.left, top: anchor.top, animation: 'openfilm-rise 0.14s ease-out both' }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <p className="px-3 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-faint)]">
+                {t('library.sortLabel')}
+              </p>
+              {SORT_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => onSort(option.id)}
+                  className={row(option.id === sort)}
+                >
+                  <Check size={14} className={option.id === sort ? 'text-[var(--text)]' : 'text-transparent'} />
+                  {t(option.labelKey)}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
         : null}
     </>
   );
@@ -1559,9 +1601,7 @@ function ViewButton({
         aria-pressed={active}
         onClick={onClick}
         className={`flex h-6 w-8 items-center justify-center rounded-[5px] transition ${
-          active
-            ? 'bg-[var(--bg-pressed)] text-[var(--text)]'
-            : 'text-[var(--text-faint)] hover:text-[var(--text)]'
+          active ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text)]'
         }`}
       >
         {icon}

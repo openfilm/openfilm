@@ -34,9 +34,13 @@ async function connection(key, baseUrl, { fresh = false, fetch: fetchImpl = fetc
   return promise;
 }
 
-/** @param {{ fresh?: boolean, fetch?: typeof fetch }} options */
+/**
+ * `strict` (the desktop agent): a moment the file cannot be read throws rather than reading as signed out, so the
+ * agent keeps the account it had.
+ * @param {{ fresh?: boolean, strict?: boolean, fetch?: typeof fetch }} options
+ */
 export async function desktopAccount(options = {}) {
-  const settings = await readSettings();
+  const settings = await readSettings(undefined, { strict: options.strict === true });
   const credential = providerKey(openfilm, settings);
   const signing = signInState();
   const baseUrl = `${serviceUrl('API', 'https://openfilm.dev')}/v1/agent`;

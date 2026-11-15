@@ -31,6 +31,11 @@ test('sorts: recently opened, newest, oldest, longest, title', () => {
   assert.deepEqual(view({ query: 'a', sort: 'duration' }).slice(0, 2), ['b', 'a']);
 });
 
+test('project names sort numbers naturally, so version 2 precedes version 10', () => {
+  const numbered = ['Film 10', 'film 2', 'Film 1'].map(name => ({ id: name, name, openedAt: 0 }));
+  assert.deepEqual(visibleProjects(numbered, { query: '', folderId: null, sort: 'title', folders: [], titleOf: p => p.name }).map(p => p.name), ['Film 1', 'film 2', 'Film 10']);
+});
+
 test('folder cards: how many each holds, and its newest covers, four at most', () => {
   assert.deepEqual(folderCounts(projects), { f: 2, deleted: 1 });
   const many = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, name: '', openedAt: 0, createdAt: i, folderId: 'f', poster: `${i}.jpg` }));

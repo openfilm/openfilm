@@ -33,6 +33,8 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
   let askAfter = 0;
   let error = null;
   let needsSignIn = false;
+  /** the cloud answered with an error other than 401: it does not offer the agent now */
+  let refused = false;
   let revision = 0;
   let pending = null;
   let published = '';
@@ -52,9 +54,12 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
     }),
   });
 
+  /* 'unavailable' only once the cloud answered that it offers no model; until it answers 'checking', and while it
+     cannot be reached 'offline' (it is asked again) */
   const state = () => {
-    const status = account?.signingIn ? 'waiting' : !account ? error ? 'unavailable' : 'checking'
-      : !account.key || needsSignIn ? 'sign-in' : !visibleModels().length ? 'unavailable' : 'ready';
+    const status = account?.signingIn ? 'waiting' : !account ? 'checking'
+      : !account.key || needsSignIn ? 'sign-in' : visibleModels().length ? 'ready'
+        : offer || refused ? 'unavailable' : error ? 'offline' : 'checking';
     const message = account?.error || (status === 'sign-in' || status === 'waiting' ? null : error);
     return {
       status,
@@ -80,6 +85,7 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
           offer = null;
           askAfter = 0;
           needsSignIn = false;
+          refused = false;
           error = null;
           revision++;
         }
@@ -99,6 +105,8 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
         if (!response.ok) {
           needsSignIn = response.status === 401;
           if (needsSignIn) { offer = null; error = null; return; }
+          /* status 0: Studio could not reach it */
+          if (response.status) refused = true;
           throw new Error(body?.error?.message || body?.message || `OpenFilm answered ${response.status}.`);
         }
         if (!Array.isArray(body?.data)) throw new Error('OpenFilm did not return its model catalog.');
@@ -109,6 +117,7 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
         }
         offer = got;
         needsSignIn = false;
+        refused = false;
         error = got.models.length ? null : 'OpenFilm has no agent models available right now.';
         askAfter = Date.now() + FRESH_MS;
       } catch (e) {

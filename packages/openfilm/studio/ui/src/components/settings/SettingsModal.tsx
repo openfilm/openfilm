@@ -1,6 +1,6 @@
 /**
  * Settings, opened from the app menu at the top left: a search and the sections in groups on the left, the section on the
- * right as a page of titled groups. General (the theme and the language), Agents (in an app with a chat: the agents
+ * right as a page of titled groups. General (the account, the theme and the language), Agents (in an app with a chat: the agents
  * it can use), Services (which model makes each kind of media, and the services connected for it), the keyboard
  * shortcuts, Advanced and Developer; the search finds a section by any phrase on it. At the
  * foot of the nav, quietly, where OpenFilm lives: its code, the examples and the website.
@@ -22,7 +22,7 @@ import { SettingsSelect } from './SettingsSelect';
 import { ShortcutsSection } from './ShortcutsSection';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
 import { useThemeMode, type ThemeMode } from './theme';
-import { StorageGroup } from './StorageGroup';
+import { AccountGroup } from './AccountGroup';
 import { LARGE_DIALOG_SIZE } from '../dialog-chrome';
 import { LibraryCategoriesGroup } from './LibraryCategoriesGroup';
 
@@ -55,7 +55,7 @@ const SECTION_ICON: Record<SettingsSection, React.ReactNode> = {
 /** what a search through each section reads: its name and every phrase it shows (Notifications only where it shows:
     inside an app that offers them, lib/host.ts `notifications`) */
 const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
-  general: ['settings.appearance', 'settings.storage'],
+  general: ['settings.account', 'settings.appearance'],
   agents: 'settings.agents',
   models: ['settings.models', 'settings.providers'],
   developer: ['settings.developer', 'settings.report'],
@@ -210,6 +210,7 @@ function GeneralSection() {
 
   return (
     <SettingsPage>
+      <AccountGroup />
       <SettingsGroup title={t('settings.appearance.group')}>
         <SettingsItem
           title={t('settings.appearance.theme')}
@@ -244,7 +245,6 @@ function GeneralSection() {
           )}
         />
       </SettingsGroup>
-      <StorageGroup />
       {studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}
     </SettingsPage>
   );

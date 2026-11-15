@@ -171,12 +171,12 @@ export function SelectionToolbar({ ids, onGroup, onUngroup, onDuplicate, onRemov
   return (
     <NodeToolbar nodeId={ids} isVisible position={Position.Top} offset={Math.min(32, top - 48)} style={{ zIndex: 4 }}>
       <div data-canvas-selection-toolbar="" role="group" className={`nodrag nopan flex w-max items-center gap-0.5 p-1 ${CARD} cv-bar-top`}>
-        {onGroup ? <button type="button" className={action} onClick={onGroup}><Group size={15} />{t('canvas.groupThem')}</button> : null}
-        {onUngroup ? <button type="button" className={action} onClick={onUngroup}><Ungroup size={15} />{t('canvas.ungroup')}</button> : null}
-        <Tooltip label={t('canvas.duplicate')}>
+        {onGroup ? <Tooltip label={t('canvas.groupThem')} shortcut={`${MOD}G`}><button type="button" className={action} onClick={onGroup}><Group size={15} />{t('canvas.groupThem')}</button></Tooltip> : null}
+        {onUngroup ? <Tooltip label={t('canvas.ungroup')} shortcut={`${MOD}⇧G`}><button type="button" className={action} onClick={onUngroup}><Ungroup size={15} />{t('canvas.ungroup')}</button></Tooltip> : null}
+        <Tooltip label={t('canvas.duplicate')} shortcut={`${MOD}D`}>
           <button type="button" aria-label={t('canvas.duplicate')} className={action} onClick={onDuplicate}><CopyPlus size={15} /></button>
         </Tooltip>
-        <Tooltip label={t('canvas.remove')}>
+        <Tooltip label={t('canvas.remove')} shortcut="⌫">
           <button type="button" aria-label={t('canvas.remove')} className={action} onClick={onRemove}><Trash2 size={15} /></button>
         </Tooltip>
       </div>
@@ -1455,7 +1455,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-[var(--cv-invert)] text-[var(--cv-on-invert)]"><Square size={11} fill="currentColor" /></button>
             </Tooltip>
           ) : (
-            <Tooltip label={`${(data.versions?.length ? t('canvas.make.again') : t('canvas.make.run'))} · ${MOD}↵`}>
+            <Tooltip label={data.versions?.length ? t('canvas.make.again') : t('canvas.make.run')} shortcut={`${MOD}↵`}>
               <button type="button" aria-label={t('canvas.make.run')} disabled={!choices.length} onClick={() => board.make(id)}
                 className={SEND}><ArrowUp size={17} /></button>
             </Tooltip>
@@ -1608,7 +1608,8 @@ export function NotePanel({ id }: { id: string }) {
             <Sparkles size={14} className="shrink-0" /><span className="truncate">{t('canvas.write.by')}</span>
           </span>}
           <span className="flex-1" />
-          <Tooltip label={`${t('canvas.write.run')} · ${MOD}↵`}>
+          {wired ? <span className="mr-1 truncate text-[11.5px] text-[var(--cv-label)]">{t('canvas.write.wired').replace('{n}', String(wired))}</span> : null}
+          <Tooltip label={t('canvas.write.run')} shortcut={`${MOD}↵`}>
             <button type="button" aria-label={t('canvas.write.run')} disabled={!canSend} onClick={send}
               className={SEND}>
               {busy ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <ArrowUp size={17} />}
