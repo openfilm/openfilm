@@ -1178,6 +1178,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       setPictureTool(null);
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
+  /** a frame of a clip at a time, small, as the timeline shows them (studio/server/derived.mjs) */
+  const frameOf = (path: string) => (ms: number) => `/api/projects/${encodeURIComponent(projectId)}/media?path=${encodeURIComponent(path)}&what=frame&ms=${ms}&w=160`;
   /** a clip worked on this computer, what it made beside it, wired from it, named for the tool */
   const runClip = async (sourceId: string, body: Parameters<typeof api.clipTool>[1], tool: string) => {
     onNotice(t('canvas.clipTools.working'));
@@ -2095,13 +2097,13 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           const tool = CLIP_TOOLS.find((x) => x.key === clipAI.tool)!;
           const models = clipModels(tool, choicesFor(providers, 'video'));
           const last = lastModel('video');
-          return <ClipToolEditor tool={tool} src={sources.file(clip)} length={(clip.durationMs ?? 0) / 1000} models={models}
+          return <ClipToolEditor tool={tool} src={sources.file(clip)} frameAt={frameOf(clipAI.path)} length={(clip.durationMs ?? 0) / 1000} models={models}
             first={models.find((m) => isOwn(tool, m)) ?? models.find((m) => last && m.via === last.via && m.model === last.model)}
             files={files.filter((f) => !f.path.startsWith(`${WORK}/`))} srcOf={(f) => sources.file(f)} onClose={() => setClipAI(null)}
             onMake={(made) => makeFromClip(clipAI.id, clipAI.path, tool, made)} />;
         })() : null}
         {trimming && byPath.get(trimming.path) ? (
-          <TrimEditor src={sources.file(byPath.get(trimming.path)!)} onClose={() => setTrimming(null)}
+          <TrimEditor src={sources.file(byPath.get(trimming.path)!)} frameAt={frameOf(trimming.path)} onClose={() => setTrimming(null)}
             onDone={async (from, to) => { if (await runClip(trimming.id, { op: 'trim', path: trimming.path, from, to }, t('canvas.clipTools.trim'))) setTrimming(null); }} />
         ) : null}
         {pictureTool && byPath.get(pictureTool.path) ? (() => {

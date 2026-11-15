@@ -8,9 +8,23 @@ import { useT } from '@/i18n';
 import { CanvasModal } from './libraries';
 
 const MIN_PART = 0.2;
+/** frames shown along a clip's track */
+const STRIP = 10;
+
+/** A clip's frames side by side along its track, so a part is picked by what is in it. */
+export function Filmstrip({ length, frameAt }: { length: number; frameAt?: (ms: number) => string }) {
+  if (!frameAt || !length) return null;
+  return (
+    <div className="pointer-events-none absolute inset-0 flex overflow-hidden rounded-[inherit] opacity-70">
+      {Array.from({ length: STRIP }, (_, i) => (
+        <img key={i} src={frameAt(Math.round(((i + 0.5) / STRIP) * length * 1000))} alt="" draggable={false} className="h-full min-w-0 flex-1 object-cover" />
+      ))}
+    </div>
+  );
+}
 const time = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 
-export function TrimEditor({ src, onClose, onDone }: { src: string; onClose: () => void; onDone: (from: number, to: number) => Promise<void> | void }) {
+export function TrimEditor({ src, frameAt, onClose, onDone }: { src: string; frameAt?: (ms: number) => string; onClose: () => void; onDone: (from: number, to: number) => Promise<void> | void }) {
   const t = useT();
   const video = React.useRef<HTMLVideoElement>(null);
   const track = React.useRef<HTMLDivElement>(null);
@@ -90,7 +104,7 @@ export function TrimEditor({ src, onClose, onDone }: { src: string; onClose: () 
       </div>
       <div className="px-5 pb-2">
         {/* the clip's track: the part kept lit between its two grips, the playhead a line */}
-        <div ref={track} className="nodrag relative h-12 touch-none select-none rounded-[10px] bg-[var(--cv-chip)]"
+        <div ref={track} className="nodrag relative h-14 touch-none select-none rounded-[10px] bg-[var(--cv-chip)]"
           onPointerDown={(event) => {
             if (!length) return;
             const s = secondsAt(event.clientX);
@@ -101,9 +115,10 @@ export function TrimEditor({ src, onClose, onDone }: { src: string; onClose: () 
           }}
           onPointerMove={(event) => { if (dragging.current && event.currentTarget.hasPointerCapture(event.pointerId)) move(event.clientX); }}
           onPointerUp={() => { dragging.current = null; }}>
-          <div className="absolute inset-y-0 rounded-[10px] bg-black/45" style={{ left: 0, width: pct(part[0]) }} />
-          <div className="absolute inset-y-0 rounded-[10px] bg-black/45" style={{ left: pct(part[1]), right: 0 }} />
-          <div className="absolute inset-y-0 rounded-[8px] border-2 border-[#4aa3ff] bg-[color-mix(in_srgb,#4aa3ff_14%,transparent)]" style={{ left: pct(part[0]), width: pct(part[1] - part[0]) }} />
+          <Filmstrip length={length} frameAt={frameAt} />
+          <div className="absolute inset-y-0 rounded-l-[10px] bg-black/60" style={{ left: 0, width: pct(part[0]) }} />
+          <div className="absolute inset-y-0 rounded-r-[10px] bg-black/60" style={{ left: pct(part[1]), right: 0 }} />
+          <div className="absolute inset-y-0 rounded-[8px] border-2 border-[#4aa3ff]" style={{ left: pct(part[0]), width: pct(part[1] - part[0]) }} />
           <span className={grip} style={{ left: pct(part[0]) }}><span className="h-6 w-1.5 rounded-full bg-[#4aa3ff]" /></span>
           <span className={grip} style={{ left: pct(part[1]) }}><span className="h-6 w-1.5 rounded-full bg-[#4aa3ff]" /></span>
           <span className="pointer-events-none absolute -top-1 bottom-[-4px] w-0.5 -translate-x-1/2 rounded-full bg-white shadow" style={{ left: pct(at) }} />

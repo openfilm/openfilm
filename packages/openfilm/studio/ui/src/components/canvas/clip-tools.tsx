@@ -14,6 +14,7 @@ import { isOwn } from '@/lib/canvas-clip';
 import { ProviderMark } from '../settings/ProviderMark';
 import { CanvasModal, stylePicture } from './libraries';
 import { LengthPicker } from './panels';
+import { Filmstrip } from './trim';
 
 export interface ClipMade { choice: ClipChoice; words: string; sec?: number; extras: string[]; style?: string; part?: [number, number] }
 
@@ -23,9 +24,11 @@ export const CLIP_REFERENCE_MAX = 15;
 const PART_MIN = 2;
 const clock = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 
-export function ClipToolEditor({ tool, src, length: told, models, first, files, srcOf, onClose, onMake }: {
+export function ClipToolEditor({ tool, src, frameAt, length: told, models, first, files, srcOf, onClose, onMake }: {
   tool: ClipTool;
   src: string;
+  /** a frame of the clip at a time, for its track */
+  frameAt?: (ms: number) => string;
   /** the clip's length, s */
   length: number;
   /** the models that do it, the one made for it first */
@@ -95,9 +98,12 @@ export function ClipToolEditor({ tool, src, length: told, models, first, files, 
             /* the part sent: as long as a model takes, moved along the clip */
             <div>
               <div className={section}>{t('canvas.clipTools.partOf').replace('{max}', String(CLIP_REFERENCE_MAX)).replace('{s}', length.toFixed(1))}</div>
-              <div ref={strip} className="nodrag relative h-9 touch-none select-none rounded-[9px] bg-[var(--cv-chip)]"
+              <div ref={strip} className="nodrag relative h-11 touch-none select-none rounded-[9px] bg-[var(--cv-chip)]"
                 onPointerMove={(event) => drag(event.clientX)} onPointerUp={() => { grab.current = null; }}>
-                <div className="absolute inset-y-0 cursor-grab rounded-[8px] border-2 border-[#4aa3ff] bg-[color-mix(in_srgb,#4aa3ff_18%,transparent)] active:cursor-grabbing"
+                <Filmstrip length={length} frameAt={frameAt} />
+                <div className="pointer-events-none absolute inset-y-0 left-0 rounded-l-[9px] bg-black/60" style={{ width: `${(part[0] / length) * 100}%` }} />
+                <div className="pointer-events-none absolute inset-y-0 right-0 rounded-r-[9px] bg-black/60" style={{ left: `${(part[1] / length) * 100}%` }} />
+                <div className="absolute inset-y-0 cursor-grab rounded-[8px] border-2 border-[#4aa3ff] bg-[color-mix(in_srgb,#4aa3ff_10%,transparent)] active:cursor-grabbing"
                   style={{ left: `${(part[0] / length) * 100}%`, width: `${((part[1] - part[0]) / length) * 100}%` }}
                   onPointerDown={(event) => { grab.current = { x: event.clientX, part, what: 'move' }; strip.current?.setPointerCapture(event.pointerId); }}>
                   {(['from', 'to'] as const).map((end) => (
