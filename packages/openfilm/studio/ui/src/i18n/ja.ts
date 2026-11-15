@@ -83,6 +83,7 @@ export const ja: Words = {
     turnOff: '{name} をオフにする',
     skillOff: 'オフです。オンに戻すまで、エージェントはこのスキルを使いません。',
     skillOffPlugin: "「{plugin}」ワークベンチと一緒にオフになっています。",
+    report: "報告する",
     scriptsConsentTitle: "{maker} のこのスキルを使いますか？",
     scriptsConsentNote: "スクリプトが {n} 個含まれています。エージェントが使うとき、エージェントと同じ権限（ファイルの読み書き、ネットワーク）で実行されることがあります。信頼できる作者のものだけインストールしてください。「追加済み」でいつでもオフや削除ができます。",
     scriptsConsentGo: "信頼して続ける",

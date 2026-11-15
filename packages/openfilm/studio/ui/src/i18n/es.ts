@@ -83,6 +83,7 @@ export const es: Words = {
     turnOff: 'Desactivar {name}',
     skillOff: 'Desactivada. Ningún agente la usará hasta que la vuelvas a activar.',
     skillOffPlugin: "Desactivada con la mesa de trabajo {plugin}.",
+    report: "Denunciar",
     scriptsConsentTitle: "¿Usar esta habilidad de {maker}?",
     scriptsConsentNote: "Trae {n} scripts. Cuando tu agente la use, puede ejecutarlos con su mismo acceso: leer y escribir tus archivos y usar la red. Instala solo lo que sea de confianza. Puedes desactivarla o eliminarla cuando quieras en Añadido.",
     scriptsConsentGo: "Confío, continuar",

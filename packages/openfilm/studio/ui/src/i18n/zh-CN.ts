@@ -84,6 +84,7 @@ export const zhCN: Words = {
     turnOff: '关闭 {name}',
     skillOff: '已关闭。重新开启前，智能体不会用到它。',
     skillOffPlugin: "跟着「{plugin}」工作台一起关了。",
+    report: "举报这个技能",
     scriptsConsentTitle: "要用 {maker} 做的这个技能吗？",
     scriptsConsentNote: "它带了 {n} 个脚本。智能体用它时可能运行这些脚本，权限和智能体一样：能读写你的文件、联网。只安装你信任的作者的东西。装好后可以随时在「已添加」里关掉或移除。",
     scriptsConsentGo: "我信任，继续",

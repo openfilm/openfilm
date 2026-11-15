@@ -80,6 +80,7 @@ export const ko: Words = {
     turnOff: '{name} 끄기',
     skillOff: '꺼져 있습니다. 다시 켜기 전까지 에이전트는 이 스킬을 쓰지 않습니다.',
     skillOffPlugin: "\"{plugin}\" 작업대와 함께 꺼져 있습니다.",
+    report: "신고하기",
     scriptsConsentTitle: "{maker}이(가) 만든 이 스킬을 쓸까요?",
     scriptsConsentNote: "스크립트가 {n}개 들어 있습니다. 에이전트가 이 스킬을 쓸 때 에이전트와 같은 권한(파일 읽기·쓰기, 네트워크)으로 실행될 수 있습니다. 신뢰하는 제작자의 것만 설치하세요. \"추가됨\"에서 언제든 끄거나 삭제할 수 있습니다.",
     scriptsConsentGo: "신뢰하고 계속",

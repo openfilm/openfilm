@@ -13,6 +13,23 @@ as you (an agent, a skill, a plugin's command) that reads those files gets nothi
 computer. With `npx openfilm` alone the keys are kept plain, so any program running as you can read them. Your user
 account is the boundary: nothing here stops a program running as you that reads Studio's memory.
 
+## Community items
+
+Workbenches, skills and connectors from the community run on your computer. OpenFilm keeps them in bounds where it can:
+
+- A project's own skills reach no agent until you allow them in that project, after reading them whole; if their
+  files change, you are asked again.
+- A workbench's page reaches no network address except the hosts its `openfilm.json` declares, and it is told what it
+  may reach before you turn it on.
+- A skill made by anyone but OpenFilm that brings scripts asks before it is installed or tried: its scripts run with
+  your agent's access.
+- Anything OpenFilm withdraws (malware, impersonation, rights, broken, policy) stops on every computer the next time
+  the community index is read, wherever a copy of it is, and says why.
+
+To report a community item, use **Report** on its page in OpenFilm or on openfilm.dev, or write to
+**support@openfilm.dev** with its name (`owner/name`) and what you saw. A confirmed malicious item is withdrawn within
+24 hours of confirmation, and an advisory says how to check whether you were affected and what to do.
+
 ## Reporting
 
 Please report a vulnerability privately, not in a public issue: on GitHub, under **Security → Report a

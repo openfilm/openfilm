@@ -12,7 +12,7 @@
 import React from 'react';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from './dialog-chrome';
 import {
-  ArrowLeft, ChevronRight, Copy, Film, Folder, GitBranch, Github, Layers, MessageSquarePlus, MonitorPlay, Music, PenLine, PictureInPicture2,
+  ArrowLeft, ChevronRight, Copy, Flag, Film, Folder, GitBranch, Github, Layers, MessageSquarePlus, MonitorPlay, Music, PenLine, PictureInPicture2,
   Plus, Presentation, RefreshCw, Scissors, Shapes, Sparkles, Trash2, Wand2, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
@@ -271,6 +271,13 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
       {/* its uid, owner/name: how it is told apart, shared and searched */}
       <p className="mt-4 truncate font-mono text-[12px] text-[var(--text-faint)]" title={skill.uid}>{skill.uid}</p>
       </ForDevelopers>
+      {/* one not OpenFilm's own can be reported: what it is named, by email (SECURITY.md) */}
+      {ownerOf(skill) !== 'openfilm' && skill.source !== 'mine' ? (
+        <a href={`mailto:support@openfilm.dev?subject=${encodeURIComponent(`Report ${skill.uid}`)}`}
+          className="mt-4 inline-flex items-center gap-1.5 text-[13.5px] text-[var(--text-faint)] transition hover:text-[var(--text)]">
+          <Flag size={13} aria-hidden />{t('gallery.report')}
+        </a>
+      ) : null}
       {(skill.scripts > 0 && !skill.core) || ((skill.surface || skill.program || skill.inApp) && installed) ? (
         <PageSection title={t('assetDrawer.pluginMay')}>
           {/* scripts it brings run on this computer, with the agent's access */}
