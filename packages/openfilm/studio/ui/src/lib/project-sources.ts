@@ -47,6 +47,19 @@ export const makerOf = (skill: { uid: string; repository?: string }) => /^https:
 /** One of Discover's, installed or not, made by someone other than OpenFilm: the community's, under its owner's name. */
 export const communityOf = (skill: { uid: string; source: string; core?: true }) => skill.source === 'official' && !skill.core && ownerOf(skill) !== 'openfilm';
 
+/** One of the person's own read as the community's review will (src/publish-cli.mjs publishCheck). */
+export type PublishCheck = {
+  name: string; kind: 'skill' | 'workbench'; version: string | null; network: string[]; scripts: number; program: boolean; element: boolean;
+  missing: Array<'description' | 'title' | 'version' | 'license'>;
+  findings: Array<{ severity: 'high' | 'medium' | 'low'; rule: string; file: string; line?: number; quote: string }>;
+  ready: boolean;
+};
+/** It read in the person's repository and compared with theirs here, and its listing (studio/server/community-publish.mjs). */
+export type PublishVerify = {
+  owner: string; repo: string; commit: string; ageDays: number | null; same: boolean; differ: string[]; onlyHere: string[]; onlyThere: string[];
+  registryPath: string; proposeUrl: string;
+};
+
 /** a skill a project can be made with (openfilm/src/skills.mjs): the project's own, the person's, or official */
 export type SkillEntry = {
   /** whose it is and its name, `owner/name` (openfilm/src/skills.mjs SKILL_UID): how it is told apart, shared and searched */
@@ -95,6 +108,8 @@ export type SkillEntry = {
   network?: { domains: string[]; why?: Record<string, string> };
   /** OpenFilm withdrew it (its index's `revoked`): given to no agent, nothing of it runs; why, and where to read more */
   revoked?: { reason: 'malware' | 'impersonation' | 'rights' | 'broken' | 'policy'; note?: string; advisory?: string };
+  /** listed by another community index the person added, not OpenFilm's (its address): not reviewed by OpenFilm */
+  from?: string;
   /** a project's own the person has not allowed in it yet: offered to no agent, nothing of it shown or run (src/skills.mjs projectSkillAllowed) */
   waits?: true;
   /** one of OpenFilm's own, off because the plugin it goes with is off (lib/plugins): turned on, its plugin is too */
@@ -228,6 +243,15 @@ export const sourcesApi = {
   startPlugin: async (uid: string, projectId: string): Promise<string> =>
     (await call<{ url: string }>(`skills/${encodeURIComponent(uid)}/start?project=${encodeURIComponent(projectId)}`, 'POST')).url,
   /** one of Discover's installed (downloaded, at the version it shows) or uninstalled; whoever lists skills reads them again */
+  /** the other community indexes the person added, read after OpenFilm's own (Discover is read again after a change) */
+  communitySources: () => call<{ sources: string[] }>('community/sources').then((r) => r.sources),
+  setCommunitySources: (sources: string[]) => call<{ sources: string[] }>('community/sources', 'PUT', { sources }).then((r) => r.sources),
+  /** how many use each community item, by uid (none when unknown) */
+  communityStats: () => call<{ stats: Record<string, { installs: number }> }>('community/stats').then((r) => r.stats, () => ({} as Record<string, { installs: number }>)),
+  /** one of the person's own read as the community's review will */
+  publishCheck: (uid: string) => call<PublishCheck>(`skills/${encodeURIComponent(uid)}/publish`, 'POST', {}),
+  /** it read in their repository, compared with theirs here, and its listing made */
+  publishVerify: (uid: string, repo: string) => call<PublishVerify>(`skills/${encodeURIComponent(uid)}/publish/verify`, 'POST', { repo }),
   /** a skill as a person reviews it before letting it in: its SKILL.md whole and its files */
   skillText: (uid: string, projectId?: string | null) =>
     call<{ text: string; files: Array<{ path: string; size: number }>; more: number }>(`skills/${encodeURIComponent(uid)}/text${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`),

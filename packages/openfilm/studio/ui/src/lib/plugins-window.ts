@@ -7,7 +7,7 @@ import * as React from 'react';
 
 import type { FeatureKind } from '@/components/feature-kinds';
 
-export type PluginsLine = 'discover' | 'added' | 'publish' | `kind:${FeatureKind}`;
+export type PluginsLine = 'discover' | 'added' | 'publish' | 'sources' | `kind:${FeatureKind}` | `author:${string}`;
 export interface PluginsWindowState { open: boolean; line: PluginsLine; page: string | null }
 
 let state: PluginsWindowState = { open: false, line: 'discover', page: null };

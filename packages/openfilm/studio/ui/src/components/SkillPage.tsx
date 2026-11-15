@@ -101,7 +101,7 @@ export function CommandChips({ name, commands }: { name: string; commands: reado
   );
 }
 
-export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: {
+export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn, onAuthor }: {
   skill: SkillEntry;
   /** the list it is in: each change shown there at once, then read again */
   setSkills: React.Dispatch<React.SetStateAction<SkillEntry[]>>;
@@ -109,6 +109,8 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
   onBack: () => void;
   /** Try now (none: Studio without the app's chat) */
   onTry?: (skill: SkillEntry) => void;
+  /** its maker's name opens their page in the Community (none: their GitHub) */
+  onAuthor?: (owner: string) => void;
   /** it was turned on here */
   onOn?: () => void;
 }) {
@@ -240,9 +242,11 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
         <span>{t(isPlugin(skill) ? 'assetDrawer.kind_workbench' : 'assetDrawer.kind_skill')} ·</span>
         {communityOf(skill) ? (
           <span>{t('gallery.byCommunity').split('{owner}')[0]}<a href={`https://github.com/${makerOf(skill)}`} target="_blank" rel="noreferrer"
+            onClick={(e) => { if (onAuthor) { e.preventDefault(); onAuthor(ownerOf(skill)); } }}
             className="text-[var(--text)] underline-offset-2 hover:underline">{makerOf(skill)}</a>{t('gallery.byCommunity').split('{owner}')[1]}</span>
         ) : <span>{t(group)}</span>}
         {skill.version ? <span className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[11.5px] text-[var(--text-muted)]">v{skill.version}</span> : null}
+        <TrustMark skill={skill} />
         {/* its source: OpenFilm's repository, or the address one of the person's came from */}
         {source ? (
           <a href={source} target="_blank" rel="noreferrer" title={source} aria-label={t('gallery.viewSource')}
@@ -511,15 +515,37 @@ function ProjectSkillReview({ skill, projectId, onAllowed }: { skill: SkillEntry
 export function useScriptsConsent() {
   const t = useT();
   const [asking, setAsking] = React.useState<{ skill: SkillEntry; go: () => void } | null>(null);
+  /* anything another community index lists (not reviewed by OpenFilm) asks always; else one with scripts, not OpenFilm's */
   const ask = (skill: SkillEntry, go: () => void) => {
-    if (skill.scripts > 0 && ownerOf(skill) !== 'openfilm') setAsking({ skill, go }); else go();
+    if (skill.from || (skill.scripts > 0 && ownerOf(skill) !== 'openfilm')) setAsking({ skill, go }); else go();
   };
+  const unofficial = asking?.skill.from;
+  const scriptsNote = asking && asking.skill.scripts > 0 ? t('gallery.scriptsConsentNote').replace('{n}', String(asking.skill.scripts)) : '';
   const dialog = (
     <ConfirmDialog open={asking != null}
-      title={t('gallery.scriptsConsentTitle').replace('{maker}', asking ? makerOf(asking.skill) : '')}
-      description={asking ? t('gallery.scriptsConsentNote').replace('{n}', String(asking.skill.scripts)) : ''}
+      title={t(unofficial ? 'gallery.unofficialTitle' : 'gallery.scriptsConsentTitle').replace('{maker}', asking ? makerOf(asking.skill) : '')}
+      description={unofficial ? `${t('gallery.unofficialNote').replace('{host}', hostOf(unofficial))}${scriptsNote ? ` ${scriptsNote}` : ''}` : scriptsNote}
       confirmLabel={t('gallery.scriptsConsentGo')}
       onCancel={() => setAsking(null)} onConfirm={() => { const go = asking?.go; setAsking(null); go?.(); }} />
   );
   return { ask, dialog };
+}
+
+/** Where an index is, as a person reads it: its host, or the file's name. */
+export const hostOf = (address: string) => { try { return new URL(address).host; } catch { return address.split('/').pop() ?? address; } };
+
+/**
+ * How far a community item is vouched for, as a small mark: OpenFilm's own; listed by OpenFilm's community (reviewed: its
+ * checks and AI review read every version); or listed by another index the person added (not reviewed). None for the
+ * person's own or a project's.
+ */
+export function TrustMark({ skill }: { skill: SkillEntry }) {
+  const t = useT();
+  if (skill.source !== 'official' || skill.core) return null;
+  const [word, tone] = ownerOf(skill) === 'openfilm' ? [t('gallery.trustOfficial'), 'var(--accent)']
+    : skill.from ? [`${t('gallery.trustUnreviewed')} · ${hostOf(skill.from)}`, 'var(--warn)'] : [t('gallery.trustReviewed'), 'var(--ok)'];
+  return (
+    <span className="inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[11.5px] font-medium"
+      style={{ color: tone, background: `color-mix(in srgb, ${tone} 14%, transparent)` }}>{word}</span>
+  );
 }

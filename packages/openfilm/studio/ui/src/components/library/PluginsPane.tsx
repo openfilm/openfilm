@@ -18,16 +18,17 @@
 import React from 'react';
 import {
   ArrowLeft, ArrowUpRight, AudioLines, Box, Check, ChevronRight, Clapperboard, Cloud, Film, FolderOpen, Images, Languages, Layers, Loader2, Megaphone, Mic,
-  Music, Music2, MousePointerClick, Palette, Projector, Puzzle, RefreshCw, Scissors, Send, Spline, SquareTerminal, Upload, Workflow, Github, type LucideIcon,
+  Compass, Globe, Music, Music2, Palette, Projector, Puzzle, RefreshCw, Scissors, Send, Spline, SquareTerminal, Upload, Workflow, Github, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
 import { setPluginOn, usePlugins, type Plugin } from '@/lib/plugins';
 import { showPluginsLine, type PluginsLine } from '@/lib/plugins-window';
 import { isPlugin, pluginOfSkill } from '@/lib/project-plugins';
-import { communityOf, forgetSeenSkills, makerOf, seenCatalog, seenSkills, sourcesApi, SourceError, watchSkills, type SkillEntry } from '@/lib/project-sources';
+import { communityOf, fetchErrorKey, forgetSeenSkills, makerOf, ownerOf, seenCatalog, seenSkills, sourcesApi, SourceError, watchSkills, type PublishCheck, type PublishVerify, type SkillEntry } from '@/lib/project-sources';
+import { ConfirmDialog } from '../ConfirmDialog';
 import {
-  BringsLine, byOrder, CommandChips, ForDevelopers, HowToUse, useScriptsConsent, inLanguage, PageSection, SkillCover, SkillMark, SkillPage, useSkillWords,
+  BringsLine, byOrder, CommandChips, ForDevelopers, HowToUse, TrustMark, hostOf, useScriptsConsent, inLanguage, PageSection, SkillCover, SkillMark, SkillPage, useSkillWords,
 } from '../SkillPage';
 import { CATEGORIES, categoryOfPlugin, categoryOfSkill, usesOfPlugin, type Category } from '@/lib/plugin-profile';
 import { ProfileStrip } from './PluginProfile';
@@ -129,6 +130,9 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   }, [line, retry]);
 
   const agents = useAgentExtras(line === 'added');
+  /* how many use each community item (anonymous counts; none when unknown) */
+  const [stats, setStats] = React.useState<Record<string, { installs: number }>>({});
+  React.useEffect(() => { let live = true; void sourcesApi.communityStats().then((r) => { if (live) setStats(r); }); return () => { live = false; }; }, []);
   const library = useLibraryIndex();
   const lang = useLanguage();
   const q = query.trim().toLowerCase();
@@ -186,7 +190,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   if (page) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <SkillPage key={page.uid} skill={page} setSkills={setSkills} projectId={projectId} onBack={() => open(from)}
+        <SkillPage key={page.uid} skill={page} setSkills={setSkills} projectId={projectId} onBack={() => open(from)} onAuthor={(owner) => showPluginsLine(`author:${owner}`)}
           onOn={() => { if (isPlugin(page)) workbenchOn(pluginOfSkill(page)); }} {...(studioHost?.useSkill ? { onTry: tryIt } : {})} />
       </div>
     );
@@ -259,19 +263,21 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   }
 
   /* Publish: how what one made reaches everyone; what one published shows here once one signs in (to come) */
+  /* Publish: one's own, published to the community from here (PublishFlow); the other ways; the community's other
+     indexes are under Sources */
   if (line === 'publish') {
     return (
       <PluginsPage title={t('assetDrawer.publishTitle')} note={t('assetDrawer.note_publish')}>
-        <SettingsGroup title={t('assetDrawer.publishHow')}>
-          <PluginRow mark={<KindMark kind="workbenches" icon={MousePointerClick} />} title={t('assetDrawer.publishInApp')} summary={t('assetDrawer.publishInAppNote')} control={<SoonMark />} />
-          <PluginRow mark={<KindMark kind="workbenches" icon={SquareTerminal} />} title={t('assetDrawer.publishCli')} summary={t('assetDrawer.publishCliNote')}
-            control={<code className="select-all rounded-md bg-[var(--bg-field)] px-2 py-1 font-mono text-[12.5px] text-[var(--text)]">openfilm publish</code>} />
-          <PluginRow mark={<KindMark kind="workbenches" icon={Github} />} title={t('assetDrawer.publishGithub')} summary={t('assetDrawer.publishGithubNote')}
-            control={<a href={MAKE_GUIDE} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-3.5 text-[14px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{t('assetDrawer.publishGuide')}<ArrowUpRight size={14} aria-hidden /></a>} />
-        </SettingsGroup>
-        <SettingsGroup title={t('assetDrawer.publishMine')}>
-          <p className="py-3 text-[14px] leading-relaxed text-[var(--text-faint)]">{t('assetDrawer.publishMineNone')}</p>
-        </SettingsGroup>
+        <PublishPanel skills={skills.filter((k) => k.source === 'mine' && !k.core)} words={words} />
+      </PluginsPage>
+    );
+  }
+
+  /* the other community indexes the person added, beside OpenFilm's own */
+  if (line === 'sources') {
+    return (
+      <PluginsPage title={t('assetDrawer.sourcesTitle')} note={t('assetDrawer.note_sources')}>
+        <SourcesPanel onChanged={() => setRetry((n) => n + 1)} />
       </PluginsPage>
     );
   }
@@ -288,6 +294,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     const { title, summary } = pluginWords(p);
     return {
       key: p.id, kind: 'workbenches', title, summary, note: p.beta ? t('assetDrawer.pluginBeta') : t('assetDrawer.skillsOfficial'),
+      trust: <span className="inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[11.5px] font-medium text-[var(--accent)]" style={{ background: 'color-mix(in srgb, var(--accent) 14%, transparent)' }}>{t('gallery.trustOfficial')}</span>,
       cover: <GradientCover hue={HUES[p.icon ?? ''] ?? 220} Icon={PLUGIN_ICONS[p.icon ?? ''] ?? Puzzle} />, onOpen: () => open(`${PLUGIN_PAGE}${p.id}`),
       action: p.soon ? <SoonMark /> : p.on ? doneMark(t('assetDrawer.turnedOn')) : <SettingsButton onClick={() => turnPlugin(p, true)}>{t('assetDrawer.turnOnAction')}</SettingsButton>,
     };
@@ -295,6 +302,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const skillCard = (k: SkillEntry): StoreItem => ({
     key: k.uid, kind: isPlugin(k) ? 'workbenches' : 'skills', title: words(k).title, summary: words(k).summary,
     note: communityOf(k) ? makerOf(k) : t('assetDrawer.skillsOfficial'), cover: <SkillCover skill={k} title={words(k).title} />, onOpen: () => open(k.uid),
+    trust: <TrustMark skill={k} />, author: ownerOf(k), onAuthor: () => showPluginsLine(`author:${ownerOf(k)}`), installs: stats[k.uid]?.installs,
     action: installedOf(k) ? doneMark(t('assetDrawer.installedMark')) : (
       <SettingsButton disabled={installing != null} onClick={() => consent.ask(k, () => install(k))}>
         {installing === k.uid ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}{t(installing === k.uid ? 'gallery.installing' : 'gallery.install')}
@@ -303,6 +311,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   });
   const assetCard = (it: LibraryItem): StoreItem => ({
     key: it.id, kind: it.cat, title: nameOf(it.name, lang), summary: (it.tags ?? []).slice(0, 4).join(t('assetDrawer.listSep')), note: it.by,
+    ...(it.by ? { author: it.by.toLowerCase(), onAuthor: () => showPluginsLine(`author:${(it.by ?? '').toLowerCase()}`) } : {}),
     cover: it.kind === 'sound' ? <GradientCover hue={it.cat === 'music' ? 286 : 200} Icon={it.cat === 'music' ? Music : AudioLines} />
       : <img src={posterUrl(it)} alt="" loading="lazy" draggable={false} className="absolute inset-0 h-full w-full object-cover" />,
     action: doneMark(t('assetDrawer.inLibrary')),
@@ -392,6 +401,24 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   }
 
   /* one kind of the catalog: all of it, cards; none yet: said, with the way to publish one */
+  /* a maker's page: all they made, and how many use it */
+  if (line.startsWith('author:')) {
+    const owner = line.slice('author:'.length).toLowerCase();
+    const theirs = FEATURE_KINDS.flatMap(storeOf).filter((x) => x.author?.toLowerCase() === owner);
+    const total = theirs.reduce((n, x) => n + (x.installs ?? 0), 0);
+    return (
+      <PluginsPage title={owner === 'openfilm' ? t('assetDrawer.skillsOfficial') : owner}
+        note={`${t('assetDrawer.note_author').replace('{n}', String(theirs.length))}${total ? ` ${t('assetDrawer.installs').replace('{n}', total.toLocaleString())}.` : ''}`}>
+        {consent.dialog}
+        {status}
+        <a href={`https://github.com/${owner}`} target="_blank" rel="noreferrer" className="mb-6 inline-flex items-center gap-1.5 text-[14px] text-[var(--text-muted)] underline-offset-2 hover:text-[var(--text)] hover:underline">
+          github.com/{owner}<ArrowUpRight size={14} aria-hidden />
+        </a>
+        {theirs.length ? <div className={STORE_GRID}>{theirs.map((item) => <StoreCard key={item.key} item={item} />)}</div> : <Empty text={t('assetDrawer.noSkillsFound')} />}
+      </PluginsPage>
+    );
+  }
+
   const kind = line.slice('kind:'.length) as FeatureKind;
   const items = storeOf(kind);
   const kindNote = isCodeKind(kind) ? t(`assetDrawer.note_discover_${kind}`) : t('assetDrawer.note_kindAsset').replaceAll('{kind}', kindName(kind));
@@ -589,6 +616,8 @@ function useAgentExtras(shown: boolean) {
 type StoreItem = {
   key: string; kind: FeatureKind; title: string; summary: string; note?: string | undefined;
   cover: React.ReactNode; action: React.ReactNode; onOpen?: () => void;
+  /** how far it is vouched for (SkillPage TrustMark); whose it is, opening their page; how many use it */
+  trust?: React.ReactNode; author?: string | undefined; onAuthor?: (() => void) | undefined; installs?: number | undefined;
 };
 
 /**
@@ -606,8 +635,6 @@ const SOON: ReadonlyArray<{ id: string; kind: FeatureKind; hue: number; icon: Lu
   { id: 'publish', kind: 'connectors', hue: 328, icon: Send },
 ];
 
-/** How to make a workbench or a skill of one's own. */
-const MAKE_GUIDE = 'https://github.com/openfilm/openfilm/blob/main/packages/openfilm/plugins/README.md';
 
 const STORE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4';
 
@@ -660,13 +687,19 @@ function StoreCard({ item }: { item: StoreItem }) {
       className={`flex min-w-0 flex-col overflow-hidden rounded-[12px] border border-[var(--border)] outline-none transition ${item.onOpen ? 'cursor-pointer hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)]' : ''}`}>
       <div className="relative aspect-video shrink-0 overflow-hidden border-b border-[var(--border)] bg-[var(--bg-field)]">{item.cover}</div>
       <div className="flex min-h-0 flex-1 flex-col p-3.5">
-        <div className="flex min-w-0 items-baseline gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-[15px] font-medium text-[var(--text)]">{item.title}</span>
-          {item.note ? <span className="shrink-0 text-[12.5px] text-[var(--text-faint)]">{item.note}</span> : null}
+          {item.trust}
         </div>
+        {item.note ? (
+          item.onAuthor
+            ? <button type="button" onClick={(e) => { e.stopPropagation(); item.onAuthor?.(); }} className="mt-0.5 self-start truncate text-left text-[12.5px] text-[var(--text-faint)] underline-offset-2 hover:text-[var(--text)] hover:underline">{item.note}</button>
+            : <span className="mt-0.5 truncate text-[12.5px] text-[var(--text-faint)]">{item.note}</span>
+        ) : null}
         <p className="mt-1 line-clamp-2 min-h-[42px] text-[13.5px] leading-[21px] text-[var(--text-muted)]">{item.summary}</p>
         <div className="mt-3 flex items-center justify-between gap-2">
-          <span className="inline-flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--text-faint)]"><KindIcon kind={item.kind} size={14} />{t(isCodeKind(item.kind) ? `assetDrawer.kind_${item.kind}` : `assetDrawer.cat_${item.kind}`)}</span>
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--text-faint)]"><KindIcon kind={item.kind} size={14} />{t(isCodeKind(item.kind) ? `assetDrawer.kind_${item.kind}` : `assetDrawer.cat_${item.kind}`)}
+            {item.installs ? <span className="tabular-nums">· {t('assetDrawer.installs').replace('{n}', item.installs.toLocaleString())}</span> : null}</span>
           {/* the button is its own: a press there does not open the page */}
           <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>{item.action}</span>
         </div>
@@ -708,5 +741,182 @@ function Hero({ item, preview, poster, label }: { item: StoreItem; preview?: str
         <div className="mt-2" onClick={(e) => e.stopPropagation()}>{item.action}</div>
       </div>
     </div>
+  );
+}
+
+/** What the publish check says is missing, as a person reads it. */
+const MISSING_WORDS = { description: 'publishMissingDescription', title: 'publishMissingTitle', version: 'publishMissingVersion', license: 'publishMissingLicense' } as const;
+
+/**
+ * Publish: one's own workbenches and skills, each with Publish (PublishFlow); then the other ways (the command, the
+ * community's guide; media through its repository for now).
+ */
+function PublishPanel({ skills, words }: { skills: SkillEntry[]; words: ReturnType<typeof useSkillWords> }) {
+  const t = useT();
+  const [picked, setPicked] = React.useState<SkillEntry | null>(null);
+  if (picked) return <PublishFlow skill={picked} title={words(picked).title} onBack={() => setPicked(null)} />;
+  return (
+    <>
+      <SettingsGroup title={t('assetDrawer.publishMineTitle')}>
+        {skills.length ? skills.map((k) => (
+          <PluginRow key={k.uid} mark={<SkillMark skill={k} />} title={words(k).title} summary={words(k).summary}
+            control={<SettingsButton onClick={() => setPicked(k)}><Upload size={14} aria-hidden />{t('assetDrawer.publishStart')}</SettingsButton>} />
+        )) : <p className="py-3 text-[14px] leading-relaxed text-[var(--text-faint)]">{t('assetDrawer.publishMineNone')}</p>}
+      </SettingsGroup>
+      <SettingsGroup title={t('assetDrawer.publishOther')}>
+        <PluginRow mark={<KindMark kind="workbenches" icon={SquareTerminal} />} title={t('assetDrawer.publishCli')} summary={t('assetDrawer.publishCliNote')}
+          control={<code className="select-all rounded-md bg-[var(--bg-field)] px-2 py-1 font-mono text-[12.5px] text-[var(--text)]">openfilm publish</code>} />
+        <PluginRow mark={<KindMark kind="workbenches" icon={Github} />} title={t('assetDrawer.publishGithub')} summary={t('assetDrawer.publishGithubNote')}
+          control={<a href="https://github.com/openfilm/community#readme" target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-3.5 text-[14px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{t('assetDrawer.publishGuide')}<ArrowUpRight size={14} aria-hidden /></a>} />
+        <PluginRow mark={<KindMark kind="sound" />} title={t('assetDrawer.publishAssets')} summary={t('assetDrawer.publishAssetsNote')}
+          control={<a href="https://github.com/openfilm/community/tree/main/assets#readme" target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-3.5 text-[14px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{t('assetDrawer.publishGuide')}<ArrowUpRight size={14} aria-hidden /></a>} />
+      </SettingsGroup>
+    </>
+  );
+}
+
+/** One step of publishing: its number lit once done, its title, what it says. */
+function Step({ n, title, done, children }: { n: number; title: string; done: boolean; children: React.ReactNode }) {
+  return (
+    <section className="flex gap-4 border-t border-[var(--border)] py-5 first:border-t-0">
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold ${done ? 'bg-[var(--ok)] text-black' : 'bg-[var(--bg-field)] text-[var(--text-muted)]'}`}>
+        {done ? <Check size={15} aria-hidden /> : n}
+      </span>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-[15.5px] font-semibold text-[var(--text)]">{title}</h3>
+        <div className="mt-1.5 text-[14px] leading-relaxed text-[var(--text-muted)]">{children}</div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Publishing one's own, step by step, with no GitHub sign-in in OpenFilm: (1) read as the community's review will;
+ * (2) put in a public repository of theirs at skills/<name>/, its address given, read there and compared with this
+ * one; (3) its listing proposed on GitHub's page for a new file, prefilled (GitHub makes the pull request). The
+ * address is kept for next time.
+ */
+function PublishFlow({ skill, title, onBack }: { skill: SkillEntry; title: string; onBack: () => void }) {
+  const t = useT();
+  const [check, setCheck] = React.useState<PublishCheck | null>(null);
+  const [checking, setChecking] = React.useState(false);
+  const kept = `openfilm.publish.repo.${skill.uid}`;
+  const [repo, setRepo] = React.useState(() => { try { return localStorage.getItem(kept) ?? ''; } catch { return ''; } });
+  const [verify, setVerify] = React.useState<PublishVerify | null>(null);
+  const [verifying, setVerifying] = React.useState(false);
+  /* what went wrong, shown in the step it went wrong in */
+  const [error, setError] = React.useState<{ step: 1 | 2; message: string } | null>(null);
+  const failed = (step: 1 | 2) => (e: unknown) => {
+    const code = e instanceof SourceError ? e.code : null;
+    const key = code === 'not-github' ? 'assetDrawer.publishGitHubOnly' : code === 'access' ? 'assetDrawer.publishNotFound' : fetchErrorKey(code);
+    setError({ step, message: key ? t(key) : e instanceof Error ? e.message : String(e) });
+  };
+  const runCheck = () => { setChecking(true); setVerify(null); setError(null); void sourcesApi.publishCheck(skill.uid).then(setCheck, failed(1)).finally(() => setChecking(false)); };
+  React.useEffect(runCheck, [skill.uid]);
+  const runVerify = () => {
+    setVerifying(true); setError(null);
+    try { localStorage.setItem(kept, repo.trim()); } catch { /* not kept */ }
+    void sourcesApi.publishVerify(skill.uid, repo.trim()).then(setVerify, (e) => { setVerify(null); failed(2)(e); }).finally(() => setVerifying(false));
+  };
+  const young = verify?.ageDays != null && verify.ageDays < 7;
+  const high = check?.findings.filter((f) => f.severity === 'high') ?? [];
+  return (
+    <div>
+      <button type="button" onClick={onBack} className="-ml-1 mb-4 flex h-8 items-center gap-1.5 rounded-md pl-1.5 pr-2.5 text-[14px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+        <ArrowLeft size={14} />{t('gallery.back')}
+      </button>
+      <h3 className="mb-2 text-[18px] font-semibold text-[var(--text)]">{t('assetDrawer.publishOne').replace('{name}', title)}</h3>
+      <Step n={1} title={t('assetDrawer.publishStep1')} done={Boolean(check?.ready)}>
+        {error?.step === 1 ? <p role="alert" className="mb-2 text-[var(--warn)]">{error.message}</p> : null}
+        {!check ? error?.step === 1 ? null : <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" aria-hidden />{t('assetDrawer.publishChecking')}</span> : (
+          <>
+            <p>{check.ready ? t('assetDrawer.publishReady') : t('assetDrawer.publishNotReady')}</p>
+            {check.missing.length ? <ul className="mt-2 list-disc pl-5">{check.missing.map((m) => <li key={m}>{t(`assetDrawer.${MISSING_WORDS[m]}`)}</li>)}</ul> : null}
+            {check.findings.length ? (
+              <ul className="mt-2 flex flex-col gap-1">
+                {[...high, ...check.findings.filter((f) => f.severity !== 'high')].map((f, i) => (
+                  <li key={i} className="flex min-w-0 items-baseline gap-2 font-mono text-[12.5px]">
+                    <span className={`shrink-0 rounded px-1.5 font-sans text-[11.5px] ${f.severity === 'high' ? 'bg-[color-mix(in_srgb,var(--err)_20%,transparent)] text-[var(--err)]' : 'bg-[var(--bg-field)]'}`}>{t(`assetDrawer.severity_${f.severity}`)}</span>
+                    <span className="min-w-0 truncate" title={f.quote}>{f.file}{f.line ? `:${f.line}` : ''}  {f.quote}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <SettingsButton className="mt-3" disabled={checking} onClick={runCheck}>{t('assetDrawer.publishCheckAgain')}</SettingsButton>
+          </>
+        )}
+      </Step>
+      <Step n={2} title={t('assetDrawer.publishStep2')} done={Boolean(verify?.same) && !young}>
+        <p>{t('assetDrawer.publishStep2Note').replace('{path}', `skills/${skill.name}/`)}</p>
+        <div className="mt-3 flex gap-2">
+          <input value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="https://github.com/you/your-repo" disabled={!check?.ready}
+            className="h-9 min-w-0 flex-1 rounded-[8px] border border-[var(--border)] bg-transparent px-3 font-mono text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--text-muted)] disabled:opacity-50" />
+          <SettingsButton disabled={!check?.ready || !repo.trim() || verifying} onClick={runVerify}>
+            {verifying ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}{t('assetDrawer.publishVerify')}
+          </SettingsButton>
+        </div>
+        {error?.step === 2 ? <p role="alert" className="mt-3 text-[var(--warn)]">{error.message}</p> : null}
+        {verify ? (
+          <div className="mt-3">
+            {verify.same ? <p className="text-[var(--ok)]">{t('assetDrawer.publishSame').replace('{commit}', verify.commit.slice(0, 7))}</p> : (
+              <>
+                <p className="text-[var(--warn)]">{t('assetDrawer.publishDiffer')}</p>
+                {[...verify.differ.map((p) => [p, 'publishFileDiffers']), ...verify.onlyHere.map((p) => [p, 'publishFileNotPushed']), ...verify.onlyThere.map((p) => [p, 'publishFileOnlyThere'])].map(([p, why]) => (
+                  <p key={`${p}${why}`} className="font-mono text-[12.5px]">{p} <span className="font-sans text-[var(--text-faint)]">· {t(`assetDrawer.${why}`)}</span></p>
+                ))}
+              </>
+            )}
+            {young ? <p className="mt-1 text-[var(--warn)]">{t('assetDrawer.publishYoung').replace('{n}', String(verify.ageDays))}</p> : null}
+          </div>
+        ) : null}
+      </Step>
+      <Step n={3} title={t('assetDrawer.publishStep3')} done={false}>
+        <p>{t('assetDrawer.publishStep3Note')}</p>
+        {verify?.same && !young ? (
+          <a href={verify.proposeUrl} target="_blank" rel="noreferrer"
+            className="mt-3 inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-[var(--primary)] px-4 text-[14.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)]">
+            <Github size={15} aria-hidden />{t('assetDrawer.publishSubmit')}
+          </a>
+        ) : <p className="mt-2 text-[var(--text-faint)]">{t('assetDrawer.publishSubmitWait')}</p>}
+      </Step>
+    </div>
+  );
+}
+
+/**
+ * The community indexes Discover reads: OpenFilm's own (always, reviewed), then the ones the person added, each to
+ * remove; and one more to add, after being told plainly that OpenFilm does not review what it lists.
+ */
+function SourcesPanel({ onChanged }: { onChanged: () => void }) {
+  const t = useT();
+  const [sources, setSources] = React.useState<string[] | null>(null);
+  const [draft, setDraft] = React.useState('');
+  const [asking, setAsking] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  React.useEffect(() => { void sourcesApi.communitySources().then(setSources, () => setSources([])); }, []);
+  const save = (next: string[]) => {
+    setError(null);
+    void sourcesApi.setCommunitySources(next).then((kept) => { setSources(kept); setDraft(''); onChanged(); }, (e) => setError(e instanceof Error ? e.message : String(e)));
+  };
+  return (
+    <>
+      <SettingsGroup title={t('assetDrawer.sourcesOfficial')}>
+        <PluginRow mark={<KindMark kind="workbenches" icon={Compass} />} title="openfilm/community" note={t('gallery.trustReviewed')} summary={t('assetDrawer.sourcesOfficialNote')} control={null} />
+      </SettingsGroup>
+      <SettingsGroup title={t('assetDrawer.sourcesAdded')} footnote={t('assetDrawer.sourcesWarning')}>
+        {(sources ?? []).map((address) => (
+          <PluginRow key={address} mark={<KindMark kind="workbenches" icon={Globe} />} title={hostOf(address)} summary={address}
+            control={<SettingsButton variant="quiet" onClick={() => save((sources ?? []).filter((a) => a !== address))}>{t('assetDrawer.sourcesRemove')}</SettingsButton>} />
+        ))}
+        <div className="flex gap-2 py-4">
+          <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="https://example.com/openfilm-index.json"
+            className="h-9 min-w-0 flex-1 rounded-[8px] border border-[var(--border)] bg-transparent px-3 font-mono text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--text-muted)]" />
+          <SettingsButton disabled={!draft.trim()} onClick={() => setAsking(true)}>{t('assetDrawer.sourcesAdd')}</SettingsButton>
+        </div>
+        {error ? <p role="alert" className="pb-3 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
+      </SettingsGroup>
+      <ConfirmDialog open={asking} title={t('assetDrawer.sourcesAddTitle')} description={t('assetDrawer.sourcesAddNote').replace('{host}', hostOf(draft.trim()))}
+        confirmLabel={t('assetDrawer.sourcesAdd')} onCancel={() => setAsking(false)} onConfirm={() => { setAsking(false); save([...(sources ?? []), draft.trim()]); }} />
+    </>
   );
 }

@@ -8,7 +8,7 @@
  * (lib/plugins-window). The design and the research behind it: internal/community.md.
  */
 import React from 'react';
-import { CircleCheck, Compass, Import, Upload } from 'lucide-react';
+import { CircleCheck, Compass, Globe, Import, Upload } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import type { Plugin } from '@/lib/plugins';
@@ -49,6 +49,7 @@ export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string 
           {/* sharing what one made, and bringing in what is elsewhere (a folder or a link: its kind is read from what it is) */}
           <div className="mt-auto flex flex-col gap-0.5 pt-6">
             <LargeDialogPlace icon={<Upload {...ICON} />} active={line === 'publish'} onClick={() => showPluginsLine('publish')}>{t('assetDrawer.place_publish')}</LargeDialogPlace>
+            <LargeDialogPlace icon={<Globe {...ICON} />} active={line === 'sources'} onClick={() => showPluginsLine('sources')}>{t('assetDrawer.place_sources')}</LargeDialogPlace>
             {importAny ? <LargeDialogPlace icon={<Import {...ICON} />} active={false} onClick={importAny}>{t('assetDrawer.importAny')}</LargeDialogPlace> : null}
           </div>
         </>
