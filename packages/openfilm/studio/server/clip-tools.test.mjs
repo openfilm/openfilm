@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { clipTool } from './clip-tools.mjs';
+import { clipTool, shotTimes } from './clip-tools.mjs';
 import { probe } from './derived.mjs';
 
 /** a project with a 4 s clip: two scenes (a cut at 2 s) and a tone */
@@ -37,4 +37,15 @@ test('a clip: a part cut out, its sound alone, cropped to a shape, its shots whe
   assert.ok(existsSync(join(root, 'assets/clip-shots/shot-02.png')));
   await assert.rejects(clipTool(root, { op: 'trim', path: '../outside.mp4', from: 0, to: 1 }));
   await assert.rejects(clipTool(root, { op: 'spin', path: 'assets/clip.mp4' }), /op:/);
+});
+
+test('shots begin where a clip changes far more than its usual, at least 0.7 s apart; a single long shot is spaced evenly', () => {
+  const calm = Array.from({ length: 240 }, (_, i) => ({ t: i / 24, s: 0.004 + (i % 7) * 0.001 }));
+  /* a wipe peaking at 3.0 s over three frames, a cut at 6.5 s */
+  const peak = (t) => (Math.abs(t - 3) < 0.01 ? 0.18 : Math.abs(t - 3) < 0.05 ? 0.1 : Math.abs(t - 6.5) < 0.03 ? 0.6 : null);
+  const changes = calm.map((x) => (peak(x.t) ? { ...x, s: peak(x.t) } : x));
+  assert.deepEqual(shotTimes(changes, 10, 24), [0, 3, 6.5]);
+  assert.deepEqual(shotTimes(calm, 10, 24), [0, 2.5, 5, 7.5]);
+  /* room for two: the start and the strongest change */
+  assert.deepEqual(shotTimes(changes, 10, 2), [0, 6.5]);
 });

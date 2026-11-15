@@ -16,8 +16,8 @@ import { HttpError, json, readJson } from './http.mjs';
 
 /** the most shots taken from one clip */
 const SHOTS_MAX = 24;
-/** how different two frames are for a cut between them (ffmpeg's scene score, 0..1) */
-const CUT_SCORE = 0.3;
+/** shots at least this far apart, s */
+const SHOT_GAP = 0.7;
 /** a picture of a shot at most this wide */
 const SHOT_WIDTH = 1280;
 
@@ -84,16 +84,21 @@ export async function clipTool(root, body) {
   }
   if (body.op === 'shots') {
     const most = Math.min(SHOTS_MAX, Math.max(1, Math.round(Number(body.most) || SHOTS_MAX)));
+    /* how much each frame changes from the one before (scaled down: only the change counts) */
+    const log = await ffmpeg(['-i', src, '-an', '-vf', "scale=320:-2,select='gte(scene,0)',metadata=print:key=lavfi.scene_score", '-f', 'null', '-']);
+    const scores = [...log.matchAll(/pts_time:([\d.]+)[^\n]*\n[^\n]*lavfi\.scene_score=([\d.]+)/g)].map((m) => ({ t: Number(m[1]), s: Number(m[2]) }));
+    const times = shotTimes(scores, length, most);
     const dir = freeName(root, rel, 'shots', '');
     const abs = inside(root, dir);
     const temp = `${abs}.part`;
     await rm(temp, { recursive: true, force: true });
     await mkdir(temp, { recursive: true });
     try {
-      /* the first frame, and each where the picture changes enough to be a cut */
-      const log = await ffmpeg(['-i', src, '-vf', `select='eq(n\\,0)+gt(scene\\,${CUT_SCORE})',showinfo,scale='min(${SHOT_WIDTH}\\,iw)':-2`,
-        '-fps_mode', 'vfr', '-frames:v', String(most), join(temp, 'shot-%02d.png')]);
-      const times = [...log.matchAll(/pts_time:([\d.]+)/g)].map((m) => Math.round(Number(m[1]) * 100) / 100);
+      /* each shot's still from its middle, clear of the changes into and out of it */
+      for (const [i, t] of times.entries()) {
+        const middle = (t + (times[i + 1] ?? length)) / 2;
+        await ffmpeg(['-ss', String(Math.min(Math.max(0, length - 0.05), middle)), '-i', src, '-frames:v', '1', '-vf', `scale='min(${SHOT_WIDTH}\\,iw)':-2`, join(temp, `shot-${String(i + 1).padStart(2, '0')}.png`)]);
+      }
       await mkdir(dirname(abs), { recursive: true });
       await rename(temp, abs);
       const names = (await readdir(abs)).filter((n) => n.endsWith('.png')).sort();
@@ -104,6 +109,30 @@ export async function clipTool(root, body) {
     }
   }
   throw new HttpError(400, 'op: trim, audio, crop or shots');
+}
+
+/**
+ * Where a clip's shots begin, from how much each frame changes (`s`, ffmpeg's scene score at `t`): its start, then the
+ * frames that change far more than the clip's own usual (a cut, or a wipe's or push's peak), the strongest first, at
+ * least SHOT_GAP apart. A clip with no such change (one long shot): evenly spaced stills instead.
+ * @param {{ t: number, s: number }[]} scores @param {number} length @param {number} most
+ */
+export function shotTimes(scores, length, most) {
+  /* the clip's usual change (its median and median spread: one strong cut does not raise the bar for the others) */
+  const middle = (/** @type {number[]} */ v) => { const o = [...v].sort((a, b) => a - b); return o.length ? o[Math.floor(o.length / 2)] : 0; };
+  const usual = middle(scores.map((x) => x.s));
+  const spread = middle(scores.map((x) => Math.abs(x.s - usual)));
+  const bar = Math.max(0.05, usual + 10 * spread);
+  const picked = [0];
+  for (const { t } of scores.filter((x) => x.s >= bar).sort((a, b) => b.s - a.s)) {
+    if (picked.length >= most) break;
+    if (picked.every((p) => Math.abs(p - t) >= SHOT_GAP)) picked.push(t);
+  }
+  if (picked.length < 2 && length >= 4) {
+    const n = Math.min(most, Math.max(3, Math.round(length / 2.5)));
+    return Array.from({ length: n }, (_, i) => Math.round(((i * length) / n) * 100) / 100);
+  }
+  return picked.sort((a, b) => a - b).map((t) => Math.round(t * 100) / 100);
 }
 
 /** @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res @param {string} root @param {string} rest */
