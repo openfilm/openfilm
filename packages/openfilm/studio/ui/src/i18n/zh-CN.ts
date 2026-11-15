@@ -84,6 +84,8 @@ export const zhCN: Words = {
     turnOff: '关闭 {name}',
     skillOff: '已关闭。重新开启前，智能体不会用到它。',
     skillOffPlugin: "跟着「{plugin}」工作台一起关了。",
+    networkSome: "联网：只连",
+    networkNone: "不联网：它的页面连不到任何网址。",
     projectSkillTitle: "这个技能是项目自带的，还没允许",
     projectSkillNote: "项目可能来自任何人。允许后，在这个项目里智能体会照它做，也可能运行它带的脚本，权限和智能体一样。先把下面的全文和文件看一遍；它的文件之后有任何改动，会再问你。",
     projectSkillHidden: "发现 {n} 处看不见的字符或注释，已经标出来了。这类内容常被用来藏指令，请仔细看。",

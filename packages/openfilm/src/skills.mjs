@@ -349,7 +349,7 @@ export function parseSkillFile(text) {
  * @typedef {{ title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string> }} SkillShown
  *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title, a one-line summary and a few lines
  *   on who it is for and what it does, by language (`en`, `zh-CN`…); the SKILL.md's description is for the agent
- * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string, needs?: Record<string, string>, platforms?: SkillPlatform[], tab?: import('./plugins.mjs').PluginTab, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], requires?: string[], profile?: import('./plugins.mjs').Profile }} SkillLook
+ * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string, needs?: Record<string, string>, platforms?: SkillPlatform[], tab?: import('./plugins.mjs').PluginTab, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], requires?: string[], profile?: import('./plugins.mjs').Profile, network?: SkillNetwork }} SkillLook
  *   where an app shows it and what it builds on (openfilm.json, each optional): `requires` the skills an agent reads
  *   before it (by name: ownSkills), `kind` a way of working or a look, `order` among its kind,
  *   `icon` a mark's name, `cover` a picture and `preview` a video in its folder, `repository` where its source is read,
@@ -397,6 +397,9 @@ function openfilmJson(folder) {
   if (profile) out.profile = profile;
   const blocks = readBlocks(raw?.blocks);
   if (blocks) out.blocks = blocks;
+  /* what it may reach, said so the person sees it and the plugins' origin holds it to it */
+  const network = networkOf(raw?.permissions, byLanguage);
+  if (network) out.network = network;
   const cover = fileIn(folder, raw?.cover), preview = fileIn(folder, raw?.preview);
   if (cover) out.cover = cover;
   if (preview) out.preview = preview;
@@ -404,6 +407,22 @@ function openfilmJson(folder) {
 }
 
 const VERSION = /^\d+\.\d+(\.\d+)?([-+][\w.]+)?$/;
+
+/**
+ * The hosts a plugin's page may reach (openfilm.json `permissions.network`: `domains`, and `why` by language), shown to
+ * the person before they turn it on and enforced on the plugins' origin (studio/server/plugin-pages.mjs): a page reaches
+ * nothing else. Each a host name (`api.example.com`) or every host under one (`*.example.com`), over https.
+ * @typedef {{ domains: string[], why?: Record<string, string> }} SkillNetwork
+ */
+const HOST = /^(\*\.)?(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+/** @param {unknown} raw @param {typeof byLanguage} byLanguage @returns {SkillNetwork | undefined} */
+export function networkOf(raw, byLanguage) {
+  const said = /** @type {{ network?: { domains?: unknown, why?: unknown } } | undefined} */ (raw && typeof raw === 'object' ? raw : undefined)?.network;
+  const domains = Array.isArray(said?.domains) ? [...new Set(said.domains.filter((d) => typeof d === 'string').map((d) => d.trim().toLowerCase()).filter((d) => HOST.test(d)))].slice(0, 20) : [];
+  if (!domains.length) return undefined;
+  const why = byLanguage(said?.why, 200);
+  return { domains, ...(Object.keys(why).length ? { why } : {}) };
+}
 
 /** The computers a skill can say it runs on (openfilm.json `platforms`). @typedef {'macos' | 'windows' | 'linux'} SkillPlatform */
 export const SKILL_PLATFORMS = /** @type {const} */ (['macos', 'windows', 'linux']);

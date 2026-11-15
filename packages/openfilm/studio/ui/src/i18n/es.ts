@@ -83,6 +83,8 @@ export const es: Words = {
     turnOff: 'Desactivar {name}',
     skillOff: 'Desactivada. Ningún agente la usará hasta que la vuelvas a activar.',
     skillOffPlugin: "Desactivada con la mesa de trabajo {plugin}.",
+    networkSome: "Red: solo",
+    networkNone: "Sin red: su página no puede conectarse a ninguna dirección.",
     projectSkillTitle: "Esta habilidad vino con el proyecto y aún no está permitida",
     projectSkillNote: "Un proyecto puede venir de cualquiera. Si la permites, tu agente la seguirá en este proyecto y podrá ejecutar los scripts que trae, con el acceso de tu agente. Lee antes su texto completo y sus archivos; si alguno cambia después, se te volverá a preguntar.",
     projectSkillHidden: "Se encontraron {n} caracteres invisibles o comentarios, marcados abajo. Suelen usarse para ocultar instrucciones: léelo con atención.",

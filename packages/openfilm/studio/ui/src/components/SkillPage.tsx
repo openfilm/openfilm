@@ -265,6 +265,14 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
           {skill.scripts > 0 && !skill.core ? (
             <p className="text-[14px] leading-[20px] text-[var(--text-muted)]">{t(skill.scripts === 1 ? 'gallery.scriptsOne' : 'gallery.scriptsMany').replace('{n}', String(skill.scripts))}</p>
           ) : null}
+          {/* the hosts its page may reach, and nothing else (enforced on the plugins' origin) */}
+          {skill.surface ? (
+            <p className="mt-1 text-[14px] leading-[20px] text-[var(--text-muted)]">
+              {skill.network?.domains.length
+                ? <>{t('gallery.networkSome')} <span className="font-mono text-[13px] text-[var(--text)]">{skill.network.domains.join(', ')}</span>{inLanguage(skill.network.why, lang) ? ` (${inLanguage(skill.network.why, lang)})` : ''}</>
+                : t('gallery.networkNone')}
+            </p>
+          ) : null}
           {/* a plugin someone made (a skill with a surface): its page reads the project; whether it may change it is the person's to say */}
           {skill.surface && installed ? (
             <div className="mt-2 rounded-[10px] border border-[var(--border)] px-3 py-2.5">

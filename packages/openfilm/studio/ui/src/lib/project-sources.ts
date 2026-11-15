@@ -91,6 +91,8 @@ export type SkillEntry = {
   update?: { version: string; commit: string }; retired?: true;
   /** turned off: offered to no agent until it is turned on again */
   off?: true;
+  /** the hosts its page may reach (openfilm.json `permissions.network`), and why; none: it reaches none */
+  network?: { domains: string[]; why?: Record<string, string> };
   /** a project's own the person has not allowed in it yet: offered to no agent, nothing of it shown or run (src/skills.mjs projectSkillAllowed) */
   waits?: true;
   /** one of OpenFilm's own, off because the plugin it goes with is off (lib/plugins): turned on, its plugin is too */

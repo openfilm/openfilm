@@ -10,6 +10,12 @@
  * A grant is one plugin in one project, signed with Studio's key like the film's tokens: the page is given its address
  * (`?project=`), and cannot work out another project's or another plugin's.
  *
+ * A page reaches nothing on the network but what its plugin declares (openfilm.json `permissions.network`, src/skills.mjs
+ * networkOf): every answer here carries a Content-Security-Policy that lets in this origin, data and blobs, and those
+ * hosts over https, and nothing else, so a page that reads the project cannot send it elsewhere, nor can a page of the
+ * project loaded under it. A plugin's element runs in the editor's page instead, under the editor's rules: that is why
+ * it is let run only when the person allows it, as a program is.
+ *
  * Why another origin than the film's: the film's is read only, so that a film's pages (anything an agent wrote, a film
  * fetched from elsewhere) can never change a project. Those pages cannot use this one: to a browser it is another
  * origin, which answers no origin but itself, and a write is taken only from a page of this origin (its `Origin`), to
@@ -55,10 +61,20 @@ export async function startPluginPages({ port, secret, mayWrite, editorOrigin = 
   const headersFor = (/** @type {import('node:http').IncomingMessage} */ req) => (editorOrigin() && req.headers.origin === editorOrigin()
     ? { ...plain0, 'access-control-allow-origin': editorOrigin(), 'access-control-expose-headers': 'etag', vary: 'origin' } : plain0);
   const sign = (/** @type {string} */ what) => createHmac('sha256', secret).update(`plugin origin\0${what}`).digest().subarray(0, 18).toString('base64url');
-  /** @type {Map<string, string>} a plugin's token → its folder */
+  /** @type {Map<string, { folder: string, hosts: string[] }>} a plugin's token → its folder and the hosts it may reach */
   const folders = new Map();
-  /** @type {Map<string, { plugin: { uid: string, source: string }, project: { id: string, path: string } }>} */
+  /** @type {Map<string, { plugin: { uid: string, source: string }, project: { id: string, path: string }, hosts: string[] }>} */
   const grants = new Map();
+  /** What a page of a plugin may load and reach: this origin, data and blobs, and its declared hosts over https. */
+  const policy = (/** @type {string[]} */ hosts) => {
+    const them = hosts.map((h) => `https://${h}`).join(' ');
+    const and = them ? ` ${them}` : '';
+    return [
+      `default-src 'self'${and}`, `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:${and}`, `style-src 'self' 'unsafe-inline'${and}`,
+      `img-src 'self' data: blob:${and}`, `media-src 'self' data: blob:${and}`, `font-src 'self' data:${and}`, `connect-src 'self'${and}`,
+      "worker-src 'self' blob:", "frame-src 'self' blob:", "object-src 'none'", "base-uri 'none'", "form-action 'self'",
+    ].join('; ');
+  };
   let origin = '';
 
   /** Whether `plain` (an address inside `root`, decoded) names a file a page may write: inside the folder for real. */
@@ -77,7 +93,8 @@ export async function startPluginPages({ port, secret, mayWrite, editorOrigin = 
   };
 
   const server = createServer(async (req, res) => {
-    const headers = headersFor(req);
+    /* this request's own copy: a page's policy is added to it below */
+    const headers = /** @type {Record<string, string>} */ ({ ...headersFor(req) });
     const own = /** @type {import('node:net').AddressInfo} */ (server.address()).port;
     if (!ownHost(req, own)) { res.writeHead(403, headers).end('not this address'); return; }
     const url = new URL(req.url ?? '/', 'http://plugins');
@@ -89,17 +106,20 @@ export async function startPluginPages({ port, secret, mayWrite, editorOrigin = 
     try { plain = decodeURIComponent(path); } catch { res.writeHead(400, headers).end('bad address'); return; }
 
     if (match[1] === 's') {
-      const folder = folders.get(match[2]);
-      if (!folder || !servable(folder, plain)) { res.writeHead(404, headers).end('not found'); return; }
+      const at = folders.get(match[2]);
+      if (!at || !servable(at.folder, plain)) { res.writeHead(404, headers).end('not found'); return; }
       if (!reading) { res.writeHead(405, { ...headers, allow: 'GET, HEAD' }).end(); return; }
       url.searchParams.set('film-host', '0');
-      if (!folderFiles(folder, { inject: '', headers })(req, res, path, url.searchParams)) res.writeHead(403, headers).end();
+      const held = { ...headers, 'content-security-policy': policy(at.hosts) };
+      if (!folderFiles(at.folder, { inject: '', headers: held })(req, res, path, url.searchParams)) res.writeHead(403, held).end();
       return;
     }
 
     const grant = grants.get(match[2]);
     if (!grant || !servable(grant.project.path, plain)) { res.writeHead(404, headers).end('not found'); return; }
     const root = grant.project.path;
+    /* a page of the project, loaded under the plugin's origin, is held to the plugin's hosts too */
+    headers['content-security-policy'] = policy(grant.hosts);
     if (reading) {
       /* the file as it is on disk (a page of the film, and film.html itself, as written), with its tag */
       let stat = null;
@@ -148,15 +168,17 @@ export async function startPluginPages({ port, secret, mayWrite, editorOrigin = 
     origin,
     /**
      * Where a plugin's page is, and (shown for a project) where that project's files are for it.
-     * @param {{ uid: string, source: string, folder: string, page: string }} plugin @param {{ id: string, path: string } | null} [project]
+     * `network`: the hosts its openfilm.json declares (none: it reaches none).
+     * @param {{ uid: string, source: string, folder: string, page: string, network?: { domains: string[] } }} plugin @param {{ id: string, path: string } | null} [project]
      */
     surface(plugin, project) {
-      const token = sign(`folder\0${plugin.folder}`);
-      folders.set(token, plugin.folder);
+      const hosts = plugin.network?.domains ?? [];
+      const token = sign(`folder\0${plugin.folder}\0${hosts.join(' ')}`);
+      folders.set(token, { folder: plugin.folder, hosts });
       const page = `${origin}/s/${token}/${plugin.page}`;
       if (!project) return { page };
       const grant = sign(`grant\0${plugin.folder}\0${project.id}`);
-      grants.set(grant, { plugin: { uid: plugin.uid, source: plugin.source }, project: { id: project.id, path: project.path } });
+      grants.set(grant, { plugin: { uid: plugin.uid, source: plugin.source }, project: { id: project.id, path: project.path }, hosts });
       return { page, project: `${origin}/f/${grant}/` };
     },
     close: () => new Promise((done) => { server.closeAllConnections(); server.close(() => done(undefined)); }),

@@ -84,6 +84,8 @@ export const en = {
     turnOff: 'Turn off {name}',
     skillOff: 'Off. Agents aren\'t offered it until you turn it on again.',
     skillOffPlugin: "Off with the {plugin} workbench.",
+    networkSome: "Network: only",
+    networkNone: "No network: its page reaches no address.",
     projectSkillTitle: "This skill came with the project and is not allowed yet",
     projectSkillNote: "A project can come from anyone. Once allowed, your agent follows it in this project and may run the scripts it brings, with your agent's access. Read its whole text and files below first; if any of its files change later, you will be asked again.",
     projectSkillHidden: "Found {n} invisible characters or comments, marked below. They are often used to hide instructions: read carefully.",

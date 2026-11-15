@@ -657,6 +657,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           ...(k.order != null ? { order: k.order } : {}), ...(k.icon ? { icon: k.icon } : {}), ...(k.repository ? { repository: k.repository } : {}),
           /* how it is listed and rated for people (src/plugins.mjs profileOf) */
           ...(k.profile ? { profile: k.profile } : {}),
+          /* the hosts its page may reach (src/skills.mjs networkOf), none but these */
+          ...(k.network ? { network: k.network } : {}),
           /* what it needs beyond OpenFilm, the computers it runs on, and whether this one is not among them */
           ...(k.needs ? { needs: k.needs } : {}), ...(k.platforms ? { platforms: k.platforms, ...(k.platforms.includes(thisPlatform()) ? {} : { elsewhere: true }) } : {}),
           ...(k.cover ? { cover: `${media(k.uid, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.uid, 'preview') } : {}),
@@ -678,13 +680,13 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           ...(k.element && !k.program && k.installed && !k.core ? (() => {
             const runs = pluginRuns(k, project ?? null);
             if (!runs) return { inApp: true };
-            const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.element }, project ?? null);
+            const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.element, ...(k.network ? { network: k.network } : {}) }, project ?? null);
             let version = '';
             try { const stat = statSync(join(k.folder, k.element)); version = `${stat.size.toString(36)}-${Math.round(stat.mtimeMs).toString(36)}`; } catch { /* gone since it was listed */ }
             return { inApp: true, runs: true, element: `${at.page}?v=${version}`, ...(at.project ? { files: at.project } : {}) };
           })() : {}),
           ...(k.page && !k.program && !k.element && k.installed && !k.core ? (() => {
-            const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.page }, project ?? null);
+            const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.page, ...(k.network ? { network: k.network } : {}) }, project ?? null);
             return { surface: at.page, ...(at.project ? { files: at.project } : {}), ...(pluginWrites(k, project ?? null) ? { writes: true } : {}) };
           })() : {}),
           /* a project's own, not allowed in it yet (`waits` above) */
