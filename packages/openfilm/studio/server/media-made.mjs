@@ -20,10 +20,11 @@ import { basename, dirname, extname, join } from 'node:path';
 import { fingerprint, isFingerprint } from '../../src/media-fingerprint.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { readMade as readCanvasMade } from './canvas-history.mjs';
-import { inProject } from './files.mjs';
+import { cleanName, inProject } from './files.mjs';
 import { projectRecordFile, readRecord, scanProject } from './media-index.mjs';
 import { TOOL_DIR, listProjects } from './projects.mjs';
 import { listProviders } from './providers/index.mjs';
+import { isOutputName } from './providers/common.mjs';
 
 /**
  * @typedef {{ as: string, path: string, fp?: string }} Ref   a file it was made from: the option that named it, where
@@ -200,11 +201,12 @@ export async function noteMade(root, { verb, args, paths, via, by, model, files,
 /** A name no file of `dir` has yet (whatever its extension): `hero`, then `hero-2`, `hero-3`. */
 function freeOut(/** @type {string} */ root, /** @type {string} */ path, /** @type {Set<string>} */ taken) {
   const dir = dirname(path);
-  /* as `--out` takes a name: letters, digits, `_` and `-` (a file the person renamed may have spaces in it) */
-  const base = basename(path, extname(path)).replace(/[-_]\d{1,3}$/, '').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 100) || 'take';
+  const base = cleanName(basename(path, extname(path)).replace(/[-_]\d{1,3}$/, '')).replace(/[. ]+$/, '') || 'take';
   for (let n = 2; ; n++) {
-    const name = `${base}-${n}`;
-    if (!taken.has(`${dir}/${name}`.toLowerCase())) return name;
+    const chars = Array.from(base);
+    while (chars.length && !isOutputName(`${chars.join('')}-${n}`)) chars.pop();
+    const name = `${chars.join('') || 'take'}-${n}`;
+    if (!taken.has(`${dir}/${name}`.normalize('NFC').toLowerCase())) return name;
   }
 }
 
@@ -236,9 +238,9 @@ export async function madeView(root) {
   for (const [path, e] of Object.entries(files)) if (!e.gone) pathsOf.set(e.fp, [...(pathsOf.get(e.fp) ?? []), path]);
   /* a name is taken whatever its extension: a new take never lands on an old one. The folders media lands in, as
      they are on disk (a file there may be none the record knows) */
-  const taken = new Set(Object.keys(files).map((p) => p.slice(0, p.length - extname(p).length).toLowerCase()));
+  const taken = new Set(Object.keys(files).map((p) => p.slice(0, p.length - extname(p).length).normalize('NFC').toLowerCase()));
   for (const dir of new Set(Object.values(made).map((m) => dirname(m.path)))) {
-    try { for (const name of readdirSync(join(root, dir))) taken.add(`${dir}/${name.slice(0, name.length - extname(name).length)}`.toLowerCase()); } catch { /* not there */ }
+    try { for (const name of readdirSync(join(root, dir))) taken.add(`${dir}/${name.slice(0, name.length - extname(name).length)}`.normalize('NFC').toLowerCase()); } catch { /* not there */ }
   }
 
   /* the versions of one thing: asked the same way, or a picture redrawn (a mask, a markup) from one of them */

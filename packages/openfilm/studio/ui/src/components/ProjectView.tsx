@@ -30,6 +30,7 @@ import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
 import { Player } from '@/editor/player';
 import { Preview, type FilmInfo, type PlayedReport, type PreviewHandle } from '@/editor/Preview';
+import { PreviewRenderControls } from './PreviewRenderControls';
 import { usePreviewRenders } from '@/editor/use-preview-renders';
 import { filmShape, type MediaFacts } from '@/lib/film-shape';
 import { changesPicture } from '@/lib/picture-files';
@@ -150,7 +151,7 @@ import type { MaskSession } from '@/lib/stage-mask';
 import type { MaskShape } from '@/lib/clip-mask';
 import { nextOverrides, overrideOf, type OverrideGeometry, type OverrideTarget } from '@/lib/film-overrides';
 import { compactScale, type MgTransform, type NodeOverride, type OverridePivot, type StageElement, type StageElementStyle, type StageGeometry } from '@/lib/stage-types';
-import { usePreviewPrefs } from '@/lib/preview-prefs';
+import { usePreviewPrefs, writePreviewPref } from '@/lib/preview-prefs';
 import { isTextField, isTypingTarget } from './typing-target';
 /* Studio's public interface for what it offers (the app's chat, its commands, the edit's `add`, Settings), and the
    shell's frame and wiring, OpenFilm-internal, for the rest */
@@ -603,9 +604,17 @@ export function ProjectView({ projectId, onProject }: {
   const projectFps = settings?.fps ?? footageRate;
   /* stretches that play late, rendered in the background to play smoothly (editor/use-preview-renders) */
   const { renders: rendersOn, stats: statsOn } = usePreviewPrefs();
-  const previewRenders = usePreviewRenders({ projectId, folder, fps: exactRate(projectFps), playing, on: rendersOn, film: film.film, files: filesTick, preview });
+  const previewRenders = usePreviewRenders({ projectId, folder, fps: exactRate(projectFps), playing, on: rendersOn, film: film.film, files: filesTick, preview, duration: totalMs / 1000 });
   /* Settings → Developer: how playing goes, in the viewer's corner, said about once a second */
   const [played, setPlayed] = React.useState<PlayedReport | null>(null);
+  const renderPreview = React.useCallback((clipId?: string) => {
+    const range = rangeNowRef.current;
+    const block = clipId ? blocksRef.current.find((b) => b.clipId === clipId) : blocksRef.current.find((b) => b.kind === 'video' && b.startMs <= player.current.time() * 1000 && b.endMs > player.current.time() * 1000);
+    const a = range ? range.startMs / 1000 : block ? block.startMs / 1000 : Math.max(0, player.current.time());
+    const b = range ? range.endMs / 1000 : block ? block.endMs / 1000 : Math.min(totalMs / 1000, a + 5);
+    pause(); writePreviewPref('renders', true); previewRenders.request([[Math.max(0, a), Math.min(totalMs / 1000, b)]]);
+  }, [previewRenders.request, totalMs, pause]);
+  const visionPreview = { ...previewRenders, render: renderPreview };
   const onPlayed = React.useCallback((report: PlayedReport) => {
     previewRenders.onPlayed(report);
     if (statsOn) setPlayed(report);
@@ -823,14 +832,24 @@ export function ProjectView({ projectId, onProject }: {
     if (!split) return t('captionTrack.onlyCues');
     const cues = split.files.length ? await writeCaptionTracksWith(projectId, split.files) : null;
     if (typeof cues === 'string') return cues;
-    /* a caption track left with no cue goes, as a track left with no clip does (ops.mjs dropEmptyTracks) */
-    const filmOps: Op[] = [...split.ops, ...split.files.filter((f) => !f.next.cues.length).map((f) => ({ op: 'uncaptions' as const, src: f.src }))];
+    const followSelection = () => {
+      const sel = captionSelectionNow();
+      if (!sel || !split.moved?.length) return;
+      const picked = [...sel.ids].map((id) => split.moved!.find((c) => c.from === cueClipId(sel.src, id)) ?? { src: sel.src, id });
+      const src = picked[0]?.src;
+      setCaptionSelection(src && picked.every((c) => c.src === src) ? { src, ids: new Set(picked.map((c) => c.id)) } : null);
+    };
+    /* Empty caption tracks remain available for another caption or a drag back onto them. Removing a whole track is
+       explicit (the track's menu), rather than a side effect of moving or deleting its last cue. */
+    const filmOps = split.ops;
     if (!filmOps.length) {
       if (cues) filmRecord(label ?? 'history.stepEdit', cues);
+      followSelection();
       return null;
     }
     const why = await filmEdit(filmOps, label, quiet, cues ?? undefined);
     if (why && cues) await cues.undo();
+    if (!why) followSelection();
     return why;
   }, [filmEdit, filmRecord, projectId, t]);
   /** `quiet`: the caller shows why an edit was refused itself (the inspector does, beside its field) */
@@ -2255,10 +2274,11 @@ export function ProjectView({ projectId, onProject }: {
    * it was not (said why).
    */
   /* the caption tracks the library's captions act on (components/library/CaptionsPane): the captions of speech are made
-     again on the top one made of what is said (SPEECH_NOTE), a caption typed in goes on the top one */
+     again on the top one made of what is said (SPEECH_NOTE), a caption typed in goes on the picked track */
   const captionRows = timelineTracks.filter((tr) => tr.captions && tr.docIndex != null);
   const speechRow = captionRows.find((tr) => { const vtt = cuesOf(tr.captions!.src); return vtt ? madeOfSpeech(vtt) : false; }) ?? null;
-  const captionRow = captionRows[0] ?? null;
+  const captionRow = captionRows.find((tr) => tr.captions?.src === cuePick?.src)
+    ?? captionRows.find((tr) => !tr.locked) ?? captionRows[0] ?? null;
   const speechSrc = speechRow?.captions?.src ?? null;
   /** Captions of what `clips` say (null: all that speak): again on the speech's track, else on a new one; its file, or null. */
   const captionsFromSpeech = React.useCallback(async (clips: readonly string[] | null): Promise<string | null> => {
@@ -2303,6 +2323,7 @@ export function ProjectView({ projectId, onProject }: {
   }, [projectId, film.film, editOps, t]);
   /** A caption put in on a caption track at a time (a caption row's menu): picked, its words to type in the inspector. */
   const addCaption = React.useCallback(async (src: string, atMs: number): Promise<string | null> => {
+    if (tracksRef.current.some((tr) => tr.captions?.src === src && tr.locked)) return t('timeline.trackLocked');
     const vtt = captionTrackNow(projectId, src);
     if (!vtt) return t('timeline.editFail');
     if (atMs >= totalMs - 100) return t('captionTrack.pastEnd');
@@ -2326,6 +2347,9 @@ export function ProjectView({ projectId, onProject }: {
       const made = atMs < totalMs - 100 ? addCue(readVtt('WEBVTT\n'), atMs / 1000, t('subtitleRow.newText'), totalMs / 1000) : null;
       if (!made) { toast.show(t(atMs >= totalMs - 100 ? 'captionTrack.pastEnd' : 'subtitleRow.noRoom')); return null; }
       text = writeVtt(made.vtt);
+      /* Extra tracks begin above the existing captions, so simultaneous lines can be read straight away. Their
+         positions stay editable on the picture, independently of which timeline row they occupy. */
+      if (captionRows.length) text = writeVtt(placeCues(made.vtt, null, 0, -Math.min(captionRows.length, 5) * TRANSLATION_LIFT_PCT));
       picked = made.id;
     }
     const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/caption-tracks/new`, {
@@ -2346,8 +2370,8 @@ export function ProjectView({ projectId, onProject }: {
     if (why) { toast.show(why); return null; }
     if (picked) { setCaptionSelection({ src, ids: new Set([picked]) }); showCaptionLook(); }
     return src;
-  }, [projectId, totalMs, editOps, showCaptionLook, toast, t]);
-  /** A caption at the playhead (the library's captions): on the top caption track, else on a new one. */
+  }, [projectId, totalMs, captionRows.length, editOps, showCaptionLook, toast, t]);
+  /** A caption at the playhead: on the picked caption track, else the first unlocked one or a new track. */
   const captionHere = React.useCallback(async () => {
     const src = captionRow?.captions?.src;
     if (!src) { await newCaptionTrack(null); return; }
@@ -4009,8 +4033,12 @@ export function ProjectView({ projectId, onProject }: {
         void edit(ops, 'history.stepTrackDelete').then((why) => { if (why) toast.show(why); });
       },
     }];
-    return menuGroups(menuGroups(refer, tools.headMenuExtra(track)), remove);
-  }, [t, tools.headMenuExtra, edit, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+    const add: ContextMenuEntry[] = src ? [{
+      id: 'new-caption-track', label: t('captionTrack.stepNew'), icon: <Plus size={14} />,
+      onSelect: () => { void newCaptionTrack(null); },
+    }] : [];
+    return menuGroups(menuGroups(menuGroups(refer, add), tools.headMenuExtra(track)), remove);
+  }, [t, tools.headMenuExtra, edit, toast, newCaptionTrack]); // eslint-disable-line react-hooks/exhaustive-deps
   /* clips dragged out of the timeline onto the app's chat */
   const referBlocks = React.useCallback((blocks: TimelineBlock[]) => { for (const b of blocks) chat.refer?.(refOfBlock(b)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const markedRangeRef = React.useCallback((range: FilmRange) => rangeRef(projectId, range, blocksRef.current), [projectId]);
@@ -4671,6 +4699,11 @@ export function ProjectView({ projectId, onProject }: {
     const take = () => event.preventDefault();
     const once = !event.repeat;
     switch (cmd) {
+      case 'preview-fullscreen':
+        if (!(totalMs > 0)) return;
+        take();
+        if (once) toggleFullscreen();
+        return;
       case 'shuttle-back': case 'shuttle-stop': case 'shuttle-forward': {
         /* the source viewer has its own playhead: J / K / L are the film's only while the film is shown */
         if (pickedMedia || !(totalMs > 0)) return;
@@ -4983,6 +5016,7 @@ export function ProjectView({ projectId, onProject }: {
               speechAuto: Boolean(speechSrc && cuesOf(speechSrc) && untouchedSpeech(cuesOf(speechSrc)!)),
               make: (o) => void makeCaptions(o), connect: () => { setSubtitleProblem(null); openSettings('models'); },
               fromFile: (file, o) => void captionsFromFile(file, o), addOne: () => void captionHere(),
+              addTrack: async () => { await newCaptionTrack(null); },
   });
   const libraryPreview = useSteady({ bar: libraryPreviewBar, picture: fullscreen ? null : libraryPreviewPicture, dismissRef: dismissLibraryPreview, begin: beginLibraryPreview });
   const shellLibrary = useSteady({
@@ -5297,7 +5331,7 @@ export function ProjectView({ projectId, onProject }: {
                       onSpeed: setSpeed,
                     }}
                     onFullscreen={toggleFullscreen}
-                    extra={<ViewerZoomButton store={viewerZoom} />}
+                    extra={<><PreviewRenderControls control={visionPreview} compact /><ViewerZoomButton store={viewerZoom} /></>}
                   />
                 </div>
               </div>
@@ -5368,6 +5402,11 @@ export function ProjectView({ projectId, onProject }: {
                       templateSection={templateSection}
                       motionSection={motionSection}
                       clipLookOf={clipLookOf}
+                      visionPreview={visionPreview}
+                      visionStatus={async (id, retry) => {
+                        if (retry) await preview.current?.stage?.('visionRetry', { id });
+                        return preview.current?.stage?.('vision', { id });
+                      }}
                       onPreviewLook={previewLook}
                       onStartCrop={startStageCrop}
                       onEditMask={editStageMask}

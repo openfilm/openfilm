@@ -10,6 +10,18 @@ import { join } from 'node:path';
 import { launch, listenLocal, presentsVideo, serve, vulkanFirst } from './host.mjs';
 import { locate } from './shared.mjs';
 
+test('analysis fingerprints distinguish replaced media even when its name, size and modified date match', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-media-identity-')), file = join(root,'v.mp4');
+  writeFileSync(file, 'first'); const site = await serve(root);
+  try {
+    const identity = async () => (await fetch(`${site.url}/v.mp4`,{method:'HEAD'})).headers.get('x-openfilm-media-id');
+    const original = await identity(), { atime, mtime } = fs.statSync(file);
+    assert.match(original,/^[0-9a-f]{64}$/); assert.equal(await identity(),original);
+    const replacement = join(root,'next.mp4'); writeFileSync(replacement,'other'); fs.utimesSync(replacement,atime,mtime); fs.renameSync(replacement,file);
+    assert.notEqual(await identity(),original);
+  } finally { await site.close(); rmSync(root,{recursive:true,force:true}); }
+});
+
 test('cancelled media requests close their files so the project can be renamed', { timeout: 10000 }, async (t) => {
   const scratch = mkdtempSync(join(tmpdir(), 'of-host-cancel-'));
   const root = join(scratch, 'film');
@@ -157,7 +169,7 @@ test('look and render serve the film\'s project, never the folders around it', (
   }
 });
 
-test('Windows: Vulkan when its renderer is a GPU, read once; otherwise the default, for every later browser too', async () => {
+test('Windows: Vulkan when its renderer is a GPU, read once; otherwise Direct3D when that is one, else the default, for every later browser too', async () => {
   /** A launcher that records what each browser was opened with; `fails` makes a Vulkan launch throw. */
   const launcher = (fails = false) => {
     const opened = /** @type {string[][]} */ ([]), closed = /** @type {string[][]} */ ([]);
@@ -173,6 +185,7 @@ test('Windows: Vulkan when its renderer is a GPU, read once; otherwise the defau
     return { renderer: async () => { count++; return said(); }, get count() { return count; } };
   };
   const vulkan = ['--use-angle=vulkan'];
+  const d3d11 = ['--use-angle=d3d11'];
 
   const gpu = reads(async () => 'ANGLE (NVIDIA, Vulkan 1.4.329 (NVIDIA GeForce RTX 5070 Laptop GPU (0x00002D58)), NVIDIA)');
   const always = async () => true;
@@ -193,17 +206,41 @@ test('Windows: Vulkan when its renderer is a GPU, read once; otherwise the defau
     l = launcher(); pick = vulkanFirst(software.renderer, always);
     const [first, second] = await Promise.all([pick(l.open), pick(l.open)]);
     assert.deepEqual([first.angle, second.angle], [[], []]);
-    assert.deepEqual(l.opened, [vulkan, [], []]);
-    assert.deepEqual(l.closed, [vulkan]);
-    assert.equal(software.count, 1);
+    /* Direct3D is asked once, and is software here too */
+    assert.deepEqual(l.opened, [vulkan, d3d11, [], []]);
+    assert.deepEqual(l.closed, [vulkan, d3d11]);
+    assert.equal(software.count, 2);
   }
 
   const never = reads(async () => 'unused');
   l = launcher(true); pick = vulkanFirst(never.renderer, always);
   assert.deepEqual((await pick(l.open)).angle, []);
   assert.deepEqual((await pick(l.open)).angle, []);
-  assert.deepEqual(l.opened, [vulkan, [], []]);
+  assert.deepEqual(l.opened, [vulkan, d3d11, [], []]);
   assert.equal(never.count, 0);
+
+  /* a GPU whose driver has no Vulkan (the launch fails, or reads software): Direct3D reaches it, and is kept */
+  const intel = 'ANGLE (Intel, Intel(R) HD Graphics 4600 (0x00000412) Direct3D11 vs_5_0 ps_5_0, D3D11)';
+  const swiftShader = 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)';
+  const byAngle = async (/** @type {any} */ b) => (b.angle.join() === d3d11.join() ? intel : swiftShader);
+  for (const fails of [false, true]) {
+    const opened = /** @type {string[][]} */ ([]), closed = /** @type {string[][]} */ ([]);
+    const open = async (/** @type {string[]} */ angle) => {
+      opened.push(angle);
+      if (fails && angle.join() === vulkan.join()) throw new Error('no Vulkan driver');
+      return /** @type {any} */ ({ angle, close: async () => { closed.push(angle); } });
+    };
+    pick = vulkanFirst(byAngle, always);
+    assert.deepEqual((await pick(open)).angle, d3d11);
+    assert.deepEqual((await pick(open)).angle, d3d11);
+    assert.deepEqual(opened, [vulkan, d3d11, d3d11]);
+    assert.deepEqual(closed, fails ? [] : [vulkan]);
+  }
+  /* Direct3D on a GPU that never shows a video's frames is not taken: the default */
+  const opened = /** @type {string[][]} */ ([]);
+  pick = vulkanFirst(byAngle, async () => false);
+  assert.deepEqual((await pick(async (angle) => { opened.push(angle); return /** @type {any} */ ({ angle, close: async () => {} }); })).angle, []);
+  assert.deepEqual(opened, [vulkan, d3d11, []]);
 });
 
 test('Windows: when Vulkan never shows a video frame, Direct3D on the same GPU, else Vulkan decoding on the CPU, else Direct3D on the other GPU, else the default', async () => {
