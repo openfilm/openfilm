@@ -9,15 +9,96 @@
     "es": "Color"
   },
   "summary": {
-    "en": "Grading by hand: scopes, wheels, curves and LUTs.",
-    "zh-CN": "亲手调色：示波器、色轮、曲线和 LUT。",
-    "ja": "手で行うカラーグレーディング：スコープ、ホイール、カーブ、LUT。",
-    "ko": "손으로 하는 색보정: 스코프, 휠, 커브, LUT.",
-    "es": "Gradación a mano: scopes, ruedas, curvas y LUT."
+    "en": "Grading by hand: camera log, wheels, curves, hue curves, windows, LUTs and scopes.",
+    "zh-CN": "亲手调色：相机 Log、色轮、曲线、色相曲线、限定窗口、LUT 和示波器。",
+    "ja": "手で行うカラーグレーディング：カメラのログ、ホイール、カーブ、色相カーブ、ウィンドウ、LUT、スコープ。",
+    "ko": "손으로 하는 색보정: 카메라 로그, 휠, 커브, 색상 커브, 윈도, LUT, 스코프.",
+    "es": "Gradación a mano: log de cámara, ruedas, curvas, curvas de tono, ventanas, LUT y scopes."
   },
-  "about": "grading the film's color by hand",
-  "soon": true,
-  "skills": [],
+  "about": "grading the film's color by hand, clip by clip: each video clip's grade is a LUT of the project",
+  "workbench": "color",
+  "beta": true,
+  "blocks": [
+    {
+      "id": "scopes",
+      "title": {
+        "en": "Scopes",
+        "zh-CN": "示波器",
+        "ja": "スコープ",
+        "ko": "스코프",
+        "es": "Scopes"
+      },
+      "edge": "left",
+      "size": 300,
+      "min": [
+        200,
+        200
+      ],
+      "range": [
+        220,
+        640
+      ]
+    },
+    {
+      "id": "viewer",
+      "title": {
+        "en": "Viewer",
+        "zh-CN": "预览",
+        "ja": "プレビュー",
+        "ko": "미리보기",
+        "es": "Visor"
+      },
+      "edge": "center",
+      "min": [
+        320,
+        240
+      ]
+    },
+    {
+      "id": "grade",
+      "title": {
+        "en": "Grade",
+        "zh-CN": "调色",
+        "ja": "グレード",
+        "ko": "그레이드",
+        "es": "Gradación"
+      },
+      "edge": "right",
+      "size": 340,
+      "min": [
+        280,
+        240
+      ],
+      "range": [
+        300,
+        640
+      ]
+    },
+    {
+      "id": "clips",
+      "title": {
+        "en": "Clips",
+        "zh-CN": "片段",
+        "ja": "クリップ",
+        "ko": "클립",
+        "es": "Clips"
+      },
+      "edge": "bottom",
+      "size": 128,
+      "min": [
+        240,
+        96
+      ],
+      "range": [
+        96,
+        320
+      ]
+    }
+  ],
+  "on": false,
+  "skills": [
+    "color"
+  ],
   "requires": [
     "film"
   ]
