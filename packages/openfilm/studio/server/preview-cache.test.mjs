@@ -120,3 +120,21 @@ test('a stretch is rendered by the film\'s own renderer, its picture only, at th
   assert.equal(probe.streams[0].height, 90);
   assert.equal(Number(probe.streams[0].nb_frames), 30, 'a second at 30 fps');
 });
+
+test('edits outside a rendered interval preserve it, while captions invalidate cached pictures', () => {
+  const dir = project();
+  const doc = { stage: { w: 320, h: 180 }, tracks: [{ clips: [
+    { id: 'first', src: 'a.html', time: [0,2] }, { id: 'later', src: 'a.html', at: 5, time: [0,2] },
+  ] }] };
+  writeFileSync(join(dir, 'captions.vtt'), 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\none\n');
+  writeFileSync(join(dir, 'film.html'), filmHtml(doc));
+  const first = previewKey(dir, 0, 1, 30, 540);
+  doc.tracks[0].clips[1].style = 'opacity:.5'; writeFileSync(join(dir,'film.html'), filmHtml(doc));
+  assert.equal(previewKey(dir, 0, 1, 30, 540), first, 'changing a later clip preserves a rendered earlier interval');
+  const other = previewKey(dir, 5, 6, 30, 540);
+  doc.tracks[0].clips[1].style = 'opacity:.7'; writeFileSync(join(dir,'film.html'), filmHtml(doc));
+  assert.notEqual(previewKey(dir, 5, 6, 30, 540), other);
+  const withCaption = previewKey(dir, 0, 1, 30, 540);
+  writeFileSync(join(dir, 'captions.vtt'), 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nnew caption\n');
+  assert.notEqual(previewKey(dir, 0, 1, 30, 540), withCaption, 'caption file changes must invalidate rendered pictures');
+});

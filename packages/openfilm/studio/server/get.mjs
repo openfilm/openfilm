@@ -40,8 +40,9 @@ import { kindOf, modelFor, providerKey } from './keys.mjs';
 import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
 import { noteMade } from './media-made.mjs';
 import { addedDir } from './providers/added.mjs';
-import { mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
+import { isOutputName, mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
+import { privateVoiceForSpeech } from './voices.mjs';
 
 /**
  * @typedef {import('./http.mjs').Req} Req @typedef {import('./http.mjs').Res} Res
@@ -256,8 +257,8 @@ export async function checkArgs(root, verb, given) {
     if (args[name] === undefined && option.default !== undefined) args[name] = option.default;
     if (args[name] === undefined && option.required) throw usage(`${verb} needs ${flagHelp(name, option)}`);
   }
-  if (typeof args.out === 'string' && (!/^[\p{L}\p{N}][\p{L}\p{N}._-]{0,120}$/u.test(args.out) || /\.[a-z0-9]{2,4}$/i.test(args.out))) {
-    throw usage('--out is a simple name, without a folder or an extension (e.g. --out intro)');
+  if (args.out !== undefined && (!isOutputName(args.out) || /\.[a-z0-9]{2,4}$/i.test(args.out))) {
+    throw usage('--out is a name, without a folder or an extension, up to 120 characters valid on macOS, Windows and Linux (e.g. --out intro)');
   }
   for (const [name, option] of Object.entries(spec.options)) {
     if (!option.path || args[name] === undefined) continue;
@@ -317,6 +318,14 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     return show(await speechReceipt(root, 'asr', String(args.src), { skip: true, note: 'It has a transcript already, made since the file last changed (--force makes it again).' }));
   }
   const settings = await providerSettings();
+  if (verb === 'tts' && typeof args.voice === 'string' && args.voice.startsWith('my:')) {
+    const voice = await privateVoiceForSpeech(args.voice, settings);
+    if (via && via !== voice.provider) throw usage('This private voice must use the service connection it belongs to.');
+    if (model && !voice.models.includes(model)) throw usage('This model does not support the selected private voice.');
+    via = voice.provider;
+    model ??= voice.models[0];
+    args.voice = voice.voiceId;
+  }
   /* `--via` names one: when it cannot, it says why (no such provider, not this verb, no key) */
   const provider = await chooseProvider(/** @type {Verb} */ (verb), { via: via ?? null, settings }).catch((e) => { throw usage(e.message); });
   if (!provider) {

@@ -7,22 +7,23 @@
  * playhead (SpeakDialog). A voice whose service is not connected says so; its "Connect" opens Services.
  */
 import React from 'react';
-import { AudioLines, Pause, Play, Plus, Square, Star } from 'lucide-react';
+import { AudioLines, Loader2, MoreHorizontal, Pause, Play, Plus, RotateCw, Square, Star, Trash2 } from 'lucide-react';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import { toggleFavorite, askHere, useLibraryHere, type HereState } from '@/lib/library';
 import { ADD_COLOR, ADD_HOVER, DownloadBadge, FOOT_ROOM, MiniPlayer, PANEL_ROUND, ROUND, type Player } from './AudioList';
 import { Empty } from './icons';
 import { SpeakDialog } from './SpeakDialog';
+import { CloneVoiceDialog } from './CloneVoiceDialog';
+import { ConfirmDialog } from '../ConfirmDialog';
+import { isPrivateVoice, MY_VOICES, privateVoiceAccess, refreshPrivateVoice, removePrivateVoice, syncPrivateVoices, usePrivateVoices, type PrivateVoice } from '@/lib/private-voices';
 import {
   languageOf, sampleUrl, useLibraryVoices, useServices, voiceAccess, voiceKey, voiceLook, voiceRef,
-  type LibraryVoice, type VoiceAccess, type VoiceService,
+  type LibraryVoice, type VoiceAccess, type VoiceService, type SpeakVoice,
 } from '@/lib/library-voices';
 
 /** The side bar's line for the starred voices (as the drawer's FAVORITES). */
 export const STARRED = '★';
-/** The side bar's line for the voices their services picked. */
-export const FEATURED = 'featured';
 /* rows drawn at first, and more each time the list is scrolled near its end */
 const PAGE = 80;
 
@@ -31,8 +32,8 @@ const FIRST = ['en', 'zh', 'ja', 'ko', 'es'];
 
 export type VoiceSample = { id: string; voice: LibraryVoice };
 
-export function VoicesPane({ group, query, favorites, onServices, onAll, speak, player, previewBar, picked, onPick, onClosePreview }: {
-  /** '' all, STARRED, FEATURED, or a service's id */
+export function VoicesPane({ group, query, favorites, onServices, onAll, speak, player, previewBar, picked, onPick, onClosePreview, projectId }: {
+  /** '' all stock voices, STARRED, MY_VOICES, or a service's id */
   group: string;
   query: string;
   favorites: readonly string[];
@@ -40,7 +41,8 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak, 
   /** the side bar's "all", from an empty list of the starred */
   onAll: () => void;
   /** Words spoken in a voice, put on the film at the playhead: null, or why not. */
-  speak?: (voice: LibraryVoice, access: VoiceAccess, text: string) => Promise<string | null>;
+  speak?: SpeakVoice;
+  projectId?: string | null;
   player: Player<VoiceSample>;
   previewBar: HTMLDivElement | null;
   picked: string | null;
@@ -55,12 +57,20 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak, 
   const [language, setLanguage] = React.useState('');
   const [gender, setGender] = React.useState<'' | 'm' | 'f'>('');
   const [speaking, setSpeaking] = React.useState<LibraryVoice | null>(null);
+  const mine = usePrivateVoices();
+  const [dialog, setDialog] = React.useState<'clone' | 'import' | null>(null);
+  const [removing, setRemoving] = React.useState<PrivateVoice | null>(null);
+  const [problem, setProblem] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const more = React.useRef<HTMLDetailsElement>(null);
   const hereOf = useLibraryHere();
   const sounding = player.playing || player.loading ? player.item?.id ?? null : null;
 
   const byId = React.useMemo(() => new Map((library?.providers ?? []).map((s) => [s.id, s])), [library]);
-  const shown = React.useMemo(() => (library?.voices ?? []).filter((v) => (group === STARRED ? favorites.includes(voiceKey(v))
-    : group === FEATURED ? v.featured : !group || v.provider === group)), [library, group, favorites]);
+  const shown = React.useMemo(() => (group === MY_VOICES ? mine.voices : group === STARRED
+    ? [...(library?.voices ?? []), ...mine.voices].filter((v) => favorites.includes(voiceKey(v)))
+    : (library?.voices ?? []).filter((v) => !group || v.provider === group)), [library, group, favorites, mine.voices]);
+  const accessOf = (v: LibraryVoice) => isPrivateVoice(v) ? privateVoiceAccess(v) : access[v.provider];
   const q = query.trim().toLowerCase();
   const voices = React.useMemo(() => shown.filter((v) => (!language || languageOf(v) === language) && (!gender || v.gender === gender)
     && (!q || [v.name, v.description, v.accent, ...v.tags].some((s) => s?.toLowerCase().includes(q)))), [shown, language, gender, q]);
@@ -89,8 +99,8 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak, 
     const service = byId.get(v.provider);
     if (!service) return;
     /* not connected yet: where to connect it */
-    if (!access[v.provider]) { onServices(); return; }
-    if (studioHost?.refer) studioHost.refer(voiceRef(v, service, access[v.provider]));
+    if (!accessOf(v)) { if (!isPrivateVoice(v) || !v.available) onServices(); return; }
+    if (studioHost?.refer) studioHost.refer(voiceRef(v, service, accessOf(v)));
     else void navigator.clipboard?.writeText(v.id);
   };
   const onKey = (e: React.KeyboardEvent) => {
@@ -101,9 +111,31 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak, 
   };
 
   const chip = (on: boolean) => `whitespace-nowrap text-[11.5px] ${on ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`;
+  const run = async (operation: () => Promise<unknown>) => {
+    if (busy) return;
+    setBusy(true); setProblem(null);
+    try { await operation(); } catch (error) { setProblem(error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(false); }
+  };
+  const openDialog = (mode: 'clone' | 'import') => {
+    if (more.current) more.current.open = false;
+    if (!mine.services.some((s) => s.connected)) { onServices(); return; }
+    player.pause(); setDialog(mode);
+  };
   return (
     /* focused by a click in it, so Enter and Esc reach it */
     <div className="flex min-h-0 flex-1 flex-col outline-none" tabIndex={-1} onKeyDown={onKey}>
+      {group === MY_VOICES ? <div className="flex items-center gap-2 px-3 pb-3" data-my-voices-actions="">
+        <span className="mr-auto text-[12px] font-medium text-[var(--text)]">{t('myVoices.title')}</span>
+        <button type="button" disabled={busy || mine.loading} onClick={() => openDialog('clone')} className="flex h-7 items-center gap-1.5 rounded-lg bg-[var(--bg-field)] px-2.5 text-[12px] text-[var(--text)] hover:bg-[var(--bg-hover)] disabled:opacity-50"><Plus size={13} />{t('myVoices.clone')}</button>
+        <details ref={more} className="relative"><summary aria-label={t('myVoices.more')} className="grid h-7 w-7 cursor-default list-none place-items-center rounded-md text-[var(--text-muted)] hover:bg-[var(--bg-field)]"><MoreHorizontal size={15} /></summary>
+          <div className="absolute right-0 top-8 z-30 flex w-44 flex-col rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] p-1 shadow-lg">
+            <button type="button" onClick={() => openDialog('import')} className="rounded-md px-2.5 py-2 text-left text-[12px] text-[var(--text)] hover:bg-[var(--bg-hover)]">{t('myVoices.import')}</button>
+            <button type="button" disabled={busy} onClick={() => { if (more.current) more.current.open = false; void run(async () => { for (const s of mine.services.filter((s) => s.connected)) await syncPrivateVoices(s.id); }); }} className="rounded-md px-2.5 py-2 text-left text-[12px] text-[var(--text)] hover:bg-[var(--bg-hover)] disabled:opacity-50">{t('myVoices.sync')}</button>
+          </div>
+        </details>
+      </div> : null}
+      {problem || (group === MY_VOICES && mine.error) ? <p role="alert" className="px-3 pb-2 text-[11.5px] text-[var(--err)]">{problem ?? mine.error}</p> : null}
       <div className="flex items-center gap-3 px-3 pb-2">
         <select
           value={language}
@@ -114,7 +146,7 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak, 
           <option value="">{t('assetDrawer.anyLanguage')}</option>
           {languages.map((l) => <option key={l} value={l}>{languageName(l)}</option>)}
         </select>
-        <span className="flex items-center gap-2.5">
+        <span className={`flex items-center gap-2.5 ${group === MY_VOICES ? 'hidden' : ''}`}>
           <button type="button" className={chip(!gender)} aria-pressed={!gender} onClick={() => setGender('')}>{t('assetDrawer.all')}</button>
           <button type="button" className={chip(gender === 'f')} aria-pressed={gender === 'f'} onClick={() => setGender('f')}>{t('assetDrawer.female')}</button>
           <button type="button" className={chip(gender === 'm')} aria-pressed={gender === 'm'} onClick={() => setGender('m')}>{t('assetDrawer.male')}</button>
@@ -130,27 +162,32 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, speak, 
         {!voices.length ? (
           !library ? null
             : q || language || gender ? <Empty icon="search" text={t('assetDrawer.nothing').replace('{q}', query.trim() || languageName(language) || '')} />
-              : group === STARRED ? <Empty icon="star" text={t('assetDrawer.noFavorites')} action={t('assetDrawer.seeAll')} onAction={onAll} /> : null
+              : group === STARRED ? <Empty icon="star" text={t('assetDrawer.noFavorites')} action={t('assetDrawer.seeAll')} onAction={onAll} />
+                : group === MY_VOICES ? <div className="flex flex-col items-center gap-2 py-12 text-center"><p className="text-[12.5px] text-[var(--text-muted)]">{t(mine.loading ? 'myVoices.loading' : 'myVoices.empty')}</p><button type="button" disabled={mine.loading} onClick={() => openDialog('clone')} className="rounded-lg bg-[var(--primary)] px-3 py-2 text-[12px] text-[var(--on-primary)] disabled:opacity-50">{t('myVoices.clone')}</button><button type="button" onClick={() => openDialog('import')} className="text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)]">{t('myVoices.import')}</button></div> : null
         ) : voices.slice(0, drawn).map((v) => {
           const key = voiceKey(v);
           const loading = player.item?.id === key && player.downloading;
           const here = v.sample ? hereOf(v.sample) : 'here';
           return (
             <VoiceRow
-              key={key} voice={v} service={byId.get(v.provider)} access={access[v.provider]} showService={group === '' || group === STARRED || group === FEATURED}
+              key={key} voice={v} service={byId.get(v.provider)} access={accessOf(v)} showService={group === '' || group === STARRED || group === MY_VOICES}
               picked={picked === key} sounding={sounding === key} kept={favorites.includes(key)} languageName={languageName}
-              here={loading ? 'fetching' : player.item?.id === key && player.error != null ? 'failed' : here}
+              here={isPrivateVoice(v) ? 'here' : loading ? 'fetching' : player.item?.id === key && player.error != null ? 'failed' : here}
               onPlay={() => play(v)} onUse={() => use(v)} onServices={onServices}
-              onSpeak={speak && access[v.provider] ? () => { player.pause(); setSpeaking(v); } : undefined}
+              onSpeak={speak && accessOf(v) ? () => { player.pause(); setSpeaking(v); } : undefined}
+              onRefresh={isPrivateVoice(v) && v.available ? () => { void run(() => refreshPrivateVoice(v.uid)); } : undefined}
+              onRemove={isPrivateVoice(v) ? () => setRemoving(v) : undefined}
             />
           );
         })}
       </div>
       <MiniPlayer target={previewBar} player={player} name={player.item?.voice.name ?? ''} />
-      {speaking && speak && access[speaking.provider] ? (
+      {speaking && speak && accessOf(speaking) ? (
         <SpeakDialog voice={speaking} service={byId.get(speaking.provider)?.name ?? speaking.provider} onClose={() => setSpeaking(null)}
-          onSpeak={(text) => speak(speaking, access[speaking.provider]!, text)} />
+          onSpeak={(text) => speak(speaking, accessOf(speaking)!, text)} />
       ) : null}
+      {dialog ? <CloneVoiceDialog mode={dialog} services={mine.services} projectId={projectId} onClose={() => { setDialog(null); void mine.reload(); }} onSaved={(v, useNow) => { setDialog(null); onPick(voiceKey(v)); if (useNow && speak) setSpeaking(v); }} /> : null}
+      <ConfirmDialog open={!!removing} title={t('myVoices.remove')} description={t('myVoices.removeNote')} danger onCancel={() => setRemoving(null)} onConfirm={() => { if (removing) void run(async () => { await removePrivateVoice(removing.uid); setRemoving(null); player.close(); }); }} />
     </div>
   );
 }
@@ -167,13 +204,16 @@ function useLanguageName(lang: Language) {
 /** What the words fade into under a row's buttons: the row's own color (its field over the drawer), so solid */
 const SHADE_HOVER = 'group-hover:bg-[linear-gradient(to_right,transparent,var(--bg-field)_36px),linear-gradient(to_right,transparent,var(--bg-panel)_36px)]';
 
-function VoiceRow({ voice, service, access, showService, picked, sounding, here, kept, languageName, onPlay, onUse, onServices, onSpeak }: {
+function VoiceRow({ voice, service, access, showService, picked, sounding, here, kept, languageName, onPlay, onUse, onServices, onSpeak, onRefresh, onRemove }: {
   voice: LibraryVoice; service: VoiceService | undefined; access: VoiceAccess | undefined; showService: boolean;
   picked: boolean; sounding: boolean; here: HereState; kept: boolean; languageName: (code: string) => string;
   onPlay: () => void; onUse: () => void; onServices: () => void; onSpeak?: () => void;
+  onRefresh?: () => void; onRemove?: () => void;
 }) {
   const t = useT();
   const loading = here === 'fetching';
+  const own = isPrivateVoice(voice) ? voice : null;
+  const state = own ? !own.available ? 'disconnected' : own.status : null;
   const facts = [
     voice.gender === 'f' ? t('assetDrawer.female') : voice.gender === 'm' ? t('assetDrawer.male') : null,
     voice.age ? t(`assetDrawer.age_${voice.age}`) : null,
@@ -197,11 +237,16 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, here,
           <span className={`shrink-[0.2] truncate text-[12.5px] font-medium ${picked ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{voice.name}</span>
           <span className="min-w-0 shrink-[5] truncate text-[11px] text-[var(--text-faint)]">{facts}</span>
         </span>
-        <span className="mt-0.5 block truncate text-[11.5px] text-[var(--text-muted)]">{voice.description ?? voice.tags.join(', ')}</span>
+        <span className="mt-0.5 block truncate text-[11.5px] text-[var(--text-muted)]">{state ? t(`myVoices.status.${state}`) : voice.description ?? voice.tags.join(', ')}</span>
       </span>
       {/* what it offers, over the row's end under the pointer, the words fading out under the row's own color; else a
           star kept */}
       <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-10 pr-2 ${SHADE_HOVER}`}>
+        {own ? <>
+          {state === 'creating' || state === 'training' ? <Loader2 size={12} className="animate-spin text-[var(--text-muted)]" /> : null}
+          {onRefresh ? <button type="button" aria-label={t('myVoices.refresh')} disabled={state === 'creating'} onClick={(e) => { e.stopPropagation(); onRefresh(); }} className={`${PANEL_ROUND} text-[var(--text-muted)] hover:text-[var(--text)] disabled:opacity-40`}><RotateCw size={12} /></button> : null}
+          {onRemove ? <button type="button" aria-label={t('myVoices.remove')} onClick={(e) => { e.stopPropagation(); onRemove(); }} className={`${PANEL_ROUND} text-[var(--text-muted)] hover:text-[var(--err)]`}><Trash2 size={12} /></button> : null}
+        </> : null}
         <button
           type="button"
           aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')}
@@ -225,12 +270,12 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, here,
             className={`${ROUND} ${ADD_COLOR} ${picked ? 'grid' : 'hidden group-hover:grid'}`}>
             <Plus size={12} strokeWidth={2.6} />
           </button>
-        ) : (
+        ) : !own || !own.available ? (
           <button type="button" aria-label={useTip} onClick={(e) => { e.stopPropagation(); onServices(); }}
             className="hidden whitespace-nowrap text-[11px] text-[var(--accent)] hover:underline group-hover:inline">
             {t('assetDrawer.connect')}
           </button>
-        )}
+        ) : null}
       </span>
     </div>
   );
@@ -247,14 +292,9 @@ function VoiceAvatar({ voice, sounding, loading = false, label }: { voice: Libra
       <span className="absolute inset-0 overflow-hidden rounded-full">
         <span className="absolute -inset-1 blur-[3px]" style={look} />
       </span>
-      <span className={`absolute inset-0 grid place-items-center rounded-full bg-black/45 text-white ${sounding || loading ? '' : 'opacity-0 group-hover:opacity-100'} ${voice.sample ? '' : 'text-white/40'}`}>
+      <span className={`absolute inset-0 grid place-items-center rounded-full bg-black/45 text-white ${sounding || loading ? '' : 'opacity-0 group-hover:opacity-100'} ${sampleUrl(voice) ? '' : 'text-white/40'}`}>
         {loading ? <Square size={12} fill="currentColor" /> : sounding ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="translate-x-px" />}
       </span>
-      {voice.featured ? (
-        <span className="absolute -right-0.5 -top-0.5 grid h-[15px] w-[15px] place-items-center rounded-full bg-[var(--bg-raised)] text-[var(--accent)] ring-2 ring-[var(--bg-panel)]">
-          <Star size={9} fill="currentColor" strokeWidth={0} />
-        </span>
-      ) : null}
     </span>
   );
 }

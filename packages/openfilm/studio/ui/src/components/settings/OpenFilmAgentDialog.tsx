@@ -9,6 +9,7 @@ import { DialogClose, DialogIdentity } from './DialogIdentity';
 import { ReorderList } from './ReorderList';
 import { SettingsButton, SettingsSwitch, settingsError } from './ui';
 import { mergeModelMenu } from '@/lib/agent-model-menu';
+import { AgentUpdateDetails } from './AgentUpdateDetails';
 
 /** Account information and this computer's model menu, edited together and saved explicitly. */
 export function OpenFilmAgentDialog({ agent, onClose, actions, connectionStatus, connectionError }: {
@@ -73,6 +74,7 @@ export function OpenFilmAgentDialog({ agent, onClose, actions, connectionStatus,
       <div className="min-h-0 overflow-y-auto px-7 py-5">
         <p className="text-[14px] leading-relaxed text-[var(--text-muted)]">{t('settings.agents.openfilmShared')}</p>
         {connectionError ? <p role="alert" className={`${settingsError} mt-3`}>{connectionError}</p> : null}
+        <div className="mt-5"><AgentUpdateDetails agent={agent} /></div>
         <div className="mb-1 mt-6 flex items-center justify-between gap-3">
           <h4 className="text-[15px] font-medium">{t('settings.agents.openfilmModels')}</h4>
           {refreshModels ? <SettingsButton variant="quiet" onClick={() => void refreshModels('openfilm', { fresh: true })}>

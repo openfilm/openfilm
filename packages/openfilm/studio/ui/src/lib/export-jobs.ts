@@ -71,6 +71,8 @@ export interface ExportJob {
   draftsRefused?: string;
   /** The export stopped because the disk is full. */
   diskFull?: boolean;
+  /** The frames are drawn without a graphics chip (no driver that reaches it): the export is slow. */
+  software?: boolean;
   error?: string;
   /** Cancel was asked and the export is stopping (still `running` until it has). */
   cancelling?: boolean;

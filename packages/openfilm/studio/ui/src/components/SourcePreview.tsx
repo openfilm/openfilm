@@ -156,6 +156,8 @@ export interface SourcePreviewProps {
   file: WorkspaceResource;
   sources: MediaSources;
   onClose: () => void;
+  /** The resource center owns a modal preview; its transport keys remain local to that preview. */
+  withinDialog?: boolean;
   /** Put the file on the film at its playhead: the part marked (null: all of it), inserted or over what is there. */
   onPlace?: (mode: 'insert' | 'overwrite', range: SourceRange | null) => void;
 }
@@ -205,7 +207,7 @@ export function SourcePreview(props: SourcePreviewProps) {
     : <MediaPreviewPane key={props.file.path} {...props} />;
 }
 
-function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProps) {
+function MediaPreviewPane({ file, sources, onClose, onPlace, withinDialog }: SourcePreviewProps) {
   const t = useT();
   const rootRef = React.useRef<HTMLDivElement>(null);
   const mediaRef = React.useRef<HTMLVideoElement & HTMLAudioElement>(null);
@@ -230,13 +232,15 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+      if (e.defaultPrevented || (!withinDialog && (e.target as Element | null)?.closest?.('[role="dialog"]'))) return;
+      if (keyAction(e) === 'preview-fullscreen') { e.preventDefault(); e.stopPropagation(); if (!e.repeat) toggleFullscreen(rootRef.current); return; }
+      if (e.key === 'Escape') { e.preventDefault(); if (document.fullscreenElement) void document.exitFullscreen(); else onClose(); }
       /* space plays the source while it is up, not the film behind it */
-      if (e.key === ' ' && timed) { e.preventDefault(); e.stopPropagation(); toggle(); }
+      if (keyAction(e) === 'play-pause' && timed) { e.preventDefault(); e.stopPropagation(); if (!e.repeat) toggle(); }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose, timed, toggle]);
+  }, [onClose, timed, toggle, withinDialog]);
 
   /* the playhead follows the media every frame while it plays (timeupdate is 4 Hz) */
   React.useEffect(() => {
@@ -319,7 +323,7 @@ function MediaPreviewPane({ file, sources, onClose, onPlace }: SourcePreviewProp
       ) : (
         <div className="flex h-8 shrink-0 items-center gap-2 px-3 text-[12px] text-[var(--text-muted)]">
           <span className="min-w-0 flex-1 truncate">{file.w && file.h ? `${file.w} × ${file.h}` : ''}</span>
-          <Tooltip label={t('viewer.fullscreen')}>
+          <Tooltip label={t('viewer.fullscreen')} action="preview-fullscreen">
             <button type="button" aria-label={t('viewer.fullscreen')} onMouseDown={(e) => e.preventDefault()} onClick={() => toggleFullscreen(rootRef.current)} className={PANE_BTN}>
               <Expand size={PANE_ICON} />
             </button>
@@ -340,7 +344,7 @@ const CLOCK_PINGS = 5;
  * project's frame grid (studio/server/bridge.js `play`): no message a frame, so a busy editor does not hold the picture.
  * A page clip of Saved plays as the film had it: laid out at its clip's size, with the changes made in it.
  */
-function PagePreview({ file, sources, onClose, onPlace }: SourcePreviewProps) {
+function PagePreview({ file, sources, onClose, onPlace, withinDialog }: SourcePreviewProps) {
   const t = useT();
   const rootRef = React.useRef<HTMLDivElement>(null);
   const frameRef = React.useRef<HTMLIFrameElement>(null);
@@ -476,12 +480,14 @@ function PagePreview({ file, sources, onClose, onPlace }: SourcePreviewProps) {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-      if (e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggle(); }
+      if (e.defaultPrevented || (!withinDialog && (e.target as Element | null)?.closest?.('[role="dialog"]'))) return;
+      if (keyAction(e) === 'preview-fullscreen') { e.preventDefault(); e.stopPropagation(); if (!e.repeat) toggleFullscreen(rootRef.current); return; }
+      if (e.key === 'Escape') { e.preventDefault(); if (document.fullscreenElement) void document.exitFullscreen(); else onClose(); }
+      if (keyAction(e) === 'play-pause') { e.preventDefault(); e.stopPropagation(); if (!e.repeat) toggle(); }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose, toggle]);
+  }, [onClose, toggle, withinDialog]);
 
   return (
     <div ref={rootRef} className="absolute inset-0 z-20 flex flex-col bg-[var(--bg-panel)]">
