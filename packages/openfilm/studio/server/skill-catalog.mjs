@@ -22,6 +22,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
 import { REVOKED_FILE, SKILL_NAME, SOURCE_FILE, discoverDir, discoverFolder, officialSkillsDir, readSkill, revocations, skillSource, skillUid, skillsIn } from '../../src/skills.mjs';
 import { downloadFiles, listFiles } from './fetch-github.mjs';
 import { moveToTrash } from './trash.mjs';
@@ -37,7 +38,8 @@ const MAX_BYTES = 20 * 1024 * 1024;
 export const REFRESH_TIMEOUT_MS = 15_000;
 
 /** @typedef {{ path: string, size: number, sha256: string }} CatalogFile */
-/** @typedef {{ name: string, repo: string, path: string, version: string, commit: string, files?: CatalogFile[] }} IndexEntry */
+/** @typedef {{ name: string, repo: string, path: string, version: string, commit: string, files?: CatalogFile[], from?: string }} IndexEntry
+ *  `from`: the address of the other community index it came from (none: OpenFilm's own, openfilm/community) */
 /** @typedef {{ read: string, entries: IndexEntry[], listed?: IndexEntry[], incomplete?: string[] }} Catalog usable entries, the current index, and failed downloads */
 
 export const catalogDir = discoverDir;
@@ -121,7 +123,31 @@ export function indexEntries(index) {
     && typeof e.repo === 'string' && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(e.repo)
     && e.path === `skills/${e.name}` && typeof e.version === 'string' && /^\d+\.\d+\.\d+$/.test(e.version)
     && typeof e.commit === 'string' && /^[0-9a-f]{40}$/.test(e.commit) && (e.files === undefined || manifestFiles(e.files)))
-    .map((e) => ({ name: e.name, repo: e.repo, path: e.path, version: e.version, commit: e.commit, ...(e.files ? { files: /** @type {CatalogFile[]} */ (manifestFiles(e.files)) } : {}) }));
+    .map((e) => ({ name: e.name, repo: e.repo, path: e.path, version: e.version, commit: e.commit, ...(e.files ? { files: /** @type {CatalogFile[]} */ (manifestFiles(e.files)) } : {}),
+      ...(typeof e.from === 'string' && SOURCE_ADDRESS.test(e.from) ? { from: e.from } : {}) }));
+}
+
+/**
+ * Other community indexes the person added (as Blender's third-party repositories are): read after OpenFilm's own,
+ * each an https address or a file on this computer, at most ten. What they list is shown as not OpenFilm's, not
+ * reviewed by it, and always asks before it is installed; it never takes the place of one of OpenFilm's (its uid), and
+ * only OpenFilm's own index withdraws anything (`revoked`).
+ */
+const SOURCE_ADDRESS = /^(https:\/\/\S{4,500}|\/\S{1,500})$/;
+export function communitySources(/** @type {string} */ home = sharedHome()) {
+  const kept = sharedPref('communitySources', home);
+  return Array.isArray(kept) ? [...new Set(kept.filter((a) => typeof a === 'string' && SOURCE_ADDRESS.test(a)))].slice(0, 10) : [];
+}
+/** @param {string[]} list @param {string} [home] */
+export function setCommunitySources(list, home = sharedHome()) {
+  const bad = list.find((a) => typeof a !== 'string' || !SOURCE_ADDRESS.test(a));
+  if (bad !== undefined) throw new Error(`Not an index address: ${String(bad)} (an https address, or a file on this computer).`);
+  if (list.includes(INDEX_URL)) throw new Error('OpenFilm\'s own community is always read.');
+  setSharedPref('communitySources', [...new Set(list)].slice(0, 10), home);
+}
+/** Where each listed skill came from, by uid: the other index's address (none: OpenFilm's own). @param {Catalog | null} [catalog] */
+export function entrySources(catalog = readCatalog()) {
+  return new Map((catalog?.listed ?? catalog?.entries ?? []).flatMap((e) => (e.from ? [[uidOf(e), e.from]] : [])));
 }
 
 /** What the index said when last read, or null when it never was. @returns {Catalog | null} */
@@ -156,18 +182,35 @@ export async function refreshCatalog({ signal: caller, timeoutMs = REFRESH_TIMEO
 async function refresh({ signal, hosts, get }) {
   const before = readCatalog();
   const from = process.env.OPENFILM_SKILLS_INDEX || INDEX_URL;
-  let index;
-  if (/^https:\/\//.test(from)) {
-    /* asked past any cache between (GitHub's raw files are cached for minutes): what the index says now */
-    const url = new URL(from);
-    url.searchParams.set('read', String(Date.now()));
-    const res = await get(url, { signal, headers: { accept: 'application/json' }, cache: 'no-store' });
-    if (!res.ok) throw new Error(`The skills index answered ${res.status}.`);
-    index = await res.json();
-  } else index = JSON.parse(await readFile(from, 'utf8'));
-  if (index?.version !== 1 || !Array.isArray(index.skills)) throw new Error('The skills index is not valid.');
+  /** @param {string} at */
+  const readIndex = async (at) => {
+    let read;
+    if (/^https:\/\//.test(at)) {
+      /* asked past any cache between (GitHub's raw files are cached for minutes): what the index says now */
+      const url = new URL(at);
+      url.searchParams.set('read', String(Date.now()));
+      const res = await get(url, { signal, headers: { accept: 'application/json' }, cache: 'no-store' });
+      if (!res.ok) throw new Error(`The skills index answered ${res.status}.`);
+      read = await res.json();
+    } else read = JSON.parse(await readFile(at, 'utf8'));
+    if (read?.version !== 1 || !Array.isArray(read.skills)) throw new Error('The skills index is not valid.');
+    return read;
+  };
+  const index = await readIndex(from);
   const listed = indexEntries(index);
   if (index.skills.length && !listed.length) throw new Error('The skills index has no valid entries.');
+  /* the other indexes the person added, after OpenFilm's own: never in place of one of its uids, nor of an earlier one's;
+     one that cannot be read now is left out, the rest go on */
+  const taken = new Set(listed.map(uidOf));
+  for (const other of communitySources()) {
+    try {
+      for (const e of indexEntries(await readIndex(other))) {
+        if (taken.has(uidOf(e))) continue;
+        taken.add(uidOf(e));
+        listed.push({ ...e, from: other });
+      }
+    } catch { /* unreadable now: its skills are not offered until it is */ }
+  }
   /** @type {IndexEntry[]} */
   const entries = [];
   /** @type {string[]} */

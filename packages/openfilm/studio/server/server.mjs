@@ -74,7 +74,7 @@ import { allowProjectSkill, revocationOf, revokedNow, skillFiles, commandsIn, co
 import { startPluginPages } from './plugin-pages.mjs';
 import { startPluginPrograms } from './plugin-programs.mjs';
 import { createPluginServers } from './plugin-servers.mjs';
-import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
+import { communitySources, entrySources, setCommunitySources, catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
@@ -633,6 +633,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const skills = listSkills({ project: project?.path ?? null });
       const catalog = readCatalog();
       const standing = installedStanding(catalog);
+      /* listed by another community index the person added, not OpenFilm's: its address (skill-catalog.mjs communitySources) */
+      const fromOther = entrySources(catalog);
       const had = new Set(skills.map((k) => k.uid));
       const offered = catalogSkills(catalog).filter((k) => !had.has(k.uid));
       const origins = skillOrigins();
@@ -664,6 +666,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           ...(k.order != null ? { order: k.order } : {}), ...(k.icon ? { icon: k.icon } : {}), ...(k.repository ? { repository: k.repository } : {}),
           /* how it is listed and rated for people (src/plugins.mjs profileOf) */
           ...(k.profile ? { profile: k.profile } : {}),
+          ...(k.source === 'official' && fromOther.get(k.uid) ? { from: fromOther.get(k.uid) } : {}),
           /* the hosts its page may reach (src/skills.mjs networkOf), none but these */
           ...(k.network ? { network: k.network } : {}),
           /* what it needs beyond OpenFilm, the computers it runs on, and whether this one is not among them */
@@ -796,6 +799,16 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       try {
         return json(res, 200, { url: await pluginPrograms.ensure({ uid: skill.uid, source: skill.source, folder: skill.folder, program }, { id: project.id, path: project.path }) });
       } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 500, e instanceof Error ? e.message : String(e)); }
+    }
+    /* the other community indexes the person added (GET: { sources }; PUT { sources }): read after OpenFilm's own, the
+       next time Discover is read (skill-catalog.mjs communitySources) */
+    if (parts[0] === 'community' && parts[1] === 'sources' && parts.length === 2 && (req.method === 'GET' || req.method === 'PUT')) {
+      if (req.method === 'PUT') {
+        const sources = (await readJson(req))?.sources;
+        if (!Array.isArray(sources)) throw new HttpError(400, 'sources: a list of index addresses');
+        try { setCommunitySources(sources); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+      }
+      return json(res, 200, { sources: communitySources() });
     }
     /* a skill as a person reviews it before letting it in: its SKILL.md whole and its files (GET ?project=) */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'text' && req.method === 'GET') {
