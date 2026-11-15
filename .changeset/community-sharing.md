@@ -1,0 +1,5 @@
+---
+"openfilm": minor
+---
+
+Publishing to the Community takes three steps in the app, with no sign-in to GitHub inside OpenFilm: Publish checks your workbench or skill as the community's review will (what is missing, what the scan finds), then reads it back from your public GitHub repository and compares it file by file with yours, then opens its listing on GitHub filled in, to submit. Cards and pages say how far an item is vouched for: Official, Reviewed (listed by the OpenFilm Community, every version checked and reviewed), or Unreviewed with where it came from. A maker's name opens a page of everything they made, and cards say how many people use an item. Community sources, at the side's foot, lists the indexes Discover reads: the OpenFilm Community always, and others you add after a plain warning; what another index lists never takes the place of an OpenFilm Community item, cannot withdraw anything, and asks before it is installed. Installing an OpenFilm Community item counts one install of that item, anonymously: only its id is sent (`OPENFILM_NO_STATS=1` turns it off).

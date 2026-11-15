@@ -25,6 +25,11 @@ Workbenches, skills and connectors from the community run on your computer. Open
   your agent's access.
 - Anything OpenFilm withdraws (malware, impersonation, rights, broken, policy) stops on every computer the next time
   the community index is read, wherever a copy of it is, and says why.
+- Another community index you add (Community sources) is not reviewed by OpenFilm: what it lists is marked
+  Unreviewed, asks before it is installed, never takes the place of an OpenFilm Community item, and cannot withdraw
+  anything.
+- Installing an item from the OpenFilm Community sends its id (`owner/name`) to openfilm.dev to count how many use
+  it, and nothing about you; `OPENFILM_NO_STATS=1` turns it off.
 
 To report a community item, use **Report** on its page in OpenFilm or on openfilm.dev (the community's
 [report form](https://github.com/openfilm/community/issues/new?template=report.yml)), or write to
