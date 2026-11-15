@@ -147,3 +147,38 @@ test("a long agent record is read into the turn's model log off the main thread:
   assert.equal(readFileSync(join(logsDir(cwd), 'local-long1.model.jsonl'), 'utf8').trim().split('\n').length, ROUNDS);
   assert.ok(longest < 250, `the main thread stood still for ${Math.round(longest)} ms`);
 });
+
+test('updates wait for running turns and refuse new starts and prompts while installing', async t => {
+  const { setChosenPaths } = await import('./agents.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'of-updating-'));
+  const program = join(dir, 'dsh.mjs');
+  writeFileSync(program, `let buf='';
+const send = m => process.stdout.write(JSON.stringify(m)+'\\n');
+process.stdin.on('data', d => { buf+=d; let n; while((n=buf.indexOf('\\n'))>=0){
+ const m=JSON.parse(buf.slice(0,n));buf=buf.slice(n+1);let result;
+ if(m.method==='initialize')result={protocolVersion:1,agentCapabilities:{},authMethods:[]};
+ else if(m.method==='session/new')result={sessionId:'s1'};
+ else if(m.method==='session/prompt'){send({jsonrpc:'2.0',method:'session/update',params:{sessionId:'s1',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'Ready'}}}});setTimeout(()=>send({jsonrpc:'2.0',id:m.id,result:{stopReason:'end_turn'}}),30);continue;}
+ if(result)send({jsonrpc:'2.0',id:m.id,result});
+}});`);
+  setChosenPaths({ deepseek: program });
+  const handlers = new Map(); let updating = true;
+  const api = registerLocalAgentIpc({ handle: (channel, fn) => handlers.set(channel, fn) }, {
+    trusted: () => true, isAgentUpdating: id => id === 'deepseek' && updating,
+  });
+  t.after(() => { api.closeAll(); setChosenPaths({}); });
+  const event = { sender: { once() {}, isDestroyed: () => false, send() {} } };
+  const start = opts => handlers.get('desktop:local-agents:start')(event, { agent: 'deepseek', cwd: dir, ...opts });
+  assert.equal((await start()).code, 'agent-updating');
+  updating = false;
+  const opened = await start(); assert.equal(opened.ok, true, opened.error);
+  const prompt = () => handlers.get('desktop:local-agents:prompt')(event, { key: opened.key, text: 'hi' });
+  const pending = prompt();
+  assert.equal(api.isAgentBusy('deepseek'), true);
+  assert.equal(api.isAgentBusy('claude'), false);
+  const answer = await pending; assert.equal(answer.ok, true, answer.error);
+  assert.equal(api.isAgentBusy('deepseek'), false);
+  updating = true;
+  assert.equal((await prompt()).code, 'agent-updating');
+  assert.equal(api.isAgentBusy('deepseek'), false, 'a refused turn never starts');
+});

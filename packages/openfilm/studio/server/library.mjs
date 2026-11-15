@@ -36,6 +36,8 @@ import { fileURLToPath } from 'node:url';
 import { communityCatalog, communityReady, fetchCommunity, isCommunity, refreshCommunity } from './community-library.mjs';
 import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
 import { SKILL_UID } from '../../src/skills.mjs';
+import { ownVoiceKeys } from './voice-store.mjs';
+import { DOUBAO_TTS_MODELS, DOUBAO_VOICES } from './providers/doubao-tts.mjs';
 
 export { refreshCommunity };
 
@@ -248,7 +250,11 @@ export function libraryIndex() {
 }
 
 /** The voices as library/voices.json has them: the services (each with its voice-over models) and their voices. */
-export const libraryVoices = () => read('voices.json', { version: 1, providers: [], voices: [] });
+export const libraryVoices = () => {
+  const library = read('voices.json', { version: 1, providers: [], voices: [] });
+  return { ...library, providers: [...library.providers.filter((/** @type {any} */ p) => p.id !== 'doubao'), { id: 'doubao', name: 'Doubao Speech', models: DOUBAO_TTS_MODELS }],
+    voices: [...library.voices.filter((/** @type {any} */ v) => v.provider !== 'doubao'), ...DOUBAO_VOICES] };
+};
 
 /** A voice's id among the starred things: `voice:<service>/<its id there>`. */
 export const voiceKey = (/** @type {{ provider: string, id: string }} */ v) => `voice:${v.provider}/${v.id}`;
@@ -258,6 +264,7 @@ function starrable() {
   return new Set([
     ...(/** @type {{ items: { id: string }[] }} */ (libraryIndex())).items.map((item) => item.id),
     ...(/** @type {{ voices: { provider: string, id: string }[] }} */ (libraryVoices())).voices.map(voiceKey),
+    ...ownVoiceKeys(),
   ]);
 }
 

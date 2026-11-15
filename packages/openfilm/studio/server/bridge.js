@@ -79,6 +79,7 @@
     try {
       await f.ready;
       up = f;
+      editor()?.stage?.visionPreview?.({ editor: true });
       post({ type: 'ready', ...facts(f), origin: performance.timeOrigin });
       if (editor()) {
         editor().learned = () => post({ type: 'spans', spans: facts(f).spans });
@@ -144,7 +145,7 @@
   let refresh = 1000 / 60;
   let lastTick = 0;
   /* what the editor is told about how playing goes: frames drawn and late, and late frames per half second of film */
-  let tally = { frames: 0, drawn: 0, late: 0, since: 0, rendered: false, spans: new Map() };
+  let tally = { frames: 0, drawn: 0, late: 0, since: 0, rendered: false, spans: new Map(), detail: new Set() };
   const requestFrame = () => { if (!raf) raf = requestAnimationFrame(tick); };
   const lineAt = (ms) => line.t + (Math.max(0, ms - line.at) / 1000) * line.rate;
   async function tick() {
@@ -182,6 +183,7 @@
     tally.late += late;
     if (editor()?.rendering?.()) tally.rendered = true;
     const half = Math.floor(t * 2) / 2;
+    if (editor()?.needsDetailedPreview?.(line?.fps > 0 ? 1000 / line.fps : 1000 / 30)) tally.detail.add(half);
     const span = tally.spans.get(half) ?? [0, 0];
     span[0] += 1 + late;
     span[1] += late;
@@ -191,8 +193,8 @@
     if (now - tally.since >= 1000) say();
   }
   function say() {
-    if (tally.frames) post({ type: 'played', frames: tally.frames, drawn: tally.drawn, late: tally.late, rendered: tally.rendered, ms: Math.round(clock() - tally.since), spans: [...tally.spans].map(([t, [frames, late]]) => [t, frames, late]) });
-    tally = { frames: 0, drawn: 0, late: 0, since: 0, rendered: false, spans: new Map() };
+    if (tally.frames) post({ type: 'played', frames: tally.frames, drawn: tally.drawn, late: tally.late, rendered: tally.rendered, ms: Math.round(clock() - tally.since), spans: [...tally.spans].map(([t, [frames, late]]) => [t, frames, late]), detailSpans: [...tally.detail].map((t) => [t, t + .5]) });
+    tally = { frames: 0, drawn: 0, late: 0, since: 0, rendered: false, spans: new Map(), detail: new Set() };
   }
   function stop() {
     if (!line) return;
@@ -237,6 +239,7 @@
          behind the picture is shown once it has drawn the film as it is now) */
       else if (inPlace) next.seq = Math.max(Number(next.seq) || 0, Number(m.seq) || 0);
     }
+    if (m.type === 'vision-preview') editor()?.stage?.visionPreview?.(m.options);
     if (m.type === 'renders') editor()?.renders?.(m.list);
     if (m.type === 'captions') void editor()?.captions?.();
     if (m.type === 'preview') editor()?.preview(m.clip, m.overrides);

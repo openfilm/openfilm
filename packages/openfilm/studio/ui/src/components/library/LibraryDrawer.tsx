@@ -15,6 +15,7 @@ import React from 'react';
 import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
+import { openResourceCenter } from '@/lib/asset-library';
 import {
   BUILT_IN, TEXT_COMPONENT, askHere, builtInItem, prepareLibraryItem, isLibraryItemReady, libraryDragItem, libraryUrl, mayNeedFetch, nameOf, posterUrl, prepareTemplatePreview, previewUrl, templateExamplePath, templatePreviewUrl, toggleFavorite,
   useLibraryFavorites, useLibraryHere, useLibraryIndex, type HereState, type LibraryCategory, type LibraryItem,
@@ -457,6 +458,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 {/* this project's media; Mine, the person's own for every film (what they keep there, in their folders) */}
                 <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
                 <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mine')}</SideBox>
+                <SideBox on={false} onClick={openResourceCenter}>{t('resourceCenter.open')}</SideBox>
               </>
             ) : cat === 'text' ? (
               <>
