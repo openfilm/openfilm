@@ -1,0 +1,156 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "url": "http://127.0.0.1:4848",
+      "port": 4848
+    },
+    {
+      "name": "asset-proto",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4995",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/Users/river/Desktop/code/openfilm/internal/asset-library-ui"
+      ],
+      "port": 4995
+    },
+    {
+      "name": "next03-test",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/river/Desktop/code/openfilm/var/next-0.3/packages/openfilm && OPENFILM_HOME=/private/tmp/claude-501/-Users-river-Desktop-code-openfilm-openfilm/7aa8b5df-eb4f-4171-964e-a419d1cd46ea/scratchpad/st/home OPENFILM_LIBRARY=/private/tmp/claude-501/-Users-river-Desktop-code-openfilm-openfilm/7aa8b5df-eb4f-4171-964e-a419d1cd46ea/scratchpad/st/lib OPENFILM_SHARED_HOME=/private/tmp/claude-501/-Users-river-Desktop-code-openfilm-openfilm/7aa8b5df-eb4f-4171-964e-a419d1cd46ea/scratchpad/st/shared OPENFILM_EXPORTS=/private/tmp/claude-501/-Users-river-Desktop-code-openfilm-openfilm/7aa8b5df-eb4f-4171-964e-a419d1cd46ea/scratchpad/st/exports OPENFILM_STUDIO_PORT=4991 OPENFILM_NO_UPDATE_CHECK=1 OPENFILM_STUDIO_WORKER=1 exec node studio/server/main.mjs"
+      ],
+      "port": 4991
+    },
+    {
+      "name": "subtitle-ui",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4996",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/Users/river/Desktop/code/openfilm/internal/subtitle-ui"
+      ],
+      "port": 4996
+    },
+    {
+      "name": "next03-check",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "OPENFILM_HOME=/private/tmp/claude-501/-Users-river-Desktop-code-openfilm-openfilm/2e4820b2-b809-48c6-b152-a6f644ef159f/scratchpad/studio-home",
+        "OPENFILM_SHARED_HOME=/private/tmp/claude-501/-Users-river-Desktop-code-openfilm-openfilm/2e4820b2-b809-48c6-b152-a6f644ef159f/scratchpad/studio-shared",
+        "OPENFILM_LIBRARY=/private/tmp/claude-501/-Users-river-Desktop-code-openfilm-openfilm/2e4820b2-b809-48c6-b152-a6f644ef159f/scratchpad/studio-projects",
+        "OPENFILM_STUDIO_PORT=4868",
+        "node",
+        "/Users/river/Desktop/code/openfilm/var/next-0.3/packages/openfilm/studio/server/main.mjs"
+      ],
+      "port": 4868
+    },
+    {
+      "name": "next03-bare",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "OPENFILM_HOME=/private/tmp/claude-501/-Users-river-Desktop-code-openfilm-openfilm/2e4820b2-b809-48c6-b152-a6f644ef159f/scratchpad/bare-home",
+        "OPENFILM_SHARED_HOME=/private/tmp/claude-501/-Users-river-Desktop-code-openfilm-openfilm/2e4820b2-b809-48c6-b152-a6f644ef159f/scratchpad/bare-shared",
+        "OPENFILM_LIBRARY=/private/tmp/claude-501/-Users-river-Desktop-code-openfilm-openfilm/2e4820b2-b809-48c6-b152-a6f644ef159f/scratchpad/studio-projects",
+        "OPENFILM_BUILT_IN_LIBRARY=/private/tmp/claude-501/-Users-river-Desktop-code-openfilm-openfilm/2e4820b2-b809-48c6-b152-a6f644ef159f/scratchpad/lib-bare",
+        "OPENFILM_STUDIO_PORT=4878",
+        "node",
+        "/Users/river/Desktop/code/openfilm/var/next-0.3/packages/openfilm/studio/server/main.mjs"
+      ],
+      "port": 4878
+    },
+    {
+      "name": "deepseek-account-preview",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/river/Desktop/code/openfilm/var/deepseek-volcengine/cloud/apps/web && exec node --env-file=/Users/river/Desktop/code/openfilm/cloud/.env.development ./node_modules/next/dist/bin/next dev --turbopack --port 3041"
+      ],
+      "port": 3041
+    },
+    {
+      "name": "admin-dev",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/river/Desktop/code/openfilm/cloud/apps/admin && exec pnpm dev"
+      ],
+      "port": 3050
+    },
+    {
+      "name": "admin-prod",
+      "url": "http://127.0.0.1:3070",
+      "port": 3070
+    },
+    {
+      "name": "color-test",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "OPENFILM_HOME=/Users/river/Desktop/code/openfilm/var/plugin-scratch/color/home",
+        "OPENFILM_SHARED_HOME=/Users/river/Desktop/code/openfilm/var/plugin-scratch/color/shared",
+        "OPENFILM_LIBRARY=/Users/river/Desktop/code/openfilm/var/plugin-scratch/color/library",
+        "OPENFILM_EXPORTS=/Users/river/Desktop/code/openfilm/var/plugin-scratch/color/exports",
+        "OPENFILM_SKILLS=/Users/river/Desktop/code/openfilm/var/plugin-scratch/color/skills",
+        "OPENFILM_STUDIO_PORT=5511",
+        "OPENFILM_NO_UPDATE_CHECK=1",
+        "node",
+        "/Users/river/Desktop/code/openfilm/var/plugin-color/packages/openfilm/studio/server/main.mjs"
+      ],
+      "port": 5511
+    },
+    {
+      "name": "plugins-page-test",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "OPENFILM_HOME=/Users/river/Desktop/code/openfilm/var/plugin-scratch/plugins-page/home",
+        "OPENFILM_SHARED_HOME=/Users/river/Desktop/code/openfilm/var/plugin-scratch/plugins-page/shared",
+        "OPENFILM_LIBRARY=/Users/river/Desktop/code/openfilm/var/plugin-scratch/plugins-page/library",
+        "OPENFILM_EXPORTS=/Users/river/Desktop/code/openfilm/var/plugin-scratch/plugins-page/exports",
+        "OPENFILM_SKILLS=/Users/river/Desktop/code/openfilm/var/plugin-scratch/plugins-page/skills",
+        "OPENFILM_STUDIO_PORT=5521",
+        "OPENFILM_NO_UPDATE_CHECK=1",
+        "node",
+        "/Users/river/Desktop/code/openfilm/var/plugins-window/packages/openfilm/studio/server/main.mjs"
+      ],
+      "port": 5521
+    },
+    {
+      "name": "site-community",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "PORT=4391",
+        "node",
+        "/Users/river/Desktop/code/openfilm/var/site-community/apps/site/tools/serve.mjs"
+      ],
+      "port": 4391
+    },
+    {
+      "name": "plugins-packs-test",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "OPENFILM_COMMUNITY_LIBRARY_URL=http://127.0.0.1:5599",
+        "OPENFILM_HOME=/Users/river/Desktop/code/openfilm/var/plugin-scratch/plugins-page/home",
+        "OPENFILM_SHARED_HOME=/Users/river/Desktop/code/openfilm/var/plugin-scratch/plugins-page/shared",
+        "OPENFILM_LIBRARY=/Users/river/Desktop/code/openfilm/var/plugin-scratch/plugins-page/library",
+        "OPENFILM_EXPORTS=/Users/river/Desktop/code/openfilm/var/plugin-scratch/plugins-page/exports",
+        "OPENFILM_SKILLS=/Users/river/Desktop/code/openfilm/var/plugin-scratch/plugins-page/skills",
+        "OPENFILM_STUDIO_PORT=5521",
+        "OPENFILM_NO_UPDATE_CHECK=1",
+        "node",
+        "/Users/river/Desktop/code/openfilm/var/plugins-window/packages/openfilm/studio/server/main.mjs"
+      ],
+      "port": 5521
+    }
+  ]
+}

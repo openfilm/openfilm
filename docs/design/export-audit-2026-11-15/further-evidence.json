@@ -1,0 +1,1566 @@
+{
+  "date": "2026-11-15",
+  "note": "Read-only codec/storage experiments on copies. Accepted Jianying draft and production export code were not modified.",
+  "inventory": [
+    {
+      "name": "a-full-1.mov",
+      "bytes": 39483201,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "yuv420p",
+          "avg_frame_rate": "30/1",
+          "duration": "15.200000",
+          "nb_frames": "456"
+        },
+        {
+          "index": 1,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "15.200000",
+          "nb_frames": "729600"
+        }
+      ],
+      "duration": 15.2
+    },
+    {
+      "name": "a-full-2.mov",
+      "bytes": 15853314,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "yuv420p",
+          "avg_frame_rate": "30/1",
+          "duration": "6.033333",
+          "nb_frames": "181"
+        },
+        {
+          "index": 1,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "6.033333",
+          "nb_frames": "289600"
+        }
+      ],
+      "duration": 6.033333
+    },
+    {
+      "name": "a-full-3.mov",
+      "bytes": 37338823,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "yuv420p",
+          "avg_frame_rate": "30/1",
+          "duration": "13.566667",
+          "nb_frames": "407"
+        },
+        {
+          "index": 1,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "13.566667",
+          "nb_frames": "651200"
+        }
+      ],
+      "duration": 13.566667
+    },
+    {
+      "name": "a-pip-1.mov",
+      "bytes": 301184840,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 424,
+          "height": 424,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "7585/316",
+          "duration": "63.200000",
+          "nb_frames": "1517"
+        },
+        {
+          "index": 1,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "63.200000",
+          "nb_frames": "3033600"
+        }
+      ],
+      "duration": 63.2
+    },
+    {
+      "name": "a-pip-2.mov",
+      "bytes": 172839263,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 424,
+          "height": 424,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "13065/544",
+          "duration": "36.266667",
+          "nb_frames": "871"
+        },
+        {
+          "index": 1,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "36.266667",
+          "nb_frames": "1740800"
+        }
+      ],
+      "duration": 36.266667
+    },
+    {
+      "name": "a-roll.mp4",
+      "bytes": 209876816,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1088,
+          "height": 1920,
+          "pix_fmt": "yuv420p",
+          "avg_frame_rate": "24/1",
+          "duration": "134.250000",
+          "nb_frames": "3222"
+        },
+        {
+          "index": 1,
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "134.295011",
+          "nb_frames": "5785"
+        }
+      ],
+      "duration": 134.295011
+    },
+    {
+      "name": "avatar-loop.mov",
+      "bytes": 8213607,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 300,
+          "height": 300,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "24/1",
+          "duration": "2.000000",
+          "nb_frames": "48"
+        }
+      ],
+      "duration": 2
+    },
+    {
+      "name": "avatar-loop.mp4",
+      "bytes": 1495570,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1088,
+          "height": 1920,
+          "pix_fmt": "yuv420p",
+          "avg_frame_rate": "24/1",
+          "duration": "2.500000",
+          "nb_frames": "60"
+        }
+      ],
+      "duration": 2.5
+    },
+    {
+      "name": "bgm.wav",
+      "bytes": 25776078,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "134.250000"
+        }
+      ],
+      "duration": 134.25
+    },
+    {
+      "name": "captions-91f5ba12.mov",
+      "bytes": 1555888,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 810,
+          "height": 56,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "1245/2014",
+          "duration": "134.266667",
+          "nb_frames": "83"
+        }
+      ],
+      "duration": 134.266667
+    },
+    {
+      "name": "check_mark_0.3s.wav",
+      "bytes": 57678,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "0.300000"
+        }
+      ],
+      "duration": 0.3
+    },
+    {
+      "name": "cover.mov",
+      "bytes": 69542,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "yuv420p",
+          "avg_frame_rate": "30/1",
+          "duration": "0.033333",
+          "nb_frames": "1"
+        }
+      ],
+      "duration": 0.033333
+    },
+    {
+      "name": "impact_deep_1.8s.wav",
+      "bytes": 345678,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "1.800000"
+        }
+      ],
+      "duration": 1.8
+    },
+    {
+      "name": "p01.mov",
+      "bytes": 169795258,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "4680/163",
+          "duration": "5.433333",
+          "nb_frames": "156"
+        }
+      ],
+      "duration": 5.433333
+    },
+    {
+      "name": "p02.mov",
+      "bytes": 482605937,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "1250/51",
+          "duration": "5.100000",
+          "nb_frames": "125"
+        }
+      ],
+      "duration": 5.1
+    },
+    {
+      "name": "p03.mov",
+      "bytes": 120087453,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "171/7",
+          "duration": "4.666667",
+          "nb_frames": "114"
+        }
+      ],
+      "duration": 4.666667
+    },
+    {
+      "name": "p04.mov",
+      "bytes": 883010,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p04.part-1.mov",
+      "bytes": 1433066,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "3.166667",
+          "nb_frames": "95"
+        }
+      ],
+      "duration": 3.166667
+    },
+    {
+      "name": "p05.mov",
+      "bytes": 6043925,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.266667",
+          "nb_frames": "8"
+        }
+      ],
+      "duration": 0.266667
+    },
+    {
+      "name": "p05.part-1.mov",
+      "bytes": 70498113,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "8.600000",
+          "nb_frames": "258"
+        }
+      ],
+      "duration": 8.6
+    },
+    {
+      "name": "p06.mov",
+      "bytes": 1185330,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p06.part-1.mov",
+      "bytes": 6693461,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "3.733333",
+          "nb_frames": "112"
+        }
+      ],
+      "duration": 3.733333
+    },
+    {
+      "name": "p07.mov",
+      "bytes": 5258594,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p07.part-1.mov",
+      "bytes": 5912468,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "6.933333",
+          "nb_frames": "208"
+        }
+      ],
+      "duration": 6.933333
+    },
+    {
+      "name": "p08.mov",
+      "bytes": 1054506,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p08.part-1.mov",
+      "bytes": 6230564,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "4.100000",
+          "nb_frames": "123"
+        }
+      ],
+      "duration": 4.1
+    },
+    {
+      "name": "p09.mov",
+      "bytes": 857207,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.166667",
+          "nb_frames": "5"
+        }
+      ],
+      "duration": 0.166667
+    },
+    {
+      "name": "p09.part-1.mov",
+      "bytes": 1331536,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "5.766667",
+          "nb_frames": "173"
+        }
+      ],
+      "duration": 5.766667
+    },
+    {
+      "name": "p10.mov",
+      "bytes": 879120,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p10.part-1.mov",
+      "bytes": 4880697,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "4.600000",
+          "nb_frames": "138"
+        }
+      ],
+      "duration": 4.6
+    },
+    {
+      "name": "p11.mov",
+      "bytes": 6919455,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.100000",
+          "nb_frames": "3"
+        }
+      ],
+      "duration": 0.1
+    },
+    {
+      "name": "p11.part-1.mov",
+      "bytes": 86151244,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "4.033333",
+          "nb_frames": "121"
+        }
+      ],
+      "duration": 4.033333
+    },
+    {
+      "name": "p12.mov",
+      "bytes": 8346144,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p12.part-1.mov",
+      "bytes": 124359032,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "6.966667",
+          "nb_frames": "209"
+        }
+      ],
+      "duration": 6.966667
+    },
+    {
+      "name": "p13.mov",
+      "bytes": 8701362,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.200000",
+          "nb_frames": "6"
+        }
+      ],
+      "duration": 0.2
+    },
+    {
+      "name": "p13.part-1.mov",
+      "bytes": 43959778,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "7.933333",
+          "nb_frames": "238"
+        }
+      ],
+      "duration": 7.933333
+    },
+    {
+      "name": "p14.mov",
+      "bytes": 754033,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p14.part-1.mov",
+      "bytes": 4872564,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "5.700000",
+          "nb_frames": "171"
+        }
+      ],
+      "duration": 5.7
+    },
+    {
+      "name": "p15.mov",
+      "bytes": 199960114,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "6.033333",
+          "nb_frames": "181"
+        }
+      ],
+      "duration": 6.033333
+    },
+    {
+      "name": "p16.mov",
+      "bytes": 11503262,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.166667",
+          "nb_frames": "5"
+        }
+      ],
+      "duration": 0.166667
+    },
+    {
+      "name": "p16.part-1.mov",
+      "bytes": 219622143,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "7.566667",
+          "nb_frames": "227"
+        }
+      ],
+      "duration": 7.566667
+    },
+    {
+      "name": "p17.mov",
+      "bytes": 1181394,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p17.part-1.mov",
+      "bytes": 7889210,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "3.666667",
+          "nb_frames": "110"
+        }
+      ],
+      "duration": 3.666667
+    },
+    {
+      "name": "p18.mov",
+      "bytes": 1928816,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p18.part-1.mov",
+      "bytes": 4736241,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "8.366667",
+          "nb_frames": "251"
+        }
+      ],
+      "duration": 8.366667
+    },
+    {
+      "name": "p19.mov",
+      "bytes": 1217247,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.266667",
+          "nb_frames": "8"
+        }
+      ],
+      "duration": 0.266667
+    },
+    {
+      "name": "p19.part-1.mov",
+      "bytes": 9452987,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "6.633333",
+          "nb_frames": "199"
+        }
+      ],
+      "duration": 6.633333
+    },
+    {
+      "name": "p20.mov",
+      "bytes": 8698216,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p20.part-1.mov",
+      "bytes": 110772537,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "4.833333",
+          "nb_frames": "145"
+        }
+      ],
+      "duration": 4.833333
+    },
+    {
+      "name": "p21.mov",
+      "bytes": 2057068,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p21.part-1.mov",
+      "bytes": 3797866,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "4.233333",
+          "nb_frames": "127"
+        }
+      ],
+      "duration": 4.233333
+    },
+    {
+      "name": "p22.mov",
+      "bytes": 166459665,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "5.200000",
+          "nb_frames": "156"
+        }
+      ],
+      "duration": 5.2
+    },
+    {
+      "name": "p23.mov",
+      "bytes": 114171793,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "5.333333",
+          "nb_frames": "160"
+        }
+      ],
+      "duration": 5.333333
+    },
+    {
+      "name": "p24.mov",
+      "bytes": 57819999,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "3.033333",
+          "nb_frames": "91"
+        }
+      ],
+      "duration": 3.033333
+    },
+    {
+      "name": "p25.mov",
+      "bytes": 1627005,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "avg_frame_rate": "30/1",
+          "duration": "0.133333",
+          "nb_frames": "4"
+        }
+      ],
+      "duration": 0.133333
+    },
+    {
+      "name": "p25.part-1.mov",
+      "bytes": 1151572,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "gbrp",
+          "avg_frame_rate": "30/1",
+          "duration": "1.866667",
+          "nb_frames": "56"
+        }
+      ],
+      "duration": 1.866667
+    },
+    {
+      "name": "paper_flip_0.5s.wav",
+      "bytes": 96078,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "0.500000"
+        }
+      ],
+      "duration": 0.5
+    },
+    {
+      "name": "riser_1.6s.wav",
+      "bytes": 307278,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "1.600000"
+        }
+      ],
+      "duration": 1.6
+    },
+    {
+      "name": "stamp_slam_0.6s.wav",
+      "bytes": 115278,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "0.600000"
+        }
+      ],
+      "duration": 0.6
+    },
+    {
+      "name": "ui_tick_0.15s.wav",
+      "bytes": 28878,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "0.150000"
+        }
+      ],
+      "duration": 0.15
+    },
+    {
+      "name": "vo.wav",
+      "bytes": 25784758,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "134.295208"
+        }
+      ],
+      "duration": 134.295208
+    },
+    {
+      "name": "whoosh_short_0.97s.wav",
+      "bytes": 186318,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "duration": "0.970000"
+        }
+      ],
+      "duration": 0.97
+    },
+    {
+      "name": "封面首帧.png",
+      "bytes": 1769281,
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgb24",
+          "avg_frame_rate": "25/1"
+        }
+      ],
+      "duration": null
+    }
+  ],
+  "alphaSamples": [
+    {
+      "name": "p01",
+      "transparent": 0,
+      "opaque": 0.05076630015432099,
+      "partial": 0.949233699845679,
+      "uniqueAlpha": 255,
+      "common": [
+        {
+          "alpha": 255,
+          "pixels": 105269
+        },
+        {
+          "alpha": 22,
+          "pixels": 51281
+        },
+        {
+          "alpha": 19,
+          "pixels": 50522
+        },
+        {
+          "alpha": 20,
+          "pixels": 49019
+        },
+        {
+          "alpha": 16,
+          "pixels": 48643
+        }
+      ]
+    },
+    {
+      "name": "p02",
+      "transparent": 0,
+      "opaque": 0.04532600308641975,
+      "partial": 0.9546739969135802,
+      "uniqueAlpha": 255,
+      "common": [
+        {
+          "alpha": 255,
+          "pixels": 93988
+        },
+        {
+          "alpha": 220,
+          "pixels": 48976
+        },
+        {
+          "alpha": 7,
+          "pixels": 45592
+        },
+        {
+          "alpha": 8,
+          "pixels": 41031
+        },
+        {
+          "alpha": 6,
+          "pixels": 32995
+        }
+      ]
+    },
+    {
+      "name": "p03",
+      "transparent": 0,
+      "opaque": 0.00517457561728395,
+      "partial": 0.994825424382716,
+      "uniqueAlpha": 255,
+      "common": [
+        {
+          "alpha": 22,
+          "pixels": 51242
+        },
+        {
+          "alpha": 19,
+          "pixels": 50520
+        },
+        {
+          "alpha": 16,
+          "pixels": 50068
+        },
+        {
+          "alpha": 15,
+          "pixels": 49844
+        },
+        {
+          "alpha": 20,
+          "pixels": 48987
+        }
+      ]
+    },
+    {
+      "name": "p15",
+      "transparent": 0,
+      "opaque": 0.19670765817901234,
+      "partial": 0.8032923418209876,
+      "uniqueAlpha": 255,
+      "common": [
+        {
+          "alpha": 255,
+          "pixels": 407893
+        },
+        {
+          "alpha": 22,
+          "pixels": 51382
+        },
+        {
+          "alpha": 19,
+          "pixels": 50599
+        },
+        {
+          "alpha": 16,
+          "pixels": 49099
+        },
+        {
+          "alpha": 20,
+          "pixels": 49082
+        }
+      ]
+    },
+    {
+      "name": "p22",
+      "transparent": 0,
+      "opaque": 0.20375434027777778,
+      "partial": 0.7962456597222223,
+      "uniqueAlpha": 255,
+      "common": [
+        {
+          "alpha": 255,
+          "pixels": 422505
+        },
+        {
+          "alpha": 23,
+          "pixels": 63286
+        },
+        {
+          "alpha": 25,
+          "pixels": 53075
+        },
+        {
+          "alpha": 22,
+          "pixels": 51415
+        },
+        {
+          "alpha": 17,
+          "pixels": 48103
+        }
+      ]
+    },
+    {
+      "name": "p23",
+      "transparent": 0,
+      "opaque": 0.043052179783950616,
+      "partial": 0.9569478202160494,
+      "uniqueAlpha": 71,
+      "common": [
+        {
+          "alpha": 255,
+          "pixels": 89273
+        },
+        {
+          "alpha": 239,
+          "pixels": 73728
+        },
+        {
+          "alpha": 240,
+          "pixels": 73341
+        },
+        {
+          "alpha": 238,
+          "pixels": 73219
+        },
+        {
+          "alpha": 237,
+          "pixels": 72507
+        }
+      ]
+    },
+    {
+      "name": "p24",
+      "transparent": 0,
+      "opaque": 0.19795476466049383,
+      "partial": 0.8020452353395062,
+      "uniqueAlpha": 60,
+      "common": [
+        {
+          "alpha": 255,
+          "pixels": 410479
+        },
+        {
+          "alpha": 254,
+          "pixels": 229670
+        },
+        {
+          "alpha": 252,
+          "pixels": 144351
+        },
+        {
+          "alpha": 253,
+          "pixels": 140112
+        },
+        {
+          "alpha": 199,
+          "pixels": 71940
+        }
+      ]
+    },
+    {
+      "name": "a-pip-1",
+      "transparent": 0.21413314346742612,
+      "opaque": 0.39035243859024565,
+      "partial": 0.3955144179423282,
+      "uniqueAlpha": 239,
+      "common": [
+        {
+          "alpha": 255,
+          "pixels": 70176
+        },
+        {
+          "alpha": 0,
+          "pixels": 38496
+        },
+        {
+          "alpha": 1,
+          "pixels": 13404
+        },
+        {
+          "alpha": 2,
+          "pixels": 5968
+        },
+        {
+          "alpha": 4,
+          "pixels": 3640
+        }
+      ]
+    }
+  ],
+  "planeExperiments": [
+    {
+      "name": "p02",
+      "frames": 153,
+      "seconds": 5.1,
+      "originalBytes": 482605937,
+      "rgbBytes": 19003211,
+      "alphaBytes": 2990801,
+      "exact": true,
+      "computeSeconds": 10.952628458,
+      "note": "Storage/composition prototype only. Not integrated into Jianying."
+    },
+    {
+      "name": "p01",
+      "frames": 163,
+      "originalBytes": 169795258,
+      "rgbBytes": 13351829,
+      "alphaBytes": 1540911,
+      "exact": true,
+      "computeSeconds": 8.549679541,
+      "note": "Storage/composition prototype. Not integrated into Jianying."
+    },
+    {
+      "name": "p03",
+      "frames": 140,
+      "originalBytes": 120087453,
+      "rgbBytes": 14159827,
+      "alphaBytes": 2074261,
+      "exact": true,
+      "computeSeconds": 8.393999124999999,
+      "note": "Storage/composition prototype. Not integrated into Jianying."
+    },
+    {
+      "name": "p15",
+      "frames": 181,
+      "originalBytes": 199960114,
+      "rgbBytes": 27106575,
+      "alphaBytes": 3920557,
+      "exact": true,
+      "computeSeconds": 10.360947375,
+      "note": "Storage/composition prototype. Not integrated into Jianying."
+    },
+    {
+      "name": "p22",
+      "frames": 156,
+      "originalBytes": 166459665,
+      "rgbBytes": 28670085,
+      "alphaBytes": 3681085,
+      "exact": true,
+      "computeSeconds": 9.584671542000004,
+      "note": "Storage/composition prototype. Not integrated into Jianying."
+    },
+    {
+      "name": "p23",
+      "frames": 160,
+      "originalBytes": 114171793,
+      "rgbBytes": 10415931,
+      "alphaBytes": 1192860,
+      "exact": true,
+      "computeSeconds": 7.709725583000007,
+      "note": "Storage/composition prototype. Not integrated into Jianying."
+    },
+    {
+      "name": "p24",
+      "frames": 91,
+      "originalBytes": 57819999,
+      "rgbBytes": 7972706,
+      "alphaBytes": 1092295,
+      "exact": true,
+      "computeSeconds": 5.549386707999998,
+      "note": "Storage/composition prototype. Not integrated into Jianying."
+    },
+    {
+      "name": "a-pip-1",
+      "frames": 1896,
+      "originalBytes": 301184840,
+      "rgbBytes": 144664415,
+      "alphaBytes": 161708,
+      "exact": true,
+      "audioExact": true,
+      "computeSeconds": 21.191924500000002,
+      "note": "Storage/composition prototype. Not integrated into Jianying."
+    },
+    {
+      "name": "a-pip-2",
+      "frames": 1088,
+      "originalBytes": 172839263,
+      "rgbBytes": 82817224,
+      "alphaBytes": 99039,
+      "exact": true,
+      "audioExact": true,
+      "computeSeconds": 10.229350750000012,
+      "note": "Storage/composition prototype. Not integrated into Jianying."
+    }
+  ],
+  "summary": {
+    "pages": {
+      "beforeBytes": 1310900219,
+      "afterBytes": 137172934,
+      "savedBytes": 1173727285,
+      "savedFraction": 0.8953597443864643,
+      "frames": 1044,
+      "allRgbaExact": true,
+      "allAudioExact": true
+    },
+    "pip": {
+      "beforeBytes": 474024103,
+      "afterBytes": 227742386,
+      "savedBytes": 246281717,
+      "savedFraction": 0.5195552619399186,
+      "frames": 2984,
+      "allRgbaExact": true,
+      "allAudioExact": true
+    },
+    "all": {
+      "beforeBytes": 1784924322,
+      "afterBytes": 364915320,
+      "savedBytes": 1420009002,
+      "savedFraction": 0.7955569793619519,
+      "frames": 4028,
+      "allRgbaExact": true,
+      "allAudioExact": true
+    },
+    "conditionalProjection": {
+      "previousDraftBytes": 2936610530,
+      "projectedBytes": 1516601528,
+      "note": "Arithmetic storage projection only, contingent on native editor consuming two-plane representation. Not a working Jianying export result."
+    }
+  },
+  "presetExperiments": [
+    {
+      "experiment": "opaque RGB preset",
+      "preset": "veryfast",
+      "frames": 60,
+      "bytes": 63296293,
+      "seconds": 2.340500375,
+      "exact": true
+    },
+    {
+      "experiment": "opaque RGB preset",
+      "preset": "medium",
+      "frames": 60,
+      "bytes": 62779531,
+      "seconds": 4.466400875000001,
+      "exact": true
+    },
+    {
+      "experiment": "opaque RGB preset",
+      "preset": "slow",
+      "frames": 60,
+      "bytes": 62683274,
+      "seconds": 5.363251792000001,
+      "exact": true
+    },
+    {
+      "experiment": "separate RGB and alpha; NOT a Jianying-ready representation",
+      "name": "p02",
+      "frames": 60,
+      "referencePngVideoPacketBytes": 167978502,
+      "rgbBytes": 13562819,
+      "alphaBytes": 28930515,
+      "seconds": 5.807757083,
+      "exact": true
+    },
+    {
+      "experiment": "separate RGB and alpha; NOT a Jianying-ready representation",
+      "name": "a-pip-1",
+      "frames": 60,
+      "referencePngVideoPacketBytes": 9082352,
+      "rgbBytes": 4203723,
+      "alphaBytes": 59263,
+      "seconds": 0.7994954590000016,
+      "exact": true
+    }
+  ],
+  "hevcExperiment": {
+    "frames": 60,
+    "bytes": 62519995,
+    "seconds": 36.556361167000006,
+    "exact": true,
+    "note": "Not validated for Jianying decoding"
+  }
+}
