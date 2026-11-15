@@ -32,14 +32,11 @@ function ffmpeg(args) {
   });
 }
 
-/**
- * A free name for what a tool made of `rel`: `<clip>-<tool>.<ext>`, else `<clip>-<tool>-2.<ext>`, … in assets/, or in
- * assets/.canvas/ when it is only on the way to something (`work`: a part sent to a model), out of the library.
- */
-function freeName(/** @type {string} */ root, /** @type {string} */ rel, /** @type {string} */ tool, /** @type {string} */ ext, work = false) {
+/** A free name in assets/ for what a tool made of `rel`: `<clip>-<tool>.<ext>`, else `<clip>-<tool>-2.<ext>`, … */
+function freeName(/** @type {string} */ root, /** @type {string} */ rel, /** @type {string} */ tool, /** @type {string} */ ext) {
   const base = basename(rel, extname(rel));
   for (let k = 1; ; k++) {
-    const name = `assets/${work ? '.canvas/' : ''}${base}-${tool}${k > 1 ? `-${k}` : ''}${ext}`;
+    const name = `assets/${base}-${tool}${k > 1 ? `-${k}` : ''}${ext}`;
     if (!existsSync(inside(root, name))) return name;
   }
 }
@@ -50,7 +47,7 @@ const even = (/** @type {number} */ n) => Math.max(2, Math.floor(n / 2) * 2);
 
 /**
  * @param {string} root the project
- * @param {{ op?: unknown, path?: unknown, from?: unknown, to?: unknown, ratio?: unknown, most?: unknown, work?: unknown }} body
+ * @param {{ op?: unknown, path?: unknown, from?: unknown, to?: unknown, ratio?: unknown, most?: unknown }} body
  * @returns {Promise<{ paths: string[], times?: number[] }>}
  */
 export async function clipTool(root, body) {
@@ -64,8 +61,7 @@ export async function clipTool(root, body) {
     const from = Math.max(0, Number(body.from) || 0);
     const to = Math.min(length || Infinity, Number(body.to) || length);
     if (!(to - from >= 0.1)) throw new HttpError(400, 'from, to: a part at least 0.1 s long');
-    const out = freeName(root, rel, 'trim', '.mp4', body.work === true);
-    await mkdir(dirname(inside(root, out)), { recursive: true });
+    const out = freeName(root, rel, 'trim', '.mp4');
     await ffmpeg(['-ss', String(from), '-i', src, '-t', String(to - from), '-map', '0:v:0', '-map', '0:a:0?', ...H264, ...AAC, inside(root, out)]);
     return { paths: [out] };
   }

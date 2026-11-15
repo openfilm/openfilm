@@ -464,11 +464,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
 
   const byPath = React.useMemo(() => new Map(files.map((f) => [f.path, f])), [files]);
-  /** a file the board is given that the project's list leaves out (a work file: a clip's part sent to a model), known by its name */
-  const workFile = (path: string): WorkspaceResource | undefined => (path.startsWith(`${WORK}/`)
-    ? { path, name: path.split('/').pop() ?? path, dir: WORK.slice('assets/'.length), size: 0, kind: resourceKindOf(path), mtimeMs: 0 } : undefined);
   const mediaOf = React.useCallback<MediaOf>((path) => {
-    const kind = (byPath.get(path) ?? workFile(path))?.kind;
+    const kind = byPath.get(path)?.kind;
     return kind === 'image' || kind === 'video' || kind === 'audio' ? kind : null;
   }, [byPath]);
 
@@ -1195,10 +1192,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const clip = byPath.get(path);
     const ratio = frameRatio(clip?.w, clip?.h, made.choice.spec) ?? '16:9';
     const size = makeSize('video', ratio);
-    /* a clip longer than a model takes: the part picked, cut here first (a work file, out of the library) */
+    /* a clip longer than a model takes: the part picked, cut here first (a clip of the project, as Trim makes) */
     let input = path;
     if (made.part) {
-      try { input = (await api.clipTool(projectId, { op: 'trim', path, from: made.part[0], to: made.part[1], work: true })).paths[0]!; }
+      try { input = (await api.clipTool(projectId, { op: 'trim', path, from: made.part[0], to: made.part[1] })).paths[0]!; }
       catch (e) { onError(e instanceof Error ? e.message : String(e)); return; }
     }
     /* what goes in besides: in a column between the clip and what is made from it, each wired in its order */
@@ -1449,7 +1446,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   };
   const board = React.useMemo<Board>(() => ({
     files,
-    fileOf: (path) => byPath.get(path) ?? workFile(path) ?? null,
+    fileOf: (path) => byPath.get(path) ?? null,
     sources,
     shown,
     showComposer: (id) => keepShown(id, true),
