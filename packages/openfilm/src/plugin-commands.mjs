@@ -43,13 +43,13 @@ export function pluginCommand(words, { cwd = '.', home, plugins = pluginsDir(), 
   if (having.length > 1) return { status: 2, error: `Two are named ${key}: say which, ${having.map((s) => `\`openfilm ${s.uid}\``).join(' or ')}.` };
   const plugin = having[0], commands = plugin.commands;
   const off = plugin.source === 'own' ? !pluginStates(home).find((p) => p.id === plugin.name)?.on : keeps(new Set(skillsOff(home)), plugin);
-  if (off) return { status: 1, error: `The ${plugin.name} ${plugin.kind} is off: the person turns it on under Added in Community (the OpenFilm menu).` };
+  if (off) return { status: 1, error: `The ${plugin.name} ${plugin.kind} is off: the person turns it on under Mine in Community (the button beside the chat's "+").` };
   /* one OpenFilm withdrew runs nothing, wherever a copy of it is (src/skills.mjs revocationOf) */
   const withdrawn = plugin.source === 'own' ? null : revocationOf(/** @type {import('./skills.mjs').Skill} */ (/** @type {unknown} */ (plugin)));
   if (withdrawn) return { status: 1, error: `OpenFilm withdrew the ${plugin.name} ${plugin.kind} (${withdrawn.reason})${withdrawn.note ? `: ${withdrawn.note}` : ''}. It does not run.` };
   /* a project's own runs nothing until the person allows it in that project, as it is now (src/skills.mjs projectSkillAllowed) */
   if (plugin.source === 'project' && !projectSkillAllowed(plugin, project, home)) {
-    return { status: 1, error: `The ${plugin.name} ${plugin.kind} comes with this project and is not allowed yet: the person allows it in the project, under Added in Community (the OpenFilm menu).` };
+    return { status: 1, error: `The ${plugin.name} ${plugin.kind} comes with this project and is not allowed yet: the person allows it in the project, under Mine in Community (the button beside the chat's "+").` };
   }
   /* one command named after the plugin: `openfilm <plugin> …` is it; else the next word says which */
   const names = Object.keys(commands);

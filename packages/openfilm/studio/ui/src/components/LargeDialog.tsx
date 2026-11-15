@@ -126,13 +126,13 @@ export function LargeDialogGroup({ title, children }: { title?: string; children
   );
 }
 
-/** One of the side's places: its icon and its name; the one shown pressed. */
-export function LargeDialogPlace({ icon, active, onClick, children, end }: {
-  icon: React.ReactNode; active: boolean; onClick: () => void; children: React.ReactNode; end?: React.ReactNode;
+/** One of the side's places: its icon and its name; the one shown pressed; `inset`: one of the place above it. */
+export function LargeDialogPlace({ icon, active, onClick, children, end, inset }: {
+  icon: React.ReactNode; active: boolean; onClick: () => void; children: React.ReactNode; end?: React.ReactNode; inset?: boolean;
 }) {
   return (
     <button type="button" aria-current={active ? 'page' : undefined} onClick={onClick}
-      className={`flex h-10 min-w-0 items-center gap-3 rounded-[8px] px-2.5 text-left text-[15px] transition ${
+      className={`flex min-w-0 items-center gap-3 rounded-[8px] pr-2.5 text-left transition ${inset ? 'h-9 pl-9 text-[14.5px]' : 'h-10 pl-2.5 text-[15px]'} ${
         active ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
       }`}>
       <span className={`shrink-0 ${active ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{icon}</span>

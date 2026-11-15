@@ -18,7 +18,7 @@
 import React from 'react';
 import {
   ArrowLeft, ArrowUpRight, AudioLines, Box, Check, ChevronRight, Clapperboard, Cloud, Film, FolderOpen, Images, Languages, Layers, Loader2, Megaphone, Mic,
-  Globe, Music, Music2, Palette, Projector, Puzzle, RefreshCw, Scissors, Send, Spline, SquareTerminal, Upload, Workflow, Github, type LucideIcon,
+  Globe, Music, Music2, Palette, Projector, Puzzle, RefreshCw, Scissors, Send, Spline, SquareTerminal, Star, Upload, Workflow, Github, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
@@ -35,7 +35,10 @@ import { ProfileStrip } from './PluginProfile';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { COMMUNITY_ICON, FEATURE_KINDS, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
-import { nameOf, posterUrl, useLibraryIndex, type LibraryCategory, type LibraryItem } from '@/lib/library';
+import { libraryUrl, nameOf, posterUrl, TEXT_COMPONENT, toggleFavorite, useLibraryFavorites, useLibraryIndex, type LibraryCategory, type LibraryItem } from '@/lib/library';
+import { isClipMotion } from '@/lib/clip-presets';
+import { PLAIN } from './OnPicture';
+import { TextStyleSample } from './TextStyleSample';
 
 export const PLUGIN_ICONS: Record<string, LucideIcon> = {
   film: Film, folder: FolderOpen, scissors: Scissors, workflow: Workflow, clapperboard: Clapperboard, audio: AudioLines, palette: Palette, layers: Layers,
@@ -133,6 +136,12 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const [stats, setStats] = React.useState<Record<string, { installs: number }>>({});
   React.useEffect(() => { let live = true; void sourcesApi.communityStats().then((r) => { if (live) setStats(r); }); return () => { live = false; }; }, []);
   const library = useLibraryIndex();
+  /* what the person starred, in the library and here alike (one list: library ids, `skill:<uid>`) */
+  const favorites = useLibraryFavorites();
+  const kept = new Set(favorites);
+  /* a kind with thousands (OpenFilm's sounds): shown a page at a time */
+  const [shown, setShown] = React.useState(STORE_PAGE);
+  React.useEffect(() => { setShown(STORE_PAGE); }, [line, query]);
   const lang = useLanguage();
   const q = query.trim().toLowerCase();
   const matches = (...said: (string | undefined)[]) => !q || said.some((w) => w?.toLowerCase().includes(q));
@@ -218,9 +227,14 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* a workbench is what shows outside the conversation: OpenFilm's with a workbench or a tab of the library, anyone's with a page */
   const ownBench = (p: Plugin) => Boolean(p.workbench || p.tab);
 
-  /* the community's own of the library's kinds (sent to its library by someone, `by`): there already, in its tabs */
-  const assetsOf = (kind: LibraryCategory) => (library?.items ?? [])
-    .filter((it) => it.cat === kind && it.by && matches(nameOf(it.name, lang), it.by, ...(it.tags ?? [])));
+  /* the library's kinds as its tabs list them: OpenFilm's own first, then the community's (sent by someone, `by`); all
+     there already, in the library's tabs (a clip's motion and a moving line of words are another tab's, not shown) */
+  const assetsOf = (kind: LibraryCategory) => {
+    const all = (library?.items ?? []).filter((it) => it.cat === kind && !isClipMotion(it) && it.kind !== 'textmotion'
+      && matches(nameOf(it.name, lang), it.by, ...(it.tags ?? [])));
+    return [...all.filter((it) => !it.by), ...all.filter((it) => it.by)];
+  };
+  const officialMark = <span className="inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[11.5px] font-medium text-[var(--accent)]" style={{ background: 'color-mix(in srgb, var(--accent) 14%, transparent)' }}>{t('gallery.trustOfficial')}</span>;
 
   /* Added: what the person has, by kind; each kind's switches; OpenFilm's workbenches among them */
   if (line === 'added') {
@@ -300,7 +314,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     const { title, summary } = pluginWords(p);
     return {
       key: p.id, kind: 'workbenches', title, summary, note: p.beta ? t('assetDrawer.pluginBeta') : t('assetDrawer.skillsOfficial'),
-      trust: <span className="inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[11.5px] font-medium text-[var(--accent)]" style={{ background: 'color-mix(in srgb, var(--accent) 14%, transparent)' }}>{t('gallery.trustOfficial')}</span>,
+      trust: officialMark,
       cover: <GradientCover hue={HUES[p.icon ?? ''] ?? 220} Icon={PLUGIN_ICONS[p.icon ?? ''] ?? Puzzle} />, onOpen: () => open(`${PLUGIN_PAGE}${p.id}`),
       action: p.soon ? <SoonMark /> : p.on ? doneMark(t('assetDrawer.turnedOn')) : <SettingsButton onClick={() => turnPlugin(p, true)}>{t('assetDrawer.turnOnAction')}</SettingsButton>,
     };
@@ -309,6 +323,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     key: k.uid, kind: isPlugin(k) ? 'workbenches' : 'skills', title: words(k).title, summary: words(k).summary,
     note: communityOf(k) ? makerOf(k) : t('assetDrawer.skillsOfficial'), cover: <SkillCover skill={k} title={words(k).title} />, onOpen: () => open(k.uid),
     trust: <TrustMark skill={k} />, author: ownerOf(k), onAuthor: () => showPluginsLine(`author:${ownerOf(k)}`), installs: stats[k.uid]?.installs,
+    starred: kept.has(`skill:${k.uid}`), onStar: () => toggleFavorite(`skill:${k.uid}`),
     action: installedOf(k) ? doneMark(t('assetDrawer.installedMark')) : (
       <SettingsButton disabled={installing != null} onClick={() => consent.ask(k, () => install(k))}>
         {installing === k.uid ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}{t(installing === k.uid ? 'gallery.installing' : 'gallery.install')}
@@ -316,10 +331,12 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     ),
   });
   const assetCard = (it: LibraryItem): StoreItem => ({
-    key: it.id, kind: it.cat, title: nameOf(it.name, lang), summary: (it.tags ?? []).slice(0, 4).join(t('assetDrawer.listSep')), note: it.by,
+    /* its tags are English words: said only in English */
+    key: it.id, kind: it.cat, title: nameOf(it.name, lang), summary: lang === 'en' ? (it.tags ?? []).slice(0, 4).join(t('assetDrawer.listSep')) : '',
+    note: it.by ?? t('assetDrawer.skillsOfficial'), ...(it.by ? {} : { trust: officialMark }),
     ...(it.by ? { author: it.by.toLowerCase(), onAuthor: () => showPluginsLine(`author:${(it.by ?? '').toLowerCase()}`) } : {}),
-    cover: it.kind === 'sound' ? <GradientCover hue={it.cat === 'music' ? 286 : 200} Icon={it.cat === 'music' ? Music : AudioLines} />
-      : <img src={posterUrl(it)} alt="" loading="lazy" draggable={false} className="absolute inset-0 h-full w-full object-cover" />,
+    cover: <AssetCover item={it} lang={lang} />,
+    starred: kept.has(it.id), onStar: () => toggleFavorite(it.id),
     action: doneMark(t('assetDrawer.inLibrary')),
   });
   const soonCards = SOON.filter((x) => matches(t(`assetDrawer.soon_${x.id}`), t(`assetDrawer.soon_${x.id}Note`))).map((x): StoreItem => ({
@@ -358,6 +375,29 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   );
   const kindName = (kind: FeatureKind) => t(isCodeKind(kind) ? `assetDrawer.view_${kind}` : `assetDrawer.cat_${kind}`);
 
+  /* Favorites: what the person starred, here or in the library, by kind */
+  if (line === 'favorites') {
+    const byId = new Map((library?.items ?? []).map((it) => [it.id, it]));
+    const cards = favorites.flatMap((id): StoreItem[] => {
+      if (id.startsWith('skill:')) { const k = found.find((x) => x.uid === id.slice('skill:'.length)); return k ? [skillCard(k)] : []; }
+      const it = byId.get(id);
+      return it && matches(nameOf(it.name, lang), it.by, ...(it.tags ?? [])) ? [assetCard(it)] : [];
+    });
+    const kinds = FEATURE_KINDS.filter((kind) => cards.some((c) => c.kind === kind));
+    return (
+      <PluginsPage title={t('assetDrawer.place_favorites')} note={t('assetDrawer.note_favorites')}>
+        {consent.dialog}
+        {kinds.map((kind) => (
+          <section key={kind} className="mb-10 last:mb-0">
+            <h3 className="mb-3 flex items-center gap-2 text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]"><KindIcon kind={kind} size={17} />{kindName(kind)}</h3>
+            <div className={STORE_GRID}>{cards.filter((c) => c.kind === kind).map((item) => <StoreCard key={item.key} item={item} />)}</div>
+          </section>
+        ))}
+        {kinds.length ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.favoritesNone')} action={q ? undefined : { label: t('assetDrawer.place_discover'), run: () => showPluginsLine('discover') }} />}
+      </PluginsPage>
+    );
+  }
+
   if (line === 'discover') {
     /* the one shown big: OpenFilm's newest skill with a moving preview, else its first workbench */
     const hero = offered.find((k) => k.preview && !isPlugin(k) && !communityOf(k)) ?? offered.find((k) => k.cover);
@@ -383,7 +423,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
                     className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] px-3.5 py-3 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]">
                     <span className="text-[var(--text-muted)]"><KindIcon kind={kind} size={20} /></span>
                     <span className="min-w-0 flex-1 truncate text-[14.5px] text-[var(--text)]">{kindName(kind)}</span>
-                    <span className="shrink-0 text-[12.5px] tabular-nums text-[var(--text-faint)]">{n || ''}</span>
+                    <span className="shrink-0 text-[12.5px] tabular-nums text-[var(--text-faint)]">{n ? n.toLocaleString() : ''}</span>
                   </button>
                 );
               })}
@@ -429,8 +469,16 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
         <div role="status" aria-label={t('assetDrawer.discoverReading')} className={STORE_GRID}>
           {Array.from({ length: 6 }, (_, i) => <div key={i} aria-hidden className="skeleton aspect-[4/3] rounded-[12px]" />)}
         </div>
-      ) : items.length ? <div className={STORE_GRID}>{items.map((item) => <StoreCard key={item.key} item={item} />)}</div>
-        : q ? <Empty text={t('assetDrawer.noSkillsFound')} />
+      ) : items.length ? (
+        <>
+          <div className={STORE_GRID}>{items.slice(0, shown).map((item) => <StoreCard key={item.key} item={item} />)}</div>
+          {items.length > shown ? (
+            <div className="mt-6 flex justify-center">
+              <SettingsButton onClick={() => setShown((n) => n + STORE_PAGE)}>{t('assetDrawer.showMoreCards').replace('{n}', (items.length - shown).toLocaleString())}</SettingsButton>
+            </div>
+          ) : null}
+        </>
+      ) : q ? <Empty text={t('assetDrawer.noSkillsFound')} />
         : publishCall(t('assetDrawer.kindNone').replaceAll('{kind}', kindName(kind)))}
     </PluginsPage>
   );
@@ -541,7 +589,8 @@ function Empty({ text, action }: { text: string; action?: { label: string; run: 
 /** A list's page: its title, what the list is in one line, then the list, in the middle of the room the window gives. */
 function PluginsPage({ title, note, badge, children }: { title: string; note: string; badge?: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-9">
+    /* a page of its own: another place starts at its top */
+    <div key={title} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-9">
       <div className="mx-auto w-full max-w-[920px]">
         <h2 className="flex items-center gap-2.5 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">
           {title}
@@ -620,6 +669,8 @@ type StoreItem = {
   cover: React.ReactNode; action: React.ReactNode; onOpen?: () => void;
   /** how far it is vouched for (SkillPage TrustMark); whose it is, opening their page; how many use it */
   trust?: React.ReactNode; author?: string | undefined; onAuthor?: (() => void) | undefined; installs?: number | undefined;
+  /** starred (the library's favorites, shared with it), and the star's press */
+  starred?: boolean; onStar?: () => void;
 };
 
 /**
@@ -639,6 +690,19 @@ const SOON: ReadonlyArray<{ id: string; kind: FeatureKind; hue: number; icon: Lu
 
 
 const STORE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4';
+/** How many cards of a kind are shown at once; more on asking. */
+const STORE_PAGE = 48;
+
+/**
+ * One of the library's items as its card in the library draws it: a look on its sample picture, a text style in words
+ * of the app's language, a sticker whole, a sound or a piece of music by its mark, the rest by its poster.
+ */
+function AssetCover({ item, lang }: { item: LibraryItem; lang: ReturnType<typeof useLanguage> }) {
+  if (item.kind === 'sound') return <GradientCover hue={item.cat === 'music' ? 286 : 200} Icon={item.cat === 'music' ? Music : AudioLines} />;
+  if (item.kind === 'look') return <img src={item.sample ? libraryUrl(item.sample) : PLAIN} alt="" loading="lazy" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />;
+  if (item.kind === 'textstyle' || item.id === TEXT_COMPONENT) return <TextStyleSample lang={lang} vars={item.vars} {...(item.id === TEXT_COMPONENT ? { words: nameOf(item.name, lang) } : {})} />;
+  return <img src={posterUrl(item)} alt="" loading="lazy" decoding="async" draggable={false} className={`absolute inset-0 h-full w-full ${item.cat === 'sticker' ? 'object-contain p-4' : 'object-cover'}`} />;
+}
 
 /** A picture for what has none: its mark large on a wash of its color. */
 function GradientCover({ hue, Icon }: { hue: number; Icon: LucideIcon }) {
@@ -687,7 +751,17 @@ function StoreCard({ item }: { item: StoreItem }) {
     <div role={item.onOpen ? 'button' : undefined} tabIndex={item.onOpen ? 0 : undefined} data-store-card={item.title}
       onClick={item.onOpen} onKeyDown={(e) => { if (item.onOpen && e.key === 'Enter' && e.target === e.currentTarget) item.onOpen(); }}
       className={`flex min-w-0 flex-col overflow-hidden rounded-[12px] border border-[var(--border)] outline-none transition ${item.onOpen ? 'cursor-pointer hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)]' : ''}`}>
-      <div className="relative aspect-video shrink-0 overflow-hidden border-b border-[var(--border)] bg-[var(--bg-field)]">{item.cover}</div>
+      <div className="group/cover relative aspect-video shrink-0 overflow-hidden border-b border-[var(--border)] bg-[var(--bg-field)]">
+        {item.cover}
+        {/* the star: shown on hover, and kept shown once starred */}
+        {item.onStar ? (
+          <button type="button" aria-pressed={Boolean(item.starred)} aria-label={t(item.starred ? 'assetDrawer.unstar' : 'assetDrawer.star')}
+            onClick={(e) => { e.stopPropagation(); item.onStar?.(); }}
+            className={`absolute right-2 top-2 h-8 w-8 items-center justify-center rounded-full bg-black/55 transition hover:bg-black/70 focus-visible:flex ${item.starred ? 'flex text-[#ffd35a]' : 'hidden text-white group-hover/cover:flex'}`}>
+            <Star size={15} fill={item.starred ? 'currentColor' : 'none'} strokeWidth={item.starred ? 0 : 2} />
+          </button>
+        ) : null}
+      </div>
       <div className="flex min-h-0 flex-1 flex-col p-3.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-[15px] font-medium text-[var(--text)]">{item.title}</span>
@@ -698,7 +772,7 @@ function StoreCard({ item }: { item: StoreItem }) {
             ? <button type="button" onClick={(e) => { e.stopPropagation(); item.onAuthor?.(); }} className="mt-0.5 self-start truncate text-left text-[12.5px] text-[var(--text-faint)] underline-offset-2 hover:text-[var(--text)] hover:underline">{item.note}</button>
             : <span className="mt-0.5 truncate text-[12.5px] text-[var(--text-faint)]">{item.note}</span>
         ) : null}
-        <p className="mt-1 line-clamp-2 min-h-[42px] text-[13.5px] leading-[21px] text-[var(--text-muted)]">{item.summary}</p>
+        {item.summary ? <p className="mt-1 line-clamp-2 min-h-[42px] text-[13.5px] leading-[21px] text-[var(--text-muted)]">{item.summary}</p> : null}
         <div className="mt-3 flex items-center justify-between gap-2">
           <span className="inline-flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--text-faint)]"><KindIcon kind={item.kind} size={14} />{t(isCodeKind(item.kind) ? `assetDrawer.kind_${item.kind}` : `assetDrawer.cat_${item.kind}`)}
             {item.installs ? <span className="tabular-nums">· {t('assetDrawer.installs').replace('{n}', item.installs.toLocaleString())}</span> : null}</span>

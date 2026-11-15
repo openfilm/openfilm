@@ -1,14 +1,15 @@
 /**
  * The Community: everything that can be added to OpenFilm and shared, in a large window of its own (components/LargeDialog,
- * as Settings is). Three places: Discover (look around), Added (what the person has: switches, updates), Publish (share
- * what they made). Kinds (feature-kinds: workbenches, skills, connectors, the library's templates, stickers, sounds…) are
- * filters of Discover's one catalog, listed once and open to more; a thing added goes back to where it is used (the top
+ * as Settings is). The person's own first: Mine (what they have: switches, updates) and Favorites (kept for later); then
+ * Discover (look around) and under it its kinds (feature-kinds: workbenches, skills, connectors, the library's templates,
+ * stickers, sounds…), filters of its one catalog, listed once and open to more; Publish (share what they made) at the
+ * foot; a thing added goes back to where it is used (the top
  * right, the conversation, the agent, the library's tabs). Import (a folder or a link, its kind read from what it is) at
  * the side's foot. In early testing, which Discover and Publish say. Opened from the button beside the chat's "+", the
  * OpenFilm menu, and links to a skill (lib/plugins-window). The design and the research behind it: internal/community.md.
  */
 import React from 'react';
-import { CircleCheck, Compass, Import, Upload } from 'lucide-react';
+import { CircleUserRound, Compass, Import, Star, Upload } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import type { Plugin } from '@/lib/plugins';
@@ -34,14 +35,16 @@ export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string 
         <>
           <LargeDialogSearch ref={search} value={query} placeholder={t('assetDrawer.featuresSearch')}
             onChange={(value) => { setQuery(value); if (page) showPluginsPage(null); }} />
+          {/* the person's own first: what they have, what they kept for later */}
+          <LargeDialogGroup>
+            <LargeDialogPlace icon={<CircleUserRound {...ICON} />} active={line === 'added'} onClick={() => showPluginsLine('added')}>{t('assetDrawer.place_added')}</LargeDialogPlace>
+            <LargeDialogPlace icon={<Star {...ICON} />} active={line === 'favorites'} onClick={() => showPluginsLine('favorites')}>{t('assetDrawer.place_favorites')}</LargeDialogPlace>
+          </LargeDialogGroup>
+          {/* Discover, and under it each kind: listed once, more to come */}
           <LargeDialogGroup>
             <LargeDialogPlace icon={<Compass {...ICON} />} active={line === 'discover'} onClick={() => showPluginsLine('discover')}>{t('assetDrawer.place_discover')}</LargeDialogPlace>
-            <LargeDialogPlace icon={<CircleCheck {...ICON} />} active={line === 'added'} onClick={() => showPluginsLine('added')}>{t('assetDrawer.place_added')}</LargeDialogPlace>
-          </LargeDialogGroup>
-          {/* Discover by kind: each listed once, more to come */}
-          <LargeDialogGroup title={t('assetDrawer.group_kinds')}>
             {FEATURE_KINDS.map((k) => (
-              <LargeDialogPlace key={k} icon={<KindIcon kind={k} />} active={line === `kind:${k}`} onClick={() => showPluginsLine(`kind:${k}`)}>
+              <LargeDialogPlace key={k} inset icon={<KindIcon kind={k} />} active={line === `kind:${k}`} onClick={() => showPluginsLine(`kind:${k}`)}>
                 {t(isCodeKind(k) ? `assetDrawer.view_${k}` : `assetDrawer.cat_${k}`)}
               </LargeDialogPlace>
             ))}
