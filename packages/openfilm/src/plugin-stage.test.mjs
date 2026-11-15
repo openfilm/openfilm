@@ -176,6 +176,11 @@ test('stage render draws a shot, or a stretch of it, as a video beside it', () =
   assert.equal(rendered.status, 0, rendered.stderr);
   assert.ok(existsSync(join(project, 'stage/s1/whitebox-0-1.mp4')));
   assert.match(rendered.stdout, /rendered {2}\[s1\]\(stage\/s1\/whitebox-0-1\.mp4\) · 1 s of it · drawn in \d+\.\d s/);
+  const passes = stage('render', 's1', '0-1', '--fps', '6', '--depth', '--pose', '--still');
+  assert.equal(passes.status, 0, passes.stderr);
+  for (const f of ['whitebox-0-1.mp4', 'depth-0-1.mp4', 'pose-0-1.mp4', 'still-0-1.png']) assert.ok(existsSync(join(project, 'stage/s1', f)), f);
+  /* the passes' pages are written into the project's cache, made again each time */
+  assert.match(readFileSync(join(project, '.film/cache/stage/s1/depth.html'), 'utf8'), /import \{ shot \} from '\/stage\/s1\/shot\.js'/);
   assert.equal(stage('render', 's1', '2').status, 2);
   assert.equal(stage('render').status, 2);
 });

@@ -17,8 +17,10 @@ and change the shot. They see no coordinates, so never ask them for numbers: say
   each figure and the camera are (meters; facing 0° = toward +z, 90° = toward +x), where a head looks and an arm points
   when they turn from the body, and what is wrong. Run it after every change and read its pictures; a shot is not done
   while it says ✗, and each ! is fixed or meant.
-- `openfilm stage render <shot> [a-b]`: the white-box video, `stage/<shot>/whitebox.mp4` (a stretch:
-  `whitebox-<a>-<b>.mp4`). It is what a video model is given as its reference for the camera and the movement.
+- `openfilm stage render <shot> [a-b] [--depth] [--pose] [--still]`: the white-box video,
+  `stage/<shot>/whitebox.mp4` (a stretch: `whitebox-<a>-<b>.mp4`), what a video model is given as its reference for
+  the camera and the movement; `--depth` and `--pose` add `depth.mp4` and `pose.mp4` (OpenPose skeletons) for models
+  and services that take them, `--still` the first frame as `still.png`.
 
 Point at what you made with links: `[the shot](stage/s1/index.html)`, `[at 2.5 s](stage/s1/index.html#t=2.5)`,
 `[the white box](stage/s1/whitebox.mp4)`.
@@ -92,6 +94,18 @@ import { mannequin, apply, stand, walk, run, sit, turn, mix, move, lookAt, point
 "Lower", "slower", "she stops at the window", "another shot from outside": change the numbers in shot.js that do it,
 look, and say what changed with a link to the moment (`[at 3 s](stage/s1/index.html#t=3)`). Another shot of the same
 place: move the set into `stage/<place>.js` exported as a function both shots call, rather than copying it.
+
+## From the white box to video
+
+When the person wants the real thing made (and the canvas plugin is on): `openfilm stage render <shot> --still`, then
+one `openfilm canvas apply` laying it out in a group named after the shot: a note of what is seen (people, place,
+light, in the person's words), the `file` nodes `stage/<shot>/whitebox.mp4` and `stage/<shot>/still.png`, an `image`
+node wired from the note and the still (the same framing as the picture, as a real film still, in the look asked for),
+and a `video` node with `opts: { mode: "omni", sec: <the shot's length> }` wired from the note, the image and the white
+box, in that order. The picture gives the look, the white box the camera and the movement, so the video does not copy
+the grey set and the colored figures. Wire a character's portrait in too when there is one. Leave the making to the
+person (they pick the model and press Make) unless they ask; making costs money. A model that takes one short
+reference gets a stretch: `render <shot> 0-5`.
 
 ## What renders the same everywhere
 
