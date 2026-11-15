@@ -329,7 +329,10 @@ test('asr: a MiMo transcript lands beside the recording, its words carrying the 
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', join(root, 'assets/talk.wav')]);
   refuse = () => [200, { choices: [{ message: { content: '你好，世界。Hello there.' } }], usage: { seconds: 4 } }];
   const receipt = JSON.parse(await runGet(root, 'asr', { src: 'assets/talk.wav' }, { via: 'mimo' }));
-  assert.deepEqual(receipt, { src: 'assets/talk.wav', text: '你好，世界。 Hello there.', transcript: 'assets/talk.vtt' });
+  /* MiMo named with --via, not the person's choice for transcripts: the receipt says what made it, to tell them */
+  const { madeWith, ...rest } = receipt;
+  assert.match(madeWith, /^Made by Xiaomi MiMo with .*not the person's choice/);
+  assert.deepEqual(rest, { src: 'assets/talk.wav', text: '你好，世界。 Hello there.', transcript: 'assets/talk.vtt' });
   const sent = calls.at(-1);
   const body = JSON.parse(sent.body.toString('utf8'));
   assert.equal(sent.path, '/v1/chat/completions');
@@ -346,7 +349,9 @@ test('tts: a line spoken as a chat completion lands as a WAV, with no transcript
   const root = project();
   refuse = () => [200, { choices: [{ message: { content: '', audio: { data: Buffer.from(wav(new Uint8Array(32000), 16000)).toString('base64') } } }] }];
   const said = JSON.parse(await runGet(root, 'tts', { out: 'line', text: 'Hello there.', voice: 'Chloe' }, { via: 'mimo' }));
-  assert.deepEqual(said, { src: 'assets/audio/vo/line.wav', dur: 1, voiceId: 'Chloe', transcript: 'none: the service does not time words; `get asr --src` makes one' });
+  const { madeWith, ...rest } = said;
+  assert.match(madeWith, /not the person's choice/);
+  assert.deepEqual(rest, { src: 'assets/audio/vo/line.wav', dur: 1, voiceId: 'Chloe', transcript: 'none: the service does not time words; `get asr --src` makes one' });
   assert.ok(existsSync(join(root, 'assets/audio/vo/line.wav')));
   const body = JSON.parse(calls.at(-1).body.toString('utf8'));
   assert.equal(calls.at(-1).path, '/v1/chat/completions');

@@ -7,7 +7,7 @@
  * model is given go inline, as data: URIs.
  */
 import { extname } from 'node:path';
-import { RATIO_SIZE, billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, mediaSeconds, mimeOf, modelOf, mp3Seconds, needed, notes, number, ownAddress, pictureSize, pngOnly, round, serviceUrl, sleep, text, wavSeconds } from './common.mjs';
+import { RATIO_SIZE, billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, mediaSeconds, mimeOf, modelOf, needed, notes, number, ownAddress, pictureSize, pngOnly, round, serviceUrl, sleep, text, wavSeconds } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -31,22 +31,17 @@ const MODELS = {
     { id: 'sync-3', name: 'sync-3 (a clip\'s lips made to follow a recording)' },
   ],
   music: [{ id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }, { id: 'fal-ai/lyria2', name: 'Lyria 2' }],
-  sfx: [{ id: 'fal-ai/elevenlabs/sound-effects/v2', name: 'ElevenLabs Sound Effects v2' }, { id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }],
+  sfx: [{ id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }],
 };
 
 /**
  * Each sound model's input for a prompt and a length, and the lengths it makes: `seconds`, a range (`whole`: in whole
- * seconds), or `fixed`. `chooses`: with no length asked, it chooses one. `mp3`: it answers with 128 kbps MP3, whose
- * length is known from its size.
- * @type {Record<string, { name: string, seconds?: [number, number], whole?: boolean, fixed?: number, chooses?: boolean, mp3?: boolean, input: (prompt: string, sec: number | null) => Record<string, unknown> }>}
+ * seconds), or `fixed`.
+ * @type {Record<string, { name: string, seconds?: [number, number], whole?: boolean, fixed?: number, input: (prompt: string, sec: number | null) => Record<string, unknown> }>}
  */
 const AUDIO = {
   'fal-ai/stable-audio-25/text-to-audio': { name: 'Stable Audio 2.5', seconds: [1, 190], whole: true, input: (prompt, sec) => ({ prompt, seconds_total: sec }) },
   'fal-ai/lyria2': { name: 'Lyria 2', fixed: 30, input: (prompt) => ({ prompt }) },
-  'fal-ai/elevenlabs/sound-effects/v2': {
-    name: 'ElevenLabs Sound Effects', seconds: [0.5, 22], chooses: true, mp3: true,
-    input: (prompt, sec) => ({ text: prompt, ...(sec !== null ? { duration_seconds: sec } : {}), output_format: 'mp3_44100_128' }),
-  },
 };
 /** the length asked of a model that needs one when none is given */
 const LENGTH = { music: 60, sfx: 5 };
@@ -102,14 +97,15 @@ const FROM_SPEECH = {
 };
 
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
-for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0, sizes: ['1k', '2k', '4k'] } });
+/* FLUX.2 makes at most 4 megapixels (a larger size is scaled down), so 2K is its largest */
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0, sizes: ['1k', '2k'] } });
 for (const model of MODELS.video) {
   const v = VIDEO[model.id];
   const c = FROM_CLIP[model.id];
   const s = FROM_SPEECH[model.id];
   const spec = v ? { ratios: v.ratios, seconds: v.seconds, refs: v.reference ? 9 : 0, frames: true,
     ...(v.reference ? { clip: true, voice: true, voiceNeedsVisual: true } : {}) }
-    : c ? { seconds: c.clip, refs: c.way === 'recast' ? 4 : 0, needs: 'clip' }
+    : c ? { seconds: c.clip, refs: c.way === 'modify' ? 0 : 4, needs: 'clip' }
     : s ? { seconds: s.seconds, refs: s.from === 'picture' ? 1 : 0, needs: 'audio' } : null;
   if (spec) Object.assign(model, { spec });
 }
@@ -355,7 +351,7 @@ async function sound(verb, args, ctx) {
   const said = [];
   const asked = number(args.sec);
   const within = (/** @type {number} */ v) => { const s = clamp(v, ...(spec.seconds ?? [v, v])); return spec.whole ? Math.round(s) : round(s); };
-  const sec = spec.fixed ?? (asked === null ? (spec.chooses ? null : LENGTH[verb]) : within(asked));
+  const sec = spec.fixed ?? (asked === null ? LENGTH[verb] : within(asked));
   if (asked !== null && sec !== asked) said.push(spec.fixed ? `${spec.name} makes ${spec.fixed} s tracks` : `${spec.name} makes ${spec.seconds?.[0]} to ${spec.seconds?.[1]} s: ${sec} s`);
   const result = await queued(model, spec.input(prompt, sec), ctx, polling.ms.audio);
   const audio = result?.audio;
@@ -364,7 +360,7 @@ async function sound(verb, args, ctx) {
   /* a type it does not say plainly: the file's own extension, when it is one */
   const named = extname(text(audio.file_name)).slice(1).toLowerCase();
   const path = landing(dir, args.out, extOf(audio.content_type ?? type, /^[a-z0-9]{2,4}$/.test(named) ? named : 'wav'));
-  const dur = wavSeconds(bytes) ?? (spec.mp3 && path.endsWith('.mp3') ? mp3Seconds(bytes) : sec);
+  const dur = wavSeconds(bytes) ?? sec;
   return {
     files: [{ path, bytes }],
     index: [{ src: path, kind: 'audio', ...(dur !== null ? { dur } : {}), from: { mode: 'generate', prompt, ...(asked !== null ? { sec: asked } : {}), provider: 'fal', model } }],

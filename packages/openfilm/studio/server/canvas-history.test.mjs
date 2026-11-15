@@ -32,3 +32,20 @@ test("what a board's making nodes were given is noted, and stays noted when the 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('a version made with `openfilm get` is noted with the service, model and words that made it, not the node\'s', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-made-'));
+  try {
+    mkdirSync(join(root, 'assets/image'), { recursive: true });
+    mkdirSync(join(root, '.film'), { recursive: true });
+    writeFileSync(join(root, 'assets/image/c.png'), 'c');
+    writeFileSync(join(root, '.film/media-made.json'), JSON.stringify({ version: 1, made: {
+      'f1-0123456789abcdef0123456789abcdef': { path: 'assets/image/c.png', verb: 'image', at: 1, via: 'openfilm', by: 'OpenFilm', model: 'gpt-image-new', args: { prompt: 'as a cartoon' }, refs: [], ask: 'a' },
+    } }));
+    await writeCanvas(root, { nodes: [{ id: 'm', x: 0, y: 0, make: 'image', prompt: '', via: 'openfilm', model: 'gpt-image-old', versions: ['assets/image/c.png'] }], edges: [] });
+    const [made] = await readMade(root);
+    assert.deepEqual([made.via, made.model, made.prompt], ['openfilm', 'gpt-image-new', 'as a cartoon']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

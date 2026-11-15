@@ -6,7 +6,10 @@
  * ⊕, what to bring into it. The toolbar's templates button opens it on the templates.
  */
 import React from 'react';
-import { ChevronRight, Images, LayoutTemplate, Scissors, Search, Type as TypeIcon, Upload, X } from 'lucide-react';
+import { ChevronRight, Images, LayoutTemplate, Search, Type as TypeIcon, Upload, X } from 'lucide-react';
+
+/** the nodes a menu adds, as a film is made: the words, the pictures, the clips, the sound (the edit takes the cut) */
+const ADD_KINDS = ['note', 'image', 'video', 'music'] as const;
 import { useT } from '@/i18n';
 import type { CanvasTemplate } from '@/lib/canvas-templates';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
@@ -66,10 +69,10 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
   const [view, setView] = React.useState<'kinds' | 'files' | 'templates'>(menu.view ?? 'kinds');
   const needle = query.trim().toLowerCase();
   const match = (label: string) => !needle || label.toLowerCase().includes(needle);
-  const kind = (k: SpawnKind): Row => {
-    const Icon = k === 'note' ? TypeIcon : k === 'cut' ? Scissors : k === 'music' ? MAKE_ICON.sfx : MAKE_ICON[k];
+  const kind = (k: Exclude<SpawnKind, 'cut'>): Row => {
+    const Icon = k === 'note' ? TypeIcon : k === 'music' ? MAKE_ICON.sfx : MAKE_ICON[k];
     /* a sound is one node (music or a sound effect, by its model): "Audio" */
-    const label = k === 'note' ? t('canvas.kinds.note') : k === 'cut' ? t('canvas.kinds.cut') : k === 'music' ? t('canvas.make.audio') : t(`canvas.make.${k}`);
+    const label = k === 'note' ? t('canvas.kinds.note') : k === 'music' ? t('canvas.make.audio') : t(`canvas.make.${k}`);
     return { key: `kind:${k}`, label, icon: <Icon size={MENU_ICON} />, run: () => onKind(k) };
   };
   const upload: Row = { key: 'upload', label: t('canvas.menu.upload'), icon: <Upload size={MENU_ICON} />, run: onUpload };
@@ -84,10 +87,10 @@ export function AddMenu({ menu, files, templates, onKind, onUpload, onFile, onTe
   }));
   const sections: Array<{ title: string; rows: Row[] }> = view === 'files' ? [{ title: t('canvas.menu.fromAssets'), rows: fileRows }]
     : view === 'templates' ? [{ title: t('canvas.menu.templates'), rows: templateRows }]
-      : menu.from?.side === 'source' ? [{ title: t('canvas.menu.fromNode'), rows: (['note', 'image', 'music', 'video', 'cut'] as const).map(kind).filter((r) => match(r.label)) }]
+      : menu.from?.side === 'source' ? [{ title: t('canvas.menu.fromNode'), rows: ADD_KINDS.map(kind).filter((r) => match(r.label)) }]
         : menu.from?.side === 'target' ? [{ title: t('canvas.menu.intoNode'), rows: [upload, fromAssets, kind('note'), kind('image')].filter((r) => match(r.label)) }]
           : [
-            { title: t('canvas.menu.nodes'), rows: (['note', 'image', 'music', 'video', 'cut'] as const).map(kind).filter((r) => match(r.label)) },
+            { title: t('canvas.menu.nodes'), rows: ADD_KINDS.map(kind).filter((r) => match(r.label)) },
             { title: t('canvas.menu.resources'), rows: [upload, fromAssets].filter((r) => match(r.label)) },
             /* searching: the project's files and the templates too */
             ...(needle ? [{ title: t('canvas.menu.fromAssets'), rows: fileRows.slice(0, 8) }, { title: t('canvas.menu.templates'), rows: templateRows }] : []),

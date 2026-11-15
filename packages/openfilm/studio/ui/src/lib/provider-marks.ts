@@ -47,3 +47,4 @@ export const AGENT_MARK: Readonly<Record<string, string>> = { codex: 'openai' };
 
 /** The mark an agent is drawn with: its own, or its maker's. */
 export const agentMark = (id: string): string => AGENT_MARK[id] ?? id;
+

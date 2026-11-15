@@ -12,19 +12,33 @@ import { basename, extname, join } from 'node:path';
 export const serviceUrl = (/** @type {string} */ name, /** @type {string} */ fallback) =>
   (process.env[`OPENFILM_${name}_URL`]?.trim() || fallback).replace(/\/+$/, '');
 
+/** A service between two of its own processes (a release restarting it), or a gateway before it that lost it a moment. */
+const PASSING = new Set([502, 503, 504, 520, 521, 522, 523, 524]);
+/** How long to wait before saying a request again, then how long at most (tests make it short). */
+export const steadily = { first: 1000, most: 10_000 };
+
 /**
  * `fetch` that answers only when the service said yes. Otherwise it throws a sentence naming the service and its
- * reason, with the key blanked out wherever the service echoed it.
+ * reason, with the key blanked out wherever the service echoed it. `patience`: said again (the same request) while
+ * the service cannot be reached or is passing between processes, for up to that long; `keep`: answers handed back as
+ * they are, for the caller to read (an asynchronous run's 404 or 409).
  * @param {string} service @param {string} url @param {RequestInit} init @param {RunContext} ctx
+ * @param {{ patience?: number, keep?: number[] }} [how]
  */
-export async function call(service, url, init, ctx) {
+export async function call(service, url, init, ctx, how = {}) {
+  const until = Date.now() + (how.patience ?? 0);
   let res;
-  try { res = await fetch(url, { ...init, signal: ctx.signal }); }
-  catch (e) {
-    if (ctx.signal.aborted) throw e;
-    throw new Error(`${service} could not be reached (${/** @type {Error} */ (e).message}).`);
+  for (let wait = steadily.first; ; wait = Math.min(steadily.most, wait * 2)) {
+    try {
+      res = await fetch(url, { ...init, signal: ctx.signal });
+      if (!PASSING.has(res.status) || Date.now() + wait > until) break;
+    } catch (e) {
+      if (ctx.signal.aborted) throw e;
+      if (Date.now() + wait > until) throw new Error(`${service} could not be reached (${/** @type {Error} */ (e).message}).`);
+    }
+    await sleep(wait, ctx.signal);
   }
-  if (res.ok) return res;
+  if (res.ok || how.keep?.includes(res.status)) return res;
   throw await failure(service, res, ctx);
 }
 
@@ -40,6 +54,7 @@ export async function failure(service, res, ctx) {
   const reason = (ctx.key ? reasonOf(text).split(ctx.key).join('•••') : reasonOf(text)).slice(0, 500);
   if (PAID_PLAN.test(text)) return new Error(`${service} needs a paid plan for this (${res.status})${reason ? `: ${reason}` : ''}`);
   if (res.status === 401 || res.status === 403) return new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Services.`);
+  if (res.status >= 500 && !reason) return new Error(`${service} is not answering right now (${res.status}). Try again in a moment.`);
   return new Error(`${service} answered ${res.status}${reason ? `: ${reason}` : ''}`);
 }
 
@@ -85,10 +100,12 @@ export const keyLimit = (service) => Object.assign(new Error(`${service}: this k
 /** The human part of a service's error body (each service nests it its own way). */
 function reasonOf(/** @type {string} */ text) {
   let body;
+  /* a web page (a gateway's error page): only its title says anything */
+  if (/^\s*</.test(text)) return (text.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? '').replace(/\s+/g, ' ').trim();
   try { body = JSON.parse(text); } catch { return text.trim(); }
   const detail = body?.error?.message ?? body?.detail?.message ?? body?.detail ?? body?.message ?? body?.error;
   if (Array.isArray(detail)) return detail.map((d) => d?.msg ?? d?.message ?? JSON.stringify(d)).join('; ');
-  return typeof detail === 'string' ? detail : JSON.stringify(body);
+  return typeof detail === 'string' ? detail : body && typeof body === 'object' && !Object.keys(body).length ? '' : JSON.stringify(body);
 }
 
 /**

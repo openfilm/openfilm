@@ -18,6 +18,9 @@ import { LoadBoundary } from '../../components/canvas/LoadBoundary';
 import { addTo, chat, openSettings, project, toast } from '../../studio';
 import { useProject, useProvide } from '../../studio/react';
 
+/** The board a file of the project holds: `.film/canvas.json` the first, `.film/canvases/<id>.json` another; null: none. */
+const boardOfFile = (path: string) => (path === CANVAS_FILES[0] ? 'main' : /^\.film\/canvases\/([^/]+)\.json$/.exec(path)?.[1] ?? null);
+
 /** Said in the toast: an error, or a notice. */
 const showError = (message: string) => toast(message, { error: true });
 const notice = (message: string) => toast(message);
@@ -29,7 +32,7 @@ function Canvas({ projectId }: { projectId: string }) {
   /* what is asked of the canvas, each time anew (`n`): files put on it, a node to show (a link to its board,
      `.film/canvas.json#<node>`), a board to lay down */
   const [addFiles, setAddFiles] = React.useState<{ paths: string[]; n: number } | null>(null);
-  const [focus, setFocus] = React.useState<{ id: string; n: number } | null>(null);
+  const [focus, setFocus] = React.useState<{ id: string | null; board: string; n: number } | null>(null);
   const [insert, setInsert] = React.useState<{ doc: CanvasDoc; n: number } | null>(null);
   useProvide('canvas', {
     add: (paths) => setAddFiles({ paths: [...paths], n: performance.now() }),
@@ -38,8 +41,9 @@ function Canvas({ projectId }: { projectId: string }) {
     },
     opens: CANVAS_FILES,
     show: (link) => {
-      const id = parseLink(link)?.fragment;
-      if (id) setFocus({ id, n: Date.now() });
+      const read = parseLink(link);
+      const board = read ? boardOfFile(read.path) : null;
+      if (read && board) setFocus({ id: read.fragment, board, n: Date.now() });
     },
   });
   if (!state) return <CanvasLoading />;
@@ -48,7 +52,7 @@ function Canvas({ projectId }: { projectId: string }) {
     <LoadBoundary title={t('canvas.loadFailed')} action={t('canvas.reload')}>
       <React.Suspense fallback={<CanvasLoading />}>
         <CanvasView shown={state.shown === 'canvas'} projectId={projectId} folder={state.folder} files={state.files} sources={state.sources} onAddToFilm={(file) => { addTo('edit', [file.path]); }}
-          onImportFiles={(dropped, progress = () => {}) => project(projectId).importFiles(dropped, { into: 'assets', onProgress: progress })} onOpenSettings={() => openSettings('models')}
+          onImportFiles={(dropped, progress = () => {}, into = 'assets') => project(projectId).importFiles(dropped, { into, onProgress: progress })} onOpenSettings={() => openSettings('models')}
           focus={focus} insert={insert} addFiles={addFiles} onRefer={refer ? (refs) => { for (const ref of refs) refer(ref); } : undefined}
           onSendToFilm={(list) => { addTo('edit', list.map((file) => file.path), { show: true }); }} onReveal={(path) => project(projectId).showFile(path)}
           {...(state.chat ? { chat: state.chat } : {})}

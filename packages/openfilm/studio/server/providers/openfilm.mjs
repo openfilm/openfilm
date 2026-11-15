@@ -30,7 +30,12 @@ const NAME = 'OpenFilm';
  * How often a run that is still going is asked about, at most (tests make it short): first soon after it began, as
  * most runs (a voice found, a line spoken) are done in a second, then less and less often.
  */
-export const polling = { ms: 3000, first: 250 };
+/**
+ * How often a run is asked after (`ms`, from `first`); how long a request is said again while the service restarts
+ * (`patience`); how often a run it counts as running elsewhere is asked again (`busy`); how long at most (`most`: the
+ * service's own limit and the time it takes to call a lost run lost).
+ */
+export const polling = { ms: 3000, first: 250, patience: 3 * 60_000, busy: 15_000, most: 50 * 60_000 };
 
 /** The kinds of media the service may offer; listing voices goes with voice-over. */
 const KINDS = /** @type {Verb[]} */ (['tts', 'sfx', 'music', 'asr', 'image-search', 'image', 'video']);
@@ -202,14 +207,22 @@ export default {
     /* no model chosen: the service's default for that kind; what it makes, from its maker when it can */
     const inputs = await inputsOf(await filesOf(verb, args, ctx), base, headers, ctx);
     const body = { verb, ...(ctx.model ? { model: ctx.model } : {}), args, inputs, results: 'links' };
-    let res = await call(NAME, `${base}/v1/media/run`, {
+    /* a release restarts the service: a request is said again through it, and a run it no longer knows (404) is posted
+       again with the same key, which never charges twice; one it still counts as running elsewhere (409) is waited for */
+    const steady = { patience: polling.patience, keep: [409] };
+    const post = () => call(NAME, `${base}/v1/media/run`, {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': runKey, prefer: 'respond-async' },
       body: JSON.stringify(body),
-    }, ctx);
-    for (let wait = Math.min(polling.first, polling.ms); res.status === 202; wait = Math.min(polling.ms, wait * 2)) {
-      await sleep(wait, ctx.signal);
-      res = await call(NAME, `${base}/v1/media/run?key=${encodeURIComponent(runKey)}`, { headers }, ctx);
+    }, ctx, steady);
+    const until = Date.now() + polling.most;
+    let res = await post();
+    for (let wait = Math.min(polling.first, polling.ms); [202, 404, 409].includes(res.status); wait = Math.min(polling.ms, wait * 2)) {
+      if (Date.now() > until) throw new Error(`${NAME} has not finished this after ${Math.round(polling.most / 60_000)} minutes: it is refunded if it never lands. Try again later.`);
+      await sleep(res.status === 409 ? polling.busy : wait, ctx.signal);
+      res = res.status === 202
+        ? await call(NAME, `${base}/v1/media/run?key=${encodeURIComponent(runKey)}`, { headers }, ctx, { ...steady, keep: [404, 409] })
+        : await post();
     }
     const done = /** @type {{ files?: { path: string, base64?: string, url?: string }[], index?: import('./contract.mjs').IndexRow[], receipt?: Record<string, unknown> }} */ (await res.json());
     return {

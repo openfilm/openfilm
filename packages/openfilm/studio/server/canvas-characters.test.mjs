@@ -40,6 +40,12 @@ test('a character is kept with its pictures, put on any project, renamed and mov
   };
   assert.equal((await call('GET', [kept.id, 'files', 'face-1.png'])).body.toString(), 'face');
   assert.equal(JSON.parse((await call('PATCH', [kept.id], { name: 'Mia Chen' })).body).character.name, 'Mia Chen');
+  /* a subject is a character unless it says it is an object or a place; a kind not known is a character */
+  assert.equal(kept.kind, 'person');
+  assert.equal(JSON.parse((await call('PATCH', [kept.id], { kind: 'object' })).body).character.kind, 'object');
+  assert.equal(JSON.parse((await call('PATCH', [kept.id], { kind: 'robot' })).body).character.kind, 'person');
+  assert.equal((await saveCharacter(a, { name: 'Lamp', kind: 'place', pictures: [{ role: 'face', path: 'assets/image/mia.png' }] })).kind, 'place');
+  for (const c of await listCharacters()) if (c.name === 'Lamp') await call('DELETE', [c.id]);
   await call('DELETE', [kept.id]);
   assert.deepEqual(await listCharacters(), []);
   assert.ok(existsSync(join(scratch, 'trash', kept.id)));

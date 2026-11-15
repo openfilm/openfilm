@@ -43,11 +43,11 @@ test('the person\'s choice serves while it can; a key gone serves nothing', asyn
 });
 
 test('voices always come from the provider that does voice-over, whatever else can list them', async () => {
-  const keys = { elevenlabs: 'xi-0123456789', openai: 'sk-0123456789' };
-  for (const use of [{ tts: 'openai' }, { tts: 'elevenlabs' }]) {
+  const keys = { elevenlabs: 'xi-0123456789', google: 'AIza-0123456789' };
+  for (const use of [{ tts: 'google' }, { tts: 'elevenlabs' }]) {
     assert.equal(await id(chooseProvider('voice', { settings: settings(keys, use) })), await id(chooseProvider('tts', { settings: settings(keys, use) })));
   }
-  assert.equal(await id(chooseProvider('voice', { via: 'openai', settings: settings(keys) })), 'openai');
+  assert.equal(await id(chooseProvider('voice', { via: 'google', settings: settings(keys) })), 'google');
 });
 
 test('--via names one: it must exist, do the verb and have a key, or it says why', async () => {

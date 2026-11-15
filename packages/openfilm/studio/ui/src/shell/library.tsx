@@ -139,7 +139,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
   const {
     projectId, loaded, failure, mediaSources,
     onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, onSetCover, onNewFolder, reveal,
-    missingMedia, findMissing, madeWords, madeVersions,
+    missingMedia, findMissing, madeWords,
     canvasOpen, setCanvasOpen, requestCanvasFiles,
     refOfFile, referOutside, onLibraryDownloadFailed, saveFiles,
     mediaScope, switchMedia, revealMedia, mediaRevealed, scopedListing, savedListing, savedImport, skillsShown, askedInHand,
@@ -219,7 +219,6 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
       missing={missingMedia.length}
       onFindMissing={() => void findMissing()}
       wordsOf={madeWords}
-      versionsOf={madeVersions}
       onSave={saveFiles}
       scope="project"
       {...(studioHost?.refer ? { fileRef: refOfFile, onRefer: studioHost.refer } : {})}

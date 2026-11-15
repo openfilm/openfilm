@@ -40,7 +40,7 @@ import { HttpError, cookie, json, readJson } from './http.mjs';
 import { acceptWebSocket } from './websocket.mjs';
 import {
   ProjectError, createFolder, createProject, deleteFolder, deleteProject, duplicateProject, libraryRoot, listFolders, listProjects, locateProject, markOpened, moveFolder, moveLibrary,
-  moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
+  agentKeyOf, moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
 } from './projects.mjs';
 import { FetchError, createFetches, fetchFilm, parseRepoUrl } from './fetch-repo.mjs';
 import { BrowseError, browseFolder, browsePlaces } from './browse.mjs';
@@ -78,6 +78,7 @@ import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
 import { projectSettingsRoute, readProjectSettings } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
 import { CANVAS_FILE, agentCanvasRoute, canvasRoute, canvasWriteRoute, readCanvas } from './canvas.mjs';
+import { clipToolsRoute } from './clip-tools.mjs';
 import { copyBoardInto, projectTemplatesRoute, templatesRoute } from './canvas-templates.mjs';
 import { canvasMadeRoute } from './canvas-history.mjs';
 import { charactersRoute, projectCharactersRoute } from './canvas-characters.mjs';
@@ -115,6 +116,21 @@ export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
   if (os === 'mac') return `${base}/mac/${arch}/OpenFilm-${arch}.dmg`;
   if (os === 'win') return `${base}/win/${arch}/OpenFilm-Setup-${arch}.exe`;
   return null;
+}
+
+/**
+ * Whether a request changes what is the person's own to say, which an agent may not: who makes the media and with
+ * which keys (Settings → Services, the models run here), Studio's preferences, and which plugins and skills are on,
+ * installed or let write. Reading them is anyone's.
+ * @param {string[]} parts the path after /api/ @param {string} method
+ */
+export function personsSay(parts, method) {
+  if (method === 'GET' || method === 'HEAD') return false;
+  const [head] = parts;
+  if (head === 'providers' || head === 'local-models' || head === 'prefs') return true;
+  if (head === 'plugins') return parts.length === 2;
+  if (head === 'skills') return !(parts.length === 2 && parts[1] === 'catalog');
+  return false;
 }
 
 /**
@@ -190,17 +206,27 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   /** films fetched from GitHub into the library (fetch-repo.mjs), each opened as a project when it lands */
   const fetches = createFetches({ library: libraryRoot, open: (folder) => openProject(folder) });
 
-  const sameKey = (/** @type {string | null | undefined} */ given) => {
+  const matches = (/** @type {string | null | undefined} */ given, /** @type {string} */ want) => {
     if (typeof given !== 'string') return false;
-    const a = Buffer.from(given), b = Buffer.from(key);
+    const a = Buffer.from(given), b = Buffer.from(want);
     return a.length === b.length && timingSafeEqual(a, b);
   };
+  const sameKey = (/** @type {string | null | undefined} */ given) => matches(given, key);
+  /* the key an agent the app runs comes with (projects.mjs agentKeyOf): Studio's all but the person's own say */
+  const agentKey = agentKeyOf(key);
 
-  /** The caller holds the key; a browser write must also come from the editor's own origin. */
+  /**
+   * The caller holds the key; a browser write must also come from the editor's own origin. Says who it is: the
+   * person (the pages, their CLI), or an agent the app runs (`x-studio-key` its key).
+   * @returns {'person' | 'agent'}
+   */
   function authorize(/** @type {Req} */ req) {
-    if (sameKey(/** @type {string | undefined} */ (req.headers['x-studio-key']))) return;
+    const given = /** @type {string | undefined} */ (req.headers['x-studio-key']);
+    if (sameKey(given)) return 'person';
+    if (matches(given, agentKey)) return 'agent';
     if (!sameKey(cookieKey(req))) throw new HttpError(401, 'open Studio from the address `openfilm open` prints');
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers.origin !== origin) throw new HttpError(403, 'not from Studio');
+    return 'person';
   }
 
   /*
@@ -259,8 +285,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       return sendEditor(res, editorDir, path);
     }
 
-    authorize(req);
+    const caller = authorize(req);
     const parts = path.slice('/api/'.length).split('/').map(decodeURIComponent);
+    /* the person's own say is theirs: an agent uses the services they connected, and does not change them */
+    if (caller === 'agent' && personsSay(parts, req.method ?? 'GET')) {
+      throw new HttpError(403, "only the person changes this, in Studio's Settings: tell them what to change and why");
+    }
 
     /* stop: another app is taking over this machine's Studio, or `openfilm open` starts it afresh (`whenIdle`: not
        while an export runs or media is made — it would be lost). `pages`: how many were open, to come back */
@@ -851,6 +881,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* its canvas (canvas.mjs): Studio's own board beside the edit */
     if (await canvasRoute(req, res, project.path, rest)) return;
     if (await canvasWriteRoute(req, res, rest, askAgent, project.path)) return;
+    /* a clip trimmed, its sound or its shots taken out, cropped: on this computer (clip-tools.mjs) */
+    if (await clipToolsRoute(req, res, project.path, rest)) return;
     if (await canvasMadeRoute(req, res, project.path, rest, url)) return;
     if (await projectCharactersRoute(req, res, project.path, rest)) return;
     if (await projectTemplatesRoute(req, res, project.path, rest)) return;
@@ -1423,7 +1455,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (!ownHost(req, /** @type {import('node:net').AddressInfo} */ (editor.address()).port)) return refuse('403 Forbidden');
     void (async () => {
       const path = new URL(req.url ?? '/', origin).pathname;
-      const keyed = sameKey(/** @type {string | undefined} */ (req.headers['x-studio-key'])) || (sameKey(cookieKey(req)) && req.headers.origin === origin);
+      const given = /** @type {string | undefined} */ (req.headers['x-studio-key']);
+      const keyed = sameKey(given) || matches(given, agentKey) || (sameKey(cookieKey(req)) && req.headers.origin === origin);
       if (!keyed) return refuse('401 Unauthorized');
       const parts = path.split('/').slice(1).map(decodeURIComponent);
       /** @type {() => void} */

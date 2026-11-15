@@ -2,6 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import openfilm, { polling } from './openfilm.mjs';
+import { steadily } from './common.mjs';
 
 const KEY = 'ofk_test0123456789';
 /** A fake OpenFilm service on 127.0.0.1: `reply` answers each request; `seen` keeps them. */
@@ -21,6 +22,9 @@ before(async () => {
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   process.env.OPENFILM_API_URL = `http://127.0.0.1:${server.address().port}`;
   polling.ms = 5;
+  polling.busy = 5;
+  steadily.first = 5;
+  steadily.most = 10;
 });
 after(() => server.close());
 
@@ -171,4 +175,31 @@ test('an account out of credits is out of balance, like any provider; a refused 
   reply = () => [401, { message: 'Invalid key' }];
   await assert.rejects(openfilm.run('tts', { text: 'hi', voice: 'v' }, ctx()), /OpenFilm did not accept your key/);
   assert.throws(() => openfilm.checkKey('sk-123'), /ofk_/);
+});
+
+test('a release restarting the service mid-run: said again through its gateway\'s 502, posted again with the same key when it forgot the run, waited for while it counts it as running', async () => {
+  seen.length = 0;
+  const done = [200, { files: [{ path: 'assets/video/b.mp4', base64: Buffer.from('mp4').toString('base64'), bytes: 3 }], index: [], receipt: {} }];
+  const script = [
+    [202, { status: 'running' }], // POST
+    [502, {}], // the gateway, while the service restarts
+    [404, { error: 'unknown_run' }], // the new process does not know it
+    [409, { error: 'in_progress' }], // posted again: the old one still counts as running
+    [202, { status: 'running' }], // posted again: run anew
+    done,
+  ];
+  reply = () => script.shift() ?? done;
+  const result = await openfilm.run('video', { prompt: 'a cat', out: 'b.mp4' }, ctx({}, 'volcengine/doubao-seedance-2-0-mini-260615'));
+  assert.equal(Buffer.from(result.files[0].bytes).toString(), 'mp4');
+  assert.deepEqual(seen.map((c) => c.method), ['POST', 'GET', 'GET', 'POST', 'POST', 'GET']);
+  /* every post the same run, so it is never charged twice */
+  assert.equal(new Set(seen.filter((c) => c.method === 'POST').map((c) => c.headers['idempotency-key'])).size, 1);
+});
+
+test('a service that stays away is said so once its patience is spent', async () => {
+  const was = polling.patience;
+  polling.patience = 30;
+  reply = () => [502, {}];
+  try { await assert.rejects(openfilm.run('video', { prompt: 'a cat', out: 'c.mp4' }, ctx({}, 'volcengine/doubao-seedance-2-0-mini-260615')), /not answering right now \(502\)/); }
+  finally { polling.patience = was; }
 });

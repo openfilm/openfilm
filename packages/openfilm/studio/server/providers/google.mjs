@@ -31,7 +31,9 @@ const MODELS = {
 /** the image model that makes 1K pictures only */
 const ONE_K_ONLY = 'gemini-3.1-flash-lite-image';
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
-for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0, sizes: model.id === ONE_K_ONLY ? ['1k'] : ['1k', '2k', '4k'] } });
+/** the most pictures a Gemini picture is made from */
+const IMAGE_REFS = 14;
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: IMAGE_REFS, sizes: model.id === ONE_K_ONLY ? ['1k'] : ['1k', '2k', '4k'] } });
 for (const model of MODELS.video) Object.assign(model, { spec: { ratios: ['16:9', '9:16'], seconds: [3, 15], refs: 6, frames: true, framedMaxSeconds: 10, clip: true, sizes: ['360p', '720p', '1080p', '4K'] } });
 
 /** The prebuilt voices (they speak every language), each with how Google describes it. */
@@ -139,10 +141,13 @@ export default {
       const said = [
         ...(args.transparent ? ['--transparent: Gemini makes opaque pictures'] : []),
         ...(resolution !== wanted ? [`--size ${size}, --quality ${text(args.quality) || 'low'}: Flash-Lite Image makes 1K pictures only`] : []),
-        ...(list(args.ref).length || text(args.mask) || text(args.markup) ? ['--ref, --mask, --markup: Gemini here makes pictures from the prompt alone'] : []),
+        ...(text(args.mask) || text(args.markup) ? ['--mask, --markup: Gemini here redraws no part of a picture: the whole was made'] : []),
+        ...(list(args.ref).length > IMAGE_REFS ? [`--ref: Gemini takes ${IMAGE_REFS} pictures: the rest were left out`] : []),
       ];
+      /* the pictures it is made from, then the words */
+      const refs = await Promise.all(list(args.ref).slice(0, IMAGE_REFS).map(async (file) => ({ inlineData: { mimeType: mimeOf(file), data: Buffer.from(await ctx.read(file)).toString('base64') } })));
       const body = await generate(model, {
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts: [...refs, { text: prompt }] }],
         generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: ratio, imageSize: resolution } },
       });
       const picture = inline(body, 'image');

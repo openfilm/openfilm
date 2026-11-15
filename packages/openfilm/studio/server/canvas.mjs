@@ -162,6 +162,10 @@ function readMake(n) {
     ...(projectPath(o.markup) ? { markup: o.markup } : {}),
     ...(o.count === 2 || o.count === 4 ? { count: o.count } : {}),
     ...(short(o.voice) ? { voice: o.voice } : {}),
+    /* a style, a camera move, a camera (`body|lens|focal|aperture`) picked from the canvas's libraries: their words go in when it is made */
+    ...(short(o.style) ? { style: o.style } : {}),
+    ...(short(o.effect) ? { effect: o.effect } : {}),
+    ...(short(o.camera) ? { camera: o.camera } : {}),
   };
   const versions = (Array.isArray(n.versions) ? n.versions : []).filter(projectPath).slice(-VERSIONS_MAX);
   const fields = {

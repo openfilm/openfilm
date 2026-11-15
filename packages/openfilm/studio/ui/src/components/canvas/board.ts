@@ -5,8 +5,9 @@
  */
 import React from 'react';
 import type { Edge, Node } from '@xyflow/react';
-import { api } from '@/api';
-import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, makeRequest } from '@/lib/canvas';
+import { api, type CanvasCharacter } from '@/api';
+import type { RedrawStart } from './redraw';
+import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, receiptOf } from '@/lib/canvas';
 import type { ProvidersState } from '@/lib/providers';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 
@@ -27,6 +28,19 @@ export type FrameNode = Node<FrameData, 'frame'>;
 export type MakeNode = Node<MakeData, 'make'>;
 export type CutNode = Node<CutData, 'cut'>;
 export type BoardNode = FileNode | NoteNode | FrameNode | MakeNode | CutNode;
+
+/** what a node's name counts among: texts with texts, pictures with pictures (a making node by what it makes), cuts with cuts */
+const countedAs = (node: Pick<BoardNode, 'type' | 'data'>) => (node.type === 'make' ? `make:${(node.data as MakeData).make}` : node.type ?? '');
+
+/** A node's number among the board's nodes of its kind, from 1, as its name numbers it ("Text 1", "Picture 1"). */
+export function numberOf(nodes: ReadonlyArray<Pick<BoardNode, 'id' | 'type' | 'data'>>, id: string): number {
+  const self = nodes.find((node) => node.id === id);
+  if (!self) return 0;
+  const kind = countedAs(self);
+  let n = 0;
+  for (const node of nodes) { if (countedAs(node) !== kind) continue; n += 1; if (node.id === id) break; }
+  return n;
+}
 export type MakingNode = CanvasNode & { make: MakeKind };
 
 /** The board as React Flow draws it: groups before what is in them, as it needs them. */
@@ -198,6 +212,10 @@ export function tidyGroup(list: BoardNode[], group: string): BoardNode[] {
  * a service and model a node can make its kind with (via, model: as `get` names them), whether the person has
  * connected that service, and what the model makes
  */
+/** a picture's own tools, each in a window over the board */
+export type PictureTool = 'expand' | 'crop' | 'adjust' | 'light';
+export type AssistKind = 'prompt' | 'ideas' | 'shots' | 'text';
+
 export interface Choice { via: string; model?: string; name: string; provider: string; connected: boolean; spec?: ModelSpec; kind?: MakeKind }
 
 /** Every service that makes a kind, each model of each: the connected ones first, then the others to connect. */
@@ -230,34 +248,42 @@ export function defaultChoice(state: ProvidersState | null, kind: MakeKind): Cho
 
 /* ── what is being made ── */
 
-export interface Run { started: number; abort: AbortController }
+/** a run: when it started; `left` once the person stopped waiting for it (what it makes still lands in the project) */
+export interface Run { started: number; abort: AbortController; left?: boolean }
 type Made = { path: string; made: string };
 /** by `project/node` */
 export const runs = new Map<string, Run>();
 export const runErrors = new Map<string, string>();
 /** the board shown for each project, to take what was made */
 /**
- * How long a model takes, as this person's own runs with it took (the middle of the last few that made something):
- * kept in this browser, shown by the model in the panel's list. None run yet: nothing said.
+ * How long a model takes, as this person's own runs with it took (the middle of the last few that made something),
+ * kept in this browser: what the progress on a card making with it is measured against. None run yet: none shown.
  */
 const TIMES_KEY = 'openfilm.canvas.times';
-const TIMES_KEPT = 5;
-const readTimes = (): Record<string, number[]> => { try { return JSON.parse(localStorage.getItem(TIMES_KEY) ?? '{}') as Record<string, number[]>; } catch { return {}; } };
+const readKept = <T>(key: string): Record<string, T> => { try { return JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, T>; } catch { return {}; } };
 export function modelTime(via: string, model?: string): number | null {
-  const list = readTimes()[`${via}|${model ?? ''}`];
+  const list = readKept<number[]>(TIMES_KEY)[`${via}|${model ?? ''}`];
   if (!Array.isArray(list) || !list.length) return null;
-  const sorted = [...list].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)]!;
+  return [...list].sort((a, b) => a - b)[Math.floor(list.length / 2)]!;
 }
 export function keepModelTime(via: string, model: string | undefined, seconds: number) {
-  const all = readTimes();
+  const all = readKept<number[]>(TIMES_KEY);
   const key = `${via}|${model ?? ''}`;
-  all[key] = [...(all[key] ?? []), Math.round(seconds)].slice(-TIMES_KEPT);
+  all[key] = [...(all[key] ?? []), Math.round(seconds)].slice(-5);
   try { localStorage.setItem(TIMES_KEY, JSON.stringify(all)); } catch { /* not kept */ }
 }
-/** "15s", "2min" */
-export function timeLabel(seconds: number): string {
-  return seconds < 90 ? `${Math.max(1, Math.round(seconds))}s` : `${Math.round(seconds / 60)}min`;
+
+/** The model last picked for each kind, kept in this browser: a new node of that kind makes with it. */
+const LAST_KEY = 'openfilm.canvas.lastModel';
+export function lastModel(kind: MakeKind): { via: string; model?: string } | null {
+  const kept = readKept<{ via?: unknown; model?: unknown }>(LAST_KEY)[kind];
+  return kept && typeof kept.via === 'string' ? { via: kept.via, ...(typeof kept.model === 'string' ? { model: kept.model } : {}) } : null;
+}
+export function keepLastModel(kind: MakeKind, choice: { via: string; model?: string } | null) {
+  const all = readKept<unknown>(LAST_KEY);
+  if (choice) all[kind] = { via: choice.via, ...(choice.model ? { model: choice.model } : {}) };
+  else delete all[kind];
+  try { localStorage.setItem(LAST_KEY, JSON.stringify(all)); } catch { /* not kept */ }
 }
 
 /** each project's board shown now (which of its boards, and how what is made comes onto it) */
@@ -268,18 +294,21 @@ export const runsChanged = () => { runsVersion += 1; for (const watch of runWatc
 export const useRuns = () => React.useSyncExternalStore((watch) => { runWatchers.add(watch); return () => { runWatchers.delete(watch); }; }, () => runsVersion);
 
 /** Whether it made one (false: it failed, was stopped, or was being made already). */
-export async function startRun(project: string, folder: string, node: string, request: ReturnType<typeof makeRequest>, pick: { via?: string; model?: string }, key: string,
+export async function startRun(project: string, folder: string, node: string, request: { verb: string; args: Record<string, string | string[]> }, pick: { via?: string; model?: string }, key: string,
   say: { nothing: string; balance: string }, board = 'main'): Promise<boolean> {
   const id = `${project}/${node}`;
   if (runs.has(id)) return false;
   const abort = new AbortController();
-  runs.set(id, { started: Date.now(), abort });
+  const run: Run = { started: Date.now(), abort };
+  runs.set(id, run);
   runErrors.delete(id);
   runsChanged();
   try {
     /* the person pressed Make on it: what it costs is not asked again, as an agent's would be */
-    const receipt = JSON.parse(await api.make(folder, request.verb, request.args, { ...pick, yes: true }, abort.signal)) as { src?: string; images?: Array<{ src?: string }> };
+    const receipt = receiptOf<{ src?: string; images?: Array<{ src?: string }> }>(await api.make(folder, request.verb, request.args, { ...pick, yes: true }, abort.signal));
     const path = receipt.src ?? receipt.images?.[0]?.src;
+    /* stopped: it was paid for once it started, so it is kept in the project (and its history), not on the node */
+    if (run.left) return false;
     if (!path) throw new Error(say.nothing);
     const made = { path, made: key };
     const shown = shownBoards.get(project);
@@ -292,12 +321,26 @@ export async function startRun(project: string, folder: string, node: string, re
     return true;
   } catch (e) {
     /* what the service's account lacked is said to the person (its dialog says where to top it up), not as told to an agent */
-    if (!abort.signal.aborted) runErrors.set(id, (e as { reason?: string })?.reason === 'balance' ? say.balance : e instanceof Error ? e.message : String(e));
+    if (!abort.signal.aborted && !run.left) runErrors.set(id, (e as { reason?: string })?.reason === 'balance' ? say.balance : e instanceof Error ? e.message : String(e));
     return false;
   } finally {
-    runs.delete(id);
+    if (runs.get(id) === run) runs.delete(id);
     runsChanged();
   }
+}
+
+/**
+ * Stop waiting for a run. What is being made is not called off: a service charges once it starts, and most cannot
+ * stop then, so it is let finish and land in the project (and its history) rather than be paid for and lost; the node
+ * is free at once to make again.
+ */
+export function leaveRun(project: string, node: string) {
+  const id = `${project}/${node}`;
+  const run = runs.get(id);
+  if (!run) return;
+  run.left = true;
+  runs.delete(id);
+  runsChanged();
 }
 
 /* ── what the nodes need of the board around them ── */
@@ -334,7 +377,18 @@ export interface Board {
   /** a node's card drawn this big */
   resize: (id: string, size: { w: number; h: number }) => void;
   /** a node of a kind made from this one: beside it on the right, wired from it (with what it starts with) */
-  spawn: (id: string, kind: SpawnKind, data?: Partial<MakeData>) => void;
+  /** a node made from this one, wired from it: its id */
+  spawn: (id: string, kind: SpawnKind, data?: Partial<MakeData>) => string;
+  /** a picture's own tool opened over the board: widen, crop and turn, color, light */
+  openTool: (id: string, path: string, tool: PictureTool) => void;
+  /** a picture made again at each of these shapes, in a group beside it, made at once */
+  sizes: (id: string, ratios: string[]) => void;
+  /** a product's set of pictures (each a preset: main shot, detail, in use, ad, features), in a group beside it, made at once */
+  productSet: (id: string, presets: string[]) => void;
+  /** a picture parted into its subject (cut out) and the background without it */
+  layers: (id: string, path: string) => void;
+  /** the agent reading a picture into words, on a text node beside it: its prompt, ideas, a shot list, its text to edit */
+  assist: (id: string, path: string, kind: AssistKind) => void;
   /** files made from a node on this computer (its picture's cells, a frame of its clip): into the project, beside it */
   bring: (id: string, files: File[]) => void;
   uploading?: (id: string) => UploadStatus | undefined;
@@ -343,6 +397,16 @@ export interface Board {
   reportError?: (error: string) => void;
   /** a picture's background taken out by the person's service: a new picture beside it */
   cutout: (id: string, path: string) => void;
+  /** a clip worked on this computer: a part of it (asks where), its sound, cropped to a shape; beside it, wired from it */
+  clipTool: (id: string, path: string, op: 'trim' | 'audio' | 'crop', ratio?: string) => void;
+  /** a clip tool done by a model opened for a clip: what it asks, then the clip made beside it */
+  clipAI: (id: string, path: string, tool: import('@/lib/canvas-clip').ClipToolKey) => void;
+  /** a clip's shots, a still where each begins, in a group beside it */
+  shots: (id: string, path: string) => void;
+  /** the agent reading a clip (its shots) into words beside it: a shot list, or a prompt to make it again */
+  clipAssist: (id: string, path: string, kind: 'shots' | 'prompt') => void;
+  /** a picture of panels cut into them (`rows`×`cols`, or 0×0: as its gutters say), laid out in a group beside it */
+  split: (id: string, path: string, rows: number, cols: number) => void;
   remove: (ids: string[]) => void;
   /** the board as it is now kept to go back to: called before a change made in a node (a resize, words written) */
   willChange: () => void;
@@ -366,6 +430,10 @@ export interface Board {
   stop: (id: string) => void;
   /** what is wired into a node, in order; a wire taken out */
   inputs: (id: string) => InputView[];
+  /** a node's name as its name row shows it ("Picture 1", "Picture 1_Expand") */
+  nameOf: (id: string) => string;
+  /** what goes into a node put in this order (its wires, by id): the first is the first reference */
+  reorderInputs: (id: string, edges: readonly string[]) => void;
   unwire: (edge: string) => void;
   /** the side ⊕ of a node pressed: what to add there, joined to it */
   sideMenu: (id: string, side: Side, screen: { x: number; y: number }) => void;
@@ -389,12 +457,16 @@ export interface Board {
   keepTemplate: (group: string) => void;
   /** a group's pictures, or a picture, kept as a character; a library opened (for a node: what is picked goes into it) */
   keepCharacter: (id: string) => void;
+  /** a subject wired into a node: its main picture, named as it is (what @its name in the node's words means) */
+  useSubject: (id: string, subject: CanvasCharacter) => void;
   openLibrary: (which: 'characters' | 'styles' | 'effects', node?: string) => void;
+  /** what a node is shot with, picked: words wired into it */
+  openCamera: (node: string) => void;
   openSettings: () => void;
   /** what is in a group laid out again in rows, clear of each other */
   tidy: (group: string) => void;
   /** a picture changed in part (brushed or drawn on, then said what to): the editor opened on it */
-  redraw: (id: string, path: string) => void;
+  redraw: (id: string, path: string, start?: RedrawStart) => void;
   /** a text node's words written by the person's agent from what they ask and what is wired in (in the app with a chat); why not, if not */
   write?: (id: string, ask: string, attachments: string[]) => Promise<string | null>;
   /** whether a text node is being written by the agent now (since when), and its writing stopped */

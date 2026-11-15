@@ -605,6 +605,8 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-edge: #b4b4ba;
   --cv-edge-lit: #3b82f6;
   --cv-float: #ffffff;
+  /* the band round a floating panel's words that holds its tools: a step away from the panel */
+  --cv-float-deep: #f1f1f2;
   --cv-float-line: rgba(0, 0, 0, 0.08);
   --cv-float-hover: rgba(0, 0, 0, 0.05);
   --cv-chip: rgba(0, 0, 0, 0.05);
@@ -637,6 +639,7 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-edge: #6b6b6b;
   --cv-edge-lit: #3b82f6;
   --cv-float: #181818;
+  --cv-float-deep: #111111;
   --cv-float-line: rgba(255, 255, 255, 0.08);
   --cv-float-hover: rgba(255, 255, 255, 0.07);
   --cv-chip: rgba(255, 255, 255, 0.05);
@@ -712,6 +715,8 @@ html[data-file-drag] iframe { pointer-events: none; }
  * running through them on a slant, as a line being written; the edges of the field fading out
  */
 .cv-veil { background: color-mix(in srgb, var(--cv-card) 94%, transparent); }
+/* a picture, clip or sound being made: a surface of its own, lifted off the board, so the card reads as there and busy */
+.cv-veil-making { background: linear-gradient(135deg, color-mix(in srgb, var(--cv-ink) 14%, var(--cv-card)), color-mix(in srgb, var(--cv-ink) 8%, var(--cv-card)) 60%, color-mix(in srgb, var(--cv-edge-lit) 12%, var(--cv-card))); }
 .cv-dots, .cv-dots::after {
   position: absolute; inset: 0; background-size: 18px 18px; background-position: 9px 9px;
   mask-image: radial-gradient(ellipse 72% 70% at 50% 50%, #000 35%, transparent 100%);
@@ -725,6 +730,9 @@ html[data-file-drag] iframe { pointer-events: none; }
   mask-size: 100% 100%, 260% 100%; mask-repeat: no-repeat; mask-composite: intersect;
   animation: cv-dot-wave 2.4s cubic-bezier(0.45, 0, 0.35, 1) infinite;
 }
+/* a selection being drawn (smart edit's lasso and box): its dashed edge running round it */
+@keyframes cv-ants { to { stroke-dashoffset: -40; } }
+.cv-ants { animation: cv-ants 1.2s linear infinite; }
 /* a node found from what is made from it: a ring flashing once round its card */
 @keyframes cv-flash { 0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } 30% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.55); } }
 .openfilm-canvas .react-flow__node.cv-flash [data-canvas-card] { animation: cv-flash 0.7s ease-out; }
@@ -818,3 +826,17 @@ html[data-file-drag] iframe { pointer-events: none; }
 .cv-doc th { font-weight: 600; }
 .cv-doc th p, .cv-doc td p { min-height: 0; }
 .cv-doc p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; height: 0; color: var(--cv-ink-3); pointer-events: none; }
+
+/* Where a picture is clear: the grey and white squares every picture editor shows, so a cut-out reads as see-through
+   rather than as black. Set on the picture itself, it shows only through its clear pixels. Darker over the board in the
+   dark theme and in the viewer, which is dark in either. */
+.cv-checker {
+  background-color: #ffffff;
+  background-image: repeating-conic-gradient(#e4e4e7 0 25%, transparent 0 50%);
+  background-size: 16px 16px;
+}
+[data-theme='dark'] .cv-checker,
+.cv-checker.cv-checker-night {
+  background-color: #2c2c2c;
+  background-image: repeating-conic-gradient(#202020 0 25%, transparent 0 50%);
+}
