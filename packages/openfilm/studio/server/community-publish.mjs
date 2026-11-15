@@ -44,7 +44,7 @@ function localFiles(folder) {
  */
 export async function verifyPublished(skill, address, { hosts = {}, signal, fetch: get = fetch } = {}) {
   const parsed = parseRepoUrl(address);
-  if (!parsed.github) throw Object.assign(new Error('The community lists items on GitHub: give a GitHub repository.'), { status: 400 });
+  if (!parsed.github) throw Object.assign(new Error('The community lists items on GitHub: give a GitHub repository.'), { status: 400, code: 'not-github' });
   const at = parsed.github;
   const { commit } = await resolveCommit(at, parsed.tree, parsed.blob, { signal, hosts });
   const path = ['skills', skill.name];

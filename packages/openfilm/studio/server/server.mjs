@@ -832,7 +832,11 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (typeof repo !== 'string') throw new HttpError(400, 'repo: the address of your repository');
       try {
         return json(res, 200, await verifyPublished({ name: skill.name, folder: skill.folder, version: check.version, kind: check.kind }, repo));
-      } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 502, e instanceof Error ? e.message : String(e)); }
+      } catch (e) {
+        /* its code, for the app's own words: the API not listing it is a repository missing or private here */
+        const code = /** @type {any} */ (e).code === 'use-git' ? 'access' : /** @type {any} */ (e).code;
+        throw new HttpError(/** @type {any} */ (e).status ?? 502, e instanceof Error ? e.message : String(e), typeof code === 'string' ? { code } : undefined);
+      }
     }
     /* a skill as a person reviews it before letting it in: its SKILL.md whole and its files (GET ?project=) */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'text' && req.method === 'GET') {

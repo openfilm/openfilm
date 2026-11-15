@@ -113,13 +113,16 @@ export function manifestFiles(value) {
   return value.map(({ path, size, sha256 }) => ({ path, size, sha256 }));
 }
 
+const KNOWN_KINDS = new Set(['skill', 'workbench']);
+
 /**
  * The entries of an index that are well formed (as openfilm/community checks them); the rest are left out.
  * @param {unknown} index @returns {IndexEntry[]}
  */
 export function indexEntries(index) {
   const skills = /** @type {any} */ (index)?.version === 1 && Array.isArray(/** @type {any} */ (index).skills) ? /** @type {any[]} */ (/** @type {any} */ (index).skills) : [];
-  return skills.filter((e) => typeof e?.name === 'string' && SKILL_NAME.test(e.name)
+  /* the kinds this app adds (a workbench is a skill with a page); a kind listed later (a connector…) waits for an app that knows it */
+  return skills.filter((e) => (e?.kind === undefined || KNOWN_KINDS.has(e.kind)) && typeof e?.name === 'string' && SKILL_NAME.test(e.name)
     && typeof e.repo === 'string' && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(e.repo)
     && e.path === `skills/${e.name}` && typeof e.version === 'string' && /^\d+\.\d+\.\d+$/.test(e.version)
     && typeof e.commit === 'string' && /^[0-9a-f]{40}$/.test(e.commit) && (e.files === undefined || manifestFiles(e.files)))

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { revokedNow, findSkill, listSkills, offeredSkills, usableSkills } from '../../src/skills.mjs';
-import { communitySources, entrySources, setCommunitySources, updateAdds, catalogSkills, installSkill, installedStanding, manifestFiles, readCatalog, readDiscover, refreshCatalog, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
+import { communitySources, entrySources, indexEntries, setCommunitySources, updateAdds, catalogSkills, installSkill, installedStanding, manifestFiles, readCatalog, readDiscover, refreshCatalog, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 
 /** A fake GitHub: its API lists a folder's files at a commit, its raw host sends each. `repos[commit]` → { path: text } */
 async function github(/** @type {Record<string, Record<string, string>>} */ commits) {
@@ -217,4 +217,10 @@ test('another community index the person adds is read after OpenFilm\'s own: nev
   assert.deepEqual(catalog.listed.map((e) => [e.repo, e.commit, e.from ?? null]), [['https://github.com/openfilm/skill-demo', A, null], ['https://github.com/someone/skill-demo', B, other]]);
   assert.deepEqual([...entrySources(catalog)], [['someone/demo', other]]);
   assert.deepEqual(revokedNow(), [], 'only OpenFilm\'s own index withdraws');
+});
+
+test('an index entry of a kind this app does not add yet is left out; one with no kind is a skill', () => {
+  const at = (name, kind) => ({ name, ...(kind ? { kind } : {}), repo: 'https://github.com/someone/thing', path: `skills/${name}`, version: '1.0.0', commit: 'a'.repeat(40) });
+  const names = indexEntries({ version: 1, skills: [at('plain'), at('brief', 'skill'), at('desk', 'workbench'), at('link', 'connector'), at('odd', 7)] }).map((e) => e.name);
+  assert.deepEqual(names, ['plain', 'brief', 'desk']);
 });
