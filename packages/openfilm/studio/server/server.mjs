@@ -649,6 +649,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           ...(agentsCall.has(k.uid) ? { as: agentsCall.get(k.uid) } : {}),
           ...(k.shown ? { shown: k.shown } : {}), ...(k.version ? { version: k.version } : {}), ...(k.kind ? { kind: k.kind } : {}),
           ...(k.order != null ? { order: k.order } : {}), ...(k.icon ? { icon: k.icon } : {}), ...(k.repository ? { repository: k.repository } : {}),
+          /* how it is listed and rated for people (src/plugins.mjs profileOf) */
+          ...(k.profile ? { profile: k.profile } : {}),
           /* what it needs beyond OpenFilm, the computers it runs on, and whether this one is not among them */
           ...(k.needs ? { needs: k.needs } : {}), ...(k.platforms ? { platforms: k.platforms, ...(k.platforms.includes(thisPlatform()) ? {} : { elsewhere: true }) } : {}),
           ...(k.cover ? { cover: `${media(k.uid, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.uid, 'preview') } : {}),

@@ -38,7 +38,7 @@ import { moveToTrash } from '../studio/server/trash.mjs';
 import { pictureType } from '../studio/server/cover.mjs';
 import { parseRepoUrl } from '../studio/server/fetch-repo.mjs';
 import { libraryDefault, setSharedPref, sharedHome, sharedPref } from './locations.mjs';
-import { PLUGINS, pluginSkillDir, pluginStates, pluginsOffLine, skillNames, tabOf } from './plugins.mjs';
+import { PLUGINS, pluginSkillDir, pluginStates, pluginsOffLine, profileOf, skillNames, tabOf } from './plugins.mjs';
 import { readBlocks } from './plugin-blocks.mjs';
 
 const mkdirSyncSafe = (/** @type {string} */ dir) => mkdirSync(dir, { recursive: true });
@@ -349,7 +349,7 @@ export function parseSkillFile(text) {
  * @typedef {{ title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string> }} SkillShown
  *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title, a one-line summary and a few lines
  *   on who it is for and what it does, by language (`en`, `zh-CN`…); the SKILL.md's description is for the agent
- * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string, needs?: Record<string, string>, platforms?: SkillPlatform[], tab?: import('./plugins.mjs').PluginTab, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], requires?: string[] }} SkillLook
+ * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string, needs?: Record<string, string>, platforms?: SkillPlatform[], tab?: import('./plugins.mjs').PluginTab, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], requires?: string[], profile?: import('./plugins.mjs').Profile }} SkillLook
  *   where an app shows it and what it builds on (openfilm.json, each optional): `requires` the skills an agent reads
  *   before it (by name: ownSkills), `kind` a way of working or a look, `order` among its kind,
  *   `icon` a mark's name, `cover` a picture and `preview` a video in its folder, `repository` where its source is read,
@@ -392,6 +392,9 @@ function openfilmJson(folder) {
   if (requires.length) out.requires = requires;
   const tab = tabOf(raw?.tab, byLanguage);
   if (tab) out.tab = tab;
+  /* how it is listed and rated for people: its category, difficulty, ease, audience and cost (src/plugins.mjs profileOf) */
+  const profile = profileOf(raw, byLanguage);
+  if (profile) out.profile = profile;
   const blocks = readBlocks(raw?.blocks);
   if (blocks) out.blocks = blocks;
   const cover = fileIn(folder, raw?.cover), preview = fileIn(folder, raw?.preview);

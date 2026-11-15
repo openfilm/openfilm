@@ -11,14 +11,16 @@
  */
 import React from 'react';
 import {
-  AppWindow, ArrowLeft, Copy, Film, Folder, GitBranch, Github, Layers, MessageSquarePlus, MonitorPlay, Music, PanelLeft, PenLine,
-  PictureInPicture2, Plug, Plus, Presentation, RefreshCw, Scissors, Shapes, Sparkles, SquareTerminal, Trash2, Wand2, Zap, type LucideIcon,
+  ArrowLeft, Copy, Film, Folder, GitBranch, Github, Layers, MessageSquarePlus, MonitorPlay, Music, PenLine, PictureInPicture2,
+  Plus, Presentation, RefreshCw, Scissors, Shapes, Sparkles, Trash2, Wand2, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { usePlugins } from '@/lib/plugins';
 import { isPlugin } from '@/lib/project-plugins';
 import { communityOf, makerOf, sourcesApi, type SkillEntry } from '@/lib/project-sources';
+import { categoryOfPlugin, categoryOfSkill, usesOfSkill } from '@/lib/plugin-profile';
 import { ConfirmDialog } from './ConfirmDialog';
+import { CategoryTag, ProfileStrip } from './library/PluginProfile';
 import { SettingsSwitch } from './settings/ui';
 
 /** OpenFilm's own by their order, then the community's as Discover's index lists them (an author's own order is not theirs to set). */
@@ -43,39 +45,6 @@ export function useSkillWords() {
 /** An official one not installed is in the catalog only; the person's own and a project's are installed already. */
 const installedOf = (skill: SkillEntry) => skill.installed !== false;
 
-/** What a plugin or a skill brings, as its badges say it and the Plugins tab's filters pick by. */
-export type Brings = 'workbench' | 'tab' | 'skill' | 'commands' | 'connection';
-
-/** What a skill brings: itself, its commands, and, one that is a plugin, its surface (a tab of the library, else a workbench). */
-export const skillBrings = (skill: SkillEntry): Brings[] => [
-  ...(isPlugin(skill) ? [skill.tab ? 'tab' as const : 'workbench' as const] : []), 'skill', ...(skill.commands?.length ? ['commands' as const] : []),
-];
-
-/** Each thing a plugin can bring, as its badge draws it. */
-const BRINGS_ICONS: Record<Brings, LucideIcon> = { workbench: AppWindow, tab: PanelLeft, skill: Zap, commands: SquareTerminal, connection: Plug };
-
-/**
- * Small badges of what it brings: each its mark, and its word too where the list is wide enough (a container query on
- * the nearest `@container`); the word is its name for assistive technology and its tooltip either way.
- */
-export function BringsBadges({ brings }: { brings: readonly Brings[] }) {
-  const t = useT();
-  return (
-    <>
-      {brings.map((b) => {
-        const Mark = BRINGS_ICONS[b];
-        const word = t(`assetDrawer.brings_${b}`);
-        return (
-          <span key={b} data-brings={b} title={word} aria-label={word} role="img"
-            className="flex h-4 shrink-0 items-center gap-0.5 rounded-[4px] border border-[var(--border)] px-[3px] text-[10px] font-medium leading-none text-[var(--text-muted)]">
-            <Mark size={10} strokeWidth={2} aria-hidden /><span aria-hidden className="hidden @[260px]:inline">{word}</span>
-          </span>
-        );
-      })}
-    </>
-  );
-}
-
 /** A part of a plugin's or a skill's page: its head, and what is under it. */
 export function PageSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -86,12 +55,12 @@ export function PageSection({ title, children }: { title: string; children: Reac
   );
 }
 
-/** How to use it, in one line under its head. */
-export function HowToUse({ text }: { text: string }) {
+/** How to use it (or, `where`, where to open it), in one line under its head. */
+export function HowToUse({ text, where = false }: { text: string; where?: boolean }) {
   const t = useT();
   return (
     <p data-how-to-use="" className="mt-4 rounded-[10px] bg-[var(--bg-field)] px-3 py-2 text-[12.5px] leading-[19px] text-[var(--text)]">
-      <span className="font-medium">{t('assetDrawer.howToUse')}</span> <span className="text-[var(--text-muted)]">{text}</span>
+      <span className="font-medium">{t(where ? 'assetDrawer.whereToOpen' : 'assetDrawer.howToUse')}</span> <span className="text-[var(--text-muted)]">{text}</span>
     </p>
   );
 }
@@ -132,6 +101,9 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
   const lang = useLanguage();
   const plugins = usePlugins();
   const words = useSkillWords()(skill);
+  /* one of OpenFilm's own skills is in the category of the plugin it goes with */
+  const owner = skill.core ? plugins.find((p) => p.skills.includes(skill.name)) : undefined;
+  const category = owner ? categoryOfPlugin(owner) : categoryOfSkill(skill);
   const details = inLanguage(skill.shown?.details, lang);
   const needs = inLanguage(skill.needs, lang);
   const installed = installedOf(skill);
@@ -228,7 +200,8 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
       {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', inLanguage(plugins.find((p) => p.id === skill.plugin)?.title, lang) ?? skill.plugin) : t('gallery.skillOff')}</p> : null}
       {skill.retired ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
-        {/* the community's: whose it is, their account a link; OpenFilm's own: its kind */}
+        {/* its category, then whose it is: the community's, their account a link; OpenFilm's own, its kind */}
+        <CategoryTag category={category} />
         {communityOf(skill) ? (
           <span>{t('gallery.byCommunity').split('{owner}')[0]}<a href={`https://github.com/${makerOf(skill)}`} target="_blank" rel="noreferrer"
             className="text-[var(--text)] underline-offset-2 hover:underline">{makerOf(skill)}</a>{t('gallery.byCommunity').split('{owner}')[1]}</span>
@@ -243,7 +216,9 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
         ) : null}
       </div>
       <Origin skill={skill} />
-      {words.summary ? <p className="mt-4 text-[13px] leading-[20px] text-[var(--text)]">{words.summary}</p> : null}
+      {words.summary ? <p className="mt-4 text-[13.5px] leading-[21px] text-[var(--text)]">{words.summary}</p> : null}
+      {/* summed up as a model's page does: how hard, how little work, what it costs, how it is used, who it is for */}
+      <ProfileStrip profile={skill.profile} uses={usesOfSkill(skill)} />
       {/* the computers it runs on, when this one is not among them; what it needs beyond OpenFilm */}
       {skill.elsewhere && skill.platforms ? (
         <p role="note" className="mt-2.5 text-[12.5px] leading-[20px] text-[var(--warn)]">
@@ -333,14 +308,14 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
 export function SkillMark({ skill }: { skill: Pick<SkillEntry, 'cover' | 'icon'> }) {
   const [failed, setFailed] = React.useState(false);
   if (skill.cover && !failed) {
-    return <img src={skill.cover} alt="" loading="lazy" draggable={false} onError={() => setFailed(true)} className="h-8 w-8 shrink-0 rounded-[7px] object-cover ring-1 ring-[var(--border)]" />;
+    return <img src={skill.cover} alt="" loading="lazy" draggable={false} onError={() => setFailed(true)} className="h-9 w-9 shrink-0 rounded-[9px] object-cover ring-1 ring-[var(--border)]" />;
   }
   const Mark = ICONS[skill.icon ?? ''] ?? Sparkles;
   const hue = HUES[skill.icon ?? ''] ?? 220;
   return (
-    <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px]"
+    <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px]"
       style={{ background: `hsl(${hue} 70% 55% / 0.16)`, color: `hsl(${hue} 80% 72%)`, boxShadow: `inset 0 0 0 1px hsl(${hue} 70% 60% / 0.28)` }}>
-      <Mark size={15} strokeWidth={1.7} />
+      <Mark size={17} strokeWidth={1.7} />
     </span>
   );
 }

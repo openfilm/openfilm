@@ -17,6 +17,8 @@
  * one package: its folder holds all of it.
  *
  *   `on`      whether it is on until the person says (the edit and the canvas are, Motion is not)
+ *   `details` a few lines on what it is for, by language, on its page
+ *   `category`, `difficulty`, `ease`, `audience`, `cost`   how it is listed and rated for people (profileOf)
  *   `beta`    still being made good
  *   `soon`    listed so the whole of OpenFilm is in sight, but not made yet: never on, with no switch, and no agent is
  *             told of it
@@ -48,7 +50,7 @@ const WORKBENCH = /^[a-z][a-z0-9-]{0,31}$/;
 
 /**
  * @typedef {{
- *   id: string, title: Record<string, string>, summary: Record<string, string>, icon?: string, about: string,
+ *   id: string, title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string>, profile?: Profile, icon?: string, about: string,
  *   workbench?: string, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], tab?: PluginTab, skills: readonly string[], requires: readonly string[], on: boolean, beta?: true, soon?: true,
  * }} Plugin
  *   `id`: its folder's name; `workbench`: the way of working it shows; `blocks`: the blocks its workbench is laid out in
@@ -57,6 +59,42 @@ const WORKBENCH = /^[a-z][a-z0-9-]{0,31}$/;
  * @typedef {{ title?: Record<string, string>, icon?: string }} PluginTab
  *   a tab of the library drawer: its name by language and its mark's name, the plugin's own where left out
  */
+
+/** What a plugin or a skill is for, as the library's Plugins tab groups them: each is one of these. */
+export const CATEGORIES = Object.freeze(['material', 'edit', 'picture', 'sound', 'recipe', 'tool']);
+
+/**
+ * @typedef {{
+ *   category?: 'material' | 'edit' | 'picture' | 'sound' | 'recipe' | 'tool',
+ *   difficulty?: number, ease?: number, audience?: Record<string, string>, cost?: 'free' | 'generation',
+ * }} Profile
+ *   how people are told what a plugin or a skill is before they turn it on (its openfilm.json, each optional):
+ *   `category` what it helps make (material: shots, pictures, sets; edit: cutting and reviewing; picture: color,
+ *   motion, compositing; sound; recipe: a whole way of making a kind of film; tool: anything else), `difficulty` how
+ *   hard it is to start with (1 anyone at once … 5 a professional's), `ease` how little work a result takes once
+ *   started, much of it being the agent's (1 all by hand … 5 a sentence), `audience` who it is for (by language),
+ *   `cost` whether using it costs money (`generation`: it makes media with a paid service) or not
+ */
+
+/**
+ * A profile from an openfilm.json's fields (anything missing or wrong left out; none at all: undefined).
+ * @param {Record<string, unknown> | null | undefined} raw @param {(v: unknown) => Record<string, string>} words
+ * @returns {Profile | undefined}
+ */
+export function profileOf(raw, words) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  /** @type {Profile} */
+  const out = {};
+  if (typeof raw.category === 'string' && CATEGORIES.includes(raw.category)) out.category = /** @type {Profile['category']} */ (raw.category);
+  const rating = (/** @type {unknown} */ v) => (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5 ? v : undefined);
+  const difficulty = rating(raw.difficulty), ease = rating(raw.ease);
+  if (difficulty) out.difficulty = difficulty;
+  if (ease) out.ease = ease;
+  const audience = words(raw.audience);
+  if (Object.keys(audience).length) out.audience = audience;
+  if (raw.cost === 'free' || raw.cost === 'generation') out.cost = raw.cost;
+  return Object.keys(out).length ? out : undefined;
+}
 
 /** A mark's name, as `icon` gives one. */
 const ICON = /^[a-z][a-z0-9-]{0,23}$/;
@@ -73,9 +111,9 @@ export function tabOf(raw, words) {
   return { ...(Object.keys(title).length ? { title } : {}), ...(typeof t.icon === 'string' && ICON.test(t.icon) ? { icon: t.icon } : {}) };
 }
 
-/** The words of a field by language (`en`, `zh-CN`…); anything else is none. */
-const byLanguage = (/** @type {unknown} */ v) => (v && typeof v === 'object'
-  ? Object.fromEntries(Object.entries(v).filter(([k, w]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(k) && typeof w === 'string' && w.trim()).map(([k, w]) => [k, String(w).trim().slice(0, 300)])) : {});
+/** The words of a field by language (`en`, `zh-CN`…), each up to `max` characters; anything else is none. */
+const byLanguage = (/** @type {unknown} */ v, max = 300) => (v && typeof v === 'object'
+  ? Object.fromEntries(Object.entries(v).filter(([k, w]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(k) && typeof w === 'string' && w.trim()).map(([k, w]) => [k, String(w).trim().slice(0, max)])) : {});
 
 /** Skills by name, as an openfilm.json lists them (`skills`, `requires`); anything else left out. @param {unknown} raw @returns {string[]} */
 export const skillNames = (raw) => (Array.isArray(raw) ? raw.filter((s) => typeof s === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(s)) : []);
@@ -94,6 +132,10 @@ function readPlugin(dir, id) {
     on: !soon && raw.on === true, order: Number.isFinite(raw.order) ? raw.order : 1000,
   };
   if (typeof raw.icon === 'string' && ICON.test(raw.icon)) plugin.icon = raw.icon;
+  const details = byLanguage(raw.details, 1000);
+  if (Object.keys(details).length) plugin.details = details;
+  const profile = profileOf(raw, byLanguage);
+  if (profile) plugin.profile = profile;
   if (typeof raw.workbench === 'string' && WORKBENCH.test(raw.workbench) && !soon) plugin.workbench = raw.workbench;
   const blocks = plugin.workbench ? readBlocks(raw.blocks) : undefined;
   if (blocks) plugin.blocks = blocks;

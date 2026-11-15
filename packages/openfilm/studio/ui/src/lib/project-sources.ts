@@ -10,7 +10,7 @@
  *   GET  /api/skills?project=<id>   → { skills } (the project's, the person's own, the official ones)
  *   POST /api/projects/:id/locate { path } → { project }
  */
-import { refreshPlugins, type PluginTab } from './plugins.ts';
+import { refreshPlugins, type PluginTab, type Profile } from './plugins.ts';
 import type { BlockDecl } from '../../../../src/plugin-blocks.mjs';
 
 export type BrowseFolder = { name: string; path: string; film: boolean };
@@ -62,6 +62,8 @@ export type SkillEntry = {
   version?: string;
   /** a way of working (a kind of job) or a look; its place among its kind; its mark */
   kind?: 'workflow' | 'style'; order?: number; icon?: string;
+  /** how it is listed and rated for people: its category, difficulty, ease, audience and cost (src/plugins.mjs profileOf) */
+  profile?: Profile;
   /** addresses of its cover picture and preview video, when it has them */
   cover?: string; preview?: string;
   /** it has a surface (a page of its own), which makes it a plugin (lib/project-plugins): the page's address; listed

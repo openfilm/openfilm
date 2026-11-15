@@ -11,8 +11,8 @@ Only in the conversation, it is a skill; also outside it, a plugin.
 ```
 my-plugin/
   SKILL.md        what an agent is taught: front matter with `name` and `description`, then the way to work
-  openfilm.json   how people see it (optional): `title`, `summary`, `icon`, by language; `requires`, `tab` and
-                  `blocks`, below
+  openfilm.json   how people see it (optional): `title`, `summary`, `icon`, by language; its category and profile;
+                  `requires`, `tab` and `blocks`, below
   package.json    what runs (optional): `browser`, `bin`, `scripts.start`
   index.html      a page shown as its workbench (optional)
 ```
@@ -20,6 +20,22 @@ my-plugin/
 Put it in your Skills folder (`~/Movies/OpenFilm/Skills` on macOS, `~/Videos/OpenFilm/Skills` elsewhere; `OPENFILM_SKILLS`
 names another), or in a project's `skills/` folder to keep it with that project. The library's Plugins tab lists it, with
 its switch.
+
+### How it is listed: category and profile
+
+The library's Plugins tab lists everything by what it helps make, each in one category, and opens on a page that sums
+it up at the top. Its openfilm.json says so (each optional; a skill's openfilm.json the same):
+
+| Field | What it says |
+|---|---|
+| `category` | `material` (shots, pictures, sets to make the film from), `edit` (cutting it, watching it), `picture` (color, motion, compositing), `sound`, `recipe` (a whole way of making one kind of film), `tool` (anything else). None: a skill is a recipe (a look, `kind: "style"`, the picture's), a plugin a tool |
+| `difficulty` | how much there is to learn before the first result, 1 (anyone, at once) to 5 (a professional's) |
+| `ease` | how little work a result takes once learned, 1 (all by hand) to 5 (a sentence to the agent) |
+| `audience` | who it is for, by language: `{ "en": "Designers who tune animation by hand", … }` |
+| `cost` | `free`, or `generation` when using it makes media with a paid service |
+| `details` | a few lines on what it is for and how it is used, by language, one thing a line (`When to use it: …`) |
+
+How it is used (its workbench or tab, the conversation, its commands) is read from what it brings, so it is not said.
 
 ### What it builds on: `requires`
 
@@ -203,7 +219,7 @@ export default class FileCount extends HTMLElement {
   `advanced` or `developer`.
 - `topBar.set(owner, { tools })`: buttons on the top bar, before the workbench switch, in place of the ones `owner` put there
   before; `topBar.set(owner, null)` takes them off. A tool is `{ id, label, onClick, icon?, text?, pressed?, disabled? }`:
-  an icon (a name as `openfilm.json`'s `icon` gives one: `film`, `folder`, `scissors`, `workflow`, `clapperboard`, `audio`,
+  an icon (a name as `openfilm.json`'s `icon` gives one: `film`, `folder`, `scissors`, `workflow`, `clapperboard`, `projector`, `spline`, `box`, `audio`,
   `palette`, `layers`) or a few words (`text`), with `label` as its tooltip. The bar draws them itself, so they look like
   its own and work whatever the element is drawn with. Buttons stay until taken off: take them off as the element goes, or
   while it is not the workbench shown (`shown`).

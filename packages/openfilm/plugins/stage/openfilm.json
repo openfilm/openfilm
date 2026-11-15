@@ -15,7 +15,25 @@
     "ko": "3D로 짜는 장면: 세트, 인물의 동선, 카메라를 실시간으로 미리 봅니다.",
     "es": "Planos bocetados en 3D: el decorado, quién se mueve adónde y la cámara, en vivo."
   },
+  "details": {
+    "en": "When to use it: before shooting or generating, to block the shot: the set, where people stand and move, and the camera, seen as it plays.\nWhat it does: builds the set and figures in 3D white box, moves the camera, and renders white-box video, a reference for generated video.\nCost: building and previewing are free; turning a first frame into a photograph uses generation, charged per use.",
+    "zh-CN": "什么时候用：拍摄或生成前，想先排镜头：场景、人物站位和走位、机位，实时看效果。\n它做什么：用 3D 白模搭场景、放人物、设镜头运动，渲成白模视频，作为生成视频的参考。\n费用：搭建和预演免费；把首帧变成照片时会用到生成，按次计费。",
+    "ja": "使うとき：撮影や生成の前に、セット、人物の立ち位置と動き、カメラを決めて、その場で見たいとき。\nできること：3D の白模型でセットと人物を組み、カメラを動かし、白模型の映像にします。生成する動画の参考になります。\n費用：組み立てとプレビューは無料。最初のフレームを写真にするときは生成を使い、従量課金です。",
+    "ko": "언제 쓰나요: 촬영이나 생성 전에 세트, 인물 위치와 동선, 카메라를 잡고 바로 확인하고 싶을 때.\n하는 일: 3D 화이트박스로 세트와 인물을 만들고 카메라를 움직여 화이트박스 영상으로 렌더링합니다. 생성할 영상의 참고가 됩니다.\n비용: 만들기와 미리보기는 무료이며, 첫 프레임을 사진으로 바꿀 때는 생성을 써서 사용량만큼 과금됩니다.",
+    "es": "Cuándo usarlo: antes de rodar o generar, para planificar el plano: el decorado, dónde están y cómo se mueven las personas, y la cámara, viéndolo en directo.\nQué hace: monta el decorado y las figuras en 3D en blanco, mueve la cámara y renderiza un vídeo en blanco, referencia para el vídeo generado.\nCoste: montar y previsualizar es gratis; convertir el primer fotograma en foto usa generación, que se cobra por uso."
+  },
   "about": "shots blocked out in 3D (set, figures, camera) as three.js pages, rendered as white-box video",
+  "category": "material",
+  "difficulty": 4,
+  "ease": 3,
+  "cost": "free",
+  "audience": {
+    "en": "Directors and storyboard artists who block shots first",
+    "zh-CN": "要先排好镜头、走位和机位的导演、分镜师",
+    "ja": "先にショット、立ち位置、カメラを決める監督・絵コンテ作家",
+    "ko": "장면, 동선, 카메라를 먼저 잡는 감독·콘티 작가",
+    "es": "Directores y storyboarders que planifican los planos primero"
+  },
   "workbench": "stage",
   "blocks": [
     {

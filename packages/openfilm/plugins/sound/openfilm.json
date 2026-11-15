@@ -16,6 +16,14 @@
     "es": "Mezcla a mano: ecualizador, compresor y volumen en el tiempo."
   },
   "about": "a mixer for the film's sound",
+  "category": "sound",
+  "audience": {
+    "en": "People who mix by hand",
+    "zh-CN": "要亲手混音的人",
+    "ja": "手でミックスしたい人",
+    "ko": "직접 믹싱하는 사람",
+    "es": "Quien mezcla a mano"
+  },
   "soon": true,
   "skills": [],
   "requires": [

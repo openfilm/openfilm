@@ -23,11 +23,17 @@ export interface PluginTab { title?: Record<string, string>; icon?: string }
  * project's files are for that page.
  */
 export interface Plugin {
-  id: string; title?: Record<string, string>; summary?: Record<string, string>; icon?: string;
+  id: string; title?: Record<string, string>; summary?: Record<string, string>; details?: Record<string, string>; profile?: Profile; icon?: string;
   workbench?: Workbench; blocks?: string | readonly (BlockDecl | string)[]; tab?: PluginTab; skills: string[]; commands?: string[]; on: boolean; beta?: boolean; soon?: boolean; skill?: string; page?: string; files?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string;
 }
 
 /** The plugins there are to turn as a new install has them, until Studio answers with every plugin. */
+/** How a plugin or a skill is listed and rated for people (src/plugins.mjs profileOf). */
+export interface Profile {
+  category?: 'material' | 'edit' | 'picture' | 'sound' | 'recipe' | 'tool';
+  difficulty?: number; ease?: number; audience?: Record<string, string>; cost?: 'free' | 'generation';
+}
+
 const DEFAULT: readonly Plugin[] = [
   { id: 'edit', workbench: 'edit', skills: [], on: true },
   { id: 'canvas', workbench: 'canvas', skills: ['canvas'], on: true },

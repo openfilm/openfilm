@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PLUGINS, pluginOfSkill, pluginSkillDir, pluginStates, pluginsDir, pluginsOffLine, readPlugins, setPluginOn, workbenchesOn } from './plugins.mjs';
+import { CATEGORIES, PLUGINS, pluginOfSkill, pluginSkillDir, pluginStates, pluginsDir, pluginsOffLine, profileOf, readPlugins, setPluginOn, workbenchesOn } from './plugins.mjs';
 import { offeredSkills, promptSkills, setSkillOn } from './skills.mjs';
 import { readBlocks } from './plugin-blocks.mjs';
 
@@ -162,6 +162,30 @@ test('every plugin says what it is for, and names skills there are', async () =>
     for (const lang of ['en', 'zh-CN', 'ja', 'ko', 'es']) assert.ok(p.title[lang] && p.summary[lang], `${p.id}: ${lang}`);
     for (const skill of p.skills) assert.ok(own.has(skill), `${p.id}: ${skill}`);
   }
+});
+
+test('each plugin of OpenFilm\'s own is in one category, and one made is rated, for whom and at what cost, in every language', () => {
+  const langs = ['en', 'zh-CN', 'ja', 'ko', 'es'];
+  for (const p of PLUGINS) {
+    assert.ok(CATEGORIES.includes(p.profile?.category ?? ''), `${p.id}: its category`);
+    for (const lang of langs) assert.ok(p.profile?.audience?.[lang], `${p.id}: who it is for, ${lang}`);
+    if (p.soon) continue;
+    assert.ok(p.profile?.difficulty && p.profile.ease && p.profile.cost, `${p.id}: rated`);
+    for (const lang of langs) assert.ok((p.details?.[lang]?.split('\n').length ?? 0) >= 2, `${p.id}: its details, ${lang}`);
+  }
+  /* by what it helps make, in the order a film is made */
+  assert.deepEqual(Object.fromEntries(PLUGINS.map((p) => [p.id, p.profile?.category])), {
+    screening: 'edit', edit: 'edit', canvas: 'material', motion: 'picture', stage: 'material', color: 'picture', sound: 'sound', composite: 'picture',
+  });
+});
+
+test('a profile reads what is right and leaves out the rest', () => {
+  const words = (/** @type {unknown} */ v) => (v && typeof v === 'object' ? /** @type {Record<string, string>} */ (v) : {});
+  assert.deepEqual(profileOf({ category: 'picture', difficulty: 4, ease: 2, cost: 'free', audience: { en: 'Colorists' } }, words),
+    { category: 'picture', difficulty: 4, ease: 2, cost: 'free', audience: { en: 'Colorists' } });
+  assert.deepEqual(profileOf({ category: 'colour', difficulty: 6, ease: 2.5, cost: 'cheap', audience: 3 }, words), undefined);
+  assert.deepEqual(profileOf({ difficulty: 1 }, words), { difficulty: 1 });
+  assert.equal(profileOf(null, words), undefined);
 });
 
 test('a plugin declares the blocks its workbench is laid out in, each checked; Motion is laid out as the edit is', () => {

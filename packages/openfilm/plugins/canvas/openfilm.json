@@ -15,7 +15,25 @@
     "ko": "소재 만들기: 아이디어, 참고 자료, 장면을 보드에 펼치고 생성합니다.",
     "es": "Crear material: ideas, referencias y planos dispuestos y generados en un tablero."
   },
+  "details": {
+    "en": "When to use it: before the edit, to lay out ideas, references and the shots you need on one board, and generate pictures, video and sound.\nWhat your agent does: lays out a storyboard and characters from what you describe; you pick what you like and send it to the timeline.\nCost: generating pictures, video and sound is charged by the service; laying things out and writing notes costs nothing.",
+    "zh-CN": "什么时候用：正式剪辑前，把想法、参考图和要拍的镜头摆在一块画板上，并生成图片、视频和声音。\n智能体能做什么：按你的描述摆好分镜和角色，生成后你挑满意的放上时间线。\n费用：生成图片、视频和声音按服务计费；摆东西、写笔记不花钱。",
+    "ja": "使うとき：編集の前に、アイデア、参考、必要なショットを一枚のボードに並べ、画像・動画・音を生成するとき。\nエージェントにできること：説明からストーリーボードとキャラクターを並べます。気に入ったものを選んでタイムラインへ。\n費用：画像・動画・音の生成はサービスごとに課金。並べることやメモは無料です。",
+    "ko": "언제 쓰나요: 편집 전에 아이디어, 참고 자료, 필요한 장면을 한 보드에 펼치고 이미지·영상·소리를 생성할 때.\n에이전트가 하는 일: 설명대로 스토리보드와 캐릭터를 배치합니다. 마음에 드는 것을 골라 타임라인에 올립니다.\n비용: 이미지·영상·소리 생성은 서비스별로 과금됩니다. 배치와 메모는 무료입니다.",
+    "es": "Cuándo usarlo: antes de editar, para disponer ideas, referencias y los planos que necesitas en un tablero, y generar imágenes, vídeo y sonido.\nQué hace tu agente: dispone un guion gráfico y personajes según lo que describes; eliges lo que te gusta y lo llevas a la línea de tiempo.\nCoste: generar imágenes, vídeo y sonido lo cobra el servicio; disponer cosas y escribir notas es gratis."
+  },
   "about": "the board beside the edit, where material is made and laid out",
+  "category": "material",
+  "difficulty": 2,
+  "ease": 4,
+  "cost": "generation",
+  "audience": {
+    "en": "People who generate pictures, shots and characters",
+    "zh-CN": "要生成画面、镜头和角色的人",
+    "ja": "画像、ショット、キャラクターを生成する人",
+    "ko": "이미지, 장면, 캐릭터를 생성하는 사람",
+    "es": "Quien genera imágenes, planos y personajes"
+  },
   "workbench": "canvas",
   "blocks": [
     {
