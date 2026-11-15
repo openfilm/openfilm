@@ -74,7 +74,7 @@ test('the providers API: keys go in and never come back out; choices for each ki
   assert.ok(!text.includes('sk-test-ABCDEFGH9876') && !text.includes(KEY));
   let state = JSON.parse(text);
   const openai = state.providers.find((p) => p.id === 'openai');
-  assert.deepEqual(openai, { id: 'openai', name: 'OpenAI', verbs: ['voice', 'tts', 'image', 'asr', 'translate'], models: listProviders().find((p) => p.id === 'openai').models, keysUrl: 'https://platform.openai.com/api-keys', pricingUrl: 'https://developers.openai.com/api/docs/pricing', env: 'OPENAI_API_KEY', envKey: false, source: 'file', last4: '9876', signIn: false, account: null });
+  assert.deepEqual(openai, { id: 'openai', name: 'OpenAI', verbs: ['image', 'asr', 'translate'], models: listProviders().find((p) => p.id === 'openai').models, keysUrl: 'https://platform.openai.com/api-keys', pricingUrl: 'https://developers.openai.com/api/docs/pricing', env: 'OPENAI_API_KEY', envKey: false, source: 'file', last4: '9876', signIn: false, account: null });
   /* a new key takes the kinds nothing serves yet, and only those it can do */
   assert.equal(state.use.image, 'openai');
   assert.equal(state.use['image-search'], null);

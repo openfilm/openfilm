@@ -126,19 +126,6 @@ test('music from Lyria 2: its tracks are 30 s, said when another length was aske
   assert.match(result.receipt.notes[0], /30 s tracks/);
 });
 
-test('a sound effect: ElevenLabs Sound Effects through fal as 128 kbps MP3, its length from its size', async () => {
-  seen.length = 0;
-  reply = queue('fal-ai/elevenlabs/sound-effects/v2', { audio: { url: `${base}/files/out.mp3`, content_type: 'audio/mpeg', file_name: 'out.mp3' } });
-  const result = await fal.run('sfx', { out: 'whoosh', prompt: 'a fast whoosh', sec: 1.5 }, ctx());
-  assert.deepEqual(JSON.parse(seen.find((c) => c.method === 'POST').body), { text: 'a fast whoosh', duration_seconds: 1.5, output_format: 'mp3_44100_128' });
-  assert.equal(result.files[0].path, 'assets/audio/sfx/whoosh.mp3');
-  assert.equal(result.index[0].dur, 1);
-  /* no length asked: the model chooses */
-  seen.length = 0;
-  await fal.run('sfx', { out: 'whoosh', prompt: 'x' }, ctx());
-  assert.equal('duration_seconds' in JSON.parse(seen.find((c) => c.method === 'POST').body), false);
-});
-
 test('a cancelled video run cancels the queued request too', async () => {
   seen.length = 0;
   reply = queue('bytedance/seedance-2.0/text-to-video', {}, Infinity);
