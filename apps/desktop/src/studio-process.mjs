@@ -17,17 +17,29 @@
  *   ← { type: 'working', folders }                   the folders the chat's agents are working in now (not deletable)
  *   ← { type: 'account:read', id }                   read the Services account for the built-in agent
  *   → { type: 'account', id, account | error }       credentials, only on this private process channel
+ *   → { type: 'secrets:read' }                       as it starts: Studio's own key and its keys' vault
+ *   ← { type: 'secrets', key?, vault? }              (studio-secrets.mjs), on this channel only; none: keys plain
+ *
+ * With them, Studio's key lives in memory only (run.json names the agents' key: `keepKey`) and the person's service
+ * keys are sealed in providers.json with the vault (the `openfilm` package's keys.mjs).
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { startStudio } from 'openfilm/studio';
+import { startStudio, vaultSealer } from 'openfilm/studio';
 import { desktopAccount } from 'openfilm/desktop-account';
 import { launch } from 'openfilm/host';
 
 const parent = process.parentPort;
 const send = (message) => parent.postMessage(message);
+
+/** Studio's own key and its keys' vault, from the main process (none: the keychain is not there, or did not open) */
+const secrets = new Promise((resolve) => {
+  const take = ({ data }) => { if (data?.type === 'secrets') { parent.off('message', take); resolve(data); } };
+  parent.on('message', take);
+  send({ type: 'secrets:read' });
+});
 
 let studio = null;
 let stopping = false;
@@ -81,7 +93,9 @@ function askAgent(text, signal, model, images, onText) {
 
 const port = Number(process.env.OPENFILM_STUDIO_PORT);
 try {
+  const { key, vault } = await secrets;
   studio = await startStudio({
+    ...(key && vault ? { key, keepKey: true, sealer: vaultSealer(Buffer.from(vault, 'hex')) } : {}),
     port: Number.isInteger(port) ? port : 0,
     advertise: true,
     openBrowser: (url) => send({ type: 'open', url }),

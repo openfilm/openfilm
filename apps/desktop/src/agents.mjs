@@ -137,6 +137,23 @@ export function agentDefaults(id, shell = {}) {
 export const HARNESS_AGENTS = Object.freeze(['openfilm', 'byok']);
 export const isChatAgent = (id) => isAgentId(id) || HARNESS_AGENTS.includes(id);
 
+/** The pipe the app's own agent is given its models' keys on (JSON, by variable), in place of its environment. */
+export const KEYS_FD = 3;
+
+/**
+ * Claude Code's rules against reading Studio's key files in `homes` (its `permissions.deny`): the person's service keys
+ * (providers.json) and Studio's keys (key, run.json). Sealed in the app, they hold nothing an agent may not have; the
+ * rules keep its own Read tool off them too. Its rules bind its tools, not every command it runs. Codex's deny rules
+ * hold only inside its sandbox, which the chat's mode turns off (full access), and its profiles cannot be set beside
+ * the mode the adapter sets, so it has none here.
+ * @param {string[]} homes @param {string} [platform]
+ */
+export function keyFileRules(homes, platform = process.platform) {
+  /* an absolute path is `//` and the path (`//c/Users/…` on Windows) */
+  const absolute = (path) => `/${platform === 'win32' ? path.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `/${d.toLowerCase()}`) : path}`;
+  return [...new Set(homes.filter(Boolean))].flatMap((home) => ['providers.json', 'key', 'run.json'].map((name) => `Read(${absolute(join(home, name))})`));
+}
+
 /**
  * How the person points at things in Studio, and how the agent points back: told to every agent, the app's own too.
  * One form both ways, links to the project (Studio's lib/links), only what the web already has after `#`: an id, and
@@ -1261,11 +1278,9 @@ export class AgentSession {
     const path = [this.opts.binDir, shell.PATH, this.opts.fallbackDir].filter(Boolean).join(PATH_SEP);
     const instructions = agentInstructions(this.opts.binDir ? openfilmCommand(this.opts.binDir) : null);
     /* the app's own agent: what Pi runs with (its whole system prompt is ours), and the web search of `openfilm get`
-       (OPENFILM_GET_WEB lists it) */
-    const own = !harness ? {} : {
-      ...harness.env,
-      OPENFILM_GET_WEB: '1',
-    };
+       (OPENFILM_GET_WEB lists it). Its models' keys (`harness.env`) are not in its environment, which every command it
+       runs inherits and other programs of this user can read (`ps`): they go over a pipe of their own (KEYS_FD) */
+    const own = !harness ? {} : { OPENFILM_GET_WEB: '1' };
     /* its skills and MCP servers: its maker's, OpenFilm's skills, and the person's own only those let in (agent-skills.mjs) */
     const skills = this.opts.skills
       ? await sessionSkills(this.opts.agent, { cwd: this.opts.cwd, env: shell, ...this.opts.skills }).catch(() => null) : null;
@@ -1298,7 +1313,8 @@ export class AgentSession {
     const script = harness ? fileURLToPath(new URL('./pi-agent.mjs', import.meta.url)) : native ? null : adapterScript(this.spec.adapter);
     this.child = native
       ? spawn(native.cmd, native.args, { ...native.options, ...OWN_GROUP, cwd: this.opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
-      : spawn(node.command, node.env.ELECTRON_RUN_AS_NODE ? asNode(script) : [script], { ...OWN_GROUP, cwd: this.opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+      : spawn(node.command, node.env.ELECTRON_RUN_AS_NODE ? asNode(script) : [script], { ...OWN_GROUP, cwd: this.opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe', ...(harness ? ['pipe'] : [])], windowsHide: true });
+    if (harness) this.child.stdio[KEYS_FD]?.end(JSON.stringify(harness.env ?? {}));
     this.child.stderr.on('data', (d) => { this.stderr = (this.stderr + String(d)).slice(-16_000); });
     LIVE.add(this);
     this.child.once('exit', (code) => { LIVE.delete(this); this.exited = { code }; this.opts.onExit?.({ code, stderr: this.stderr }); });
@@ -1350,7 +1366,10 @@ export class AgentSession {
       cwd: this.opts.cwd,
       mcpServers: [],
       ...(skills?.additionalDirectories ? { additionalDirectories: skills.additionalDirectories } : {}),
-      ...(claude ? { _meta: { systemPrompt: { append: instructions }, ...(skills?.claude ? { claudeCode: { options: skills.claude } } : {}) } } : {}),
+      ...(claude ? { _meta: { systemPrompt: { append: instructions }, claudeCode: { options: {
+        ...skills?.claude,
+        settings: { ...skills?.claude?.settings, permissions: { deny: keyFileRules([this.opts.env?.OPENFILM_HOME, this.opts.env?.OPENFILM_SHARED_HOME, join(homedir(), '.openfilm')]) } },
+      } } } } : {}),
     };
     /* the program's own sign-in, taken up (Cursor asks for this before any session) */
     if (this.spec.authenticate && (init.authMethods ?? []).some((m) => m.id === this.spec.authenticate)) {
@@ -1390,13 +1409,12 @@ export class AgentSession {
     this.noteModel(this.info.configOptions);
     /* what the agent was started and opened with, for the turn log: every word the app adds to its own, and the
        variables the app set (a key's value never: it reads "(hidden)") */
-    const secret = new Set(Object.keys(harness?.env ?? {}));
     this.opened = {
       program: harness ? 'pi' : cli.path,
       /* the command line the agent's process was started with: its own program, or the app's Node running its adapter (or Pi) */
       command: native ? [native.cmd, ...native.args] : [node.command, ...(node.env.ELECTRON_RUN_AS_NODE ? asNode(script) : [script])],
       adapter: this.spec.adapter ?? null,
-      env: Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, secret.has(k) || /KEY|TOKEN|SECRET|PASSWORD/i.test(k) ? '(hidden)' : k === 'OPENFILM_PI' ? JSON.parse(v) : v])),
+      env: Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, /KEY|TOKEN|SECRET|PASSWORD/i.test(k) ? '(hidden)' : k === 'OPENFILM_PI' ? JSON.parse(v) : v])),
       ...(env.CODEX_CONFIG ? { codexConfig: JSON.parse(env.CODEX_CONFIG) } : {}),
       path: { first: this.opts.binDir ?? null, last: this.opts.fallbackDir ?? null },
       fromShell: this.spec.fromShell ? Object.keys(shell).sort() : 'all',

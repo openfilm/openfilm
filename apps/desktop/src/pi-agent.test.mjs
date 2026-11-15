@@ -10,7 +10,7 @@ import { AgentSession } from './agents.mjs';
 import { agentOffer } from './openfilm-agent.mjs';
 
 /** A service on the Chat Completions API that answers "ok" and notes the model each request named (and each request, and its key). */
-async function service({ broke = false, fails = null, busyOnce = false, largest = Infinity, reads = 0 } = {}) {
+async function service({ broke = false, fails = null, busyOnce = false, largest = Infinity, reads = 0, bash = null } = {}) {
   const asked = [];
   const bodies = [];
   const keys = [];
@@ -29,6 +29,14 @@ async function service({ broke = false, fails = null, busyOnce = false, largest 
       if (fails) { res.writeHead(400, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: fails } })); return; }
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const chunk = (choice, extra = {}) => `data: ${JSON.stringify({ id: 'c', object: 'chat.completion.chunk', created: 0, model, choices: [choice], ...extra })}\n\n`;
+      /* `bash`: the first answer runs that command */
+      if (bash && asked.length === 1) {
+        res.end(chunk({ index: 0, delta: { role: 'assistant', tool_calls: [{
+          index: 0, id: 'bash-1', type: 'function', function: { name: 'bash', arguments: JSON.stringify({ command: bash }) },
+        }] }, finish_reason: null })
+          + chunk({ index: 0, delta: {}, finish_reason: 'tool_calls' }) + 'data: [DONE]\n\n');
+        return;
+      }
       if (asked.length <= reads) {
         res.end(chunk({ index: 0, delta: { role: 'assistant', tool_calls: [{
           index: 0, id: `read-${asked.length}`, type: 'function',
@@ -176,6 +184,31 @@ test('a service with no balance left is named for the model the turn was on, not
     session.close();
     first.close();
     second.close();
+  }
+});
+
+test("the app's own agent's key goes to its model's service, never to a command it runs: not in its environment, nor Pi's", { timeout: 60_000, skip: process.platform === 'win32' }, async () => {
+  const KEY = `sk-hidden-${randomBytes(8).toString('hex')}`;
+  /* what a command sees: its own environment, and Pi's as another program of this user reads it (ps) */
+  const svc = await service({ bash: 'env > seen.txt; ps -wwE -p $PPID >> seen.txt 2>&1; echo done >> seen.txt' });
+  const cwd = mkdtempSync(join(tmpdir(), 'of-pi-env-'));
+  const session = new AgentSession({
+    agent: 'byok', cwd,
+    harness: { home: mkdtempSync(join(tmpdir(), 'of-pi-home-')), models: [own('a', svc.url)], model: 'a', env: { OPENFILM_BYOK_KEY_a: KEY } },
+  });
+  try {
+    await session.start();
+    await session.prompt([{ type: 'text', text: 'look around' }]);
+    const seen = readFileSync(join(cwd, 'seen.txt'), 'utf8');
+    assert.match(seen, /PATH=/);
+    assert.match(seen, /done/);
+    assert.match(seen, /pi-agent\.mjs .*OPENFILM_PI=/, "Pi's own environment, as ps shows it");
+    assert.ok(!seen.includes(KEY), 'the key is in no environment a command can see');
+    assert.deepEqual(svc.keys, [`Bearer ${KEY}`, `Bearer ${KEY}`], 'the service gets it, each request');
+  } finally {
+    session.close();
+    svc.close();
+    rmSync(cwd, { recursive: true, force: true });
   }
 });
 

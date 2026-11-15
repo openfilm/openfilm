@@ -17,7 +17,7 @@ const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.u
 /** A source checkout (Studio's editor source is here): git pull updates it, not npm. */
 export const FROM_SOURCE = existsSync(new URL('./ui/src', import.meta.url));
 
-/** @typedef {{ pid?: number, supervisor?: number, origin: string, filmOrigin: string, key: string, version?: string, app?: boolean }} Running */
+/** @typedef {{ pid?: number, supervisor?: number, origin: string, filmOrigin: string, key: string, keyKind?: 'agent', version?: string, app?: boolean }} Running */
 
 /** What a Studio says about itself, or null when nothing (or something else) answers at `origin`. */
 async function health(/** @type {string} */ origin, ms = 1500) {
@@ -38,7 +38,8 @@ export async function running() {
   try { run = JSON.parse(readFileSync(join(studioHome(), 'run.json'), 'utf8')); } catch { /* none advertised */ }
   if (run) {
     const said = await health(run.origin);
-    if (said) return { ...run, key: callerKey(run.key), version: said.version, ...(said.app ? { app: true } : {}) };
+    /* the app's Studio names only the agents' key (`keyKind: 'agent'`): sent as it is, by an agent or the person */
+    if (said) return { ...run, key: run.keyKind === 'agent' ? run.key : callerKey(run.key), version: said.version, ...(said.app ? { app: true } : {}) };
   }
   const given = Number(process.env.OPENFILM_STUDIO_PORT);
   const origin = `http://127.0.0.1:${Number.isInteger(given) && given > 0 ? given : 4747}`;

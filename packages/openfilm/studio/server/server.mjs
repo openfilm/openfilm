@@ -43,6 +43,9 @@ import {
   agentKeyOf, moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
 } from './projects.mjs';
 import { FetchError, createFetches, fetchFilm, parseRepoUrl } from './fetch-repo.mjs';
+import { sealKeysWith, sealPlainKeys } from './keys.mjs';
+/* the app's Studio seals the person's keys with it (startStudio `sealer`) */
+export { vaultSealer } from './keys.mjs';
 import { BrowseError, browseFolder, browsePlaces } from './browse.mjs';
 import { exampleFile, exampleFolder, listExamples } from './examples.mjs';
 import { pickFiles, pickFolder } from './folder-picker.mjs';
@@ -142,16 +145,23 @@ export function personsSay(parts, method) {
  * Studio's editor into a page of its own (its chat beside it) serves that one. `working`: the folders an app's agent
  * is working in right now (an app with a chat), which cannot be renamed or deleted meanwhile. `askAgent`: in an app with
  * a chat, one question answered by the person's agent's own model, for Studio's own work that needs a model
- * (translating subtitles); without it, that goes to a service connected for it. Resolves once both servers listen.
- * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent, indexMedia?: boolean }} [options]
+ * (translating subtitles); without it, that goes to a service connected for it. `sealer`: the person's service keys
+ * are kept sealed with it (keys.mjs), those found plain sealed now. `keepKey`: Studio's own `key` is the app's, kept in
+ * its memory only: run.json names the agents' key (projects.mjs agentKeyOf, `keyKind: 'agent'`), so no file holds a
+ * key to the person's say. Resolves once both servers listen.
+ * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent, indexMedia?: boolean, sealer?: import('./keys.mjs').Sealer, keepKey?: boolean }} [options]
  */
-export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent, indexMedia = false } = {}) {
+export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent, indexMedia = false, sealer, keepKey = false } = {}) {
   void refreshCommunity();
   let COOKIE = cookieName(port);
   let FRAMED = framedCookieName(port);
-  /** The key from either session cookie. */
-  const cookieKey = (/** @type {Req} */ req) => (sameKey(cookie(req, COOKIE)) ? cookie(req, COOKIE) : cookie(req, FRAMED));
+  /** The key a browser session holds, Studio's or the agents', from either session cookie (null: none). */
+  const cookieKey = (/** @type {Req} */ req) => [cookie(req, COOKIE), cookie(req, FRAMED)].find((k) => sameKey(k) || matches(k, agentKey)) ?? null;
   key ??= advertise ? studioKey() : randomBytes(24).toString('hex');
+  if (sealer) {
+    sealKeysWith(sealer);
+    await sealPlainKeys().catch((e) => console.warn(`service keys: not sealed yet (${e instanceof Error ? e.message : String(e)})`));
+  }
   /* every change of an open project's folder: a version once it rests, when the person asked for that */
   const watchers = createWatchers({ onChange: (root, e) => {
     if (e.type === 'film' || e.type === 'files') autoVersions.changed(root);
@@ -217,16 +227,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
 
   /**
    * The caller holds the key; a browser write must also come from the editor's own origin. Says who it is: the
-   * person (the pages, their CLI), or an agent the app runs (`x-studio-key` its key).
+   * person (the pages, their CLI), or an agent the app runs (`x-studio-key` its key, or a browser it opened Studio
+   * in with its key).
    * @returns {'person' | 'agent'}
    */
   function authorize(/** @type {Req} */ req) {
     const given = /** @type {string | undefined} */ (req.headers['x-studio-key']);
     if (sameKey(given)) return 'person';
     if (matches(given, agentKey)) return 'agent';
-    if (!sameKey(cookieKey(req))) throw new HttpError(401, 'open Studio from the address `openfilm open` prints');
+    const session = cookieKey(req);
+    if (!session) throw new HttpError(401, 'open Studio from the address `openfilm open` prints');
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers.origin !== origin) throw new HttpError(403, 'not from Studio');
-    return 'person';
+    return sameKey(session) ? 'person' : 'agent';
   }
 
   /*
@@ -261,25 +273,30 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        without the key, so it says nothing of the machine: its home only as a digest (homeTag), no process id */
     /* `app`: the desktop app's Studio, which updates with the app (`openfilm update` says so instead) */
     if (path === '/api/health') return json(res, 200, { product: 'openfilm-studio', version: VERSION, home: homeTag(), filmOrigin, ...(stays ? { app: true } : {}) });
-    const signIn = [`${COOKIE}=${key}; Path=/; HttpOnly; SameSite=Strict`, `${FRAMED}=${key}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned`];
+    /* a browser signs in with the key it was given: Studio's (the person's), or the agents' (a browser an agent opened
+       Studio in, which has all but the person's say) */
+    const signIn = (/** @type {string} */ k) => [`${COOKIE}=${k}; Path=/; HttpOnly; SameSite=Strict`, `${FRAMED}=${k}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned`];
+    const given = url.searchParams.get('key');
+    const signingIn = sameKey(given) || matches(given, agentKey) ? /** @type {string} */ (given) : null;
     /** A page's address with the key in it (the address bar is what a person copies). */
-    const keyed = (/** @type {string} */ to) => {
+    const keyed = (/** @type {string} */ to, /** @type {string} */ k) => {
       const at = new URL(to, origin);
-      at.searchParams.set('key', String(key));
+      at.searchParams.set('key', k);
       return at.pathname + at.search;
     };
     if (path === '/open') {
-      if (!sameKey(url.searchParams.get('key'))) throw new HttpError(403, 'this link is from another Studio launch; use the one `openfilm open` printed');
+      if (!signingIn) throw new HttpError(403, 'this link is from another Studio launch; use the one `openfilm open` printed');
       const to = url.searchParams.get('to') ?? '/';
-      res.writeHead(302, { location: keyed(/^\/(?!\/)[^\s\\]*$/.test(to) ? to : '/'), 'set-cookie': signIn, 'referrer-policy': 'no-referrer' });
+      res.writeHead(302, { location: keyed(/^\/(?!\/)[^\s\\]*$/.test(to) ? to : '/', signingIn), 'set-cookie': signIn(signingIn), 'referrer-policy': 'no-referrer' });
       return res.end();
     }
     if (!path.startsWith('/api/')) {
       if (path.startsWith('/assets/')) return sendEditor(res, editorDir, path);
       /* a page with the key in its address signs this browser in; one signed in without it gets it in its address */
-      if (sameKey(url.searchParams.get('key'))) return sendEditor(res, editorDir, path, { 'set-cookie': signIn });
-      if (sameKey(cookieKey(req))) {
-        res.writeHead(302, { location: keyed(path + url.search), 'referrer-policy': 'no-referrer' });
+      if (signingIn) return sendEditor(res, editorDir, path, { 'set-cookie': signIn(signingIn) });
+      const session = cookieKey(req);
+      if (session) {
+        res.writeHead(302, { location: keyed(path + url.search, session), 'referrer-policy': 'no-referrer' });
         return res.end();
       }
       return sendEditor(res, editorDir, path);
@@ -319,7 +336,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const last = folder == null ? (await listProjects()).find((p) => !p.missing && existsSync(join(p.path, FILM_FILE))) : null;
       const project = folder != null ? await openProject(folder) : last ? await openProject(last.path) : null;
       const to = project ? `/projects/${encodeURIComponent(project.id)}` : '/';
-      const address = `${origin}/open?key=${key}&to=${encodeURIComponent(to)}`;
+      /* an agent is given an address with its own key; a browser Studio opens itself, Studio's */
+      const addressWith = (/** @type {string} */ k) => `${origin}/open?key=${k}&to=${encodeURIComponent(to)}`;
+      const address = addressWith(String(key));
       for (const end = Date.now() + PAGES_BACK_MS; editorPages.size < before && Date.now() < end;) {
         await new Promise((done) => { pageCame = () => done(undefined); setTimeout(done, end - Date.now()).unref(); });
       }
@@ -331,7 +350,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (now) openBrowser(address);
         else if (fallback > 0) setTimeout(() => { if (pagesConnected === before) openBrowser(address); }, fallback * 1000).unref();
       }
-      return json(res, 200, { project, url: address, pages: open });
+      return json(res, 200, { project, url: caller === 'agent' ? addressWith(agentKey) : address, pages: open });
     }
 
     /* this Studio's version, and the latest on npm (Settings → General; `?check=1` asks npm now) */
@@ -1456,7 +1475,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     void (async () => {
       const path = new URL(req.url ?? '/', origin).pathname;
       const given = /** @type {string | undefined} */ (req.headers['x-studio-key']);
-      const keyed = sameKey(given) || matches(given, agentKey) || (sameKey(cookieKey(req)) && req.headers.origin === origin);
+      const keyed = sameKey(given) || matches(given, agentKey) || (cookieKey(req) !== null && req.headers.origin === origin);
       if (!keyed) return refuse('401 Unauthorized');
       const parts = path.split('/').slice(1).map(decodeURIComponent);
       /** @type {() => void} */
@@ -1520,7 +1539,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     mkdirSync(studioHome(), { recursive: true });
     /* `supervisor`: the process that starts this one again if it ends unexpectedly (main.mjs), stopped with it */
     const supervisor = Number(process.env.OPENFILM_STUDIO_SUPERVISOR) || undefined;
-    writeFileSync(runFile(), `${JSON.stringify({ pid: process.pid, ...(supervisor ? { supervisor } : {}), origin, filmOrigin: pages.origin, key })}\n`, { mode: 0o600 });
+    /* `keepKey`: the agents' key only (anyone of this user reads the file), which the CLI sends as it is */
+    const named = keepKey ? { key: agentKey, keyKind: 'agent' } : { key };
+    writeFileSync(runFile(), `${JSON.stringify({ pid: process.pid, ...(supervisor ? { supervisor } : {}), origin, filmOrigin: pages.origin, ...named })}\n`, { mode: 0o600 });
   }
 
   /** @type {Promise<void> | null} */

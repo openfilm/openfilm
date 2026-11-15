@@ -18,6 +18,7 @@ import { folderDialogOptions, programDialogOptions } from './folder-dialog.mjs';
 import { childEnvironment, lastPathSource, loginShellEnvironment } from './environment.mjs';
 import { gatherAppReport } from './app-report.mjs';
 import { startWindowStudio } from './studio.mjs';
+import { studioSecrets } from './studio-secrets.mjs';
 import { CHAT_MIN, STUDIO_MIN, WINDOW_MIN, placeOnDisplays, readWindowState, writeWindowState } from './window-state.mjs';
 import { createPagePresentation, paintPage, preparePage, revealPage, syncPagePointer } from './page-presentation.mjs';
 import { closeTabOrWindow, keepWindowOnClose, quitAfterStudio } from './window-lifecycle.mjs';
@@ -522,10 +523,14 @@ function answerStudio(message, reply) {
 /** when the running Studio started, and the wait before it did (studio-restart.mjs) */
 let startedAt = 0;
 let restartWait = 0;
+/** Studio's own key and the vault of the person's service keys, opened from the keychain once (studio-secrets.mjs) */
+let secrets;
 
 async function runStudio(env) {
   startedAt = Date.now();
+  if (secrets === undefined) secrets = studioSecrets({ dataDir: DATA, available: safeStorage.isEncryptionAvailable(), seal, unseal, log });
   studio = await startWindowStudio({
+    secrets,
     onAsk: answerStudio,
     home: env.OPENFILM_HOME,
     port: IDENTITY.studioPort,
