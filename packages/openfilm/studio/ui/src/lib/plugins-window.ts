@@ -1,11 +1,11 @@
 /**
- * The Features window (components/PluginsWindow): whether it is open, on which list (the workbenches, the skills, or
- * Get more), and the page shown in it (a skill's, by its uid or the name agents know it by, or `plugin:<id>` one of OpenFilm's own),
+ * The Features window (components/PluginsWindow): whether it is open, on which list (the person's workbenches, skills or
+ * connectors; or Discover: its featured, or one of its kinds, or the community's), and the page shown in it (a skill's, by its uid or the name agents know it by, or `plugin:<id>` one of OpenFilm's own),
  * for whoever opens it: the workbench switch's menu, the app's chat (its button, a skill named in a message), a link.
  */
 import * as React from 'react';
 
-export type PluginsLine = 'workbenches' | 'skills' | 'discover';
+export type PluginsLine = 'workbenches' | 'skills' | 'connectors' | 'discover' | `discover:${'workbenches' | 'skills' | 'connectors' | 'community'}`;
 export interface PluginsWindowState { open: boolean; line: PluginsLine; page: string | null }
 
 let state: PluginsWindowState = { open: false, line: 'workbenches', page: null };

@@ -17,8 +17,8 @@
  */
 import React from 'react';
 import {
-  ArrowLeft, AudioLines, Box, Check, Clapperboard, Film, FolderOpen, Layers, Loader2, Palette, Projector, Puzzle, RefreshCw, Scissors, Spline, Workflow,
-  type LucideIcon,
+  ArrowLeft, ArrowUpRight, AudioLines, Box, Check, ChevronRight, Clapperboard, Cloud, Film, FolderOpen, Images, Languages, Layers, Loader2, Megaphone, Mic,
+  Music, Music2, Palette, Projector, Puzzle, RefreshCw, Scissors, Send, Spline, Workflow, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
@@ -33,6 +33,7 @@ import { CATEGORIES, categoryOfPlugin, categoryOfSkill, usesOfPlugin, type Categ
 import { ProfileStrip } from './PluginProfile';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
+import { KIND_ICONS, type FeatureKind } from '../feature-kinds';
 
 export const PLUGIN_ICONS: Record<string, LucideIcon> = {
   film: Film, folder: FolderOpen, scissors: Scissors, workflow: Workflow, clapperboard: Clapperboard, audio: AudioLines, palette: Palette, layers: Layers,
@@ -80,6 +81,8 @@ let discoverRequest = 0;
 /** One of an agent's own skills, and whether OpenFilm lets it in. */
 type AgentSkill = { name: string; description: string; allowed: boolean };
 type AgentGroup = { id: HostAgentId; name: string; skills: AgentSkill[] };
+/** An agent's connectors (its own MCP servers): `filtered` false, it cannot be told, and has them all. */
+type McpGroup = { id: HostAgentId; name: string; filtered: boolean; servers: Array<{ name: string; detail: string; allowed: boolean }> };
 
 export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenchOn }: {
   line: PluginsLine;
@@ -112,7 +115,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const [discover, setDiscover] = React.useState<'reading' | 'read' | 'failed' | 'partial'>(() => (seenCatalog() ? discoverFailed ?? 'read' : 'reading'));
   const [retry, setRetry] = React.useState(0);
   React.useEffect(() => {
-    if (line !== 'discover') return;
+    if (!line.startsWith('discover')) return;
     let live = true;
     const request = ++discoverRequest;
     setDiscover(seenCatalog() ? 'read' : 'reading');
@@ -123,7 +126,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     return () => { live = false; };
   }, [line, retry]);
 
-  const agents = useAgentSkills(line === 'skills');
+  const agents = useAgentExtras(line === 'skills' || line === 'connectors');
   const q = query.trim().toLowerCase();
   const matches = (...said: (string | undefined)[]) => !q || said.some((w) => w?.toLowerCase().includes(q));
   const found = skills
@@ -132,7 +135,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     .sort(byOrder);
   const ownMatched = own.filter((p) => matches(pluginWords(p).title, pluginWords(p).summary, p.id));
   const listed = found.filter((k) => installedOf(k));
-  const offered = line === 'discover' ? found.filter((k) => k.source === 'official') : [];
+  const offered = found.filter((k) => k.source === 'official');
   const agentsOwn = agents.groups
     .map((g) => ({ ...g, skills: g.skills.filter((k) => matches(k.name, k.description)) }))
     .filter((g) => g.skills.length);
@@ -247,18 +250,66 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     );
   }
 
-  /* Get more: what there is to install, workbenches then skills; what is installed stays, said so */
+  if (line === 'connectors') {
+    const groups = agents.mcp.map((g) => ({ ...g, servers: g.servers.filter((k) => matches(k.name, k.detail)) })).filter((g) => g.servers.length);
+    return (
+      <PluginsPage title={t('assetDrawer.view_connectors')} note={t('assetDrawer.note_connectors')}>
+        {groups.length ? groups.map((g) => (
+          <SettingsGroup key={g.id} title={t('assetDrawer.connectorsOf').replace('{name}', g.name)}
+            footnote={g.filtered ? undefined : t('assetDrawer.connectorsAll').replace('{name}', g.name)}>
+            {g.servers.map((k) => (
+              <PluginRow key={k.name} mark={<KindMark kind="connectors" />} title={k.name} summary={k.detail}
+                control={g.filtered ? <SettingsSwitch checked={k.allowed} onChange={(on) => agents.allowMcp(g.id, k.name, on)} label={t(k.allowed ? 'gallery.turnOff' : 'gallery.turnOn').replace('{name}', k.name)} /> : null} />
+            ))}
+          </SettingsGroup>
+        )) : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.noConnectorsYet')} action={q ? undefined : { label: t('assetDrawer.seeConnectors'), run: () => showPluginsLine('discover:connectors') }} />}
+      </PluginsPage>
+    );
+  }
+
+  /* Discover: what there is to add, as cards. OpenFilm's workbenches are here too, to turn on; what is installed or on
+     stays, said so; what is still being made is shown as it will be, without a button (soon.ts) */
   const read = seenCatalog();
   const note = discover === 'partial' ? t('assetDrawer.discoverPartial') : discover === 'failed'
     ? (read ? t('assetDrawer.discoverOffline').replace('{when}', new Date(read).toLocaleString()) : t('assetDrawer.discoverNever'))
     : null;
-  /* the first read under way: its rows' places, said as it being read */
   const waiting = discover === 'reading' && !offered.length && !q;
-  const parts = (['workbenches', 'skills'] as const)
-    .map((kind) => ({ kind, skills: offered.filter((k) => (isPlugin(k) ? 'workbenches' : 'skills') === kind) }))
-    .filter((part) => part.skills.length);
-  return (
-    <PluginsPage title={t('assetDrawer.view_discover')} note={t('assetDrawer.note_discover')}>
+  const doneMark = (word: string) => <span className="inline-flex h-8 items-center gap-1.5 text-[13.5px] text-[var(--text-muted)]"><Check size={15} aria-hidden />{word}</span>;
+  const benchCard = (p: Plugin): StoreItem => {
+    const { title, summary } = pluginWords(p);
+    return {
+      key: p.id, kind: 'workbenches', title, summary, note: p.beta ? t('assetDrawer.pluginBeta') : t('assetDrawer.skillsOfficial'),
+      cover: <GradientCover hue={HUES[p.icon ?? ''] ?? 220} Icon={PLUGIN_ICONS[p.icon ?? ''] ?? Puzzle} />, onOpen: () => open(`${PLUGIN_PAGE}${p.id}`),
+      action: p.soon ? <SoonMark /> : p.on ? doneMark(t('assetDrawer.turnedOn')) : <SettingsButton onClick={() => turnPlugin(p, true)}>{t('assetDrawer.turnOnAction')}</SettingsButton>,
+    };
+  };
+  const skillCard = (k: SkillEntry): StoreItem => ({
+    key: k.uid, kind: isPlugin(k) ? 'workbenches' : 'skills', title: words(k).title, summary: words(k).summary,
+    note: communityOf(k) ? makerOf(k) : t('assetDrawer.skillsOfficial'), cover: <SkillCover skill={k} title={words(k).title} />, onOpen: () => open(k.uid),
+    action: installedOf(k) ? doneMark(t('assetDrawer.installedMark')) : (
+      <SettingsButton disabled={installing != null} onClick={() => install(k)}>
+        {installing === k.uid ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}{t(installing === k.uid ? 'gallery.installing' : 'gallery.install')}
+      </SettingsButton>
+    ),
+  });
+  const soonCards = SOON.filter((x) => matches(t(`assetDrawer.soon_${x.id}`), t(`assetDrawer.soon_${x.id}Note`))).map((x): StoreItem => ({
+    key: `soon:${x.id}`, kind: x.kind, title: t(`assetDrawer.soon_${x.id}`), summary: t(`assetDrawer.soon_${x.id}Note`), note: t('assetDrawer.skillsOfficial'),
+    cover: <GradientCover hue={x.hue} Icon={x.icon} />, action: <SoonMark />,
+  }));
+  const official = offered.filter((k) => !communityOf(k));
+  const store: Record<'workbenches' | 'skills' | 'connectors' | 'community', StoreItem[]> = {
+    workbenches: [
+      ...inOrder(ownMatched.filter((p) => ownBench(p) && !p.soon), categoryOfPlugin).map(benchCard),
+      ...official.filter((k) => isPlugin(k)).map(skillCard),
+      ...inOrder(ownMatched.filter((p) => p.soon), categoryOfPlugin).map(benchCard),
+      ...soonCards.filter((x) => x.kind === 'workbenches'),
+    ],
+    skills: [...official.filter((k) => !isPlugin(k)).map(skillCard), ...soonCards.filter((x) => x.kind === 'skills')],
+    connectors: soonCards.filter((x) => x.kind === 'connectors'),
+    community: offered.filter((k) => communityOf(k)).map(skillCard),
+  };
+  const status = (
+    <>
       {note ? (
         <div role="status" className="mb-6 flex items-start gap-3 text-[14px] leading-relaxed text-[var(--text-muted)]">
           <p className="min-w-0 flex-1">{note}</p>
@@ -266,32 +317,49 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
         </div>
       ) : null}
       {error ? <p role="alert" className="mb-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
+    </>
+  );
+  const communityEmpty = (
+    <div className="flex flex-col items-start gap-3 rounded-[12px] border border-dashed border-[var(--border-strong)] p-5">
+      <p className="text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.communityEmpty')}</p>
+      <a href={MAKE_GUIDE} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-3.5 text-[14px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]">
+        {t('assetDrawer.communityHow')}<ArrowUpRight size={14} aria-hidden />
+      </a>
+    </div>
+  );
+
+  if (line === 'discover') {
+    /* the one shown big: OpenFilm's newest skill with a moving preview, else its newest workbench */
+    const hero = official.find((k) => k.preview && !isPlugin(k)) ?? official.find((k) => k.cover);
+    const heroItem = hero ? skillCard(hero) : store.workbenches[0];
+    return (
+      <PluginsPage title={t('assetDrawer.discover_featured')} note={t('assetDrawer.note_featured')}>
+        {status}
+        {heroItem && !q ? <Hero item={heroItem} preview={hero?.preview} label={t('assetDrawer.discover_featured')} /> : null}
+        {(['workbenches', 'skills', 'connectors'] as const).map((kind) => store[kind].length ? (
+          <StoreShelf key={kind} title={t(`assetDrawer.view_${kind}`)} more={t('assetDrawer.seeAll')} onMore={() => showPluginsLine(`discover:${kind}`)}>
+            {store[kind].slice(0, 3).map((item) => <StoreCard key={item.key} item={item} />)}
+          </StoreShelf>
+        ) : null)}
+        <StoreShelf title={t('assetDrawer.discover_community')} more={t('assetDrawer.seeAll')} onMore={() => showPluginsLine('discover:community')} empty={communityEmpty}>
+          {store.community.slice(0, 3).map((item) => <StoreCard key={item.key} item={item} />)}
+        </StoreShelf>
+      </PluginsPage>
+    );
+  }
+
+  const kind = line.slice('discover:'.length) as 'workbenches' | 'skills' | 'connectors' | 'community';
+  const items = store[kind];
+  return (
+    <PluginsPage title={t(kind === 'community' ? 'assetDrawer.discover_community' : `assetDrawer.view_${kind}`)} note={t(`assetDrawer.note_discover_${kind}`)}>
+      {status}
       {waiting ? (
-        <div role="status" aria-label={t('assetDrawer.discoverReading')} className="flex flex-col divide-y divide-[var(--border)]">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} aria-hidden className="flex items-center gap-4 py-4">
-              <div className="skeleton h-12 w-[84px] rounded-[8px]" />
-              <div className="flex flex-1 flex-col gap-2"><div className="skeleton h-3.5 w-1/3 rounded" /><div className="skeleton h-3 w-2/3 rounded" /></div>
-            </div>
-          ))}
+        <div role="status" aria-label={t('assetDrawer.discoverReading')} className={STORE_GRID}>
+          {Array.from({ length: 6 }, (_, i) => <div key={i} aria-hidden className="skeleton aspect-[4/3] rounded-[12px]" />)}
         </div>
-      ) : parts.length ? parts.map(({ kind, skills: inIt }) => (
-        <SettingsGroup key={kind} title={parts.length > 1 ? t(`assetDrawer.view_${kind}`) : undefined}>
-          {inIt.map((skill) => {
-            const there = installedOf(skill);
-            return (
-              <PluginRow key={skill.uid} onOpen={() => open(skill.uid)}
-                mark={<span aria-hidden className="relative block h-12 w-[84px] shrink-0 overflow-hidden rounded-[8px] bg-[var(--bg-field)] ring-1 ring-[var(--border)]"><SkillCover skill={skill} title={words(skill).title} /></span>}
-                title={words(skill).title} note={communityOf(skill) ? makerOf(skill) : undefined} summary={words(skill).summary}
-                control={there ? <span className="inline-flex items-center gap-1.5 text-[13.5px] text-[var(--text-muted)]"><Check size={15} aria-hidden />{t('assetDrawer.installedMark')}</span>
-                  : <SettingsButton disabled={installing != null} onClick={() => install(skill)}>
-                    {installing === skill.uid ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}
-                    {t(installing === skill.uid ? 'gallery.installing' : 'gallery.install')}
-                  </SettingsButton>} />
-            );
-          })}
-        </SettingsGroup>
-      )) : note && !read ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.discoverNone')} />}
+      ) : items.length ? <div className={STORE_GRID}>{items.map((item) => <StoreCard key={item.key} item={item} />)}</div>
+        : kind === 'community' && !q ? communityEmpty
+        : note && !read ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.discoverNone')} />}
     </PluginsPage>
   );
 }
@@ -436,23 +504,149 @@ function PluginRow({ mark, title, note, summary, control, onOpen, dim = false }:
   );
 }
 
-/** The skills each of the person's agents has of its own, for the agents that can be told which to leave out (read when `shown`). */
-function useAgentSkills(shown: boolean) {
+/**
+ * What each of the person's agents brings of its own, for the agents that can be told which to leave out (read when
+ * `shown`): its skills, and its connectors (the MCP servers the person added to it; an agent that cannot be told has
+ * them all, said so).
+ */
+function useAgentExtras(shown: boolean) {
   const [groups, setGroups] = React.useState<AgentGroup[]>([]);
+  const [mcp, setMcp] = React.useState<McpGroup[]>([]);
   const host = studioHost?.agents;
   const read = React.useCallback(async () => {
-    if (!host?.skills) return;
+    if (!host) return;
     const agents = (await host.list().catch(() => [])).filter((a) => a.status === 'ready' && a.shown);
-    const read = await Promise.all(agents.map(async (a) => {
-      const own = await host.skills!(a.id).catch(() => null);
+    const skills = await Promise.all(agents.map(async (a) => {
+      const own = host.skills ? await host.skills(a.id).catch(() => null) : null;
       return own?.filtered && own.skills.length ? { id: a.id, name: a.name, skills: own.skills } : null;
     }));
-    setGroups(read.filter((g): g is AgentGroup => g != null));
+    const servers = await Promise.all(agents.map(async (a) => {
+      const own = host.mcp ? await host.mcp(a.id).catch(() => null) : null;
+      return own?.servers.length ? { id: a.id, name: a.name, filtered: own.filtered, servers: own.servers } : null;
+    }));
+    setGroups(skills.filter((g): g is AgentGroup => g != null));
+    setMcp(servers.filter((g): g is McpGroup => g != null));
   }, [host]);
   React.useEffect(() => { if (shown) void read(); }, [shown, read]);
   const allow = (id: HostAgentId, name: string, allowed: boolean) => {
     setGroups((list) => list.map((g) => (g.id === id ? { ...g, skills: g.skills.map((k) => (k.name === name ? { ...k, allowed } : k)) } : g)));
     void host?.allowSkill?.(id, name, allowed)?.catch(() => {}).finally(() => { void read(); });
   };
-  return { groups: shown ? groups : [], allow };
+  const allowMcp = (id: HostAgentId, name: string, allowed: boolean) => {
+    setMcp((list) => list.map((g) => (g.id === id ? { ...g, servers: g.servers.map((k) => (k.name === name ? { ...k, allowed } : k)) } : g)));
+    void host?.allowMcp?.(id, name, allowed)?.catch(() => {}).finally(() => { void read(); });
+  };
+  return { groups: shown ? groups : [], mcp: shown ? mcp : [], allow, allowMcp };
+}
+
+/** One thing in Discover, as its card shows it. */
+type StoreItem = {
+  key: string; kind: FeatureKind; title: string; summary: string; note?: string | undefined;
+  cover: React.ReactNode; action: React.ReactNode; onOpen?: () => void;
+};
+
+/**
+ * What Discover will offer and does not yet, shown as it will be, with no button: the final shape of each shelf while
+ * the catalog fills. Each goes once the real one is in the catalog.
+ */
+const SOON: ReadonlyArray<{ id: string; kind: FeatureKind; hue: number; icon: LucideIcon }> = [
+  { id: 'ad', kind: 'skills', hue: 18, icon: Megaphone },
+  { id: 'talk', kind: 'skills', hue: 200, icon: Mic },
+  { id: 'beat', kind: 'skills', hue: 286, icon: Music2 },
+  { id: 'translate', kind: 'skills', hue: 150, icon: Languages },
+  { id: 'stock', kind: 'connectors', hue: 212, icon: Images },
+  { id: 'sounds', kind: 'connectors', hue: 262, icon: Music },
+  { id: 'drive', kind: 'connectors', hue: 188, icon: Cloud },
+  { id: 'publish', kind: 'connectors', hue: 328, icon: Send },
+];
+
+/** How to make a workbench or a skill of one's own. */
+const MAKE_GUIDE = 'https://github.com/openfilm/openfilm/blob/main/packages/openfilm/plugins/README.md';
+
+const STORE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4';
+
+/** A picture for what has none: its mark large on a wash of its color. */
+function GradientCover({ hue, Icon }: { hue: number; Icon: LucideIcon }) {
+  return (
+    <div aria-hidden className="absolute inset-0 flex items-center justify-center"
+      style={{ background: `radial-gradient(110% 90% at 25% 0%, hsl(${hue} 70% 55% / 0.24), transparent 62%), radial-gradient(90% 80% at 100% 100%, hsl(${hue} 70% 50% / 0.14), transparent 60%), var(--bg-field)` }}>
+      <span className="flex h-14 w-14 items-center justify-center rounded-[14px]"
+        style={{ background: `hsl(${hue} 70% 55% / 0.16)`, color: `light-dark(hsl(${hue} 62% 40%), hsl(${hue} 80% 72%))`, boxShadow: `0 0 0 1px hsl(${hue} 70% 60% / 0.28)` }}>
+        <Icon size={24} strokeWidth={1.6} />
+      </span>
+    </div>
+  );
+}
+
+/** Not out yet: a word where its button will be. */
+function SoonMark() {
+  const t = useT();
+  return <span className="inline-flex h-7 items-center rounded-full bg-[var(--bg-field)] px-2.5 text-[12.5px] text-[var(--text-muted)]">{t('assetDrawer.comingSoon')}</span>;
+}
+
+/** A kind's mark in a row's place for one (a connector has no mark of its own). */
+function KindMark({ kind }: { kind: FeatureKind }) {
+  const Mark = KIND_ICONS[kind];
+  return <span className="flex h-9 w-9 items-center justify-center rounded-[9px] bg-[var(--bg-field)] text-[var(--text-muted)]"><Mark size={17} strokeWidth={1.7} /></span>;
+}
+
+/** One thing in Discover: its picture, its name and whose, what it is for, its kind and its button; a click opens its page. */
+function StoreCard({ item }: { item: StoreItem }) {
+  const t = useT();
+  const Mark = KIND_ICONS[item.kind];
+  return (
+    <div role={item.onOpen ? 'button' : undefined} tabIndex={item.onOpen ? 0 : undefined} data-store-card={item.title}
+      onClick={item.onOpen} onKeyDown={(e) => { if (item.onOpen && e.key === 'Enter' && e.target === e.currentTarget) item.onOpen(); }}
+      className={`flex min-w-0 flex-col overflow-hidden rounded-[12px] border border-[var(--border)] outline-none transition ${item.onOpen ? 'cursor-pointer hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)]' : ''}`}>
+      <div className="relative aspect-video shrink-0 overflow-hidden border-b border-[var(--border)] bg-[var(--bg-field)]">{item.cover}</div>
+      <div className="flex min-h-0 flex-1 flex-col p-3.5">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-[15px] font-medium text-[var(--text)]">{item.title}</span>
+          {item.note ? <span className="shrink-0 text-[12.5px] text-[var(--text-faint)]">{item.note}</span> : null}
+        </div>
+        <p className="mt-1 line-clamp-2 min-h-[42px] text-[13.5px] leading-[21px] text-[var(--text-muted)]">{item.summary}</p>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--text-faint)]"><Mark size={14} strokeWidth={1.75} aria-hidden />{t(`assetDrawer.kind_${item.kind}`)}</span>
+          {/* the button is its own: a press there does not open the page */}
+          <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>{item.action}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A shelf of Discover's front page: its kind's name, its first three (none: `empty`), and the way to all of them. */
+function StoreShelf({ title, more, onMore, children, empty }: { title: string; more: string; onMore: () => void; children: React.ReactNode; empty?: React.ReactNode }) {
+  return (
+    <section className="mb-10 last:mb-0">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h3 className="text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{title}</h3>
+        <button type="button" onClick={onMore} className="inline-flex items-center gap-0.5 text-[13.5px] text-[var(--text-muted)] transition hover:text-[var(--text)]">
+          {more}<ChevronRight size={14} aria-hidden />
+        </button>
+      </div>
+      {React.Children.count(children) ? <div className={STORE_GRID}>{children}</div> : empty}
+    </section>
+  );
+}
+
+/** Discover's one shown big: its moving preview (else its picture) beside what it is and its button. */
+function Hero({ item, preview, label }: { item: StoreItem; preview?: string | undefined; label: string }) {
+  return (
+    <div role={item.onOpen ? 'button' : undefined} tabIndex={item.onOpen ? 0 : undefined} onClick={item.onOpen}
+      onKeyDown={(e) => { if (item.onOpen && e.key === 'Enter' && e.target === e.currentTarget) item.onOpen(); }}
+      className="mb-10 grid cursor-pointer overflow-hidden rounded-[14px] border border-[var(--border)] outline-none transition hover:border-[var(--border-strong)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)] md:grid-cols-[1.25fr_1fr]">
+      <div className="relative aspect-video overflow-hidden bg-black">
+        {item.cover}
+        {preview ? <video src={preview} autoPlay muted loop playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
+      </div>
+      <div className="flex min-w-0 flex-col justify-center gap-2 p-6">
+        <span className="text-[12.5px] font-medium text-[var(--accent)]">{label}</span>
+        <h3 className="text-[22px] font-semibold leading-tight tracking-[-0.015em] text-[var(--text)]">{item.title}</h3>
+        {item.note ? <span className="text-[13px] text-[var(--text-faint)]">{item.note}</span> : null}
+        <p className="line-clamp-3 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{item.summary}</p>
+        <div className="mt-2" onClick={(e) => e.stopPropagation()}>{item.action}</div>
+      </div>
+    </div>
+  );
 }
