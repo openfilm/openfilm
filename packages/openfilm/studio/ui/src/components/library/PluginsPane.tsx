@@ -264,7 +264,8 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       <PluginsPage title={t('assetDrawer.publishTitle')} note={t('assetDrawer.note_publish')}>
         <SettingsGroup title={t('assetDrawer.publishHow')}>
           <PluginRow mark={<KindMark kind="workbenches" icon={MousePointerClick} />} title={t('assetDrawer.publishInApp')} summary={t('assetDrawer.publishInAppNote')} control={<SoonMark />} />
-          <PluginRow mark={<KindMark kind="workbenches" icon={SquareTerminal} />} title={t('assetDrawer.publishCli')} summary={t('assetDrawer.publishCliNote')} control={<SoonMark />} />
+          <PluginRow mark={<KindMark kind="workbenches" icon={SquareTerminal} />} title={t('assetDrawer.publishCli')} summary={t('assetDrawer.publishCliNote')}
+            control={<code className="select-all rounded-md bg-[var(--bg-field)] px-2 py-1 font-mono text-[12.5px] text-[var(--text)]">openfilm publish</code>} />
           <PluginRow mark={<KindMark kind="workbenches" icon={Github} />} title={t('assetDrawer.publishGithub')} summary={t('assetDrawer.publishGithubNote')}
             control={<a href={MAKE_GUIDE} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-3.5 text-[14px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{t('assetDrawer.publishGuide')}<ArrowUpRight size={14} aria-hidden /></a>} />
         </SettingsGroup>

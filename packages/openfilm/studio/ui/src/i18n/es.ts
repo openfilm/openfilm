@@ -1105,7 +1105,7 @@ export const es: Words = {
     publishInApp: "Publicar desde OpenFilm",
     publishInAppNote: "Haz clic derecho en una transición, plantilla o habilidad tuya en la biblioteca y elige Publicar en la comunidad. Inicia sesión con GitHub para enviarla y sigue la revisión aquí.",
     publishCli: "Publicar con un comando",
-    publishCliNote: "Desarrolladores o agentes envían una carpeta a la comunidad con un comando.",
+    publishCliNote: "Ejecútalo en la carpeta de tu obra: la revisa con las mismas reglas que la revisión de la comunidad, te dice qué falta, qué encuentra el escaneo y cómo publicarla.",
     publishGithub: "Enviar en GitHub",
     publishGithubNote: "Envía tu trabajo al repositorio de la comunidad de OpenFilm siguiendo la guía. Para desarrolladores.",
     publishGuide: "Leer la guía",

@@ -1106,7 +1106,7 @@ export const en = {
     publishInApp: "Publish from OpenFilm",
     publishInAppNote: "Right-click a transition, template or skill you made in the library and choose Publish to Community. Sign in with GitHub to submit, and follow the review here.",
     publishCli: "Publish with a command",
-    publishCliNote: "Developers or agents submit a folder to the community with one command.",
+    publishCliNote: "Run it in your item's folder: it checks it by the same rules as the community's review, says what is missing and what the scan finds, and how to list it.",
     publishGithub: "Submit on GitHub",
     publishGithubNote: "Submit your work to OpenFilm's community repository by following the guide. For developers.",
     publishGuide: "Read the guide",

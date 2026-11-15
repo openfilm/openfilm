@@ -1102,7 +1102,7 @@ export const ko: Words = {
     publishInApp: "OpenFilm에서 게시",
     publishInAppNote: "라이브러리에서 직접 만든 전환, 템플릿, 스킬을 오른쪽 클릭하고 \"커뮤니티에 게시\"를 고르세요. GitHub로 로그인해 제출하고 검토 상황은 여기서 봅니다.",
     publishCli: "명령으로 게시",
-    publishCliNote: "개발자나 에이전트가 명령 하나로 폴더를 커뮤니티에 제출합니다.",
+    publishCliNote: "작품 폴더에서 실행하세요. 커뮤니티 검토와 같은 규칙으로 먼저 확인하고, 부족한 것과 스캔 결과, 올리는 방법을 알려 줍니다.",
     publishGithub: "GitHub에서 제출",
     publishGithubNote: "안내에 따라 OpenFilm 커뮤니티 저장소에 제출합니다. 개발자용입니다.",
     publishGuide: "안내 보기",

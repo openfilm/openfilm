@@ -1106,7 +1106,7 @@ export const zhCN: Words = {
     publishInApp: "在 OpenFilm 里发布",
     publishInAppNote: "在资源库里右键你做的转场、模板或技能，选「发布到社区」，用 GitHub 登录就能提交，审核进度在这里看。",
     publishCli: "用命令发布",
-    publishCliNote: "开发者或智能体用一条命令把一个文件夹提交到社区。",
+    publishCliNote: "在作品的文件夹里运行它：按社区审核的同一套规则先检查一遍，告诉你还缺什么、扫描发现了什么，以及怎么上架。",
     publishGithub: "在 GitHub 上提交",
     publishGithubNote: "照指南把你的作品提交到 OpenFilm 社区仓库，适合开发者。",
     publishGuide: "看发布指南",

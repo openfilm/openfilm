@@ -10,6 +10,7 @@ const USAGE = `openfilm — a film is a function of time: given t, it draws that
   openfilm get     [what] [--options]  media: free from OpenFilm's library (music, sounds, transitions…), else a connected service
   openfilm canvas  [apply <steps>]     the canvas beside the edit: read it, or lay out notes, files and what to make on it
   openfilm skills                      the skills this film can be made with; \`openfilm skill <name>\` prints one
+  openfilm publish [folder]            check a workbench or a skill as the community's review will, before you publish it
   openfilm <name> [command] …          a command a skill or a plugin brings; its skill says what it does
   openfilm update                      the newest OpenFilm; Studio starts again on it
   openfilm doctor                      what this computer has for OpenFilm, to paste into an issue
@@ -204,6 +205,7 @@ if (ofPlugin != null) {
     update: () => import('../studio/client.mjs').then((m) => m.updateOpenfilm((line) => console.error(line))),
     skills: () => import('../src/skills-cli.mjs').then((m) => m.skillsCommand(RUN)),
     skill: () => import('../src/skills-cli.mjs').then((m) => m.skillCommand(args, RUN)),
+    publish: () => import('../src/publish-cli.mjs').then((m) => m.publishCommand(args, RUN)),
     doctor: () => import('../src/doctor.mjs').then(async (m) => {
       const report = await m.doctor({ run: RUN });
       return { ok: report.ok, lines: [report.text] };

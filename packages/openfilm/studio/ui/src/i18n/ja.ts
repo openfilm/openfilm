@@ -1105,7 +1105,7 @@ export const ja: Words = {
     publishInApp: "OpenFilm から公開",
     publishInAppNote: "ライブラリで自作のトランジション、テンプレート、スキルを右クリックし「コミュニティに公開」を選びます。GitHub でサインインして提出し、審査の状況はここで確認できます。",
     publishCli: "コマンドで公開",
-    publishCliNote: "開発者やエージェントが、フォルダを 1 つのコマンドでコミュニティに提出します。",
+    publishCliNote: "作品のフォルダで実行します。コミュニティの審査と同じルールで先にチェックし、足りないもの、スキャン結果、公開の手順を教えてくれます。",
     publishGithub: "GitHub で提出",
     publishGithubNote: "ガイドに沿って OpenFilm のコミュニティリポジトリに提出します。開発者向けです。",
     publishGuide: "ガイドを読む",
