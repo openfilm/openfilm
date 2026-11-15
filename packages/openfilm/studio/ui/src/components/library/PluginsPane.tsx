@@ -27,7 +27,7 @@ import { showPluginsLine, type PluginsLine } from '@/lib/plugins-window';
 import { isPlugin, pluginOfSkill } from '@/lib/project-plugins';
 import { communityOf, forgetSeenSkills, makerOf, seenCatalog, seenSkills, sourcesApi, SourceError, watchSkills, type SkillEntry } from '@/lib/project-sources';
 import {
-  BringsLine, byOrder, CommandChips, ForDevelopers, HowToUse, inLanguage, PageSection, SkillCover, SkillMark, SkillPage, useSkillWords,
+  BringsLine, byOrder, CommandChips, ForDevelopers, HowToUse, useScriptsConsent, inLanguage, PageSection, SkillCover, SkillMark, SkillPage, useSkillWords,
 } from '../SkillPage';
 import { CATEGORIES, categoryOfPlugin, categoryOfSkill, usesOfPlugin, type Category } from '@/lib/plugin-profile';
 import { ProfileStrip } from './PluginProfile';
@@ -165,6 +165,8 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const tryIt = (skill: SkillEntry) => studioHost?.useSkill?.({ name: skill.as ?? skill.uid.replace('/', '-'), description: skill.description, title: words(skill).title, newConversation: true });
   /* installed from Discover's list, as its page installs it: it stays there, said installed */
   const [installing, setInstalling] = React.useState<string | null>(null);
+  /* one made by someone else that brings scripts: asked before it is installed (SkillPage useScriptsConsent) */
+  const consent = useScriptsConsent();
   const install = (skill: SkillEntry) => {
     setInstalling(skill.uid);
     setError(null);
@@ -293,7 +295,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     key: k.uid, kind: isPlugin(k) ? 'workbenches' : 'skills', title: words(k).title, summary: words(k).summary,
     note: communityOf(k) ? makerOf(k) : t('assetDrawer.skillsOfficial'), cover: <SkillCover skill={k} title={words(k).title} />, onOpen: () => open(k.uid),
     action: installedOf(k) ? doneMark(t('assetDrawer.installedMark')) : (
-      <SettingsButton disabled={installing != null} onClick={() => install(k)}>
+      <SettingsButton disabled={installing != null} onClick={() => consent.ask(k, () => install(k))}>
         {installing === k.uid ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}{t(installing === k.uid ? 'gallery.installing' : 'gallery.install')}
       </SettingsButton>
     ),
@@ -347,6 +349,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     const shelves = FEATURE_KINDS.map((kind) => ({ kind, items: storeOf(kind) })).filter((x) => x.items.length);
     return (
       <PluginsPage title={t('assetDrawer.place_discover')} note={t('assetDrawer.note_discoverHome')}>
+        {consent.dialog}
         {status}
         {heroItem && !q ? <Hero item={heroItem} preview={hero?.preview} poster={hero?.cover} label={t('assetDrawer.featuredLabel')} /> : null}
         {/* every kind at a glance, as a store's departments: the open list, with how many each has */}
@@ -393,6 +396,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const kindNote = isCodeKind(kind) ? t(`assetDrawer.note_discover_${kind}`) : t('assetDrawer.note_kindAsset').replaceAll('{kind}', kindName(kind));
   return (
     <PluginsPage title={kindName(kind)} note={kindNote}>
+      {consent.dialog}
       {status}
       {waiting && isCodeKind(kind) ? (
         <div role="status" aria-label={t('assetDrawer.discoverReading')} className={STORE_GRID}>

@@ -18,7 +18,7 @@ import {
 import { useLanguage, useT } from '@/i18n';
 import { usePlugins } from '@/lib/plugins';
 import { isPlugin } from '@/lib/project-plugins';
-import { communityOf, makerOf, sourcesApi, type SkillEntry } from '@/lib/project-sources';
+import { communityOf, makerOf, ownerOf, sourcesApi, type SkillEntry } from '@/lib/project-sources';
 import { usesOfSkill } from '@/lib/plugin-profile';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ProfileStrip } from './library/PluginProfile';
@@ -124,6 +124,8 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [removing, setRemoving] = React.useState(false);
+  /* one made by someone else that brings scripts: asked before it is installed */
+  const consent = useScriptsConsent();
   const coverInput = React.useRef<HTMLInputElement>(null);
 
   const patch = (change: (k: SkillEntry) => SkillEntry) => setSkills((list) => list.map((k) => (k.uid === skill.uid ? change(k) : k)));
@@ -309,7 +311,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
       ) : null}
       <div className="mt-5 flex flex-col gap-2">
         {onTry ? (
-          <button type="button" onClick={() => onTry(skill)} disabled={skill.off || skill.waits || Boolean(skill.revoked)} title={skill.off ? t('gallery.tryOff') : undefined}
+          <button type="button" onClick={() => consent.ask(skill, () => onTry(skill))} disabled={skill.off || skill.waits || Boolean(skill.revoked)} title={skill.off ? t('gallery.tryOff') : undefined}
             className="flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[14.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
         ) : null}
         {/* OpenFilm's system skills are only turned off */}
@@ -319,7 +321,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
             <RefreshCw size={14} />{working === 'updating' ? t('gallery.updating') : t('gallery.update').replace('{version}', skill.update.version)}</button>
         ) : null}
         {skill.core ? null : !installed ? (
-          <button type="button" onClick={() => install(true)} disabled={working !== null || skill.elsewhere === true}
+          <button type="button" onClick={() => consent.ask(skill, () => install(true))} disabled={working !== null || skill.elsewhere === true}
             className={onTry
               ? 'flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[14.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50'
               : 'flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[14.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-50'}><Plus size={15} />{t(working === 'installing' ? 'gallery.installing' : 'gallery.install')}</button>
@@ -330,6 +332,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
           </button>
         )}
       </div>
+      {consent.dialog}
       <ConfirmDialog open={removing} danger
         title={t('gallery.removeTitle').replace('{name}', words.title)}
         description={t('gallery.removeHint')} confirmLabel={t('gallery.remove')}
@@ -478,4 +481,25 @@ function ProjectSkillReview({ skill, projectId, onAllowed }: { skill: SkillEntry
       </button>
     </section>
   );
+}
+
+/**
+ * Before one made by someone other than OpenFilm, that brings scripts, is installed: said plainly that its scripts run
+ * on this computer with the agent's access, by whom it is made, and asked. `ask(skill, go)` runs `go` at once when there
+ * is nothing to ask; `dialog` is put in the page.
+ */
+export function useScriptsConsent() {
+  const t = useT();
+  const [asking, setAsking] = React.useState<{ skill: SkillEntry; go: () => void } | null>(null);
+  const ask = (skill: SkillEntry, go: () => void) => {
+    if (skill.scripts > 0 && ownerOf(skill) !== 'openfilm') setAsking({ skill, go }); else go();
+  };
+  const dialog = (
+    <ConfirmDialog open={asking != null}
+      title={t('gallery.scriptsConsentTitle').replace('{maker}', asking ? makerOf(asking.skill) : '')}
+      description={asking ? t('gallery.scriptsConsentNote').replace('{n}', String(asking.skill.scripts)) : ''}
+      confirmLabel={t('gallery.scriptsConsentGo')}
+      onCancel={() => setAsking(null)} onConfirm={() => { const go = asking?.go; setAsking(null); go?.(); }} />
+  );
+  return { ask, dialog };
 }
