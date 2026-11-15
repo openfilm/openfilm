@@ -704,6 +704,7 @@ export const en = {
     stepRemoved: 'Deleted {clip}',
     stepMoved: 'Moved {clip}',
     stepTrimmed: 'Trimmed {clip}',
+    stepRolled: 'Rolled the cut at {clip}',
     stepSplit: 'Split {clip}',
     stepDetachAudio: 'Detached the audio of {clip}',
     stepCompound: 'Made {clip} one compound clip',
@@ -2096,6 +2097,7 @@ export const en = {
     menuUnlink: 'Unlink',
     speed: "Speed: drag the clip's edges",
     speedHandle: 'Drag to change the speed',
+    trimHandle: 'Drag to trim; Alt/Option-drag to trim this track alone or roll a touching cut (J/L cut)',
     speedNone: 'Only video and sound clips have a speed',
     menuDisableClip: 'Disable clip',
     menuEnableClip: 'Enable clip',
@@ -2105,6 +2107,7 @@ export const en = {
     menuClearRange: 'Clear range',
     tip: {
       trim: 'Trim',
+      roll: 'Roll',
       ripple: 'Ripple',
       speed: 'Speed',
       sourceEnd: 'End of the media',

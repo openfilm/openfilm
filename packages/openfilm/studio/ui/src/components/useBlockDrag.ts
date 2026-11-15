@@ -45,6 +45,7 @@ import {
   planMove,
   planRippleTrim,
   planSpeed,
+  rollEdges,
   sourceLeftMs,
   type EditModel,
   type EditPlan,
@@ -88,7 +89,7 @@ function dropLanesOf(lanes: readonly TimelineTrack[], except: readonly string[])
 
 /** What the label beside the pointer says while trimming or changing a speed. */
 export interface GestureTip {
-  kind: 'trim' | 'ripple' | 'speed';
+  kind: 'trim' | 'roll' | 'ripple' | 'speed';
   /** The clip's speed now, for a speed. */
   speed?: number;
   /** How far the edge, the cut, the content or the clip moved (film ms). */
@@ -154,7 +155,7 @@ export interface BlockDrag {
   error: string | null;
   /**
    * Attached to the clip body and its edges. `selected`: the clips moving along (a move). ⌥ at the press (`e.altKey`)
-   * trims this clip alone; for a move it copies (`copy`).
+   * trims this clip alone, rolling a touching cut on this track; for a move it copies (`copy`).
    */
   start: (e: React.PointerEvent, block: TimelineBlock, mode: GestureMode, selected?: readonly string[], copy?: boolean) => void;
   /** Whether a clip can move / be trimmed: decides handles and cursors. */
@@ -184,10 +185,10 @@ function opensOf(
 }
 
 /** The history label of a gesture, naming the clip (see OperationHistory's stepText). */
-function stepOf(mode: GestureMode, ripple: boolean, clipId: string): string {
+function stepOf(mode: GestureMode, ripple: boolean, roll: boolean, clipId: string): string {
   const key = mode === 'move' ? 'history.stepMoved'
     : mode === 'speed-start' || mode === 'speed-end' ? 'history.stepSpeed'
-      : ripple ? 'history.stepRippleTrimmed' : 'history.stepTrimmed';
+      : roll ? 'history.stepRolled' : ripple ? 'history.stepRippleTrimmed' : 'history.stepTrimmed';
   return `${key}|${clipId}`;
 }
 
@@ -287,6 +288,10 @@ export function useBlockDrag(opts: {
     const edgeMode: DragMode = mode === 'speed-start' ? 'trim-start' : mode === 'speed-end' ? 'trim-end' : mode;
     /* ⌥ at the press: this clip alone, not the clips linked to it (a trim; for a move ⌥ copies) */
     const alone = e.altKey && (edgeMode === 'trim-start' || edgeMode === 'trim-end');
+    /* Split edit: only this track's cut moves, even on V1 with the magnet on. A speed handle keeps its own behavior. */
+    const independent = alone && !speedEdge;
+    const roll = independent && block.clipId
+      ? rollEdges(model, block.clipId, edgeMode === 'trim-start' ? 'start' : 'end') : null;
 
     const geom: Block = { id: block.id, startMs: block.startMs, endMs: block.endMs };
     /* a trim also leaves out where the dragged edge is now: with clips end to end the neighbor's edge sits right
@@ -319,7 +324,7 @@ export function useBlockDrag(opts: {
     /* a trim stops at the neighbors on the clip's own track (every row of it) */
     const fence = edgeMode === 'trim-start' || edgeMode === 'trim-end' ? trimFence(geom, singleLanes[homeLaneIndex]?.occupied ?? []) : undefined;
     /* on the main track with the magnet a trim ripples: what follows moves with the edge */
-    const ripple = magnetOn(model, homeLane?.docIndex, prefs.magnet) && (edgeMode === 'trim-start' || edgeMode === 'trim-end');
+    const ripple = !independent && magnetOn(model, homeLane?.docIndex, prefs.magnet) && (edgeMode === 'trim-start' || edgeMode === 'trim-end');
 
     let dragging = false;
     let last: DragPreview | null = null;
@@ -415,18 +420,18 @@ export function useBlockDrag(opts: {
       if (mode !== 'move') {
         /* a trim: the clips stay on their rows; the plan says where every edge lands. Rippling (the main track with the
            magnet), the neighbor is no fence: it moves along */
-        const out = applyDrag(geom, edgeMode, deltaMs, targets, pxPerMs, block.room, undefined, ripple ? undefined : fence);
+        const out = applyDrag(geom, edgeMode, deltaMs, targets, pxPerMs, block.room, undefined, ripple || roll ? undefined : fence);
         const edge = mode === 'trim-end' ? 'end' : 'start';
         const want = edge === 'end' ? out.endMs - geom.endMs : out.startMs - geom.startMs;
         const plan = ripple
           ? planRippleTrim(m, ids, edge, want, switchesOf(p))
-          : planEdges(m, ids.map((id) => ({ id, kind: edge })), want, switchesOf(p));
+          : planEdges(m, roll ?? ids.map((id) => ({ id, kind: edge })), want, switchesOf(p));
         const snappedTo = plan.deltaMs === want ? out.snappedTo : null;
         const own = plan.placed.get(block.clipId!);
         /* how much source is left past that edge once it moved (pulled out, the edge moves away from the clip) */
         const left = (sourceLeftMs(m, block.clipId!, edge) ?? Infinity) - (edge === 'end' ? plan.deltaMs : -plan.deltaMs);
         const tip: GestureTip = {
-          kind: ripple ? 'ripple' : 'trim', deltaMs: plan.deltaMs, lengthMs: own ? own.endMs - own.startMs : geom.endMs - geom.startMs,
+          kind: roll ? 'roll' : ripple ? 'ripple' : 'trim', deltaMs: plan.deltaMs, lengthMs: own ? own.endMs - own.startMs : geom.endMs - geom.startMs,
           atMs: edge === 'end' || ripple ? (own?.endMs ?? geom.endMs) : (own?.startMs ?? geom.startMs), lane: homeLaneIndex,
           ...(left < 1 ? { sourceEnd: true } : {}),
         };
@@ -667,7 +672,7 @@ export function useBlockDrag(opts: {
       pendingSaves.current += 1;
       setSaving(true);
       setPreview(held);
-      const label = copy ? `history.stepDuplicated|${block.clipId}` : stepOf(mode, ripple, block.clipId!);
+      const label = copy ? `history.stepDuplicated|${block.clipId}` : stepOf(mode, ripple, Boolean(roll), block.clipId!);
       void Promise.resolve().then(() => commit(ops, label)).catch((err: unknown) => (
         err instanceof Error ? err.message : String(err)
       )).then((err) => {

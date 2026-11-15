@@ -704,6 +704,7 @@ export const zhCN: Words = {
     stepRemoved: '删除 {clip}',
     stepMoved: '移动 {clip}',
     stepTrimmed: '修剪 {clip}',
+    stepRolled: '滚动调整 {clip} 的切点',
     stepSplit: '分割 {clip}',
     stepDetachAudio: '分离 {clip} 的音频',
     stepCompound: '将 {clip} 新建为复合片段',
@@ -2096,6 +2097,7 @@ export const zhCN: Words = {
     menuUnlink: '取消关联',
     speed: '变速：拖动片段的边缘',
     speedHandle: '拖动以改变速度',
+    trimHandle: '拖动以修剪；按住 Alt/Option 拖动可单独修剪此轨，或滚动调整相邻切点（J/L 剪辑）',
     speedNone: '只有视频和声音片段可以变速',
     menuDisableClip: '禁用素材',
     menuEnableClip: '启用素材',
@@ -2105,6 +2107,7 @@ export const zhCN: Words = {
     menuClearRange: '清除区间',
     tip: {
       trim: '裁剪',
+      roll: '滚动剪辑',
       ripple: '波纹',
       speed: '变速',
       sourceEnd: '素材到头了',

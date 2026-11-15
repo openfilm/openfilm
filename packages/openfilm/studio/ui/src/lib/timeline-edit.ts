@@ -999,6 +999,21 @@ export type EdgeKind = 'start' | 'end' | 'shift' | 'slip';
 export interface EdgeMove { id: string; kind: EdgeKind }
 
 /**
+ * The two sides of a cut on one track. Alt-drag rolls these edges without taking linked clips along (a J/L cut
+ * after detaching audio). A free edge, a locked track or a caption cue has no cut to roll. Both clips keep their
+ * source moments at every film time; planEdges bounds the move by both sources and both minimum lengths.
+ */
+export function rollEdges(model: EditModel, id: string, edge: 'start' | 'end'): EdgeMove[] | null {
+  const track = model.find((t) => t.clips.some((c) => c.id === id));
+  const clip = track?.clips.find((c) => c.id === id);
+  if (!track || !clip || track.locked || track.captions || clip.cue) return null;
+  const other = track.clips.find((c) => c.id !== id && !c.cue && (edge === 'start'
+    ? c.startMs < clip.startMs && Math.abs(c.endMs - clip.startMs) <= TOUCH_MS
+    : c.endMs > clip.endMs && Math.abs(c.startMs - clip.endMs) <= TOUCH_MS));
+  return other ? [{ id, kind: edge }, { id: other.id, kind: edge === 'start' ? 'end' : 'start' }] : null;
+}
+
+/**
  * How far an edge can go, both ways: not past its source, not shorter than the shortest clip, not into a neighbor
  * on its track that is not moving along (one that is, the other side of a roll, is not a fence).
  */

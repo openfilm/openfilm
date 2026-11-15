@@ -703,6 +703,7 @@ export const es: Words = {
     stepRemoved: 'Eliminado {clip}',
     stepMoved: 'Movido {clip}',
     stepTrimmed: 'Recortado {clip}',
+    stepRolled: 'Corte de {clip} ajustado por rodadura',
     stepSplit: 'Dividido {clip}',
     stepDetachAudio: 'Audio separado de {clip}',
     stepCompound: '{clip} en un clip compuesto',
@@ -2095,6 +2096,7 @@ export const es: Words = {
     menuUnlink: 'Desvincular',
     speed: 'Velocidad: arrastra los bordes del clip',
     speedHandle: 'Arrastra para cambiar la velocidad',
+    trimHandle: 'Arrastra para recortar; Alt/Option-arrastrar recorta solo esta pista o desplaza un corte entre clips contiguos (corte J/L)',
     speedNone: 'Solo los clips de vídeo y de sonido tienen velocidad',
     menuDisableClip: 'Desactivar clip',
     menuEnableClip: 'Activar clip',
@@ -2104,6 +2106,7 @@ export const es: Words = {
     menuClearRange: 'Quitar rango',
     tip: {
       trim: 'Recorte',
+      roll: 'Rodadura',
       ripple: 'Desplazar',
       speed: 'Velocidad',
       sourceEnd: 'Fin del medio',

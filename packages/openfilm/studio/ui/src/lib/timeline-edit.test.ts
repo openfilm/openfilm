@@ -27,6 +27,7 @@ import {
   slowestSpeed,
   planUnlink,
   ridesOn,
+  rollEdges,
   soundTrackFor,
   sourceLeftMs,
   type EditClip,
@@ -351,6 +352,53 @@ test('a move to a new track opens it; an insert move still closes the gap it lea
 });
 
 /* ── trims, rolls, slips, slides ── */
+
+test('a sound cut rolls independently into J and L cuts, preserving links and source sync', () => {
+  const m = model(
+    { role: 'video', clips: [['v1', 0, 4, { inMs: 1000, link: 'one' }], ['v2', 4, 8, { inMs: 2000, link: 'two' }]] },
+    { role: 'audio', clips: [['a1', 0, 4, { inMs: 1000, link: 'one' }], ['a2', 4, 8, { inMs: 2000, link: 'two' }]] },
+  );
+  for (const [id, edge] of [['a1', 'end'], ['a2', 'start']] as const) {
+    const moves = rollEdges(m, id, edge)!;
+    assert.equal(moves.length, 2, 'either side of the cut can be grabbed');
+    for (const delta of [-1000, 1000]) {
+      const plan = planEdges(m, moves, delta, { magnet: true, linkage: true });
+      const cut = 4 + delta / 1000;
+      assert.deepEqual(after(m, plan), [
+        [['v1', 0, 4], ['v2', 4, 8]],
+        [['a1', 0, cut], ['a2', cut, 8]],
+      ]);
+      assert.deepEqual(timeOf(m, plan, 'a2'), [2 + delta / 1000, 6]);
+      const film = applyOps(filmOf(m) as never, plan.ops as never) as unknown as FilmValue;
+      assert.deepEqual(film.tracks.flatMap((t) => t.clips.map((c) => c.attrs?.['data-link'])), ['one', 'two', 'one', 'two']);
+      apart(after(m, plan));
+    }
+  }
+  const picture = planEdges(m, rollEdges(m, 'v2', 'start')!, -1000, { magnet: true, linkage: true });
+  assert.deepEqual(after(m, picture), [[['v1', 0, 3], ['v2', 3, 8]], [['a1', 0, 4], ['a2', 4, 8]]]);
+});
+
+test('a roll stops at either source handle and either minimum length, including different speeds', () => {
+  const m = model([['a', 0, 4, { speed: 2, inMs: 1000, sourceMs: 10_000 }], ['b', 4, 8, { speed: 0.5, inMs: 250, sourceMs: 6000 }]]);
+  const moves = rollEdges(m, 'a', 'end')!;
+  assert.equal(planEdges(m, moves, 2000).deltaMs, 500, 'left source has only half a second on the film');
+  assert.equal(planEdges(m, moves, -2000).deltaMs, -500, 'right source has only half a second before its in point');
+  const out = planEdges(m, moves, -500);
+  assert.deepEqual(timeOf(m, out, 'a'), [1, 8]);
+  assert.deepEqual(timeOf(m, out, 'b'), [0, 2.25]);
+  const long = model([['a', 0, 4], ['b', 4, 8, { inMs: 10_000 }]]);
+  assert.equal(planEdges(long, rollEdges(long, 'a', 'end')!, -10_000).deltaMs, -3900);
+  assert.equal(planEdges(long, rollEdges(long, 'b', 'start')!, 10_000).deltaMs, 3900);
+});
+
+test('a free edge, a gap, a locked track and caption cues have no cut to roll', () => {
+  const m = model([['a', 0, 4], ['b', 5, 8]]);
+  for (const id of ['a', 'b', 'missing']) for (const edge of ['start', 'end'] as const) assert.equal(rollEdges(m, id, edge), null);
+  const locked = model({ locked: true, clips: [['a', 0, 4], ['b', 4, 8]] });
+  assert.equal(rollEdges(locked, 'a', 'end'), null);
+  const cues = model([['a', 0, 4, { cue: true }], ['b', 4, 8, { cue: true }]]);
+  assert.equal(rollEdges(cues, 'b', 'start'), null);
+});
 
 test('a trim moves the same edge of linked clips, and stops at the first neighbor in the way', () => {
   const m = model([['v', 0, 4, { link: 'l' }], ['w', 5, 6]], [['s', 0, 4, { link: 'l' }], ['t', 4.5, 6]]);

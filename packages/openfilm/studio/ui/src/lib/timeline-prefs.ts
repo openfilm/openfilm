@@ -8,8 +8,9 @@
  *     overlays go with it (a sound stays).
  *
  * Clips sharing a `data-link` (a video and its detached sound) are always selected and edited together; ⌥-click picks
- * one alone. The inspector reads the switches too (a slower speed pushes the next clip only with the magnet on), so a
- * change is told to everyone listening.
+ * one alone. ⌥-drag on an edge trims that track alone without rippling; at a touching cut it rolls both sides (J/L
+ * cuts after detaching audio). The inspector reads the switches too (a slower speed pushes the next clip only with
+ * the magnet on), so a change is told to everyone listening.
  */
 import { useSyncExternalStore } from 'react';
 

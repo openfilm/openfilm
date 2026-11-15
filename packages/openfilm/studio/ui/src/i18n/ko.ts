@@ -700,6 +700,7 @@ export const ko: Words = {
     stepRemoved: '{clip} 삭제',
     stepMoved: '{clip} 이동',
     stepTrimmed: '{clip} 트리밍',
+    stepRolled: '{clip}의 컷 지점 롤링 편집',
     stepSplit: '{clip} 분할',
     stepDetachAudio: '{clip}의 오디오 분리',
     stepCompound: '{clip}을(를) 복합 클립으로',
@@ -2092,6 +2093,7 @@ export const ko: Words = {
     menuUnlink: '연결 해제',
     speed: '속도: 클립 가장자리를 드래그',
     speedHandle: '드래그해 속도 변경',
+    trimHandle: '드래그해 트리밍. Alt/Option을 누르고 드래그하면 이 트랙만 트리밍하거나 맞닿은 컷 지점을 롤링 편집합니다(J/L 컷)',
     speedNone: '속도는 동영상과 사운드 클립에만 있습니다',
     menuDisableClip: '클립 비활성화',
     menuEnableClip: '클립 활성화',
@@ -2101,6 +2103,7 @@ export const ko: Words = {
     menuClearRange: '구간 해제',
     tip: {
       trim: '트림',
+      roll: '롤링',
       ripple: '리플',
       speed: '속도',
       sourceEnd: '소스의 끝입니다',

@@ -86,6 +86,11 @@ film's files, so the agent sees and keeps them, and you can save named versions 
 the sound or its stems, subtitles, stills, slides, a transparent video, or the timeline itself for Final Cut Pro,
 Premiere Pro and DaVinci Resolve.
 
+For J and L cuts, select your footage and choose **Detach audio** in its right-click menu. Hold Alt/Option and drag
+an audio cut: both sides roll together while the picture cut stays put. Do the same on the picture track to move
+its cut alone, even with the main-track magnet on. At a free edge, Alt/Option trims just that clip. The sound and
+picture stay linked, and one Undo restores the whole edit.
+
 Beside the edit is the canvas (⌘E switches between them): a board where you and the agent lay out notes, pictures,
 clips, voice-over, music and sound, wire them into each other, make each with your services, and send what you made
 to the timeline in order. A project can have several, each also seen as a storyboard. The library, in the assets

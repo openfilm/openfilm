@@ -3410,7 +3410,7 @@ export const Timeline = React.memo(function Timeline({
                         picked={picked && !touching.has(`${block.id}:start`)}
                         hit={trimHit(width)}
                         speed={speeding}
-                        title={speeding ? t('timeline.speedHandle') : undefined}
+                        title={speeding ? t('timeline.speedHandle') : t('timeline.trimHandle')}
                         onDown={(e) => { e.stopPropagation(); pickForTrim(e, block); drag.start(e, block, speeding ? 'speed-start' : 'trim-start'); }}
                       />
                     ) : null}
@@ -3419,7 +3419,7 @@ export const Timeline = React.memo(function Timeline({
                       picked={picked && !touching.has(`${block.id}:end`)}
                       hit={trimHit(width)}
                       speed={speeding}
-                      title={speeding ? t('timeline.speedHandle') : undefined}
+                      title={speeding ? t('timeline.speedHandle') : t('timeline.trimHandle')}
                       onDown={(e) => { e.stopPropagation(); pickForTrim(e, block); drag.start(e, block, speeding ? 'speed-end' : 'trim-end'); }}
                     />
                   </>

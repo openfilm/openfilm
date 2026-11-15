@@ -703,6 +703,7 @@ export const ja: Words = {
     stepRemoved: '{clip} を削除',
     stepMoved: '{clip} を移動',
     stepTrimmed: '{clip} をトリミング',
+    stepRolled: '{clip} のカット点をローリング編集',
     stepSplit: '{clip} を分割',
     stepDetachAudio: '{clip} のオーディオを切り離し',
     stepCompound: '{clip} を複合クリップに',
@@ -2095,6 +2096,7 @@ export const ja: Words = {
     menuUnlink: 'リンク解除',
     speed: '速度：クリップの端をドラッグ',
     speedHandle: 'ドラッグして速度を変更',
+    trimHandle: 'ドラッグでトリム。Alt/Option を押しながらドラッグすると、このトラックだけをトリム、または隣接するカット点をローリング編集（J/L カット）',
     speedNone: '速度を変えられるのは動画とサウンドのクリップだけです',
     menuDisableClip: 'クリップを無効化',
     menuEnableClip: 'クリップを有効化',
@@ -2104,6 +2106,7 @@ export const ja: Words = {
     menuClearRange: '範囲を解除',
     tip: {
       trim: 'トリム',
+      roll: 'ローリング',
       ripple: 'リップル',
       speed: '速度',
       sourceEnd: '素材の端です',
