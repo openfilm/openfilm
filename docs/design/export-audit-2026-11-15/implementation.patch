@@ -1,0 +1,1190 @@
+--- a/packages/openfilm/src/host.mjs
++++ b/packages/openfilm/src/host.mjs
+@@ -89,7 +89,7 @@
+  * render keys its chunks on those too, as the page would draw otherwise once the file is there.
+  * `grade(file, luts)` says a video graded by LUT files (SPEC.md `--of-lut`): the key of its graded copy (seekable.mjs
+  * gradeKey) once it is made, `making` while it is, null when it is played as it is. Without it, every video is.
+- * @param {string} root @param {{ inject?: string, timelineInject?: string, headers?: Record<string, string>, swap?: (file: string, query?: URLSearchParams) => string | null, missed?: (file: string) => void, grade?: Grade }} [options]
++ * @param {string} root @param {{ inject?: string, timelineInject?: string, headers?: Record<string, string>, swap?: (file: string, query?: URLSearchParams, source?: string) => string | null, missed?: (file: string) => void, grade?: Grade }} [options]
+  */
+ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, timelineInject = inject, headers: extraHeaders = {}, swap, missed, grade } = {}) {
+   root = resolve(root);
+@@ -171,7 +171,7 @@
+     if (!inRoot) try { inRoot = within(realpathSync(root), realpathSync(asked)) || readableLink(root, asked); } catch { /* gone meanwhile */ }
+     if (!inRoot) { missed?.(asked); return false; }
+     /* what a file is (its length and size: `film-facts`) is the file's own, never its copy's */
+-    const file = (query?.has('film-facts') ? null : swap?.(asked, query)) ?? linked ?? asked;
++    const file = (query?.has('film-facts') ? null : swap?.(asked, query, linked ?? asked)) ?? linked ?? asked;
+     let stat;
+     try { stat = statSync(file); } catch { res.writeHead(404, extraHeaders).end('not found'); return true; }
+     if (stat.isDirectory()) { res.writeHead(302, { ...extraHeaders, location: `${path}/` }).end(); return true; }
+@@ -621,6 +621,12 @@
+     /* `size`: a page clip's (SPEC §1), what a page without a size of its own is laid out at, from its first layout */
+     const laid = size?.w > 0 && size?.h > 0 ? { width: Math.round(size.w), height: Math.round(size.h) } : { width: 1920, height: 1080 };
+     film.context = await browser.newContext({ viewport: laid, deviceScaleFactor: scale });
++    // Persistent media caching can hash local requests; changing external resources have no such identity.
++    film.externalRequests = new Set();
++    film.context.on('request', (r) => {
++      const url = r.url();
++      if (!url.startsWith(origin + '/') && !/^(data|blob):/.test(url)) film.externalRequests.add(url);
++    });
+     film.page = await film.context.newPage();
+     const problems = film.problems;
+     film.page.on('pageerror', (e) => problems.push({ kind: 'error', message: e.message }));
+--- a/packages/openfilm/src/render.mjs
++++ b/packages/openfilm/src/render.mjs
+@@ -118,9 +118,10 @@
+   let copies = new Map();
+   /** @type {Map<string, string>} the graded copies of the film's videos graded by LUTs, by their keys (seekable.mjs) */
+   let graded = new Map();
+-  const swap = (/** @type {string} */ file, /** @type {URLSearchParams | undefined} */ query) => {
++  const swap = (/** @type {string} */ file, /** @type {URLSearchParams | undefined} */ query, /** @type {string} */ source = file) => {
+     if (clipKind(file) === 'video') videos.add(file);
+     if (!used.has(file)) used.set(file, signature(file));
++    if (source !== file && !used.has(source)) used.set(source, signature(source));
+     return graded.get(query?.get('of-grade') ?? '') ?? copies.get(file) ?? null;
+   };
+   /* a video graded by LUTs plays its graded copy, made before any frame is drawn; its LUTs are what its chunks are
+@@ -542,6 +543,9 @@
+     ...(straightFrames ? { straight: straightFrames } : {}),
+     ...(selection ? { ranges: selection.spans.map((part) => [part.from, part.to]) } : {}),
+     ...(clearFormat ? { clear } : {}),
++    ...(opts.dependencies ? { dependencies: [...used.keys()].filter((file) => !file.startsWith(work)),
++      dependencySignatures: [...used].filter(([file]) => !file.startsWith(work)),
++      cacheable: [probe.film, ...tabs].every((p) => p.externalRequests.size === 0) } : {}),
+     lines: [
+       `→ ${shown(out)}`,
+       `  ${total} frames · ${fmt(to - from)} at ${Number(fps.toFixed(3))} fps · ${Math.round(meta.width * scale)}×${Math.round(meta.height * scale)}${samples > 1 ? ` · ${samples} samples/frame` : ''}${alpha ? ' · alpha' : ''} · ${workers} worker${workers > 1 ? 's' : ''} · ${encoder} · ${seconds.toFixed(1)} s`,
+--- a/packages/openfilm/studio/server/exports.mjs
++++ b/packages/openfilm/studio/server/exports.mjs
+@@ -87,7 +87,7 @@
+ import { layerBlocks, rowBadges, trackKind } from './track-layout.mjs';
+ import { fcpxmlDocument } from './fcpxml.mjs';
+ import { markHevcStraightAlpha } from './hevc-alpha.mjs';
+-import { frameSpan, NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
++import { frameSpan, NLE_FPS, nleFps, ownLook, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
+ import { draftsRoot, jianyingClipLook, jianyingDraft } from './jianying.mjs';
+ import { captionNeedsRendering, jianyingCaptionFonts } from './jianying-captions.mjs';
+ import { slidesPdf, writePptx } from './slides.mjs';
+@@ -102,6 +102,7 @@
+ import { PROJECT_PARTS, TOOL_DIR } from './projects.mjs';
+ import { exportsRoot } from '../../src/locations.mjs';
+ import { recordProblem } from '../../src/problems.mjs';
++import { cropDraftPng, draftCache, draftEngineVersion, draftPartPath, draftRgbProfile, splitDraftPng } from './draft-media.mjs';
+ 
+ /** The exports folder: the one chosen in Settings, else the Desktop, where a file just made is found (src/locations.mjs). */
+ export { exportsRoot };
+@@ -132,7 +133,8 @@
+  *   status: 'waiting' | 'running' | 'done' | 'failed' | 'cancelled', progress: number, phase: ExportPhase | null,
+  *   framesDone: number, framesTotal: number, rate: number, etaMs: number | null, encoder: string | null,
+  *   out?: string, outputs: string[], bytes: number | null, alpha: { any: boolean } | null, error?: string, cancelling?: boolean,
+- *   at: number, startedAt: number | null, finishedAt: number | null, draftsRefused?: string, diskFull?: boolean, software?: boolean }} ExportJob
++ *   at: number, startedAt: number | null, finishedAt: number | null, draftsRefused?: string, diskFull?: boolean, software?: boolean,
++ *   mediaStats?: Record<string, unknown>[] }} ExportJob
+  */
+ 
+ /** Whether an error is the disk being full, in ffmpeg's words or the system's (a Mac, Linux, Windows). @param {unknown} e */
+@@ -823,43 +825,44 @@
+  * drawing it.
+  */
+ const QUICK_PNG = { video: ['-c:v', 'png', '-compression_level', '1', '-pred', 'sub'], pix: 'format=rgba' };
++// One lossless encode. Level 3 + SUB retains the small files of the slow second pass on real noisy/photographic pages.
++const DRAFT_PNG = { video: ['-c:v', 'png', '-compression_level', '3', '-pred', 'sub'], pix: 'format=rgba' };
+ 
+ /**
+  * A PNG video with each picture kept once: a frame that repeats the one before is dropped and the one before lasts
+  * until the next (the timestamps say so), so a page that holds still is one picture, not a second's worth. A repeat is
+- * found by its bytes: one encoder at one setting writes the same picture the same way, so a frame a pixel apart is
+- * never taken for one; the frames kept are written again as PNG at ffmpeg's own settings, the same pixels. The last
+- * frame stays, so the length does too; a video that changes in most of its frames keeps every frame, written again the
+- * same way (it may have been drawn as a quick PNG).
++ * found by its bytes: one encoder at one setting writes the same picture the same way. Only identical packets are
++ * removed. No PNG is decoded or encoded again; PTS and the last sample retain the original picture clock.
+  * @param {string} file @param {AbortSignal} signal
+  */
+ export async function keepChanges(file, signal) {
+   const { stdout } = await execFileP('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-i', file, '-map', '0:v:0', '-c', 'copy', '-f', 'framemd5', '-'],
+     { maxBuffer: 256 << 20, signal, windowsHide: true });
+   const sums = String(stdout).split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(',').pop()?.trim());
+-  const kept = sums.flatMap((sum, i) => (i === 0 || i === sums.length - 1 || sum !== sums[i - 1] ? [i] : []));
++  const dropped = sums.flatMap((sum, i) => (i > 0 && i < sums.length - 1 && sum === sums[i - 1] ? [i] : []));
++  if (!dropped.length) return { frames: sums.length, kept: sums.length };
+   /* frames kept one after another are one term; the terms are added as a balanced tree, since ffmpeg parses no more
+      than 100 in a row */
+   /** @type {[number, number][]} */
+   const runs = [];
+-  for (const i of kept) { const last = runs.at(-1); if (last && last[1] === i - 1) last[1] = i; else runs.push([i, i]); }
++  for (const i of dropped) { const last = runs.at(-1); if (last && last[1] === i - 1) last[1] = i; else runs.push([i, i]); }
+   /** @type {(part: [number, number][]) => string} */
+   const sum = (part) => (part.length === 1 ? (part[0][0] === part[0][1] ? `eq(n,${part[0][0]})` : `between(n,${part[0][0]},${part[0][1]})`)
+     : `(${sum(part.slice(0, part.length >> 1))}+${sum(part.slice(part.length >> 1))})`);
+   const part = `${file}.part.mov`;
+-  const all = kept.length > sums.length / 2;
+-  const graph = all ? '' : `[0:v:0]select='${sum(runs)}'[v]`;
+-  /* a long one goes in a file: Windows takes a command of no more than 32,767 characters, and a long page that steps
+-     every few frames keeps thousands of runs */
+-  const script = graph.length > COMMAND_ROOM ? `${part}.filter` : null;
++  const graph = `noise=amount=0:drop='${sum(runs)}'`;
++  /* FFmpeg's option-file syntax keeps even an hours-long expression below Windows' command-line limit. */
++  const script = graph.length > COMMAND_ROOM ? `${part}.bsf` : null;
+   if (script) await writeFile(script, graph, 'utf8');
+   try {
+-    const select = all ? ['-map', '0:v:0'] : [...(script ? [await filterScriptOption(), script] : ['-filter_complex', graph]), '-map', '[v]', '-fps_mode', 'vfr'];
+-    await run(['-i', file, ...select, '-c:v', 'png', part], signal);
++    await run(['-i', file, '-map', '0:v:0', '-map', '0:a?', '-c', 'copy',
++      ...(script ? ['-/bsf:v', script] : ['-bsf:v', graph]), part], signal);
++    await renameSafely(part, file);
+   } finally {
+     if (script) await tidy(script);
+-  }
+-  await renameSafely(part, file);
++    await tidy(part);
++  }
++  return { frames: sums.length, kept: sums.length - dropped.length };
+ }
+ 
+ const IMAGE_TYPES = /** @type {Record<string, string>} */ ({ svg: 'image/svg+xml', webp: 'image/webp', avif: 'image/avif', gif: 'image/gif', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', bmp: 'image/bmp' });
+@@ -1351,7 +1354,7 @@
+     const have = await encoders();
+     /** how a page with alpha is drawn: PNG (a draft's a quick one, its pictures thinned after; PNG's alpha is exact,
+         ProRes's comes back a little off full), or (null) ProRes 4444, whose encoder render picks */
+-    const pngFormat = app ? QUICK_PNG : alpha === 'png' ? encoding('png', 'master', { w: 0, h: 0 }, fps, have).format : null;
++    const pngFormat = app ? DRAFT_PNG : alpha === 'png' ? encoding('png', 'master', { w: 0, h: 0 }, fps, have).format : null;
+     /* the edit with every track shown: a hidden track comes over disabled, one click from back on, so it is drawn too */
+     const doc = existsSync(join(root, FILM_FILE)) ? filmDoc(root)
+       : { stage: await stageOf(root), tracks: [{ clips: [{ src: 'index.html', id: title }] }] };
+@@ -1373,9 +1376,11 @@
+       await filmElsewhere(root, scratch, { stage: doc.stage, tracks: doc.tracks.map((t) => ({ clips: t.clips })) });
+       const probe = await open(scratch, { root });
+       /** @type {{ id: string, at: number, end: number, from: number, to: number, speed: number, native: number | null, w: number | null, h: number | null,
+-       * hasEffect: boolean, draftStyle: import('./jianying.mjs').DraftStyle | null, animationTiming?: { durations: number[], delays: number[] } }[]} */
++       * hasEffect: boolean, draftStyle: import('./jianying.mjs').DraftStyle | null, fit: string | null, position: string | null, animationTiming?: { durations: number[], delays: number[] } }[]} */
+       let loaded;
++      let browserVersion = '';
+       try {
++        browserVersion = probe.browser.version();
+         loaded = await probe.film.page.evaluate(() => /** @type {any} */ (window).__filmEditor.stage.clips().map((/** @type {any} */ c) => {
+           const css = c.el ? getComputedStyle(c.el) : null;
+           const seconds = (/** @type {string} */ value) => value.split(',').map((v) => parseFloat(v) * (v.trim().endsWith('ms') ? 0.001 : 1));
+@@ -1386,10 +1391,11 @@
+           const simple = Boolean(css && standardMask && css.clipPath === 'none' && css.filter === 'none' && css.backdropFilter === 'none'
+             && css.mixBlendMode === 'normal' && css.borderRadius === '0px' && css.borderWidth === '0px' && css.boxShadow === 'none'
+             && css.backgroundColor === 'rgba(0, 0, 0, 0)' && css.backgroundImage === 'none'
+-            && css.objectFit === 'contain' && css.objectPosition === '50% 50%' && !timing);
++            && !timing);
+           const hasEffect = Boolean(css && (css.maskImage !== 'none' || css.clipPath !== 'none' || css.filter !== 'none' || css.opacity !== '1' || timing));
+           const draftStyle = css ? { opacity: Number(css.opacity), maskImage: css.maskImage, maskComposite: css.maskComposite, simple } : null;
+           return { id: c.id, at: c.at, end: c.end, from: c.span.from, to: c.span.to, speed: c.span.speed, hasEffect, draftStyle,
++            fit: css ? css.objectFit : null, position: css ? css.objectPosition : null,
+             native: Number.isFinite(c.native) ? c.native : null, w: c.nw ?? null, h: c.nh ?? null,
+             ...(timing && [...timing.durations, ...timing.delays].every(Number.isFinite) ? { animationTiming: timing } : {}) };
+         }));
+@@ -1448,7 +1454,8 @@
+             }
+             pictures.push({ id: row.id, kind, src: row.src, path, at: c.at, end: c.end, from: c.from, speed: c.speed, box: row.box,
+               ...(draftLook ? { draftLook } : {}),
+-              track: ti, hidden: Boolean(track.hidden || row.disabled), styled: Boolean(row.class || row.style || c.hasEffect), ...(fade ? { faded: true } : {}), facts: f,
++              track: ti, hidden: Boolean(track.hidden || row.disabled), styled: Boolean(row.class || ownLook(row.style ?? '').length || c.hasEffect),
++              ...(c.fit ? { fit: c.fit } : {}), ...(c.position ? { position: c.position } : {}), ...(fade ? { faded: true } : {}), facts: f,
+               ...(c.animationTiming ? { animationTiming: c.animationTiming } : {}) });
+           }
+           if (kind === 'sound' || kind === 'video') {
+@@ -1491,6 +1498,30 @@
+         { title, fps, audio: mode, media: ask.media ?? 'copy', mediaDir: join(final, 'media'), stems: [...stems.keys()],
+           audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app), embeddedAudio: Boolean(app), footage: ask.footage ?? 'auto' });
+       const staged = (/** @type {import('./nle.mjs').NleFile} */ f) => join(staging, 'media', basename(f.path));
++      const cache = app ? draftCache(root, `${await draftEngineVersion()}:${browserVersion}`) : null;
++      const rgbProfile = alpha === 'auto' && have.has('libx264rgb') ? await draftRgbProfile(app) : null;
++      const head = (existsSync(join(root, FILM_FILE)) ? readFileSync(join(root, FILM_FILE), 'utf8') : '').split(/<body\b/i)[0];
++      /** @type {Record<string, unknown>[]} */ const mediaStats = [];
++      const reportMedia = (/** @type {Record<string, unknown>} */ stats) => { mediaStats.push(stats); update(job, { mediaStats: [...mediaStats] }); };
++      const restoreCrop = (/** @type {import('./nle.mjs').NleFile} */ file, /** @type {import('./draft-media.mjs').Crop | null} */ crop) => {
++        if (!crop || !file.video) return;
++        file.video.w = crop.w; file.video.h = crop.h;
++        for (const track of timeline.video) for (const clip of track.clips) if (clip.fileId === file.id) {
++          clip.motion = { scale: 100, center: { h: (crop.x + crop.w / 2) / timeline.width - 0.5, v: (crop.y + crop.h / 2) / timeline.height - 0.5 } };
++          clip.rasterCrop = crop;
++        }
++      };
++      const restoreParts = (/** @type {import('./nle.mjs').NleFile} */ file, /** @type {import('./draft-media.mjs').DraftPart[] | null} */ parts) => {
++        if (!parts?.length || !file.video) return;
++        const base = { ...file, video: { ...file.video } };
++        const files = parts.map((part, i) => ({ ...base, id: i ? `${base.id}.part-${i}` : base.id, path: draftPartPath(base.path, part.suffix),
++          durationFrames: part.to - part.from, video: { ...base.video, alpha: !part.opaque } }));
++        Object.assign(file, files[0]);
++        timeline.files.push(...files.slice(1));
++        for (const track of timeline.video) track.clips = track.clips.flatMap((clip) => clip.fileId === base.id
++          ? parts.map((part, i) => ({ ...clip, id: i ? `${clip.id}.part-${i}` : clip.id, fileId: files[i].id,
++            start: clip.start + part.from, end: clip.start + part.to, in: 0, out: part.to - part.from })) : [clip]);
++      };
+ 
+       /* each web page (and each picture Basic Motion can't place) drawn alone, full frame, with alpha. Several are drawn at
+          once, the longest first, with as many browsers in all as one render of every frame would get (render.mjs
+@@ -1526,7 +1557,7 @@
+       const asEditorsPlay = async (draw, codec) => {
+         /** @param {string | null} encoder */
+         const formats = (encoder) => (codec === 'h264'
+-          ? { format: { video: [...encoding('h264', 'master', doc.stage, timeline.rate.fps, have, encoder).format.video, ...H264_709], pix: YUV_709('yuv420p') }, clear: QUICK_PNG }
++          ? { format: { video: [...encoding('h264', 'master', doc.stage, timeline.rate.fps, have, encoder).format.video, ...H264_709], pix: YUV_709('yuv420p') }, clear: DRAFT_PNG }
+           : { format: prores709(encoder ?? 'prores_ks', false), clear: prores709(encoder ?? 'prores_ks', true) });
+         const chip = await hardwareEncoder(codec, have);
+         try {
+@@ -1539,10 +1570,33 @@
+           return draw(formats(null));
+         }
+       };
+-      /** @param {import('./nle.mjs').NleFile} file @param {number} workers @param {() => void} drawn */
+-      const page = async (file, workers, drawn) => {
++      /** @param {import('./nle.mjs').NleFile} file @param {number} workers */
++      const page = async (file, workers) => {
++        const started = performance.now();
+         const { clip: id, frames, fullSource } = /** @type {Extract<import('./nle.mjs').NleMediaJob, { kind: 'render' }>} */ (file.job);
+         const p = /** @type {import('./nle.mjs').NlePicture} */ (pictures.find((x) => x.id === id));
++        const row = doc.tracks.flatMap((t) => t.clips).find((c) => c.id === id);
++        const cacheKey = cache?.keyOf({ head, stage: doc.stage, row: row ?? { captions: cues, tracks: doc.tracks.filter((t) => t.captions) }, frames, fullSource,
++          fps: timeline.rate.fps, alpha, rgbProfile, footage: ask.footage, job: { ...file.job, clip: row?.id ?? 'captions' } });
++        const hit = cache && cacheKey ? await cache.get(cacheKey, staged(file)) : null;
++        if (hit) {
++          file.durationFrames = hit.durationFrames;
++          for (const t of timeline.video) for (const c of t.clips) if (c.fileId === file.id && hit.durationFrames < frames) {
++            c.out = fullSource ? Math.min(c.out, hit.durationFrames) : hit.durationFrames;
++            c.end = c.start + Math.round((c.out - c.in) / (c.speed ?? 1));
++          }
++          restoreCrop(file, hit.crop);
++          restoreParts(file, hit.parts);
++          drawnFrames.set(file.id, framesOf(file));
++          tick([...drawnFrames.values()].reduce((n, d) => n + d, 0), totalFrames);
++          const bytes = (await Promise.all((hit.parts ?? [{ suffix: '' }]).map((/** @type {{suffix:string}} */ part) => stat(draftPartPath(staged(file), part.suffix))))).reduce((n, s) => n + s.size, 0);
++          reportMedia({ clip: id, cached: true, bytes, seconds: (performance.now() - started) / 1000, crop: hit.crop, parts: hit.parts });
++          return;
++        }
++        /** @type {string[]} */ let dependencies = [];
++        /** @type {Map<string, string>} */ let dependencySignatures = new Map();
++        let cacheable = false;
++        let renderSeconds = 0;
+         const native = byId.get(id)?.native ?? p.facts?.duration ?? Infinity;
+         /* as long as its frames on the sequence: a page holds its last frame, a still lasts as long as it is told */
+         const time = p.kind === 'video' ? [p.from, Math.min(native, p.from + (frames / timeline.rate.fps) * p.speed)] : [p.from, p.from + frames / timeline.rate.fps];
+@@ -1566,7 +1620,7 @@
+             /** @param {Record<string, unknown>} how */
+             const draw = async (how) => {
+               const result = await pool.render([one.dir], {
+-                root, alpha: !ground, silent: true, fps: timeline.rate.fps, out: staged(file), signal: stop.signal, workers,
++                root, alpha: !ground, silent: true, fps: timeline.rate.fps, out: staged(file), signal: stop.signal, workers, dependencies: true,
+                 ...(ground ? { format: how.format } : how),
+                 /* a page drawn again counts from where it was: it holds until the second drawing passes it */
+                 onProgress: (/** @type {number} */ done) => {
+@@ -1575,6 +1629,9 @@
+                 },
+               });
+               if (result.encoder !== job.encoder) update(job, { encoder: result.encoder });
++              dependencies = result.dependencies ?? [];
++              dependencySignatures = new Map(result.dependencySignatures ?? []);
++              cacheable = result.cacheable === true;
+               return result;
+             };
+             if (app && alpha !== 'png') clear = (await asEditorsPlay(draw, alpha === 'prores' ? 'prores' : 'h264')).clear === true;
+@@ -1583,7 +1640,7 @@
+             await one.remove();
+           }
+         } finally {
+-          drawn();
++          renderSeconds = (performance.now() - started) / 1000;
+         }
+         /* a source shorter than its place by a frame of rounding: the clip ends where its picture does */
+         const made = await countFrames(staged(file));
+@@ -1596,7 +1653,22 @@
+         }
+         /* a draft's PNG page keeps each picture once, for as long as it shows (剪映 plays a picture's own length): a
+            fraction of the frames, the same pixels */
+-        if (app && clear && alpha !== 'prores') await keepChanges(staged(file), stop.signal);
++        let analysis = null;
++        /** @type {import('./draft-media.mjs').DraftPart[] | null} */ let parts = null;
++        const sourceFrames = file.durationFrames;
++        const postStarted = performance.now();
++        if (app && clear && alpha !== 'prores') {
++          const compact = await keepChanges(staged(file), stop.signal);
++          analysis = await cropDraftPng(staged(file), { ...doc.stage, frames: compact.kept, fps: timeline.rate.fps }, stop.signal);
++          restoreCrop(file, analysis.crop);
++          const placements = timeline.video.flatMap((t) => t.clips).filter((c) => c.fileId === file.id);
++          const collisions = Array.from({ length: 15 }, (_, i) => draftPartPath(file.path, `.part-${i + 1}`).normalize('NFD').toLowerCase());
++          if (rgbProfile && p.kind === 'page' && !analysis.crop && placements.length === 1 && placements[0].in === 0 && !placements[0].speed
++            && !timeline.files.some((f) => f !== file && collisions.includes(f.path.normalize('NFD').toLowerCase()))) {
++            parts = await splitDraftPng(staged(file), analysis, { fps: timeline.rate.fps, frames: sourceFrames, signal: stop.signal });
++            restoreParts(file, parts);
++          }
++        }
+         /* A rendered picture still owns the sound recorded with it. Put that sound on the rendered media's clock;
+            clip gain, mute and fades remain editable in the draft instead of becoming detached audio clips. */
+         const audio = /** @type {Extract<import('./nle.mjs').NleMediaJob, { kind: 'render' }>} */ (file.job).audio;
+@@ -1611,6 +1683,14 @@
+             await rename(temp, staged(file));
+           } finally { await rm(temp, { force: true }); }
+         }
++        const bytes = (await Promise.all((parts ?? [{ suffix: '' }]).map((part) => stat(draftPartPath(staged(file), part.suffix))))).reduce((n, s) => n + s.size, 0);
++        const stats = { clip: id, cached: false, bytes, seconds: (performance.now() - started) / 1000,
++          renderSeconds, postSeconds: (performance.now() - postStarted) / 1000, crop: analysis?.crop ?? null, alphaSpans: analysis?.spans, parts, rgbProfile };
++        const cacheStarted = performance.now();
++        if (cache && cacheKey && cacheable) await cache.put(cacheKey, staged(file), dependencies, { crop: analysis?.crop ?? null, durationFrames: sourceFrames, parts }, file.path,
++          (parts ?? [{ suffix: '' }]).map((part) => part.suffix), dependencySignatures).catch(() => {});
++        Object.assign(stats, { cacheWriteSeconds: (performance.now() - cacheStarted) / 1000, seconds: (performance.now() - started) / 1000 });
++        reportMedia(stats);
+       };
+       try {
+         let left = totalFrames;
+@@ -1625,10 +1705,10 @@
+           let drawn = () => {};
+           const slot = new Promise((r) => { drawn = () => r(undefined); }).then(() => { drawing.delete(slot); free += workers; });
+           drawing.add(slot);
+-          pages.push(page(file, workers, drawn).catch((e) => {
++          pages.push(page(file, workers).catch((e) => {
+             failed ??= e;
+             stop.abort();
+-          }));
++          }).finally(drawn));
+         }
+         await Promise.all(pages);
+       } finally {
+@@ -1981,7 +2061,7 @@
+     end(new Error(`the renderer stopped (${sig ?? `exit ${code}`})${last ? `: ${last.slice(0, 300)}` : ''}`));
+   });
+   return {
+-    /** @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, clear?: boolean, lines: string[] }>} */
++    /** @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, clear?: boolean, dependencies?: string[], dependencySignatures?: [string, string][], cacheable?: boolean, lines: string[] }>} */
+     render(args, opts) {
+       const { signal, onProgress, ...rest } = opts;
+       return new Promise((done, fail) => {
+--- a/packages/openfilm/studio/server/exports.test.mjs
++++ b/packages/openfilm/studio/server/exports.test.mjs
+@@ -16,6 +16,7 @@
+ import { layoutTracks } from '../ui/src/lib/timeline-layout.ts';
+ import { filmHtml } from '../../src/film-doc.mjs';
+ import { JIANYING_DRAFT_PATH } from './jianying.mjs';
++import { draftRasterFilter } from '../../scripts/draft-bench-frames.mjs';
+ 
+ const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
+ const ffmpeg = { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 };
+@@ -1127,12 +1128,14 @@
+   /* a page lossless, with its alpha (剪映 shows PNG's on both systems), and clear where the page draws nothing */
+   const page = join(folder, 'media', 'title.mov');
+   assert.equal(probe(page, 'stream=codec_name,pix_fmt'), 'png,rgba');
+-  const corner = execFileSync('ffmpeg', ['-v', 'error', '-i', page, '-frames:v', '1', '-vf', 'crop=1:1:200:120,format=rgba', '-f', 'rawvideo', '-']);
++  const info = JSON.parse(readFileSync(done.out, 'utf8'));
++  const material = info.materials.videos.find((m) => m.path.endsWith('/title.mov'));
++  const placed = info.tracks.flatMap((t) => t.segments).find((s) => s.material_id === material.id);
++  const corner = execFileSync('ffmpeg', ['-v', 'error', '-i', page, '-frames:v', '1', '-vf', `${draftRasterFilter(info, placed)},crop=1:1:200:120,format=rgba`, '-f', 'rawvideo', '-']);
+   assert.equal(corner[3], 0, 'transparent away from the page\'s box');
+   /* the page holds still: its first and last pictures, for its whole second */
+   assert.equal(frameCount(page), 2);
+   assert.equal(Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', page]).toString()), 1);
+-  const info = JSON.parse(readFileSync(done.out, 'utf8'));
+   const meta = JSON.parse(readFileSync(join(folder, 'draft_meta_info.json'), 'utf8'));
+   assert.deepEqual([meta.draft_name, meta.draft_fold_path, meta.draft_root_path, meta.draft_id], ['Cut', folder, drafts, info.id]);
+   assert.deepEqual(info.canvas_config, { width: 320, height: 180, ratio: 'original' });
+@@ -1360,18 +1363,26 @@
+     assert.equal(frameCount(steps), stepPictures);
+     assert.deepEqual(decoded(steps), stepsBefore);
+     assert.deepEqual(readdirSync(dir).filter((n) => n.endsWith('.filter')), [], 'its sum file gone');
+-    /* drawn as a quick PNG and changing in every frame: every frame kept, written again at ffmpeg's own settings */
++    /* A changing quick PNG is already lossless: leave its encoded packets alone. */
+     const quick = join(dir, 'quick.mov');
+     const own = join(dir, 'own.mov');
+     const moving = ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=64x36:r=30:d=1,format=rgba'];
+     execFileSync('ffmpeg', [...moving, '-c:v', 'png', '-compression_level', '1', '-pred', 'sub', quick]);
+     execFileSync('ffmpeg', [...moving, '-c:v', 'png', own]);
+     const quickBefore = decoded(quick);
++    const packets = (f) => execFileSync('ffmpeg', ['-v', 'error', '-i', f, '-map', '0:v:0', '-c', 'copy', '-f', 'framemd5', '-']).toString().split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(',').pop());
++    const quickPackets = packets(quick);
+     await keepChanges(quick, new AbortController().signal);
+-    assert.equal(frameCount(quick), 30);
++    const quickKept = quickPackets.filter((s, i) => i === 0 || i === quickPackets.length - 1 || s !== quickPackets[i - 1]);
++    assert.equal(frameCount(quick), quickKept.length);
+     assert.deepEqual(decoded(quick), quickBefore, 'the same pixels at the same time');
+-    const packets = (f) => execFileSync('ffmpeg', ['-v', 'error', '-i', f, '-map', '0:v:0', '-c', 'copy', '-f', 'framemd5', '-']).toString().split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(',').pop());
+-    assert.deepEqual(packets(quick), packets(own), 'written as ffmpeg writes a PNG');
++    assert.deepEqual(packets(quick), quickKept, 'no second PNG encoding');
++    const mostly = join(dir, 'mostly.mov');
++    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=32x32:r=24:d=1,fps=30,format=rgba', '-c:v', 'png', mostly]);
++    const mostlyBefore = decoded(mostly);
++    await keepChanges(mostly, new AbortController().signal);
++    assert.ok(frameCount(mostly) < mostlyBefore.length, 'duplicates removed even when most frames change');
++    assert.deepEqual(decoded(mostly), mostlyBefore);
+   } finally {
+     rmSync(dir, { recursive: true, force: true });
+   }
+--- a/packages/openfilm/studio/server/clip-export-regressions.test.mjs
++++ b/packages/openfilm/studio/server/clip-export-regressions.test.mjs
+@@ -3,10 +3,12 @@
+ import { execFileSync, spawnSync } from 'node:child_process';
+ import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+ import { tmpdir } from 'node:os';
++import { createServer } from 'node:http';
+ import { dirname, join } from 'node:path';
+ import { filmHtml } from '../../src/film-doc.mjs';
+ import { createExports, framing } from './exports.mjs';
+ import { JIANYING_DRAFT_PATH } from './jianying.mjs';
++import { draftRasterFilter } from '../../scripts/draft-bench-frames.mjs';
+ 
+ const haveFfmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
+ const ffmpeg = { skip: !haveFfmpeg, timeout: 180_000 };
+@@ -17,8 +19,8 @@
+   process.env.OPENFILM_EXPORTS = join(scratch, 'exports');
+ });
+ after(() => rmSync(scratch, { recursive: true, force: true }));
+-async function exported(root, ask) {
+-  const exports = createExports({ drafts: () => null });
++async function exported(root, ask, onChange = () => {}) {
++  const exports = createExports({ drafts: () => null, onChange });
+   const job = exports.start({ id: 'p', name: 'Regression', path: root }, ask);
+   const deadline = Date.now() + 150_000;
+   for (;;) {
+@@ -37,6 +39,42 @@
+   const at = (45 * 160 + 80) * 4;
+   return [...raw.subarray(at, at + 4)];
+ }
++
++test('changing a remote stylesheet is rendered again instead of reusing stale draft media', ffmpeg, async () => {
++  const root = join(scratch, 'remote-style'); mkdirSync(root);
++  let color = 'red';
++  const server = createServer((_req, res) => { res.setHeader('Content-Type', 'text/css'); res.end(`body{margin:0;background:${color}}`); });
++  await new Promise((done) => server.listen(0, '127.0.0.1', done));
++  try {
++    const url = `http://127.0.0.1:${server.address().port}/style.css`;
++    writeFileSync(join(root, 'page.html'), `<link rel="stylesheet" href="${url}"><script>window.film={width:160,height:90,duration:1,frame(){}}</script>`);
++    writeFileSync(join(root, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [{ clips: [{ id: 'page', src: 'page.html', time: [0, 1] }] }] }));
++    const first = dirname(await exported(root, { kind: 'nle', format: 'capcut', alpha: 'png', fps: 30, subtitles: false }));
++    assert.deepEqual(pixel(join(first, 'media', 'page.mov')), [255, 0, 0, 255]);
++    color = 'lime';
++    const second = dirname(await exported(root, { kind: 'nle', format: 'capcut', alpha: 'png', fps: 30, subtitles: false }));
++    assert.deepEqual(pixel(join(second, 'media', 'page.mov')), [0, 255, 0, 255]);
++  } finally { await new Promise((done) => server.close(done)); }
++});
++
++test('completed local pages hit the draft cache and editing a dependency invalidates them', ffmpeg, async () => {
++  const root = join(scratch, 'local-cache'); mkdirSync(root);
++  const source = join(root, 'page.html');
++  const html = (color) => `<!doctype html><body style="margin:0;background:${color}"><script>window.film={width:160,height:90,duration:1,frame(){}}</script>`;
++  writeFileSync(source, html('red'));
++  writeFileSync(join(root, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [{ clips: [{ id: 'page', src: 'page.html', time: [0, 1] }] }] }));
++  let last;
++  const ask = { kind: 'nle', format: 'capcut', alpha: 'png', fps: 30, subtitles: false };
++  await exported(root, ask, (job) => { last = job; });
++  assert.equal(last.mediaStats[0].cached, false);
++  const warm = dirname(await exported(root, ask, (job) => { last = job; }));
++  assert.equal(last.mediaStats[0].cached, true);
++  assert.deepEqual(pixel(join(warm, 'media', 'page.mov')), [255, 0, 0, 255]);
++  writeFileSync(source, html('lime'));
++  const edited = dirname(await exported(root, ask, (job) => { last = job; }));
++  assert.equal(last.mediaStats[0].cached, false);
++  assert.deepEqual(pixel(join(edited, 'media', 'page.mov')), [0, 255, 0, 255]);
++});
+ 
+ test('draft exports keep original audio when video is only scaled, with native placement or CSS', ffmpeg, async () => {
+   const root = join(scratch, 'scaled-audio'); mkdirSync(root);
+@@ -155,7 +193,7 @@
+   assert.equal(untouched.path, `${JIANYING_DRAFT_PATH}/media/source.mp4`);
+   const meta = JSON.parse(readFileSync(join(folder, 'draft_meta_info.json'), 'utf8'));
+   assert.ok(meta.draft_materials[0].value.some((m) => m.file_Path === './media/mask.mov'));
+-  const rgba = execFileSync('ffmpeg', ['-v', 'error', '-i', rendered.path.replace(JIANYING_DRAFT_PATH, folder), '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
++  const rgba = execFileSync('ffmpeg', ['-v', 'error', '-i', rendered.path.replace(JIANYING_DRAFT_PATH, folder), '-vf', draftRasterFilter(info, mask), '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
+   assert.equal(rgba[3], 0, 'the corner outside the mask is transparent even on the bottom track');
+   assert.equal(rgba[(45 * 160 + 80) * 4 + 3], 255, 'the middle of the mask remains visible');
+   assert.equal(plain.speed, 2);
+@@ -208,7 +246,7 @@
+     const material = info.materials.videos.find((m) => m.id === layer.segments[0].material_id);
+     assert.match(material.material_name, /captions/i);
+     const file = material.path.replace(JIANYING_DRAFT_PATH, folder);
+-    const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vf', 'fps=30', '-ss', '0.3', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
++    const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vf', `fps=30,${draftRasterFilter(info, layer.segments[0])}`, '-ss', '0.3', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
+     const at = (x, y) => [...raw.subarray((y * 160 + x) * 4, (y * 160 + x) * 4 + 4)];
+     const visible = [];
+     for (let y = 0; y < 90; y++) for (let x = 0; x < 160; x++) if (at(x, y)[3]) visible.push([x, y]);
+--- a/packages/openfilm/studio/server/jianying.mjs
++++ b/packages/openfilm/studio/server/jianying.mjs
+@@ -30,7 +30,7 @@
+ import { readFileSync } from 'node:fs';
+ import { isAbsolute, join, relative, sep } from 'node:path';
+ import { filmSubtitleLanguageOf } from './film-subtitle.mjs';
+-import { declarations } from '../../src/film-doc.mjs';
++import { ownLook } from './nle.mjs';
+ import { captionPosition, jianyingCaptionStyle } from './jianying-captions.mjs';
+ 
+ /**
+@@ -125,7 +125,7 @@
+  * @returns {DraftClipLook | undefined}
+  */
+ export function jianyingClipLook(style, css, rotation, maskFits) {
+-  if (!css?.simple || declarations(style).some(([key]) => !nativeProperties.has(key))) return;
++  if (!css?.simple || ownLook(style).some(([key]) => !nativeProperties.has(key))) return;
+   const { opacity, maskImage, maskComposite } = css;
+   if (maskImage === 'none') return { opacity, rotation };
+   // A draft mask is relative to the actual picture. CSS masks may be relative to a letterboxed clip box.
+@@ -311,8 +311,10 @@
+         const w = file.video?.w ?? timeline.width, h = file.video?.h ?? timeline.height;
+         /* 剪映 first fits it whole in the canvas; the plan's scale is of its own pixels, 100 when none */
+         const fit = Math.min(timeline.width / w, timeline.height / h);
+-        const scale = round6((c.motion ? c.motion.scale / 100 : 1) / fit);
+-        const x = round6((c.motion?.center.h ?? 0) * 2), y = round6(-(c.motion?.center.v ?? 0) * 2);
++        // Cropped raster media must land on its original pixel grid; six decimal places can introduce a resize.
++        const precision = c.rasterCrop ? (/** @type {number} */ n) => n : round6;
++        const scale = precision((c.motion ? c.motion.scale / 100 : 1) / fit);
++        const x = precision((c.motion?.center.h ?? 0) * 2), y = precision(-(c.motion?.center.v ?? 0) * 2);
+         const sound = ownSound.get(c.id);
+         const level = sound?.level ?? 0;
+         const refs = [speed(c.speed)];
+--- a/packages/openfilm/studio/server/nle.mjs
++++ b/packages/openfilm/studio/server/nle.mjs
+@@ -12,9 +12,11 @@
+  *     are spread over several (an editor's track shows one clip a frame).
+  *   · A web page (a motion graphic) is always rendered: a full-frame MOV with alpha (`alpha`: ProRes 4444 or PNG;
+  *     footage with alpha that has to be converted is written the same way), its placement in the
+- *     picture. Footage and stills come as they are, placed with Basic Motion (uniform scale and a move); what Basic
+- *     Motion can't say (a rotation, a speed change, an unknown size) is rendered too: rather less to adjust than a
+- *     picture in the wrong place.
++ *     picture. Footage and stills come as they are, placed with Basic Motion (uniform scale and a move), fitted in
++ *     their box or filling it (`object-fit` contain or cover, where `object-position` puts them); what Basic Motion
++ *     can't say (a rotation, a speed change, an unknown size, a fill its box cuts inside the frame) is rendered too:
++ *     rather less to adjust than a picture in the wrong place. A style that only says what CSS does anyway
++ *     (`object-fit: contain`, `opacity: 1`) is no look of its own.
+  *   · Sound comes as clips (each its own, with its level, footage's sound linked to its picture) on footage, voice,
+  *     sound-effect and music tracks, or as those four mixed stems. FCPXML clips instead retain their source rows.
+  *   · A hidden track's clips and a muted track's sounds are not dropped: they come disabled, one click from back on.
+@@ -27,7 +29,7 @@
+ import { spawn } from 'node:child_process';
+ import { join } from 'node:path';
+ import { pathToFileURL } from 'node:url';
+-import { clipKind, pictureRect, soundRole } from '../../src/film-doc.mjs';
++import { clipKind, declarations, pictureRect, soundRole } from '../../src/film-doc.mjs';
+ import { exactRate } from '../../src/rate.mjs';
+ 
+ /**
+@@ -37,9 +39,11 @@
+  * @typedef {{ opacity: number, rotation: number, rectangle?: { left: number, top: number, right: number, bottom: number } }} DraftClipLook
+  * @typedef {{ id: string, kind: 'page' | 'video' | 'still', src: string, path: string, at: number, end: number,
+  *   from: number, speed: number, box?: FilmBox, track: number, hidden: boolean, styled?: boolean, faded?: boolean,
+- *   facts: SourceFacts | null, draftLook?: DraftClipLook, animationTiming?: { durations: number[], delays: number[] } }} NlePicture
++ *   facts: SourceFacts | null, draftLook?: DraftClipLook, animationTiming?: { durations: number[], delays: number[] },
++ *   fit?: string, position?: string }} NlePicture
+  *   A picture clip: its film seconds [at, end), its source from `from` at `speed`; `facts` its file's (w × h as the
+- *   browser shows it), null for a page
++ *   browser shows it), null for a page; `fit` and `position` its `object-fit` and `object-position` as the browser
++ *   computes them (contain, centered, when not said)
+  * @typedef {'voice' | 'music' | 'sfx' | 'footage'} SoundRole
+  *   A sound's stem (see soundStem)
+  * @typedef {{ id: string, src: string, path: string, at: number, from: number, to: number, speed: number, volume: number,
+@@ -65,7 +69,7 @@
+  *   nativeRate?: NleRate }} NleFile
+  * @typedef {{ id: string, name: string, fileId: string, start: number, end: number, in: number, out: number, enabled: boolean,
+  *   motion?: { scale: number, center: { h: number, v: number } }, draftLook?: DraftClipLook, gain?: number, speed?: number,
+- *   levels?: { when: number, value: number }[], linkGroup?: string, sourceRow?: string }} NleClip
++ *   levels?: { when: number, value: number }[], linkGroup?: string, sourceRow?: string, rasterCrop?: {x:number,y:number,w:number,h:number} }} NleClip
+  *   Sequence frames [start, end), file frames [in, out); `gain` linear; `levels` its gain's keyframes (its fades),
+  *   frames from the clip's first
+  * @typedef {{ name: string, enabled: boolean, clips: NleClip[], sourceTrack?: number, role?: SoundRole }} NleTrack
+@@ -126,23 +130,83 @@
+ 
+ const round6 = (/** @type {number} */ n) => { const r = Math.round(n * 1e6) / 1e6; return Object.is(r, -0) ? 0 : r; };
+ 
+-/**
+- * A footage or still clip's place (fitted whole inside its `box`, or the stage, and centered: a picture with no CSS of
+- * its own; `r` turns it about its center) as Basic Motion: the source's own pixels × scale %, its center moved from the
+- * frame's by a share of the frame's width and height. A rotation or no size known → `bake`.
++/** A tenth of a pixel: an edge this near the frame's is on it. */
++const EDGE_PX = 0.1;
++
++/**
++ * Where `object-position` puts a picture in its box: px from the box's left and top, given the room left over on each
++ * axis (negative when the picture spills past). A share of that room, or a length; null for anything else (calc()).
++ * @param {string | undefined} position @param {number} roomX @param {number} roomY
++ */
++function objectOffset(position, roomX, roomY) {
++  const [x = '50%', y = '50%', ...more] = String(position ?? '').trim().split(/\s+/).filter(Boolean);
++  if (more.length) return null;
++  const along = (/** @type {string} */ v, /** @type {number} */ room) => {
++    const m = /^(-?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?)(%|px)?$/i.exec(v);
++    if (!m || (!m[2] && Number(m[1]) !== 0)) return null;
++    return m[2] === '%' ? (room * Number(m[1])) / 100 : Number(m[1]);
++  };
++  const dx = along(x, roomX), dy = along(y, roomY);
++  return dx == null || dy == null ? null : { x: dx, y: dy };
++}
++
++/**
++ * A footage or still clip's place (fitted whole inside its `box`, or the stage, or filling it: `fit` contain or cover;
++ * where in it `position` says, centered when not said; `r` turns it about its center) as Basic Motion: the source's own
++ * pixels × scale %, its center moved from the frame's by a share of the frame's width and height. A fill is cut at its
++ * box, which Basic Motion can't do: only a box over the whole frame, which cuts nothing the frame does not, comes as a
++ * move. A rotation, no size known, another fit or a position it can't read → `bake`.
+  * @param {{ w?: number, h?: number }} natural @param {{ w: number, h: number }} stage @param {FilmBox} [box]
++ * @param {{ fit?: string, position?: string }} [look]
+  * @returns {{ kind: 'none' } | { kind: 'motion', motion: { scale: number, center: { h: number, v: number } } } | { kind: 'bake' }}
+  */
+-export function containMotion(natural, stage, box) {
++export function containMotion(natural, stage, box, look = {}) {
+   const nw = natural.w ?? 0, nh = natural.h ?? 0;
+-  if (!(nw > 0 && nh > 0) || Math.abs(box?.r ?? 0) > 1e-6) return { kind: 'bake' };
++  const fit = look.fit ?? 'contain';
++  if (!(nw > 0 && nh > 0) || Math.abs(box?.r ?? 0) > 1e-6 || (fit !== 'contain' && fit !== 'cover')) return { kind: 'bake' };
+   const rect = pictureRect('video', { w: nw, h: nh }, stage, box);
+-  const cx = rect.x + rect.w / 2;
+-  const cy = rect.y + rect.h / 2;
+-  const scale = round6((Math.min(rect.w / nw, rect.h / nh)) * 100);
++  const k = (fit === 'cover' ? Math.max : Math.min)(rect.w / nw, rect.h / nh);
++  const pw = nw * k, ph = nh * k;
++  const offset = objectOffset(look.position, rect.w - pw, rect.h - ph);
++  if (!offset) return { kind: 'bake' };
++  const spills = pw > rect.w + EDGE_PX || ph > rect.h + EDGE_PX;
++  const overFrame = rect.x <= EDGE_PX && rect.y <= EDGE_PX && rect.x + rect.w >= stage.w - EDGE_PX && rect.y + rect.h >= stage.h - EDGE_PX;
++  if (spills && !overFrame) return { kind: 'bake' };
++  const cx = rect.x + offset.x + pw / 2;
++  const cy = rect.y + offset.y + ph / 2;
++  const scale = round6(k * 100);
+   const center = { h: round6((cx - stage.w / 2) / stage.w), v: round6((cy - stage.h / 2) / stage.h) };
+   if (Math.abs(scale - 100) < 1e-4 && center.h === 0 && center.v === 0) return { kind: 'none' };
+   return { kind: 'motion', motion: { scale, center } };
++}
++
++/** What a picture's own style says as CSS does anyway: the values that change nothing. */
++const NEUTRAL = /** @type {Record<string, (value: string) => boolean>} */ ({
++  opacity: (v) => v === '100%' || Number(v) === 1,
++  filter: (v) => v === 'none',
++  'backdrop-filter': (v) => v === 'none',
++  'clip-path': (v) => v === 'none',
++  'mask-image': (v) => v === 'none',
++  'mix-blend-mode': (v) => v === 'normal',
++  'box-shadow': (v) => v === 'none',
++  'border-radius': (v) => /^0(?:px|%)?$/.test(v),
++  border: (v) => v === 'none' || /^0(?:px)?$/.test(v),
++  outline: (v) => v === 'none',
++});
++/** Where a picture sits in its box: Basic Motion says it (containMotion), from the values the browser computes. */
++const PLACED = new Set(['object-fit', 'object-position']);
++
++/**
++ * The declarations of a picture's `style` that make a look of its own: past where it sits in its box, and past what
++ * says only what CSS does anyway.
++ * @param {string} style @returns {[string, string][]}
++ */
++export function ownLook(style) {
++  return declarations(style).filter(([key, value]) => {
++    if (PLACED.has(key)) return false;
++    const v = value.replace(/\s*!important$/i, '').trim().toLowerCase();
++    return !NEUTRAL[key]?.(v);
++  });
+ }
+ 
+ /**
+@@ -300,7 +364,7 @@
+     };
+     /* a clip with a look of its own (the film's CSS: a crop, round corners) is drawn as the film draws it */
+     if (p.kind === 'page' || (p.styled && !p.draftLook) || p.faded || !p.facts || (!editable && p.kind === 'video' && Math.abs(p.speed - 1) > 1e-6)) { bake(); continue; }
+-    const placement = containMotion(p.facts, stage, p.draftLook && p.box ? { ...p.box, r: 0 } : p.box);
++    const placement = containMotion(p.facts, stage, p.draftLook && p.box ? { ...p.box, r: 0 } : p.box, { fit: p.fit, position: p.position });
+     if (placement.kind === 'bake') { bake(); continue; }
+     const inFrame = p.kind === 'still' ? 0 : toFrame(p.from, rate);
+     const speed = editable && p.kind === 'video' ? p.speed : 1;
+--- /dev/null
++++ b/packages/openfilm/studio/server/draft-media.mjs
+@@ -0,0 +1,252 @@
++// @ts-check
++// Lossless draft-media work. All analysis covers every stored frame, including alpha=1 shadows.
++import { execFile } from 'node:child_process';
++import { promisify } from 'node:util';
++import { createHash, randomBytes } from 'node:crypto';
++import { createReadStream, constants } from 'node:fs';
++import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
++import { join, relative, isAbsolute, sep } from 'node:path';
++import { setTimeout as delay } from 'node:timers/promises';
++import { homedir, release } from 'node:os';
++import { exactRate, ffmpegRate } from '../../src/rate.mjs';
++import { signature } from '../../src/render-resume.mjs';
++const exec = promisify(execFile);
++/** Only a target-editor build actually checked for RGB decode is allowed to use this profile.
++ * @param {string | null} app @param {NodeJS.Platform} [platform] @param {string} [arch] */
++export async function draftRgbProfile(app, platform = process.platform, arch = process.arch) {
++  if (platform !== 'darwin' || arch !== 'arm64' || app !== 'jianying') return null;
++  for (const base of ['/Applications', join(homedir(), 'Applications')]) for (const name of ['VideoFusion-macOS.app', 'JianyingPro.app', '剪映专业版.app']) {
++    try {
++      const { stdout } = await exec('/usr/bin/plutil', ['-extract', 'CFBundleShortVersionString', 'raw', join(base, name, 'Contents', 'Info.plist')]);
++      if (stdout.trim() === '11.8.0') return 'jianying-macos-11.8.0-rgb-tv2';
++    } catch { /* not this installation */ }
++  }
++  return null;
++}
++
++/** @typedef {{from:number,to:number,opaque:boolean,suffix:string}} DraftPart */
++/** @param {string} file @param {string} suffix */
++export const draftPartPath = (file, suffix) => file.replace(/\.mov$/i, `${suffix}.mov`);
++
++/** PNG alpha runs and lossless RGB opaque runs. Every decoded RGBA pixel is verified before publication.
++ * @param {string} file @param {{spans:{from:number,to:number,opaque:boolean}[]}} analysis
++ * @param {{fps:number,frames:number,signal:AbortSignal}} options */
++export async function splitDraftPng(file, analysis, { fps, frames, signal }) {
++  /** @type {DraftPart[]} */ const parts = [];
++  for (const span of analysis.spans) {
++    const opaque = span.opaque && span.to - span.from >= fps;
++    const last = parts.at(-1);
++    if (last && last.opaque === opaque) last.to = span.to;
++    else parts.push({ ...span, opaque, suffix: parts.length ? `.part-${parts.length}` : '' });
++  }
++  if (parts.length < 2 || parts.length > 16 || !parts.some((p) => p.opaque) || parts[0].from !== 0 || parts.at(-1)?.to !== frames) return null;
++  const rate = ffmpegRate(exactRate(fps));
++  const temps = parts.map((_, i) => `${file}.split-${i}.mov`);
++  const graph = (/** @type {DraftPart} */ p) => `fps=${rate},trim=start_frame=${p.from}:end_frame=${p.to},setpts=PTS-STARTPTS`;
++  const pixels = async (/** @type {string} */ path, /** @type {string} */ filter, /** @type {number} */ count) => (await exec('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-threads', '2', '-i', path,
++    '-map', '0:v:0', '-vf', `${filter},format=rgba`, '-frames:v', String(count), '-f', 'hash', '-hash', 'sha256', '-'], { signal, windowsHide: true })).stdout.trim();
++  let accepted = false;
++  try {
++    for (const [i, part] of parts.entries()) {
++      const count = part.to - part.from;
++      // This editor build contracts RGB tagged full-range a second time. Its tested TV flag retains the RGB
++      // samples (verified below) and avoids that decode bug. Never apply this profile to unverified editors.
++      const codec = part.opaque ? ['-vf', `${graph(part)},format=rgb24`, '-c:v', 'libx264rgb', '-preset', 'veryfast', '-crf', '0', '-colorspace', 'rgb', '-color_range', 'tv']
++        : ['-vf', `${graph(part)},format=rgba`, '-c:v', 'png', '-compression_level', '3', '-pred', 'sub'];
++      await exec('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-y', '-threads', '2', '-i', file, '-an', ...codec,
++        '-threads', '2', '-frames:v', String(count), '-r', rate, temps[i]], { signal, windowsHide: true });
++      const { stdout } = await exec('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=nb_frames', '-of', 'csv=p=0', temps[i]], { signal, windowsHide: true });
++      if (Number(stdout.trim()) !== count || await pixels(file, graph(part), count) !== await pixels(temps[i], 'setpts=PTS-STARTPTS', count)) return null;
++    }
++    const sizes = await Promise.all(temps.map((p) => stat(p)));
++    if (sizes.reduce((n, s) => n + s.size, 0) >= (await stat(file)).size * 0.9) return null;
++    // Retain the full original until all parts pass. Export staging owns these names and is swept on cancellation.
++    for (let i = 1; i < parts.length; i++) await replace(temps[i], draftPartPath(file, parts[i].suffix), signal);
++    await replace(temps[0], file, signal);
++    accepted = true;
++    return parts;
++  } catch (e) {
++    if (signal.aborted || /ENOSPC|no space left on device/i.test(String(e))) throw e;
++    return null; // Unsupported encoder, an exactness failure, or an unprofitable representation keeps the PNG.
++  } finally {
++    await Promise.all(temps.map((p) => rm(p, { force: true })));
++    if (!accepted) await Promise.all(parts.slice(1).map((p) => rm(draftPartPath(file, p.suffix), { force: true })));
++  }
++}
++
++/** @typedef {{ x: number, y: number, w: number, h: number }} Crop */
++/** Scan exact alpha, never a downscaled estimate. @param {string} file @param {AbortSignal} signal @param {number} [fps] */
++export async function draftAlpha(file, signal, fps = 30) {
++  const clock = exactRate(fps).fps;
++  const { stdout } = await exec('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-threads', '2', '-i', file, '-map', '0:v:0',
++    '-vf', 'format=rgba,alphaextract,signalstats,bbox=min_val=0,metadata=print:file=-', '-f', 'null', '-'], { signal, maxBuffer: 256 << 20, windowsHide: true });
++  /** @type {{ opaque: boolean, from: number, to: number }[]} */
++  const spans = [];
++  let x1 = Infinity, y1 = Infinity, x2 = -1, y2 = -1, frames = 0;
++  for (const block of stdout.split(/(?=frame:\d)/)) {
++    if (!block.startsWith('frame:')) continue;
++    const min = /lavfi.signalstats.YMIN=(\d+)/.exec(block);
++    if (!min) throw new Error('draft alpha analysis missed a frame');
++    const opaque = Number(min[1]) === 255;
++    const time = /pts_time:([\d.e+-]+)/.exec(block);
++    const at = time ? Math.round(Number(time[1]) * clock) : frames;
++    const last = spans.at(-1);
++    if (last) last.to = at;
++    if (last?.opaque === opaque) last.to = at + 1;
++    else spans.push({ opaque, from: at, to: at + 1 });
++    frames++;
++    const values = Object.fromEntries([...block.matchAll(/lavfi.bbox.(x1|x2|y1|y2|w|h)=(\d+)/g)].map((m) => [m[1], Number(m[2])]));
++    if (values.w > 0 && values.h > 0) {
++      x1 = Math.min(x1, values.x1); y1 = Math.min(y1, values.y1);
++      x2 = Math.max(x2, values.x2); y2 = Math.max(y2, values.y2);
++    }
++  }
++  if (!frames) throw new Error('draft alpha analysis returned no frames');
++  return { frames, spans, crop: x2 >= x1 && y2 >= y1 ? { x: x1, y: y1, w: x2 - x1 + 1, h: y2 - y1 + 1 } : null };
++}
++
++/** Crop only when it removes most of the work; preserve all alpha and audio. @param {string} file @param {{w:number,h:number,frames?:number,fps?:number}} size @param {AbortSignal} signal */
++export async function cropDraftPng(file, size, signal) {
++  const analysis = await draftAlpha(file, signal, size.fps);
++  if (size.frames && analysis.frames !== size.frames) return { ...analysis, crop: null };
++  let crop = analysis.crop;
++  // Keep even offsets: target editors often round half-pixel placement. Grow outwards, never inwards.
++  if (crop) {
++    const x = Math.floor(crop.x / 2) * 2, y = Math.floor(crop.y / 2) * 2;
++    const right = Math.min(size.w, Math.ceil((crop.x + crop.w) / 2) * 2);
++    const bottom = Math.min(size.h, Math.ceil((crop.y + crop.h) / 2) * 2);
++    crop = { x, y, w: right - x, h: bottom - y };
++  }
++  if (!crop || crop.w * crop.h > size.w * size.h * 0.6) return { ...analysis, crop: null };
++  const part = `${file}.crop.mov`;
++  const rate = exactRate(size.fps ?? 30);
++  try {
++    await exec('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-y', '-threads', '2', '-i', file,
++      '-map', '0:v:0', '-map', '0:a?', '-vf', `crop=${crop.w}:${crop.h}:${crop.x}:${crop.y}:exact=1,format=rgba`, '-fps_mode', 'passthrough',
++      '-c:v', 'png', '-compression_level', '3', '-pred', 'sub', '-threads', '2', '-enc_time_base', `${rate.den}:${rate.num}`,
++      '-bsf:v', `setts=duration=1/((${ffmpegRate(rate)})*TB)`, '-c:a', 'copy', part], { signal, windowsHide: true });
++    // A crop must also earn its disk space. A very compressible transparent border can cost fewer bytes than this.
++    if ((await stat(part)).size < (await stat(file)).size) await replace(part, file, signal);
++    else crop = null;
++  } finally { await rm(part, { force: true }); }
++  return { ...analysis, crop };
++}
++
++/** Antivirus software can retain a just-closed MOV for a moment on Windows.
++ * @param {string} from @param {string} to @param {AbortSignal} signal */
++async function replace(from, to, signal) {
++  for (let n = 0;; n++) {
++    signal?.throwIfAborted();
++    try { return await rename(from, to); }
++    catch (e) { if (n >= 30 || !['EBUSY', 'EPERM', 'EACCES'].includes(/** @type {NodeJS.ErrnoException} */ (e).code ?? '')) throw e; await delay(100, undefined, { signal }); }
++  }
++}
++
++/** Full content hashes, including large videos; timestamp-preserving replacements must invalidate. @param {string} path */
++async function digest(path) {
++  const hash = createHash('sha256');
++  for await (const chunk of createReadStream(path)) hash.update(chunk);
++  return hash.digest('hex');
++}
++
++/** The implementation itself is part of a persistent cache key, also in source checkouts without a version bump. */
++export async function draftEngineVersion() {
++  const hash = createHash('sha256');
++  hash.update(JSON.stringify([process.platform, process.arch, release()]));
++  hash.update((await exec('ffmpeg', ['-version'], { windowsHide: true, timeout: 10_000 })).stdout);
++  for (const base of [new URL('../../src/', import.meta.url), new URL('./', import.meta.url)]) {
++    for (const name of (await readdir(base)).filter((n) => /\.(mjs|js)$/.test(n) && !n.endsWith('.test.mjs')).sort()) {
++      hash.update(name); hash.update(await readFile(new URL(name, base)));
++    }
++  }
++  // Bundled fonts can change without a JS or package version change.
++  const fonts = new URL('../../library/text/fonts/', import.meta.url);
++  try { for (const name of (await readdir(fonts)).sort()) hash.update(await readFile(new URL(name, fonts))); } catch { /* a distribution without bundled fonts */ }
++  // Local font installation/replacement changes the renderer even when no project file changes.
++  const localFonts = process.platform === 'darwin' ? [join(homedir(), 'Library', 'Fonts'), '/Library/Fonts', '/System/Library/Fonts']
++    : process.platform === 'win32' ? [join(process.env.WINDIR ?? 'C:\\Windows', 'Fonts'), join(process.env.LOCALAPPDATA ?? homedir(), 'Microsoft', 'Windows', 'Fonts')]
++      : ['/usr/share/fonts', join(homedir(), '.local/share/fonts'), join(homedir(), '.fonts')];
++  const inspect = async (/** @type {string} */ path, depth = 0) => {
++    try {
++      for (const name of (await readdir(path, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
++        const file = join(path, name.name);
++        if (name.isDirectory() && depth < 4) await inspect(file, depth + 1);
++        else if (name.isFile()) { const s = await stat(file, { bigint: true }); hash.update(`${file}:${s.size}:${s.mtimeNs}:${s.ctimeNs}:${s.ino}`); }
++      }
++    } catch { /* a font directory that is absent or not readable */ }
++  };
++  for (const path of localFonts) await inspect(path);
++  return `draft-png-v2:${hash.digest('hex')}`;
++}
++
++/** Successful per-clip results, not render's crash-resume chunks. @param {string} root @param {string} version */
++export function draftCache(root, version) {
++  const folder = join(root, '.film', 'cache', 'draft-media');
++  /** @type {Map<string, {stamp:string, hash:Promise<string>}>} */ const hashes = new Map();
++  const hashed = (/** @type {string} */ path) => {
++    const stamp = signature(path), previous = hashes.get(path);
++    if (previous?.stamp === stamp) return previous.hash;
++    const hash = digest(path); hashes.set(path, { stamp, hash });
++    return hash;
++  };
++  const keyOf = (/** @type {unknown} */ descriptor) => createHash('sha256').update(JSON.stringify([version, descriptor])).digest('hex');
++  return {
++    keyOf,
++    /** @param {string} key @param {string} destination */
++    async get(key, destination) {
++      /** @type {string[]} */ const copied = [];
++      let restored = false;
++      try {
++        const entry = join(folder, key);
++        const value = JSON.parse(await readFile(join(entry, 'manifest.json'), 'utf8'));
++        if (value.version !== version || !Array.isArray(value.dependencies) || !value.dependencies.length || !Array.isArray(value.media) || !value.media.length
++          || !value.result || !Number.isInteger(value.result.durationFrames) || value.result.durationFrames <= 0) return null;
++        const crop = value.result.crop;
++        if (crop != null && (!['x', 'y', 'w', 'h'].every((k) => Number.isInteger(crop[k])) || crop.x < 0 || crop.y < 0 || crop.w <= 0 || crop.h <= 0)) return null;
++        const parts = value.result.parts;
++        const suffixes = parts == null ? [''] : Array.isArray(parts) && parts.length >= 2 && parts.length <= 16
++          && parts.every((/** @type {DraftPart} */ p, /** @type {number} */ i) => Number.isInteger(p.from) && Number.isInteger(p.to) && p.to > p.from
++            && p.from === (i ? parts[i - 1].to : 0) && p.suffix === (i ? `.part-${i}` : '') && typeof p.opaque === 'boolean')
++          && parts.at(-1).to === value.result.durationFrames && !crop ? parts.map((/** @type {DraftPart} */ p) => p.suffix) : null;
++        if (!suffixes || value.media.length !== suffixes.length || value.media.some((/** @type {{suffix:string}} */ m, /** @type {number} */ i) => m.suffix !== suffixes[i])) return null;
++        for (const dep of value.dependencies) {
++          if (typeof dep.path !== 'string' || typeof dep.hash !== 'string' || await hashed(dep.path) !== dep.hash) return null;
++        }
++        for (const media of value.media) {
++          if (typeof media.artifact !== 'string' || !/^(?:|\.part-\d+)$/.test(media.suffix) || (await stat(media.artifact)).size !== media.bytes || await digest(media.artifact) !== media.hash) return null;
++        }
++        for (const media of value.media) {
++          const to = draftPartPath(destination, media.suffix);
++          copied.push(to);
++          await copyFile(media.artifact, to, constants.COPYFILE_FICLONE);
++          if (await digest(to) !== media.hash) return null;
++        }
++        restored = true;
++        return value.result;
++      } catch (e) { if (/** @type {NodeJS.ErrnoException} */ (e).code === 'ABORT_ERR') throw e; return null; }
++      finally { if (!restored) await Promise.all(copied.map((p) => rm(p, { force: true }))); }
++    },
++    /** No hidden media duplicate: index the completed export and clone it only when a new export asks for it.
++     * @param {string} key @param {string} source @param {string[]} dependencies @param {unknown} result @param {string} [artifact] @param {string[]} [suffixes]
++     * @param {ReadonlyMap<string,string>} [snapshots] */
++    async put(key, source, dependencies, result, artifact = source, suffixes = [''], snapshots) {
++      const entry = join(folder, key), temporary = join(entry, `manifest.${process.pid}-${randomBytes(4).toString('hex')}.json`);
++      try {
++        // Never retain temporary wrapper documents. The descriptor carries their stable content instead.
++        const paths = [...new Set(dependencies)].filter((p) => {
++          const rel = relative(root, p);
++          return isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`) || !rel.split(sep).includes('.film');
++        });
++        if (!paths.length) return;
++        const unchanged = () => !snapshots || paths.every((p) => snapshots.get(p) === signature(p));
++        if (!unchanged()) return;
++        const deps = await Promise.all(paths.map(async (path) => ({ path, hash: await hashed(path) })));
++        await mkdir(entry, { recursive: true });
++        const media = await Promise.all(suffixes.map(async (suffix) => ({ suffix, artifact: draftPartPath(artifact, suffix), bytes: (await stat(draftPartPath(source, suffix))).size, hash: await digest(draftPartPath(source, suffix)) })));
++        if (!unchanged()) return; // Never label pixels already drawn with the bytes of an edit made during export.
++        await writeFile(temporary, JSON.stringify({ version, dependencies: deps, media, result }));
++        await rename(temporary, join(entry, 'manifest.json'));
++      } finally { await rm(temporary, { force: true }); }
++    },
++  };
++}
+--- /dev/null
++++ b/packages/openfilm/studio/server/draft-media.test.mjs
+@@ -0,0 +1,136 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { execFileSync } from 'node:child_process';
++import { mkdtempSync, writeFileSync, readFileSync, rmSync, statSync, utimesSync } from 'node:fs';
++import { join } from 'node:path';
++import { tmpdir } from 'node:os';
++import { cropDraftPng, draftAlpha, draftCache, draftPartPath, splitDraftPng, draftRgbProfile } from './draft-media.mjs';
++import { signature } from '../../src/render-resume.mjs';
++
++const frames = (file, filter = 'format=rgba') => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:v:0', '-vf', filter, '-r', '30', '-f', 'framemd5', '-']).toString().split('\n').filter((s) => s && !s.startsWith('#'));
++test('alpha analysis keeps a one-level shadow, all frames and the exact opaque run', async () => {
++  const dir = mkdtempSync(join(tmpdir(), 'of-draft-alpha-'));
++  try {
++    const file = join(dir, 'alpha.mov');
++    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', "color=black@0:s=128x128:r=30:d=1,format=rgba,drawbox=x=21:y=23:w=20:h=18:color=0xff000001:t=fill:replace=1,drawbox=x=0:y=0:w=128:h=128:color=red:t=fill:replace=1:enable=gte(n\\,27)", '-c:v', 'png', file]);
++    const result = await draftAlpha(file, new AbortController().signal);
++    assert.equal(result.frames, 30);
++    assert.deepEqual(result.spans, [{ opaque: false, from: 0, to: 27 }, { opaque: true, from: 27, to: 30 }]);
++    assert.deepEqual(result.crop, { x: 0, y: 0, w: 128, h: 128 });
++  } finally { rmSync(dir, { recursive: true, force: true }); }
++});
++
++test('a sparse PNG crop restores every pixel and PTS, including alpha=1 and fractional edges', async () => {
++  const dir = mkdtempSync(join(tmpdir(), 'of-draft-crop-'));
++  try {
++    const file = join(dir, 'sparse.mov');
++    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=black@0:s=320x180:r=30:d=1,format=rgba,drawbox=x=63:y=35:w=41:h=33:color=0xff000001:t=fill:replace=1', '-c:v', 'png', file]);
++    const before = frames(file);
++    const result = await cropDraftPng(file, { w: 320, h: 180 }, new AbortController().signal);
++    assert.deepEqual(result.crop, { x: 62, y: 34, w: 42, h: 34 });
++    assert.deepEqual(frames(file, 'pad=320:180:62:34:color=black@0,format=rgba'), before);
++  } finally { rmSync(dir, { recursive: true, force: true }); }
++});
++
++test('successful clip cache invalidates timestamp-preserving dependency replacements and corrupt payloads', async () => {
++  const dir = mkdtempSync(join(tmpdir(), 'of-draft-cache-'));
++  try {
++    const source = join(dir, 'source.mov'), dependency = join(dir, 'page.html'), out = join(dir, 'output.mov');
++    writeFileSync(source, 'media'); writeFileSync(dependency, 'first');
++    let cache = draftCache(dir, 'test-v1'); const key = cache.keyOf({ clip: 'a' });
++    await cache.put(key, source, [dependency], { durationFrames: 30 });
++    assert.deepEqual(await cache.get(key, out), { durationFrames: 30 });
++    assert.equal(readFileSync(out, 'utf8'), 'media');
++    const original = statSync(dependency); writeFileSync(dependency, 'other'); utimesSync(dependency, original.atime, original.mtime);
++    cache = draftCache(dir, 'test-v1'); assert.equal(await cache.get(key, out), null);
++    writeFileSync(dependency, 'first');
++    writeFileSync(source, 'wrong');
++    cache = draftCache(dir, 'test-v1'); assert.equal(await cache.get(key, out), null);
++    assert.equal(await draftCache(dir, 'test-v2').get(key, out), null);
++  } finally { rmSync(dir, { recursive: true, force: true }); }
++});
++
++test('cropping a deduplicated 25 fps still keeps its final packet one frame long', async () => {
++  const dir = mkdtempSync(join(tmpdir(), 'of-draft-sparse-clock-'));
++  try {
++    const file = join(dir, 'still.mov');
++    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=black@0:s=320x180:r=25:d=1,format=rgba,drawbox=x=20:y=20:w=40:h=40:color=red:t=fill:replace=1',
++      '-vf', 'select=eq(n\\,0)+eq(n\\,24)', '-fps_mode', 'passthrough', '-c:v', 'png', file]);
++    const before = frames(file);
++    const result = await cropDraftPng(file, { w: 320, h: 180, frames: 2, fps: 25 }, new AbortController().signal);
++    assert.deepEqual(result.crop, { x: 20, y: 20, w: 40, h: 40 });
++    assert.deepEqual(frames(file, 'pad=320:180:20:20:color=black@0,format=rgba'), before);
++    const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'packet=pts_time,duration_time:format=duration', '-of', 'json', file]));
++    assert.equal(Number(probe.format.duration), 1);
++    assert.deepEqual(probe.packets.map((p) => [Number(p.pts_time), Number(p.duration_time)]), [[0, 0.96], [0.96, 0.04]]);
++  } finally { rmSync(dir, { recursive: true, force: true }); }
++});
++
++test('mixed-alpha pages split into pixel-identical PNG and lossless RGB runs, with the original frame clock', async () => {
++  const dir = mkdtempSync(join(tmpdir(), 'of-draft-split-'));
++  try {
++    const file = join(dir, 'page.mov');
++    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', "testsrc2=s=160x90:r=30:d=3,noise=alls=10:allf=u,format=rgba,colorchannelmixer=aa=0.5:enable=lt(t\\,0.1)", '-c:v', 'png', file]);
++    const before = frames(file).map((s) => s.split(',').at(-1));
++    const analysis = await draftAlpha(file, new AbortController().signal);
++    const parts = await splitDraftPng(file, analysis, { fps: 30, frames: 90, signal: new AbortController().signal });
++    assert.ok(parts, 'the exact RGB representation earns its size');
++    assert.deepEqual(parts.map((p) => [p.from, p.to, p.opaque]), [[0, 3, false], [3, 90, true]]);
++    const after = parts.flatMap((p) => frames(draftPartPath(file, p.suffix)).map((s) => s.split(',').at(-1)));
++    assert.deepEqual(after, before);
++    assert.equal(await draftRgbProfile('capcut'), null, 'unverified target editors retain PNG');
++    assert.equal(await draftRgbProfile('jianying', 'win32'), null, 'unverified platforms retain PNG');
++    assert.equal(await draftRgbProfile('jianying', 'darwin', 'x64'), null, 'unverified decoder architectures retain PNG');
++  } finally { rmSync(dir, { recursive: true, force: true }); }
++});
++
++test('an incorrect alpha classification cannot publish opaque RGB over translucent pixels', async () => {
++  const dir = mkdtempSync(join(tmpdir(), 'of-draft-refuse-'));
++  try {
++    const file = join(dir, 'page.mov');
++    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=160x90:r=30:d=2,format=rgba,colorchannelmixer=aa=0.5', '-c:v', 'png', file]);
++    const before = readFileSync(file);
++    const parts = await splitDraftPng(file, { spans: [{ from: 0, to: 3, opaque: false }, { from: 3, to: 60, opaque: true }] }, { fps: 30, frames: 60, signal: new AbortController().signal });
++    assert.equal(parts, null);
++    assert.deepEqual(readFileSync(file), before);
++  } finally { rmSync(dir, { recursive: true, force: true }); }
++});
++
++test('a split cache restores every part and refuses a damaged part before copying any media', async () => {
++  const dir = mkdtempSync(join(tmpdir(), 'of-draft-parts-cache-'));
++  try {
++    const source = join(dir, 'source.mov'), dependency = join(dir, 'page.html'), out = join(dir, 'output.mov');
++    writeFileSync(source, 'alpha'); writeFileSync(draftPartPath(source, '.part-1'), 'opaque'); writeFileSync(dependency, 'page');
++    const result = { durationFrames: 90, crop: null, parts: [{ from: 0, to: 3, opaque: false, suffix: '' }, { from: 3, to: 90, opaque: true, suffix: '.part-1' }] };
++    let cache = draftCache(dir, 'test-parts'); const key = cache.keyOf({ clip: 'a' });
++    await cache.put(key, source, [dependency], result, source, ['', '.part-1']);
++    assert.deepEqual(await cache.get(key, out), result);
++    assert.equal(readFileSync(out, 'utf8'), 'alpha');
++    assert.equal(readFileSync(draftPartPath(out, '.part-1'), 'utf8'), 'opaque');
++    rmSync(out); rmSync(draftPartPath(out, '.part-1'));
++    writeFileSync(draftPartPath(source, '.part-1'), 'broken');
++    cache = draftCache(dir, 'test-parts'); assert.equal(await cache.get(key, out), null);
++    assert.throws(() => statSync(out), { code: 'ENOENT' });
++    assert.throws(() => statSync(draftPartPath(out, '.part-1')), { code: 'ENOENT' });
++  } finally { rmSync(dir, { recursive: true, force: true }); }
++});
++
++test('an edit made during export cannot label old pixels as the new source, and hash memoization observes later edits', async () => {
++  const dir = mkdtempSync(join(tmpdir(), 'of-draft-edit-race-'));
++  try {
++    const source = join(dir, 'source.mov'), dependency = join(dir, 'page.html'), out = join(dir, 'out.mov');
++    writeFileSync(source, 'media'); writeFileSync(dependency, 'first');
++    const cache = draftCache(dir, 'race-v1'), key = cache.keyOf('drawn-before-edit');
++    const snapshots = new Map([[dependency, signature(dependency)]]);
++    writeFileSync(dependency, 'other');
++    await cache.put(key, source, [dependency], { durationFrames: 30 }, source, [''], snapshots);
++    assert.equal(await cache.get(key, out), null);
++    const a = cache.keyOf('a'), b = cache.keyOf('b');
++    await cache.put(a, source, [dependency], { durationFrames: 30 });
++    writeFileSync(dependency, 'third');
++    await cache.put(b, source, [dependency], { durationFrames: 30 });
++    assert.deepEqual(await draftCache(dir, 'race-v1').get(b, out), { durationFrames: 30 });
++    assert.equal(await draftCache(dir, 'race-v1').get(a, out), null);
++  } finally { rmSync(dir, { recursive: true, force: true }); }
++});
++
+--- /dev/null
++++ b/packages/openfilm/scripts/bench-draft-export.mjs
+@@ -0,0 +1,43 @@
++#!/usr/bin/env node
++// A real Studio draft export, with sampled logical disk use. Run against a project COPY.
++import { readdir, stat, mkdir, writeFile } from 'node:fs/promises';
++import { resolve, join, dirname } from 'node:path';
++import { pathToFileURL } from 'node:url';
++import { setTimeout as delay } from 'node:timers/promises';
++
++const [projectArg, outputArg, moduleArg, resultArg] = process.argv.slice(2);
++if (!projectArg || !outputArg) throw new Error('bench-draft-export.mjs PROJECT_COPY OUTPUT_FOLDER [EXPORTS_MODULE] [RESULT_JSON]');
++const root = resolve(projectArg), output = resolve(outputArg);
++const resultFile = resolve(resultArg ?? join(output, 'benchmark.json'));
++process.env.OPENFILM_HOME = join(dirname(output), 'benchmark-home');
++const { createExports } = await import(moduleArg ? pathToFileURL(resolve(moduleArg)).href : '../studio/server/exports.mjs');
++await mkdir(output, { recursive: true });
++async function bytes(path) {
++  try {
++    const s = await stat(path);
++    if (!s.isDirectory()) return s.size;
++    return (await Promise.all((await readdir(path)).map((n) => bytes(join(path, n))))).reduce((a, b) => a + b, 0);
++  } catch (e) { if (e.code === 'ENOENT') return 0; throw e; }
++}
++let latest, told = 0;
++const exports = createExports({ drafts: () => null, onChange(job) {
++  latest = job;
++  if (Date.now() - told > 10_000 || ['failed', 'done', 'cancelled'].includes(job.status)) {
++    told = Date.now();
++    console.log(JSON.stringify({ status: job.status, phase: job.phase, frame: job.framesDone, total: job.framesTotal, rate: job.rate, encoder: job.encoder, error: job.error }));
++  }
++} });
++const started = performance.now();
++exports.start({ id: 'benchmark', name: 'T12 benchmark', path: root }, { kind: 'nle', format: 'jianying', fps: 30 }, { folder: output });
++const samples = [];
++while (!latest || !['done', 'failed', 'cancelled'].includes(latest.status)) {
++  const [out, cache] = await Promise.all([bytes(output), bytes(join(root, '.film', 'cache'))]);
++  samples.push({ seconds: (performance.now() - started) / 1000, outputBytes: out, cacheBytes: cache });
++  await delay(1000);
++}
++const result = { startedAt: new Date(Date.now() - (performance.now() - started)).toISOString(), seconds: (latest.finishedAt - latest.startedAt) / 1000,
++  peakLogicalOutputBytes: Math.max(0, ...samples.map((s) => s.outputBytes)), peakLogicalCacheBytes: Math.max(0, ...samples.map((s) => s.cacheBytes)),
++  note: 'Disk samples are logical file sizes at one-second intervals, not physical APFS allocation. Use a project copy; original media may be cloned by the filesystem.', job: latest, samples };
++await writeFile(resultFile, JSON.stringify(result, null, 2));
++console.log(JSON.stringify({ seconds: result.seconds, bytes: latest.bytes, result: resultFile, status: latest.status }));
++if (latest.status !== 'done') process.exitCode = 1;
+--- /dev/null
++++ b/packages/openfilm/scripts/verify-draft-export.mjs
+@@ -0,0 +1,47 @@
++#!/usr/bin/env node
++// Compare decoded media on the original frame grid, reconstructing cropped and split draft layers.
++import { execFile } from 'node:child_process';
++import { promisify } from 'node:util';
++import { readFile, readdir, writeFile } from 'node:fs/promises';
++import { basename, join, resolve } from 'node:path';
++import { draftRasterFilter } from './draft-bench-frames.mjs';
++const exec = promisify(execFile);
++const [referencePath, draftPath, outputPath, mappingPath] = process.argv.slice(2);
++if (!referencePath || !draftPath || !outputPath) throw Error('verify-draft-export.mjs REFERENCE_JSON DRAFT_FOLDER RESULT_JSON');
++const reference = JSON.parse(await readFile(resolve(referencePath), 'utf8'));
++const mapping = mappingPath ? JSON.parse(await readFile(resolve(mappingPath), 'utf8')) : {};
++const root = resolve(draftPath), media = join(root, 'media');
++const info = JSON.parse(await readFile(join(root, 'draft_info.json'), 'utf8'));
++const names = await readdir(media);
++const pixels = async (file, filter) => (await exec('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-threads', '2', '-i', file,
++  '-map', '0:v:0', '-vf', `fps=${info.fps},${filter},scale=iw:ih:flags=accurate_rnd+full_chroma_int,format=rgba`, '-f', 'framemd5', '-'], { maxBuffer: 32 << 20 })).stdout
++  .split('\n').filter((s) => s && !s.startsWith('#')).map((s) => s.split(',').at(-1).trim());
++const results = [];
++for (const ref of reference) {
++  const name = mapping[ref.name] ?? (ref.name.startsWith('captions-') ? names.find((n) => /^captions-.*\.mov$/.test(n)) : ref.name);
++  if (!name || !names.includes(name)) { results.push({ name: ref.name, error: 'missing media' }); continue; }
++  const stem = name.replace(/\.mov$/, '');
++  const parts = names.filter((n) => n === name || (n.startsWith(stem + '.part-') && /\.part-\d+\.mov$/.test(n)))
++    .sort((a, b) => (Number(/\.part-(\d+)/.exec(a)?.[1] ?? 0) - Number(/\.part-(\d+)/.exec(b)?.[1] ?? 0)));
++  const hashes = [];
++  for (const part of parts) {
++    const material = info.materials.videos.find((m) => basename(m.path) === part);
++    const segment = material && info.tracks.filter((t) => t.type === 'video').flatMap((t) => t.segments).find((s) => s.material_id === material.id);
++    const restore = segment && (material.width !== info.canvas_config.width || material.height !== info.canvas_config.height)
++      ? draftRasterFilter(info, segment) : 'null';
++    hashes.push(...await pixels(join(media, part), restore));
++  }
++  const expected = ref.frames.map((s) => s.split(',').at(-1).trim());
++  const differences = [];
++  for (let i = 0; i < Math.max(hashes.length, expected.length); i++) if (hashes[i] !== expected[i]) differences.push(i);
++  let audioMatches;
++  if (ref.audioHash) {
++    const { stdout } = await exec('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-i', join(media, name), '-map', '0:a:0', '-f', 'hash', '-hash', 'sha256', '-']);
++    audioMatches = stdout.trim() === ref.audioHash.trim();
++  }
++  const row = { name: ref.name, parts, expectedFrames: expected.length, actualFrames: hashes.length, differentFrames: differences.length,
++    firstDifferences: differences.slice(0, 12), ...(audioMatches == null ? {} : { audioMatches }) };
++  results.push(row); console.log(JSON.stringify(row));
++}
++await writeFile(resolve(outputPath), JSON.stringify({ fps: info.fps, canvas: info.canvas_config, results }, null, 2));
++if (results.some((r) => r.error || r.differentFrames || r.audioMatches === false)) process.exitCode = 1;
+--- /dev/null
++++ b/packages/openfilm/scripts/draft-bench-frames.mjs
+@@ -0,0 +1,12 @@
++// Independent reconstruction of serialized draft controls for raster-media regression checks.
++export function draftRasterFilter(info, segment) {
++  const material = info.materials.videos.find((m) => m.id === segment.material_id);
++  const { width, height } = info.canvas_config;
++  const fit = Math.min(width / material.width, height / material.height);
++  const w = material.width * fit * segment.clip.scale.x, h = material.height * fit * segment.clip.scale.y;
++  const x = width / 2 + segment.clip.transform.x * width / 2 - w / 2;
++  const y = height / 2 - segment.clip.transform.y * height / 2 - h / 2;
++  for (const v of [w, h, x, y]) if (Math.abs(v - Math.round(v)) > 1e-7) throw new Error(`Raster is off the pixel grid: ${[w, h, x, y]}`);
++  const scale = Math.round(w) === material.width && Math.round(h) === material.height ? '' : `scale=${Math.round(w)}:${Math.round(h)},`;
++  return `format=rgba,${scale}pad=${width}:${height}:${Math.round(x)}:${Math.round(y)}:color=black@0`;
++}
