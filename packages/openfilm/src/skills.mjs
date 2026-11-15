@@ -13,7 +13,7 @@
  *              elsewhere; OPENFILM_SKILLS to name another): the person's own, and those they added. In sight beside
  *              their Projects and Exports, backed up with them, and never in Studio's own folder, which a reset clears.
  *              Skills kept in Studio's home before (~/.openfilm/skills) are moved there (migrateMySkills).
- *   official   `skills-installed/` in the shared home (~/.openfilm): those installed from the openfilm/skills index
+ *   official   `skills-installed/` in the shared home (~/.openfilm): those installed from the openfilm/community index
  *              (studio/server/skill-catalog.mjs), each the commit it was installed at, with where it came from in its
  *              `.source.json`. Every OpenFilm on this computer has the same ones.
  *
@@ -179,7 +179,7 @@ export const SKILL_SOURCES = /** @type {const} */ (['project', 'mine', 'official
 /** @typedef {typeof SKILL_SOURCES[number]} SkillSource */
 
 /**
- * The skills installed from the openfilm/skills index, each in a folder of its own (studio/server/skill-catalog.mjs).
+ * The skills installed from the openfilm/community index, each in a folder of its own (studio/server/skill-catalog.mjs).
  * OPENFILM_OFFICIAL_SKILLS names another folder of them.
  */
 export const officialSkillsDir = () => process.env.OPENFILM_OFFICIAL_SKILLS || join(sharedHome(), 'skills-installed');
@@ -197,7 +197,7 @@ export function skillSource(folder) {
     return { repo: raw.repo, path: raw.path, commit: raw.commit, version: typeof raw.version === 'string' ? raw.version : null };
   } catch { return null; }
 }
-/** Where Discover keeps the skills the openfilm/skills index names, each at its commit (studio/server/skill-catalog.mjs). */
+/** Where Discover keeps the skills the openfilm/community index names, each at its commit (studio/server/skill-catalog.mjs). */
 export const discoverDir = () => join(sharedHome(), 'skill-catalog');
 /** Where Discover keeps one skill of the index. @param {{ name: string, repo: string, commit: string }} entry */
 export const discoverFolder = (entry) => join(discoverDir(), (/github\.com\/([\w.-]+)\//.exec(`${entry.repo}/`)?.[1] ?? 'unknown').toLowerCase(), `${entry.name}@${entry.commit}`);

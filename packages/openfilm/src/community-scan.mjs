@@ -1,5 +1,5 @@
 // @ts-nocheck
-// The community's scan, as its repository runs it on every pull request (openfilm/skills scripts/scan.mjs, the part that
+// The community's scan, as its repository runs it on every pull request (openfilm/community scripts/scan.mjs, the part that
 // reads a folder; copied as it is, so `openfilm publish` finds what the review will): keep the two the same.
 // Reads an item's folder for what the developer policy bans, and says where. It only reads: nothing in the folder is
 // run, imported or installed.

@@ -26,7 +26,8 @@ Workbenches, skills and connectors from the community run on your computer. Open
 - Anything OpenFilm withdraws (malware, impersonation, rights, broken, policy) stops on every computer the next time
   the community index is read, wherever a copy of it is, and says why.
 
-To report a community item, use **Report** on its page in OpenFilm or on openfilm.dev, or write to
+To report a community item, use **Report** on its page in OpenFilm or on openfilm.dev (the community's
+[report form](https://github.com/openfilm/community/issues/new?template=report.yml)), or write to
 **support@openfilm.dev** with its name (`owner/name`) and what you saw. A confirmed malicious item is withdrawn within
 24 hours of confirmation, and an advisory says how to check whether you were affected and what to do.
 

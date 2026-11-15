@@ -15,7 +15,7 @@ import { isPlugin, readSkill } from './skills.mjs';
 import { scanFolder } from './community-scan.mjs';
 
 /** Where the community's index and its rules are. */
-export const COMMUNITY_REPO = 'https://github.com/openfilm/skills';
+export const COMMUNITY_REPO = 'https://github.com/openfilm/community';
 
 /** @param {string[]} args @param {string} run how `openfilm` is typed here @returns {Promise<{ ok: boolean, lines: string[], usage?: boolean }>} */
 export async function publishCommand(args, run) {
@@ -42,7 +42,7 @@ export async function publishCommand(args, run) {
   }
   const ready = !missing.length && !high.length;
   lines.push('', ready
-    ? `Ready. Next: push it to a public GitHub repository, tag ${skill.version}, then list it in the community: ${COMMUNITY_REPO} (README, "How a skill is listed"). An AI review reads every version in full; a person decides for a new publisher, more permissions or anything high.`
+    ? `Ready. Next: push it to a public GitHub repository, tag ${skill.version}, then list it in the community: ${COMMUNITY_REPO} (README, "Publish"). An AI review reads every version in full; a person decides for a new publisher, more permissions or anything high.`
     : 'Not ready: fix what is above, then run this again. The review would ask for the same.');
   return { ok: ready, lines };
 }

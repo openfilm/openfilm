@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * The skills Discover shows: the current openfilm/skills index on GitHub. An offline snapshot of official skills is
+ * The skills Discover shows: the current openfilm/community index on GitHub. An offline snapshot of official skills is
  * used only until a live index has been read. The index names each skill's repository, its folder there and the commit
  * it is pinned to (its index.json);
  * each skill at that commit is kept here so Discover shows its picture and words without asking again, and works
@@ -27,7 +27,9 @@ import { downloadFiles, listFiles } from './fetch-github.mjs';
 import { moveToTrash } from './trash.mjs';
 
 /** The index Discover reads. */
-export const INDEX_URL = 'https://raw.githubusercontent.com/openfilm/skills/main/index.json';
+/* the community's repository, renamed from openfilm/skills (its old address still answers, through GitHub's redirect,
+   for the OpenFilm that read it there) */
+export const INDEX_URL = 'https://raw.githubusercontent.com/openfilm/community/main/index.json';
 /** How long what the index said is fresh enough not to read it again when Discover opens. */
 export const FRESH_MS = 10 * 60 * 1000;
 /** The largest skill fetched for the catalog. */
@@ -110,7 +112,7 @@ export function manifestFiles(value) {
 }
 
 /**
- * The entries of an index that are well formed (as openfilm/skills checks them); the rest are left out.
+ * The entries of an index that are well formed (as openfilm/community checks them); the rest are left out.
  * @param {unknown} index @returns {IndexEntry[]}
  */
 export function indexEntries(index) {

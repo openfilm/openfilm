@@ -96,7 +96,7 @@ Final Cut Pro、Premiere Pro 和 DaVinci Resolve。
 用 `openfilm skill <名字>` 读取当前任务需要的那个。
 
 其他技能各是一种做片子的方法，用全名 `owner/name` 区分。Studio 素材库的「发现」里列出 OpenFilm 官方和社区的技能，
-来自 [openfilm/skills](https://github.com/openfilm/skills)，那里也说明了怎么写一个技能。可以在那里安装，也可以不安装
+来自 [openfilm/community](https://github.com/openfilm/community)，那里也说明了怎么写一个技能。可以在那里安装，也可以不安装
 直接在对话里试用，或者从链接、文件夹添加你自己的（`openfilm skill add <链接>`）。装好的技能所有智能体都能用。
 
 ## 工作原理

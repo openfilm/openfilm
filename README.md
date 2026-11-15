@@ -102,7 +102,7 @@ skills, which hold the rest: `edit` (the project, film.html and pages, and check
 the services) and `canvas`. An agent reads the one a task needs with `openfilm skill <name>`.
 
 Every other skill is a way of making a kind of film, known by its full name, `owner/name`. Studio's library lists
-OpenFilm's and the community's under Discover, from [openfilm/skills](https://github.com/openfilm/skills), which also
+OpenFilm's and the community's under Discover, from [openfilm/community](https://github.com/openfilm/community), which also
 says how to write one; install one there, try it in a conversation without installing it, or add your own from a link
 or a folder (`openfilm skill add <link>`). An installed skill is offered to every agent.
 
