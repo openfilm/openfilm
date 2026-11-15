@@ -47,7 +47,7 @@ test('a plugin off takes its skills from every agent, and the system prompt\'s l
   assert.match(promptSkills(h), /^- `canvas`:/m);
 
   setPluginOn('canvas', false, h);
-  assert.deepEqual([...skillsOfPluginsOff(h)], [['canvas', 'canvas'], ['motion', 'motion']]);
+  assert.deepEqual([...skillsOfPluginsOff(h)], [['canvas', 'canvas'], ['motion', 'motion'], ['stage', 'stage']]);
   assert.deepEqual(names(), ['edit', 'media']);
   const manual = promptSkills(h);
   assert.doesNotMatch(manual, /^- `canvas`:/m);
@@ -57,9 +57,10 @@ test('a plugin off takes its skills from every agent, and the system prompt\'s l
   /* on again, its skill is back; every plugin on, the list is OpenFilm's own skills and nothing else */
   setPluginOn('canvas', true, h);
   setPluginOn('motion', true, h);
-  assert.deepEqual(names(), ['edit', 'media', 'canvas', 'motion']);
+  setPluginOn('stage', true, h);
+  assert.deepEqual(names(), ['edit', 'media', 'canvas', 'motion', 'stage']);
   assert.equal(pluginsOffLine(h), null);
-  assert.deepEqual(promptSkills(h).trim().split('\n').map((line) => /^- `([a-z]+)`: \S/.exec(line)?.[1]), ['edit', 'media', 'canvas', 'motion'], 'each in a line, and no more');
+  assert.deepEqual(promptSkills(h).trim().split('\n').map((line) => /^- `([a-z]+)`: \S/.exec(line)?.[1]), ['edit', 'media', 'canvas', 'motion', 'stage'], 'each in a line, and no more');
 });
 
 test('one of OpenFilm\'s own skills has no switch of its own: it is on while its plugin is, and the media\'s always', () => {
@@ -86,7 +87,7 @@ test('one of OpenFilm\'s own skills has no switch of its own: it is on while its
 test('every plugin made has a switch; what is not made yet is never on, and no agent hears of it', async () => {
   const h = home();
   const state = (id) => pluginStates(h).find((p) => p.id === id);
-  assert.deepEqual(PLUGINS.filter((p) => !p.soon).map((p) => [p.id, p.on]), [['edit', true], ['canvas', true], ['motion', false]]);
+  assert.deepEqual(PLUGINS.filter((p) => !p.soon).map((p) => [p.id, p.on]), [['edit', true], ['canvas', true], ['motion', false], ['stage', false]]);
   assert.deepEqual(PLUGINS.filter((p) => p.soon).map((p) => p.id), ['sound', 'color', 'composite']);
   const { CORE_SKILLS } = await import('./skills.mjs');
   /* the media's goes with none: it is not a plugin's, it is always given */
@@ -144,6 +145,7 @@ test('an official plugin is one folder: each skill it names is in its skills/<na
   assert.deepEqual(coreSkills().map((s) => [s.name, s.uid, s.folder]), [
     ['edit', 'openfilm/edit', pluginSkillDir('edit', 'edit')], ['media', 'openfilm/media', join(coreSkillsDir(), 'media')],
     ['canvas', 'openfilm/canvas', pluginSkillDir('canvas', 'canvas')], ['motion', 'openfilm/motion', pluginSkillDir('motion', 'motion')],
+    ['stage', 'openfilm/stage', pluginSkillDir('stage', 'stage')],
   ]);
   /* a skill is no plugin of its own: the plugin's element and commands are the plugin's, not its skill's */
   for (const s of coreSkills()) assert.deepEqual([s.element, s.commands, s.scripts], [undefined, undefined, []], s.name);

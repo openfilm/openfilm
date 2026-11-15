@@ -1,0 +1,10 @@
+{
+  "name": "openfilm-stage",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "new": "new.mjs",
+    "render": "render.mjs",
+    "look": "look.mjs"
+  }
+}

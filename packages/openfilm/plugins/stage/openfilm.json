@@ -1,0 +1,24 @@
+{
+  "order": 5,
+  "icon": "box",
+  "title": {
+    "en": "Stage",
+    "zh-CN": "导演台",
+    "ja": "ステージ",
+    "ko": "스테이지",
+    "es": "Escenario"
+  },
+  "summary": {
+    "en": "Shots blocked out in 3D: the set, who moves where, and the camera, played live.",
+    "zh-CN": "用 3D 白模排镜头：场景、人物走位和机位，实时预演。",
+    "ja": "3D で組むショット：セット、人物の動き、カメラをその場で再生します。",
+    "ko": "3D로 짜는 장면: 세트, 인물의 동선, 카메라를 실시간으로 미리 봅니다.",
+    "es": "Planos bocetados en 3D: el decorado, quién se mueve adónde y la cámara, en vivo."
+  },
+  "about": "shots blocked out in 3D (set, figures, camera) as three.js pages, rendered as white-box video",
+  "on": false,
+  "beta": true,
+  "skills": [
+    "stage"
+  ]
+}
