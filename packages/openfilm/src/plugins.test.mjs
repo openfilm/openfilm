@@ -13,7 +13,7 @@ const where = (h) => ({ home: h, mine: join(h, 'mine'), official: join(h, 'offic
 test('the screening, the edit and the canvas are on until the person says, Motion is not; the choice is kept by plugin', () => {
   const h = home();
   assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'canvas']);
-  assert.deepEqual(pluginStates(h).filter((p) => p.workbench).map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['motion', false], ['color', false]]);
+  assert.deepEqual(pluginStates(h).filter((p) => p.workbench).map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['motion', false], ['stage', false], ['color', false]]);
   setPluginOn('motion', true, h);
   setPluginOn('canvas', false, h);
   assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'motion']);
@@ -50,8 +50,8 @@ test('an agent is given the skills the plugins on bring and require, each after 
 
   setPluginOn('motion', true, h);
   assert.deepEqual(names(), ['film', 'media', 'canvas', 'motion']);
-  assert.match(String(pluginsOffLine(h)), /turns one on\): color \(/);
-  /* the skills each in a line, and no more; then, apart, the plugins still off (the color workbench's, at first) */
+  assert.match(String(pluginsOffLine(h)), /turns one on\): stage \(.*; color \(/);
+  /* the skills each in a line, and no more; then, apart, the plugins still off (the stage's and color's, at first) */
   const [given] = promptSkills(h).split('\n\n');
   assert.deepEqual(given.trim().split('\n').map((line) => /^- `([a-z]+)`( \(after [^)]+\))?: \S/.exec(line)?.[1]), ['film', 'media', 'canvas', 'motion'], 'each in a line, and no more');
   assert.match(promptSkills(h), /^- `motion` \(after `film`\):/m);
@@ -88,13 +88,13 @@ test('a skill of OpenFilm\'s own has no switch of its own: the plugin it goes wi
 test('every plugin made has a switch; what is not made yet is never on, and no agent hears of it', async () => {
   const h = home();
   const state = (id) => pluginStates(h).find((p) => p.id === id);
-  assert.deepEqual(PLUGINS.filter((p) => !p.soon).map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['motion', false], ['color', false]]);
+  assert.deepEqual(PLUGINS.filter((p) => !p.soon).map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['motion', false], ['stage', false], ['color', false]]);
   assert.deepEqual(PLUGINS.filter((p) => p.soon).map((p) => p.id), ['sound', 'composite']);
   const { CORE_SKILLS } = await import('./skills.mjs');
   /* the film's and the media's go with none: each is there while a plugin on needs it */
   assert.deepEqual(CORE_SKILLS.map((skill) => pluginOfSkill(skill)), [undefined, undefined, 'canvas', 'motion']);
   assert.deepEqual(PLUGINS.filter((p) => !p.soon).map((p) => [p.id, p.skills, p.requires]),
-    [['screening', [], ['film']], ['edit', [], ['film', 'media']], ['canvas', ['canvas'], ['media']], ['motion', ['motion'], ['film']], ['color', ['color'], ['film']]]);
+    [['screening', [], ['film']], ['edit', [], ['film', 'media']], ['canvas', ['canvas'], ['media']], ['motion', ['motion'], ['film']], ['stage', ['stage'], []], ['color', ['color'], ['film']]]);
   assert.throws(() => setPluginOn('sound', true, h), /not made yet/);
   /* a choice written by hand for one of them is not followed */
   mkdirSync(h, { recursive: true });
@@ -148,7 +148,7 @@ test('an official plugin is one folder: each skill it names is in its skills/<na
   assert.deepEqual(coreSkills().map((s) => [s.name, s.uid, s.folder]), [
     ['film', 'openfilm/film', join(coreSkillsDir(), 'film')], ['media', 'openfilm/media', join(coreSkillsDir(), 'media')],
     ['canvas', 'openfilm/canvas', pluginSkillDir('canvas', 'canvas')], ['motion', 'openfilm/motion', pluginSkillDir('motion', 'motion')],
-    ['color', 'openfilm/color', pluginSkillDir('color', 'color')],
+    ['color', 'openfilm/color', pluginSkillDir('color', 'color')], ['stage', 'openfilm/stage', pluginSkillDir('stage', 'stage')],
   ]);
   /* a skill is no plugin of its own: the plugin's element and commands are the plugin's, not its skill's */
   for (const s of coreSkills()) assert.deepEqual([s.element, s.commands, s.scripts], [undefined, undefined, []], s.name);
