@@ -1,6 +1,6 @@
 // The reference host (SPEC §4): serves a film folder over HTTP, opens its page in Chromium and asks it for frames.
 import { execFile } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { pipeline } from 'node:stream';
 import { createReadStream, readFileSync, realpathSync, statSync } from 'node:fs';
@@ -10,6 +10,7 @@ import { chromium } from 'playwright-core';
 import { DEFAULT_STAGE, FILM_FILE, readFilmFile } from './film-doc.mjs';
 import { readableLink, referenceSource } from './media-links.mjs';
 import { guard } from './browser-memory.mjs';
+import { serveVision } from './vision-assets.mjs';
 
 // Media seeks that land inside the frame they name. A plain `video.currentTime = t` at a frame boundary otherwise
 // shows the previous frame about a third of the time. Every page that draws a film by seeking video runs it first,
@@ -88,11 +89,12 @@ const TYPES = {
  * render keys its chunks on those too, as the page would draw otherwise once the file is there.
  * `grade(file, luts)` says a video graded by LUT files (SPEC.md `--of-lut`): the key of its graded copy (seekable.mjs
  * gradeKey) once it is made, `making` while it is, null when it is played as it is. Without it, every video is.
- * @param {string} root @param {{ inject?: string, timelineInject?: string, headers?: Record<string, string>, swap?: (file: string, query?: URLSearchParams) => string | null, missed?: (file: string) => void, grade?: Grade }} [options]
+ * @param {string} root @param {{ inject?: string, timelineInject?: string, headers?: Record<string, string>, swap?: (file: string, query?: URLSearchParams, source?: string) => string | null, missed?: (file: string) => void, grade?: Grade }} [options]
  */
 export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, timelineInject = inject, headers: extraHeaders = {}, swap, missed, grade } = {}) {
   root = resolve(root);
   return (req, res, path, query) => {
+    if (serveVision(req, res, path, extraHeaders)) return true;
     /* beside any film, wherever in the folder it is (its page asks for them relative to itself) */
     if (path.endsWith('/__film/timeline.mjs')) {
       // the built-in timeline: plays a film.html (see timeline.mjs)
@@ -169,12 +171,14 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     if (!inRoot) try { inRoot = within(realpathSync(root), realpathSync(asked)) || readableLink(root, asked); } catch { /* gone meanwhile */ }
     if (!inRoot) { missed?.(asked); return false; }
     /* what a file is (its length and size: `film-facts`) is the file's own, never its copy's */
-    const file = (query?.has('film-facts') ? null : swap?.(asked, query)) ?? linked ?? asked;
+    const file = (query?.has('film-facts') ? null : swap?.(asked, query, linked ?? asked)) ?? linked ?? asked;
     let stat;
     try { stat = statSync(file); } catch { res.writeHead(404, extraHeaders).end('not found'); return true; }
     if (stat.isDirectory()) { res.writeHead(302, { ...extraHeaders, location: `${path}/` }).end(); return true; }
     const type = TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream';
-    const headers = { ...extraHeaders, 'content-type': type, 'cache-control': 'no-store', 'accept-ranges': 'bytes' };
+    const headers = { ...extraHeaders, 'content-type': type, 'cache-control': 'no-store', 'accept-ranges': 'bytes',
+      ...(type.startsWith('video/') ? { 'x-openfilm-media-id': createHash('sha256').update(`${file}\0${stat.size}\0${stat.mtimeMs}\0${stat.ctimeMs}\0${stat.ino}`).digest('hex') } : {}),
+    };
     /* a HEAD has no body (the browser cancels one that brings it) */
     if (req.method === 'HEAD') { res.writeHead(200, headers).end(); return true; }
     if (type.startsWith('text/html') && query?.get('film-host') !== '0') {
@@ -444,7 +448,8 @@ const deviceOf = (/** @type {string} */ renderer) => {
  * Windows: headless Chromium picks no ANGLE backend by itself and draws WebGL with SwiftShader, on the CPU. Vulkan
  * reaches the GPU (on a laptop with two, the discrete one: d3d11 and gl take the integrated one). A virtual machine, a
  * CI runner or a computer without a Vulkan driver has none, so the first browser reads its renderer once: when Vulkan
- * did not start, or is software too, it and every later browser take Chromium's default.
+ * did not start, or is software too, it and every later browser take Direct3D when that reaches a GPU (a computer
+ * whose driver has no Vulkan), else Chromium's default.
  *
  * Vulkan on a GPU may still never show a video's frames (presentsVideo). Then Direct3D is taken when it reaches the
  * same GPU (a computer with one), else Vulkan with videos decoded on the CPU, else Direct3D on the other GPU; each only
@@ -466,10 +471,20 @@ export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
     const read = (/** @type {import('playwright-core').Browser} */ b) => inTime(renderer(b), 30_000, 'no renderer').catch(() => 'none');
     const shows = (/** @type {import('playwright-core').Browser} */ b) => inTime(presents(b), 30_000, '').catch(() => true);
     const vulkan = ['--use-angle=vulkan'];
+    const d3d11 = ['--use-angle=d3d11'];
     const browser = await open(vulkan).catch(() => null);
     const gpu = browser ? await read(browser) : 'none';
     if (!browser || gpu === 'none' || SOFTWARE_GL.test(gpu)) {
       await browser?.close().catch(() => {});
+      /* no Vulkan on a GPU (an older driver, or none for it): Direct3D reaches the GPU of most such computers, and is
+         taken when it does and shows a video's frames; else the default, on the CPU */
+      const direct = await open(d3d11).catch(() => null);
+      const directGpu = direct ? await read(direct) : 'none';
+      if (direct && directGpu !== 'none' && !SOFTWARE_GL.test(directGpu) && await shows(direct)) {
+        choose(d3d11);
+        return direct;
+      }
+      await direct?.close().catch(() => {});
       choose([]);
       return open([]);
     }
@@ -479,7 +494,6 @@ export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
     }
     await browser.close().catch(() => {});
     /* Direct3D, asked for by name (the default is SwiftShader, on the CPU): first on the same GPU, a computer with one */
-    const d3d11 = ['--use-angle=d3d11'];
     const direct = await open(d3d11).catch(() => null);
     const directGpu = direct ? await read(direct) : 'none';
     /** @type {boolean | null} */
@@ -607,6 +621,12 @@ export class FilmPage {
     /* `size`: a page clip's (SPEC §1), what a page without a size of its own is laid out at, from its first layout */
     const laid = size?.w > 0 && size?.h > 0 ? { width: Math.round(size.w), height: Math.round(size.h) } : { width: 1920, height: 1080 };
     film.context = await browser.newContext({ viewport: laid, deviceScaleFactor: scale });
+    // Persistent media caching can hash local requests; changing external resources have no such identity.
+    film.externalRequests = new Set();
+    film.context.on('request', (r) => {
+      const url = r.url();
+      if (!url.startsWith(origin + '/') && !/^(data|blob):/.test(url)) film.externalRequests.add(url);
+    });
     film.page = await film.context.newPage();
     const problems = film.problems;
     film.page.on('pageerror', (e) => problems.push({ kind: 'error', message: e.message }));

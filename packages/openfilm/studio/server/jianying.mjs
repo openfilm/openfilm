@@ -30,7 +30,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { filmSubtitleLanguageOf } from './film-subtitle.mjs';
-import { declarations } from '../../src/film-doc.mjs';
+import { ownLook } from './nle.mjs';
 import { captionPosition, jianyingCaptionStyle } from './jianying-captions.mjs';
 
 /**
@@ -125,7 +125,7 @@ const nativeProperties = new Set(['opacity', 'mask-image', 'mask-composite']);
  * @returns {DraftClipLook | undefined}
  */
 export function jianyingClipLook(style, css, rotation, maskFits) {
-  if (!css?.simple || declarations(style).some(([key]) => !nativeProperties.has(key))) return;
+  if (!css?.simple || ownLook(style).some(([key]) => !nativeProperties.has(key))) return;
   const { opacity, maskImage, maskComposite } = css;
   if (maskImage === 'none') return { opacity, rotation };
   // A draft mask is relative to the actual picture. CSS masks may be relative to a letterboxed clip box.
@@ -311,8 +311,10 @@ export function jianyingDraft(timeline, opts) {
         const w = file.video?.w ?? timeline.width, h = file.video?.h ?? timeline.height;
         /* 剪映 first fits it whole in the canvas; the plan's scale is of its own pixels, 100 when none */
         const fit = Math.min(timeline.width / w, timeline.height / h);
-        const scale = round6((c.motion ? c.motion.scale / 100 : 1) / fit);
-        const x = round6((c.motion?.center.h ?? 0) * 2), y = round6(-(c.motion?.center.v ?? 0) * 2);
+        // Cropped raster media must land on its original pixel grid; six decimal places can introduce a resize.
+        const precision = c.rasterCrop ? (/** @type {number} */ n) => n : round6;
+        const scale = precision((c.motion ? c.motion.scale / 100 : 1) / fit);
+        const x = precision((c.motion?.center.h ?? 0) * 2), y = precision(-(c.motion?.center.v ?? 0) * 2);
         const sound = ownSound.get(c.id);
         const level = sound?.level ?? 0;
         const refs = [speed(c.speed)];

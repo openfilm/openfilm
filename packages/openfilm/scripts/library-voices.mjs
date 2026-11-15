@@ -2,10 +2,11 @@
 // @ts-check
 /**
  * The library's voices (library/voices.json): the ready-made voices of the voice-over services OpenFilm offers
- * (ElevenLabs Eleven v4, Inworld TTS-2, Cartesia Sonic 3.6), as each service's own API lists them, each with its
- * service's own sample, made small (library/voices/<service>/<voice>.m4a).
+ * (ElevenLabs Eleven v4, Inworld TTS-2, Cartesia Sonic 3.6, Doubao TTS 2.0), as each service lists them, each with its
+ * service's own sample. The first three have small AAC copies; Doubao uses verified public MP3/WAV recordings.
  *
  *   ELEVENLABS_API_KEY=… INWORLD_API_KEY=… CARTESIA_API_KEY=… node scripts/library-voices.mjs [--make-samples]
+ *   node scripts/library-voices.mjs --provider=doubao
  *
  * Listing voices and their samples costs nothing with any of them. A sample already here is kept; a service without
  * a key keeps what voices.json had for it.
@@ -16,6 +17,8 @@
  *   Inworld     all its own voices
  *   Cartesia    all its public voices; a voice it gives no sample of has one made with `--make-samples` (Sonic 3.6
  *               says LINES in its language, a few cents for them all), else none
+ *   Doubao      both official TTS 2.0 tables, including multilingual voices, without credentials; verified public
+ *               recordings are fetched into the shared cache on first playback, with no paid synthesis
  *
  * `featured`: the service picked it (ElevenLabs' own voices and the ones its library features); `uses`: how much it is
  * used, where the service says (ElevenLabs: characters spoken in a year), to list the most used first.
@@ -24,6 +27,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { doubaoVoices } from './doubao-voices.mjs';
 
 const LIBRARY = fileURLToPath(new URL('../library/', import.meta.url));
 const OUT = join(LIBRARY, 'voices.json');
@@ -42,6 +46,7 @@ const PROVIDERS = [
   { id: 'elevenlabs', name: 'ElevenLabs', models: [{ id: 'eleven_v4', name: 'Eleven v4' }, { id: 'eleven_v4_turbo', name: 'Eleven v4 Turbo' }] },
   { id: 'inworld', name: 'Inworld', models: [{ id: 'inworld-tts-2', name: 'TTS-2' }, { id: 'inworld-tts-2-flash', name: 'TTS-2 Flash' }] },
   { id: 'cartesia', name: 'Cartesia', models: [{ id: 'sonic-3.6', name: 'Sonic 3.6' }] },
+  { id: 'doubao', name: 'Doubao', models: [{ id: 'seed-tts-2.0', name: 'Doubao TTS 2.0' }] },
 ];
 
 const sleep = (/** @type {number} */ ms) => new Promise((done) => setTimeout(done, ms));
@@ -222,6 +227,14 @@ const before = existsSync(OUT) ? JSON.parse(readFileSync(OUT, 'utf8')) : { voice
 /** @type {Voice[]} */
 const voices = [];
 for (const provider of PROVIDERS) {
+  const selected = process.argv.find((arg) => arg.startsWith('--provider='))?.slice('--provider='.length);
+  if (selected && selected !== provider.id) { voices.push(...before.voices.filter((/** @type {Voice} */ v) => v.provider === provider.id)); continue; }
+  if (provider.id === 'doubao') {
+    const found = await doubaoVoices();
+    voices.push(...found);
+    console.log(`Doubao: ${found.length} voices, ${found.filter((v) => v.sample).length} official samples`);
+    continue;
+  }
   const [list, env] = /** @type {[(key: string) => Promise<Found[]>, string]} */ (LISTS[/** @type {keyof typeof LISTS} */ (provider.id)]);
   const key = process.env[env];
   if (!key) {

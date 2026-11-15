@@ -343,11 +343,16 @@ function mapThrough(ms: number, track: number, shifts: readonly Shift[]): number
 
 /** Cut a clip in two at `ms`: the right half is a new clip (`<id>~b`) right after it. */
 function cutAt(d: Draft, track: EditTrack, c: EditClip, ms: number): EditClip | null {
-  if (!(ms > c.startMs + TOUCH_MS && ms < c.endMs - TOUCH_MS) || d.cut.has(c.id)) return null;
-  const right: EditClip = { ...c, id: `${c.id}~b` };
+  if (!(ms > c.startMs + TOUCH_MS && ms < c.endMs - TOUCH_MS)) return null;
+  let id = `${c.id}~b`;
+  const taken = new Set([...d.before.keys(), ...[...d.cut.values()].map((clip) => clip.id)]);
+  for (let n = 2; taken.has(id); n++) id = `${c.id}~b${n}`;
+  const right: EditClip = { ...c, id };
   setStart(right, ms);
   c.endMs = ms;
   track.clips.push(right);
+  const next = d.cut.get(c.id);
+  if (next) d.cut.set(right.id, next);
   d.cut.set(c.id, right);
   return right;
 }
@@ -583,8 +588,41 @@ function planOf(d: Draft): EditPlan {
   });
   const openEdits: { clip: string; prop: string; value: PropValue }[] = [];
   const joinEdits: { clip: string; prop: string; value: PropValue }[] = [];
+  const splitIds = new Set(d.before.keys());
   for (const [id, was] of d.before) {
-    const cur = now.get(id);
+    /* Multiple disjoint overwrites can cut one source into more than two surviving pieces. Emit the
+       whole chain, giving each right half a real id so subsequent splits address that half. */
+    const firstRight = d.cut.get(id);
+    if (firstRight && d.cut.has(firstRight.id)) {
+      const pieces = [];
+      for (let part: EditClip | undefined = now.get(id)?.clip ?? was.clip; part; part = d.cut.get(part.id)) {
+        const live = now.get(part.id);
+        if (live) pieces.push(live);
+      }
+      if (pieces.length) {
+        let parent = was.clip;
+        let parentId = id;
+        for (let i = 0; i < pieces.length - 1; i++) {
+          const cur = pieces[i]!;
+          const next = pieces[i + 1]!.clip;
+          const remainder = { ...next, endMs: pieces.at(-1)!.clip.endMs };
+          let rightId = `${id}-b`;
+          for (let n = 2; splitIds.has(rightId); n++) rightId = `${id}-b-${n}`;
+          splitIds.add(rightId);
+          ops.push({ op: 'split', clip: parentId, left: changedFields(parent, cur.clip), right: changedFields(parent, remainder), rightId });
+          placed.set(cur.clip.id, { startMs: cur.clip.startMs, endMs: cur.clip.endMs, track: cur.track });
+          parent = remainder;
+          parentId = rightId;
+        }
+        const last = pieces.at(-1)!;
+        for (const [prop, value] of Object.entries(changedFields(parent, last.clip))) edits.push({ clip: parentId, prop, value });
+        placed.set(last.clip.id, { startMs: last.clip.startMs, endMs: last.clip.endMs, track: last.track });
+        continue;
+      }
+    }
+    /* A later overwrite may remove the left half of an earlier cut. Keep its surviving right half
+       under the original id instead of deleting the whole source. */
+    const cur = now.get(id) ?? (firstRight && !d.cut.has(firstRight.id) ? now.get(firstRight.id) : undefined);
     if (!cur) {
       removes.push({ op: 'remove', clip: id });
       placed.set(id, null);
@@ -593,7 +631,7 @@ function planOf(d: Draft): EditPlan {
     const fields = changedFields(was.clip, cur.clip);
     const dest = destOf(id, cur.track);
     const right = d.cut.get(id);
-    if (right && now.has(right.id)) {
+    if (right && now.has(id) && now.has(right.id)) {
       const rightFields = changedFields(was.clip, right);
       ops.push({ op: 'split', clip: id, left: fields, right: rightFields });
       placed.set(id, { startMs: cur.clip.startMs, endMs: cur.clip.endMs, track: dest });

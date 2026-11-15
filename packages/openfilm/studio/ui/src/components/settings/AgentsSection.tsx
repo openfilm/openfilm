@@ -128,6 +128,7 @@ export function AgentsSection() {
   const [help, setHelp] = React.useState<HostAgentId | null>(null);
   const [notice, setNotice] = React.useState<{ id: HostAgentId; text: string } | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [checkingUpdates, setCheckingUpdates] = React.useState(false);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
   const [keyOpen, setKeyOpen] = React.useState(false);
   const [openfilmOpen, setOpenfilmOpen] = React.useState(false);
@@ -147,6 +148,12 @@ export function AgentsSection() {
     void (host.refresh ? host.refresh() : host.list())
       .catch((e: unknown) => setRefreshError(e instanceof Error ? e.message : String(e)))
       .finally(() => setRefreshing(false));
+  };
+  const checkUpdates = async () => {
+    setCheckingUpdates(true); setRefreshError(null);
+    try { await host.checkUpdates?.(); }
+    catch (e) { setRefreshError(e instanceof Error ? e.message : String(e)); }
+    finally { setCheckingUpdates(false); }
   };
 
   const act = (id: HostAgentId, run: () => Promise<{ ok?: boolean; error?: string } | unknown>) => {
@@ -219,6 +226,7 @@ export function AgentsSection() {
         return agent.app ? t('settings.agents.appOnly').replace('{app}', agent.app).replaceAll('{name}', agent.name) : t('settings.agents.missing');
       case 'key': return t('settings.agents.needsKey');
       case 'unavailable': return t('settings.agents.unavailable');
+      case 'offline': return t('settings.agents.offline');
       case 'checking': return t('settings.agents.checking');
       default: return null;
     }
@@ -264,7 +272,7 @@ export function AgentsSection() {
       );
     }
     if (agent.status === 'key') return <SettingsButton onClick={() => setKeyOpen(true)}>{t('settings.agents.setUpKey')}</SettingsButton>;
-    if (agent.status === 'unavailable') return agent.id === 'openfilm' ? <SettingsButton disabled={working} onClick={() => act(agent.id, () => host.connect(agent.id))}>{t('settings.agents.connect')}</SettingsButton> : null;
+    if (agent.status === 'unavailable' || agent.status === 'offline') return agent.id === 'openfilm' ? <SettingsButton disabled={working} onClick={() => act(agent.id, () => host.connect(agent.id))}>{t('settings.agents.connect')}</SettingsButton> : null;
     if (agent.status === 'checking') return <Loader2 size={16} className="animate-spin text-[var(--text-muted)]" aria-hidden />;
     if (agent.status === 'waiting') return (
       <SettingsButton variant="quiet" disabled={working} onClick={() => act(agent.id, () => host.cancelSignIn ? host.cancelSignIn(agent.id) : host.disconnect(agent.id))}>
@@ -323,6 +331,11 @@ export function AgentsSection() {
             {connectedStatus || !description && helpButton ? <span className="inline-flex items-center gap-1">
               {connectedStatus}{!description ? helpButton : null}
             </span> : null}
+            {agent.path && agent.update?.version ? <span className="text-[11px] tabular-nums text-[var(--text-faint)]">v{agent.update.version}</span> : null}
+            {agent.path && agent.update && ['available', 'unknown', 'queued', 'updating', 'error'].includes(agent.update.status) ? <button type="button" onClick={() => setHelp(agent.id)}
+              className="rounded-full border border-[var(--border)] px-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--text)]">
+              {t(`settings.agents.updates.${agent.update.status}`)}
+            </button> : null}
           </>
         )}
         description={description ? <div className="flex items-center gap-1">
@@ -428,7 +441,10 @@ export function AgentsSection() {
   const openfilmAgent = byId('openfilm');
   return (
     <SettingsPage note={t('settings.agents.intro')}>
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex justify-end gap-2">
+        {host.checkUpdates ? <SettingsButton variant="quiet" disabled={checkingUpdates} aria-busy={checkingUpdates} onClick={() => void checkUpdates()}>
+          <RefreshCw size={15} className={checkingUpdates ? 'animate-spin' : ''} />{t('settings.agents.updates.checkAll')}
+        </SettingsButton> : null}
         <SettingsButton variant="quiet" disabled={refreshing} aria-busy={refreshing} onClick={refreshAgents}><RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />{t('settings.agents.refreshCheck')}</SettingsButton>
       </div>
       {refreshError ? <p role="alert" className={settingsError}>{refreshError}</p> : null}

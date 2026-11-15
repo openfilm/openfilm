@@ -20,6 +20,8 @@
  */
 import * as React from 'react';
 import { createPortal } from 'react-dom';
+import { useKeyHint } from '@/lib/keymap-store';
+import type { ActionId } from '@/lib/keymap';
 
 /** How long to wait on the first hover. */
 const DELAY_MS = 500;
@@ -34,12 +36,14 @@ const EDGE_PAD = 8;
 const ARROW_INSET = 12;
 
 export function Tooltip({
-  label, shortcut, side = 'top', wrap = false, children,
+  label, shortcut: providedShortcut, action, side = 'top', wrap = false, children,
 }: {
   /** Empty string/undefined = no tooltip right now (e.g. a "Restore" button sitting on the current version); the child is passed through untouched. */
   label: string | undefined;
   /** Shortcut (the string already arranged for the platform, from shortcutHint). Shown as `Name (⌘Z)`. */
   shortcut?: string;
+  /** Read the active scheme, including user remaps and deliberately unbound actions. */
+  action?: ActionId;
   /** Which side the tooltip appears on. Top-bar buttons use `bottom`; everything else defaults to above. */
   side?: 'top' | 'bottom';
   /** A sentence rather than a name: it wraps at a reading width instead of staying on one line. */
@@ -47,6 +51,9 @@ export function Tooltip({
   /** The element the tooltip attaches to. Must accept a ref and mouse events. */
   children: React.ReactElement;
 }): React.ReactElement {
+  const keyHint = useKeyHint();
+  const shortcut = action ? keyHint(action) : providedShortcut;
+  const descriptionId = React.useId();
   const [at, setAt] = React.useState<{ x: number; y: number } | null>(null);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const host = React.useRef<HTMLElement | null>(null);
@@ -118,14 +125,18 @@ export function Tooltip({
   /* Chain the existing handlers before attaching ours: `cloneElement` overrides rather than
      merges. Overriding directly would make the wrapped element's own `onMouseDown`
      **silently disappear** (toolbar buttons rely on it to avoid taking focus). */
-  const own = children.props as Partial<React.DOMAttributes<HTMLElement>>;
+  const own = children.props as Partial<React.HTMLAttributes<HTMLElement>>;
   const chain = <E extends React.SyntheticEvent>(
     mine: (e: E) => void,
     theirs?: (e: E) => void,
   ) => (e: E) => { theirs?.(e); mine(e); };
 
   const child = React.cloneElement(children, {
+    'data-shortcut': shortcut,
+    'aria-describedby': [own['aria-describedby'], at ? descriptionId : undefined].filter(Boolean).join(' ') || undefined,
     onMouseEnter: chain(onEnter, own.onMouseEnter),
+    onFocus: chain((event: React.FocusEvent<HTMLElement>) => { host.current = event.currentTarget; clear(); show(); }, own.onFocus),
+    onBlur: chain(onLeave, own.onBlur),
     onMouseLeave: chain(onLeave, own.onMouseLeave),
     /* Hide on press: a tooltip left floating after a click would cover the part of the UI that just changed. */
     onMouseDown: chain(onLeave, own.onMouseDown),
@@ -138,6 +149,7 @@ export function Tooltip({
         ? createPortal(
           <div
             ref={bubble}
+            id={descriptionId}
             role="tooltip"
             className={`pointer-events-none fixed z-[10200] -translate-x-1/2 ${wrap ? 'w-max max-w-[280px] whitespace-normal leading-snug' : 'whitespace-nowrap'} rounded-[8px] px-2.5 py-[5px] text-[12px] font-medium shadow-md ${
               side === 'bottom' ? '' : '-translate-y-full'
@@ -183,7 +195,7 @@ export function Tooltip({
               }}
             />
           </div>,
-          document.body,
+          document.fullscreenElement ?? document.body,
         )
         : null}
     </>

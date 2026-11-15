@@ -76,6 +76,54 @@ test('a render with no format of its own encodes on the graphics chip when it ca
   }
 });
 
+test('a format with a ceiling: a film that comes to more than it is encoded once more at the bitrate as its parts are joined; one under it is left as drawn', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-ceiling-'));
+  try {
+    /* noise that changes every frame: busy in every pixel, as grain is */
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><body style="margin:0"><canvas id="c" width="320" height="180"></canvas><script>'
+      + 'const ctx = document.getElementById("c").getContext("2d");'
+      + 'window.film = { duration: 2, width: 320, height: 180, frame(t) { let s = Math.round(t * 1000) + 1; const d = ctx.createImageData(320, 180);'
+      + ' for (let i = 0; i < d.data.length; i += 4) { s = (s * 1103515245 + 12345) & 0x7fffffff; d.data[i] = d.data[i + 1] = d.data[i + 2] = s >> 23; d.data[i + 3] = 255; } ctx.putImageData(d, 0, 0); } };</script>');
+    const quiet = { workers: 2, silent: true, onProgress() {}, fps: 10 };
+    const pix = 'scale=out_color_matrix=bt709:out_range=tv,format=yuv420p';
+    const fine = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '12'];
+    const atRate = ['-c:v', 'libx264', '-preset', 'veryfast', '-b:v', '300k', '-maxrate', '450k', '-bufsize', '600k'];
+    const rate = (/** @type {string} */ file) => statSync(file).size * 8 / 2;
+    const frames = (/** @type {string} */ file) => parseInt(execFileSync('ffprobe', ['-v', 'error', '-count_packets', '-select_streams', 'v:0', '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', file]).toString(), 10);
+    const plain = await render([dir], { ...quiet, out: join(dir, 'plain.mp4'), format: { video: fine, pix } });
+    assert.ok(rate(plain.out) > 2_000_000, `the noise held to a quality: ${rate(plain.out)} bits a second`);
+    /* over its ceiling: every frame still there, at about the bitrate */
+    const capped = await render([dir], { ...quiet, out: join(dir, 'capped.mp4'), format: { video: fine, pix, ceiling: { bits: 450_000, video: atRate } } });
+    assert.equal(frames(capped.out), 20);
+    assert.ok(rate(capped.out) < 600_000, `encoded again at the bitrate: ${rate(capped.out)} bits a second`);
+    /* under it: the parts as they were drawn, joined */
+    const under = await render([dir], { ...quiet, out: join(dir, 'under.mp4'), format: { video: fine, pix, ceiling: { bits: 50_000_000, video: atRate } } });
+    assert.ok(Math.abs(rate(under.out) - rate(plain.out)) < rate(plain.out) * 0.02, 'not encoded again');
+    /* an encoder that fails at the bitrate leaves the film as it was drawn */
+    const kept = await render([dir], { ...quiet, out: join(dir, 'kept.mp4'), format: { video: fine, pix, ceiling: { bits: 450_000, video: ['-c:v', 'no_such_encoder'] } } });
+    assert.equal(frames(kept.out), 20);
+    assert.ok(rate(kept.out) > 2_000_000, 'the parts are the film');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a render drawn without a graphics chip says so at once, and in its result', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-software-'));
+  /* browsers whose WebGL is SwiftShader, as on a computer whose driver reaches no chip */
+  const pool = new BrowserPool({ start: () => launch({ args: ['--use-angle=swiftshader'] }) });
+  try {
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><body style="margin:0;background:#246"><script>window.film = { duration: 1, width: 320, height: 180, frame() {} };</script>');
+    let told = 0;
+    const drawn = await render([dir, '0-0.3'], { workers: 1, silent: true, onProgress() {}, fps: 10, hardware: false, browsers: pool, out: join(dir, 'software.mp4'), onSoftware: () => { told++; } });
+    assert.equal(drawn.software, true);
+    assert.equal(told, 1);
+  } finally {
+    await pool.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('an encoder that fails to start fails the render with ffmpeg\'s error, instead of waiting forever', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-render-fails-'));
   try {
@@ -272,6 +320,27 @@ window.film={duration:2,width:960,height:540,frame(t){els.forEach((d,k)=>{const 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('transparent RLE chunks retain PNG pixels across browser and chunk boundaries', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-rle-'));
+  try {
+    writeFileSync(join(dir, 'index.html'), `<!doctype html><style>html,body{margin:0;width:320px;height:180px;background:transparent}
+#a{position:absolute;left:20px;top:20px;width:130px;height:100px;background:linear-gradient(90deg,rgba(17,99,213,.01),rgba(250,31,111,.9));box-shadow:0 6px 10px rgba(1,2,3,.004)}
+#b{position:absolute;left:160px;top:90px;width:90px;height:70px;background:rgba(27,145,62,.5)}</style><div id="a"></div><div id="b"></div>
+<script>window.film={duration:2.2,width:320,height:180,frame(t){document.getElementById('b').style.transform='translateX('+Math.floor(t*25)+'px)'}}</script>`);
+    const sums = (file) => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vf', 'format=rgba', '-f', 'framemd5', '-']).toString()
+      .split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(',').pop());
+    const all = [];
+    for (const [codec, pix, workers] of [['png', 'rgba', 1], ['qtrle', 'argb', 1], ['qtrle', 'argb', 3]]) {
+      const out = join(dir, `${codec}-${workers}.mov`);
+      await render([dir], { out, workers, alpha: true, silent: true, fps: 25, onProgress() {}, format: { video: ['-c:v', codec], pix: `format=${pix}` } });
+      all.push(sums(out));
+    }
+    assert.equal(all[0].length, 55);
+    assert.deepEqual(all[1], all[0], 'every alpha and color sample survives the format change');
+    assert.deepEqual(all[2], all[0], 'delta packets join at independent chunk keyframes');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('a render is written once: its chunks straight into the file with the sound, and one chunk with nothing to add moved there', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 180_000 }, async () => {

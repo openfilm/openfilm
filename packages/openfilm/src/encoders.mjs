@@ -51,18 +51,54 @@ const HARDWARE = /** @type {Record<string, Partial<Record<ChipCodec, string[]>>>
   linux: { h264: ['h264_nvenc'], hevc: ['hevc_nvenc'] },
 });
 
+/** @typedef {'standard' | 'high'} ChipQuality */
+
+/** Whose encoder one is, by its name's ending: `videotoolbox`, `nvenc`, `qsv`, `amf`, `mf`. @param {string} encoder */
+const makerOf = (encoder) => encoder.slice(encoder.indexOf('_') + 1);
+
 /**
- * A hardware H.264 or HEVC encoder's options at a bitrate (they take no quality number that means the same on every
- * chip): peaks allowed at half again, for cuts and screen text. `gop`: frames from one key frame to the next (left
- * to itself, the Mac's puts one every 12 frames, and a bitrate spent on key frames is lost to the picture).
- * @param {string} encoder @param {number} bits a second @param {{ gop?: number }} [options]
+ * The quality each maker's encoder is held to, on its own scale, for the picture x264 and x265 give at Studio's
+ * standard and high (CRF 23 and 18, 28 and 23). The Mac's is a share of its best, measured on Apple silicon against
+ * those by VMAF, on motion graphics, screen recordings and footage: within half a point of them. The others count as
+ * x264 does, lower being better, and stand at x264's own numbers (HEVC three under x265's) until they are measured
+ * on those chips. Windows' own encoder (Media Foundation) holds none.
  */
-export function hardwareOptions(encoder, bits, { gop } = {}) {
+const CHIP_QUALITY = /** @type {Record<string, Record<'h264' | 'hevc', Record<ChipQuality, number>>>} */ ({
+  videotoolbox: { h264: { standard: 64, high: 72 }, hevc: { standard: 62, high: 70 } },
+  nvenc: { h264: { standard: 23, high: 18 }, hevc: { standard: 25, high: 20 } },
+  qsv: { h264: { standard: 23, high: 18 }, hevc: { standard: 25, high: 20 } },
+  amf: { h264: { standard: 23, high: 18 }, hevc: { standard: 25, high: 20 } },
+});
+
+/**
+ * A hardware H.264 or HEVC encoder's options. At a bitrate (`bits`), with peaks allowed at half again, for cuts and
+ * screen text: every frame gets its share, however little is in it. Or held to a `quality` (when the maker's encoder
+ * holds one, `holdsQuality`): each frame gets what its picture needs and no more, so a film of slides or screen
+ * text comes to a fraction of the bitrate's file, and detailed footage is not starved; `bits` is then what NVIDIA's
+ * and AMD's may not pass (the Mac's draws worse under a ceiling, and Intel's takes none). `gop`: frames from one key
+ * frame to the next (left to itself, the Mac's puts one every 12 frames, and a bitrate spent on key frames is lost to
+ * the picture).
+ * @param {string} encoder @param {number} bits a second @param {{ gop?: number, quality?: ChipQuality }} [options]
+ */
+export function hardwareOptions(encoder, bits, { gop, quality } = {}) {
   const k = (/** @type {number} */ n) => `${Math.round(n / 1000)}k`;
   const rate = ['-b:v', k(bits), '-maxrate', k(bits * 1.5), '-bufsize', k(bits * 2)];
   const hevc = encoder.startsWith('hevc_');
   const tag = [...(hevc ? ['-tag:v', 'hvc1'] : []), ...(gop ? ['-g', String(Math.max(1, Math.round(gop)))] : [])];
-  switch (encoder.slice(encoder.indexOf('_') + 1)) {
+  const maker = makerOf(encoder);
+  const level = quality ? CHIP_QUALITY[maker]?.[hevc ? 'hevc' : 'h264'][quality] : undefined;
+  if (level != null) {
+    const q = String(level);
+    switch (maker) {
+      case 'videotoolbox': return ['-c:v', encoder, ...(hevc ? [] : ['-profile:v', 'high']), '-q:v', q, ...tag];
+      /* a quality with a ceiling: the average bitrate is not looked at */
+      case 'nvenc': return ['-c:v', encoder, '-preset', 'p5', '-rc', 'vbr', '-cq', q, '-b:v', '0', '-maxrate', k(bits * 1.5), '-bufsize', k(bits * 2), ...tag];
+      case 'qsv': return ['-c:v', encoder, '-preset', 'medium', '-global_quality', q, ...tag];
+      /* the quality while the bitrate allows it, the bitrate when it does not */
+      case 'amf': return ['-c:v', encoder, '-quality', 'quality', '-rc', 'qvbr', '-qvbr_quality_level', q, ...rate, ...tag];
+    }
+  }
+  switch (maker) {
     case 'videotoolbox': return ['-c:v', encoder, ...(hevc ? [] : ['-profile:v', 'high']), '-b:v', k(bits), ...tag];
     case 'nvenc': return ['-c:v', encoder, '-preset', 'p5', '-rc', 'vbr', ...rate, ...tag];
     case 'qsv': return ['-c:v', encoder, '-preset', 'medium', ...rate, ...tag];
@@ -71,6 +107,20 @@ export function hardwareOptions(encoder, bits, { gop } = {}) {
     case 'mf': return ['-c:v', encoder, '-hw_encoding', '1', '-rate_control', 'u_vbr', '-b:v', k(bits), ...tag];
     default: return ['-c:v', encoder, '-b:v', k(bits), ...tag];
   }
+}
+
+/**
+ * A chip's H.264 or HEVC as render's format takes it (`more`: options after the encoder's own). Held to a `quality`,
+ * it comes with what its file may not pass (`ceiling`): a film busy in every frame (grain, static, a field of
+ * particles) would come to twenty times the file its bitrate makes, and not every maker's encoder takes a ceiling
+ * with a quality. Detailed footage held to a quality comes to once and a half `bits`, so the ceiling is two and a
+ * half times it; a picture past that render encodes once more, at a bitrate of once and a half (`ceiling.video`).
+ * @param {string} encoder @param {number} bits a second @param {{ gop?: number, quality?: ChipQuality }} [options] @param {string[]} [more]
+ * @returns {{ video: string[], ceiling?: { bits: number, video: string[] } }}
+ */
+export function chipDelivery(encoder, bits, { gop, quality } = {}, more = []) {
+  if (!quality) return { video: [...hardwareOptions(encoder, bits, { gop }), ...more] };
+  return { video: [...hardwareOptions(encoder, bits, { gop, quality }), ...more], ceiling: { bits: bits * 2.5, video: [...hardwareOptions(encoder, bits * 1.5, { gop }), ...more] } };
 }
 
 /**
@@ -120,15 +170,38 @@ const tried = new Map();
 function works(encoder) {
   if (!tried.has(encoder)) {
     const prores = encoder.startsWith('prores_') ? proresOptions(encoder, true) : null;
-    const options = prores ? ['-vf', prores.pix, ...prores.video] : ['-vf', 'format=yuv420p', ...hardwareOptions(encoder, 2e6)];
-    tried.set(encoder, new Promise((done) => {
-      /* one that hangs in the chip's driver never sees a SIGTERM, and its answer would never come: killed */
-      execFile('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30', '-frames:v', '10',
-        ...options, '-f', 'null', '-'], { timeout: 20_000, killSignal: 'SIGKILL', windowsHide: true }, (error) => done(!error));
-    }));
+    tried.set(encoder, encodes(prores ? ['-vf', prores.pix, ...prores.video] : ['-vf', 'format=yuv420p', ...hardwareOptions(encoder, 2e6)]));
   }
   return /** @type {Promise<boolean>} */ (tried.get(encoder));
 }
+
+/** Whether a moment of video goes through an encoder with these options. @param {string[]} options @returns {Promise<boolean>} */
+function encodes(options) {
+  return new Promise((done) => {
+    /* one that hangs in the chip's driver never sees a SIGTERM, and its answer would never come: killed */
+    execFile('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30', '-frames:v', '10',
+      ...options, '-f', 'null', '-'], { timeout: 20_000, killSignal: 'SIGKILL', windowsHide: true }, (error) => done(!error));
+  });
+}
+
+/** @type {Map<string, Promise<boolean>>} */
+const holding = new Map();
+/**
+ * Whether a chip's H.264 or HEVC encoder can be held to a quality here (hardwareOptions' `quality`): its maker's
+ * encoder has such a mode, and this chip and its driver take it (an Intel Mac's does not, nor an older graphics
+ * driver), tried with a moment of video, once a launch. One that cannot is given a bitrate.
+ * @param {string} encoder
+ */
+export function holdsQuality(encoder) {
+  if (!holding.has(encoder)) {
+    holding.set(encoder, /^(h264|hevc)_/.test(encoder) && CHIP_QUALITY[makerOf(encoder)]
+      ? encodes(['-vf', 'format=yuv420p', ...hardwareOptions(encoder, 2e6, { quality: 'high' })]) : Promise.resolve(false));
+  }
+  return /** @type {Promise<boolean>} */ (holding.get(encoder));
+}
+
+/** A chip's encoder that gave up while held to a quality: given its bitrate for the rest of this launch. @param {string} encoder */
+export const unheld = (encoder) => { holding.set(encoder, Promise.resolve(false)); };
 
 /** A hardware encoder that failed partway: the rest of this launch uses another. @param {string} encoder */
 export const broken = (encoder) => { tried.set(encoder, Promise.resolve(false)); };

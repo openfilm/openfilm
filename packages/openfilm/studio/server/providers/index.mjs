@@ -17,6 +17,7 @@ import { changeSettings, cleanKey, envKey, kindOf, modelFor, providerKey, readSe
 import { shownService, withService } from '../custom-services.mjs';
 import { cancelSignIn, signInState, signOut, startSignIn } from '../sign-in.mjs';
 import { desktopAccount } from '../account.mjs';
+import { accountProfile } from '../account-profile.mjs';
 import elevenlabs from './elevenlabs.mjs';
 import inworld from './inworld.mjs';
 import cartesia from './cartesia.mjs';
@@ -162,6 +163,10 @@ async function state() {
   await freshProviders();
   const settings = await readSettings();
   const account = await desktopAccount();
+  /* the signed-in account's name and picture (account-profile.mjs) */
+  const own = OWN.find((p) => p.id === 'openfilm');
+  const signed = own ? providerKey(own, settings) : null;
+  const profile = signed?.source === 'file' && account.connection?.status !== 401 ? await accountProfile(signed.key) : null;
   return {
     providers: OWN.map((p) => {
       const key = providerKey(p, settings);
@@ -175,6 +180,7 @@ async function state() {
         ...(invalid ? { connectionError: 'This OpenFilm connection is no longer valid. Connect again.' } : {}),
         /* connected by signing in (sign-in.mjs), and as whom */
         signIn: Boolean(p.signIn), account: key?.source === 'file' ? settings.accounts[p.id] ?? null : null,
+        ...(p.id === 'openfilm' && profile ? { profile } : {}),
         /* one the person added (added.mjs), not built in */
         ...(p.added ? { added: true } : {}),
       };
@@ -192,7 +198,7 @@ async function state() {
 /**
  * Studio's `/api/providers/*` (the editor page, with the launch key like the rest of the API). Each answers the state:
  *   GET    /api/providers           → { providers: [{ id, name, verbs, models: { verb: [{ id, name }] }, keysUrl, pricingUrl, env,
- *                                       keyless?, source: 'file' | 'env' | null, last4 }],
+ *                                       keyless?, source: 'file' | 'env' | null, last4, account, profile? (OpenFilm: { name, avatar }) }],
  *                                       use: { verb: provider id | null },
  *                                       model: { verb: model id | null },
  *                                       librarySearch: 'openfilm' | null }

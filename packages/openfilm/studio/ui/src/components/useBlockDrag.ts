@@ -82,6 +82,7 @@ function dropLanesOf(lanes: readonly TimelineTrack[], except: readonly string[])
     ...(lane.docIndex != null ? { docIndex: lane.docIndex } : {}),
     ...(lane.locked ? { locked: true } : {}),
     ...(lane.role === 'audio' ? { sound: true } : {}),
+    ...(lane.captions ? { captions: true } : {}),
     occupied: lane.docIndex == null ? [] : occupied.get(lane.docIndex) ?? [],
   }));
 }
@@ -423,23 +424,30 @@ export function useBlockDrag(opts: {
           : planEdges(m, ids.map((id) => ({ id, kind: edge })), want, switchesOf(p));
         const snappedTo = plan.deltaMs === want ? out.snappedTo : null;
         const own = plan.placed.get(block.clipId!);
+        /* While a magnetic head trim is held, show the head moving under the hand and leave following clips in
+           place. On release the ripple plan closes the gap and shifts what follows. */
+        const deferHeadRipple = ripple && edge === 'start';
+        const startMs = deferHeadRipple ? geom.startMs + plan.deltaMs : own?.startMs ?? geom.startMs;
+        const endMs = deferHeadRipple ? geom.endMs : own?.endMs ?? geom.endMs;
         /* how much source is left past that edge once it moved (pulled out, the edge moves away from the clip) */
         const left = (sourceLeftMs(m, block.clipId!, edge) ?? Infinity) - (edge === 'end' ? plan.deltaMs : -plan.deltaMs);
         const tip: GestureTip = {
           kind: ripple ? 'ripple' : 'trim', deltaMs: plan.deltaMs, lengthMs: own ? own.endMs - own.startMs : geom.endMs - geom.startMs,
-          atMs: edge === 'end' || ripple ? (own?.endMs ?? geom.endMs) : (own?.startMs ?? geom.startMs), lane: homeLaneIndex,
+          atMs: edge === 'end' ? endMs : startMs, lane: homeLaneIndex,
           ...(left < 1 ? { sourceEnd: true } : {}),
         };
         lastPlan = plan;
         document.body.style.cursor = 'ew-resize';
         last = {
           ...base,
-          startMs: own?.startMs ?? geom.startMs,
-          endMs: own?.endMs ?? geom.endMs,
+          startMs,
+          endMs,
           landStartMs: own?.startMs ?? geom.startMs,
           landEndMs: own?.endMs ?? geom.endMs,
           snappedTo,
-          ghosts: ghostsOf(plan, new Set([block.id])),
+          ghosts: deferHeadRipple
+            ? new Map(partners.map((b) => [b.id, { startMs: b.startMs + plan.deltaMs, endMs: b.endMs }]))
+            : ghostsOf(plan, new Set([block.id])),
           tip,
         };
         setPreview(last);
@@ -660,6 +668,7 @@ export function useBlockDrag(opts: {
         startMs: last.landStartMs,
         endMs: last.landEndMs,
         moves: [...last.landMoves],
+        ghosts: ripple && mode === 'trim-start' ? ghostsOf(lastPlan, new Set([block.id])) : last.ghosts,
         tip: null,
         landed: true,
         pendingProjection: latest.current.projection,

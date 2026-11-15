@@ -75,6 +75,8 @@ import { layerTarget } from '@/lib/stage-layers';
 import type { StagePictureActions } from './stage-menu';
 import { InspectorCategory, InspectorEditable, InspectorReadOnly, InspectorWorkspace } from './InspectorWorkspace';
 import type { MotionBlur } from '@/api';
+import type { PreviewRenderControl } from '@/editor/use-preview-renders';
+import { VideoEffectsSection, type VisionStatusReader } from './VideoEffectsSection';
 
 /** A change of a layer's words (kept as its `text` override). `expect` is what it said before: painted back on refusal. */
 export type StageTextEdit = {
@@ -202,7 +204,11 @@ export const FilmInspector = React.memo(function FilmInspector({
   propsHostOf,
   pictures,
   layerProps,
+  visionStatus,
+  visionPreview,
 }: {
+  visionStatus?: VisionStatusReader;
+  visionPreview?: PreviewRenderControl;
   element: StageElement | null;
   /** The clips selected on the timeline. A layer picked on the picture wins: one selection at a time. */
   clips?: readonly TimelineBlock[];
@@ -363,6 +369,7 @@ export const FilmInspector = React.memo(function FilmInspector({
             {...(propsHostOf ? { propsHostOf } : {})}
             {...(motion ? { motion } : {})}
             {...(rate ? { fps: rate.fps } : {})}
+            visionStatus={visionStatus} visionPreview={visionPreview}
           />
         ) : many ? (
           <MultiClipPanel
@@ -1399,8 +1406,10 @@ function clipsLook(
  */
 function ClipPanel({
   block, onMain, speedFloor, geometry, stage, onEdit, onPreviewClip, onAnimate, pageChangesOf, replaceEntries, templateSection, motionSection, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
-  onMaskAsked, fades, propsHostOf, motion, fps = 30,
+  onMaskAsked, fades, propsHostOf, motion, fps = 30, visionStatus, visionPreview,
 }: {
+  visionStatus?: VisionStatusReader;
+  visionPreview?: PreviewRenderControl;
   fades?: ReadonlyMap<string, FadeMs>;
   motion?: ClipMotionHost;
   fps?: number;
@@ -1485,7 +1494,8 @@ function ClipPanel({
               onCommit={(css) => commit([{ loc, prop: 'style', value: css }])} />
           ) : null}
           {propsHost && isTextClip(block.src) ? (
-            <TextInspector host={propsHost} boxH={geo?.h} commit={(next) => commit([{ loc: loc!, prop: 'overrides', value: (next.length ? next : null) as unknown as Record<string, unknown> | null }])} />
+            /* vh is interpreted against the saved box; a live text preview refits its box on each keystroke. */
+            <TextInspector host={propsHost} boxH={own ? computedGeometry(block, own, stage).h : undefined} commit={(next) => commit([{ loc: loc!, prop: 'overrides', value: (next.length ? next : null) as unknown as Record<string, unknown> | null }])} />
           ) : propsHost ? (
             <PropertiesSection host={propsHost} commit={(next) => commit([{ loc: loc!, prop: 'overrides', value: next as unknown as Record<string, unknown> | null }])} />
           ) : null}
@@ -1547,6 +1557,7 @@ function ClipPanel({
                 {...(onMaskAsked ? { onAsked: onMaskAsked } : {})}
               />
               <AppearanceSection look={look} t={t} radius />
+              {block.kind === 'video' && block.clipId ? <VideoEffectsSection look={look} clipId={block.clipId} readStatus={visionStatus} previewControl={visionPreview} /> : null}
               <StrokeSection look={look} t={t} />
               <EffectsSection look={look} t={t} />
               <FilterSection look={look} t={t} />

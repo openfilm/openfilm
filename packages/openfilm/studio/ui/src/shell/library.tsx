@@ -102,7 +102,9 @@ export function useLibraryShown(projectId: string, of: {
     const keep = (f: { path: string }) => f.path === revealMedia?.path || !fromLibrary(f.path, libraryIndex?.items ?? null);
     return { ...listing, files: listing.files.filter(keep), pages: listing.pages.filter(keep) };
   }, [listing, mediaScope, libraryIndex, revealMedia?.path]);
-  const savedListing = useSavedListing(mediaScope === 'saved');
+  const [savedDirectory, setSavedDirectory] = React.useState('');
+  const [savedQuery, setSavedQuery] = React.useState('');
+  const savedListing = useSavedListing(mediaScope === 'saved', true, { at: savedDirectory, query: savedQuery });
   const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => importIntoSaved(files, into, onProgress, t('assets.uploadFailed')), [t]);
   /* the file a workbench was just asked to take in hand (showFile), with what it gave the library then: the media
      pane is told that file is in hand until the workbench says what is. The shell and a workbench are drawn one after
@@ -126,7 +128,7 @@ export function useLibraryShown(projectId: string, of: {
 
   return {
     refOfFile, referOutside, onLibraryDownloadFailed, saveThings, saveFiles,
-    mediaScope, switchMedia, revealMedia, setRevealMedia, mediaRevealed, libraryIndex, scopedListing, savedListing, savedImport,
+    mediaScope, switchMedia, revealMedia, setRevealMedia, mediaRevealed, libraryIndex, scopedListing, savedListing, savedImport, setSavedDirectory, setSavedQuery,
     showFile, askedInHand,
   };
 }
@@ -145,7 +147,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     missingMedia, findMissing, madeWords,
     canvasOpen, setCanvasOpen, requestCanvasFiles,
     refOfFile, referOutside, onLibraryDownloadFailed, saveFiles,
-    mediaScope, switchMedia, revealMedia, mediaRevealed, scopedListing, savedListing, savedImport, askedInHand,
+    mediaScope, switchMedia, revealMedia, mediaRevealed, scopedListing, savedListing, savedImport, setSavedDirectory, setSavedQuery, askedInHand,
     setSettingsOpen, toast, showWorkbench,
     libraryPane: pane, updateWorkspace, setPanelWidth,
   } = frame;
@@ -195,6 +197,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
       key="saved"
       projectId={SAVED}
       listing={savedListing}
+      onFolderChange={setSavedDirectory} onSearchChange={setSavedQuery}
       sources={savedSources}
       selectedPath={library?.pickedSaved ? library.pickedPath : null}
       onSelectFile={pickSavedFile}

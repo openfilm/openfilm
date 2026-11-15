@@ -458,6 +458,8 @@ export interface DropLane {
   locked?: boolean;
   /** A sound track (A): only sounds go on it, and sounds go on nothing else. */
   sound?: boolean;
+  /** Caption cues move only between caption tracks. */
+  captions?: boolean;
   /** What is taken on this film.html track besides the clips being dragged. Rows of one track share a docIndex. */
   occupied?: readonly { startMs: number; endMs: number }[];
 }
@@ -525,6 +527,7 @@ export function moveDestFor(
   if (target.locked) return { action: 'refuse' };
   /* a sound to a sound track, a picture to a picture track */
   const home = lanes.find((lane) => lane.docIndex === sourceDocIndex);
+  if (Boolean(target.captions) !== Boolean(home?.captions)) return { action: 'refuse' };
   if (Boolean(target.sound) !== (sound ?? Boolean(home?.sound))) return { action: 'refuse' };
   return { action: 'move', trackIndex: target.docIndex };
 }
@@ -565,7 +568,8 @@ export function groupLaneShift(
   lanes: readonly DropLane[],
   wantDelta: number,
 ): GroupLaneShift {
-  if (!members.length) return { ok: true, delta: 0, moves: [] };
+  /* Along their own rows, existing overlaps keep their shape; no new track landing to validate. */
+  if (!members.length || wantDelta === 0) return { ok: true, delta: 0, moves: [] };
   const moves = groupFitsAt(members, lanes, wantDelta);
   if (!moves) return { ok: false, delta: 0, moves: [] };
   return { ok: true, delta: wantDelta, moves };
@@ -585,6 +589,7 @@ function groupFitsAt(
     if (!lane || lane.docIndex == null) return null;
     const moved = lane.docIndex !== home?.docIndex;
     if (moved && lane.locked) return null;
+    if (moved && Boolean(lane.captions) !== Boolean(home?.captions)) return null;
     if (moved && Boolean(lane.sound) !== (m.sound ?? Boolean(home?.sound))) return null;
     landed.push({ member: m, docIndex: lane.docIndex, moved });
   }
