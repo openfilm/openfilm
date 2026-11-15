@@ -10,6 +10,7 @@
  * the language shown, its cover, and the parts a plugin's page (library/PluginsPane) is made of as well.
  */
 import React from 'react';
+import { LARGE_DIALOG_COLUMN as PAGE_INSET } from './dialog-chrome';
 import {
   ArrowLeft, Copy, Film, Folder, GitBranch, Github, Layers, MessageSquarePlus, MonitorPlay, Music, PenLine, PictureInPicture2,
   Plus, Presentation, RefreshCw, Scissors, Shapes, Sparkles, Trash2, Wand2, type LucideIcon,
@@ -49,7 +50,7 @@ const installedOf = (skill: SkillEntry) => skill.installed !== false;
 export function PageSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mt-5">
-      <h3 className="mb-1.5 text-[11.5px] font-medium text-[var(--text-muted)]">{title}</h3>
+      <h3 className="mb-1.5 text-[13px] font-medium text-[var(--text-muted)]">{title}</h3>
       {children}
     </section>
   );
@@ -59,7 +60,7 @@ export function PageSection({ title, children }: { title: string; children: Reac
 export function HowToUse({ text, where = false }: { text: string; where?: boolean }) {
   const t = useT();
   return (
-    <p data-how-to-use="" className="mt-4 rounded-[10px] bg-[var(--bg-field)] px-3 py-2 text-[12.5px] leading-[19px] text-[var(--text)]">
+    <p data-how-to-use="" className="mt-4 rounded-[10px] bg-[var(--bg-field)] px-3 py-2 text-[14px] leading-[19px] text-[var(--text)]">
       <span className="font-medium">{t(where ? 'assetDrawer.whereToOpen' : 'assetDrawer.howToUse')}</span> <span className="text-[var(--text-muted)]">{text}</span>
     </p>
   );
@@ -68,8 +69,8 @@ export function HowToUse({ text, where = false }: { text: string; where?: boolea
 /** One thing it brings: what it is, and under it its name or what it is for. */
 export function BringsLine({ kind, children }: { kind: string; children: React.ReactNode }) {
   return (
-    <div className="py-1 text-[12.5px] leading-[18px]">
-      <div className="text-[11px] leading-[15px] text-[var(--text-faint)]">{kind}</div>
+    <div className="py-1 text-[14px] leading-[18px]">
+      <div className="text-[12px] leading-[15px] text-[var(--text-faint)]">{kind}</div>
       <div className="mt-0.5 min-w-0 text-[var(--text)]">{children}</div>
     </div>
   );
@@ -80,7 +81,7 @@ export function CommandChips({ name, commands }: { name: string; commands: reado
   return (
     <div className="flex flex-wrap gap-1.5">
       {commands.map((c) => (
-        <code key={c} className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[11px] text-[var(--text-muted)]">openfilm {name}{c === name ? '' : ` ${c}`}</code>
+        <code key={c} className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[12px] text-[var(--text-muted)]">openfilm {name}{c === name ? '' : ` ${c}`}</code>
       ))}
     </div>
   );
@@ -174,32 +175,32 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
   return (
     <>
     {/* Back where the search was, at its height, so the page comes in without a jump */}
-    <div className="flex shrink-0 px-3 pb-2 pt-2.5">
-      <button type="button" onClick={onBack} className="-ml-1 flex h-8 items-center gap-1.5 rounded-md pl-1.5 pr-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+    <div className={`flex shrink-0 ${PAGE_INSET} pb-2 pt-6`}>
+      <button type="button" onClick={onBack} className="-ml-1 flex h-8 items-center gap-1.5 rounded-md pl-1.5 pr-2.5 text-[14px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
         <ArrowLeft size={14} />{t('gallery.back')}
       </button>
     </div>
-    <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-0.5">
+    <div className={`min-h-0 flex-1 overflow-y-auto ${PAGE_INSET} pb-12 pt-0.5`}>
       <div className="relative aspect-video w-full overflow-hidden rounded-[10px] bg-black ring-1 ring-[var(--border)]">
         {skill.preview ? <video src={skill.preview} poster={skill.cover} autoPlay muted loop controls playsInline className="absolute inset-0 h-full w-full object-contain" />
           : <SkillCover key={skill.cover ?? ''} skill={skill} title={words.title} big />}
       </div>
-      {skill.source === 'mine' ? <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-[var(--text-muted)]">
-        <button type="button" disabled={busy} onClick={() => coverInput.current?.click()} className="h-8 rounded-[8px] px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-40">{t(skill.cover ? 'gallery.changeCover' : 'gallery.chooseCover')}</button>
+      {skill.source === 'mine' ? <div className="mt-2 flex flex-wrap items-center gap-2 text-[13.5px] text-[var(--text-muted)]">
+        <button type="button" disabled={busy} onClick={() => coverInput.current?.click()} className="h-8 rounded-[8px] px-2.5 text-[14px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-40">{t(skill.cover ? 'gallery.changeCover' : 'gallery.chooseCover')}</button>
         <input ref={coverInput} type="file" accept="image/png,image/jpeg,image/webp" aria-label={t(skill.cover ? 'gallery.changeCover' : 'gallery.chooseCover')} disabled={busy} hidden
           onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void changeCover(file); }} />
-        {skill.cover ? <button type="button" disabled={busy} onClick={() => void changeCover(null)} className="h-8 rounded-[8px] px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-40">{t('gallery.removeCover')}</button> : null}
+        {skill.cover ? <button type="button" disabled={busy} onClick={() => void changeCover(null)} className="h-8 rounded-[8px] px-2.5 text-[14px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:opacity-40">{t('gallery.removeCover')}</button> : null}
         {busy ? <span role="status">{t('gallery.coverSaving')}</span> : null}
       </div> : null}
-      {error ? <p role="alert" className="mt-2 text-[12px] text-[var(--warn)]">{error}</p> : null}
+      {error ? <p role="alert" className="mt-2 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
       <div className="mt-4 flex items-start gap-3">
-        <h2 className="min-w-0 flex-1 text-[17px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{words.title}</h2>
+        <h2 className="min-w-0 flex-1 text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{words.title}</h2>
         {/* one of OpenFilm's own has no switch of its own: it is on while its plugin is (library/PluginsPane) */}
         {installed && !skill.core ? <SettingsSwitch checked={!skill.off} onChange={turn} label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words.title)} /> : null}
       </div>
-      {skill.off ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', inLanguage(plugins.find((p) => p.id === skill.plugin)?.title, lang) ?? skill.plugin) : t('gallery.skillOff')}</p> : null}
-      {skill.retired ? <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
-      <div className="mt-2 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
+      {skill.off ? <p className="mt-1.5 text-[13.5px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', inLanguage(plugins.find((p) => p.id === skill.plugin)?.title, lang) ?? skill.plugin) : t('gallery.skillOff')}</p> : null}
+      {skill.retired ? <p className="mt-1.5 text-[13.5px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
+      <div className="mt-2 flex items-center gap-2 text-[13.5px] text-[var(--text-muted)]">
         {/* its category, then whose it is: the community's, their account a link; OpenFilm's own, its kind */}
         <CategoryTag category={category} />
         {communityOf(skill) ? (
@@ -207,8 +208,8 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
             className="text-[var(--text)] underline-offset-2 hover:underline">{makerOf(skill)}</a>{t('gallery.byCommunity').split('{owner}')[1]}</span>
         ) : <span>{t(group)}</span>}
         {/* its uid, owner/name: how it is told apart, shared and searched */}
-        <span className="min-w-0 truncate font-mono text-[11px] text-[var(--text-faint)]" title={skill.uid}>{skill.uid}</span>
-        {skill.version ? <span className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[10.5px] text-[var(--text-muted)]">v{skill.version}</span> : null}
+        <span className="min-w-0 truncate font-mono text-[12px] text-[var(--text-faint)]" title={skill.uid}>{skill.uid}</span>
+        {skill.version ? <span className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[11.5px] text-[var(--text-muted)]">v{skill.version}</span> : null}
         {/* its source: OpenFilm's repository, or the address one of the person's came from */}
         {source ? (
           <a href={source} target="_blank" rel="noreferrer" title={source} aria-label={t('gallery.viewSource')}
@@ -216,20 +217,20 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
         ) : null}
       </div>
       <Origin skill={skill} />
-      {words.summary ? <p className="mt-4 text-[13.5px] leading-[21px] text-[var(--text)]">{words.summary}</p> : null}
+      {words.summary ? <p className="mt-4 text-[15px] leading-[21px] text-[var(--text)]">{words.summary}</p> : null}
       {/* summed up as a model's page does: how hard, how little work, what it costs, how it is used, who it is for */}
       <ProfileStrip profile={skill.profile} uses={usesOfSkill(skill)} />
       {/* the computers it runs on, when this one is not among them; what it needs beyond OpenFilm */}
       {skill.elsewhere && skill.platforms ? (
-        <p role="note" className="mt-2.5 text-[12.5px] leading-[20px] text-[var(--warn)]">
+        <p role="note" className="mt-2.5 text-[14px] leading-[20px] text-[var(--warn)]">
           {t('gallery.onlyOn').replace('{where}', skill.platforms.map((p) => t(`gallery.platform_${p}`)).join(' / '))}</p>
       ) : null}
-      {needs ? <p className="mt-2.5 text-[12.5px] leading-[20px] text-[var(--text-muted)]"><span className="font-medium text-[var(--text)]">{t('gallery.needs')}</span> {needs}</p> : null}
+      {needs ? <p className="mt-2.5 text-[14px] leading-[20px] text-[var(--text-muted)]"><span className="font-medium text-[var(--text)]">{t('gallery.needs')}</span> {needs}</p> : null}
       {/* each line of its details; a line's lead ("When it is used:") a shade brighter, to find at a glance */}
       {details ? details.split('\n').map((line) => {
         const lead = /^(.{1,24}?[：:])\s*(.+)$/.exec(line);
         return (
-          <p key={line} className="mt-2.5 text-[12.5px] leading-[20px] text-[var(--text-muted)]">
+          <p key={line} className="mt-2.5 text-[14px] leading-[20px] text-[var(--text-muted)]">
             {lead ? <><span className="font-medium text-[var(--text)]">{lead[1]}</span> {lead[2]}</> : line}
           </p>
         );
@@ -239,35 +240,35 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
       <PageSection title={t('assetDrawer.pluginBrings')}>
         {plugin ? <BringsLine kind={t(skill.tab ? 'assetDrawer.brings_tab' : 'assetDrawer.brings_workbench')}>{inLanguage(skill.tab?.title, lang) ?? words.title}</BringsLine> : null}
         {/* the skill an agent is given, with what it is told of it */}
-        <BringsLine kind={t('assetDrawer.brings_skill')}><span className="font-mono text-[11.5px]">{skill.as ?? skill.name}</span><span className="block text-[11.5px] leading-[17px] text-[var(--text-muted)]">{skill.description}</span></BringsLine>
+        <BringsLine kind={t('assetDrawer.brings_skill')}><span className="font-mono text-[13px]">{skill.as ?? skill.name}</span><span className="block text-[13px] leading-[17px] text-[var(--text-muted)]">{skill.description}</span></BringsLine>
         {skill.commands?.length ? <BringsLine kind={t('assetDrawer.brings_commands')}><CommandChips name={skill.name} commands={skill.commands} /></BringsLine> : null}
       </PageSection>
       {(skill.scripts > 0 && !skill.core) || ((skill.surface || skill.program || skill.inApp) && installed) ? (
         <PageSection title={t('assetDrawer.pluginMay')}>
           {/* scripts it brings run on this computer, with the agent's access */}
           {skill.scripts > 0 && !skill.core ? (
-            <p className="text-[12.5px] leading-[20px] text-[var(--text-muted)]">{t(skill.scripts === 1 ? 'gallery.scriptsOne' : 'gallery.scriptsMany').replace('{n}', String(skill.scripts))}</p>
+            <p className="text-[14px] leading-[20px] text-[var(--text-muted)]">{t(skill.scripts === 1 ? 'gallery.scriptsOne' : 'gallery.scriptsMany').replace('{n}', String(skill.scripts))}</p>
           ) : null}
           {/* a plugin someone made (a skill with a surface): its page reads the project; whether it may change it is the person's to say */}
           {skill.surface && installed ? (
             <div className="mt-2 rounded-[10px] border border-[var(--border)] px-3 py-2.5">
               <div className="flex items-center gap-3">
-                <span className="min-w-0 flex-1 text-[12.5px] font-medium text-[var(--text)]">{t('gallery.pluginWrites')}</span>
+                <span className="min-w-0 flex-1 text-[14px] font-medium text-[var(--text)]">{t('gallery.pluginWrites')}</span>
                 <SettingsSwitch checked={Boolean(skill.writes)} label={t('gallery.pluginWrites')}
                   onChange={(on) => { patch((k) => { const { writes: _was, ...rest } = k; return on ? { ...rest, writes: true as const } : rest; }); void sourcesApi.setPluginWrites(skill.uid, on, projectId).catch(reload); }} />
               </div>
-              <p className="mt-1 text-[11.5px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginWritesNote')}</p>
+              <p className="mt-1 text-[13px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginWritesNote')}</p>
             </div>
           ) : null}
           {/* one that brings a program, or an element put in the app itself: it runs on this computer once the person lets it */}
           {(skill.program || skill.inApp) && installed ? (
             <div className="mt-2 rounded-[10px] border border-[var(--border)] px-3 py-2.5">
               <div className="flex items-center gap-3">
-                <span className="min-w-0 flex-1 text-[12.5px] font-medium text-[var(--text)]">{t('gallery.pluginRuns')}</span>
+                <span className="min-w-0 flex-1 text-[14px] font-medium text-[var(--text)]">{t('gallery.pluginRuns')}</span>
                 <SettingsSwitch checked={Boolean(skill.runs)} label={t('gallery.pluginRuns')}
                   onChange={(on) => { patch((k) => { const { runs: _was, ...rest } = k; return on ? { ...rest, runs: true as const } : rest; }); void sourcesApi.setPluginRuns(skill.uid, on, projectId).catch(reload); }} />
               </div>
-              <p className="mt-1 text-[11.5px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginRunsNote')}</p>
+              <p className="mt-1 text-[13px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginRunsNote')}</p>
             </div>
           ) : null}
         </PageSection>
@@ -275,22 +276,22 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
       <div className="mt-5 flex flex-col gap-2">
         {onTry ? (
           <button type="button" onClick={() => onTry(skill)} disabled={skill.off} title={skill.off ? t('gallery.tryOff') : undefined}
-            className="flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
+            className="flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[14.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
         ) : null}
         {/* OpenFilm's system skills are only turned off */}
         {skill.update && installed ? (
           <button type="button" onClick={update} disabled={working !== null}
-            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50">
+            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[14.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50">
             <RefreshCw size={14} />{working === 'updating' ? t('gallery.updating') : t('gallery.update').replace('{version}', skill.update.version)}</button>
         ) : null}
         {skill.core ? null : !installed ? (
           <button type="button" onClick={() => install(true)} disabled={working !== null || skill.elsewhere === true}
             className={onTry
-              ? 'flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[13px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50'
-              : 'flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[13px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-50'}><Plus size={15} />{t(working === 'installing' ? 'gallery.installing' : 'gallery.install')}</button>
+              ? 'flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[14.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50'
+              : 'flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[14.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-50'}><Plus size={15} />{t(working === 'installing' ? 'gallery.installing' : 'gallery.install')}</button>
         ) : (
           <button type="button" onClick={() => { if (skill.source === 'official') install(false); else setRemoving(true); }}
-            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--bg-field)] text-[13px] text-[var(--text-muted)] transition hover:bg-[color-mix(in_srgb,var(--err)_14%,var(--bg-field))] hover:text-[var(--err)]">
+            className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--bg-field)] text-[14.5px] text-[var(--text-muted)] transition hover:bg-[color-mix(in_srgb,var(--err)_14%,var(--bg-field))] hover:text-[var(--err)]">
             <Trash2 size={14} />{t(skill.source === 'official' ? 'gallery.uninstall' : 'gallery.remove')}
           </button>
         )}
@@ -314,7 +315,7 @@ export function SkillMark({ skill }: { skill: Pick<SkillEntry, 'cover' | 'icon'>
   const hue = HUES[skill.icon ?? ''] ?? 220;
   return (
     <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px]"
-      style={{ background: `hsl(${hue} 70% 55% / 0.16)`, color: `hsl(${hue} 80% 72%)`, boxShadow: `inset 0 0 0 1px hsl(${hue} 70% 60% / 0.28)` }}>
+      style={{ background: `hsl(${hue} 70% 55% / 0.16)`, color: `light-dark(hsl(${hue} 62% 40%), hsl(${hue} 80% 72%))`, boxShadow: `inset 0 0 0 1px hsl(${hue} 70% 60% / 0.28)` }}>
       <Mark size={17} strokeWidth={1.7} />
     </span>
   );
@@ -335,9 +336,9 @@ function Origin({ skill }: { skill: SkillEntry }) {
   }
   return (
     <>
-      <div title={o.from === 'made' ? undefined : o.address} className="mt-2 flex min-w-0 items-center gap-1.5 text-[11.5px] text-[var(--text-faint)]">{icon}<span className="truncate">{text}</span></div>
+      <div title={o.from === 'made' ? undefined : o.address} className="mt-2 flex min-w-0 items-center gap-1.5 text-[13px] text-[var(--text-faint)]">{icon}<span className="truncate">{text}</span></div>
       {/* added from an address, not from Discover: OpenFilm has not looked at it */}
-      {o.from === 'link' ? <p className="mt-1 text-[11.5px] leading-[17px] text-[var(--text-muted)]">{t('gallery.unlisted')}</p> : null}
+      {o.from === 'link' ? <p className="mt-1 text-[13px] leading-[17px] text-[var(--text-muted)]">{t('gallery.unlisted')}</p> : null}
     </>
   );
 }
@@ -366,7 +367,7 @@ export function SkillCover({ skill, title, small = false, big = false, playing =
     <div aria-label={title} className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center"
       style={{ background: `radial-gradient(110% 90% at 25% 0%, hsl(${hue} 70% 55% / 0.22), transparent 62%), radial-gradient(90% 80% at 100% 100%, hsl(${hue} 70% 50% / 0.12), transparent 60%), var(--bg-field)` }}>
       <span className={`flex items-center justify-center ${small ? 'h-7 w-7 rounded-[8px]' : big ? 'h-16 w-16 rounded-[14px]' : 'h-14 w-14 rounded-[14px]'}`}
-        style={{ background: `hsl(${hue} 70% 55% / 0.16)`, color: `hsl(${hue} 80% 72%)`, boxShadow: `0 0 0 1px hsl(${hue} 70% 60% / 0.28)` }}>
+        style={{ background: `hsl(${hue} 70% 55% / 0.16)`, color: `light-dark(hsl(${hue} 62% 40%), hsl(${hue} 80% 72%))`, boxShadow: `0 0 0 1px hsl(${hue} 70% 60% / 0.28)` }}>
         <Mark size={small ? 14 : big ? 28 : 24} strokeWidth={1.6} />
       </span>
       {/* a card has its title under it; the page's big picture carries it */}

@@ -32,7 +32,7 @@ import { ProjectsView, type LibraryProject } from './ProjectsView';
 import { FolderBrowserDialog, GitHubDialog } from './ProjectSources';
 import { ExamplesGallery, TitleSwitch, type ExamplePart } from './ExamplesGallery';
 import { ProjectCoverContext, posterUrl, useProjectCover } from './ProjectCover';
-import { LARGE_DIALOG_SIZE } from './dialog-chrome';
+import { LARGE_DIALOG_SIZE, LARGE_DIALOG_SURFACE } from './dialog-chrome';
 
 
 /* each card's picture: its own cover, else the film's middle frame, drawn by Studio (cached until film.html changes);
@@ -465,7 +465,7 @@ export function ProjectsPopover({
         role="dialog"
         aria-label={t('project.projects')}
         aria-modal="true"
-        className={`fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-topbar-popover)] shadow-[0_24px_64px_rgba(0,0,0,0.35)]`}
+        className={`fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden ${LARGE_DIALOG_SURFACE}`}
         onDragOver={onDragOver}
         onDrop={onDrop}
       >

@@ -24,7 +24,7 @@ export function CategoryTag({ category }: { category: Category }) {
   const t = useT();
   const Mark = CATEGORY_ICONS[category];
   return (
-    <span data-category={category} className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-[var(--bg-field)] px-1.5 text-[11px] font-medium leading-none text-[var(--text-muted)]">
+    <span data-category={category} className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[5px] bg-[var(--bg-field)] px-1.5 text-[12px] font-medium leading-none text-[var(--text-muted)]">
       <Mark size={11} strokeWidth={2} aria-hidden />{t(`assetDrawer.category_${category}`)}
     </span>
   );
@@ -45,9 +45,9 @@ function Meter({ value, mark }: { value: number; mark: 'dot' | 'bolt' }) {
 function Cell({ name, tip, children, word }: { name: string; tip: string; children: React.ReactNode; word: React.ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col items-center gap-2 px-2 py-3 text-center" title={tip}>
-      <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--text-faint)]">{name}</span>
+      <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--text-faint)]">{name}</span>
       <span className="flex h-[18px] items-center">{children}</span>
-      <span className="text-[12px] leading-[16px] text-[var(--text)]">{word}</span>
+      <span className="text-[13.5px] leading-[16px] text-[var(--text)]">{word}</span>
     </div>
   );
 }
@@ -112,8 +112,8 @@ export function ProfileStrip({ profile, uses }: { profile: Profile | undefined; 
       </div> : null}
       {audience ? (
         <div className={`${cells.length ? 'mt-px ' : ''}flex items-baseline gap-3 bg-[var(--bg-panel)] px-3.5 py-2.5`}>
-          <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--text-faint)]">{t('assetDrawer.metric_audience')}</span>
-          <span className="min-w-0 text-[12.5px] leading-[18px] text-[var(--text)]">{audience}</span>
+          <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--text-faint)]">{t('assetDrawer.metric_audience')}</span>
+          <span className="min-w-0 text-[14px] leading-[18px] text-[var(--text)]">{audience}</span>
         </div>
       ) : null}
     </div>

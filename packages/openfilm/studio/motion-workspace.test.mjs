@@ -53,7 +53,7 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
     await page.getByRole('switch', { name: 'Turn off Motion' }).waitFor();
     /* the window closed */
     await page.keyboard.press('Escape');
-    await page.locator('[data-plugins-window]').waitFor({ state: 'detached' });
+    await page.getByRole('dialog', { name: 'Plugins' }).waitFor({ state: 'detached' });
     await page.reload();
     await page.locator('[data-timeline-view-item="motion"]').click();
     const layer = page.locator('[data-motion-layer="card"]');

@@ -1,73 +1,65 @@
 /**
- * The plugins, in a window of their own over Studio: what OpenFilm can do besides the edit, turned on and off now and
- * then, apart from the library's material, which is put into the film all the time. Its head: its name, the installed
- * or Discover, a search, Import (one of the person's own, the app's way) and Close; under it the list or a page
- * (library/PluginsPane). Opened from the workbench switch's menu, the app's chat, and links to a skill (lib/plugins-window).
+ * The plugins, in a large window of their own (components/LargeDialog, as Settings is): what OpenFilm can do besides
+ * the edit, turned on and off now and then, apart from the library's material, which is put into the film all the
+ * time. Its side: a search; the installed and Discover; the categories, each showing only its own; Import (one of the
+ * person's own, the app's way) at its foot. Its page: the list or one plugin's page (library/PluginsPane). Opened from
+ * the puzzle beside the chat's "+", the OpenFilm menu, and links to a skill (lib/plugins-window).
  */
 import React from 'react';
-import { Plus, Search, X } from 'lucide-react';
+import { Compass, LayoutGrid, Plus } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
+import { CATEGORIES, type Category } from '@/lib/plugin-profile';
 import type { Plugin } from '@/lib/plugins';
-import { closePlugins, showPluginsLine, showPluginsPage, usePluginsWindow, type PluginsLine } from '@/lib/plugins-window';
-import { LARGE_DIALOG_BACKDROP } from './dialog-chrome';
+import { closePlugins, showPluginsLine, showPluginsPage, usePluginsWindow } from '@/lib/plugins-window';
+import { LargeDialog, LargeDialogGroup, LargeDialogPlace, LargeDialogSearch } from './LargeDialog';
+import { CATEGORY_ICONS } from './library/PluginProfile';
 import { PluginsPane } from './library/PluginsPane';
+
+const ICON = { size: 18, strokeWidth: 1.75 } as const;
 
 export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string | null; onWorkbenchOn?: (plugin: Plugin) => void }) {
   const t = useT();
   const { open, line, page } = usePluginsWindow();
   const [query, setQuery] = React.useState('');
-  React.useEffect(() => {
-    if (!open) return;
-    /* Esc: back from a page, else close; the window's before anything under it (a toast, the editor's selection) */
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (page) showPluginsPage(null); else closePlugins();
-    };
-    window.addEventListener('keydown', key, true);
-    return () => window.removeEventListener('keydown', key, true);
-  }, [open, page]);
+  /* one category of the installed, or all of them */
+  const [category, setCategory] = React.useState<Category | null>(null);
+  const search = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => { if (open) { setQuery(''); setCategory(null); } }, [open]);
   if (!open) return null;
   const importSkill = studioHost?.skills?.add;
+  const show = (next: { line: 'installed' | 'discover'; category?: Category }) => { setCategory(next.category ?? null); showPluginsLine(next.line); };
   return (
-    <div className={LARGE_DIALOG_BACKDROP} onPointerDown={(e) => { if (e.target === e.currentTarget) closePlugins(); }}>
-      <div role="dialog" aria-modal="true" aria-label={t('assetDrawer.pluginsWindow')} data-plugins-window=""
-        className="flex h-[84dvh] max-h-[860px] w-[92vw] max-w-[1000px] min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-panel)] shadow-[var(--shadow-lg)]">
-        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--border)] px-5">
-          <h2 className="text-[15px] font-semibold text-[var(--text)]">{t('assetDrawer.pluginsWindow')}</h2>
-          <div role="tablist" className="ml-1 flex items-center gap-1">
-            {(['installed', 'discover'] as PluginsLine[]).map((l) => (
-              <button key={l} type="button" role="tab" aria-selected={line === l} onClick={() => showPluginsLine(l)}
-                className={`h-7 rounded-full px-3 text-[12.5px] font-medium transition ${line === l ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}>
-                {t(l === 'installed' ? 'assetDrawer.skillsInstalled' : 'assetDrawer.skillsDiscover')}
-              </button>
-            ))}
-          </div>
-          <span className="flex-1" />
-          <label className="flex h-8 w-[220px] min-w-0 items-center gap-2 rounded-[8px] bg-[var(--bg-field)] px-2.5 text-[var(--text-faint)] focus-within:ring-1 focus-within:ring-[var(--accent)]">
-            <Search size={14} />
-            <input value={query} onChange={(e) => { setQuery(e.target.value); if (page) showPluginsPage(null); }}
-              placeholder={t('assetDrawer.search').replace('{what}', t('assetDrawer.pluginsWindow'))}
-              className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]" />
-          </label>
+    <LargeDialog label={t('assetDrawer.pluginsWindow')} closeLabel={t('assetDrawer.closePlugins')} onClose={closePlugins} focusFirst={search}
+      onEscape={() => { if (!page) return false; showPluginsPage(null); return true; }}
+      side={(
+        <>
+          <LargeDialogSearch ref={search} value={query} placeholder={t('assetDrawer.search').replace('{what}', t('assetDrawer.pluginsWindow'))}
+            onChange={(value) => { setQuery(value); if (page) showPluginsPage(null); }} />
+          <LargeDialogGroup title={t('assetDrawer.pluginsWindow')}>
+            <LargeDialogPlace icon={<LayoutGrid {...ICON} />} active={line === 'installed' && !category} onClick={() => show({ line: 'installed' })}>{t('assetDrawer.skillsInstalled')}</LargeDialogPlace>
+            <LargeDialogPlace icon={<Compass {...ICON} />} active={line === 'discover'} onClick={() => show({ line: 'discover' })}>{t('assetDrawer.skillsDiscover')}</LargeDialogPlace>
+          </LargeDialogGroup>
+          <LargeDialogGroup title={t('assetDrawer.pluginCategories')}>
+            {CATEGORIES.map((c) => {
+              const Mark = CATEGORY_ICONS[c];
+              return (
+                <LargeDialogPlace key={c} icon={<Mark {...ICON} />} active={line === 'installed' && category === c} onClick={() => show({ line: 'installed', category: c })}>
+                  {t(`assetDrawer.category_${c}`)}
+                </LargeDialogPlace>
+              );
+            })}
+          </LargeDialogGroup>
+          {/* one of the person's own comes in here, the app's way (a link or a folder) */}
           {importSkill ? (
-            <button type="button" onClick={importSkill}
-              className="flex h-8 shrink-0 items-center gap-1 rounded-[8px] bg-[var(--bg-field)] px-2.5 text-[12.5px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)]">
-              <Plus size={14} />{t('assetDrawer.skillImport')}
-            </button>
+            <div className="mt-auto pt-6">
+              <LargeDialogPlace icon={<Plus {...ICON} />} active={false} onClick={importSkill}>{t('assetDrawer.pluginsImport')}</LargeDialogPlace>
+            </div>
           ) : null}
-          <button type="button" onClick={closePlugins} aria-label={t('assetDrawer.closePlugins')}
-            className="-mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col pt-3">
-          <PluginsPane line={line} query={query} projectId={projectId} opened={page} onOpen={showPluginsPage}
-            {...(onWorkbenchOn ? { onWorkbenchOn } : {})} />
-        </div>
-      </div>
-    </div>
+        </>
+      )}>
+      <PluginsPane line={line} category={line === 'installed' ? category : null} query={query} projectId={projectId} opened={page} onOpen={showPluginsPage}
+        {...(onWorkbenchOn ? { onWorkbenchOn } : {})} />
+    </LargeDialog>
   );
 }

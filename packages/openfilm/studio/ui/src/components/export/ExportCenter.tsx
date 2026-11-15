@@ -63,7 +63,7 @@ import { FILM_FRAME_IDS, filmFrameBox, filmFrameRatio, type FilmFrameFill, type 
 import { cleanMoments, loadSharedMoments, MOMENTS_MAX, momentSeconds, saveMoments } from '@/lib/export-moments';
 import { MomentPicker } from './MomentPicker';
 import { RangePicker } from './RangePicker';
-import { LARGE_DIALOG, LARGE_DIALOG_BACKDROP } from '../dialog-chrome';
+import { LARGE_DIALOG, LARGE_DIALOG_BACKDROP, LARGE_DIALOG_SIDE } from '../dialog-chrome';
 
 type Dest = 'video' | 'alpha' | 'nle' | 'gif' | 'audio' | 'subtitles' | 'images' | 'project';
 type ImageOutput = 'files' | 'zip' | 'pdf' | 'pptx';
@@ -644,7 +644,7 @@ export function ExportCenter(props: ExportCenterProps) {
       >
         {/* left: destinations */}
         {/* the list scrolls when the window is short; the note under it stays whole */}
-        <nav className="flex min-h-0 w-[212px] shrink-0 flex-col border-r border-[var(--border)]">
+        <nav className={LARGE_DIALOG_SIDE}>
           <h2 className="shrink-0 px-5 pb-2 pt-4 text-[15px] font-semibold tracking-tight text-[var(--text)]">{t('exportCenter.title')}</h2>
           <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-3 pb-2">
           {DESTS.map((d) => {

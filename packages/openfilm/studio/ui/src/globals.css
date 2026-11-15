@@ -47,7 +47,9 @@
   --bg-panel: #fbfbfc;
   --bg-raised: #ffffff;
   /* Settings' sidebar */
-  --settings-nav: var(--bg-raised);
+  /* the large windows (components/dialog-chrome): their side a quiet step darker than their page */
+  --dialog-side: #f4f4f6;
+  --dialog-main: var(--bg-raised);
   /* the viewer's pane, round the picture: the panels' own white (rgb 251, 251, 252) */
   --bg-viewer: #fbfbfc;
   /* the one-pixel lines between the panes and under the top bar (the board under them showing through) */
@@ -129,7 +131,9 @@
   --bg-titlebar: #202020;
   --bg-panel: #181818;
   --bg-raised: #202020;
-  --settings-nav: rgb(32, 32, 32);
+  /* the large windows: the side the panels' color (rgb 24), the page the raised one (rgb 32) */
+  --dialog-side: var(--bg-panel);
+  --dialog-main: var(--bg-raised);
   --bg-viewer: #181818;
   --dock-line: #000000;
   --bg-field: rgba(255, 255, 255, 0.08);
