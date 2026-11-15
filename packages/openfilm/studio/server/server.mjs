@@ -75,6 +75,8 @@ import { startPluginPages } from './plugin-pages.mjs';
 import { startPluginPrograms } from './plugin-programs.mjs';
 import { createPluginServers } from './plugin-servers.mjs';
 import { communityStats, countInstall } from './community-stats.mjs';
+import { verifyPublished } from './community-publish.mjs';
+import { publishCheck } from '../../src/publish-cli.mjs';
 import { communitySources, entrySources, setCommunitySources, catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
@@ -816,6 +818,21 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         try { setCommunitySources(sources); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
       }
       return json(res, 200, { sources: communitySources() });
+    }
+    /* one of the person's own, read as the community's review will (POST: src/publish-cli.mjs publishCheck); and, once it
+       is in a repository of theirs, read there and compared, with its listing (POST `publish/verify` { repo }:
+       community-publish.mjs) */
+    if (parts[0] === 'skills' && (parts.length === 3 || (parts.length === 4 && parts[3] === 'verify')) && parts[2] === 'publish' && req.method === 'POST') {
+      const skill = await skillAt(decodeURIComponent(parts[1]));
+      if (!skill || skill.source !== 'mine') throw new HttpError(404, 'Only one of your own is published.');
+      const check = publishCheck(skill.folder);
+      if (!check) throw new HttpError(404, 'no such skill');
+      if (parts.length === 3) return json(res, 200, check);
+      const repo = (await readJson(req))?.repo;
+      if (typeof repo !== 'string') throw new HttpError(400, 'repo: the address of your repository');
+      try {
+        return json(res, 200, await verifyPublished({ name: skill.name, folder: skill.folder, version: check.version, kind: check.kind }, repo));
+      } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 502, e instanceof Error ? e.message : String(e)); }
     }
     /* a skill as a person reviews it before letting it in: its SKILL.md whole and its files (GET ?project=) */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'text' && req.method === 'GET') {

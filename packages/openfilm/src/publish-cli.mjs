@@ -17,32 +17,53 @@ import { scanFolder } from './community-scan.mjs';
 /** Where the community's index and its rules are. */
 export const COMMUNITY_REPO = 'https://github.com/openfilm/community';
 
+/**
+ * A workbench or a skill read as the community's review will read it: what it is and may do, what it lacks to be
+ * listed, what the scan finds, and whether it is ready (nothing high, nothing missing). Nothing in it is run.
+ * @param {string} folder
+ */
+export function publishCheck(folder) {
+  const skill = readSkill(folder, 'mine');
+  if (!skill) return null;
+  /** @type {string[]} */
+  const missing = [];
+  if (!skill.description) missing.push('description');
+  if (!skill.shown?.title?.en || !skill.shown?.summary?.en) missing.push('title');
+  if (!skill.version) missing.push('version');
+  if (!['LICENSE', 'LICENSE.md', 'LICENSE.txt'].some((f) => existsSync(join(folder, f)) || existsSync(join(folder, '..', '..', f)))) missing.push('license');
+  const findings = scanFolder(folder);
+  return {
+    name: skill.name, kind: isPlugin(skill) ? /** @type {const} */ ('workbench') : /** @type {const} */ ('skill'), version: skill.version ?? null,
+    network: skill.network?.domains ?? [], scripts: skill.scripts.length, program: Boolean(skill.program), element: Boolean(skill.element),
+    missing, findings, ready: !missing.length && !findings.some((f) => f.severity === 'high'),
+  };
+}
+
+const SAID = /** @type {Record<string, string>} */ ({
+  description: 'SKILL.md has no description: say when an agent uses it.',
+  title: 'openfilm.json needs a title and a summary, in English at least (five languages are best).',
+  version: 'openfilm.json needs a version (1.0.0).',
+  license: 'No licence file: the community lists open-source items only (an OSI licence).',
+});
+
 /** @param {string[]} args @param {string} run how `openfilm` is typed here @returns {Promise<{ ok: boolean, lines: string[], usage?: boolean }>} */
 export async function publishCommand(args, run) {
   const folder = resolve(args.find((a) => !a.startsWith('-')) ?? '.');
-  const skill = readSkill(folder, 'mine');
-  if (!skill) return { ok: false, usage: true, lines: [`${run} publish: ${folder} has no SKILL.md. Name the folder of a workbench or a skill.`] };
-  const kind = isPlugin(skill) ? 'workbench' : 'skill';
-  /** @type {string[]} */
-  const missing = [];
-  if (!skill.description) missing.push('SKILL.md has no description: say when an agent uses it.');
-  if (!skill.shown?.title?.en || !skill.shown?.summary?.en) missing.push('openfilm.json needs a title and a summary, in English at least (five languages are best).');
-  if (!skill.version) missing.push('openfilm.json needs a version (1.0.0).');
-  if (!['LICENSE', 'LICENSE.md', 'LICENSE.txt'].some((f) => existsSync(join(folder, f)) || existsSync(join(folder, '..', '..', f)))) missing.push('No licence file: the community lists open-source items only (an OSI licence).');
-  const findings = scanFolder(folder);
+  const check = publishCheck(folder);
+  if (!check) return { ok: false, usage: true, lines: [`${run} publish: ${folder} has no SKILL.md. Name the folder of a workbench or a skill.`] };
+  const { findings, missing } = check;
   const high = findings.filter((f) => f.severity === 'high');
   const lines = [
-    `${skill.name}: a ${kind}${skill.version ? `, ${skill.version}` : ''}.`,
-    `May reach: ${skill.network?.domains.length ? skill.network.domains.join(', ') : 'no network address'}.${skill.scripts.length ? ` Brings ${skill.scripts.length} script${skill.scripts.length === 1 ? '' : 's'}, run with the agent's access.` : ''}${skill.program ? ' Runs a program of its own.' : ''}${skill.element ? ' Runs inside the editor (reviewed by a person).' : ''}`,
+    `${check.name}: a ${check.kind}${check.version ? `, ${check.version}` : ''}.`,
+    `May reach: ${check.network.length ? check.network.join(', ') : 'no network address'}.${check.scripts ? ` Brings ${check.scripts} script${check.scripts === 1 ? '' : 's'}, run with the agent's access.` : ''}${check.program ? ' Runs a program of its own.' : ''}${check.element ? ' Runs inside the editor (reviewed by a person).' : ''}`,
   ];
-  if (missing.length) lines.push('', 'Missing:', ...missing.map((m) => `  - ${m}`));
+  if (missing.length) lines.push('', 'Missing:', ...missing.map((m) => `  - ${SAID[m]}`));
   if (findings.length) {
     lines.push('', `The scan found ${findings.length} (${high.length} high):`);
     for (const f of [...high, ...findings.filter((f) => f.severity !== 'high')]) lines.push(`  ${f.severity.padEnd(6)} ${f.rule}  ${f.file}${f.line ? `:${f.line}` : ''}  ${f.quote}`);
   }
-  const ready = !missing.length && !high.length;
-  lines.push('', ready
-    ? `Ready. Next: push it to a public GitHub repository, tag ${skill.version}, then list it in the community: ${COMMUNITY_REPO} (README, "Publish"). An AI review reads every version in full; a person decides for a new publisher, more permissions or anything high.`
+  lines.push('', check.ready
+    ? `Ready. Next: push it to a public GitHub repository, tag ${check.version}, then list it in the community: ${COMMUNITY_REPO} (README, "Publish"). OpenFilm's Community window (Publish) does the listing for you. An AI review reads every version in full; a person decides for a new publisher, more permissions or anything high.`
     : 'Not ready: fix what is above, then run this again. The review would ask for the same.');
-  return { ok: ready, lines };
+  return { ok: check.ready, lines };
 }
