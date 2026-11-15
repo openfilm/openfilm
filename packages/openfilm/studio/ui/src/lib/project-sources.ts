@@ -91,6 +91,8 @@ export type SkillEntry = {
   update?: { version: string; commit: string }; retired?: true;
   /** turned off: offered to no agent until it is turned on again */
   off?: true;
+  /** a project's own the person has not allowed in it yet: offered to no agent, nothing of it shown or run (src/skills.mjs projectSkillAllowed) */
+  waits?: true;
   /** one of OpenFilm's own, off because the plugin it goes with is off (lib/plugins): turned on, its plugin is too */
   plugin?: string;
 };
@@ -222,6 +224,15 @@ export const sourcesApi = {
   startPlugin: async (uid: string, projectId: string): Promise<string> =>
     (await call<{ url: string }>(`skills/${encodeURIComponent(uid)}/start?project=${encodeURIComponent(projectId)}`, 'POST')).url,
   /** one of Discover's installed (downloaded, at the version it shows) or uninstalled; whoever lists skills reads them again */
+  /** a skill as a person reviews it before letting it in: its SKILL.md whole and its files */
+  skillText: (uid: string, projectId?: string | null) =>
+    call<{ text: string; files: Array<{ path: string; size: number }>; more: number }>(`skills/${encodeURIComponent(uid)}/text${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`),
+  /** a project's own skill allowed in that project, as its files are now, or no longer (src/skills.mjs allowProjectSkill) */
+  allowProjectSkill: async (uid: string, projectId: string, on: boolean): Promise<void> => {
+    await call<{ on: boolean }>(`skills/${encodeURIComponent(uid)}/allow?project=${encodeURIComponent(projectId)}`, 'PUT', { on });
+    seen.skills.delete(projectId);
+    window.dispatchEvent(new Event(SKILLS_CHANGED));
+  },
   setSkillInstalled: async (uid: string, installed: boolean): Promise<void> => {
     await call<{ installed: boolean }>(`skills/${encodeURIComponent(uid)}/installed`, 'PUT', { installed });
     window.dispatchEvent(new Event(SKILLS_CHANGED));

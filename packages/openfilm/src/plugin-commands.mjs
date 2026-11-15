@@ -18,7 +18,7 @@
 import { spawn } from 'node:child_process';
 import { extname, join } from 'node:path';
 import { PLUGINS, pluginStates, pluginsDir } from './plugins.mjs';
-import { commandsIn, isPlugin, keeps, listSkills, skillsOff } from './skills.mjs';
+import { commandsIn, isPlugin, keeps, listSkills, projectSkillAllowed, skillsOff } from './skills.mjs';
 import { projectAround } from './skills-cli.mjs';
 
 /**
@@ -44,6 +44,10 @@ export function pluginCommand(words, { cwd = '.', home, plugins = pluginsDir(), 
   const plugin = having[0], commands = plugin.commands;
   const off = plugin.source === 'own' ? !pluginStates(home).find((p) => p.id === plugin.name)?.on : keeps(new Set(skillsOff(home)), plugin);
   if (off) return { status: 1, error: `The ${plugin.name} ${plugin.kind} is off: the person turns it on under Added in Community (the OpenFilm menu).` };
+  /* a project's own runs nothing until the person allows it in that project, as it is now (src/skills.mjs projectSkillAllowed) */
+  if (plugin.source === 'project' && !projectSkillAllowed(plugin, project, home)) {
+    return { status: 1, error: `The ${plugin.name} ${plugin.kind} comes with this project and is not allowed yet: the person allows it in the project, under Added in Community (the OpenFilm menu).` };
+  }
   /* one command named after the plugin: `openfilm <plugin> …` is it; else the next word says which */
   const names = Object.keys(commands);
   const whole = names.length === 1 && names[0] === plugin.name;

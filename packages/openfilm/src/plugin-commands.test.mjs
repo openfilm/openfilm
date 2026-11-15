@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { pluginCommand, runPluginCommand } from './plugin-commands.mjs';
 import { pluginsDir, setPluginOn } from './plugins.mjs';
-import { setSkillOn } from './skills.mjs';
+import { allowProjectSkill, listSkills, setSkillOn } from './skills.mjs';
 
 /** A plugin folder: a SKILL.md, a package.json with `bin`, and its files. */
 const plugin = (dir, name, bin, files = {}) => {
@@ -78,6 +78,9 @@ test('a plugin that is off runs nothing, and two of one name are told apart', ()
   const two = pluginCommand(['outline', 'list'], where);
   assert.equal(two.status, 2);
   assert.match(two.error, /^Two are named outline: say which, `openfilm project\/outline` or `openfilm local\/outline`\.$/);
+  /* a project's own runs nothing until allowed in the project (src/skills.mjs projectSkillAllowed) */
+  assert.match(pluginCommand(['project/outline', 'list'], where).error, /^The outline skill comes with this project and is not allowed yet/);
+  allowProjectSkill(listSkills({ project: where.cwd, mine: where.mine, official: where.official }).find((k) => k.uid === 'project/outline'), where.cwd, true, where.home);
   assert.equal(pluginCommand(['project/outline', 'list'], where).plugin.source, 'project');
   rmSync(root, { recursive: true, force: true });
 });

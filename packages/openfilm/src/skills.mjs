@@ -33,7 +33,7 @@ import { cp, mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { moveToTrash } from '../studio/server/trash.mjs';
 import { pictureType } from '../studio/server/cover.mjs';
 import { parseRepoUrl } from '../studio/server/fetch-repo.mjs';
@@ -511,10 +511,93 @@ export function setSkillOn(uid, on, home) {
   setSharedPref('skillsOff', [...names].sort(), home);
 }
 
-/** The skills agents get for a project: listSkills's, less any turned off. @param {Parameters<typeof listSkills>[0] & { home?: string }} [where] */
+/**
+ * A project's own skill (its `skills/`, beside film.html) comes with the project, and a project can come from anyone (a
+ * download, a shared folder, a synced repository): one could tell an agent to run the scripts beside it. So it is given
+ * to no agent, and its commands do not run, until the person allows it in that project; and the allowance holds for the
+ * skill as it was then: a changed file asks again. Kept in the shared prefs.json (`projectSkillsAllowed`), each
+ * `<uid>@<the project's folder>#<the digest of the skill's files>`.
+ */
+const PROJECT_ALLOWED = 'projectSkillsAllowed';
+/** The most of a skill's files read for its digest: more than any skill should have, enough that a huge one asks each time. */
+const DIGEST_MAX = 32 << 20;
+
+/**
+ * A skill folder's digest: every file's path, size and bytes, in path order (one too big to read whole, or a folder past
+ * DIGEST_MAX in all: a digest no allowance matches, so it is asked for again). @param {string} folder @returns {string}
+ */
+export function skillDigest(folder) {
+  const hash = createHash('sha256');
+  let total = 0;
+  /** @param {string} dir @param {string} rel */
+  const walk = (dir, rel) => {
+    for (const name of readdirSync(dir).sort()) {
+      const path = join(dir, name), at = rel ? `${rel}/${name}` : name, info = statSync(path);
+      if (info.isDirectory()) { walk(path, at); continue; }
+      if (!info.isFile()) continue;
+      total += info.size;
+      if (total > DIGEST_MAX) throw new Error('too big');
+      hash.update(`${at}\0${info.size}\0`).update(readFileSync(path));
+    }
+  };
+  try { walk(folder, ''); } catch { return `unread-${randomUUID()}`; }
+  return hash.digest('hex');
+}
+
+/**
+ * A skill's files as a person reviews them before letting it in: each path (in path order) and size, at most `max`
+ * (`more`: how many past it). @param {string} folder @param {number} [max] @returns {{ files: Array<{ path: string, size: number }>, more: number }}
+ */
+export function skillFiles(folder, max = 300) {
+  /** @type {Array<{ path: string, size: number }>} */
+  const files = [];
+  let more = 0;
+  /** @param {string} dir @param {string} rel */
+  const walk = (dir, rel) => {
+    for (const name of readdirSync(dir).sort()) {
+      const path = join(dir, name), at = rel ? `${rel}/${name}` : name, info = statSync(path);
+      if (info.isDirectory()) walk(path, at);
+      else if (info.isFile()) { if (files.length < max) files.push({ path: at, size: info.size }); else more += 1; }
+    }
+  };
+  try { walk(folder, ''); } catch { /* gone since it was listed */ }
+  return { files, more };
+}
+
+/** What a project's skill is allowed by: it, in that project, as its files are now. @param {{ uid: string, folder: string }} skill @param {string} project */
+const projectSkillKey = (skill, project) => `${skill.uid}@${resolve(project)}#${skillDigest(skill.folder)}`;
+
+/**
+ * Whether a skill may be given to agents in a project: any but a project's own; a project's own once the person allowed
+ * it there, as it is now. @param {{ uid: string, source: string, folder: string }} skill @param {string | null | undefined} project @param {string} [home]
+ */
+export function projectSkillAllowed(skill, project, home) {
+  if (skill.source !== 'project') return true;
+  if (!project) return false;
+  const kept = sharedPref(PROJECT_ALLOWED, home);
+  return Array.isArray(kept) && kept.includes(projectSkillKey(skill, project));
+}
+
+/**
+ * The person allows a project's own skill in that project, as its files are now (a former allowance of it there goes),
+ * or no longer. @param {{ uid: string, source: string, folder: string }} skill @param {string} project @param {boolean} on @param {string} [home]
+ */
+export function allowProjectSkill(skill, project, on, home) {
+  if (skill.source !== 'project') throw new Error('Only a project\'s own skill is allowed in its project.');
+  const at = `${skill.uid}@${resolve(project)}#`;
+  const kept = sharedPref(PROJECT_ALLOWED, home);
+  const keys = (Array.isArray(kept) ? kept.filter((k) => typeof k === 'string') : []).filter((k) => !k.startsWith(at));
+  if (on) keys.push(projectSkillKey(skill, project));
+  setSharedPref(PROJECT_ALLOWED, [...new Set(keys)].sort(), home);
+}
+
+/**
+ * The skills agents get for a project: listSkills's, less any turned off, and less a project's own the person has not
+ * allowed in it (projectSkillAllowed). @param {Parameters<typeof listSkills>[0] & { home?: string }} [where]
+ */
 export function usableSkills({ home, ...where } = {}) {
   const off = new Set(skillsOff(home));
-  return listSkills(where).filter((s) => !keeps(off, s));
+  return listSkills(where).filter((s) => !keeps(off, s) && projectSkillAllowed(s, where.project, home));
 }
 
 /** OpenFilm's own skills by name, in the order they are listed: how a film is written, its media, its canvas, its motion. */
@@ -654,7 +737,7 @@ export function offeredSkills({ home, ...where } = {}) {
   const usable = usableAll.filter((s) => !known(core, s));
   /* the rest a person may name in a conversation: those of a project or theirs turned off elsewhere, and Discover's not
      installed (tried before installing) */
-  const listed = listSkills(where);
+  const listed = listSkills(where).filter((s) => projectSkillAllowed(s, where.project, home));
   const rest = [...listed, ...discoverSkills().filter((s) => !known(listed, s))].filter((s) => !keeps(off, s) && !own.has(s.uid) && !known(usable, s));
   const named = agentNames([...core, ...usable, ...rest]);
   return { named, given: named.slice(0, core.length + usable.length), usable: named.slice(core.length, core.length + usable.length) };

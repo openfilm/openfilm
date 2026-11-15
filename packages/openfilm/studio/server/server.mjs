@@ -70,7 +70,7 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { commandsIn, coreSkills, elementIn, keeps, listSkills, offeredSkills, ownSkills, pluginRuns, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
+import { allowProjectSkill, skillFiles, commandsIn, coreSkills, elementIn, keeps, listSkills, offeredSkills, ownSkills, pluginRuns, projectSkillAllowed, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
 import { startPluginPages } from './plugin-pages.mjs';
 import { startPluginPrograms } from './plugin-programs.mjs';
 import { createPluginServers } from './plugin-servers.mjs';
@@ -640,7 +640,13 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const given = new Set(ownSkills().skills.map((k) => k.name));
       const agentsCall = new Map(offeredSkills({ project: project?.path ?? null }).named.map((k) => [k.uid, k.as]));
       const media = (/** @type {string} */ uid, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(uid)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
-      const all = [...coreSkills().map((k) => ({ ...k, core: true, installed: true })), ...skills.map((k) => ({ ...k, core: false, installed: true })),
+      /* a project's own the person has not allowed in it (src/skills.mjs projectSkillAllowed): listed, waiting, with
+         nothing of it shown or run (no page, element, program, tab or commands) until it is allowed */
+      const waits = (/** @type {typeof skills[number]} */ k) => k.source === 'project' && !projectSkillAllowed(k, project?.path ?? null);
+      const withheld = (/** @type {typeof skills[number]} */ k) => (waits(k)
+        ? { ...k, page: undefined, element: undefined, program: undefined, tab: undefined, blocks: undefined, commands: undefined, waits: true }
+        : k);
+      const all = [...coreSkills().map((k) => ({ ...k, core: true, installed: true })), ...skills.map((k) => ({ ...withheld(k), core: false, installed: true })),
         ...offered.map((k) => ({ ...k, core: false, installed: false }))];
       return json(res, 200, {
         catalog: catalog ? { read: catalog.read } : null,
@@ -681,6 +687,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
             const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.page }, project ?? null);
             return { surface: at.page, ...(at.project ? { files: at.project } : {}), ...(pluginWrites(k, project ?? null) ? { writes: true } : {}) };
           })() : {}),
+          /* a project's own, not allowed in it yet (`waits` above) */
+          ...('waits' in k && k.waits ? { waits: true } : {}),
           /* the person's own: where it came from (none kept: made where it is) */
           ...(k.source === 'mine' ? { origin: origins[basename(k.folder)] ?? { from: 'made' } } : {}),
           /* in Discover only, installed to be used; the person's own and a project's are theirs already */
@@ -777,6 +785,28 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       try {
         return json(res, 200, { url: await pluginPrograms.ensure({ uid: skill.uid, source: skill.source, folder: skill.folder, program }, { id: project.id, path: project.path }) });
       } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 500, e instanceof Error ? e.message : String(e)); }
+    }
+    /* a skill as a person reviews it before letting it in: its SKILL.md whole and its files (GET ?project=) */
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'text' && req.method === 'GET') {
+      const skill = await skillAt(decodeURIComponent(parts[1]));
+      if (!skill) throw new HttpError(404, 'no such skill');
+      let text = '';
+      try { text = readFileSync(join(skill.folder, 'SKILL.md'), 'utf8').slice(0, 400_000); } catch { /* none */ }
+      return json(res, 200, { text, ...skillFiles(skill.folder) });
+    }
+    /* a project's own skill allowed in that project, as its files are now, or no longer (PUT ?project= { on }):
+       src/skills.mjs allowProjectSkill */
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'allow' && req.method === 'PUT') {
+      const on = (await readJson(req))?.on;
+      if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) ?? null : null;
+      if (!project) throw new HttpError(404, 'no such project');
+      const skill = listSkills({ project: project.path }).find((k) => k.uid === decodeURIComponent(parts[1]));
+      if (!skill || skill.source !== 'project') throw new HttpError(404, 'no skill of this project by that name');
+      allowProjectSkill(skill, project.path, on);
+      if (!on) pluginPrograms.stop(skill.uid);
+      return json(res, 200, { on });
     }
     /* a skill turned on or off, by uid, for every project (PUT { on }) */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'on' && req.method === 'PUT') {

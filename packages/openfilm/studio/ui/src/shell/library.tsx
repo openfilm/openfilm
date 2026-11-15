@@ -23,6 +23,8 @@ import { fileRef, stillUrl } from '@/lib/studio-refs';
 import type { MediaListing, MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 import { LibraryDrawer, type LibraryActions } from '@/components/library/LibraryDrawer';
 import { PluginsWindow } from '@/components/PluginsWindow';
+import { openPlugins } from '@/lib/plugins-window';
+import { sourcesApi } from '@/lib/project-sources';
 import { MediaPool, type ImportProgress } from '@/components/MediaPool';
 import type { useToast } from '@/components/Toast';
 import { WorkspaceLibraryPane } from '@/components/WorkspaceLibraryPane';
@@ -158,6 +160,18 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     const onTimeline = workbench !== 'edit' && plugin.blocks === 'edit';
     showToast(t(onTimeline ? 'assetDrawer.workbenchAddedTimeline' : 'assetDrawer.workbenchAdded'), { label: t('assetDrawer.workbenchOpen'), run: () => showWorkbench(workbench) });
   }, [showToast, showWorkbench, t]);
+  /* a project that brings skills not allowed in it yet says so as it opens, once, with the way to look at them
+     (src/skills.mjs projectSkillAllowed): nothing of them reaches an agent until then */
+  React.useEffect(() => {
+    if (!projectId) return;
+    let live = true;
+    void sourcesApi.skills(projectId).then((list) => {
+      const waiting = list.filter((k) => k.waits).length;
+      if (live && waiting) showToast(t('assetDrawer.projectSkillsWaiting').replace('{n}', String(waiting)), { label: t('assetDrawer.reviewAndAllow'), run: () => openPlugins({ line: 'added' }) });
+    }, () => {});
+    return () => { live = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
   /* where the drawer writes the way out of a try when no workbench has a place for it */
   const noDismiss = React.useRef<() => boolean>(() => false);
   if (!loaded || failure) return null;

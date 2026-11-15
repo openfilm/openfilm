@@ -204,10 +204,12 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
         {busy ? <span role="status">{t('gallery.coverSaving')}</span> : null}
       </div> : null}
       {error ? <p role="alert" className="mt-2 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
+      {/* brought by the project: looked at whole before it is let in (src/skills.mjs projectSkillAllowed) */}
+      {skill.waits && projectId ? <ProjectSkillReview skill={skill} projectId={projectId} onAllowed={reload} /> : null}
       <div className="mt-4 flex items-start gap-3">
         <h2 className="min-w-0 flex-1 text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{words.title}</h2>
         {/* one of OpenFilm's own has no switch of its own: it is on while its plugin is (library/PluginsPane) */}
-        {installed && !skill.core ? <SettingsSwitch checked={!skill.off} onChange={turn} label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words.title)} /> : null}
+        {installed && !skill.core && !skill.waits ? <SettingsSwitch checked={!skill.off} onChange={turn} label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words.title)} /> : null}
       </div>
       {skill.off ? <p className="mt-1.5 text-[13.5px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', inLanguage(plugins.find((p) => p.id === skill.plugin)?.title, lang) ?? skill.plugin) : t('gallery.skillOff')}</p> : null}
       {skill.retired ? <p className="mt-1.5 text-[13.5px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
@@ -289,7 +291,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
       ) : null}
       <div className="mt-5 flex flex-col gap-2">
         {onTry ? (
-          <button type="button" onClick={() => onTry(skill)} disabled={skill.off} title={skill.off ? t('gallery.tryOff') : undefined}
+          <button type="button" onClick={() => onTry(skill)} disabled={skill.off || skill.waits} title={skill.off ? t('gallery.tryOff') : undefined}
             className="flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[14.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
         ) : null}
         {/* OpenFilm's system skills are only turned off */}
@@ -387,5 +389,75 @@ export function SkillCover({ skill, title, small = false, big = false, playing =
       {/* a card has its title under it; the page's big picture carries it */}
       {big ? <span className="line-clamp-2 text-[22px] font-semibold tracking-[-0.01em] text-[var(--text)]">{title}</span> : null}
     </div>
+  );
+}
+
+/* characters a reader cannot see, which can hide words from them and not from an agent: zero-width ones, direction
+   marks and overrides, the soft hyphen, the word joiner family, the byte-order mark */
+const HIDDEN = /[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+/* what Markdown shows nobody: an HTML comment */
+const COMMENT = /<!--[\s\S]*?-->/g;
+
+/** A skill's text as it is, with what a reader would not see marked: each hidden character named, each comment lit. */
+function Revealed({ text }: { text: string }) {
+  const parts: React.ReactNode[] = [];
+  let at = 0, n = 0;
+  const marks = [...text.matchAll(new RegExp(`${COMMENT.source}|${HIDDEN.source}`, 'g'))];
+  for (const m of marks) {
+    if (m.index > at) parts.push(text.slice(at, m.index));
+    const hidden = m[0].length === 1 && HIDDEN.test(m[0]);
+    HIDDEN.lastIndex = 0;
+    parts.push(hidden
+      ? <mark key={n++} className="rounded-[3px] bg-[var(--warn)] px-0.5 text-[11px] text-black">U+{m[0].codePointAt(0)?.toString(16).toUpperCase().padStart(4, '0')}</mark>
+      : <mark key={n++} className="rounded-[3px] bg-[color-mix(in_srgb,var(--warn)_30%,transparent)] text-[var(--text)]">{m[0]}</mark>);
+    at = m.index + m[0].length;
+  }
+  parts.push(text.slice(at));
+  return <>{parts}</>;
+}
+
+/**
+ * A skill a project brings, before it is let in: said plainly what letting it in means, its SKILL.md whole with hidden
+ * characters and comments marked, its files with scripts marked, and one button that allows it in this project as it is.
+ */
+function ProjectSkillReview({ skill, projectId, onAllowed }: { skill: SkillEntry; projectId: string; onAllowed: () => void }) {
+  const t = useT();
+  const [read, setRead] = React.useState<{ text: string; files: Array<{ path: string; size: number }>; more: number } | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => { let live = true; void sourcesApi.skillText(skill.uid, projectId).then((r) => { if (live) setRead(r); }, () => {}); return () => { live = false; }; }, [skill.uid, projectId]);
+  const hidden = read ? [...read.text.matchAll(new RegExp(`${COMMENT.source}|${HIDDEN.source}`, 'g'))].length : 0;
+  const script = (path: string) => !/\.(md|txt|json|jpe?g|png|webp|gif|svg|mp4|webm|mp3|m4a|wav)$/i.test(path);
+  const allow = () => {
+    setBusy(true);
+    void sourcesApi.allowProjectSkill(skill.uid, projectId, true).then(onAllowed, () => {}).finally(() => setBusy(false));
+  };
+  return (
+    <section className="mt-5 rounded-[12px] border border-[color-mix(in_srgb,var(--warn)_45%,transparent)] bg-[color-mix(in_srgb,var(--warn)_7%,transparent)] p-4">
+      <h3 className="text-[15px] font-semibold text-[var(--text)]">{t('gallery.projectSkillTitle')}</h3>
+      <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--text-muted)]">{t('gallery.projectSkillNote')}</p>
+      {hidden ? <p role="alert" className="mt-2 text-[14px] font-medium text-[var(--warn)]">{t('gallery.projectSkillHidden').replace('{n}', String(hidden))}</p> : null}
+      <pre className="mt-3 max-h-[320px] overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-[var(--bg-field)] p-3 font-mono text-[12.5px] leading-[19px] text-[var(--text)]">
+        {read ? <Revealed text={read.text || t('gallery.projectSkillNoText')} /> : '…'}
+      </pre>
+      {read?.files.length ? (
+        <div className="mt-3">
+          <div className="mb-1 text-[13px] text-[var(--text-faint)]">{t('gallery.projectSkillFiles')}</div>
+          <ul className="flex flex-col gap-0.5 font-mono text-[12.5px] text-[var(--text-muted)]">
+            {read.files.map((f) => (
+              <li key={f.path} className="flex items-center gap-2">
+                <span className="min-w-0 truncate">{f.path}</span>
+                {script(f.path) ? <span className="shrink-0 rounded-[4px] bg-[color-mix(in_srgb,var(--warn)_25%,transparent)] px-1 font-sans text-[11px] text-[var(--text)]">{t('gallery.projectSkillScript')}</span> : null}
+                <span className="ml-auto shrink-0 text-[var(--text-faint)]">{f.size < 1024 ? `${f.size} B` : `${Math.round(f.size / 1024)} KB`}</span>
+              </li>
+            ))}
+            {read.more ? <li className="text-[var(--text-faint)]">+{read.more}</li> : null}
+          </ul>
+        </div>
+      ) : null}
+      <button type="button" disabled={busy || !read} onClick={allow}
+        className="mt-4 flex h-10 items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] px-4 text-[14.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-50">
+        {t('gallery.projectSkillAllow')}
+      </button>
+    </section>
   );
 }

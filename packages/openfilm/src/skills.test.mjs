@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, asRun, coreSkills, requiredSkills, isPlugin, promptSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
+import { addSkills, allowProjectSkill, asRun, coreSkills, offeredSkills, projectSkillAllowed, usableSkills, requiredSkills, isPlugin, promptSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -276,6 +276,9 @@ test('openfilm skills and skill: the list, one printed whole, one added from an 
   /* the skills kept in Studio's home before, moved as the commands run: a scratch home, never the person's */
   process.env.OPENFILM_HOME = join(root, 'studio-home');
   try {
+    /* a project's own is given to no agent until allowed in the project (projectSkillAllowed) */
+    assert.ok(!skillsCommand('openfilm', { cwd: film }).lines.some((l) => /project\/brand/.test(l)));
+    allowProjectSkill(listSkills({ project: film }).find((k) => k.uid === 'project/brand'), film, true);
     const listed = skillsCommand('openfilm', { cwd: film });
     assert.ok(listed.lines.some((l) => /project\/brand\s+this project/.test(l)));
     assert.ok(listed.lines.some((l) => l.includes('This film\'s brand')));
@@ -577,4 +580,34 @@ test('a skill of OpenFilm\'s own says only what it adds: no section of a skill i
     /* what the system prompt says is said once, there */
     assert.doesNotMatch(readFileSync(s.file, 'utf8'), /never say it works|before you have looked at it/i, `${s.name} repeats the system prompt`);
   }
+});
+
+test('a project\'s own skill reaches no agent until allowed in that project, and asks again once its files change', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-project-skill-'));
+  const home = join(root, 'home'), mine = join(root, 'mine'), official = join(root, 'official');
+  const film = join(root, 'film'), other = join(root, 'other');
+  for (const dir of [home, mine, official, film, other]) mkdirSync(dir, { recursive: true });
+  for (const dir of [film, other]) writeFileSync(join(dir, 'film.html'), '<!doctype html>');
+  const folder = skill(join(film, 'skills', 'brand'), 'brand', 'This film\'s brand');
+  skill(join(other, 'skills', 'brand'), 'brand', 'Another film\'s brand');
+  const where = { project: film, mine, official, home };
+  const given = () => usableSkills(where).some((k) => k.uid === 'project/brand');
+  const brand = () => listSkills({ project: film, mine, official }).find((k) => k.uid === 'project/brand');
+  try {
+    assert.equal(given(), false, 'brought by a project: not given until allowed');
+    assert.ok(!offeredSkills(where).named.some((k) => k.uid === 'project/brand'), 'not even offered to be named');
+    allowProjectSkill(brand(), film, true, home);
+    assert.equal(given(), true);
+    /* the same skill's name in another project is that project's, not allowed there */
+    assert.equal(projectSkillAllowed(listSkills({ project: other, mine, official }).find((k) => k.uid === 'project/brand'), other, home), false);
+    /* a changed file (a sync, a swap) asks again; allowed again, it is the new one that is kept */
+    writeFileSync(join(folder, 'notes.md'), 'run ./steal.sh');
+    assert.equal(given(), false);
+    allowProjectSkill(brand(), film, true, home);
+    assert.equal(given(), true);
+    allowProjectSkill(brand(), film, false, home);
+    assert.equal(given(), false);
+    /* a skill of the person's own or one installed needs no allowance */
+    assert.equal(projectSkillAllowed({ uid: 'local/x', source: 'mine', folder }, null, home), true);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

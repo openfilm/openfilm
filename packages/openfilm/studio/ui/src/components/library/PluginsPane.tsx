@@ -202,10 +202,12 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* a skill installed (or a workbench someone made, turned as the skill it is), on its switch */
   const fromOf = (skill: SkillEntry) => (communityOf(skill) ? makerOf(skill)
     : skill.source === 'mine' ? t('assetDrawer.source_mine') : skill.source === 'project' ? t('assetDrawer.skillProject') : undefined);
+  /* a project's own not allowed yet: no switch, but the way to look at it whole and allow it (its page) */
   const skillRow = (k: SkillEntry) => (
     <PluginRow key={k.uid} mark={<SkillMark skill={k} />} title={words(k).title} note={fromOf(k)}
-      summary={k.update ? t('gallery.updateOut').replace('{version}', k.update.version) : words(k).summary} onOpen={() => open(k.uid)}
-      control={<SettingsSwitch checked={!k.off} onChange={(on) => turnSkill(k, on)} label={t(k.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(k).title)} />} />
+      summary={k.waits ? t('assetDrawer.waitsNote') : k.update ? t('gallery.updateOut').replace('{version}', k.update.version) : words(k).summary} onOpen={() => open(k.uid)}
+      control={k.waits ? <SettingsButton onClick={() => open(k.uid)}>{t('assetDrawer.reviewAndAllow')}</SettingsButton>
+        : <SettingsSwitch checked={!k.off} onChange={(on) => turnSkill(k, on)} label={t(k.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(k).title)} />} />
   );
   /* a workbench is what shows outside the conversation: OpenFilm's with a workbench or a tab of the library, anyone's with a page */
   const ownBench = (p: Plugin) => Boolean(p.workbench || p.tab);
