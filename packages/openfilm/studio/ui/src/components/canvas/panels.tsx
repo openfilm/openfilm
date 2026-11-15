@@ -1369,7 +1369,8 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             <>
               <Popover open={open === 'spec'} onOpenChange={(v) => setOpen(v ? 'spec' : null)} placement="top" align="center"
                 trigger={(
-                  <button type="button" className={PICK} onClick={() => setOpen(open === 'spec' ? null : 'spec')}>
+                  /* named as it reads, its parts apart (each part is a span of its own, which a name runs together) */
+                  <button type="button" aria-label={spec} className={PICK} onClick={() => setOpen(open === 'spec' ? null : 'spec')}>
                     {ratios ? <RatioIcon ratio={ratio} /> : null}
                     <span className="truncate">{spec.split(' · ').map((part, i) => <React.Fragment key={i}>{i ? <span className="px-1 text-[var(--cv-ink-3)]">·</span> : null}{part}</React.Fragment>)}</span>
                     <ChevronDown size={14} className="shrink-0 text-[var(--cv-ink-2)]" />
