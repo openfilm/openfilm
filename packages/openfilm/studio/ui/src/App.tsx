@@ -33,8 +33,11 @@ export function App() {
 
   /* the examples and skills, read as Studio opens: a gallery opened later shows them at once */
   useEffect(() => { sourcesApi.preload(); }, []);
-  /* The launcher is usable first. Warm the optional board's code without opening any project's canvas. */
-  useEffect(() => afterPaintIdle(() => { void loadCanvas().catch(() => {}); }), []);
+  const id = projectIn(path);
+  /* The launcher is usable first. Without a project, warm the board's code for the examples' canvas previews; a
+     project's page warms its canvas itself (shell/workbenches), after the edit has loaded. */
+  const home = id == null;
+  useEffect(() => (home ? afterPaintIdle(() => { void loadCanvas().catch(() => {}); }) : undefined), [home]);
 
   useEffect(() => {
     const onPop = () => setPath(location.pathname);
@@ -47,7 +50,6 @@ export function App() {
     return () => { window.removeEventListener('popstate', onPop); stop(); };
   }, []);
 
-  const id = projectIn(path);
   /* no project in the address: the one opened last that is still there, else the Projects window (`none`); with
      tabs, the projects (no tab is open) */
   const [none, setNone] = useState(false);
