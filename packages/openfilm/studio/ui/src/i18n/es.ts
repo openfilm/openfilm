@@ -2158,6 +2158,7 @@ export const es: Words = {
       purple: "Morado",
     },
     trackHeight: "Altura de la pista",
+    waveformRatio: "Proporción de la onda",
     allTracksHeight: "Altura de todas las pistas",
     size: {
       small: "Pequeña",

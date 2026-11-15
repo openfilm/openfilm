@@ -22,6 +22,25 @@ test('settings are read field by field: what is not one is left out', () => {
   assert.deepEqual(parseProjectSettings(null), {});
 });
 
+test('waveform proportions accept only their presets and keep the other settings', async () => {
+  assert.deepEqual(parseProjectSettings({ trackWaveforms: [
+    { ratio: 60, index: 1, clips: ['a', 3] }, { ratio: 45, index: 0 }, { ratio: '30', index: 0 },
+    { ratio: 90, index: -1 }, { ratio: 30, index: 2 }, { ratio: 100, index: 3 },
+  ] }), { trackWaveforms: [{ ratio: 60, index: 1, clips: ['a'] }, { ratio: 30, index: 2, clips: [] }] });
+  const root = folder();
+  try {
+    await patchProjectSettings(root, { fps: 25, trackHeights: [{ height: 96, index: 0, clips: ['shot'] }] });
+    const trackWaveforms = [{ ratio: 90, index: 0, clips: ['shot'] }];
+    await patchProjectSettings(root, { trackWaveforms });
+    assert.deepEqual((await readProjectSettings(root)).trackWaveforms, trackWaveforms);
+    await assert.rejects(patchProjectSettings(root, { trackWaveforms: 'large' }), /trackWaveforms: a list/);
+    assert.deepEqual((await readProjectSettings(root)).trackWaveforms, trackWaveforms, 'a refused patch leaves the saved choice intact');
+    assert.deepEqual(await patchProjectSettings(root, { trackWaveforms: null }), { fps: 25, trackHeights: [{ height: 96, index: 0, clips: ['shot'] }] });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('a project keeps its settings in .film/settings.json; null takes one away', async () => {
   const root = folder();
   try {

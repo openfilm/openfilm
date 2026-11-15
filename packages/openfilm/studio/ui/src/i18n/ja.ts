@@ -2158,6 +2158,7 @@ export const ja: Words = {
       purple: "紫",
     },
     trackHeight: "トラックの高さ",
+    waveformRatio: "波形の割合",
     allTracksHeight: "すべてのトラックの高さ",
     size: {
       small: "小",

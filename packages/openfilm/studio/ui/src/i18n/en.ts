@@ -2159,6 +2159,7 @@ export const en = {
       purple: "Purple",
     },
     trackHeight: "Track height",
+    waveformRatio: "Waveform proportion",
     allTracksHeight: "Height of all tracks",
     size: {
       small: "Small",

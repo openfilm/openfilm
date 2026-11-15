@@ -2159,6 +2159,7 @@ export const zhCN: Words = {
       purple: "紫色",
     },
     trackHeight: "轨道高度",
+    waveformRatio: "波形占比",
     allTracksHeight: "所有轨道的高度",
     size: {
       small: "小",

@@ -10,6 +10,7 @@
  *                gives a track no id, so a moved track is found by them; see the editor's lib/timeline-nav.ts).
  *   trackHeights how tall tracks are drawn on the timeline, px, each with the clips its track had then (as trackNames;
  *                see the editor's lib/track-heights.ts).
+ *   trackWaveforms the share of a video's content area given to its sound: 30, 60 or 90 percent, kept with its clips.
  *
  *   motionBlur   temporal sampling for Studio video exports.
  *
@@ -29,8 +30,9 @@ export const FRAME_RATES = /** @type {const} */ ([23.976, 24, 25, 29.97, 30, 48,
 
 /** @typedef {{ name: string, index: number, clips: string[] }} TrackName */
 /** @typedef {{ height: number, index: number, clips: string[] }} TrackHeight */
+/** @typedef {{ ratio: 30 | 60 | 90, index: number, clips: string[] }} TrackWaveform */
 /** @typedef {{ enabled: boolean, samples: number, shutter: number }} MotionBlur */
-/** @typedef {{ fps?: number, trackNames?: TrackName[], trackHeights?: TrackHeight[], motionBlur?: MotionBlur }} ProjectSettings */
+/** @typedef {{ fps?: number, trackNames?: TrackName[], trackHeights?: TrackHeight[], trackWaveforms?: TrackWaveform[], motionBlur?: MotionBlur }} ProjectSettings */
 
 /** The heights a track can be drawn at, px (the editor's lib/track-heights.ts). */
 const TRACK_MIN_H = 28;
@@ -71,6 +73,14 @@ function trackHeightOf(v) {
   return { height, index: Number(v.index), clips: /** @type {string[]} */ (clips) };
 }
 
+/** One track's waveform proportion, checked. @param {unknown} v @returns {TrackWaveform | null} */
+function trackWaveformOf(v) {
+  if (!isRecord(v) || (v.ratio !== 30 && v.ratio !== 60 && v.ratio !== 90)) return null;
+  if (!(Number.isInteger(v.index) && Number(v.index) >= 0)) return null;
+  const clips = Array.isArray(v.clips) ? v.clips.filter((c) => typeof c === 'string' && c).slice(0, 500) : [];
+  return { ratio: v.ratio, index: Number(v.index), clips: /** @type {string[]} */ (clips) };
+}
+
 /** The settings as kept: what is not a setting, or not a good one, is left out. @param {unknown} raw @returns {ProjectSettings} */
 export function parseProjectSettings(raw) {
   if (!isRecord(raw)) return {};
@@ -87,6 +97,10 @@ export function parseProjectSettings(raw) {
   if (Array.isArray(raw.trackHeights)) {
     const heights = raw.trackHeights.map(trackHeightOf).filter((h) => h != null).slice(0, 200);
     if (heights.length) out.trackHeights = /** @type {TrackHeight[]} */ (heights);
+  }
+  if (Array.isArray(raw.trackWaveforms)) {
+    const waveforms = raw.trackWaveforms.map(trackWaveformOf).filter((w) => w != null).slice(0, 200);
+    if (waveforms.length) out.trackWaveforms = /** @type {TrackWaveform[]} */ (waveforms);
   }
   return out;
 }
@@ -121,6 +135,11 @@ export async function patchProjectSettings(root, patch) {
     else if (!Array.isArray(patch.trackHeights)) throw new HttpError(400, 'trackHeights: a list of { height, index, clips }');
     else next.trackHeights = patch.trackHeights;
   }
+  if ('trackWaveforms' in patch) {
+    if (patch.trackWaveforms === null) delete next.trackWaveforms;
+    else if (!Array.isArray(patch.trackWaveforms)) throw new HttpError(400, 'trackWaveforms: a list of { ratio, index, clips }');
+    else next.trackWaveforms = patch.trackWaveforms;
+  }
   if ('motionBlur' in patch) {
     if (patch.motionBlur === null) delete next.motionBlur;
     else {
@@ -144,7 +163,7 @@ export async function projectSettingsRoute(req, res, root, rest) {
   if (req.method === 'GET') { json(res, 200, { settings: await readProjectSettings(root) }); return true; }
   if (req.method === 'PATCH') {
     const body = await readJson(req);
-    if (!isRecord(body)) throw new HttpError(400, 'which settings? { fps?, trackNames?, trackHeights?, motionBlur? }');
+    if (!isRecord(body)) throw new HttpError(400, 'which settings? { fps?, trackNames?, trackHeights?, trackWaveforms?, motionBlur? }');
     json(res, 200, { settings: await patchProjectSettings(root, body) });
     return true;
   }
