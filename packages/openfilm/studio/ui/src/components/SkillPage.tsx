@@ -126,6 +126,16 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
   const [removing, setRemoving] = React.useState(false);
   /* one made by someone else that brings scripts: asked before it is installed */
   const consent = useScriptsConsent();
+  /* a newer version that brings more (scripts, hosts, a page, a program): asked before it is taken */
+  const [growing, setGrowing] = React.useState(false);
+  const adds = skill.update?.adds;
+  const addsText = adds ? [
+    adds.scripts ? t('gallery.addsScripts').replace('{n}', String(adds.scripts)) : null,
+    adds.network?.length ? t('gallery.addsNetwork').replace('{hosts}', adds.network.join(', ')) : null,
+    adds.page ? t('gallery.addsPage') : null,
+    adds.program ? t('gallery.addsProgram') : null,
+    adds.element ? t('gallery.addsElement') : null,
+  ].filter(Boolean).join(' ') : '';
   const coverInput = React.useRef<HTMLInputElement>(null);
 
   const patch = (change: (k: SkillEntry) => SkillEntry) => setSkills((list) => list.map((k) => (k.uid === skill.uid ? change(k) : k)));
@@ -323,7 +333,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
         ) : null}
         {/* OpenFilm's system skills are only turned off */}
         {skill.update && installed ? (
-          <button type="button" onClick={update} disabled={working !== null}
+          <button type="button" onClick={() => (skill.update?.adds ? setGrowing(true) : update())} disabled={working !== null}
             className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border-strong)] text-[14.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50">
             <RefreshCw size={14} />{working === 'updating' ? t('gallery.updating') : t('gallery.update').replace('{version}', skill.update.version)}</button>
         ) : null}
@@ -340,6 +350,9 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
         )}
       </div>
       {consent.dialog}
+      <ConfirmDialog open={growing} title={t('gallery.addsTitle').replace('{version}', skill.update?.version ?? '')}
+        description={`${addsText} ${t('gallery.addsNote')}`} confirmLabel={t('gallery.addsGo')}
+        onCancel={() => setGrowing(false)} onConfirm={() => { setGrowing(false); update(); }} />
       <ConfirmDialog open={removing} danger
         title={t('gallery.removeTitle').replace('{name}', words.title)}
         description={t('gallery.removeHint')} confirmLabel={t('gallery.remove')}

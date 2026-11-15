@@ -88,7 +88,7 @@ export type SkillEntry = {
   /** one of Discover's: installed to be used (the person's own and a project's are installed already) */
   installed?: boolean;
   /** an installed one of Discover's: a newer version there, or no longer there at all (it still works here) */
-  update?: { version: string; commit: string }; retired?: true;
+  update?: { version: string; commit: string; adds?: { scripts?: number; network?: string[]; page?: true; program?: true; element?: true } }; retired?: true;
   /** turned off: offered to no agent until it is turned on again */
   off?: true;
   /** the hosts its page may reach (openfilm.json `permissions.network`), and why; none: it reaches none */

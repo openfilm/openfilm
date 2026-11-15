@@ -257,9 +257,28 @@ export function catalogSkills(catalog = readCatalog()) {
 }
 
 /**
- * How each installed skill stands against the index, by uid: a newer commit there (`update`), or none at all
- * (`retired`). Nothing is said before the index was ever read. @param {Catalog | null} [catalog]
- * @returns {Map<string, { update?: { version: string, commit: string }, retired?: true }>}
+ * What a newer version brings that the installed one did not: more scripts, hosts its page may reach, a page, a
+ * program, an element in the editor. Said before the update, so more is never taken without asking (none: nothing more).
+ * @param {import('../../src/skills.mjs').Skill} now @param {import('../../src/skills.mjs').Skill | null} next
+ * @returns {{ scripts?: number, network?: string[], page?: true, program?: true, element?: true } | undefined}
+ */
+export function updateAdds(now, next) {
+  if (!next) return undefined;
+  const hosts = (next.network?.domains ?? []).filter((d) => !(now.network?.domains ?? []).includes(d));
+  const adds = {
+    ...(next.scripts.length > now.scripts.length ? { scripts: next.scripts.length - now.scripts.length } : {}),
+    ...(hosts.length ? { network: hosts } : {}),
+    ...(next.page && !now.page ? { page: /** @type {const} */ (true) } : {}),
+    ...(next.program && !now.program ? { program: /** @type {const} */ (true) } : {}),
+    ...(next.element && !now.element ? { element: /** @type {const} */ (true) } : {}),
+  };
+  return Object.keys(adds).length ? adds : undefined;
+}
+
+/**
+ * How each installed skill stands against the index, by uid: a newer commit there (`update`, with what it brings
+ * more: updateAdds), or none at all (`retired`). Nothing is said before the index was ever read. @param {Catalog | null} [catalog]
+ * @returns {Map<string, { update?: { version: string, commit: string, adds?: ReturnType<typeof updateAdds> }, retired?: true }>}
  */
 export function installedStanding(catalog = readCatalog()) {
   const out = new Map();
@@ -270,7 +289,10 @@ export function installedStanding(catalog = readCatalog()) {
     if (!source) continue;
     const entry = offered.get(skill.uid);
     if (!entry) out.set(skill.uid, { retired: true });
-    else if (entry.commit !== source.commit) out.set(skill.uid, { update: { version: entry.version, commit: entry.commit } });
+    else if (entry.commit !== source.commit) {
+      const adds = updateAdds(skill, readSkill(catalogFolder(entry), 'official'));
+      out.set(skill.uid, { update: { version: entry.version, commit: entry.commit, ...(adds ? { adds } : {}) } });
+    }
   }
   return out;
 }

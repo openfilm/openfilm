@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { revokedNow, findSkill, listSkills, offeredSkills, usableSkills } from '../../src/skills.mjs';
-import { catalogSkills, installSkill, installedStanding, manifestFiles, readCatalog, readDiscover, refreshCatalog, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
+import { updateAdds, catalogSkills, installSkill, installedStanding, manifestFiles, readCatalog, readDiscover, refreshCatalog, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 
 /** A fake GitHub: its API lists a folder's files at a commit, its raw host sends each. `repos[commit]` → { path: text } */
 async function github(/** @type {Record<string, Record<string, string>>} */ commits) {
@@ -192,4 +192,12 @@ test('the index\'s revoked list is kept as read, so a withdrawal holds offline, 
   writeFileSync(join(root, 'index.json'), JSON.stringify({ version: 1, skills: [] }));
   await refreshCatalog();
   assert.deepEqual(revokedNow(), []);
+});
+
+test('an update says what more it would take: scripts, hosts, a page, a program, an element; nothing when it takes no more', () => {
+  const base = { uid: 'a/b', name: 'b', description: '', folder: '', source: 'official', file: '', scripts: ['scripts/a.mjs'] };
+  assert.equal(updateAdds(/** @type {any} */ (base), /** @type {any} */ ({ ...base })), undefined);
+  assert.deepEqual(updateAdds(/** @type {any} */ ({ ...base, network: { domains: ['a.com'] } }),
+    /** @type {any} */ ({ ...base, scripts: ['scripts/a.mjs', 'scripts/b.mjs'], network: { domains: ['a.com', 'b.com'] }, page: 'index.html', program: 'start' })),
+    { scripts: 1, network: ['b.com'], page: true, program: true });
 });
