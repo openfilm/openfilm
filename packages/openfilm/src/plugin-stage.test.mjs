@@ -215,6 +215,18 @@ export function shot({ pass = 'beauty' } = {}) {
   assert.deepEqual(shots[0].problems.camera, []);
 });
 
+test('stage models lists the models that come with the stage, and copies the ones named into the project', () => {
+  const list = stage('models');
+  assert.equal(list.status, 0);
+  assert.match(list.stdout, /^actor /m);
+  assert.match(list.stdout, /furniture {2}.*\bchair\b.*\btableRound\b/);
+  const copied = stage('models', 'actor', 'chair');
+  assert.equal(copied.status, 0, copied.stderr);
+  for (const f of ['actor.glb', 'chair.glb']) assert.ok(existsSync(join(project, 'assets/models', f)), f);
+  assert.match(stage('models', 'chair').stdout, /is there already/);
+  assert.equal(stage('models', 'spaceship').status, 2);
+});
+
 test('stage render draws a shot, or a stretch of it, as a video beside it', () => {
   const rendered = stage('render', 's1', '0-1', '--fps', '12');
   assert.equal(rendered.status, 0, rendered.stderr);

@@ -7,6 +7,7 @@
     "new": "new.mjs",
     "render": "render.mjs",
     "look": "look.mjs",
-    "blend": "blend.mjs"
+    "blend": "blend.mjs",
+    "models": "models.mjs"
   }
 }

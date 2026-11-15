@@ -65,7 +65,41 @@ const at = (fig, name, local) => {
 };
 /* the 18 points, in OpenPose's order: nose, neck, right shoulder, elbow, wrist, left shoulder, elbow, wrist, right
    hip, knee, ankle, left hip, knee, ankle, right eye, left eye, right ear, left ear */
+/* a rigged character's joints, by the names rigs give them (Rigify's DEF-upper_arm.L, after three.js drops the dot;
+   other rigs' LeftArm): side 'l' or 'r' */
+const BONES = {
+  arm: (x) => [new RegExp('upper_?arm[._-]?' + x + '$'), new RegExp((x === 'l' ? 'left' : 'right') + 'arm$')],
+  fore: (x) => [new RegExp('fore_?arm[._-]?' + x + '$'), new RegExp((x === 'l' ? 'left' : 'right') + 'forearm$')],
+  hand: (x) => [new RegExp('hand[._-]?' + x + '$'), new RegExp((x === 'l' ? 'left' : 'right') + 'hand$')],
+  thigh: (x) => [new RegExp('thigh[._-]?' + x + '$'), new RegExp((x === 'l' ? 'left' : 'right') + 'upleg$')],
+  shin: (x) => [new RegExp('(shin|calf)[._-]?' + x + '$'), new RegExp((x === 'l' ? 'left' : 'right') + 'leg$')],
+  foot: (x) => [new RegExp('foot[._-]?' + x + '$'), new RegExp((x === 'l' ? 'left' : 'right') + 'foot$')],
+};
+const boneOf = (fig, tests) => {
+  let found = null;
+  fig.traverse((o) => { if (!found && o.isBone && tests.some((r) => r.test(o.name.toLowerCase()))) found = o; });
+  return found;
+};
+const rigged = (fig) => {
+  const at = (o) => (o ? o.getWorldPosition(o.position.clone()) : null);
+  const head = boneOf(fig, [/head$/]);
+  const p = new Array(18).fill(null);
+  [[2, 'arm', 'r'], [3, 'fore', 'r'], [4, 'hand', 'r'], [5, 'arm', 'l'], [6, 'fore', 'l'], [7, 'hand', 'l'],
+    [8, 'thigh', 'r'], [9, 'shin', 'r'], [10, 'foot', 'r'], [11, 'thigh', 'l'], [12, 'shin', 'l'], [13, 'foot', 'l']]
+    .forEach(([i, part, side]) => { p[i] = at(boneOf(fig, BONES[part](side))); });
+  if (head) {
+    /* the face from the head joint: the head's way forward is the figure's, up is up */
+    const base = at(head);
+    const q = fig.getWorldQuaternion(fig.quaternion.clone());
+    const ahead = base.clone().set(0, 0, 1).applyQuaternion(q), right = base.clone().set(-1, 0, 0).applyQuaternion(q);
+    const face = (up, fwd, side) => base.clone().add(base.clone().set(0, up, 0)).addScaledVector(ahead, fwd).addScaledVector(right, side);
+    p[0] = face(0.1, 0.11, 0); p[14] = face(0.13, 0.09, 0.04); p[15] = face(0.13, 0.09, -0.04); p[16] = face(0.11, 0, 0.09); p[17] = face(0.11, 0, -0.09);
+  }
+  if (p[2] && p[5]) p[1] = p[2].clone().add(p[5]).multiplyScalar(0.5);
+  return p;
+};
 const points = (fig) => {
+  if (!fig.getObjectByName(fig.name + '-pelvis')) return rigged(fig);
   const p = [
     at(fig, 'nose'), null,
     at(fig, 'right-arm-joint'), at(fig, 'right-forearm-joint'), at(fig, 'right-forearm-joint', [0, -0.27, 0]),
