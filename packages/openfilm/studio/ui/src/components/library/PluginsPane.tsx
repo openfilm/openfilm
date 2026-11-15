@@ -17,13 +17,14 @@
  */
 import React from 'react';
 import {
-  ArrowLeft, ArrowUpRight, AudioLines, Box, Check, ChevronRight, Clapperboard, Cloud, Film, FolderOpen, Images, Languages, Layers, Loader2, Megaphone, Mic,
+  ArrowLeft, ArrowUpRight, AudioLines, Box, Check, Clapperboard, Cloud, Film, FolderOpen, Images, Languages, Layers, Loader2, Megaphone, Mic,
   Globe, Music, Music2, Palette, Projector, Puzzle, RefreshCw, Scissors, Send, Spline, SquareTerminal, Star, Upload, Workflow, Github, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
 import { setPluginOn, usePlugins, type Plugin } from '@/lib/plugins';
-import { showPluginsLine, type PluginsLine } from '@/lib/plugins-window';
+import { closePlugins, FIRST_LINE, showPluginsLine, type PluginsLine } from '@/lib/plugins-window';
+import { revealInLibrary } from '@/lib/library-reveal';
 import { isPlugin, pluginOfSkill } from '@/lib/project-plugins';
 import { communityOf, fetchErrorKey, forgetSeenSkills, makerOf, ownerOf, seenCatalog, seenSkills, sourcesApi, SourceError, watchSkills, type PublishCheck, type PublishVerify, type SkillEntry } from '@/lib/project-sources';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -35,7 +36,7 @@ import { ProfileStrip } from './PluginProfile';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { COMMUNITY_ICON, FEATURE_KINDS, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
-import { libraryUrl, nameOf, posterUrl, TEXT_COMPONENT, toggleFavorite, useLibraryFavorites, useLibraryIndex, type LibraryCategory, type LibraryItem } from '@/lib/library';
+import { libraryUrl, nameOf, posterUrl, previewUrl, templatePreviewUrl, TEXT_COMPONENT, toggleFavorite, useLibraryFavorites, useLibraryIndex, type LibraryCategory, type LibraryItem } from '@/lib/library';
 import { isClipMotion } from '@/lib/clip-presets';
 import { PLAIN } from './OnPicture';
 import { TextStyleSample } from './TextStyleSample';
@@ -120,7 +121,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const [discover, setDiscover] = React.useState<'reading' | 'read' | 'failed' | 'partial'>(() => (seenCatalog() ? discoverFailed ?? 'read' : 'reading'));
   const [retry, setRetry] = React.useState(0);
   React.useEffect(() => {
-    if (line !== 'discover' && !line.startsWith('kind:')) return;
+    if (!line.startsWith('kind:')) return;
     let live = true;
     const request = ++discoverRequest;
     setDiscover(seenCatalog() ? 'read' : 'reading');
@@ -203,6 +204,13 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       </div>
     );
   }
+  /* one of the library's things: its page, with it shown as it is (`asset:<id>`) */
+  const assetPage = opened?.startsWith(ASSET_PAGE) ? library?.items.find((it) => it.id === opened.slice(ASSET_PAGE.length)) : undefined;
+  if (assetPage) {
+    return <AssetPage item={assetPage} lang={lang} starred={kept.has(assetPage.id)} onBack={() => open(null)}
+      onUse={() => { closePlugins(); revealInLibrary(assetPage.cat); }}
+      {...(assetPage.by ? { onAuthor: () => showPluginsLine(`author:${(assetPage.by ?? '').toLowerCase()}`) } : {})} />;
+  }
   /* in the film's order (the category each says it is in), else as they were */
   const inOrder = <T,>(list: T[], categoryOf: (item: T) => Category) => list
     .map((item, i) => ({ item, i, c: CATEGORIES.indexOf(categoryOf(item)) })).sort((x, y) => x.c - y.c || x.i - y.i).map((x) => x.item);
@@ -270,7 +278,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
             ))}
           </SettingsGroup>
         ))}
-        {nothing ? <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.addedNone')} action={q ? undefined : { label: t('assetDrawer.place_discover'), run: () => showPluginsLine('discover') }} /> : null}
+        {nothing ? <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.addedNone')} action={q ? undefined : { label: t('assetDrawer.place_discover'), run: () => showPluginsLine(FIRST_LINE) }} /> : null}
         {/* where Discover reads from: the OpenFilm Community, and others the person added (rarely: kept out of the side) */}
         {!q ? (
           <p className="mt-10 flex flex-wrap items-center gap-x-2 text-[13.5px] text-[var(--text-faint)]">
@@ -335,7 +343,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     key: it.id, kind: it.cat, title: nameOf(it.name, lang), summary: lang === 'en' ? (it.tags ?? []).slice(0, 4).join(t('assetDrawer.listSep')) : '',
     note: it.by ?? t('assetDrawer.skillsOfficial'), ...(it.by ? {} : { trust: officialMark }),
     ...(it.by ? { author: it.by.toLowerCase(), onAuthor: () => showPluginsLine(`author:${(it.by ?? '').toLowerCase()}`) } : {}),
-    cover: <AssetCover item={it} lang={lang} />,
+    cover: <AssetCover item={it} lang={lang} />, onOpen: () => open(`${ASSET_PAGE}${it.id}`),
     starred: kept.has(it.id), onStar: () => toggleFavorite(it.id),
     action: doneMark(t('assetDrawer.inLibrary')),
   });
@@ -393,67 +401,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
             <div className={STORE_GRID}>{cards.filter((c) => c.kind === kind).map((item) => <StoreCard key={item.key} item={item} />)}</div>
           </section>
         ))}
-        {kinds.length ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.favoritesNone')} action={q ? undefined : { label: t('assetDrawer.place_discover'), run: () => showPluginsLine('discover') }} />}
-      </PluginsPage>
-    );
-  }
-
-  if (line === 'discover') {
-    /* the one shown big: OpenFilm's newest skill with a moving preview, else its first workbench */
-    const hero = offered.find((k) => k.preview && !isPlugin(k) && !communityOf(k)) ?? offered.find((k) => k.cover);
-    const heroItem = hero ? skillCard(hero) : storeOf('workbenches')[0];
-    const shelves = FEATURE_KINDS.map((kind) => ({ kind, items: storeOf(kind) })).filter((x) => x.items.length);
-    return (
-      <PluginsPage title={t('assetDrawer.place_discover')} note={t('assetDrawer.note_discoverHome')} badge={t('assetDrawer.communityEarly')}>
-        {consent.dialog}
-        {status}
-        {/* in early testing: OpenFilm's own first, opened to everyone's work step by step */}
-        {!q ? <p className="mb-8 rounded-[10px] bg-[var(--bg-field)] px-4 py-3 text-[14px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.earlyNote')}</p> : null}
-        {heroItem && !q ? <Hero item={heroItem} preview={hero?.preview} poster={hero?.cover} label={t('assetDrawer.featuredLabel')} /> : null}
-        {/* every kind at a glance, as a store's departments: the open list, with how many each has */}
-        {!q ? (
-          <section className="mb-10">
-            <h3 className="mb-3 text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('assetDrawer.byKind')}</h3>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5">
-              {FEATURE_KINDS.map((kind) => {
-                /* what is there now: the coming ones are not counted */
-                const n = storeOf(kind).filter((x) => !x.key.startsWith('soon:')).length;
-                return (
-                  <button key={kind} type="button" onClick={() => showPluginsLine(`kind:${kind}`)}
-                    className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] px-3.5 py-3 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]">
-                    <span className="text-[var(--text-muted)]"><KindIcon kind={kind} size={20} /></span>
-                    <span className="min-w-0 flex-1 truncate text-[14.5px] text-[var(--text)]">{kindName(kind)}</span>
-                    <span className="shrink-0 text-[12.5px] tabular-nums text-[var(--text-faint)]">{n ? n.toLocaleString() : ''}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
-        {shelves.map(({ kind, items }) => (
-          <StoreShelf key={kind} title={kindName(kind)} more={t('assetDrawer.seeAll')} onMore={() => showPluginsLine(`kind:${kind}`)}>
-            {items.slice(0, 3).map((item) => <StoreCard key={item.key} item={item} />)}
-          </StoreShelf>
-        ))}
-      </PluginsPage>
-    );
-  }
-
-  /* one kind of the catalog: all of it, cards; none yet: said, with the way to publish one */
-  /* a maker's page: all they made, and how many use it */
-  if (line.startsWith('author:')) {
-    const owner = line.slice('author:'.length).toLowerCase();
-    const theirs = FEATURE_KINDS.flatMap(storeOf).filter((x) => x.author?.toLowerCase() === owner);
-    const total = theirs.reduce((n, x) => n + (x.installs ?? 0), 0);
-    return (
-      <PluginsPage title={owner === 'openfilm' ? t('assetDrawer.skillsOfficial') : owner}
-        note={`${t('assetDrawer.note_author').replace('{n}', String(theirs.length))}${total ? ` ${t('assetDrawer.installs').replace('{n}', total.toLocaleString())}.` : ''}`}>
-        {consent.dialog}
-        {status}
-        <a href={`https://github.com/${owner}`} target="_blank" rel="noreferrer" className="mb-6 inline-flex items-center gap-1.5 text-[14px] text-[var(--text-muted)] underline-offset-2 hover:text-[var(--text)] hover:underline">
-          github.com/{owner}<ArrowUpRight size={14} aria-hidden />
-        </a>
-        {theirs.length ? <div className={STORE_GRID}>{theirs.map((item) => <StoreCard key={item.key} item={item} />)}</div> : <Empty text={t('assetDrawer.noSkillsFound')} />}
+        {kinds.length ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.favoritesNone')} action={q ? undefined : { label: t('assetDrawer.place_discover'), run: () => showPluginsLine(FIRST_LINE) }} />}
       </PluginsPage>
     );
   }
@@ -690,8 +638,100 @@ const SOON: ReadonlyArray<{ id: string; kind: FeatureKind; hue: number; icon: Lu
 
 
 const STORE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4';
+/** The page of one of the library's things: `asset:` and its id. */
+const ASSET_PAGE = 'asset:';
 /** How many cards of a kind are shown at once; more on asking. */
 const STORE_PAGE = 48;
+
+/**
+ * One of the library's things on its page: shown as it is used (a moving one plays; a look on its picture beside the
+ * picture as it was; a text style in words; a sound or music to listen to), whose it is, and where it is used (the
+ * library's tab of its kind, opened from here), with its star.
+ */
+function AssetPage({ item, lang, starred, onBack, onUse, onAuthor }: {
+  item: LibraryItem; lang: ReturnType<typeof useLanguage>; starred: boolean; onBack: () => void; onUse: () => void; onAuthor?: () => void;
+}) {
+  const t = useT();
+  const kindName = t(`assetDrawer.cat_${item.cat}`);
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-9">
+      <div className="mx-auto w-full max-w-[920px]">
+        <button type="button" onClick={onBack} className="-ml-1 mb-5 flex h-8 items-center gap-1.5 rounded-md pl-1.5 pr-2.5 text-[14px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+          <ArrowLeft size={14} />{t('gallery.back')}
+        </button>
+        {/* no larger than its pictures bear (the library's previews are small) */}
+        <div className="max-w-[640px]"><AssetShow item={item} lang={lang} /></div>
+        <div className="mt-6 flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <h2 className="truncate text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{nameOf(item.name, lang)}</h2>
+              {item.by ? null : <span className="inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[11.5px] font-medium text-[var(--accent)]" style={{ background: 'color-mix(in srgb, var(--accent) 14%, transparent)' }}>{t('gallery.trustOfficial')}</span>}
+            </div>
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-[14px] text-[var(--text-muted)]">
+              {item.by && onAuthor
+                ? <button type="button" onClick={onAuthor} className="underline-offset-2 hover:text-[var(--text)] hover:underline">{item.by}</button>
+                : <span>{item.by ?? t('assetDrawer.skillsOfficial')}</span>}
+              <span aria-hidden>·</span>
+              <span className="inline-flex items-center gap-1.5"><KindIcon kind={item.cat} size={14} />{kindName}</span>
+            </p>
+            <p className="mt-3 max-w-[560px] text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.assetUseNote').replaceAll('{kind}', kindName)}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <SettingsButton onClick={() => toggleFavorite(item.id)} aria-pressed={starred}>
+              <Star size={14} fill={starred ? 'currentColor' : 'none'} className={starred ? 'text-[#ffd35a]' : ''} aria-hidden />{t(starred ? 'assetDrawer.unstar' : 'assetDrawer.star')}
+            </SettingsButton>
+            <SettingsButton variant="primary" onClick={onUse}>{t('assetDrawer.useInLibrary')}</SettingsButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** One of the library's things large, as it is used: playing when it moves, heard when it sounds. */
+function AssetShow({ item, lang }: { item: LibraryItem; lang: ReturnType<typeof useLanguage> }) {
+  const t = useT();
+  const [still, setStill] = React.useState(false);
+  const frame = 'relative aspect-video w-full overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--bg-field)]';
+  if (item.kind === 'sound') {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className={frame}>
+          {item.cover ? <img src={libraryUrl(item.cover)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            : <GradientCover hue={item.cat === 'music' ? 286 : 200} Icon={item.cat === 'music' ? Music : AudioLines} />}
+        </div>
+        <audio controls preload="none" src={libraryUrl(item.id)} className="w-full" aria-label={nameOf(item.name, lang)} />
+      </div>
+    );
+  }
+  if (item.kind === 'look') {
+    /* the picture as it was, and with the look on it */
+    const src = item.sample ? libraryUrl(item.sample) : PLAIN;
+    return (
+      <div className="grid grid-cols-2 gap-3">
+        {[false, true].map((on) => (
+          <figure key={String(on)} className="min-w-0">
+            <div className={frame}><img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" style={on ? { filter: item.filter } : undefined} /></div>
+            <figcaption className="mt-1.5 text-center text-[12.5px] text-[var(--text-faint)]">{t(on ? 'assetDrawer.lookAfter' : 'assetDrawer.lookBefore')}</figcaption>
+          </figure>
+        ))}
+      </div>
+    );
+  }
+  if (item.kind === 'textstyle' || item.id === TEXT_COMPONENT) {
+    return <div className={frame}><TextStyleSample lang={lang} vars={item.vars} {...(item.id === TEXT_COMPONENT ? { words: nameOf(item.name, lang) } : {})} /></div>;
+  }
+  /* a moving one plays (a template its example); one with no moving picture, or whose picture is not there, its poster */
+  const video = item.kind === 'group' ? templatePreviewUrl(item) : previewUrl(item);
+  const fit = item.cat === 'sticker' ? 'object-contain p-8' : 'object-cover';
+  return (
+    <div className={frame}>
+      <img src={posterUrl(item)} alt="" className={`absolute inset-0 h-full w-full ${fit}`} />
+      {still ? null : <video key={video} src={video} autoPlay muted loop playsInline onError={() => setStill(true)}
+        className={`absolute inset-0 h-full w-full ${fit}`} />}
+    </div>
+  );
+}
 
 /**
  * One of the library's items as its card in the library draws it: a look on its sample picture, a text style in words
@@ -784,41 +824,7 @@ function StoreCard({ item }: { item: StoreItem }) {
   );
 }
 
-/** A shelf of Discover's front page: its kind's name, its first three (none: `empty`), and the way to all of them. */
-function StoreShelf({ title, more, onMore, children, empty }: { title: string; more: string; onMore: () => void; children: React.ReactNode; empty?: React.ReactNode }) {
-  return (
-    <section className="mb-10 last:mb-0">
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h3 className="text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{title}</h3>
-        <button type="button" onClick={onMore} className="inline-flex items-center gap-0.5 text-[13.5px] text-[var(--text-muted)] transition hover:text-[var(--text)]">
-          {more}<ChevronRight size={14} aria-hidden />
-        </button>
-      </div>
-      {React.Children.count(children) ? <div className={STORE_GRID}>{children}</div> : empty}
-    </section>
-  );
-}
 
-/** Discover's one shown big: its moving preview (else its picture) beside what it is and its button. */
-function Hero({ item, preview, poster, label }: { item: StoreItem; preview?: string | undefined; poster?: string | undefined; label: string }) {
-  return (
-    <div role={item.onOpen ? 'button' : undefined} tabIndex={item.onOpen ? 0 : undefined} onClick={item.onOpen}
-      onKeyDown={(e) => { if (item.onOpen && e.key === 'Enter' && e.target === e.currentTarget) item.onOpen(); }}
-      className="mb-10 grid cursor-pointer overflow-hidden rounded-[14px] border border-[var(--border)] outline-none transition hover:border-[var(--border-strong)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)] md:grid-cols-[1.25fr_1fr]">
-      <div className="relative aspect-video overflow-hidden bg-black">
-        {item.cover}
-        {preview ? <video src={preview} poster={poster} autoPlay muted loop playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
-      </div>
-      <div className="flex min-w-0 flex-col justify-center gap-2 p-6">
-        <span className="text-[12.5px] font-medium text-[var(--accent)]">{label}</span>
-        <h3 className="text-[22px] font-semibold leading-tight tracking-[-0.015em] text-[var(--text)]">{item.title}</h3>
-        {item.note ? <span className="text-[13px] text-[var(--text-faint)]">{item.note}</span> : null}
-        <p className="line-clamp-3 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{item.summary}</p>
-        <div className="mt-2" onClick={(e) => e.stopPropagation()}>{item.action}</div>
-      </div>
-    </div>
-  );
-}
 
 /** What the publish check says is missing, as a person reads it. */
 const MISSING_WORDS = { description: 'publishMissingDescription', title: 'publishMissingTitle', version: 'publishMissingVersion', license: 'publishMissingLicense' } as const;

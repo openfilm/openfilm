@@ -12,6 +12,7 @@
  * Where the pane is and whether it is open are the layout's (shell/layout): the pane is drawn there with a workbench
  * in the page or none.
  */
+import { onRevealInLibrary } from '@/lib/library-reveal';
 import * as React from 'react';
 import { api, type MediaMade } from '@/api';
 import { useT } from '@/i18n';
@@ -111,6 +112,8 @@ export function useLibraryShown(projectId: string, of: {
    * Find a file in Assets; the canvas points it out without replacing the editing selection. The pane is opened, and
    * the file is taken in hand by the workbench shown (with the canvas over it, in hand only).
    */
+  /* a category of the library asked for from elsewhere (the Community): the drawer opens (it shows the category) */
+  React.useEffect(() => onRevealInLibrary(() => openLibrary(true)), [openLibrary]);
   const showFile = React.useCallback((path: string, highlight = false) => {
     const file = listing ? [...listing.pages, ...listing.files].find((f) => f.path === path) : undefined;
     if (!file) return;

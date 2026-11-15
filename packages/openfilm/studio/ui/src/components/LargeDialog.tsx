@@ -117,10 +117,10 @@ export const LargeDialogSearch = React.forwardRef<HTMLInputElement, { value: str
 );
 
 /** A group of the side's places, under a quiet name (none: no name). */
-export function LargeDialogGroup({ title, children }: { title?: string; children: React.ReactNode }) {
+export function LargeDialogGroup({ title, children }: { title?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="mt-3 flex flex-col gap-0.5">
-      {title ? <div className="px-2.5 pb-1.5 text-[13px] text-[var(--text-faint)]">{title}</div> : null}
+      {title ? <div className="flex items-center px-2.5 pb-1.5 text-[13px] text-[var(--text-faint)]">{title}</div> : null}
       {children}
     </div>
   );

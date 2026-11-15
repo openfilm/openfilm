@@ -11,6 +11,7 @@
  * Enter or its "+" puts it in the film where the try showed it; a drag puts it where it is let go. A star keeps
  * it among the favorites, for every project.
  */
+import { onRevealInLibrary, takeRevealed } from '@/lib/library-reveal';
 import React from 'react';
 import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
@@ -203,6 +204,14 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
     return () => { dismissRef.current = () => false; };
   }, [dismissRef, closePreview, stopHover, picked, tried, player.item, voicePlayer.item]);
   const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(firstLine(next)); setQuery(''); setSource(''); closePreview(); };
+  /* a category asked for from elsewhere (the Community's page of a thing in it): shown, as the drawer opens or after */
+  const showRef = React.useRef(show);
+  showRef.current = show;
+  React.useEffect(() => {
+    const asked = takeRevealed();
+    if (asked) showRef.current(asked);
+    return onRevealInLibrary((next) => { takeRevealed(); showRef.current(next); });
+  }, []);
   const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); closePreview(); };
   /* a section of the text category opened or closed; opened, it shows its first line unless one of its lines is shown */
   const toggleText = (section: TextSection) => {

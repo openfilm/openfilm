@@ -337,7 +337,7 @@ export function useProjectFrame(projectId: string) {
       /* the Community window: on Discover, on its skills ("More skills"), or on a skill's page; an example: the projects window's examples */
       const open = command.open;
       if (open?.kind === 'plugins' || open?.kind === 'discover' || open?.kind === 'skill') {
-        openPlugins(open.kind === 'skill' ? { page: open.name } : { line: open.kind === 'discover' ? 'kind:skills' : 'discover' });
+        openPlugins(open.kind === 'skill' ? { page: open.name } : open.kind === 'discover' ? { line: 'kind:skills' } : {});
       } else windows.setProjectsOpen({ example: open?.kind === 'example' ? open.id : undefined });
       return;
     }
