@@ -2,7 +2,8 @@
 /**
  * A project's shots, as the stage plugin keeps them: `stage/<name>/` with `index.html` (the page) and `shot.js` (the
  * set, the figures and the camera), all standing on `stage/lib/` (three.js, stage.js, mannequin.js), copied in from
- * this plugin the first time and the project's own after that. Nothing here is a format: a shot is a page of a film.
+ * this plugin the first time and the project's own after that (with `viewer.html`, how the workbench draws a shot).
+ * Nothing here is a format: a shot is a page of a film.
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -13,7 +14,7 @@ import { projectAround } from '../../src/skills-cli.mjs';
 /** This plugin's folder. */
 export const PLUGIN = dirname(fileURLToPath(import.meta.url));
 /** What `stage/lib/` holds, from the plugin's `lib/`. */
-export const LIB = ['three.module.min.js', 'three.core.min.js', 'three.LICENSE', 'stage.js', 'mannequin.js'];
+export const LIB = ['three.module.min.js', 'three.core.min.js', 'three.LICENSE', 'stage.js', 'mannequin.js', 'viewer.html', 'viewer.js'];
 /** A shot's name: what its folder is called. */
 export const NAME = /^[a-z0-9][a-z0-9-]{0,47}$/;
 

@@ -16,6 +16,56 @@
     "es": "Planos bocetados en 3D: el decorado, quién se mueve adónde y la cámara, en vivo."
   },
   "about": "shots blocked out in 3D (set, figures, camera) as three.js pages, rendered as white-box video",
+  "workbench": "stage",
+  "blocks": [
+    {
+      "id": "viewfinder",
+      "title": {
+        "en": "Viewfinder",
+        "zh-CN": "取景器",
+        "ja": "ビューファインダー",
+        "ko": "뷰파인더",
+        "es": "Visor"
+      },
+      "edge": "center",
+      "min": [
+        320,
+        200
+      ]
+    },
+    {
+      "id": "above",
+      "title": {
+        "en": "From above",
+        "zh-CN": "俯视图",
+        "ja": "上から",
+        "ko": "위에서",
+        "es": "Desde arriba"
+      },
+      "edge": "right",
+      "size": 320,
+      "min": [
+        200,
+        160
+      ]
+    },
+    {
+      "id": "shots",
+      "title": {
+        "en": "Shots",
+        "zh-CN": "镜头",
+        "ja": "ショット",
+        "ko": "장면",
+        "es": "Planos"
+      },
+      "edge": "bottom",
+      "size": 150,
+      "min": [
+        240,
+        120
+      ]
+    }
+  ],
   "on": false,
   "beta": true,
   "skills": [

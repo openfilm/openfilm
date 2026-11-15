@@ -13,7 +13,7 @@ const where = (h) => ({ home: h, mine: join(h, 'mine'), official: join(h, 'offic
 test('the edit and the canvas are on until the person says, Motion is not; the choice is kept by plugin', () => {
   const h = home();
   assert.deepEqual(workbenchesOn(h), ['edit', 'canvas']);
-  assert.deepEqual(pluginStates(h).filter((p) => p.workbench).map((p) => [p.id, p.on]), [['edit', true], ['canvas', true], ['motion', false]]);
+  assert.deepEqual(pluginStates(h).filter((p) => p.workbench).map((p) => [p.id, p.on]), [['edit', true], ['canvas', true], ['motion', false], ['stage', false]]);
   setPluginOn('motion', true, h);
   setPluginOn('canvas', false, h);
   assert.deepEqual(workbenchesOn(h), ['edit', 'motion']);

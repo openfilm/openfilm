@@ -2,6 +2,7 @@
   "name": "openfilm-stage",
   "private": true,
   "type": "module",
+  "browser": "ui.js",
   "bin": {
     "new": "new.mjs",
     "render": "render.mjs",
