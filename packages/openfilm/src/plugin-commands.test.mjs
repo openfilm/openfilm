@@ -123,7 +123,8 @@ test('openfilm canvas says what it takes, and where it works, as before it was t
   for (const args of [['canvas', '--help'], ['canvas', '-h'], ['canvas', 'apply', '--help']]) {
     const help = cli(args);
     assert.equal(help.status, 0, args.join(' '));
-    assert.match(help.stdout, /^openfilm canvas \[apply <steps>\]\n\n  The project's canvas: /);
+    assert.match(help.stdout, /^openfilm canvas \[apply <steps> \| add <file…>\]\n\n  The project's canvas: /);
+    assert.match(help.stdout, /canvas add <file…> {5}files of the project put on the board/);
     assert.match(help.stdout, /canvas apply <steps> {3}steps on it, all taken or none/);
   }
   const outside = cli(['canvas'], root);

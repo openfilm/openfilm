@@ -141,7 +141,9 @@ async function inputsOf(files, base, headers, ctx) {
     const to = uploads.find((u) => u.path === f.path);
     if (!to) throw new Error(`${NAME} gave no place for ${f.path}.`);
     ctx.signal.throwIfAborted();
-    const res = await fetch(to.url, { method: 'PUT', headers: to.headers ?? {}, body: f.bytes, signal: ctx.signal });
+    /* the bytes of a file read from disk, an ArrayBuffer's (never shared memory) */
+    const body = /** @type {Uint8Array<ArrayBuffer>} */ (f.bytes);
+    const res = await fetch(to.url, { method: 'PUT', headers: to.headers ?? {}, body, signal: ctx.signal });
     if (!res.ok) throw new Error(`${f.path} could not be sent to ${NAME} (${res.status}). Try again.`);
     put.push({ path: f.path, upload: to.id });
   }

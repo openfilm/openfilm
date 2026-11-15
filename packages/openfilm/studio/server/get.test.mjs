@@ -82,7 +82,7 @@ before(async () => {
   base = `http://127.0.0.1:${service.address().port}`;
   Object.assign(process.env, {
     OPENFILM_HOME: join(scratch, 'home'), OPENFILM_LIBRARY: join(scratch, 'library'),
-    OPENFILM_ELEVENLABS_URL: base, OPENFILM_FAL_URL: base, OPENFILM_OPENAI_URL: base, OPENFILM_MIMO_URL: base,
+    OPENFILM_ELEVENLABS_URL: base, OPENFILM_FAL_URL: base, OPENFILM_OPENAI_URL: base, OPENFILM_MIMO_URL: base, OPENFILM_GROQ_URL: base,
   });
   for (const p of [...listProviders(), { env: 'GOOGLE_API_KEY' }]) delete process.env[p.env];
 });
@@ -528,7 +528,7 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
       + 'Until then, take what OpenFilm\'s own library has (its verbs are free and need nothing connected), make sound and pictures in code, '
       + 'or use a service the person has a key for (with its API docs), and save them under assets/. '
       + `\`openfilm get <what> --help\` shows what one kind takes (${media.join(', ')}).\n\n${services()}\n`);
-    assert.match(services(), /^Media services, each used with the person's own key: Brave Search \(web search\), Cartesia \(voice-over\), Doubao \(transcripts\), ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video, music, sound effects\), .*, Microsoft Azure \(voice-over\), .*, Tavily \(web search\), Xiaomi MiMo \(voice-over, transcripts\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
+    assert.match(services(), /^Media services, each used with the person's own key: Brave Search \(web search\), Cartesia \(voice-over\), Doubao \(transcripts\), ElevenLabs \(voice-over, sound effects, music, transcripts\), fal\.ai \(images, video, music, sound effects\), .*, Microsoft Azure \(voice-over\), .*, Tavily \(web search\), Volcengine \(video\), Xiaomi MiMo \(voice-over, transcripts\)\. In Studio, the OpenFilm logo at the top left opens Settings/);
 
     /* partly: what is connected, then one line for the rest with the services that make each, then the services there
        are; never who makes what is connected */
@@ -605,12 +605,13 @@ test('a voice-over spoken again without word timings: the last take\'s transcrip
   mkdirSync(join(root, 'assets/audio/vo'), { recursive: true });
   writeFileSync(join(root, 'assets/audio/vo/intro.wav'), 'old take');
   writeFileSync(join(root, 'assets/audio/vo/intro.vtt'), 'WEBVTT\n\n00:00.000 --> 00:09.000\nThe old take, spoken slower\n');
-  /* a WAV of a second of silence, as OpenAI answers */
+  /* a WAV of a second of silence, as Groq answers (it times no words) */
   const wav = Buffer.alloc(44 + 32000);
   wav.write('RIFF', 0); wav.writeUInt32LE(36 + 32000, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
   wav.writeUInt32LE(16000, 24); wav.writeUInt32LE(32000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(32000, 40);
-  refuse = (call) => (call.path === '/v1/audio/speech' ? [200, wav] : [404, {}]);
-  const said = await runGet(root, 'tts', { text: 'Hello', voice: 'alloy', out: 'intro' }, { via: 'openai' });
+  await changeSettings((s) => { s.keys.groq = 'gsk-test-0123456789'; });
+  refuse = (call) => (call.path === '/openai/v1/audio/speech' ? [200, wav] : [404, {}]);
+  const said = await runGet(root, 'tts', { text: 'Hello', voice: 'troy', out: 'intro' }, { via: 'groq' });
   assert.equal(existsSync(join(root, 'assets/audio/vo/intro.vtt')), false);
   assert.match(said, /"transcript": "none: the service does not time words/);
 });
@@ -622,9 +623,9 @@ test('what a run lands is on record with how it was made, and the run says so on
   const { readMade, madeView } = await import('./media-made.mjs');
   const [record] = Object.values(readMade(root));
   assert.deepEqual({ path: record.path, verb: record.verb, via: record.via, by: record.by, model: record.model, args: record.args, refs: record.refs },
-    { path: 'assets/audio/sfx/ding.mp3', verb: 'sfx', via: 'elevenlabs', by: 'ElevenLabs', model: 'eleven_text_to_sound_v2', args: { prompt: 'a chime', sec: 1 }, refs: [] });
+    { path: 'assets/audio/sfx/ding.mp3', verb: 'sfx', via: 'elevenlabs', by: 'ElevenLabs', model: 'eleven_text_to_sound_v3', args: { prompt: 'a chime', sec: 1 }, refs: [] });
   assert.deepEqual(told, [root]);
-  assert.deepEqual((await madeView(root))['assets/audio/sfx/ding.mp3'].again, { verb: 'sfx', via: 'elevenlabs', model: 'eleven_text_to_sound_v2', args: { out: 'ding-2', prompt: 'a chime', sec: '1' } });
+  assert.deepEqual((await madeView(root))['assets/audio/sfx/ding.mp3'].again, { verb: 'sfx', via: 'elevenlabs', model: 'eleven_text_to_sound_v3', args: { out: 'ding-2', prompt: 'a chime', sec: '1' } });
   /* asked again as the record says: a new file beside the first, a version of the same thing */
   const { again } = (await madeView(root))['assets/audio/sfx/ding.mp3'];
   refuse = (call) => (call.path === '/v1/sound-generation' ? [200, mp3(1.5)] : [404, {}]);

@@ -522,7 +522,8 @@ async function land(root, verb, args, result) {
   /** @type {string[]} */
   const landed = [];
   for (const file of result.files ?? []) {
-    if (!landable(file?.path) || file.path.endsWith('.vtt')) continue;
+    /* a file handed off by its address is the service's to fetch (RunContext.handOff): Studio never asks for one */
+    if (!('bytes' in file) || !landable(file?.path) || file.path.endsWith('.vtt')) continue;
     const abs = join(root, file.path);
     /* a link the project brings under assets/ is not written through to wherever it leads */
     if (!(await landsInside(root, abs))) continue;
