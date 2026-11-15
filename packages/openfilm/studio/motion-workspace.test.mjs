@@ -37,10 +37,10 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
     await page.locator('[data-block-kind="caption"]').first().waitFor({ state: 'visible' });
     assert.equal(await page.locator('[data-timeline-view-item="motion"]').count(), 0);
     const switcher = page.locator('[data-work-mode]');
-    /* workbenches are turned on and off under Added, in the Community window opened from the OpenFilm menu */
+    /* workbenches are turned on and off under Mine, in the Community window opened from the OpenFilm menu (Studio in a browser) */
     await page.getByRole('button', { name: 'OpenFilm menu', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Community', exact: true }).click();
-    await page.getByRole('button', { name: 'Added', exact: true }).click();
+    await page.getByRole('button', { name: 'Mine', exact: true }).click();
     const motion = page.getByRole('switch', { name: 'Turn on Motion' });
     await motion.waitFor();
     assert.equal(await motion.getAttribute('aria-checked'), 'false');
