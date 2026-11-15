@@ -1,5 +1,5 @@
 /**
- * A large window with a side: Settings, Plugins. One frame, so every such window reads the same: its size
+ * A large window with a side: Settings, Features. One frame, so every such window reads the same: its size
  * (dialog-chrome), the side on the left (264 px, the side's color: the panels' in the dark, rgb 24) with its search
  * and its places, the page on the right (the raised color, rgb 32) with Close in its corner. It is put on the
  * document's body, over the app's chat as well as Studio. Esc pressed in it is its own, before Studio's keys under it

@@ -1,6 +1,6 @@
 /** The app menu opens on click; its community flyout opens on hover, like the model menu. */
 import React from 'react';
-import { ChevronRight, MessageSquare, Puzzle, Settings2, Star, Users } from 'lucide-react';
+import { ChevronRight, LayoutGrid, MessageSquare, Settings2, Star, Users } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { useClickOpen } from '@/lib/click-open';
 import { studioHost } from '@/lib/host';
@@ -154,7 +154,7 @@ export function AppMenu({ onSettings }: { onSettings: (section: SettingsSection)
         <Settings2 size={15} className={styles.icon} aria-hidden /><span className={styles.label}>{t('settings.title')}</span>
       </button>
       <button type="button" role="menuitem" tabIndex={-1} className={styles.row} onMouseEnter={hideCommunitySoon} onFocus={() => closeCommunity()} onClick={() => { dismiss(true); openPlugins(); }}>
-        <Puzzle size={15} className={styles.icon} aria-hidden /><span className={styles.label}>{t('assetDrawer.pluginsWindow')}</span>
+        <LayoutGrid size={15} className={styles.icon} aria-hidden /><span className={styles.label}>{t('assetDrawer.pluginsWindow')}</span>
       </button>
       <button ref={communityTrigger} type="button" role="menuitem" tabIndex={-1} aria-haspopup="menu" aria-expanded={community} aria-controls={community ? `${id}-community` : undefined}
         className={`${styles.row} ${community ? styles.active : ''}`}

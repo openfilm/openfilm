@@ -37,9 +37,9 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
     await page.locator('[data-block-kind="caption"]').first().waitFor({ state: 'visible' });
     assert.equal(await page.locator('[data-timeline-view-item="motion"]').count(), 0);
     const switcher = page.locator('[data-work-mode]');
-    /* the plugins are turned on and off in their window, opened from the OpenFilm menu */
+    /* workbenches are turned on and off in the Features window, opened from the OpenFilm menu */
     await page.getByRole('button', { name: 'OpenFilm menu', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Plugins', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Features', exact: true }).click();
     const motion = page.getByRole('switch', { name: 'Turn on Motion' });
     await motion.waitFor();
     assert.equal(await motion.getAttribute('aria-checked'), 'false');
@@ -53,7 +53,7 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
     await page.getByRole('switch', { name: 'Turn off Motion' }).waitFor();
     /* the window closed */
     await page.keyboard.press('Escape');
-    await page.getByRole('dialog', { name: 'Plugins' }).waitFor({ state: 'detached' });
+    await page.getByRole('dialog', { name: 'Features' }).waitFor({ state: 'detached' });
     await page.reload();
     await page.locator('[data-timeline-view-item="motion"]').click();
     const layer = page.locator('[data-motion-layer="card"]');

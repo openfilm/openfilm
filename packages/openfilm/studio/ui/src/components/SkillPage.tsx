@@ -12,16 +12,16 @@
 import React from 'react';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from './dialog-chrome';
 import {
-  ArrowLeft, Copy, Film, Folder, GitBranch, Github, Layers, MessageSquarePlus, MonitorPlay, Music, PenLine, PictureInPicture2,
+  ArrowLeft, ChevronRight, Copy, Film, Folder, GitBranch, Github, Layers, MessageSquarePlus, MonitorPlay, Music, PenLine, PictureInPicture2,
   Plus, Presentation, RefreshCw, Scissors, Shapes, Sparkles, Trash2, Wand2, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { usePlugins } from '@/lib/plugins';
 import { isPlugin } from '@/lib/project-plugins';
 import { communityOf, makerOf, sourcesApi, type SkillEntry } from '@/lib/project-sources';
-import { categoryOfPlugin, categoryOfSkill, usesOfSkill } from '@/lib/plugin-profile';
+import { usesOfSkill } from '@/lib/plugin-profile';
 import { ConfirmDialog } from './ConfirmDialog';
-import { CategoryTag, ProfileStrip } from './library/PluginProfile';
+import { ProfileStrip } from './library/PluginProfile';
 import { SettingsSwitch } from './settings/ui';
 
 /** OpenFilm's own by their order, then the community's as Discover's index lists them (an author's own order is not theirs to set). */
@@ -45,6 +45,20 @@ export function useSkillWords() {
 
 /** An official one not installed is in the catalog only; the person's own and a project's are installed already. */
 const installedOf = (skill: SkillEntry) => skill.installed !== false;
+
+/** What a page's thing is made of (the skills an agent is given, commands, its name for code), folded under "For developers":
+    a person deciding whether to use it needs none of it. */
+export function ForDevelopers({ children }: { children: React.ReactNode }) {
+  const t = useT();
+  return (
+    <details className="group mt-6 border-t border-[var(--border)] pt-3">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13.5px] text-[var(--text-faint)] outline-none transition hover:text-[var(--text-muted)] [&::-webkit-details-marker]:hidden">
+        <ChevronRight size={14} className="transition-transform group-open:rotate-90" aria-hidden />{t('assetDrawer.forDevelopers')}
+      </summary>
+      <div className="pt-1">{children}</div>
+    </details>
+  );
+}
 
 /** A part of a plugin's or a skill's page: its head, and what is under it. */
 export function PageSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -102,9 +116,6 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
   const lang = useLanguage();
   const plugins = usePlugins();
   const words = useSkillWords()(skill);
-  /* one of OpenFilm's own skills is in the category of the plugin it goes with */
-  const owner = skill.core ? plugins.find((p) => p.skills.includes(skill.name)) : undefined;
-  const category = owner ? categoryOfPlugin(owner) : categoryOfSkill(skill);
   const details = inLanguage(skill.shown?.details, lang);
   const needs = inLanguage(skill.needs, lang);
   const installed = installedOf(skill);
@@ -201,14 +212,12 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
       {skill.off ? <p className="mt-1.5 text-[13.5px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', inLanguage(plugins.find((p) => p.id === skill.plugin)?.title, lang) ?? skill.plugin) : t('gallery.skillOff')}</p> : null}
       {skill.retired ? <p className="mt-1.5 text-[13.5px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
       <div className="mt-2 flex items-center gap-2 text-[13.5px] text-[var(--text-muted)]">
-        {/* its category, then whose it is: the community's, their account a link; OpenFilm's own, its kind */}
-        <CategoryTag category={category} />
+        {/* what it is (a workbench, or a skill), then whose: the community's, their account a link; OpenFilm's own, its kind */}
+        <span>{t(isPlugin(skill) ? 'assetDrawer.kind_workbench' : 'assetDrawer.kind_skill')} ·</span>
         {communityOf(skill) ? (
           <span>{t('gallery.byCommunity').split('{owner}')[0]}<a href={`https://github.com/${makerOf(skill)}`} target="_blank" rel="noreferrer"
             className="text-[var(--text)] underline-offset-2 hover:underline">{makerOf(skill)}</a>{t('gallery.byCommunity').split('{owner}')[1]}</span>
         ) : <span>{t(group)}</span>}
-        {/* its uid, owner/name: how it is told apart, shared and searched */}
-        <span className="min-w-0 truncate font-mono text-[12px] text-[var(--text-faint)]" title={skill.uid}>{skill.uid}</span>
         {skill.version ? <span className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[11.5px] text-[var(--text-muted)]">v{skill.version}</span> : null}
         {/* its source: OpenFilm's repository, or the address one of the person's came from */}
         {source ? (
@@ -237,12 +246,17 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
       }) : null}
       {/* how to use it: a plugin's surface where it is, else ask the agent */}
       {installed ? <HowToUse text={t(!plugin ? 'assetDrawer.howSkill' : skill.tab ? 'assetDrawer.howTab' : 'assetDrawer.howWorkbench')} /> : null}
+      {/* what it is made of, for whoever makes such things: folded */}
+      <ForDevelopers>
       <PageSection title={t('assetDrawer.pluginBrings')}>
         {plugin ? <BringsLine kind={t(skill.tab ? 'assetDrawer.brings_tab' : 'assetDrawer.brings_workbench')}>{inLanguage(skill.tab?.title, lang) ?? words.title}</BringsLine> : null}
         {/* the skill an agent is given, with what it is told of it */}
         <BringsLine kind={t('assetDrawer.brings_skill')}><span className="font-mono text-[13px]">{skill.as ?? skill.name}</span><span className="block text-[13px] leading-[17px] text-[var(--text-muted)]">{skill.description}</span></BringsLine>
         {skill.commands?.length ? <BringsLine kind={t('assetDrawer.brings_commands')}><CommandChips name={skill.name} commands={skill.commands} /></BringsLine> : null}
       </PageSection>
+      {/* its uid, owner/name: how it is told apart, shared and searched */}
+      <p className="mt-4 truncate font-mono text-[12px] text-[var(--text-faint)]" title={skill.uid}>{skill.uid}</p>
+      </ForDevelopers>
       {(skill.scripts > 0 && !skill.core) || ((skill.surface || skill.program || skill.inApp) && installed) ? (
         <PageSection title={t('assetDrawer.pluginMay')}>
           {/* scripts it brings run on this computer, with the agent's access */}

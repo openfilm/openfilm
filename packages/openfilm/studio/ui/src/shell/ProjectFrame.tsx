@@ -334,10 +334,10 @@ export function useProjectFrame(projectId: string) {
     if (link) { openLink.current(link); return; }
     if (command.type === 'settings') { windows.setSettingsOpen(command.section === 'providers' ? 'models' : command.section ?? 'agents'); return; }
     if (command.type === 'show-examples') {
-      /* the plugins: their window, on Discover or on a skill's page; an example: the projects window's examples */
+      /* the Features window: on its workbenches, on Get more, or on a skill's page; an example: the projects window's examples */
       const open = command.open;
       if (open?.kind === 'plugins' || open?.kind === 'discover' || open?.kind === 'skill') {
-        openPlugins(open.kind === 'skill' ? { page: open.name } : { line: open.kind === 'discover' ? 'discover' : 'installed' });
+        openPlugins(open.kind === 'skill' ? { page: open.name } : { line: open.kind === 'discover' ? 'discover' : 'workbenches' });
       } else windows.setProjectsOpen({ example: open?.kind === 'example' ? open.id : undefined });
       return;
     }

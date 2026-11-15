@@ -227,7 +227,7 @@ export const ja: Words = {
   project: {
     assets: '素材',
     addAttachment: 'ファイルを追加',
-    plugins: 'プラグイン',
+    plugins: '機能',
     close: '閉じる',
     composerPlaceholder: '変更したい内容を入力。@ でファイル、スキル、タイミング、選択中のものを指定できます',
     composerPlaceholderBlank: '作りたい映像を説明してください。@ でファイルやスキルを追加できます',

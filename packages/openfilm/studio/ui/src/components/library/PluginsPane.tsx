@@ -23,14 +23,14 @@ import {
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
 import { setPluginOn, usePlugins, type Plugin } from '@/lib/plugins';
-import type { PluginsLine } from '@/lib/plugins-window';
+import { showPluginsLine, type PluginsLine } from '@/lib/plugins-window';
 import { isPlugin, pluginOfSkill } from '@/lib/project-plugins';
 import { communityOf, forgetSeenSkills, makerOf, seenCatalog, seenSkills, sourcesApi, SourceError, watchSkills, type SkillEntry } from '@/lib/project-sources';
 import {
-  BringsLine, byOrder, CommandChips, HowToUse, inLanguage, PageSection, SkillCover, SkillMark, SkillPage, useSkillWords,
+  BringsLine, byOrder, CommandChips, ForDevelopers, HowToUse, inLanguage, PageSection, SkillCover, SkillMark, SkillPage, useSkillWords,
 } from '../SkillPage';
 import { CATEGORIES, categoryOfPlugin, categoryOfSkill, usesOfPlugin, type Category } from '@/lib/plugin-profile';
-import { CategoryTag, ProfileStrip } from './PluginProfile';
+import { ProfileStrip } from './PluginProfile';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 
@@ -81,10 +81,8 @@ let discoverRequest = 0;
 type AgentSkill = { name: string; description: string; allowed: boolean };
 type AgentGroup = { id: HostAgentId; name: string; skills: AgentSkill[] };
 
-export function PluginsPane({ line, category, query, projectId, opened, onOpen, onWorkbenchOn }: {
+export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenchOn }: {
   line: PluginsLine;
-  /** the installed of one category only (none: all of them, each under its name) */
-  category: Category | null;
   query: string;
   projectId: string | null;
   /** the page shown (a skill's uid or the name agents know it by; `plugin:<id>` one of OpenFilm's own plugins), none: the list */
@@ -125,8 +123,7 @@ export function PluginsPane({ line, category, query, projectId, opened, onOpen, 
     return () => { live = false; };
   }, [line, retry]);
 
-  const installed = line === 'installed';
-  const agents = useAgentSkills(installed);
+  const agents = useAgentSkills(line === 'skills');
   const q = query.trim().toLowerCase();
   const matches = (...said: (string | undefined)[]) => !q || said.some((w) => w?.toLowerCase().includes(q));
   const found = skills
@@ -134,7 +131,7 @@ export function PluginsPane({ line, category, query, projectId, opened, onOpen, 
     .filter((k) => matches(words(k).title, words(k).summary, k.name, k.uid))
     .sort(byOrder);
   const ownMatched = own.filter((p) => matches(pluginWords(p).title, pluginWords(p).summary, p.id));
-  const listed = installed ? found.filter((k) => installedOf(k)) : [];
+  const listed = found.filter((k) => installedOf(k));
   const offered = line === 'discover' ? found.filter((k) => k.source === 'official') : [];
   const agentsOwn = agents.groups
     .map((g) => ({ ...g, skills: g.skills.filter((k) => matches(k.name, k.description)) }))
@@ -185,98 +182,116 @@ export function PluginsPane({ line, category, query, projectId, opened, onOpen, 
       </div>
     );
   }
-  if (line === 'discover') {
-    /* what Discover could not read now: the skills it had when it last could, said with when; none ever read */
-    const read = seenCatalog();
-    const note = discover === 'partial' ? t('assetDrawer.discoverPartial') : discover === 'failed'
-      ? (read ? t('assetDrawer.discoverOffline').replace('{when}', new Date(read).toLocaleString()) : t('assetDrawer.discoverNever'))
-      : null;
-    /* the first read under way: its rows' places, said as Discover being read */
-    const waiting = discover === 'reading' && !offered.length && !q;
-    /* OpenFilm's own, then the community's */
-    const parts = (['official', 'community'] as const)
-      .map((whose) => ({ whose, skills: offered.filter((k) => (communityOf(k) ? 'community' : 'official') === whose) }))
-      .filter((part) => part.skills.length);
+  /* in the film's order (the category each says it is in), else as they were */
+  const inOrder = <T,>(list: T[], categoryOf: (item: T) => Category) => list
+    .map((item, i) => ({ item, i, c: CATEGORIES.indexOf(categoryOf(item)) })).sort((x, y) => x.c - y.c || x.i - y.i).map((x) => x.item);
+  /* a workbench, on its switch */
+  const workbenchRow = (p: Plugin) => {
+    const { title, summary } = pluginWords(p);
+    return <PluginRow key={p.id} mark={<PluginMark plugin={p} />} title={title} note={p.beta ? t('assetDrawer.pluginBeta') : undefined} summary={summary}
+      onOpen={() => open(`${PLUGIN_PAGE}${p.id}`)}
+      control={<SettingsSwitch checked={p.on} onChange={(on) => turnPlugin(p, on)} label={t(p.on ? 'assetDrawer.pluginTurnOff' : 'assetDrawer.pluginTurnOn').replace('{name}', title)} />} />;
+  };
+  /* a skill installed (or a workbench someone made, turned as the skill it is), on its switch */
+  const fromOf = (skill: SkillEntry) => (communityOf(skill) ? makerOf(skill)
+    : skill.source === 'mine' ? t('assetDrawer.source_mine') : skill.source === 'project' ? t('assetDrawer.skillProject') : undefined);
+  const skillRow = (k: SkillEntry) => (
+    <PluginRow key={k.uid} mark={<SkillMark skill={k} />} title={words(k).title} note={fromOf(k)}
+      summary={k.update ? t('gallery.updateOut').replace('{version}', k.update.version) : words(k).summary} onOpen={() => open(k.uid)}
+      control={<SettingsSwitch checked={!k.off} onChange={(on) => turnSkill(k, on)} label={t(k.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(k).title)} />} />
+  );
+  /* a workbench is what shows outside the conversation: OpenFilm's with a workbench or a tab of the library, anyone's with a page */
+  const ownBench = (p: Plugin) => Boolean(p.workbench || p.tab);
+
+  if (line === 'workbenches') {
+    const benches = inOrder(ownMatched.filter((p) => ownBench(p) && !p.soon), categoryOfPlugin);
+    const theirs = listed.filter((k) => isPlugin(k));
+    /* OpenFilm's still being made (each a workbench to be, none declared yet) */
+    const soon = inOrder(ownMatched.filter((p) => p.soon), categoryOfPlugin);
     return (
-      <PluginsPage title={t('assetDrawer.skillsDiscover')}>
-        {note ? (
-          <div role="status" className="mb-6 flex items-start gap-3 text-[14px] leading-relaxed text-[var(--text-muted)]">
-            <p className="min-w-0 flex-1">{note}</p>
-            <SettingsButton onClick={() => setRetry((n) => n + 1)}><RefreshCw size={14} />{t('assetDrawer.discoverRetry')}</SettingsButton>
-          </div>
-        ) : null}
+      <PluginsPage title={t('assetDrawer.view_workbenches')} note={t('assetDrawer.note_workbenches')}>
         {error ? <p role="alert" className="mb-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
-        {waiting ? (
-          <div role="status" aria-label={t('assetDrawer.discoverReading')} className="flex flex-col divide-y divide-[var(--border)]">
-            {Array.from({ length: 4 }, (_, i) => (
-              <div key={i} aria-hidden className="flex items-center gap-4 py-4">
-                <div className="skeleton h-12 w-[84px] rounded-[8px]" />
-                <div className="flex flex-1 flex-col gap-2"><div className="skeleton h-3.5 w-1/3 rounded" /><div className="skeleton h-3 w-2/3 rounded" /></div>
-              </div>
-            ))}
-          </div>
-        ) : parts.length ? parts.map(({ whose, skills: inIt }) => (
-          <SettingsGroup key={whose} title={parts.length > 1 ? t(`assetDrawer.source_${whose}`) : undefined}>
-            {inIt.map((skill) => {
-              const there = installedOf(skill);
-              return (
-                <PluginRow key={skill.uid} onOpen={() => open(skill.uid)}
-                  mark={<span aria-hidden className="relative block h-12 w-[84px] shrink-0 overflow-hidden rounded-[8px] bg-[var(--bg-field)] ring-1 ring-[var(--border)]"><SkillCover skill={skill} title={words(skill).title} /></span>}
-                  title={words(skill).title} note={communityOf(skill) ? makerOf(skill) : undefined} summary={words(skill).summary}
-                  control={there ? <span className="inline-flex items-center gap-1.5 text-[13.5px] text-[var(--text-muted)]"><Check size={15} aria-hidden />{t('assetDrawer.skillsInstalled')}</span>
-                    : <SettingsButton disabled={installing != null} onClick={() => install(skill)}>
-                      {installing === skill.uid ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}
-                      {t(installing === skill.uid ? 'gallery.installing' : 'gallery.install')}
-                    </SettingsButton>} />
-              );
+        {benches.length || theirs.length ? <SettingsGroup>{benches.map(workbenchRow)}{theirs.map(skillRow)}</SettingsGroup> : null}
+        {/* OpenFilm's still being made, so the whole of it is in sight: no switch */}
+        {soon.length ? (
+          <SettingsGroup title={t('assetDrawer.comingSoon')}>
+            {soon.map((p) => {
+              const { title, summary } = pluginWords(p);
+              return <PluginRow key={p.id} dim mark={<PluginMark plugin={p} />} title={title} summary={summary} onOpen={() => open(`${PLUGIN_PAGE}${p.id}`)} control={null} />;
             })}
           </SettingsGroup>
-        )) : note && !read ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.discoverNone')} />}
+        ) : null}
+        {!benches.length && !theirs.length && !soon.length ? <Empty text={t('assetDrawer.noSkillsFound')} /> : null}
       </PluginsPage>
     );
   }
 
-  /* the installed, each in its category: OpenFilm's own plugins first, then the skills installed, each agent's own (a
-     tool: off until let in); OpenFilm's still being made last in theirs, with no switch */
-  type Row = { category: Category; key: string; node: React.ReactNode };
-  const fromOf = (skill: SkillEntry) => (communityOf(skill) ? makerOf(skill)
-    : skill.source === 'mine' ? t('assetDrawer.source_mine') : skill.source === 'project' ? t('assetDrawer.skillProject') : undefined);
-  const soonWord = <span className="text-[13.5px] text-[var(--text-faint)]">{t('assetDrawer.pluginsSoon')}</span>;
-  const rows: Row[] = [
-    ...ownMatched.filter((p) => !p.soon).map((p) => {
-      const { title, summary } = pluginWords(p);
-      return {
-        category: categoryOfPlugin(p), key: p.id,
-        node: <PluginRow key={p.id} mark={<PluginMark plugin={p} />} title={title} note={p.beta ? t('assetDrawer.pluginBeta') : undefined} summary={summary}
-          onOpen={() => open(`${PLUGIN_PAGE}${p.id}`)}
-          control={<SettingsSwitch checked={p.on} onChange={(on) => turnPlugin(p, on)} label={t(p.on ? 'assetDrawer.pluginTurnOff' : 'assetDrawer.pluginTurnOn').replace('{name}', title)} />} />,
-      };
-    }),
-    ...listed.map((k) => ({
-      category: categoryOfSkill(k), key: k.uid,
-      node: <PluginRow key={k.uid} mark={<SkillMark skill={k} />} title={words(k).title} note={fromOf(k)}
-        summary={k.update ? t('gallery.updateOut').replace('{version}', k.update.version) : words(k).summary} onOpen={() => open(k.uid)}
-        control={<SettingsSwitch checked={!k.off} onChange={(on) => turnSkill(k, on)} label={t(k.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(k).title)} />} />,
-    })),
-    ...agentsOwn.flatMap((g) => g.skills.map((k) => ({
-      category: 'tool' as const, key: `${g.id}:${k.name}`,
-      node: <PluginRow key={`${g.id}:${k.name}`} mark={<SkillMark skill={{}} />} title={k.name} note={t('assetDrawer.skillsAgentOwn').replace('{name}', g.name)} summary={k.description}
-        control={<SettingsSwitch checked={k.allowed} onChange={(on) => agents.allow(g.id, k.name, on)} label={t(k.allowed ? 'gallery.turnOff' : 'gallery.turnOn').replace('{name}', k.name)} />} />,
-    }))),
-    ...ownMatched.filter((p) => p.soon).map((p) => {
-      const { title, summary } = pluginWords(p);
-      return { category: categoryOfPlugin(p), key: p.id, node: <PluginRow key={p.id} dim mark={<PluginMark plugin={p} />} title={title} summary={summary} onOpen={() => open(`${PLUGIN_PAGE}${p.id}`)} control={soonWord} /> };
-    }),
-  ];
-  const parts = (category ? [category] : CATEGORIES).map((c) => ({ category: c, rows: rows.filter((r) => r.category === c) })).filter((part) => part.rows.length);
+  if (line === 'skills') {
+    const mine = inOrder(listed.filter((k) => !isPlugin(k)), categoryOfSkill);
+    /* OpenFilm's own plugins with no surface: theirs is a skill too */
+    const ownSkills = ownMatched.filter((p) => !ownBench(p) && !p.soon);
+    return (
+      <PluginsPage title={t('assetDrawer.view_skills')} note={t('assetDrawer.note_skills')}>
+        {mine.length || ownSkills.length ? <SettingsGroup>{ownSkills.map(workbenchRow)}{mine.map(skillRow)}</SettingsGroup>
+          : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.noSkillsYet')} action={q ? undefined : { label: t('assetDrawer.view_discover'), run: () => showPluginsLine('discover') }} />}
+        {/* each agent's own, off here until let in */}
+        {agentsOwn.map((g) => (
+          <SettingsGroup key={g.id} title={t('assetDrawer.skillsAgentOwn').replace('{name}', g.name)} footnote={t('assetDrawer.agentOwnNote').replace('{name}', g.name)}>
+            {g.skills.map((k) => (
+              <PluginRow key={k.name} mark={<SkillMark skill={{}} />} title={k.name} summary={k.description}
+                control={<SettingsSwitch checked={k.allowed} onChange={(on) => agents.allow(g.id, k.name, on)} label={t(k.allowed ? 'gallery.turnOff' : 'gallery.turnOn').replace('{name}', k.name)} />} />
+            ))}
+          </SettingsGroup>
+        ))}
+      </PluginsPage>
+    );
+  }
+
+  /* Get more: what there is to install, workbenches then skills; what is installed stays, said so */
+  const read = seenCatalog();
+  const note = discover === 'partial' ? t('assetDrawer.discoverPartial') : discover === 'failed'
+    ? (read ? t('assetDrawer.discoverOffline').replace('{when}', new Date(read).toLocaleString()) : t('assetDrawer.discoverNever'))
+    : null;
+  /* the first read under way: its rows' places, said as it being read */
+  const waiting = discover === 'reading' && !offered.length && !q;
+  const parts = (['workbenches', 'skills'] as const)
+    .map((kind) => ({ kind, skills: offered.filter((k) => (isPlugin(k) ? 'workbenches' : 'skills') === kind) }))
+    .filter((part) => part.skills.length);
   return (
-    <PluginsPage title={t(category ? `assetDrawer.category_${category}` : 'assetDrawer.skillsInstalled')}>
-      {error ? <p role="alert" className="mb-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
-      {parts.length ? parts.map(({ category: c, rows: inIt }) => (
-        <div key={c} data-plugins-part={c} className="mb-10 last:mb-0">
-          <SettingsGroup title={category ? undefined : t(`assetDrawer.category_${c}`)}>{inIt.map((r) => <React.Fragment key={r.key}>{r.node}</React.Fragment>)}</SettingsGroup>
+    <PluginsPage title={t('assetDrawer.view_discover')} note={t('assetDrawer.note_discover')}>
+      {note ? (
+        <div role="status" className="mb-6 flex items-start gap-3 text-[14px] leading-relaxed text-[var(--text-muted)]">
+          <p className="min-w-0 flex-1">{note}</p>
+          <SettingsButton onClick={() => setRetry((n) => n + 1)}><RefreshCw size={14} />{t('assetDrawer.discoverRetry')}</SettingsButton>
         </div>
-      )) : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.pluginsNoneHere')} />}
+      ) : null}
+      {error ? <p role="alert" className="mb-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
+      {waiting ? (
+        <div role="status" aria-label={t('assetDrawer.discoverReading')} className="flex flex-col divide-y divide-[var(--border)]">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} aria-hidden className="flex items-center gap-4 py-4">
+              <div className="skeleton h-12 w-[84px] rounded-[8px]" />
+              <div className="flex flex-1 flex-col gap-2"><div className="skeleton h-3.5 w-1/3 rounded" /><div className="skeleton h-3 w-2/3 rounded" /></div>
+            </div>
+          ))}
+        </div>
+      ) : parts.length ? parts.map(({ kind, skills: inIt }) => (
+        <SettingsGroup key={kind} title={parts.length > 1 ? t(`assetDrawer.view_${kind}`) : undefined}>
+          {inIt.map((skill) => {
+            const there = installedOf(skill);
+            return (
+              <PluginRow key={skill.uid} onOpen={() => open(skill.uid)}
+                mark={<span aria-hidden className="relative block h-12 w-[84px] shrink-0 overflow-hidden rounded-[8px] bg-[var(--bg-field)] ring-1 ring-[var(--border)]"><SkillCover skill={skill} title={words(skill).title} /></span>}
+                title={words(skill).title} note={communityOf(skill) ? makerOf(skill) : undefined} summary={words(skill).summary}
+                control={there ? <span className="inline-flex items-center gap-1.5 text-[13.5px] text-[var(--text-muted)]"><Check size={15} aria-hidden />{t('assetDrawer.installedMark')}</span>
+                  : <SettingsButton disabled={installing != null} onClick={() => install(skill)}>
+                    {installing === skill.uid ? <Loader2 size={14} className="animate-spin" aria-hidden /> : null}
+                    {t(installing === skill.uid ? 'gallery.installing' : 'gallery.install')}
+                  </SettingsButton>} />
+            );
+          })}
+        </SettingsGroup>
+      )) : note && !read ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.discoverNone')} />}
     </PluginsPage>
   );
 }
@@ -316,8 +331,7 @@ function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn }: {
               {plugin.soon ? <Beta>{t('assetDrawer.pluginsSoon')}</Beta> : null}
             </div>
             <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[13px] text-[var(--text-faint)]">
-              <CategoryTag category={categoryOfPlugin(plugin)} />
-              <span className="truncate">{t('assetDrawer.skillsOfficial')}</span>
+              <span className="truncate">{t(plugin.workbench || plugin.tab ? 'assetDrawer.kind_workbench' : 'assetDrawer.kind_skill')} · {t('assetDrawer.skillsOfficial')}</span>
             </div>
           </div>
           {onTurn ? <SettingsSwitch checked={plugin.on} onChange={onTurn}
@@ -340,7 +354,10 @@ function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn }: {
           </div>
         ) : null}
         {how && !plugin.soon ? <HowToUse where text={t(how)} /> : null}
-        {plugin.workbench || plugin.tab || taught.length || plugin.commands?.length ? (
+        {/* it ships with OpenFilm: it is turned off rather than removed */}
+        <p className="mt-5 text-[14px] leading-[20px] text-[var(--text-muted)]">{t(plugin.soon ? 'assetDrawer.pluginSoonNote' : 'assetDrawer.pluginOffNote')}</p>
+        {/* what it is made of, for whoever makes such things: folded */}
+        <ForDevelopers>
           <PageSection title={t('assetDrawer.pluginBrings')}>
             {plugin.workbench ? <BringsLine kind={t('assetDrawer.brings_workbench')}>{title}</BringsLine> : null}
             {plugin.tab ? <BringsLine kind={t('assetDrawer.brings_tab')}>{inLanguage(plugin.tab.title, lang) ?? title}</BringsLine> : null}
@@ -361,29 +378,33 @@ function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn }: {
             ) : null}
             {plugin.commands?.length ? <BringsLine kind={t('assetDrawer.brings_commands')}><CommandChips name={plugin.id} commands={plugin.commands} /></BringsLine> : null}
           </PageSection>
-        ) : null}
-        {/* it ships with OpenFilm: its source is OpenFilm's, it is turned off rather than removed */}
-        <p className="mt-5 text-[13.5px] leading-[18px] text-[var(--text-muted)]">{t(plugin.soon ? 'assetDrawer.pluginSoonNote' : 'assetDrawer.pluginOffNote')}</p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px] text-[var(--text-muted)]">
-          <span className="shrink-0">{t('assetDrawer.pluginPart')}</span>
-          <span className="min-w-0 truncate font-mono text-[12px] text-[var(--text-faint)]">openfilm/{plugin.id}</span>
-        </div>
+          <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px] text-[var(--text-muted)]">
+            <span className="shrink-0">{t('assetDrawer.pluginPart')}</span>
+            <span className="min-w-0 truncate font-mono text-[12px] text-[var(--text-faint)]">openfilm/{plugin.id}</span>
+          </div>
+        </ForDevelopers>
       </div>
     </>
   );
 }
 
-/** Nothing to list: a word under the title. */
-function Empty({ text }: { text: string }) {
-  return <p className="pt-2 text-[14.5px] leading-relaxed text-[var(--text-faint)]">{text}</p>;
+/** Nothing to list: a word under the title, and where to go instead. */
+function Empty({ text, action }: { text: string; action?: { label: string; run: () => void } | undefined }) {
+  return (
+    <div className="flex flex-col items-start gap-3 pt-2">
+      <p className="text-[14.5px] leading-relaxed text-[var(--text-faint)]">{text}</p>
+      {action ? <SettingsButton onClick={action.run}>{action.label}</SettingsButton> : null}
+    </div>
+  );
 }
 
-/** The list's page: its title over it, in the middle of the room the window gives. */
-function PluginsPage({ title, children }: { title: string; children: React.ReactNode }) {
+/** A list's page: its title, what the list is in one line, then the list, in the middle of the room the window gives. */
+function PluginsPage({ title, note, children }: { title: string; note: string; children: React.ReactNode }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-9">
       <div className="mx-auto w-full max-w-[920px]">
-        <h2 className="mb-7 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{title}</h2>
+        <h2 className="text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{title}</h2>
+        <p className="mb-6 mt-2 max-w-[640px] text-[14.5px] leading-relaxed text-[var(--text-muted)]">{note}</p>
         {children}
       </div>
     </div>
