@@ -55,7 +55,7 @@ export const SKILL_FILE = 'SKILL.md';
 /**
  * A skill's surface: a web page at its folder's root. A skill that has one is a plugin of someone's own making: what
  * it teaches an agent, and a workbench of its own in Studio where the person sees and adjusts the same thing (the
- * Features window lists it among the workbenches, and its switch is the skill's). Studio shows the page beside the library and the
+ * Community window lists it among the workbenches, and its switch is the skill's). Studio shows the page beside the library and the
  * chat, on an origin of the plugins' own (studio/server/plugin-pages.mjs): it reads the project's files, writes them
  * once the person lets it (pluginWrites), and reaches nothing of the editor.
  */

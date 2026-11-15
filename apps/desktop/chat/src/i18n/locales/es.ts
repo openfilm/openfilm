@@ -227,7 +227,7 @@ export const es: Words = {
   project: {
     assets: 'Recursos',
     addAttachment: 'Añadir archivos',
-    plugins: 'Funciones',
+    plugins: 'Comunidad',
     close: 'Cerrar',
     composerPlaceholder: 'Di qué cambiar. Escribe @ para un archivo, una skill, un momento o lo que seleccionaste',
     composerPlaceholderBlank: 'Describe tu película. Escribe @ para añadir un archivo o una skill',

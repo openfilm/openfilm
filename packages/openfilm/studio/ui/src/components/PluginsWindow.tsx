@@ -1,23 +1,20 @@
 /**
- * Features: what OpenFilm can do, in a large window of its own (components/LargeDialog, as Settings is). Everything in
- * it is one of three kinds, told apart by where it shows when it is on: a workbench (a place worked in by hand, switched
- * to at the top right), a skill (know-how the agent uses in the conversation) or a connector (an outside service or tool
- * the agent can reach). Agents are not a kind here: they are who the person talks to, picked in the chat and set up in
- * Settings; what an agent brings (its skills, its connectors) is listed under its kind, with its name.
- *
- * The side: a search; Mine, the three kinds the person has; Discover, what there is to add, featured first, then each
- * kind and the community's; Import (a folder or a link, its kind read from what it is) at its foot. The page: a list or
- * one item's page (library/PluginsPane). Opened from the blocks beside the chat's "+", the OpenFilm menu, and links to a
- * skill (lib/plugins-window). Underneath, a workbench is a plugin; people need not know the word.
+ * The Community: everything that can be added to OpenFilm and shared, in a large window of its own (components/LargeDialog,
+ * as Settings is). Three places: Discover (look around), Added (what the person has: switches, updates), Publish (share
+ * what they made). Kinds (feature-kinds: workbenches, skills, connectors, the library's templates, stickers, sounds…) are
+ * filters of Discover's one catalog, listed once and open to more; a thing added goes back to where it is used (the top
+ * right, the conversation, the agent, the library's tabs). Import (a folder or a link, its kind read from what it is) at
+ * the side's foot. Opened from the compass beside the chat's "+", the OpenFilm menu, and links to a skill
+ * (lib/plugins-window). The design and the research behind it: internal/community.md.
  */
 import React from 'react';
-import { Import, Star, UsersRound, type LucideIcon } from 'lucide-react';
+import { CircleCheck, Compass, Import, Upload } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import type { Plugin } from '@/lib/plugins';
-import { closePlugins, showPluginsLine, showPluginsPage, usePluginsWindow, type PluginsLine } from '@/lib/plugins-window';
+import { closePlugins, showPluginsLine, showPluginsPage, usePluginsWindow } from '@/lib/plugins-window';
 import { LargeDialog, LargeDialogGroup, LargeDialogPlace, LargeDialogSearch } from './LargeDialog';
-import { FEATURE_KINDS, KIND_ICONS } from './feature-kinds';
+import { FEATURE_KINDS, KindIcon, isCodeKind } from './feature-kinds';
 import { PluginsPane } from './library/PluginsPane';
 
 const ICON = { size: 18, strokeWidth: 1.75 } as const;
@@ -30,9 +27,6 @@ export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string 
   React.useEffect(() => { if (open) setQuery(''); }, [open]);
   if (!open) return null;
   const importAny = studioHost?.skills?.add;
-  const place = (to: PluginsLine, Icon: LucideIcon, label: string) => (
-    <LargeDialogPlace key={to} icon={<Icon {...ICON} />} active={line === to} onClick={() => showPluginsLine(to)}>{label}</LargeDialogPlace>
-  );
   return (
     <LargeDialog label={t('assetDrawer.pluginsWindow')} closeLabel={t('assetDrawer.closePlugins')} onClose={closePlugins} focusFirst={search}
       onEscape={() => { if (!page) return false; showPluginsPage(null); return true; }}
@@ -40,20 +34,23 @@ export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string 
         <>
           <LargeDialogSearch ref={search} value={query} placeholder={t('assetDrawer.featuresSearch')}
             onChange={(value) => { setQuery(value); if (page) showPluginsPage(null); }} />
-          <LargeDialogGroup title={t('assetDrawer.group_mine')}>
-            {FEATURE_KINDS.map((k) => place(k, KIND_ICONS[k], t(`assetDrawer.view_${k}`)))}
+          <LargeDialogGroup>
+            <LargeDialogPlace icon={<Compass {...ICON} />} active={line === 'discover'} onClick={() => showPluginsLine('discover')}>{t('assetDrawer.place_discover')}</LargeDialogPlace>
+            <LargeDialogPlace icon={<CircleCheck {...ICON} />} active={line === 'added'} onClick={() => showPluginsLine('added')}>{t('assetDrawer.place_added')}</LargeDialogPlace>
           </LargeDialogGroup>
-          <LargeDialogGroup title={t('assetDrawer.group_discover')}>
-            {place('discover', Star, t('assetDrawer.discover_featured'))}
-            {FEATURE_KINDS.map((k) => place(`discover:${k}`, KIND_ICONS[k], t(`assetDrawer.view_${k}`)))}
-            {place('discover:community', UsersRound, t('assetDrawer.discover_community'))}
+          {/* Discover by kind: each listed once, more to come */}
+          <LargeDialogGroup title={t('assetDrawer.group_kinds')}>
+            {FEATURE_KINDS.map((k) => (
+              <LargeDialogPlace key={k} icon={<KindIcon kind={k} />} active={line === `kind:${k}`} onClick={() => showPluginsLine(`kind:${k}`)}>
+                {t(isCodeKind(k) ? `assetDrawer.view_${k}` : `assetDrawer.cat_${k}`)}
+              </LargeDialogPlace>
+            ))}
           </LargeDialogGroup>
-          {/* anything of the person's own comes in here, the app's way (a folder or a link): its kind is read from what it is */}
-          {importAny ? (
-            <div className="mt-auto pt-6">
-              <LargeDialogPlace icon={<Import {...ICON} />} active={false} onClick={importAny}>{t('assetDrawer.importAny')}</LargeDialogPlace>
-            </div>
-          ) : null}
+          {/* sharing what one made, and bringing in what is elsewhere (a folder or a link: its kind is read from what it is) */}
+          <div className="mt-auto flex flex-col gap-0.5 pt-6">
+            <LargeDialogPlace icon={<Upload {...ICON} />} active={line === 'publish'} onClick={() => showPluginsLine('publish')}>{t('assetDrawer.place_publish')}</LargeDialogPlace>
+            {importAny ? <LargeDialogPlace icon={<Import {...ICON} />} active={false} onClick={importAny}>{t('assetDrawer.importAny')}</LargeDialogPlace> : null}
+          </div>
         </>
       )}>
       <PluginsPane line={line} query={query} projectId={projectId} opened={page} onOpen={showPluginsPage}

@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Blocks, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, Square } from 'lucide-react';
+import { ArrowDown, Coins, Compass, CornerDownLeft, LibraryBig, Loader2, Plus, Square } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
@@ -1105,11 +1105,11 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
           </button>
         </Tooltip>
 
-        {/* what OpenFilm can do (its workbenches and skills), in Studio's Features window */}
+        {/* the community: what there is to add to OpenFilm, and what was added, in Studio's Community window */}
         {app.showExamples ? (
           <Tooltip label={t('project.plugins')}>
             <button type="button" onClick={() => app.showExamples?.({ kind: 'plugins' })} className="openfilm-composer-tool" aria-label={t('project.plugins')}>
-              <Blocks size={16} strokeWidth={1.75} />
+              <Compass size={16} strokeWidth={1.75} />
             </button>
           </Tooltip>
         ) : null}

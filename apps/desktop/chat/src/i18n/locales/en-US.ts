@@ -228,7 +228,7 @@ export const enUS = {
   project: {
     assets: 'Assets',
     addAttachment: 'Add files',
-    plugins: 'Features',
+    plugins: 'Community',
     close: 'Close',
     composerPlaceholder: 'Say what to change. Type @ for a file, a skill, a moment or what you selected',
     composerPlaceholderBlank: 'Describe your film. Type @ to add a file or a skill',

@@ -18,7 +18,7 @@
 import React from 'react';
 import {
   ArrowLeft, ArrowUpRight, AudioLines, Box, Check, ChevronRight, Clapperboard, Cloud, Film, FolderOpen, Images, Languages, Layers, Loader2, Megaphone, Mic,
-  Music, Music2, Palette, Projector, Puzzle, RefreshCw, Scissors, Send, Spline, Workflow, type LucideIcon,
+  Music, Music2, MousePointerClick, Palette, Projector, Puzzle, RefreshCw, Scissors, Send, Spline, SquareTerminal, Upload, Workflow, Github, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
@@ -32,8 +32,10 @@ import {
 import { CATEGORIES, categoryOfPlugin, categoryOfSkill, usesOfPlugin, type Category } from '@/lib/plugin-profile';
 import { ProfileStrip } from './PluginProfile';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
+import { CommunityChannels } from '../CommunityChannels';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
-import { KIND_ICONS, type FeatureKind } from '../feature-kinds';
+import { FEATURE_KINDS, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
+import { nameOf, posterUrl, useLibraryIndex, type LibraryCategory, type LibraryItem } from '@/lib/library';
 
 export const PLUGIN_ICONS: Record<string, LucideIcon> = {
   film: Film, folder: FolderOpen, scissors: Scissors, workflow: Workflow, clapperboard: Clapperboard, audio: AudioLines, palette: Palette, layers: Layers,
@@ -115,7 +117,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const [discover, setDiscover] = React.useState<'reading' | 'read' | 'failed' | 'partial'>(() => (seenCatalog() ? discoverFailed ?? 'read' : 'reading'));
   const [retry, setRetry] = React.useState(0);
   React.useEffect(() => {
-    if (!line.startsWith('discover')) return;
+    if (line !== 'discover' && !line.startsWith('kind:')) return;
     let live = true;
     const request = ++discoverRequest;
     setDiscover(seenCatalog() ? 'read' : 'reading');
@@ -126,7 +128,9 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     return () => { live = false; };
   }, [line, retry]);
 
-  const agents = useAgentExtras(line === 'skills' || line === 'connectors');
+  const agents = useAgentExtras(line === 'added');
+  const library = useLibraryIndex();
+  const lang = useLanguage();
   const q = query.trim().toLowerCase();
   const matches = (...said: (string | undefined)[]) => !q || said.some((w) => w?.toLowerCase().includes(q));
   const found = skills
@@ -206,69 +210,68 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* a workbench is what shows outside the conversation: OpenFilm's with a workbench or a tab of the library, anyone's with a page */
   const ownBench = (p: Plugin) => Boolean(p.workbench || p.tab);
 
-  if (line === 'workbenches') {
-    const benches = inOrder(ownMatched.filter((p) => ownBench(p) && !p.soon), categoryOfPlugin);
-    const theirs = listed.filter((k) => isPlugin(k));
-    /* OpenFilm's still being made (each a workbench to be, none declared yet) */
-    const soon = inOrder(ownMatched.filter((p) => p.soon), categoryOfPlugin);
-    return (
-      <PluginsPage title={t('assetDrawer.view_workbenches')} note={t('assetDrawer.note_workbenches')}>
-        {error ? <p role="alert" className="mb-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
-        {benches.length || theirs.length ? <SettingsGroup>{benches.map(workbenchRow)}{theirs.map(skillRow)}</SettingsGroup> : null}
-        {/* OpenFilm's still being made, so the whole of it is in sight: no switch */}
-        {soon.length ? (
-          <SettingsGroup title={t('assetDrawer.comingSoon')}>
-            {soon.map((p) => {
-              const { title, summary } = pluginWords(p);
-              return <PluginRow key={p.id} dim mark={<PluginMark plugin={p} />} title={title} summary={summary} onOpen={() => open(`${PLUGIN_PAGE}${p.id}`)} control={null} />;
-            })}
-          </SettingsGroup>
-        ) : null}
-        {!benches.length && !theirs.length && !soon.length ? <Empty text={t('assetDrawer.noSkillsFound')} /> : null}
-      </PluginsPage>
-    );
-  }
+  /* the community's own of the library's kinds (sent to its library by someone, `by`): there already, in its tabs */
+  const assetsOf = (kind: LibraryCategory) => (library?.items ?? [])
+    .filter((it) => it.cat === kind && it.by && matches(nameOf(it.name, lang), it.by, ...(it.tags ?? [])));
 
-  if (line === 'skills') {
+  /* Added: what the person has, by kind; each kind's switches; OpenFilm's workbenches among them */
+  if (line === 'added') {
+    const benches = inOrder(ownMatched.filter((p) => ownBench(p) && !p.soon), categoryOfPlugin);
+    const theirBenches = listed.filter((k) => isPlugin(k));
     const mine = inOrder(listed.filter((k) => !isPlugin(k)), categoryOfSkill);
-    /* OpenFilm's own plugins with no surface: theirs is a skill too */
     const ownSkills = ownMatched.filter((p) => !ownBench(p) && !p.soon);
+    const connectors = agents.mcp.map((g) => ({ ...g, servers: g.servers.filter((k) => matches(k.name, k.detail)) })).filter((g) => g.servers.length);
+    const agentSkills = agentsOwn;
+    const nothing = !benches.length && !theirBenches.length && !mine.length && !ownSkills.length && !connectors.length && !agentSkills.length;
     return (
-      <PluginsPage title={t('assetDrawer.view_skills')} note={t('assetDrawer.note_skills')}>
-        {mine.length || ownSkills.length ? <SettingsGroup>{ownSkills.map(workbenchRow)}{mine.map(skillRow)}</SettingsGroup>
-          : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.noSkillsYet')} action={q ? undefined : { label: t('assetDrawer.view_discover'), run: () => showPluginsLine('discover') }} />}
-        {/* each agent's own, off here until let in */}
-        {agentsOwn.map((g) => (
-          <SettingsGroup key={g.id} title={t('assetDrawer.skillsAgentOwn').replace('{name}', g.name)} footnote={t('assetDrawer.agentOwnNote').replace('{name}', g.name)}>
+      <PluginsPage title={t('assetDrawer.place_added')} note={t('assetDrawer.note_added')}>
+        {error ? <p role="alert" className="mb-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
+        {benches.length || theirBenches.length ? (
+          <SettingsGroup title={<KindTitle kind="workbenches" />}>{benches.map(workbenchRow)}{theirBenches.map(skillRow)}</SettingsGroup>
+        ) : null}
+        {mine.length || ownSkills.length ? <SettingsGroup title={<KindTitle kind="skills" />}>{ownSkills.map(workbenchRow)}{mine.map(skillRow)}</SettingsGroup> : null}
+        {/* what each agent brings of its own: its skills, its connectors, each let in here or not */}
+        {agentSkills.map((g) => (
+          <SettingsGroup key={`skills:${g.id}`} title={<KindTitle kind="skills" from={g.name} />} footnote={t('assetDrawer.agentOwnNote').replace('{name}', g.name)}>
             {g.skills.map((k) => (
               <PluginRow key={k.name} mark={<SkillMark skill={{}} />} title={k.name} summary={k.description}
                 control={<SettingsSwitch checked={k.allowed} onChange={(on) => agents.allow(g.id, k.name, on)} label={t(k.allowed ? 'gallery.turnOff' : 'gallery.turnOn').replace('{name}', k.name)} />} />
             ))}
           </SettingsGroup>
         ))}
-      </PluginsPage>
-    );
-  }
-
-  if (line === 'connectors') {
-    const groups = agents.mcp.map((g) => ({ ...g, servers: g.servers.filter((k) => matches(k.name, k.detail)) })).filter((g) => g.servers.length);
-    return (
-      <PluginsPage title={t('assetDrawer.view_connectors')} note={t('assetDrawer.note_connectors')}>
-        {groups.length ? groups.map((g) => (
-          <SettingsGroup key={g.id} title={t('assetDrawer.connectorsOf').replace('{name}', g.name)}
-            footnote={g.filtered ? undefined : t('assetDrawer.connectorsAll').replace('{name}', g.name)}>
+        {connectors.map((g) => (
+          <SettingsGroup key={`mcp:${g.id}`} title={<KindTitle kind="connectors" from={g.name} />}
+            footnote={g.filtered ? t('assetDrawer.connectorsNote').replace('{name}', g.name) : t('assetDrawer.connectorsAll').replace('{name}', g.name)}>
             {g.servers.map((k) => (
               <PluginRow key={k.name} mark={<KindMark kind="connectors" />} title={k.name} summary={k.detail}
                 control={g.filtered ? <SettingsSwitch checked={k.allowed} onChange={(on) => agents.allowMcp(g.id, k.name, on)} label={t(k.allowed ? 'gallery.turnOff' : 'gallery.turnOn').replace('{name}', k.name)} /> : null} />
             ))}
           </SettingsGroup>
-        )) : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.noConnectorsYet')} action={q ? undefined : { label: t('assetDrawer.seeConnectors'), run: () => showPluginsLine('discover:connectors') }} />}
+        ))}
+        {nothing ? <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.addedNone')} action={q ? undefined : { label: t('assetDrawer.place_discover'), run: () => showPluginsLine('discover') }} /> : null}
       </PluginsPage>
     );
   }
 
-  /* Discover: what there is to add, as cards. OpenFilm's workbenches are here too, to turn on; what is installed or on
-     stays, said so; what is still being made is shown as it will be, without a button (soon.ts) */
+  /* Publish: how what one made reaches everyone; what one published shows here once one signs in (to come) */
+  if (line === 'publish') {
+    return (
+      <PluginsPage title={t('assetDrawer.publishTitle')} note={t('assetDrawer.note_publish')}>
+        <SettingsGroup title={t('assetDrawer.publishHow')}>
+          <PluginRow mark={<KindMark kind="workbenches" icon={MousePointerClick} />} title={t('assetDrawer.publishInApp')} summary={t('assetDrawer.publishInAppNote')} control={<SoonMark />} />
+          <PluginRow mark={<KindMark kind="workbenches" icon={SquareTerminal} />} title={t('assetDrawer.publishCli')} summary={t('assetDrawer.publishCliNote')} control={<SoonMark />} />
+          <PluginRow mark={<KindMark kind="workbenches" icon={Github} />} title={t('assetDrawer.publishGithub')} summary={t('assetDrawer.publishGithubNote')}
+            control={<a href={MAKE_GUIDE} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-3.5 text-[14px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]">{t('assetDrawer.publishGuide')}<ArrowUpRight size={14} aria-hidden /></a>} />
+        </SettingsGroup>
+        <SettingsGroup title={t('assetDrawer.publishMine')}>
+          <p className="py-3 text-[14px] leading-relaxed text-[var(--text-faint)]">{t('assetDrawer.publishMineNone')}</p>
+        </SettingsGroup>
+      </PluginsPage>
+    );
+  }
+
+  /* Discover: the catalog, as cards. OpenFilm's workbenches are here too, to turn on; what is installed or on stays,
+     said so; what is still being made is shown as it will be, without a button (SOON) */
   const read = seenCatalog();
   const note = discover === 'partial' ? t('assetDrawer.discoverPartial') : discover === 'failed'
     ? (read ? t('assetDrawer.discoverOffline').replace('{when}', new Date(read).toLocaleString()) : t('assetDrawer.discoverNever'))
@@ -292,21 +295,27 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       </SettingsButton>
     ),
   });
+  const assetCard = (it: LibraryItem): StoreItem => ({
+    key: it.id, kind: it.cat, title: nameOf(it.name, lang), summary: (it.tags ?? []).slice(0, 4).join(t('assetDrawer.listSep')), note: it.by,
+    cover: it.kind === 'sound' ? <GradientCover hue={it.cat === 'music' ? 286 : 200} Icon={it.cat === 'music' ? Music : AudioLines} />
+      : <img src={posterUrl(it)} alt="" loading="lazy" draggable={false} className="absolute inset-0 h-full w-full object-cover" />,
+    action: doneMark(t('assetDrawer.inLibrary')),
+  });
   const soonCards = SOON.filter((x) => matches(t(`assetDrawer.soon_${x.id}`), t(`assetDrawer.soon_${x.id}Note`))).map((x): StoreItem => ({
     key: `soon:${x.id}`, kind: x.kind, title: t(`assetDrawer.soon_${x.id}`), summary: t(`assetDrawer.soon_${x.id}Note`), note: t('assetDrawer.skillsOfficial'),
     cover: <GradientCover hue={x.hue} Icon={x.icon} />, action: <SoonMark />,
   }));
-  const official = offered.filter((k) => !communityOf(k));
-  const store: Record<'workbenches' | 'skills' | 'connectors' | 'community', StoreItem[]> = {
-    workbenches: [
-      ...inOrder(ownMatched.filter((p) => ownBench(p) && !p.soon), categoryOfPlugin).map(benchCard),
-      ...official.filter((k) => isPlugin(k)).map(skillCard),
-      ...inOrder(ownMatched.filter((p) => p.soon), categoryOfPlugin).map(benchCard),
-      ...soonCards.filter((x) => x.kind === 'workbenches'),
-    ],
-    skills: [...official.filter((k) => !isPlugin(k)).map(skillCard), ...soonCards.filter((x) => x.kind === 'skills')],
-    connectors: soonCards.filter((x) => x.kind === 'connectors'),
-    community: offered.filter((k) => communityOf(k)).map(skillCard),
+  const storeOf = (kind: FeatureKind): StoreItem[] => {
+    if (kind === 'workbenches') {
+      return [
+        ...inOrder(ownMatched.filter((p) => ownBench(p) && !p.soon), categoryOfPlugin).map(benchCard),
+        ...offered.filter((k) => isPlugin(k)).map(skillCard),
+        ...inOrder(ownMatched.filter((p) => p.soon), categoryOfPlugin).map(benchCard),
+      ];
+    }
+    if (kind === 'skills') return [...offered.filter((k) => !isPlugin(k)).map(skillCard), ...soonCards.filter((x) => x.kind === 'skills')];
+    if (kind === 'connectors') return soonCards.filter((x) => x.kind === 'connectors');
+    return assetsOf(kind).map(assetCard);
   };
   const status = (
     <>
@@ -319,47 +328,76 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       {error ? <p role="alert" className="mb-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
     </>
   );
-  const communityEmpty = (
-    <div className="flex flex-col items-start gap-3 rounded-[12px] border border-dashed border-[var(--border-strong)] p-5">
-      <p className="text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.communityEmpty')}</p>
-      <a href={MAKE_GUIDE} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--border)] px-3.5 text-[14px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]">
-        {t('assetDrawer.communityHow')}<ArrowUpRight size={14} aria-hidden />
-      </a>
+  /* the way to share what one made, wherever a shelf has nothing yet and at the foot of Discover */
+  const publishCall = (text: string) => (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-[12px] border border-dashed border-[var(--border-strong)] px-5 py-4">
+      <p className="min-w-0 flex-1 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{text}</p>
+      <SettingsButton onClick={() => showPluginsLine('publish')}><Upload size={14} aria-hidden />{t('assetDrawer.publishAction')}</SettingsButton>
     </div>
   );
+  const kindName = (kind: FeatureKind) => t(isCodeKind(kind) ? `assetDrawer.view_${kind}` : `assetDrawer.cat_${kind}`);
 
   if (line === 'discover') {
-    /* the one shown big: OpenFilm's newest skill with a moving preview, else its newest workbench */
-    const hero = official.find((k) => k.preview && !isPlugin(k)) ?? official.find((k) => k.cover);
-    const heroItem = hero ? skillCard(hero) : store.workbenches[0];
+    /* the one shown big: OpenFilm's newest skill with a moving preview, else its first workbench */
+    const hero = offered.find((k) => k.preview && !isPlugin(k) && !communityOf(k)) ?? offered.find((k) => k.cover);
+    const heroItem = hero ? skillCard(hero) : storeOf('workbenches')[0];
+    const shelves = FEATURE_KINDS.map((kind) => ({ kind, items: storeOf(kind) })).filter((x) => x.items.length);
     return (
-      <PluginsPage title={t('assetDrawer.discover_featured')} note={t('assetDrawer.note_featured')}>
+      <PluginsPage title={t('assetDrawer.place_discover')} note={t('assetDrawer.note_discoverHome')}>
         {status}
-        {heroItem && !q ? <Hero item={heroItem} preview={hero?.preview} label={t('assetDrawer.discover_featured')} /> : null}
-        {(['workbenches', 'skills', 'connectors'] as const).map((kind) => store[kind].length ? (
-          <StoreShelf key={kind} title={t(`assetDrawer.view_${kind}`)} more={t('assetDrawer.seeAll')} onMore={() => showPluginsLine(`discover:${kind}`)}>
-            {store[kind].slice(0, 3).map((item) => <StoreCard key={item.key} item={item} />)}
+        {heroItem && !q ? <Hero item={heroItem} preview={hero?.preview} poster={hero?.cover} label={t('assetDrawer.featuredLabel')} /> : null}
+        {/* every kind at a glance, as a store's departments: the open list, with how many each has */}
+        {!q ? (
+          <section className="mb-10">
+            <h3 className="mb-3 text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('assetDrawer.byKind')}</h3>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5">
+              {FEATURE_KINDS.map((kind) => {
+                /* what is there now: the coming ones are not counted */
+                const n = storeOf(kind).filter((x) => !x.key.startsWith('soon:')).length;
+                return (
+                  <button key={kind} type="button" onClick={() => showPluginsLine(`kind:${kind}`)}
+                    className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] px-3.5 py-3 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]">
+                    <span className="text-[var(--text-muted)]"><KindIcon kind={kind} size={20} /></span>
+                    <span className="min-w-0 flex-1 truncate text-[14.5px] text-[var(--text)]">{kindName(kind)}</span>
+                    <span className="shrink-0 text-[12.5px] tabular-nums text-[var(--text-faint)]">{n || ''}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+        {shelves.map(({ kind, items }) => (
+          <StoreShelf key={kind} title={kindName(kind)} more={t('assetDrawer.seeAll')} onMore={() => showPluginsLine(`kind:${kind}`)}>
+            {items.slice(0, 3).map((item) => <StoreCard key={item.key} item={item} />)}
           </StoreShelf>
-        ) : null)}
-        <StoreShelf title={t('assetDrawer.discover_community')} more={t('assetDrawer.seeAll')} onMore={() => showPluginsLine('discover:community')} empty={communityEmpty}>
-          {store.community.slice(0, 3).map((item) => <StoreCard key={item.key} item={item} />)}
-        </StoreShelf>
+        ))}
+        {!q ? publishCall(t('assetDrawer.publishCall')) : null}
+        {/* where the community talks, beside what it makes */}
+        {!q ? (
+          <section className="mt-10">
+            <h3 className="mb-1 text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('assetDrawer.talkTitle')}</h3>
+            <p className="mb-4 text-[14px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.talkNote')}</p>
+            <CommunityChannels />
+          </section>
+        ) : null}
       </PluginsPage>
     );
   }
 
-  const kind = line.slice('discover:'.length) as 'workbenches' | 'skills' | 'connectors' | 'community';
-  const items = store[kind];
+  /* one kind of the catalog: all of it, cards; none yet: said, with the way to publish one */
+  const kind = line.slice('kind:'.length) as FeatureKind;
+  const items = storeOf(kind);
+  const kindNote = isCodeKind(kind) ? t(`assetDrawer.note_discover_${kind}`) : t('assetDrawer.note_kindAsset').replaceAll('{kind}', kindName(kind));
   return (
-    <PluginsPage title={t(kind === 'community' ? 'assetDrawer.discover_community' : `assetDrawer.view_${kind}`)} note={t(`assetDrawer.note_discover_${kind}`)}>
+    <PluginsPage title={kindName(kind)} note={kindNote}>
       {status}
-      {waiting ? (
+      {waiting && isCodeKind(kind) ? (
         <div role="status" aria-label={t('assetDrawer.discoverReading')} className={STORE_GRID}>
           {Array.from({ length: 6 }, (_, i) => <div key={i} aria-hidden className="skeleton aspect-[4/3] rounded-[12px]" />)}
         </div>
       ) : items.length ? <div className={STORE_GRID}>{items.map((item) => <StoreCard key={item.key} item={item} />)}</div>
-        : kind === 'community' && !q ? communityEmpty
-        : note && !read ? null : <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.discoverNone')} />}
+        : q ? <Empty text={t('assetDrawer.noSkillsFound')} />
+        : publishCall(t('assetDrawer.kindNone').replaceAll('{kind}', kindName(kind)))}
     </PluginsPage>
   );
 }
@@ -584,16 +622,30 @@ function SoonMark() {
   return <span className="inline-flex h-7 items-center rounded-full bg-[var(--bg-field)] px-2.5 text-[12.5px] text-[var(--text-muted)]">{t('assetDrawer.comingSoon')}</span>;
 }
 
-/** A kind's mark in a row's place for one (a connector has no mark of its own). */
-function KindMark({ kind }: { kind: FeatureKind }) {
-  const Mark = KIND_ICONS[kind];
-  return <span className="flex h-9 w-9 items-center justify-center rounded-[9px] bg-[var(--bg-field)] text-[var(--text-muted)]"><Mark size={17} strokeWidth={1.7} /></span>;
+/** A kind's mark (or `icon`) in a row's place for one that has no mark of its own (a connector, a way to publish). */
+function KindMark({ kind, icon: Icon }: { kind: FeatureKind; icon?: LucideIcon }) {
+  return (
+    <span className="flex h-9 w-9 items-center justify-center rounded-[9px] bg-[var(--bg-field)] text-[var(--text-muted)]">
+      {Icon ? <Icon size={17} strokeWidth={1.7} aria-hidden /> : <KindIcon kind={kind} size={17} />}
+    </span>
+  );
+}
+
+/** A group's title in Added: its kind's mark and name, and whose it is when an agent brought it. */
+function KindTitle({ kind, from }: { kind: FeatureKind; from?: string }) {
+  const t = useT();
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="text-[var(--text-muted)]"><KindIcon kind={kind} size={17} /></span>
+      {t(isCodeKind(kind) ? `assetDrawer.view_${kind}` : `assetDrawer.cat_${kind}`)}
+      {from ? <span className="text-[14px] font-normal text-[var(--text-faint)]">{t('assetDrawer.fromAgent').replace('{name}', from)}</span> : null}
+    </span>
+  );
 }
 
 /** One thing in Discover: its picture, its name and whose, what it is for, its kind and its button; a click opens its page. */
 function StoreCard({ item }: { item: StoreItem }) {
   const t = useT();
-  const Mark = KIND_ICONS[item.kind];
   return (
     <div role={item.onOpen ? 'button' : undefined} tabIndex={item.onOpen ? 0 : undefined} data-store-card={item.title}
       onClick={item.onOpen} onKeyDown={(e) => { if (item.onOpen && e.key === 'Enter' && e.target === e.currentTarget) item.onOpen(); }}
@@ -606,7 +658,7 @@ function StoreCard({ item }: { item: StoreItem }) {
         </div>
         <p className="mt-1 line-clamp-2 min-h-[42px] text-[13.5px] leading-[21px] text-[var(--text-muted)]">{item.summary}</p>
         <div className="mt-3 flex items-center justify-between gap-2">
-          <span className="inline-flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--text-faint)]"><Mark size={14} strokeWidth={1.75} aria-hidden />{t(`assetDrawer.kind_${item.kind}`)}</span>
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-[12.5px] text-[var(--text-faint)]"><KindIcon kind={item.kind} size={14} />{t(isCodeKind(item.kind) ? `assetDrawer.kind_${item.kind}` : `assetDrawer.cat_${item.kind}`)}</span>
           {/* the button is its own: a press there does not open the page */}
           <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>{item.action}</span>
         </div>
@@ -631,14 +683,14 @@ function StoreShelf({ title, more, onMore, children, empty }: { title: string; m
 }
 
 /** Discover's one shown big: its moving preview (else its picture) beside what it is and its button. */
-function Hero({ item, preview, label }: { item: StoreItem; preview?: string | undefined; label: string }) {
+function Hero({ item, preview, poster, label }: { item: StoreItem; preview?: string | undefined; poster?: string | undefined; label: string }) {
   return (
     <div role={item.onOpen ? 'button' : undefined} tabIndex={item.onOpen ? 0 : undefined} onClick={item.onOpen}
       onKeyDown={(e) => { if (item.onOpen && e.key === 'Enter' && e.target === e.currentTarget) item.onOpen(); }}
       className="mb-10 grid cursor-pointer overflow-hidden rounded-[14px] border border-[var(--border)] outline-none transition hover:border-[var(--border-strong)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)] md:grid-cols-[1.25fr_1fr]">
       <div className="relative aspect-video overflow-hidden bg-black">
         {item.cover}
-        {preview ? <video src={preview} autoPlay muted loop playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
+        {preview ? <video src={preview} poster={poster} autoPlay muted loop playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
       </div>
       <div className="flex min-w-0 flex-col justify-center gap-2 p-6">
         <span className="text-[12.5px] font-medium text-[var(--accent)]">{label}</span>

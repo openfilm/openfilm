@@ -18,13 +18,13 @@ my-plugin/
 ```
 
 Put it in your Skills folder (`~/Movies/OpenFilm/Skills` on macOS, `~/Videos/OpenFilm/Skills` elsewhere; `OPENFILM_SKILLS`
-names another), or in a project's `skills/` folder to keep it with that project. Studio's Features window (the OpenFilm
-menu, or the grid beside the chat's "+") lists it with its switch: under Workbenches when it has a page, else under
-Skills. People see "workbench" and "skill"; "plugin" is the word for those who make them.
+names another), or in a project's `skills/` folder to keep it with that project. Studio's Community window (the OpenFilm
+menu, or the compass beside the chat's "+") lists it under Added with its switch: as a workbench when it has a page,
+else as a skill. People see "workbench" and "skill"; "plugin" is the word for those who make them.
 
 ### How it is listed: category and profile
 
-The Features window lists workbenches and skills in the order a film is made (each says its category), and opens on a
+The Community window lists workbenches and skills in the order a film is made (each says its category), and opens on a
 page that sums it up at the top. Its openfilm.json says so (each optional; a skill's openfilm.json the same):
 
 | Field | What it says |

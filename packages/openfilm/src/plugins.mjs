@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Plugins: what OpenFilm can do, each a folder in `plugins/` of this package, listed in Studio's Features window (as workbenches, or as skills when they have none).
+ * Plugins: what OpenFilm can do, each a folder in `plugins/` of this package, listed in Studio's Community window (as workbenches, or as skills when they have none).
  * What every project stands on is no plugin and has no switch: the conversation, the project's folder and the system
  * prompt. No skill is: the skills an agent is given are those the plugins on bring and require (src/skills.mjs
  * ownSkills), so with only the canvas on it is not told how a film is written.
@@ -207,6 +207,6 @@ export const workbenchesOn = (home) => pluginStates(home).flatMap((p) => (p.work
 export function pluginsOffLine(home) {
   const off = pluginStates(home).filter((p) => !p.on && !p.soon);
   if (!off.length) return null;
-  return `Plugins the person has turned off (Features, in the OpenFilm menu, turns one on): ${off.map((p) => `${p.id} (${p.about})`).join('; ')}. `
+  return `Plugins the person has turned off (Community › Added, in the OpenFilm menu, turns one on): ${off.map((p) => `${p.id} (${p.about})`).join('; ')}. `
     + 'Their workbenches are not shown, so do not send the person to one; when a task would be better done there, say so in a line.';
 }

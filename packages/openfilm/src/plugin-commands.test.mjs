@@ -66,11 +66,11 @@ test('a plugin that is off runs nothing, and two of one name are told apart', ()
   setSkillOn('local/outline', false, where.home);
   const off = pluginCommand(['outline', 'list'], where);
   assert.equal(off.status, 1);
-  assert.match(off.error, /^The outline skill is off: the person turns it on in Features \(the OpenFilm menu\)\.$/);
+  assert.match(off.error, /^The outline skill is off: the person turns it on under Added in Community \(the OpenFilm menu\)\.$/);
   /* one with a surface is a plugin, and is said to be */
   plugin(join(where.mine, 'board'), 'board', { list: 'list.mjs' }, { 'list.mjs': '', 'index.html': '<p>' });
   setSkillOn('local/board', false, where.home);
-  assert.match(pluginCommand(['board', 'list'], where).error, /^The board plugin is off: the person turns it on in Features \(the OpenFilm menu\)\.$/);
+  assert.match(pluginCommand(['board', 'list'], where).error, /^The board plugin is off: the person turns it on under Added in Community \(the OpenFilm menu\)\.$/);
   setSkillOn('local/outline', true, where.home);
   assert.equal(pluginCommand(['outline', 'list'], where).command, 'list');
   /* the project brings one of the same name */
@@ -110,7 +110,7 @@ test('openfilm canvas is the canvas plugin\'s one command: every word after it i
   setPluginOn('canvas', false, where.home);
   const off = pluginCommand(['canvas'], where);
   assert.equal(off.status, 1);
-  assert.equal(off.error, 'The canvas plugin is off: the person turns it on in Features (the OpenFilm menu).');
+  assert.equal(off.error, 'The canvas plugin is off: the person turns it on under Added in Community (the OpenFilm menu).');
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -137,7 +137,7 @@ test('openfilm canvas says what it takes, and where it works, as before it was t
   setPluginOn('canvas', false, where.home);
   const off = cli(['canvas']);
   assert.equal(off.status, 1);
-  assert.equal(off.stderr, 'openfilm canvas: The canvas plugin is off: the person turns it on in Features (the OpenFilm menu).\n');
+  assert.equal(off.stderr, 'openfilm canvas: The canvas plugin is off: the person turns it on under Added in Community (the OpenFilm menu).\n');
   rmSync(root, { recursive: true, force: true });
 });
 
