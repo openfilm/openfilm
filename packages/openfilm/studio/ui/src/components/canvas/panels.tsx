@@ -8,7 +8,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
 import {
-  ArrowUp, ArrowUpRight, Camera, ChevronLeft, ChevronRight, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb, GalleryHorizontal,
+  ArrowUp, ArrowUpRight, Camera, ChevronLeft, ChevronRight, FileText, AudioLines, Brush, Palette, UserRound, Film, Grid2x2, LayoutDashboard, Orbit, Check, ChevronDown, Clapperboard, CopyPlus, Download, FolderSearch, Group, Images, LayoutGrid, Maximize2, Mic, Minimize2, Music, Plus, Search, Sparkles, Square, Trash2, Ungroup, Video, X, Type as TypeIcon, MessageSquareQuote, Shapes, ChevronUp, AtSign, Scissors, Upload, Image as ImageIcon, SunMedium, Expand, Layers, Repeat, Wand2, Crop, SlidersHorizontal, MessageSquareText, Lightbulb, GalleryHorizontal, Settings2, SkipBack, SkipForward, ScissorsLineDashed, RectangleHorizontal, ChevronsRight, PersonStanding, GripVertical, RotateCcw,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { GIF_FRAMES, GIF_FRAME_MS, IMAGE_RATIOS, MAKE_COUNTS, MAKE_MEDIA, VIDEO_RATIOS, frameRatio, lengthOf, lengthRange, modeOf, modesFor, ratioOf, type VideoMode } from '@/lib/canvas';
@@ -19,6 +19,7 @@ const PRESET_PICTURES: Record<string, string> = Object.fromEntries(Object.entrie
   .map(([path, url]) => [path.slice('./presets/'.length, -'.webp'.length), url]));
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { studioHost } from '@/lib/host';
+import { frameOf } from './pixels';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
 import { keepLastModel, lastModel, useBoard, type Choice, type MakeData } from './board';
@@ -186,7 +187,9 @@ export function SelectionToolbar({ ids, onGroup, onUngroup, onDuplicate, onRemov
 export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceResource | null; empty?: 'image' | 'video' }) {
   const t = useT();
   const board = useBoard();
-  const [open, setOpen] = React.useState<'create' | 'edit' | 'video' | 'agent' | null>(null);
+  const [open, setOpen] = React.useState<string | null>(null);
+  const [customizing, setCustomizing] = React.useState(false);
+  useBars();
   if (board.readOnly || board.single !== id || (!file && !empty)) return null;
   const btn = 'cv-tool nodrag flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
   const icon = 'cv-tool nodrag flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
@@ -243,49 +246,98 @@ export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceReso
   };
   /* a clip made from the picture as its first frame: moving on its own, from words, to a last frame picked, with a camera move */
   const clip = (data: Partial<MakeData>) => { setOpen(null); return board.spawn(id, 'video', { ...data, opts: { mode: 'first', ...(shape ? { ratio: shape } : {}), ...data.opts } }); };
+  /* a clip made from this clip: by the tool's own model when one is connected (Kling, Gemini, Luma, MiniMax, sync),
+     else by one that takes a clip as a reference; a tool with neither is not shown */
+  const clipChoices = video ? board.choices('video') : [];
+  const own = (model: string) => clipChoices.find((c) => c.model === model || c.model?.endsWith(`/${model}`));
+  const referenced = clipChoices.find((c) => c.spec?.clip && !c.spec.needs);
+  const fromClip = (preset: string, choice: Choice, pick: boolean) => {
+    setOpen(null);
+    const made = board.spawn(id, 'video', { via: choice.via, ...(choice.model ? { model: choice.model } : {}), preset,
+      opts: { ...(choice.spec?.needs ? {} : { mode: 'omni' as const }), ...(shape ? { ratio: shape } : {}) } });
+    /* one that needs more wired in (who to put in, the recording to follow) asks for it */
+    if (pick) board.pick(made);
+  };
+  const clipTools = [
+    { key: 'edit', icon: Wand2, preset: 'clipEdit', choice: own('kling-o3-edit') ?? referenced, pick: false },
+    { key: 'extend', icon: ChevronsRight, preset: 'clipExtend', choice: own('gemini-omni-1.2-flash') ?? referenced, pick: false },
+    { key: 'motion', icon: PersonStanding, preset: 'clipMotion', choice: own('kling-o3-reference') ?? referenced, pick: false },
+    { key: 'restyle', icon: Brush, preset: 'clipRestyle', choice: own('luma-ray-3.2') ?? referenced, pick: false },
+    { key: 'recast', icon: UserRound, preset: 'clipRecast', choice: own('minimax-h3-max-recast'), pick: true },
+    { key: 'lipsync', icon: Mic, preset: 'clipLipsync', choice: own('sync-3'), pick: true },
+  ].flatMap(({ choice, ...c }) => (choice ? [{ ...c, run: () => fromClip(c.preset, choice, c.pick) }] : []));
+  /* a frame of the clip as a picture beside it: where it is playing, its first, its last */
+  const grabFrame = async (mode: 'current' | 'first' | 'last') => {
+    setOpen(null);
+    const player = document.querySelector<HTMLVideoElement>(`.react-flow__node[data-id="${CSS.escape(id)}"] video`);
+    const length = player && Number.isFinite(player.duration) ? player.duration : (file.durationMs ?? 0) / 1000;
+    const at = mode === 'first' ? 0 : mode === 'last' ? Math.max(0, length - 0.04) : player?.currentTime ?? 0;
+    try { board.bring(id, [await frameOf(board.sources.file(file), at, `${file.name.replace(/\.[^.]+$/, '')}-${mode}-frame.png`)]); }
+    catch { board.reportError?.(t('canvas.video.captureFailed')); }
+  };
+  /* ── the tools, each a key: those kept on the bar in the person's order (BarSettings), the rest under More ── */
+  const tool = (key: string, label: string, icon: BarTool['icon'], run: () => void): BarTool => ({ key, label, icon, run });
+  const menu = (key: string, label: string, icon: BarTool['icon'], caption: string, tone: Tone, items: MenuItem[]): BarTool => ({ key, label, icon, menu: { caption, tone, items } });
+  const all: BarTool[] = file.kind === 'image' ? [
+    ...(can.mask || can.markup ? [tool('redraw', t('canvas.actions.redraw'), Wand2, () => board.redraw(id, file.path))] : []),
+    ...(can.mask ? [tool('expand', t('canvas.expand.title'), Expand, () => board.openTool(id, file.path, 'expand'))] : []),
+    tool('cutout', t('canvas.actions.cutout'), Scissors, () => board.cutout(id, file.path)),
+    tool('light', t('canvas.actions.light'), SunMedium, () => board.openTool(id, file.path, 'light')),
+    { key: 'create', label: t('canvas.create.title'), icon: LayoutDashboard, picker: <PresetPicker hasPicture onPick={(p) => from(p)} tools={tools} /> },
+    menu('edit', t('canvas.create.edit'), SlidersHorizontal, t('canvas.create.captions.edit'), 'blue', [
+      { key: 'crop', icon: Crop, label: t('canvas.tools.crop'), about: t('canvas.create.about.crop'), run: () => board.openTool(id, file.path, 'crop') },
+      { key: 'adjust', icon: Palette, label: t('canvas.tools.adjust'), about: t('canvas.create.about.adjust'), run: () => board.openTool(id, file.path, 'adjust') },
+      { key: 'split', icon: Grid2x2, label: t('canvas.actions.split'), about: t('canvas.create.about.split'), more: <GridPicker onPick={(rows, cols) => { setOpen(null); board.split(id, file.path, rows, cols); }} /> },
+      ...(can.mask ? [{ key: 'layers', icon: Layers, label: t('canvas.marketing.layers'), about: t('canvas.marketing.layersAbout'), run: () => board.layers(id, file.path) }] : []),
+    ]),
+    ...(can.video ? [menu('video', t('canvas.create.video'), Clapperboard, t('canvas.create.captions.video'), 'violet', [
+      { key: 'motion', icon: Sparkles, label: t('canvas.marketing.motion'), about: t('canvas.marketing.motionAbout'), run: () => clip({ prompt: MOTION_WORDS }) },
+      { key: 'first', icon: Film, label: t('canvas.create.first'), about: t('canvas.create.about.first'), run: () => clip({}) },
+      { key: 'firstLast', icon: Repeat, label: t('canvas.create.firstLast'), about: t('canvas.create.about.firstLast'), run: () => board.pick(clip({ opts: { mode: 'firstLast' } })) },
+      { key: 'effect', icon: Orbit, label: t('canvas.create.effect'), about: t('canvas.create.about.effect'), run: () => board.openLibrary('effects', clip({})) },
+    ])] : []),
+    ...(can.agent ? [menu('agent', t('canvas.assist.title'), MessageSquareText, t('canvas.create.captions.agent'), 'amber', [
+      { key: 'shots', icon: Clapperboard, label: t('canvas.assist.shots'), about: t('canvas.assist.shotsAbout'), run: () => board.assist(id, file.path, 'shots') },
+      { key: 'prompt', icon: FileText, label: t('canvas.assist.prompt'), about: t('canvas.assist.promptAbout'), run: () => board.assist(id, file.path, 'prompt') },
+      { key: 'ideas', icon: Lightbulb, label: t('canvas.assist.ideas'), about: t('canvas.assist.ideasAbout'), run: () => board.assist(id, file.path, 'ideas') },
+      { key: 'text', icon: TypeIcon, label: t('canvas.marketing.editText'), about: t('canvas.marketing.editTextAbout'), run: () => board.assist(id, file.path, 'text') },
+    ])] : []),
+    tool('addToFilm', t('canvas.addToFilm'), Clapperboard, () => board.addToFilm(file)),
+  ] : video ? [
+    /* made from the clip by a model that does it: its own (Kling, Gemini, Luma, MiniMax, sync), else one that takes a clip as a reference */
+    ...clipTools.map((c) => tool(c.key, t(`canvas.clipTools.${c.key}`), c.icon, c.run)),
+    menu('frames', t('canvas.clipTools.frames'), Camera, t('canvas.clipTools.framesAbout'), 'green', (['current', 'first', 'last'] as const).map((mode) => (
+      { key: mode, icon: mode === 'current' ? Camera : mode === 'first' ? SkipBack : SkipForward, label: t(`canvas.video.${mode}`), about: t(`canvas.clipTools.frameAbout.${mode}`), run: () => { void grabFrame(mode); } }))),
+    tool('trim', t('canvas.clipTools.trim'), ScissorsLineDashed, () => board.clipTool(id, file.path, 'trim')),
+    menu('crop', t('canvas.clipTools.crop'), Crop, t('canvas.clipTools.cropAbout'), 'blue', ['9:16', '16:9', '1:1', '4:3', '3:4', '21:9'].map((r) => (
+      { key: r, icon: RectangleHorizontal, label: r, about: t('canvas.clipTools.cropTo').replace('{r}', r), run: () => board.clipTool(id, file.path, 'crop', r) }))),
+    tool('audio', t('canvas.clipTools.audio'), AudioLines, () => board.clipTool(id, file.path, 'audio')),
+    tool('shots', t('canvas.clipTools.shots'), LayoutGrid, () => board.shots(id, file.path)),
+    ...(can.agent ? [menu('agent', t('canvas.assist.title'), MessageSquareText, t('canvas.create.captions.agent'), 'amber', [
+      { key: 'shotList', icon: Clapperboard, label: t('canvas.clipTools.shotList'), about: t('canvas.clipTools.shotListAbout'), run: () => board.clipAssist(id, file.path, 'shots') },
+      { key: 'prompt', icon: FileText, label: t('canvas.clipTools.prompt'), about: t('canvas.clipTools.promptAbout'), run: () => board.clipAssist(id, file.path, 'prompt') },
+    ])] : []),
+    tool('addToFilm', t('canvas.addToFilm'), Clapperboard, () => board.addToFilm(file)),
+  ] : file.kind !== 'other' ? [tool('addToFilm', t('canvas.addToFilm'), Clapperboard, () => board.addToFilm(file))] : [];
+  const kind: BarKind | null = file.kind === 'image' ? 'image' : video ? 'video' : null;
+  const keys = kind ? barLayout(kind) : all.map((x) => x.key);
+  const shownTools = keys.map((k) => all.find((x) => x.key === k)).filter((x): x is BarTool => Boolean(x));
+  const moreTools = all.filter((x) => !keys.includes(x.key));
+  const render = (x: BarTool) => x.menu ? (
+    <ToolMenu key={x.key} label={x.label} caption={x.menu.caption} tone={x.menu.tone} icon={x.icon} open={open === x.key} onOpen={(v) => setOpen(v ? x.key : null)} items={x.menu.items} />
+  ) : x.picker ? (
+    <Popover key={x.key} open={open === x.key} onOpenChange={(v) => setOpen(v ? x.key : null)} placement="bottom" align="start"
+      trigger={<button type="button" className={`${btn} ${open === x.key ? 'bg-[var(--cv-float-hover)]' : ''}`} onClick={() => setOpen(open === x.key ? null : x.key)}>{React.createElement(x.icon, { size: 16 })}{x.label}<ChevronDown size={13} className={`transition-transform duration-200 ${open === x.key ? 'rotate-180' : ''}`} /></button>}>
+      {x.picker}
+    </Popover>
+  ) : (
+    <button key={x.key} type="button" className={btn} onClick={() => { setOpen(null); x.run?.(); }}>{React.createElement(x.icon, { size: 16 })}{x.label}</button>
+  );
   const actions = (
       <div className={`${bar} ${video ? 'cursor-grab active:cursor-grabbing' : 'nodrag'}`}>
         {refer}
-        {file.kind === 'image' ? (
-          /* the picture changed in place (smart edit, widened, its background out, lit anew), made into more (the
-             create cards), edited on this computer, made into a clip, or read by the agent; a tool only when a
-             connected model does it */
-          <>
-            {can.mask || can.markup ? <button type="button" className={btn} onClick={() => board.redraw(id, file.path)}><Wand2 size={16} />{t('canvas.actions.redraw')}</button> : null}
-            {can.mask ? <button type="button" className={btn} onClick={() => board.openTool(id, file.path, 'expand')}><Expand size={16} />{t('canvas.expand.title')}</button> : null}
-            <button type="button" className={btn} onClick={() => board.cutout(id, file.path)}><Scissors size={16} />{t('canvas.actions.cutout')}</button>
-            <button type="button" className={btn} onClick={() => board.openTool(id, file.path, 'light')}><SunMedium size={16} />{t('canvas.actions.light')}</button>
-            {line}
-            <Popover open={open === 'create'} onOpenChange={(v) => setOpen(v ? 'create' : null)} placement="bottom" align="start"
-              trigger={<button type="button" className={`${btn} ${open === 'create' ? 'bg-[var(--cv-float-hover)]' : ''}`} onClick={() => setOpen(open === 'create' ? null : 'create')}><LayoutDashboard size={16} />{t('canvas.create.title')}<ChevronDown size={13} className={`transition-transform duration-200 ${open === 'create' ? 'rotate-180' : ''}`} /></button>}>
-              <PresetPicker hasPicture onPick={(p) => from(p)} tools={tools} />
-            </Popover>
-            <ToolMenu label={t('canvas.create.edit')} caption={t('canvas.create.captions.edit')} tone="blue" icon={SlidersHorizontal} open={open === 'edit'} onOpen={(v) => setOpen(v ? 'edit' : null)} items={[
-              { key: 'crop', icon: Crop, label: t('canvas.tools.crop'), about: t('canvas.create.about.crop'), run: () => board.openTool(id, file.path, 'crop') },
-              { key: 'adjust', icon: Palette, label: t('canvas.tools.adjust'), about: t('canvas.create.about.adjust'), run: () => board.openTool(id, file.path, 'adjust') },
-              { key: 'split', icon: Grid2x2, label: t('canvas.actions.split'), about: t('canvas.create.about.split'), more: <GridPicker onPick={(rows, cols) => { setOpen(null); board.split(id, file.path, rows, cols); }} /> },
-              ...(can.mask ? [{ key: 'layers', icon: Layers, label: t('canvas.marketing.layers'), about: t('canvas.marketing.layersAbout'), run: () => board.layers(id, file.path) }] : []),
-            ]} />
-            {can.video ? (
-              <ToolMenu label={t('canvas.create.video')} caption={t('canvas.create.captions.video')} tone="violet" icon={Clapperboard} open={open === 'video'} onOpen={(v) => setOpen(v ? 'video' : null)} items={[
-                { key: 'motion', icon: Sparkles, label: t('canvas.marketing.motion'), about: t('canvas.marketing.motionAbout'), run: () => clip({ prompt: MOTION_WORDS }) },
-                { key: 'first', icon: Film, label: t('canvas.create.first'), about: t('canvas.create.about.first'), run: () => clip({}) },
-                { key: 'firstLast', icon: Repeat, label: t('canvas.create.firstLast'), about: t('canvas.create.about.firstLast'), run: () => board.pick(clip({ opts: { mode: 'firstLast' } })) },
-                { key: 'effect', icon: Orbit, label: t('canvas.create.effect'), about: t('canvas.create.about.effect'), run: () => board.openLibrary('effects', clip({})) },
-              ]} />
-            ) : null}
-            {can.agent ? (
-              <ToolMenu label={t('canvas.assist.title')} caption={t('canvas.create.captions.agent')} tone="amber" icon={MessageSquareText} open={open === 'agent'} onOpen={(v) => setOpen(v ? 'agent' : null)} items={[
-                { key: 'shots', icon: Clapperboard, label: t('canvas.assist.shots'), about: t('canvas.assist.shotsAbout'), run: () => board.assist(id, file.path, 'shots') },
-                { key: 'prompt', icon: FileText, label: t('canvas.assist.prompt'), about: t('canvas.assist.promptAbout'), run: () => board.assist(id, file.path, 'prompt') },
-                { key: 'ideas', icon: Lightbulb, label: t('canvas.assist.ideas'), about: t('canvas.assist.ideasAbout'), run: () => board.assist(id, file.path, 'ideas') },
-                { key: 'text', icon: TypeIcon, label: t('canvas.marketing.editText'), about: t('canvas.marketing.editTextAbout'), run: () => board.assist(id, file.path, 'text') },
-              ]} />
-            ) : null}
-            {line}
-          </>
-        ) : null}
-        {file.kind !== 'other' ? <button type="button" className={btn} onClick={() => board.addToFilm(file)}><Clapperboard size={16} />{t('canvas.addToFilm')}</button> : null}
+        {shownTools.map(render)}
+        {moreTools.length ? <MoreTools tools={moreTools} open={open === 'more'} onOpen={(v) => setOpen(v ? 'more' : null)} /> : null}
         {line}
         {board.reveal ? (
           <Tooltip label={t('canvas.actions.reveal')}>
@@ -298,6 +350,12 @@ export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceReso
         <Tooltip label={t('canvas.actions.view')}>
           <button type="button" aria-label={t('canvas.actions.view')} className={icon} onClick={() => board.view(file.path)}><Maximize2 size={17} /></button>
         </Tooltip>
+        {kind ? (
+          <Tooltip label={t('canvas.bar.customize')}>
+            <button type="button" aria-label={t('canvas.bar.customize')} className={icon} onClick={() => { setOpen(null); setCustomizing(true); }}><Settings2 size={17} /></button>
+          </Tooltip>
+        ) : null}
+        {customizing && kind ? <BarSettings kind={kind} tools={all} onClose={() => setCustomizing(false)} /> : null}
       </div>
   );
   return video ? <VideoActionBar>{actions}</VideoActionBar> : (
@@ -673,47 +731,188 @@ function ToolMenu({ label, caption, tone, icon: Icon, open, onOpen, items }: {
   label: string; caption: string; tone: Tone; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; open: boolean; onOpen: (open: boolean) => void;
   items: MenuItem[];
 }) {
-  const [more, setMore] = React.useState<string | null>(null);
-  React.useEffect(() => { if (!open) setMore(null); }, [open]);
   const btn = 'cv-tool nodrag flex h-9 items-center gap-2 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
   if (!items.length) return null;
-  const opened = items.find((item) => item.key === more);
   return (
     <Popover open={open} onOpenChange={onOpen} placement="bottom" align="start"
       trigger={<button type="button" className={`${btn} ${open ? 'bg-[var(--cv-float-hover)]' : ''}`} onClick={() => onOpen(!open)}><Icon size={16} />{label}<ChevronDown size={13} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} /></button>}>
-      <div className={`w-[372px] p-2 ${CARD}`}>
-        <div className="flex items-center gap-2.5 px-2 pb-2.5 pt-1.5">
-          <ToneMark icon={Icon} tone={tone} size={28} />
-          <span className="min-w-0">
-            <span className="block text-[13.5px] font-semibold leading-5 text-[var(--cv-ink)]">{label}</span>
-            <span className="block truncate text-[11.5px] leading-4 text-[var(--cv-ink-3)]">{caption}</span>
-          </span>
+      <div className={`w-[372px] p-2 ${CARD}`}><ToolTiles label={label} caption={caption} tone={tone} icon={Icon} items={items} open={open} onDone={() => onOpen(false)} /></div>
+    </Popover>
+  );
+}
+
+/** A tool menu's own: its mark, name and caption, its tools as tiles (one that asks first opening under them). */
+function ToolTiles({ label, caption, tone, icon: Icon, items, open = true, onDone }: {
+  label: string; caption: string; tone: Tone; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; items: MenuItem[]; open?: boolean; onDone: () => void;
+}) {
+  const [more, setMore] = React.useState<string | null>(null);
+  React.useEffect(() => { if (!open) setMore(null); }, [open]);
+  const opened = items.find((item) => item.key === more);
+  return (
+    <>
+      <div className="flex items-center gap-2.5 px-2 pb-2.5 pt-1.5">
+        <ToneMark icon={Icon} tone={tone} size={28} />
+        <span className="min-w-0">
+          <span className="block text-[13.5px] font-semibold leading-5 text-[var(--cv-ink)]">{label}</span>
+          <span className="block truncate text-[11.5px] leading-4 text-[var(--cv-ink-3)]">{caption}</span>
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {items.map((item) => {
+          const on = more === item.key;
+          return (
+            <button key={item.key} type="button" onClick={() => { if (item.more) setMore(on ? null : item.key); else { onDone(); item.run?.(); } }}
+              className={`group/tool flex min-w-0 flex-col items-start gap-2 rounded-[12px] p-2.5 text-left transition duration-150 ${on ? 'bg-[var(--cv-float-hover)] ring-1 ring-inset ring-[color-mix(in_srgb,var(--cv-ink)_22%,transparent)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_3.5%,transparent)] hover:bg-[var(--cv-float-hover)]'}`}>
+              <span className="flex w-full items-center justify-between">
+                <ToneMark icon={item.icon} tone={tone} size={30} />
+                {item.more ? <ChevronDown size={14} className={`text-[var(--cv-ink-3)] transition-transform duration-200 ${on ? 'rotate-180' : ''}`} />
+                  : <ArrowUpRight size={14} className="text-[var(--cv-ink-3)] opacity-0 transition duration-150 group-hover/tool:translate-x-0.5 group-hover/tool:-translate-y-0.5 group-hover/tool:opacity-100" />}
+              </span>
+              <span className="w-full min-w-0">
+                <span className="block truncate text-[13px] font-medium leading-5 text-[var(--cv-ink)]">{item.label}</span>
+                <span className="line-clamp-2 block text-[11.5px] leading-[15px] text-[var(--cv-ink-3)]">{item.about}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {/* what a tile that asks first asks, under the tiles */}
+      <div className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${opened ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+        <div className="min-h-0 overflow-hidden">{opened?.more ? <div className="mt-2 rounded-[12px] bg-[color-mix(in_srgb,var(--cv-ink)_3.5%,transparent)] p-3">{opened.more}</div> : null}</div>
+      </div>
+    </>
+  );
+}
+
+/* ── a card's toolbar as the person lays it out ── */
+
+/** a tool on a card's bar: run at once, a menu of tools, or a picker */
+type BarTool = { key: string; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; run?: () => void;
+  menu?: { caption: string; tone: Tone; items: MenuItem[] }; picker?: React.ReactNode };
+type BarKind = 'image' | 'video';
+/** what each bar shows out of the box, in order; the rest are under More */
+const BAR_DEFAULT: Record<BarKind, string[]> = {
+  image: ['redraw', 'expand', 'cutout', 'light', 'create', 'edit', 'video', 'agent', 'addToFilm'],
+  video: ['edit', 'extend', 'motion', 'frames', 'trim', 'audio', 'shots', 'agent', 'addToFilm'],
+};
+const BAR_KEY = 'openfilm.canvas.toolbar';
+const barListeners = new Set<() => void>();
+function readBars(): Partial<Record<BarKind, string[]>> {
+  try { const kept = JSON.parse(localStorage.getItem(BAR_KEY) ?? '{}') as Partial<Record<BarKind, unknown>>; return Object.fromEntries(Object.entries(kept).filter(([, v]) => Array.isArray(v))) as Partial<Record<BarKind, string[]>>; } catch { return {}; }
+}
+/** the tools on a bar, in order: the person's, else the default */
+function barLayout(kind: BarKind): string[] { return readBars()[kind] ?? BAR_DEFAULT[kind]; }
+function keepBar(kind: BarKind, keys: string[] | null) {
+  const bars = readBars();
+  if (keys) bars[kind] = keys; else delete bars[kind];
+  try { localStorage.setItem(BAR_KEY, JSON.stringify(bars)); } catch { /* not kept */ }
+  for (const listen of barListeners) listen();
+}
+function useBars() {
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => { const listen = () => setTick((n) => n + 1); barListeners.add(listen); return () => { barListeners.delete(listen); }; }, []);
+}
+
+/** the tools not on the bar: a list, a menu's or picker's own opened in its place */
+function MoreTools({ tools, open, onOpen }: { tools: BarTool[]; open: boolean; onOpen: (open: boolean) => void }) {
+  const t = useT();
+  const [inside, setInside] = React.useState<string | null>(null);
+  React.useEffect(() => { if (!open) setInside(null); }, [open]);
+  const opened = tools.find((x) => x.key === inside);
+  const btn = 'cv-tool nodrag flex h-9 items-center gap-1.5 rounded-[8px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
+  return (
+    <Popover open={open} onOpenChange={onOpen} placement="bottom" align="end"
+      trigger={<button type="button" className={`${btn} ${open ? 'bg-[var(--cv-float-hover)]' : ''}`} onClick={() => onOpen(!open)}>{t('canvas.bar.more')}<ChevronDown size={13} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} /></button>}>
+      {opened?.picker ? opened.picker : (
+        <div className={`${opened?.menu ? 'w-[372px]' : 'w-[220px]'} p-1.5 ${CARD}`}>
+          {opened?.menu ? (
+            <>
+              <button type="button" onClick={() => setInside(null)} className="mb-1 flex h-7 items-center gap-1 rounded-[7px] px-1.5 text-[12px] text-[var(--cv-ink-3)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><ChevronLeft size={13} />{t('canvas.bar.more')}</button>
+              <ToolTiles label={opened.label} caption={opened.menu.caption} tone={opened.menu.tone} icon={opened.icon} items={opened.menu.items} onDone={() => onOpen(false)} />
+            </>
+          ) : tools.map((x) => (
+            <button key={x.key} type="button" onClick={() => { if (x.menu || x.picker) setInside(x.key); else { onOpen(false); x.run?.(); } }}
+              className="flex h-9 w-full items-center gap-2.5 rounded-[9px] px-2.5 text-left text-[13.5px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">
+              {React.createElement(x.icon, { size: 16 })}<span className="min-w-0 flex-1 truncate">{x.label}</span>
+              {x.menu || x.picker ? <ChevronRight size={14} className="text-[var(--cv-ink-3)]" /> : null}
+            </button>
+          ))}
         </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          {items.map((item) => {
-            const on = more === item.key;
-            return (
-              <button key={item.key} type="button" onClick={() => { if (item.more) setMore(on ? null : item.key); else { onOpen(false); item.run?.(); } }}
-                className={`group/tool flex min-w-0 flex-col items-start gap-2 rounded-[12px] p-2.5 text-left transition duration-150 ${on ? 'bg-[var(--cv-float-hover)] ring-1 ring-inset ring-[color-mix(in_srgb,var(--cv-ink)_22%,transparent)]' : 'bg-[color-mix(in_srgb,var(--cv-ink)_3.5%,transparent)] hover:bg-[var(--cv-float-hover)]'}`}>
-                <span className="flex w-full items-center justify-between">
-                  <ToneMark icon={item.icon} tone={tone} size={30} />
-                  {item.more ? <ChevronDown size={14} className={`text-[var(--cv-ink-3)] transition-transform duration-200 ${on ? 'rotate-180' : ''}`} />
-                    : <ArrowUpRight size={14} className="text-[var(--cv-ink-3)] opacity-0 transition duration-150 group-hover/tool:translate-x-0.5 group-hover/tool:-translate-y-0.5 group-hover/tool:opacity-100" />}
-                </span>
-                <span className="w-full min-w-0">
-                  <span className="block truncate text-[13px] font-medium leading-5 text-[var(--cv-ink)]">{item.label}</span>
-                  <span className="line-clamp-2 block text-[11.5px] leading-[15px] text-[var(--cv-ink-3)]">{item.about}</span>
-                </span>
-              </button>
-            );
-          })}
+      )}
+    </Popover>
+  );
+}
+
+/**
+ * The bar laid out by the person: the tools on it in their order (dragged; × takes one off), the rest below (+ puts one
+ * on); kept for every card of the kind, back to the default with a press.
+ */
+function BarSettings({ kind, tools, onClose }: { kind: BarKind; tools: BarTool[]; onClose: () => void }) {
+  const t = useT();
+  const known = (keys: string[]) => keys.filter((k) => tools.some((x) => x.key === k));
+  const [on, setOn] = React.useState(() => known(barLayout(kind)));
+  const [dragged, setDragged] = React.useState<string | null>(null);
+  const off = tools.filter((x) => !on.includes(x.key));
+  const of = (key: string) => tools.find((x) => x.key === key)!;
+  const chip = 'flex h-10 shrink-0 items-center gap-2 rounded-[10px] px-3 text-[13.5px] text-[var(--cv-ink)]';
+  React.useEffect(() => {
+    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
+  }, [onClose]);
+  return createPortal(
+    <div className="cv-fade nodrag nopan nowheel fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 p-6" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div role="dialog" aria-label={t('canvas.bar.customize')}
+        className="cv-grow relative w-[min(760px,100%)] rounded-[22px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-modal)] p-6 text-[var(--cv-ink)] shadow-[var(--cv-float-shadow)]">
+        <button type="button" aria-label={t('canvas.outline.close')} onClick={onClose}
+          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><X size={16} /></button>
+        <h2 className="text-[17px] font-semibold">{t('canvas.bar.customize')} · {t(`canvas.bar.kinds.${kind}`)}</h2>
+        <p className="mt-1.5 text-[13px] text-[var(--cv-ink-3)]">{t('canvas.bar.customizeAbout')}</p>
+        {/* the bar as it will be, on a backdrop like the board's */}
+        <div className="mt-5 rounded-[16px] bg-[radial-gradient(circle,color-mix(in_srgb,var(--cv-ink)_14%,transparent)_1px,transparent_1.5px)] bg-[length:16px_16px] p-6">
+          <div className="flex min-h-[56px] flex-wrap items-center gap-1 rounded-[14px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] p-1.5 shadow-[var(--cv-float-shadow)]"
+            onDragOver={(event) => event.preventDefault()}>
+            {on.map((key) => {
+              const x = of(key);
+              return (
+                <div key={key} draggable onDragStart={() => setDragged(key)} onDragEnd={() => setDragged(null)}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    if (!dragged || dragged === key) return;
+                    setOn((list) => { const rest = list.filter((k) => k !== dragged); rest.splice(rest.indexOf(key), 0, dragged); return rest; });
+                  }}
+                  className={`group/chip ${chip} cursor-grab bg-[color-mix(in_srgb,var(--cv-ink)_5%,transparent)] transition hover:bg-[var(--cv-float-hover)] ${dragged === key ? 'opacity-40' : ''}`}>
+                  <GripVertical size={13} className="-ml-1 text-[var(--cv-ink-3)]" />
+                  {React.createElement(x.icon, { size: 15 })}{x.label}
+                  <button type="button" aria-label={t('canvas.bar.takeOff')} onClick={() => setOn((list) => list.filter((k) => k !== key))}
+                    className="-mr-1 flex h-5 w-5 items-center justify-center rounded-full text-[var(--cv-ink-3)] opacity-0 transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)] group-hover/chip:opacity-100"><X size={12} /></button>
+                </div>
+              );
+            })}
+            {!on.length ? <span className="px-3 text-[12.5px] text-[var(--cv-ink-3)]">{t('canvas.bar.empty')}</span> : null}
+          </div>
         </div>
-        {/* what a tile that asks first asks, under the tiles */}
-        <div className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${opened ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-          <div className="min-h-0 overflow-hidden">{opened?.more ? <div className="mt-2 rounded-[12px] bg-[color-mix(in_srgb,var(--cv-ink)_3.5%,transparent)] p-3">{opened.more}</div> : null}</div>
+        <div className="mt-5 text-[12px] text-[var(--cv-ink-3)]">{t('canvas.bar.inMore')}</div>
+        <div className="mt-2 flex min-h-[44px] flex-wrap gap-1.5">
+          {off.map((x) => (
+            <button key={x.key} type="button" onClick={() => setOn((list) => [...list, x.key])}
+              className={`${chip} border border-dashed !border-[var(--cv-float-line)] text-[var(--cv-ink-2)] transition hover:!border-[var(--cv-ink-3)] hover:text-[var(--cv-ink)]`}>
+              <Plus size={14} />{React.createElement(x.icon, { size: 15 })}{x.label}
+            </button>
+          ))}
+          {!off.length ? <span className="py-3 text-[12.5px] text-[var(--cv-ink-3)]">{t('canvas.bar.allOn')}</span> : null}
+        </div>
+        <div className="mt-6 flex items-center gap-2">
+          <button type="button" onClick={() => setOn(known(BAR_DEFAULT[kind]))}
+            className="flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]"><RotateCcw size={14} />{t('canvas.bar.restore')}</button>
+          <span className="flex-1" />
+          <button type="button" onClick={onClose} className="h-9 rounded-full bg-[var(--cv-chip)] px-4 text-[13px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]">{t('canvas.bar.cancel')}</button>
+          <button type="button" onClick={() => { keepBar(kind, on); onClose(); }}
+            className="h-9 rounded-full bg-[var(--cv-invert)] px-5 text-[13px] font-medium text-[var(--cv-on-invert)] transition hover:opacity-90">{t('canvas.bar.save')}</button>
         </div>
       </div>
-    </Popover>
+    </div>,
+    document.body,
   );
 }
 

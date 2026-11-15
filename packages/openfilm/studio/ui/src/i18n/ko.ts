@@ -1941,7 +1941,7 @@ export const ko: Words = {
       needsPicture: '먼저 이미지를 연결하세요',
       fromPicture: '참조 이미지 필요',
       groups: { story: '스토리보드', role: '캐릭터', scene: '장면', product: '상품', design: '디자인', edit: '보정' },
-      names: {
+      names: { clipEdit: '영상 편집', clipExtend: '영상 연장', clipMotion: '모션 전이', clipRestyle: '스타일 변환', clipRecast: '인물 교체', clipLipsync: '립싱크', 
         expand: '확장',
         cutout: '배경 제거',
         storyboard: '스토리보드',
@@ -2111,6 +2111,20 @@ export const ko: Words = {
     },
     importUploading: '업로드 중…',
     importPreparing: '미디어 준비 중…',
+    clipTools: {
+      edit: '영상 편집', extend: '영상 연장', motion: '모션 전이', restyle: '스타일 변환', recast: '인물 교체', lipsync: '립싱크',
+      frames: '프레임 캡처', framesAbout: '한 프레임을 이미지로 옆에 둡니다', frameAbout: { current: '재생 중인 프레임', first: '첫 프레임', last: '마지막 프레임' },
+      trim: '구간 자르기', trimHint: '양 끝을 끌어 남길 부분 선택 · 스페이스로 재생 · I / O로 시작·끝 지정 · Enter로 자르기', trimApply: '자르기', kept: '{s}초 남김',
+      crop: '화면 자르기', cropAbout: '가운데 기준으로 다른 비율로 자르기', cropTo: '{r}(으)로 자르기',
+      audio: '오디오 분리', shots: '컷 분해',
+      shotList: '샷 분석', shotListAbout: '샷마다 크기, 앵글, 카메라 무빙, 내용', prompt: '프롬프트 추출', promptAbout: '이 영상을 다시 만들 프롬프트',
+      working: '영상을 처리하는 중…', noAudio: '이 영상에는 소리가 없습니다', play: '재생', pause: '일시정지',
+    },
+    bar: {
+      customize: '툴바 사용자 설정', customizeAbout: '툴바에 둘 도구를 고르고 끌어서 순서를 바꿉니다. 나머지는 \'더 보기\'에 있습니다.', more: '더 보기',
+      kinds: { image: '이미지', video: '영상' }, takeOff: '\'더 보기\'로 이동', empty: '툴바에 도구가 없습니다', inMore: '\'더 보기\'의 도구 · 클릭하면 툴바에 추가', allOn: '모든 도구가 툴바에 있습니다',
+      restore: '기본값으로', cancel: '취소', save: '저장',
+    },
     video: {
       loading: '동영상 불러오는 중…',
       unavailable: '동영상을 재생할 수 없습니다',

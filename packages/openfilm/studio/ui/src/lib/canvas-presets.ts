@@ -8,7 +8,7 @@
  */
 /** `character`: the pictures a new character is made of (canvas libraries), not offered in the presets' list */
 /** `light` and `tool`: made from a picture by its own bar (Light, Tools), not in the presets' list */
-export type PresetGroup = 'story' | 'role' | 'scene' | 'product' | 'design' | 'edit' | 'light' | 'tool' | 'character';
+export type PresetGroup = 'story' | 'role' | 'scene' | 'product' | 'design' | 'edit' | 'light' | 'tool' | 'character' | 'clip';
 
 export interface CanvasPreset {
   id: string;
@@ -23,6 +23,13 @@ export interface CanvasPreset {
 export const PRESET_GROUPS: PresetGroup[] = ['story', 'role', 'scene', 'product', 'design', 'edit'];
 
 export const PRESETS: CanvasPreset[] = [
+  /* a clip made from a clip (the clip toolbar): its words first; never in the picture presets */
+  { id: 'clipEdit', group: 'clip', fromPicture: true, ratio: '16:9', prompt: 'Keep the reference clip exactly as it is — its camera, motion, timing, people and setting — and change only what is described next.' },
+  { id: 'clipExtend', group: 'clip', fromPicture: true, ratio: '16:9', prompt: 'Continue the reference clip seamlessly from its last frame: the same people, setting, light, style and camera, the action carrying on naturally.' },
+  { id: 'clipMotion', group: 'clip', fromPicture: true, ratio: '16:9', prompt: 'Make a new clip that follows the reference clip\'s camera movement and the people\'s motion and timing exactly, with the look described next.' },
+  { id: 'clipRestyle', group: 'clip', fromPicture: true, ratio: '16:9', prompt: 'Redraw the reference clip in the style described next, keeping its composition, performance, motion and timing.' },
+  { id: 'clipRecast', group: 'clip', fromPicture: true, ratio: '16:9', prompt: 'Replace the people in the reference clip with the people in the reference pictures, keeping their motion, expressions and the camera.' },
+  { id: 'clipLipsync', group: 'clip', fromPicture: true, ratio: '16:9', prompt: '' },
   { id: 'storyboard', group: 'story', ratio: '16:9', prompt: 'A storyboard sheet of six consecutive shots of this scene in a 3×2 grid with thin white gutters, each panel a clear cinematic frame with its own camera angle, the same characters, setting, costume and light throughout, readable as one continuous sequence.' },
   { id: 'grid25', group: 'story', ratio: '1:1', quality: 'high', prompt: 'A 5×5 grid of 25 consecutive storyboard frames telling this moment from start to end, thin white gutters, the same characters, setting and light in every frame, the action advancing a little from frame to frame.' },
   { id: 'next4', group: 'story', fromPicture: true, ratio: '16:9', prompt: 'A 2×2 grid of the four moments that follow the reference picture, in order from top left, the same characters, setting, lighting and style, the story moving forward naturally, thin white gutters.' },

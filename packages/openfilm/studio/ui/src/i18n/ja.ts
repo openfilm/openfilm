@@ -1944,7 +1944,7 @@ export const ja: Words = {
       needsPicture: '先に画像をつないでください',
       fromPicture: '参照画像が必要',
       groups: { story: '絵コンテ', role: 'キャラクター', scene: 'シーン', product: '商品', design: 'デザイン', edit: 'レタッチ' },
-      names: {
+      names: { clipEdit: '動画編集', clipExtend: '動画延長', clipMotion: 'モーション転写', clipRestyle: 'スタイル変換', clipRecast: '人物差し替え', clipLipsync: 'リップシンク', 
         expand: '拡張',
         cutout: '切り抜き',
         storyboard: '絵コンテ',
@@ -2114,6 +2114,20 @@ export const ja: Words = {
     },
     importUploading: 'アップロード中…',
     importPreparing: '素材を準備中…',
+    clipTools: {
+      edit: '動画編集', extend: '動画延長', motion: 'モーション転写', restyle: 'スタイル変換', recast: '人物差し替え', lipsync: 'リップシンク',
+      frames: 'フレーム切り出し', framesAbout: '1 フレームを画像として横に置く', frameAbout: { current: '再生中のフレーム', first: '最初のフレーム', last: '最後のフレーム' },
+      trim: 'トリミング', trimHint: '両端をドラッグして残す部分を選択 · スペースで再生 · I / O でイン・アウト · Enter で切り出し', trimApply: '切り出す', kept: '{s} 秒を残す',
+      crop: '画面クロップ', cropAbout: '中央から別の比率に切り抜く', cropTo: '{r} に切り抜く',
+      audio: '音声を分離', shots: 'カット分解',
+      shotList: 'ショット分析', shotListAbout: 'ショットごとにサイズ・アングル・カメラワーク・内容', prompt: 'プロンプト逆算', promptAbout: 'この動画をもう一度作れるプロンプト',
+      working: '動画を処理中…', noAudio: 'この動画には音声がありません', play: '再生', pause: '一時停止',
+    },
+    bar: {
+      customize: 'ツールバーのカスタマイズ', customizeAbout: 'ツールバーに置くツールを選び、ドラッグで並べ替えます。置かないものは「その他」に入ります。', more: 'その他',
+      kinds: { image: '画像', video: '動画' }, takeOff: '「その他」へ移す', empty: 'ツールバーにツールがありません', inMore: '「その他」のツール · クリックでツールバーへ', allOn: 'すべてのツールがツールバーにあります',
+      restore: 'デフォルトに戻す', cancel: 'キャンセル', save: '保存',
+    },
     video: {
       loading: '動画を読み込み中…',
       unavailable: '動画を再生できません',

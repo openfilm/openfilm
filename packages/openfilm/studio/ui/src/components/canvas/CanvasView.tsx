@@ -51,6 +51,7 @@ import { CANVAS_EDGE_OPTIONS, CANVAS_EDGE_TYPES, DraggedWire, MenuWire } from '.
 import { CharacterLibrary, HistoryModal, MaterialLibrary, SUBJECT_KINDS, SUBJECT_PARTS, loadSubjects } from './libraries';
 import { CutoutSetup } from './cutout';
 import { CameraPicker } from './camera';
+import { TrimEditor } from './trim';
 import { cameraOf, cameraText, picksAnything } from '@/lib/canvas-camera';
 import { RedrawEditor, type RedrawJob, type RedrawStart } from './redraw';
 import { EXPAND_ASK, ExpandEditor, expandName, expandPlan, framedPicture, type Expanded } from './expand';
@@ -161,6 +162,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
   const [redraw, setRedraw] = React.useState<{ id: string; path: string; start?: RedrawStart } | null>(null);
   /* a picture's own tool open over the board */
   const [pictureTool, setPictureTool] = React.useState<{ id: string; path: string; tool: PictureTool } | null>(null);
+  /** a clip whose part to keep is being picked */
+  const [trimming, setTrimming] = React.useState<{ id: string; path: string } | null>(null);
   /* a cut-out asked for while nothing here cuts out: what to do once the way to cut out is there */
   /* the node whose camera is being picked */
   const [cameraFor, setCameraFor] = React.useState<string | null>(null);
@@ -1164,6 +1167,59 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       setPictureTool(null);
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
+  /** a clip worked on this computer, what it made beside it, wired from it, named for the tool */
+  const runClip = async (sourceId: string, body: Parameters<typeof api.clipTool>[1], tool: string) => {
+    onNotice(t('canvas.clipTools.working'));
+    try {
+      const { paths } = await api.clipTool(projectId, body);
+      for (const path of paths) addFile(path, { at: spotBeside(sourceId, 'source', FILE_W), from: { node: sourceId, side: 'source' }, corner: true }, undefined, nameFrom(sourceId, tool));
+      return true;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      onError(message.includes('no-audio') ? t('canvas.clipTools.noAudio') : message);
+      return false;
+    }
+  };
+  /** a clip's shots, a still where each begins, laid out in a group beside it as wide as the clip */
+  const layShots = async (sourceId: string, path: string) => {
+    onNotice(t('canvas.clipTools.working'));
+    try {
+      const { paths } = await api.clipTool(projectId, { op: 'shots', path });
+      const clip = byPath.get(path);
+      const H = 180, GAP = 20;
+      const W = Math.round((H * (clip?.w ?? 16)) / (clip?.h ?? 9));
+      const cols = Math.min(4, paths.length);
+      const rows = Math.ceil(paths.length / cols);
+      const w = cols * W + GAP * (cols - 1) + 2 * GROUP_PAD;
+      const h = rows * H + GAP * (rows - 1) + 2 * GROUP_PAD + GROUP_HEAD / 2;
+      const at = spotBeside(sourceId, 'source', w);
+      const group = canvasId('n');
+      add({
+        nodes: [
+          { id: group, x: at.x, y: at.y, w, h, group: nameFrom(sourceId, t('canvas.clipTools.shots')), color: 'gray' },
+          ...paths.map((p, i) => ({ id: canvasId('n'), parent: group, path: p, x: GROUP_PAD + (i % cols) * (W + GAP), y: GROUP_PAD + GROUP_HEAD / 2 + Math.floor(i / cols) * (H + GAP), w: W, h: H })),
+        ],
+        edges: [],
+      });
+      requestAnimationFrame(() => requestAnimationFrame(() => { void flow.fitView({ nodes: [{ id: group }], padding: 0.2, maxZoom: 1, duration: 300 }); }));
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+  /** the agent reading a clip by its shots into words beside it: its shot list, or a prompt to make it again */
+  const clipAssist = async (sourceId: string, path: string, kind: 'shots' | 'prompt') => {
+    const tongue = ({ 'zh-CN': 'Simplified Chinese', en: 'English', ja: 'Japanese', ko: 'Korean', es: 'Spanish' } as Record<string, string>)[language] ?? 'English';
+    const at = spotBeside(sourceId, 'source', NOTE_W);
+    const note = canvasId('n');
+    add({ nodes: [{ id: note, x: at.x, y: at.y, w: NOTE_W, h: CARD_H, text: '', title: t(`canvas.clipTools.${kind === 'shots' ? 'shotList' : 'prompt'}`) }], edges: [] }, false);
+    try {
+      const { paths, times = [] } = await api.clipTool(projectId, { op: 'shots', path, most: 8 });
+      const when = times.map((s) => `${s}s`).join(', ');
+      const ask = kind === 'shots'
+        ? `The attached pictures are the shots of one video clip, in order, each where a shot begins (at ${when}). Write the clip's shot list: one numbered line per shot with its start time, shot size, camera angle, lens, camera movement, light and what happens; then one line on the cutting rhythm. No preamble. Write it in ${tongue}.`
+        : `The attached pictures are frames of one video clip, in order (at ${when}). Write one detailed prompt a video model could use to make this clip again: the subject and the action as it unfolds, the setting, the camera and how it moves, the light, the colors, the style and the mood. One paragraph, no preamble. Write it in ${tongue}.`;
+      const error = await write(note, ask, paths);
+      if (error) onError(error);
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
   /**
    * A picture parted into layers: its subject cut out (on this computer), and the background without it — the subject's
    * shape, a little larger, as a mask a model fills in — in a group beside it.
@@ -1377,6 +1433,12 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     productSet: (id, presets) => makeGroupFrom(id, t('canvas.marketing.set'), presets.map((preset) => ({ preset, ratio: presetOf(preset)?.ratio ?? '1:1' }))),
     layers: (id, path) => { void splitLayers(id, path); },
     assist: (id, path, kind) => assist(id, path, kind),
+    clipTool: (id, path, op, ratio) => {
+      if (op === 'trim') { setTrimming({ id, path }); return; }
+      void runClip(id, { op, path, ...(ratio ? { ratio } : {}) }, t(op === 'audio' ? 'canvas.clipTools.audio' : 'canvas.clipTools.crop'));
+    },
+    shots: (id, path) => { void layShots(id, path); },
+    clipAssist: (id, path, kind) => { void clipAssist(id, path, kind); },
     bring: (id, list) => {
       uploadFiles(list, { at: spotBeside(id, 'source', FILE_W), from: { node: id, side: 'source' }, corner: true, wireFirstOnly: true });
     },
@@ -1426,7 +1488,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     edit: (id) => { if (id) willChange(); setEditing(id); },
     select: (id, add) => setNodes((list) => list.map((n) => (n.id === id ? { ...n, selected: add ? !n.selected : true } : add ? n : { ...n, selected: false }))),
     /* a window over the board (a picture's tool, a library): the bars round the node give way to it */
-    single: redraw || pictureTool || modal || cutoutThen ? null : single,
+    single: redraw || pictureTool || trimming || modal || cutoutThen ? null : single,
     choices: (kind) => choicesFor(providers, kind),
     allChoices: (kind) => allChoicesFor(providers, kind),
     fallback: (kind) => defaultChoice(providers, kind),
@@ -1487,7 +1549,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     ...(chat ? { write, writing: (id: string) => writing.get(id), stopWriting: (id: string) => writers.current.get(id)?.abort(), uploadWritingFiles: onImportFiles } : {}),
     locate,
     ...(onRefer ? { refer: (id: string) => { const node = now.current.nodes.find((n) => n.id === id); const ref = node ? refOf(node) : null; if (ref) onRefer([ref]); } } : {}),
-  }), [chat, writing, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, redraw, pictureTool, modal, cutoutThen, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal, onError, onImportFiles, activeUploads, shown]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [chat, writing, boardId, files, byPath, sources, onAddToFilm, setNodes, editing, single, redraw, pictureTool, trimming, modal, cutoutThen, providers, runsSeen, making, projectId, folder, onOpenSettings, nodes, edges, onReveal, onError, onImportFiles, activeUploads, shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onDrop = (event: React.DragEvent) => {
     const at = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -1594,7 +1656,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (target !== document.body && !rootRef.current?.contains(target)) return;
     /* a menu open has the keys (its Escape closes it, and only it); a dialog over the board has them all (its own undo) */
     if (menu || context) return;
-    if (modal || redraw || pictureTool || target.closest('[role="dialog"]')) { if (target === document.body) event.stopPropagation(); return; }
+    if (modal || redraw || pictureTool || trimming || target.closest('[role="dialog"]')) { if (target === document.body) event.stopPropagation(); return; }
     if (viewing) { if (event.key === 'Escape') { event.preventDefault(); setViewing(null); } return; }
     if (picking && event.key === 'Escape') { event.preventDefault(); setPicking(null); return; }
     if (cutAt && event.key === 'Escape') { event.preventDefault(); setCutAt(null); return; }
@@ -1967,6 +2029,10 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
             pictures={files.filter((f) => f.kind === 'image' && f.path !== redraw.path && !/(^|\/)(expand-|mask-|markup-)/.test(f.path)).slice(0, 80).map((f) => ({ path: f.path, src: sources.file(f), name: f.name }))} />
         ) : null}
         {/* a picture's own tools: widened, cropped and turned, colored, lit anew */}
+        {trimming && byPath.get(trimming.path) ? (
+          <TrimEditor src={sources.file(byPath.get(trimming.path)!)} onClose={() => setTrimming(null)}
+            onDone={async (from, to) => { if (await runClip(trimming.id, { op: 'trim', path: trimming.path, from, to }, t('canvas.clipTools.trim'))) setTrimming(null); }} />
+        ) : null}
         {pictureTool && byPath.get(pictureTool.path) ? (() => {
           const picture = byPath.get(pictureTool.path)!;
           const src = sources.file(picture);
@@ -2115,7 +2181,7 @@ function Preview({ doc, fileUrl }: { doc: CanvasDoc; fileUrl: (path: string) => 
       files: [...files.values()],
       fileOf: (path) => files.get(path) ?? null,
       sources: { file: (file) => fileUrl(file.path), wave: () => '' },
-      addToFilm: nothing, setData: nothing, resize: nothing, spawn: () => '', bring: nothing, cutout: nothing, split: nothing, openTool: nothing, sizes: nothing, productSet: nothing, layers: nothing, assist: nothing, remove: nothing, willChange: nothing, editing: null, edit: nothing, single: null,
+      addToFilm: nothing, setData: nothing, resize: nothing, spawn: () => '', bring: nothing, cutout: nothing, clipTool: nothing, shots: nothing, clipAssist: nothing, split: nothing, openTool: nothing, sizes: nothing, productSet: nothing, layers: nothing, assist: nothing, remove: nothing, willChange: nothing, editing: null, edit: nothing, single: null,
       choices: () => [], allChoices: () => [], fallback: () => null, run: () => undefined, error: () => undefined, stale: NOTHING, unused: NONE,
       make: nothing, stop: nothing, inputs: (id) => inputViews(drawn.nodes, drawn.edges, id, mediaOf), nameOf: () => '', reorderInputs: nothing, unwire: nothing, sideMenu: nothing,
       upload: nothing, wireIn: nothing, sendToFilm: nothing, view: nothing,

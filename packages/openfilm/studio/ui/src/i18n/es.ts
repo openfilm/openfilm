@@ -1944,7 +1944,7 @@ export const es: Words = {
       needsPicture: 'Conecta antes una imagen',
       fromPicture: 'Necesita una imagen',
       groups: { story: 'Guion gráfico', role: 'Personajes', scene: 'Lugares', product: 'Productos', design: 'Diseño', edit: 'Retoque' },
-      names: {
+      names: { clipEdit: 'Editar vídeo', clipExtend: 'Extender', clipMotion: 'Transferir movimiento', clipRestyle: 'Cambiar estilo', clipRecast: 'Cambiar personaje', clipLipsync: 'Sincronía labial', 
         expand: 'Ampliar',
         cutout: 'Recorte',
         storyboard: 'Storyboard',
@@ -2114,6 +2114,20 @@ export const es: Words = {
     },
     importUploading: 'Subiendo…',
     importPreparing: 'Preparando medios…',
+    clipTools: {
+      edit: 'Editar vídeo', extend: 'Extender', motion: 'Transferir movimiento', restyle: 'Cambiar estilo', recast: 'Cambiar personaje', lipsync: 'Sincronía labial',
+      frames: 'Capturar fotograma', framesAbout: 'Un fotograma guardado como imagen a su lado', frameAbout: { current: 'El fotograma que se ve ahora', first: 'El primer fotograma', last: 'El último fotograma' },
+      trim: 'Recortar tramo', trimHint: 'Arrastra los extremos para elegir la parte · Espacio reproduce · I / O marcan entrada y salida · Intro recorta', trimApply: 'Recortar', kept: 'Se quedan {s} s',
+      crop: 'Encuadrar', cropAbout: 'Recortado desde el centro a otra proporción', cropTo: 'Recortado a {r}',
+      audio: 'Separar audio', shots: 'Desglose de planos',
+      shotList: 'Análisis de planos', shotListAbout: 'Cada plano: tamaño, ángulo, movimiento y qué pasa', prompt: 'Prompt desde vídeo', promptAbout: 'Un prompt para volver a hacer este clip',
+      working: 'Procesando el clip…', noAudio: 'Este clip no tiene sonido', play: 'Reproducir', pause: 'Pausa',
+    },
+    bar: {
+      customize: 'Personalizar barra', customizeAbout: 'Elige las herramientas de la barra y arrástralas para ordenarlas; las demás quedan en Más.', more: 'Más',
+      kinds: { image: 'Imagen', video: 'Vídeo' }, takeOff: 'Mover a Más', empty: 'Aún no hay herramientas en la barra', inMore: 'En Más · haz clic para ponerla en la barra', allOn: 'Todas las herramientas están en la barra',
+      restore: 'Restablecer', cancel: 'Cancelar', save: 'Guardar',
+    },
     video: {
       loading: 'Cargando vídeo…',
       unavailable: 'No se pudo reproducir el vídeo',

@@ -292,6 +292,9 @@ export const api = {
     'file' in from ? { method: 'PUT', body: from.file, headers: { 'content-type': 'application/octet-stream' } } : { method: 'POST', json: from }).then((r) => r.cover),
   /** a file of the project into the trash */
   removeFile: (id: string, path: string) => call<object>(`${p(id)}/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  /** A clip trimmed, its sound or its shots taken out, cropped to a shape, on this computer (studio/server/clip-tools.mjs). */
+  clipTool: (id: string, body: { op: 'trim' | 'audio' | 'crop' | 'shots'; path: string; from?: number; to?: number; ratio?: string; most?: number }) =>
+    call<{ paths: string[]; times?: number[] }>(`${p(id)}/clip-tools`, { method: 'POST', json: body }),
   clearCover: (id: string) => call<{ cover: null }>(`${p(id)}/cover`, { method: 'DELETE' }).then(() => null),
   /**
    * Something made with the person's services, as `openfilm get <verb>` makes it (studio/server/get.mjs): answered

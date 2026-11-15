@@ -1945,7 +1945,7 @@ export const zhCN: Words = {
       needsPicture: '先连入一张图片',
       fromPicture: '需参考图',
       groups: { story: '分镜', role: '角色', scene: '场景', product: '商品', design: '设计', edit: '修图' },
-      names: {
+      names: { clipEdit: '视频编辑', clipExtend: '视频延长', clipMotion: '动作迁移', clipRestyle: '风格重绘', clipRecast: '换角色', clipLipsync: '对口型', 
         expand: '扩图',
         cutout: '抠图',
         storyboard: '故事板',
@@ -2115,6 +2115,20 @@ export const zhCN: Words = {
     },
     importUploading: '正在上传…',
     importPreparing: '正在准备素材…',
+    clipTools: {
+      edit: '视频编辑', extend: '视频延长', motion: '动作迁移', restyle: '风格重绘', recast: '换角色', lipsync: '对口型',
+      frames: '截取帧', framesAbout: '把一帧存成图片，放在旁边', frameAbout: { current: '正在播放的这一帧', first: '第一帧', last: '最后一帧' },
+      trim: '片段截取', trimHint: '拖动两端选出要保留的部分 · 空格播放 · I / O 设入点出点 · 回车截取', trimApply: '截取', kept: '保留 {s} 秒',
+      crop: '画面裁切', cropAbout: '居中裁成另一种比例', cropTo: '居中裁成 {r}',
+      audio: '分离音频', shots: '拉片',
+      shotList: '镜头分析', shotListAbout: '逐个镜头写出景别、角度、运镜和内容', prompt: '反推提示词', promptAbout: '写出能重新生成这段视频的提示词',
+      working: '正在处理视频…', noAudio: '这段视频没有声音', play: '播放', pause: '暂停',
+    },
+    bar: {
+      customize: '自定义工具栏', customizeAbout: '选择要放在工具栏上的工具，拖动调整顺序；没放上去的在“更多”里。', more: '更多',
+      kinds: { image: '图片', video: '视频' }, takeOff: '移到更多', empty: '工具栏上还没有工具', inMore: '更多里的工具 · 点击放到工具栏', allOn: '所有工具都在工具栏上',
+      restore: '恢复默认', cancel: '取消', save: '保存',
+    },
     video: {
       loading: '正在加载视频…',
       unavailable: '无法播放视频',

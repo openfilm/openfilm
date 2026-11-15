@@ -397,6 +397,12 @@ export interface Board {
   reportError?: (error: string) => void;
   /** a picture's background taken out by the person's service: a new picture beside it */
   cutout: (id: string, path: string) => void;
+  /** a clip worked on this computer: a part of it (asks where), its sound, cropped to a shape; beside it, wired from it */
+  clipTool: (id: string, path: string, op: 'trim' | 'audio' | 'crop', ratio?: string) => void;
+  /** a clip's shots, a still where each begins, in a group beside it */
+  shots: (id: string, path: string) => void;
+  /** the agent reading a clip (its shots) into words beside it: a shot list, or a prompt to make it again */
+  clipAssist: (id: string, path: string, kind: 'shots' | 'prompt') => void;
   /** a picture of panels cut into them (`rows`×`cols`, or 0×0: as its gutters say), laid out in a group beside it */
   split: (id: string, path: string, rows: number, cols: number) => void;
   remove: (ids: string[]) => void;

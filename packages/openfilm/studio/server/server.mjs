@@ -78,6 +78,7 @@ import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
 import { projectSettingsRoute, readProjectSettings } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
 import { CANVAS_FILE, agentCanvasRoute, canvasRoute, canvasWriteRoute, readCanvas } from './canvas.mjs';
+import { clipToolsRoute } from './clip-tools.mjs';
 import { copyBoardInto, projectTemplatesRoute, templatesRoute } from './canvas-templates.mjs';
 import { canvasMadeRoute } from './canvas-history.mjs';
 import { charactersRoute, projectCharactersRoute } from './canvas-characters.mjs';
@@ -878,6 +879,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* its canvas (canvas.mjs): Studio's own board beside the edit */
     if (await canvasRoute(req, res, project.path, rest)) return;
     if (await canvasWriteRoute(req, res, rest, askAgent, project.path)) return;
+    /* a clip trimmed, its sound or its shots taken out, cropped: on this computer (clip-tools.mjs) */
+    if (await clipToolsRoute(req, res, project.path, rest)) return;
     if (await canvasMadeRoute(req, res, project.path, rest, url)) return;
     if (await projectCharactersRoute(req, res, project.path, rest)) return;
     if (await projectTemplatesRoute(req, res, project.path, rest)) return;

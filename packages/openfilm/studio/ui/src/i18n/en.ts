@@ -1945,7 +1945,7 @@ export const en = {
       needsPicture: 'Wire a picture in first',
       fromPicture: 'Needs a picture',
       groups: { story: 'Story', role: 'Characters', scene: 'Places', product: 'Products', design: 'Design', edit: 'Retouch' },
-      names: {
+      names: { clipEdit: 'Video edit', clipExtend: 'Extend', clipMotion: 'Motion transfer', clipRestyle: 'Restyle', clipRecast: 'Recast', clipLipsync: 'Lip sync', 
         expand: 'Expand',
         cutout: 'Cutout',
         storyboard: 'Storyboard',
@@ -2115,6 +2115,20 @@ export const en = {
     },
     importUploading: 'Uploading…',
     importPreparing: 'Preparing media…',
+    clipTools: {
+      edit: 'Video edit', extend: 'Extend', motion: 'Motion transfer', restyle: 'Restyle', recast: 'Recast', lipsync: 'Lip sync',
+      frames: 'Grab frame', framesAbout: 'A frame kept as a picture beside it', frameAbout: { current: 'The frame playing now', first: 'The first frame', last: 'The last frame' },
+      trim: 'Trim', trimHint: 'Drag the ends to keep a part · Space plays · I / O set in and out · Enter trims', trimApply: 'Trim', kept: '{s} s kept',
+      crop: 'Crop', cropAbout: 'Cropped about its middle to another shape', cropTo: 'Cropped to {r}',
+      audio: 'Extract audio', shots: 'Shot breakdown',
+      shotList: 'Shot analysis', shotListAbout: 'Each shot: size, angle, camera move, what happens', prompt: 'Prompt from video', promptAbout: 'A prompt to make this clip again',
+      working: 'Working on the clip…', noAudio: 'This clip has no sound', play: 'Play', pause: 'Pause',
+    },
+    bar: {
+      customize: 'Customize toolbar', customizeAbout: 'Pick the tools on the toolbar and drag them into order; the others are under More.', more: 'More',
+      kinds: { image: 'Picture', video: 'Video' }, takeOff: 'Move to More', empty: 'No tools on the toolbar yet', inMore: 'Under More · click one to put it on the toolbar', allOn: 'Every tool is on the toolbar',
+      restore: 'Restore default', cancel: 'Cancel', save: 'Save',
+    },
     video: {
       loading: 'Loading video…',
       unavailable: 'Video could not be played',
