@@ -157,3 +157,15 @@ test('no balance, as each service says it, is one error for all; a plain rate li
     server.close();
   }
 });
+
+test('a gateway\'s error page is said by its title, or plainly when it has none', async () => {
+  const ctx = { signal: new AbortController().signal, key: 'k-123' };
+  const page = (html, status) => { globalThis.fetch = async () => new Response(html, { status }); };
+  const was = globalThis.fetch;
+  try {
+    page('<!DOCTYPE html><html><head><title>openfilm.dev | 502: Bad gateway</title></head><body>…</body></html>', 502);
+    await assert.rejects(call('OpenFilm', 'https://x', {}, ctx), /^Error: OpenFilm answered 502: openfilm\.dev \| 502: Bad gateway$/);
+    page('<html><body>nothing</body></html>', 503);
+    await assert.rejects(call('OpenFilm', 'https://x', {}, ctx), /OpenFilm is not answering right now \(503\)/);
+  } finally { globalThis.fetch = was; }
+});

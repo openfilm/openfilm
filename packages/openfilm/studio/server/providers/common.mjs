@@ -32,6 +32,7 @@ export async function call(service, url, init, ctx) {
   const reason = (ctx.key ? reasonOf(text).split(ctx.key).join('•••') : reasonOf(text)).slice(0, 500);
   if (PAID_PLAN.test(text)) throw new Error(`${service} needs a paid plan for this (${res.status})${reason ? `: ${reason}` : ''}`);
   if (res.status === 401 || res.status === 403) throw new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Services.`);
+  if (res.status >= 500 && !reason) throw new Error(`${service} is not answering right now (${res.status}). Try again in a moment.`);
   throw new Error(`${service} answered ${res.status}${reason ? `: ${reason}` : ''}`);
 }
 
@@ -77,6 +78,8 @@ export const keyLimit = (service) => Object.assign(new Error(`${service}: this k
 /** The human part of a service's error body (each service nests it its own way). */
 function reasonOf(/** @type {string} */ text) {
   let body;
+  /* a web page (a gateway's error page): only its title says anything */
+  if (/^\s*</.test(text)) return (text.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? '').replace(/\s+/g, ' ').trim();
   try { body = JSON.parse(text); } catch { return text.trim(); }
   const detail = body?.error?.message ?? body?.detail?.message ?? body?.detail ?? body?.message ?? body?.error;
   if (Array.isArray(detail)) return detail.map((d) => d?.msg ?? d?.message ?? JSON.stringify(d)).join('; ');
