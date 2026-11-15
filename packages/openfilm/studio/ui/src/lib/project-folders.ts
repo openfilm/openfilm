@@ -92,7 +92,7 @@ export function visibleProjects<P extends ListedProject>(
       if (sort === 'recent') return b.openedAt - a.openedAt;
       if (sort === 'oldest') return created(a) - created(b);
       if (sort === 'duration') return (b.duration ?? 0) - (a.duration ?? 0);
-      if (sort === 'title') return titleOf(a).localeCompare(titleOf(b));
+      if (sort === 'title') return titleOf(a).localeCompare(titleOf(b), undefined, { numeric: true, sensitivity: 'base' });
       return created(b) - created(a);
     });
 }

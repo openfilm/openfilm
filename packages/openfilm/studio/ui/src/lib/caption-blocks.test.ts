@@ -75,3 +75,21 @@ test('copies of cues: pasted from one still in its file, or from one cut since i
   assert.deepEqual(back.files[0]!.next.cues.map((c) => [c.start, c.end, c.text]), [[1, 2, 'One'], [4, 5, '<00:00:04.000>Two <00:00:04.500>words']]);
   assert.match(back.files[0]!.next.styles.join('\n'), /color: #ffd400/);
 });
+
+test('a cross-track drag carries its region without moving the destination captions, and reports its new identity', () => {
+  const source = withIds(readVtt('WEBVTT\n\nREGION\nid:main\nwidth:80%\nviewportanchor:10%,70%\n\nc1\n00:00:01.000 --> 00:00:02.000 region:main align:center\nOne\n\nc2\n00:00:03.000 --> 00:00:04.000 region:main\nTwo\n'));
+  const destination = withIds(readVtt('WEBVTT\n\nREGION\nid:main\nwidth:90%\nviewportanchor:5%,95%\n\nc1\n00:00:05.000 --> 00:00:06.000 region:main\nThere\n'));
+  const edit = cueEditOf(film, [{ op: 'props', edits: [
+    { clip: id(A, 'c1'), prop: 'track', value: 1 },
+    { clip: id(A, 'c2'), prop: 'track', value: 1 },
+  ] }], (src) => src === A ? source : destination)!;
+  const a = edit.files.find((f) => f.src === A)!.next;
+  const b = edit.files.find((f) => f.src === B)!.next;
+  assert.equal(a.cues.length, 0);
+  assert.deepEqual(edit.ops, [], 'the empty track is kept in film.html');
+  assert.equal(b.regions.length, 2, 'the two moved cues share the carried region');
+  assert.equal(b.regions[0], destination.regions[0]);
+  assert.match(b.regions[1]!, /id:main-2\nwidth:80%\nviewportanchor:10%,70%/);
+  assert.deepEqual(b.cues.map((c) => [c.id, c.settings]), [['c2', 'region:main-2 align:center'], ['c3', 'region:main-2'], ['c1', 'region:main']]);
+  assert.deepEqual(edit.moved, [{ from: id(A, 'c1'), src: B, id: 'c2' }, { from: id(A, 'c2'), src: B, id: 'c3' }]);
+});
