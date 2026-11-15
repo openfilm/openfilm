@@ -11,7 +11,7 @@
  */
 import { BaseWindow, Menu, Notification, WebContentsView, app, clipboard, dialog, ipcMain, nativeTheme, safeStorage, screen, shell } from 'electron';
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FLAVOR, IDENTITY, PRODUCT_NAME } from './flavor.mjs';
 import { folderDialogOptions, programDialogOptions } from './folder-dialog.mjs';
@@ -42,6 +42,7 @@ import { firstWindowsApps } from './windows-apps.mjs';
 import { createTabs, projectGone } from './tabs.mjs';
 import { turnNotice } from './turn-notices.mjs';
 import { restartDelay } from './studio-restart.mjs';
+import { PROTOCOL, createLinks, linkFromArgv } from './deep-links.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const mac = process.platform === 'darwin';
@@ -73,6 +74,26 @@ const LOGS = join(DATA, 'logs');
 mkdirSync(LOGS, { recursive: true });
 const log = (line) => { try { appendFileSync(join(LOGS, 'studio.log'), line); } catch { /* no log */ } };
 
+/* `openfilm://` links (deep-links.mjs): a page of openfilm.dev opens the app on what it names. Registered as the app
+   that opens them (in development, this Electron with this app's folder); macOS sends one as `open-url`, even before
+   the app is ready; Windows in the arguments, of this instance or of a second one */
+const links = createLinks({
+  send: (link) => {
+    /* before the window and its page are made (the app opening on a link), it waits for the page to take it */
+    try {
+      const page = activeView();
+      if (!page || page.webContents.isLoading()) return false;
+      focusWindow();
+      page.webContents.send('desktop:open-link', link);
+      return true;
+    } catch { return false; }
+  },
+});
+if (process.defaultApp && process.argv[1]) app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [resolve(process.argv[1])]);
+else app.setAsDefaultProtocolClient(PROTOCOL);
+app.on('open-url', (event, url) => { event.preventDefault(); links.came(url); });
+links.came(linkFromArgv(process.argv));
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else if (mac && app.isPackaged && stepAside({ dir: DATA, version: app.getVersion(), bundleId: IDENTITY.bundleId, execPath: process.execPath, argv: process.argv })) {
@@ -80,7 +101,7 @@ if (!app.requestSingleInstanceLock()) {
      when it is done (update-launch.mjs) */
   app.exit(0);
 } else {
-  app.on('second-instance', () => focusWindow());
+  app.on('second-instance', (_event, argv) => { focusWindow(); links.came(linkFromArgv(argv)); });
   app.whenReady().then(start).catch((error) => {
     console.error(error);
     app.exit(1);
@@ -671,6 +692,8 @@ async function start() {
     try { writeWindowState(DATA, state); } catch { /* kept until next time */ }
     showMenu();
   });
+  /* the page is up and takes the link that opened the app, if one did (deep-links.mjs) */
+  ipcMain.handle('desktop:take-link', (event) => (fromPage(event) ? links.take() : null));
   ipcMain.handle('desktop:hello', (event) => {
     if (!fromPage(event)) throw new Error('not the window\'s page');
     return { flavor: FLAVOR, version: app.getVersion(), ffmpeg: ffmpegFound, update: updates?.snapshot() ?? null, chatOpen: state.chatOpen, chatWidth: state.chatWidth, chatMin: CHAT_MIN, studioMin: STUDIO_MIN, fullScreen: Boolean(win?.isFullScreen()) };

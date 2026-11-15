@@ -140,6 +140,9 @@ contextBridge.exposeInMainWorld('openfilmNative', {
   onToggleChat: on('desktop:toggle-chat'),
   /* Native Settings menu and Cmd/Ctrl+,; no renderer can invoke a privileged action here. */
   onOpenSettings: on('desktop:open-settings'),
+  /* an openfilm:// link (deep-links.mjs): the one that opened the app, taken once; those that come while it runs */
+  takeLink: () => ipcRenderer.invoke('desktop:take-link'),
+  onOpenLink: on('desktop:open-link'),
   onStudioBrowser: on('desktop:studio-browser'),
   onFfmpeg: on('desktop:ffmpeg'),
   onUpdate: on('desktop:update'),

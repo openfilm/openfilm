@@ -38,6 +38,9 @@ interface Native {
   onFullScreen(listener: Listener<boolean>): Stop;
   onToggleChat(listener: Listener<void>): Stop;
   onOpenSettings(listener: Listener<void>): Stop;
+  /* an openfilm:// link (src/deep-links.mjs): what it names in the community */
+  takeLink(): Promise<{ kind: 'community'; uid: string } | null>;
+  onOpenLink(listener: Listener<{ kind: 'community'; uid: string }>): Stop;
   onStudioBrowser(listener: Listener<unknown>): Stop;
   onFfmpeg(listener: Listener<unknown>): Stop;
   onUpdate(listener: Listener<unknown>): Stop;
@@ -303,7 +306,13 @@ export const host: StudioHost = {
   unrefer: (ref) => { pictured = pictured.then(() => unrefer.set(ref)); },
   onSelection: (next) => selection.set(next),
   onHover: (ref) => hover.set(ref ?? null),
-  onCommand: (listener) => { command = listener; },
+  onCommand: (listener) => {
+    command = listener;
+    /* an openfilm:// link opens the Community on what it names: the one that opened the app, once Studio listens */
+    void native.takeLink().then((link) => { if (link) listener({ type: 'show-examples', open: { kind: 'skill', name: link.uid } }); }, () => {});
+    /* and those that come while the app runs */
+    native.onOpenLink((link) => command?.({ type: 'show-examples', open: { kind: 'skill', name: link.uid } }));
+  },
   settings: { onOpen: (listener) => native.onOpenSettings(listener) },
   /* read live: Studio may read the panel before or after the kept layout arrives */
   panel: {
