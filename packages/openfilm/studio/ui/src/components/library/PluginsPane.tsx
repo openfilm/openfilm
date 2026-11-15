@@ -205,8 +205,9 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* a project's own not allowed yet: no switch, but the way to look at it whole and allow it (its page) */
   const skillRow = (k: SkillEntry) => (
     <PluginRow key={k.uid} mark={<SkillMark skill={k} />} title={words(k).title} note={fromOf(k)}
-      summary={k.waits ? t('assetDrawer.waitsNote') : k.update ? t('gallery.updateOut').replace('{version}', k.update.version) : words(k).summary} onOpen={() => open(k.uid)}
-      control={k.waits ? <SettingsButton onClick={() => open(k.uid)}>{t('assetDrawer.reviewAndAllow')}</SettingsButton>
+      summary={k.revoked ? t('gallery.revokedNote').replace('{reason}', t(`gallery.revoked_${k.revoked.reason}`)) : k.waits ? t('assetDrawer.waitsNote') : k.update ? t('gallery.updateOut').replace('{version}', k.update.version) : words(k).summary} onOpen={() => open(k.uid)}
+      control={k.revoked ? <span className="text-[13.5px] font-medium text-[var(--err)]">{t('gallery.revokedShort')}</span>
+        : k.waits ? <SettingsButton onClick={() => open(k.uid)}>{t('assetDrawer.reviewAndAllow')}</SettingsButton>
         : <SettingsSwitch checked={!k.off} onChange={(on) => turnSkill(k, on)} label={t(k.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words(k).title)} />} />
   );
   /* a workbench is what shows outside the conversation: OpenFilm's with a workbench or a tab of the library, anyone's with a page */

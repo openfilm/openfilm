@@ -9,7 +9,8 @@
  * Installing one copies it, at the commit Discover shows, among the installed skills (src/skills.mjs officialSkillsDir),
  * with where it came from (`.source.json`): it stays that commit, offline too, until the person updates it. When the
  * index pins a newer commit, it says so (`update`); updating puts the old one in the trash. One the index no longer has
- * stays installed and works, said to be retired (`retired`); one not installed is gone from Discover.
+ * stays installed and works, said to be retired (`retired`); one not installed is gone from Discover. One the index
+ * withdraws (its `revoked`: malware, impersonation, rights…) stops, wherever a copy of it is (src/skills.mjs revocationOf).
  *
  *   ~/.openfilm/skill-catalog/index.json                       what the index said, and when it was read
  *   ~/.openfilm/skill-catalog/<owner>/<name>@<commit>/         a skill at the commit it named
@@ -21,7 +22,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { SKILL_NAME, SOURCE_FILE, discoverDir, discoverFolder, officialSkillsDir, readSkill, skillSource, skillUid, skillsIn } from '../../src/skills.mjs';
+import { REVOKED_FILE, SKILL_NAME, SOURCE_FILE, discoverDir, discoverFolder, officialSkillsDir, readSkill, revocations, skillSource, skillUid, skillsIn } from '../../src/skills.mjs';
 import { downloadFiles, listFiles } from './fetch-github.mjs';
 import { moveToTrash } from './trash.mjs';
 
@@ -203,6 +204,10 @@ async function refresh({ signal, hosts, get }) {
   }
   const catalog = { read: new Date().toISOString(), entries, listed, incomplete };
   await mkdir(catalogDir(), { recursive: true });
+  /* what OpenFilm withdrew, kept as the index said it, so it holds offline (src/skills.mjs revocationOf) */
+  const withdrawn = `${join(catalogDir(), REVOKED_FILE)}.${randomUUID()}.tmp`;
+  await writeFile(withdrawn, `${JSON.stringify(revocations(index.revoked), null, 2)}\n`);
+  await rename(withdrawn, join(catalogDir(), REVOKED_FILE));
   const temporary = `${indexFile()}.${randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(catalog, null, 2)}\n`);
   await rename(temporary, indexFile());

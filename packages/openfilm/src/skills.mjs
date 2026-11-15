@@ -611,12 +611,56 @@ export function allowProjectSkill(skill, project, on, home) {
 }
 
 /**
- * The skills agents get for a project: listSkills's, less any turned off, and less a project's own the person has not
- * allowed in it (projectSkillAllowed). @param {Parameters<typeof listSkills>[0] & { home?: string }} [where]
+ * What OpenFilm has withdrawn, by its index's `revoked` (studio/server/skill-catalog.mjs keeps the last one read, beside
+ * the index, so it holds offline): a skill by its uid, at some commits or all of them, or by the digest of its files
+ * wherever a copy of it is (a project's, the person's). One withdrawn is given to no agent and nothing of it runs; the
+ * person is told why. `reason`: malware, impersonation, rights, broken or policy.
+ * @typedef {{ uid: string, commits?: string[], digests?: string[], reason: 'malware' | 'impersonation' | 'rights' | 'broken' | 'policy', note?: string, advisory?: string, date?: string }} Revocation
+ */
+export const REVOKED_FILE = 'revoked.json';
+const REASONS = /** @type {const} */ (['malware', 'impersonation', 'rights', 'broken', 'policy']);
+
+/** The well-formed entries of an index's `revoked`; the rest are left out. @param {unknown} list @returns {Revocation[]} */
+export function revocations(list) {
+  return (Array.isArray(list) ? list : []).flatMap((e) => {
+    if (!e || typeof e !== 'object' || typeof e.uid !== 'string' || !SKILL_UID.test(e.uid) || !REASONS.includes(e.reason)) return [];
+    const commits = Array.isArray(e.commits) ? e.commits.filter((/** @type {unknown} */ c) => typeof c === 'string' && /^[0-9a-f]{40}$/.test(c)) : undefined;
+    const digests = Array.isArray(e.digests) ? e.digests.filter((/** @type {unknown} */ d) => typeof d === 'string' && /^[0-9a-f]{64}$/.test(d)) : undefined;
+    return [{ uid: e.uid, reason: e.reason, ...(commits?.length ? { commits } : {}), ...(digests?.length ? { digests } : {}),
+      ...(typeof e.note === 'string' ? { note: e.note.slice(0, 500) } : {}), ...(typeof e.advisory === 'string' && /^https:\/\/\S{4,300}$/.test(e.advisory) ? { advisory: e.advisory } : {}),
+      ...(typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date) ? { date: e.date } : {}) }];
+  });
+}
+
+/** What was withdrawn when the index was last read (none: nothing). @returns {Revocation[]} */
+export function revokedNow() {
+  try { return revocations(JSON.parse(readFileSync(join(discoverDir(), REVOKED_FILE), 'utf8'))); } catch { return []; }
+}
+
+/**
+ * Whether a skill is withdrawn, and how: the index names its uid (one installed from Discover: at its commit, when the
+ * entry names commits), or the digest of its files wherever it is. @param {Skill} skill @param {Revocation[]} [list]
+ * @returns {Revocation | null}
+ */
+export function revocationOf(skill, list = revokedNow()) {
+  if (!list.length) return null;
+  const commit = skill.source === 'official' ? skillSource(skill.folder)?.commit : undefined;
+  const byUid = list.find((r) => r.uid === skill.uid && skill.source === 'official' && (!r.commits || (commit != null && r.commits.includes(commit))));
+  if (byUid) return byUid;
+  if (!list.some((r) => r.digests)) return null;
+  const digest = skillDigest(skill.folder);
+  return list.find((r) => r.digests?.includes(digest)) ?? null;
+}
+
+/**
+ * The skills agents get for a project: listSkills's, less any turned off, less a project's own the person has not
+ * allowed in it (projectSkillAllowed), and less any OpenFilm withdrew (revocationOf).
+ * @param {Parameters<typeof listSkills>[0] & { home?: string }} [where]
  */
 export function usableSkills({ home, ...where } = {}) {
   const off = new Set(skillsOff(home));
-  return listSkills(where).filter((s) => !keeps(off, s) && projectSkillAllowed(s, where.project, home));
+  const revoked = revokedNow();
+  return listSkills(where).filter((s) => !keeps(off, s) && projectSkillAllowed(s, where.project, home) && !revocationOf(s, revoked));
 }
 
 /** OpenFilm's own skills by name, in the order they are listed: how a film is written, its media, its canvas, its motion. */
@@ -756,7 +800,8 @@ export function offeredSkills({ home, ...where } = {}) {
   const usable = usableAll.filter((s) => !known(core, s));
   /* the rest a person may name in a conversation: those of a project or theirs turned off elsewhere, and Discover's not
      installed (tried before installing) */
-  const listed = listSkills(where).filter((s) => projectSkillAllowed(s, where.project, home));
+  const revoked = revokedNow();
+  const listed = listSkills(where).filter((s) => projectSkillAllowed(s, where.project, home) && !revocationOf(s, revoked));
   const rest = [...listed, ...discoverSkills().filter((s) => !known(listed, s))].filter((s) => !keeps(off, s) && !own.has(s.uid) && !known(usable, s));
   const named = agentNames([...core, ...usable, ...rest]);
   return { named, given: named.slice(0, core.length + usable.length), usable: named.slice(core.length, core.length + usable.length) };

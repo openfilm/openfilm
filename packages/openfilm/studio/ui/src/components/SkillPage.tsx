@@ -204,12 +204,22 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
         {busy ? <span role="status">{t('gallery.coverSaving')}</span> : null}
       </div> : null}
       {error ? <p role="alert" className="mt-2 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
+      {/* withdrawn by OpenFilm: said first, with why and where to read more */}
+      {skill.revoked ? (
+        <section role="alert" className="mt-5 rounded-[12px] border border-[color-mix(in_srgb,var(--err)_45%,transparent)] bg-[color-mix(in_srgb,var(--err)_8%,transparent)] p-4">
+          <h3 className="text-[15px] font-semibold text-[var(--text)]">{t('gallery.revokedTitle')}</h3>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--text-muted)]">
+            {t('gallery.revokedNote').replace('{reason}', t(`gallery.revoked_${skill.revoked.reason}`))}{skill.revoked.note ? ` ${skill.revoked.note}` : ''}
+          </p>
+          {skill.revoked.advisory ? <a href={skill.revoked.advisory} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[14px] text-[var(--text)] underline underline-offset-2">{t('gallery.revokedAdvisory')}</a> : null}
+        </section>
+      ) : null}
       {/* brought by the project: looked at whole before it is let in (src/skills.mjs projectSkillAllowed) */}
       {skill.waits && projectId ? <ProjectSkillReview skill={skill} projectId={projectId} onAllowed={reload} /> : null}
       <div className="mt-4 flex items-start gap-3">
         <h2 className="min-w-0 flex-1 text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{words.title}</h2>
         {/* one of OpenFilm's own has no switch of its own: it is on while its plugin is (library/PluginsPane) */}
-        {installed && !skill.core && !skill.waits ? <SettingsSwitch checked={!skill.off} onChange={turn} label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words.title)} /> : null}
+        {installed && !skill.core && !skill.waits && !skill.revoked ? <SettingsSwitch checked={!skill.off} onChange={turn} label={t(skill.off ? 'gallery.turnOn' : 'gallery.turnOff').replace('{name}', words.title)} /> : null}
       </div>
       {skill.off ? <p className="mt-1.5 text-[13.5px] text-[var(--text-muted)]">{skill.plugin ? t('gallery.skillOffPlugin').replace('{plugin}', inLanguage(plugins.find((p) => p.id === skill.plugin)?.title, lang) ?? skill.plugin) : t('gallery.skillOff')}</p> : null}
       {skill.retired ? <p className="mt-1.5 text-[13.5px] text-[var(--text-muted)]">{t('gallery.retired')}</p> : null}
@@ -299,7 +309,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn }: 
       ) : null}
       <div className="mt-5 flex flex-col gap-2">
         {onTry ? (
-          <button type="button" onClick={() => onTry(skill)} disabled={skill.off || skill.waits} title={skill.off ? t('gallery.tryOff') : undefined}
+          <button type="button" onClick={() => onTry(skill)} disabled={skill.off || skill.waits || Boolean(skill.revoked)} title={skill.off ? t('gallery.tryOff') : undefined}
             className="flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[var(--primary)] text-[14.5px] font-medium text-[var(--on-primary)] transition hover:bg-[var(--primary-hover)] disabled:opacity-40"><MessageSquarePlus size={15} />{t('gallery.tryNow')}</button>
         ) : null}
         {/* OpenFilm's system skills are only turned off */}

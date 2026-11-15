@@ -70,7 +70,7 @@ import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
 import { moveToTrash } from './trash.mjs';
-import { allowProjectSkill, skillFiles, commandsIn, coreSkills, elementIn, keeps, listSkills, offeredSkills, ownSkills, pluginRuns, projectSkillAllowed, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
+import { allowProjectSkill, revocationOf, revokedNow, skillFiles, commandsIn, coreSkills, elementIn, keeps, listSkills, offeredSkills, ownSkills, pluginRuns, projectSkillAllowed, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
 import { startPluginPages } from './plugin-pages.mjs';
 import { startPluginPrograms } from './plugin-programs.mjs';
 import { createPluginServers } from './plugin-servers.mjs';
@@ -643,9 +643,16 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       /* a project's own the person has not allowed in it (src/skills.mjs projectSkillAllowed): listed, waiting, with
          nothing of it shown or run (no page, element, program, tab or commands) until it is allowed */
       const waits = (/** @type {typeof skills[number]} */ k) => k.source === 'project' && !projectSkillAllowed(k, project?.path ?? null);
-      const withheld = (/** @type {typeof skills[number]} */ k) => (waits(k)
-        ? { ...k, page: undefined, element: undefined, program: undefined, tab: undefined, blocks: undefined, commands: undefined, waits: true }
-        : k);
+      /* one OpenFilm withdrew (its index's `revoked`): nothing of it shown or run, its program stopped, and why said */
+      const revoked = revokedNow();
+      const withheld = (/** @type {typeof skills[number]} */ k) => {
+        const withdrawn = revocationOf(k, revoked);
+        if (withdrawn) pluginPrograms.stop(k.uid);
+        return withdrawn || waits(k)
+          ? { ...k, page: undefined, element: undefined, program: undefined, tab: undefined, blocks: undefined, commands: undefined,
+            ...(withdrawn ? { revoked: { reason: withdrawn.reason, ...(withdrawn.note ? { note: withdrawn.note } : {}), ...(withdrawn.advisory ? { advisory: withdrawn.advisory } : {}) } } : { waits: true }) }
+          : k;
+      };
       const all = [...coreSkills().map((k) => ({ ...k, core: true, installed: true })), ...skills.map((k) => ({ ...withheld(k), core: false, installed: true })),
         ...offered.map((k) => ({ ...k, core: false, installed: false }))];
       return json(res, 200, {
@@ -689,8 +696,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
             const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.page, ...(k.network ? { network: k.network } : {}) }, project ?? null);
             return { surface: at.page, ...(at.project ? { files: at.project } : {}), ...(pluginWrites(k, project ?? null) ? { writes: true } : {}) };
           })() : {}),
-          /* a project's own, not allowed in it yet (`waits` above) */
+          /* a project's own, not allowed in it yet; one OpenFilm withdrew, and why (`withheld` above) */
           ...('waits' in k && k.waits ? { waits: true } : {}),
+          ...('revoked' in k && k.revoked ? { revoked: k.revoked } : {}),
           /* the person's own: where it came from (none kept: made where it is) */
           ...(k.source === 'mine' ? { origin: origins[basename(k.folder)] ?? { from: 'made' } } : {}),
           /* in Discover only, installed to be used; the person's own and a project's are theirs already */
@@ -784,6 +792,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) ?? null : null;
       if (!project) throw new HttpError(404, 'no such project');
       if (keeps(new Set(skillsOff()), skill)) throw new HttpError(409, 'This plugin is off.');
+      if (revocationOf(skill)) throw new HttpError(409, 'OpenFilm withdrew this plugin: it does not run.');
       try {
         return json(res, 200, { url: await pluginPrograms.ensure({ uid: skill.uid, source: skill.source, folder: skill.folder, program }, { id: project.id, path: project.path }) });
       } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 500, e instanceof Error ? e.message : String(e)); }

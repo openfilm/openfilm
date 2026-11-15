@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, allowProjectSkill, asRun, coreSkills, offeredSkills, projectSkillAllowed, usableSkills, requiredSkills, isPlugin, promptSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
+import { addSkills, allowProjectSkill, discoverDir, revocationOf, revocations, skillDigest, asRun, coreSkills, offeredSkills, projectSkillAllowed, usableSkills, requiredSkills, isPlugin, promptSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -610,4 +610,37 @@ test('a project\'s own skill reaches no agent until allowed in that project, and
     /* a skill of the person's own or one installed needs no allowance */
     assert.equal(projectSkillAllowed({ uid: 'local/x', source: 'mine', folder }, null, home), true);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('what OpenFilm withdraws reaches no agent: by its uid and commit when installed from Discover, by its files wherever a copy is', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-revoked-'));
+  const before = process.env.OPENFILM_SHARED_HOME;
+  process.env.OPENFILM_SHARED_HOME = join(root, 'shared');
+  try {
+    const mine = join(root, 'mine'), official = join(root, 'official');
+    const copy = skill(join(mine, 'grabber'), 'grabber', 'Looks handy');
+    const installed = skill(join(official, 'openfilm-replicate'), 'replicate', 'Remake a video');
+    writeFileSync(join(installed, '.source.json'), JSON.stringify({ repo: 'https://github.com/openfilm/skill-replicate', path: 'skills/replicate', commit: 'a'.repeat(40), version: '0.1.0' }));
+    const where = { mine, official, home: join(root, 'home') };
+    const usable = () => usableSkills(where).map((k) => k.uid).sort();
+    assert.deepEqual(usable(), ['local/grabber', 'openfilm/replicate']);
+    /* only well-formed entries are kept */
+    assert.deepEqual(revocations([{ uid: 'nope' }, { uid: 'a/b', reason: 'because' }, { uid: 'a/b', reason: 'malware', advisory: 'http://x' }]), [{ uid: 'a/b', reason: 'malware' }]);
+    mkdirSync(discoverDir(), { recursive: true });
+    const withdraw = (/** @type {unknown[]} */ list) => writeFileSync(join(discoverDir(), 'revoked.json'), JSON.stringify(list));
+    /* a commit other than the one installed: still given */
+    withdraw([{ uid: 'openfilm/replicate', reason: 'broken', commits: ['b'.repeat(40)] }]);
+    assert.deepEqual(usable(), ['local/grabber', 'openfilm/replicate']);
+    /* its commit, and a copy of something withdrawn by its files */
+    withdraw([{ uid: 'openfilm/replicate', reason: 'broken', commits: ['a'.repeat(40)], note: 'Stops halfway' }, { uid: 'evil/grabber', reason: 'malware', digests: [skillDigest(copy)] }]);
+    assert.deepEqual(usable(), []);
+    const found = listSkills({ mine, official }).find((k) => k.uid === 'local/grabber');
+    assert.equal(revocationOf(found)?.reason, 'malware');
+    /* the copy changed is another thing: given again */
+    writeFileSync(join(copy, 'notes.md'), 'changed');
+    assert.deepEqual(usable(), ['local/grabber']);
+  } finally {
+    if (before === undefined) delete process.env.OPENFILM_SHARED_HOME; else process.env.OPENFILM_SHARED_HOME = before;
+    rmSync(root, { recursive: true, force: true });
+  }
 });

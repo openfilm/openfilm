@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFil
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { findSkill, listSkills, offeredSkills, usableSkills } from '../../src/skills.mjs';
+import { revokedNow, findSkill, listSkills, offeredSkills, usableSkills } from '../../src/skills.mjs';
 import { catalogSkills, installSkill, installedStanding, manifestFiles, readCatalog, readDiscover, refreshCatalog, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 
 /** A fake GitHub: its API lists a folder's files at a commit, its raw host sends each. `repos[commit]` → { path: text } */
@@ -182,4 +182,14 @@ test('Discover: the index read as it is now, each skill installed at its commit,
   assert.deepEqual(usableSkills(), []);
   assert.equal(readdirSync(join(root, 'trash')).length, 2, 'uninstalled to the trash');
   assert.equal(existsSync(join(root, 'home', 'skills-installed', 'openfilm-demo')), false);
+});
+
+test('the index\'s revoked list is kept as read, so a withdrawal holds offline, and an index without one clears it', async (t) => {
+  const root = isolated(t);
+  writeFileSync(join(root, 'index.json'), JSON.stringify({ version: 1, skills: [], revoked: [{ uid: 'evil/grabber', reason: 'malware', note: 'Sends files out', digests: ['c'.repeat(64)] }, { uid: 'bad' }] }));
+  await refreshCatalog();
+  assert.deepEqual(revokedNow(), [{ uid: 'evil/grabber', reason: 'malware', digests: ['c'.repeat(64)], note: 'Sends files out' }]);
+  writeFileSync(join(root, 'index.json'), JSON.stringify({ version: 1, skills: [] }));
+  await refreshCatalog();
+  assert.deepEqual(revokedNow(), []);
 });
