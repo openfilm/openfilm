@@ -35,6 +35,8 @@ test('a clip: a part cut out, its sound alone, cropped to a shape, its shots whe
   assert.equal(shots.times[0], 0);
   assert.ok(Math.abs(shots.times[1] - 2) < 0.1);
   assert.ok(existsSync(join(root, 'assets/clip-shots/shot-02.png')));
+  /* the shots the agent reads stay out of the library */
+  assert.equal((await clipTool(root, { op: 'shots', path: 'assets/clip.mp4', work: true })).paths[0], 'assets/.canvas/clip-shots/shot-01.png');
   await assert.rejects(clipTool(root, { op: 'trim', path: '../outside.mp4', from: 0, to: 1 }));
   await assert.rejects(clipTool(root, { op: 'spin', path: 'assets/clip.mp4' }), /op:/);
 });

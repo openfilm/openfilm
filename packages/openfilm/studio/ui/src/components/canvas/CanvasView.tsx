@@ -52,6 +52,7 @@ import { CharacterLibrary, HistoryModal, MaterialLibrary, SUBJECT_KINDS, SUBJECT
 import { CutoutSetup } from './cutout';
 import { CameraPicker } from './camera';
 import { TrimEditor } from './trim';
+import { WRITING_ATTACHMENT_LIMIT } from '../../../../../src/canvas-attachments.mjs';
 import { ClipToolEditor, type ClipMade } from './clip-tools';
 import { CLIP_TOOLS, clipModels, isOwn, type ClipTool, type ClipToolKey } from '@/lib/canvas-clip';
 import { cameraOf, cameraText, picksAnything } from '@/lib/canvas-camera';
@@ -1273,7 +1274,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const note = canvasId('n');
     add({ nodes: [{ id: note, x: at.x, y: at.y, w: NOTE_W, h: CARD_H, text: '', title: t(`canvas.clipTools.${kind === 'shots' ? 'shotList' : 'prompt'}`) }], edges: [] }, false);
     try {
-      const { paths, times = [] } = await api.clipTool(projectId, { op: 'shots', path, most: 8 });
+      /* as many shots as the writer takes attached */
+      const { paths, times = [] } = await api.clipTool(projectId, { op: 'shots', path, most: WRITING_ATTACHMENT_LIMIT, work: true });
       const when = times.map((s) => `${s}s`).join(', ');
       const ask = kind === 'shots'
         ? `The attached pictures are the shots of one video clip, in order, each where a shot begins (at ${when}). Write the clip's shot list: one numbered line per shot with its start time, shot size, camera angle, lens, camera movement, light and what happens; then one line on the cutting rhythm. No preamble. Write it in ${tongue}.`

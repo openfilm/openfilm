@@ -32,11 +32,14 @@ function ffmpeg(args) {
   });
 }
 
-/** A free name in assets/ for what a tool made of `rel`: `<clip>-<tool>.<ext>`, else `<clip>-<tool>-2.<ext>`, … */
-function freeName(/** @type {string} */ root, /** @type {string} */ rel, /** @type {string} */ tool, /** @type {string} */ ext) {
+/**
+ * A free name for what a tool made of `rel`: `<clip>-<tool>.<ext>`, else `<clip>-<tool>-2.<ext>`, … in assets/, or in
+ * assets/.canvas/ for what is only on the way to something (`work`: the shots the agent reads), out of the library.
+ */
+function freeName(/** @type {string} */ root, /** @type {string} */ rel, /** @type {string} */ tool, /** @type {string} */ ext, work = false) {
   const base = basename(rel, extname(rel));
   for (let k = 1; ; k++) {
-    const name = `assets/${base}-${tool}${k > 1 ? `-${k}` : ''}${ext}`;
+    const name = `assets/${work ? '.canvas/' : ''}${base}-${tool}${k > 1 ? `-${k}` : ''}${ext}`;
     if (!existsSync(inside(root, name))) return name;
   }
 }
@@ -47,7 +50,7 @@ const even = (/** @type {number} */ n) => Math.max(2, Math.floor(n / 2) * 2);
 
 /**
  * @param {string} root the project
- * @param {{ op?: unknown, path?: unknown, from?: unknown, to?: unknown, ratio?: unknown, most?: unknown }} body
+ * @param {{ op?: unknown, path?: unknown, from?: unknown, to?: unknown, ratio?: unknown, most?: unknown, work?: unknown }} body
  * @returns {Promise<{ paths: string[], times?: number[] }>}
  */
 export async function clipTool(root, body) {
@@ -88,7 +91,7 @@ export async function clipTool(root, body) {
     const log = await ffmpeg(['-i', src, '-an', '-vf', "scale=320:-2,select='gte(scene,0)',metadata=print:key=lavfi.scene_score", '-f', 'null', '-']);
     const scores = [...log.matchAll(/pts_time:([\d.]+)[^\n]*\n[^\n]*lavfi\.scene_score=([\d.]+)/g)].map((m) => ({ t: Number(m[1]), s: Number(m[2]) }));
     const times = shotTimes(scores, length, most);
-    const dir = freeName(root, rel, 'shots', '');
+    const dir = freeName(root, rel, 'shots', '', body.work === true);
     const abs = inside(root, dir);
     const temp = `${abs}.part`;
     await rm(temp, { recursive: true, force: true });
