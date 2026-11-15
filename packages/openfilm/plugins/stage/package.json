@@ -5,6 +5,7 @@
   "bin": {
     "new": "new.mjs",
     "render": "render.mjs",
-    "look": "look.mjs"
+    "look": "look.mjs",
+    "blend": "blend.mjs"
   }
 }

@@ -6,6 +6,7 @@ import { register } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
+const { findBlender } = await import(new URL('../plugins/stage/blender.mjs', import.meta.url).href);
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const PLUGIN = fileURLToPath(new URL('../plugins/stage/', import.meta.url));
@@ -183,4 +184,16 @@ test('stage render draws a shot, or a stretch of it, as a video beside it', () =
   assert.match(readFileSync(join(project, '.film/cache/stage/s1/depth.html'), 'utf8'), /import \{ shot \} from '\/stage\/s1\/shot\.js'/);
   assert.equal(stage('render', 's1', '2').status, 2);
   assert.equal(stage('render').status, 2);
+});
+
+test('with Blender on this computer, stage render draws the shot with it, and stage blend gives a scene of the person\'s own', { skip: !findBlender() && 'no Blender here' }, () => {
+  const rendered = stage('render', 's1', '0-0.25', '--fps', '8', '--engine', 'blender');
+  assert.equal(rendered.status, 0, rendered.stderr + rendered.stdout);
+  assert.match(rendered.stdout, /rendered {2}\[s1\]\(stage\/s1\/whitebox-0-0\.25\.mp4\) · 0\.25 s of it · drawn in [\d.]+ s · by Blender \(EEVEE\)/);
+  assert.ok(existsSync(join(project, '.film/cache/stage/s1/blender/shot.blend')));
+  const blend = stage('blend', 's1');
+  assert.equal(blend.status, 0, blend.stderr);
+  assert.ok(existsSync(join(project, 'stage/s1/blender/shot.blend')));
+  assert.match(stage('blend', 's1').stdout, /is there already, yours/);
+  assert.equal(stage('render', 's1', '--cycles').status, 2, '--cycles goes with --engine blender');
 });

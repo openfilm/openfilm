@@ -11,22 +11,28 @@ import { parseArgs } from 'node:util';
 import { render } from '../../src/render.mjs';
 import { UsageError } from '../../src/shared.mjs';
 import { launch, serve } from '../../src/host.mjs';
+import { blenderVersion, findBlender, renderWithBlender } from './blender.mjs';
 import { passPage } from './passes.mjs';
 import { RUN, command, projectHere, shotOf } from './shots.mjs';
 
-const HELP = `${RUN} stage render <shot> [a-b] [--depth] [--pose] [--still] [--fps 24]
+const HELP = `${RUN} stage render <shot> [a-b] [--depth] [--pose] [--still] [--fps 24] [--engine blender [--cycles] [--samples n]]
 
   The shot as a video: stage/<shot>/whitebox.mp4, 1920 × 1080; a stretch (0-5) is stage/<shot>/whitebox-0-5.mp4.
   This is the white box a video model is given as its reference for the camera and the movement.
   --depth   also depth.mp4: white near, black far, its range fitted to the shot
   --pose    also pose.mp4: each figure's pose as OpenPose draws it, on black
-  --still   also still.png: the first frame, 1920 × 1080 (for a picture model to restyle, keeping the framing)`;
+  --still   also still.png: the first frame, 1920 × 1080 (for a picture model to restyle, keeping the framing)
+  --engine blender   the white box drawn by Blender, when it is on this computer: real bounce light and soft
+            shadows, slower (EEVEE about a second a frame; --cycles path-traced, much slower; --samples, 32 or 128).
+            The scene is kept as .film/cache/stage/<shot>/blender/shot.blend; ${RUN} stage blend <shot> gives you a
+            copy of your own to open in Blender.`;
 
 await command(async () => {
   const { values, positionals } = parseArgs({
     args: process.argv.slice(2), allowPositionals: true,
     options: {
       fps: { type: 'string' }, depth: { type: 'boolean' }, pose: { type: 'boolean' }, still: { type: 'boolean' },
+      engine: { type: 'string' }, cycles: { type: 'boolean' }, samples: { type: 'string' },
       help: { type: 'boolean', short: 'h' },
     },
   });
@@ -44,6 +50,12 @@ await command(async () => {
   if (at != null) throw new UsageError(`render takes a stretch (for example ${at}-${at + 2}), not one moment: for one moment, ${RUN} stage look ${what} ${at}`);
   const fps = Number(values.fps ?? 24);
   if (!(fps > 0 && fps <= 120)) throw new UsageError('--fps is a number of frames a second, 1 to 120');
+  if (values.engine && values.engine !== 'blender' && values.engine !== 'three') throw new UsageError(`--engine is blender (or three, the default)`);
+  if ((values.cycles || values.samples) && values.engine !== 'blender') throw new UsageError('--cycles and --samples go with --engine blender');
+  if (values.samples && !(Number(values.samples) >= 1 && Number(values.samples) <= 4096)) throw new UsageError('--samples is a number from 1 to 4096');
+  const blender = values.engine === 'blender' ? findBlender() : null;
+  if (values.engine === 'blender' && !blender) throw new Error('Blender is not on this computer (or set OPENFILM_BLENDER to where it is): the white box is drawn in the browser without it');
+  if (blender && !blenderVersion(blender)) throw new Error(`${blender} did not say it is Blender`);
   const project = projectHere();
   const shot = shotOf(project, what);
   const suffix = range ? `-${range[0]}-${range[1]}` : '';
@@ -55,8 +67,17 @@ await command(async () => {
   for (const [pass, name] of /** @type {[string, string][]} */ ([['beauty', 'whitebox'], ['depth', 'depth'], ['pose', 'pose']])) {
     if (pass !== 'beauty' && !values[pass]) continue;
     const out = join(shot.dir, `${name}${suffix}.mp4`);
-    const page = pass === 'beauty' ? shot.page : passPage(project, shot, pass);
     const started = Date.now();
+    if (pass === 'beauty' && blender) {
+      const { blend } = await renderWithBlender({
+        project, shot, out, fps, range: /** @type {[number, number] | null} */ (range), engine: values.cycles ? 'cycles' : 'eevee',
+        samples: Number(values.samples ?? (values.cycles ? 64 : 32)), blender, say: (line) => console.log(line),
+      });
+      console.log(`${said(out, started)} · by Blender (${values.cycles ? 'Cycles' : 'EEVEE'})`);
+      console.log(`          the scene: ${relative(project, blend).split('\\').join('/')}`);
+      continue;
+    }
+    const page = pass === 'beauty' ? shot.page : passPage(project, shot, pass);
     await render([page, ...span], { out, fps, root: project, onSoftware: () => { software = true; } });
     console.log(said(out, started));
   }
