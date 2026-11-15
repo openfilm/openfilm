@@ -234,7 +234,7 @@ const SCRUB_TELL_MS = 15;
 /** While scrubbing, how often the timeline renders itself for the time (ms): the line itself moves each frame. */
 const SCRUB_STATE_MS = 100;
 /**
- * The audio band at the bottom of a video clip: its own sound draws its waveform here; a video without sound keeps
+ * The audio band's height on a video track at its default height: its own sound draws its waveform here; a video without sound keeps
  * the band empty but still takes its height, so the preview bands of neighboring videos line up. A page or a still
  * has no sound at all: its picture takes the whole clip.
  */
@@ -3138,14 +3138,17 @@ export const Timeline = React.memo(function Timeline({
             const compound = Boolean(compoundFolder(block.src));
             const visual = block.kind === 'mg' || block.kind === 'video';
             const soundBand = compound ? Boolean(block.ownAudio) : block.kind === 'video' && !(block.src && filmSrcIsStill(block.src));
-            const previewH = Math.max(6, h - INFO_H - (soundBand ? AUDIO_BAND_H : 0));
+            /* The sound grows with its track, keeping its share of the default height. At the smallest height,
+               leave room for the name and at least 6 px of picture. */
+            const audioBandH = Math.min(h - INFO_H - 6, Math.round(AUDIO_BAND_H * h / ownTrackHeight(track)));
+            const previewH = Math.max(6, h - INFO_H - (soundBand ? audioBandH : 0));
             const bandAudio = visual && !!block.ownAudio && !block.silent;
             /* where its sound starts: the top of a video's audio band, or of a sound's waveform (a page's or a still's
                picture, which has none). The volume line is across it */
-            const soundTop = soundBand ? h - AUDIO_BAND_H : INFO_H;
+            const soundTop = soundBand ? h - audioBandH : INFO_H;
             /* the fade handles: on the bottom of the picture (a video's, where its audio band starts; a page's or a
                still's, just inside the clip's bottom), or on the top of a sound's waveform */
-            const fadeY = soundBand ? h - AUDIO_BAND_H : visual ? h - FADE_DOT_INSET : INFO_H;
+            const fadeY = soundBand ? soundTop : visual ? h - FADE_DOT_INSET : INFO_H;
             /* the volume line: on the clip under the pointer, when it is heard, with nothing else on its edges */
             const volumeLine = pointed && !floating && !speeding && mode === 'select' && !track.locked && width > 18
               && Boolean(onEditBlocks && block.loc) && hasVolume(block) && (!visual || bandAudio);
@@ -3345,7 +3348,7 @@ export const Timeline = React.memo(function Timeline({
                     data-audio-band={bandAudio ? 'on' : 'off'}
                     className="absolute inset-x-0 bottom-0"
                     style={{
-                      height: AUDIO_BAND_H,
+                      height: audioBandH,
                       background: 'rgba(0,0,0,0.22)',
                     }}
                   >
@@ -3353,7 +3356,7 @@ export const Timeline = React.memo(function Timeline({
                       <BlockWaveform
                         url={waveUrl(block.src)}
                         width={width}
-                        height={AUDIO_BAND_H - 2}
+                        height={audioBandH - 2}
                         color="var(--tl-wave-band)"
                         clipColor="var(--tl-wave-clip)"
                         /* as loud as it plays: the volume as written, or as the line in hand has it */
