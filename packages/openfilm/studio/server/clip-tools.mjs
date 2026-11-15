@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * What the canvas does to a clip on this computer, with ffmpeg, free: a part of it cut out (`trim`), its sound alone
- * (`audio`), its picture cropped to a shape (`crop`), and its shots, each a still where the picture cuts (`shots`).
+ * (`audio`, as MP3), its picture cropped to a shape (`crop`), and its shots, each a still where the picture cuts (`shots`).
  * What it makes lands in `assets/`, named after the clip and the tool, never over a file that is there.
  *
  *   POST /api/projects/:id/clip-tools  { op, path, from?, to?, ratio?, most? }  →  { paths: [...], times?: [...] }
@@ -67,8 +67,9 @@ export async function clipTool(root, body) {
   }
   if (body.op === 'audio') {
     if (!facts.audio) throw new HttpError(422, 'no-audio');
-    const out = freeName(root, rel, 'audio', '.m4a');
-    await ffmpeg(['-i', src, '-vn', '-map', '0:a:0', ...AAC, inside(root, out)]);
+    /* MP3: what every service that takes a recording takes (Seedance refuses AAC) */
+    const out = freeName(root, rel, 'audio', '.mp3');
+    await ffmpeg(['-i', src, '-vn', '-map', '0:a:0', '-c:a', 'libmp3lame', '-b:a', '192k', inside(root, out)]);
     return { paths: [out] };
   }
   if (body.op === 'crop') {
