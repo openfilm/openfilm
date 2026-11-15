@@ -76,6 +76,54 @@ test('a render with no format of its own encodes on the graphics chip when it ca
   }
 });
 
+test('a format with a ceiling: a film that comes to more than it is encoded once more at the bitrate as its parts are joined; one under it is left as drawn', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-ceiling-'));
+  try {
+    /* noise that changes every frame: busy in every pixel, as grain is */
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><body style="margin:0"><canvas id="c" width="320" height="180"></canvas><script>'
+      + 'const ctx = document.getElementById("c").getContext("2d");'
+      + 'window.film = { duration: 2, width: 320, height: 180, frame(t) { let s = Math.round(t * 1000) + 1; const d = ctx.createImageData(320, 180);'
+      + ' for (let i = 0; i < d.data.length; i += 4) { s = (s * 1103515245 + 12345) & 0x7fffffff; d.data[i] = d.data[i + 1] = d.data[i + 2] = s >> 23; d.data[i + 3] = 255; } ctx.putImageData(d, 0, 0); } };</script>');
+    const quiet = { workers: 2, silent: true, onProgress() {}, fps: 10 };
+    const pix = 'scale=out_color_matrix=bt709:out_range=tv,format=yuv420p';
+    const fine = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '12'];
+    const atRate = ['-c:v', 'libx264', '-preset', 'veryfast', '-b:v', '300k', '-maxrate', '450k', '-bufsize', '600k'];
+    const rate = (/** @type {string} */ file) => statSync(file).size * 8 / 2;
+    const frames = (/** @type {string} */ file) => parseInt(execFileSync('ffprobe', ['-v', 'error', '-count_packets', '-select_streams', 'v:0', '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', file]).toString(), 10);
+    const plain = await render([dir], { ...quiet, out: join(dir, 'plain.mp4'), format: { video: fine, pix } });
+    assert.ok(rate(plain.out) > 2_000_000, `the noise held to a quality: ${rate(plain.out)} bits a second`);
+    /* over its ceiling: every frame still there, at about the bitrate */
+    const capped = await render([dir], { ...quiet, out: join(dir, 'capped.mp4'), format: { video: fine, pix, ceiling: { bits: 450_000, video: atRate } } });
+    assert.equal(frames(capped.out), 20);
+    assert.ok(rate(capped.out) < 600_000, `encoded again at the bitrate: ${rate(capped.out)} bits a second`);
+    /* under it: the parts as they were drawn, joined */
+    const under = await render([dir], { ...quiet, out: join(dir, 'under.mp4'), format: { video: fine, pix, ceiling: { bits: 50_000_000, video: atRate } } });
+    assert.ok(Math.abs(rate(under.out) - rate(plain.out)) < rate(plain.out) * 0.02, 'not encoded again');
+    /* an encoder that fails at the bitrate leaves the film as it was drawn */
+    const kept = await render([dir], { ...quiet, out: join(dir, 'kept.mp4'), format: { video: fine, pix, ceiling: { bits: 450_000, video: ['-c:v', 'no_such_encoder'] } } });
+    assert.equal(frames(kept.out), 20);
+    assert.ok(rate(kept.out) > 2_000_000, 'the parts are the film');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a render drawn without a graphics chip says so at once, and in its result', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-render-software-'));
+  /* browsers whose WebGL is SwiftShader, as on a computer whose driver reaches no chip */
+  const pool = new BrowserPool({ start: () => launch({ args: ['--use-angle=swiftshader'] }) });
+  try {
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><body style="margin:0;background:#246"><script>window.film = { duration: 1, width: 320, height: 180, frame() {} };</script>');
+    let told = 0;
+    const drawn = await render([dir, '0-0.3'], { workers: 1, silent: true, onProgress() {}, fps: 10, hardware: false, browsers: pool, out: join(dir, 'software.mp4'), onSoftware: () => { told++; } });
+    assert.equal(drawn.software, true);
+    assert.equal(told, 1);
+  } finally {
+    await pool.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('an encoder that fails to start fails the render with ffmpeg\'s error, instead of waiting forever', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-render-fails-'));
   try {

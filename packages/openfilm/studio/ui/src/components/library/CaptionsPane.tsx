@@ -8,7 +8,7 @@
  * A caption's look is the inspector's (components/CaptionInspector), on the track or the captions picked.
  */
 import React from 'react';
-import { Check, FileText } from 'lucide-react';
+import { Check, FileText, Plus } from 'lucide-react';
 import { FILM_SUBTITLE_LANGUAGES } from '../../../../server/film-subtitle.mjs';
 import { useLanguage, useT } from '@/i18n';
 import { MenuSelect } from '../MenuSelect';
@@ -42,7 +42,7 @@ export interface CaptionsActions {
   /** The track of the captions of speech (its badge, V3), and whether they follow the cuts by themselves (not changed by hand). */
   speechTrack: string | null;
   speechAuto: boolean;
-  /** The top caption track (a caption typed in goes there); null: none. */
+  /** The picked caption track, else the first unlocked one (a caption typed in goes there); null: none. */
   captionTrack: string | null;
   /** Captions of what the clips with a transcript and the ticked ones say. */
   make: (o: CaptionsMake) => void;
@@ -51,6 +51,8 @@ export interface CaptionsActions {
   connect: () => void;
   /** A caption at the playhead, on `captionTrack` or a new track. */
   addOne: () => void;
+  /** A separate caption track with one editable caption at the playhead. */
+  addTrack: () => Promise<void>;
 }
 
 export function CaptionsPane({ actions }: { actions: CaptionsActions }) {
@@ -72,6 +74,7 @@ function New({ actions }: { actions: CaptionsActions }) {
   const [translate, setTranslate] = React.useState<string | null>(null);
   const [file, setFile] = React.useState<File | null>(null);
   const [over, setOver] = React.useState(false);
+  const [addingTrack, setAddingTrack] = React.useState(false);
   const named = React.useMemo(() => { try { return new Intl.DisplayNames([ui], { type: 'language' }); } catch { return null; } }, [ui]);
   const fileOf = (files: FileList | null) => [...(files ?? [])].find((f) => /\.(srt|vtt)$/i.test(f.name)) ?? null;
   const { heard, picked, making, problem, speechTrack, speechAuto, choosing } = actions;
@@ -188,9 +191,18 @@ function New({ actions }: { actions: CaptionsActions }) {
         </button>
         {plan && has ? <p data-captions-plan="" className="text-[11px] leading-relaxed text-[var(--text-faint)]">{plan}</p> : null}
       </div>
-      <button type="button" onClick={actions.addOne} className="self-start text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)] hover:underline">
-        {actions.captionTrack ? t('assetDrawer.captionsAddOneOn').replace('{track}', actions.captionTrack) : t('assetDrawer.captionsAddOne')}
-      </button>
+      <div className="flex flex-col gap-2 border-t border-[var(--border)] pt-3">
+        <button type="button" data-captions-new-track="" disabled={making || addingTrack}
+          onClick={() => { setAddingTrack(true); void actions.addTrack().finally(() => setAddingTrack(false)); }}
+          className="flex h-8 items-center justify-center gap-1.5 rounded-md bg-[var(--bg-field)] text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)] disabled:opacity-50">
+          <Plus size={14} />{t('captionTrack.stepNew')}
+        </button>
+        <p className="text-[11px] leading-relaxed text-[var(--text-faint)]">{t('captionTrack.multiTrackHint')}</p>
+        <button type="button" data-captions-add-one="" disabled={making || addingTrack} onClick={actions.addOne}
+          className="self-start text-left text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)] hover:underline disabled:opacity-50">
+          {actions.captionTrack ? t('assetDrawer.captionsAddOneOn').replace('{track}', actions.captionTrack) : t('assetDrawer.captionsAddOne')}
+        </button>
+      </div>
     </div>
   );
 }

@@ -27,6 +27,14 @@ export function refreshSaved(): void {
   for (const fn of listeners) fn();
 }
 
+export function useSavedRevision(): number {
+  return React.useSyncExternalStore(
+    fn => { listeners.add(fn); return () => { listeners.delete(fn); }; },
+    () => version,
+    () => version,
+  );
+}
+
 const enc = (path: string) => encodeURIComponent(path);
 const media = (what: string, path: string, v: number) => `/api/saved/media?what=${what}&path=${enc(path)}&v=${v}`;
 
@@ -48,11 +56,7 @@ export const savedSources: MediaSources = {
 
 /** The library as the media pane lists it, once read (null before, or while `on` is false). */
 export function useSavedListing(on: boolean): MediaListing | null {
-  const seen = React.useSyncExternalStore(
-    (fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
-    () => version,
-    () => version,
-  );
+  const seen = useSavedRevision();
   const [raw, setRaw] = React.useState<(FilesListing & { made?: string[] }) | null>(null);
   const [facts, setFacts] = React.useState<ReadonlyMap<string, MediaFacts>>(new Map());
   React.useEffect(() => {
@@ -76,6 +80,7 @@ export function useSavedListing(on: boolean): MediaListing | null {
   React.useEffect(() => {
     for (const f of raw?.files ?? []) {
       const key = `${f.path}@${f.mtime}`;
+      if (Object.entries(raw?.links ?? {}).some(([path, link]) => link.missing && (f.path === path || f.path.startsWith(`${path}/`)))) continue;
       if (f.saved || !['video', 'audio', 'image'].includes(f.kind) || facts.has(key)) continue;
       void mediaFetch(media('probe', f.path, f.mtime), undefined, 'background').then((r) => (r.ok ? r.json() : null)).then((probe) => {
         if (probe) setFacts((m) => new Map(m).set(key, factsOfProbe(probe)));
@@ -98,7 +103,8 @@ export const savedActions = {
   move: async (from: string, to: string) => { const r = await result(await send('PATCH', '/api/saved/files', { from, to })); refreshSaved(); return r; },
   remove: async (path: string) => { const r = await result(await fetch(`/api/saved/files?path=${enc(path)}`, { method: 'DELETE' })); refreshSaved(); return r; },
   newFolder: async (path: string) => { const r = await result(await send('POST', '/api/saved/folders', { path })); refreshSaved(); return r; },
-  reveal: (path: string) => { void send('POST', '/api/saved/reveal', { path }); },
+  reveal: (path: string, original = false) => { void send('POST', '/api/saved/reveal', { path, original }); },
+  relink: async (path: string, to: string) => { const res = await send('POST', '/api/saved/relink', { path, to }); if (!res.ok) throw new Error(String((await res.json()).error)); refreshSaved(); },
   /** Files or folders of this computer (their paths) brought in, taking no room where the disk allows (`auto`), or
    linked where they are kept (`link`). Resolves with where each landed. */
   bring: async (paths: string[], into: string, mode: 'auto' | 'link' = 'auto'): Promise<string[]> => {

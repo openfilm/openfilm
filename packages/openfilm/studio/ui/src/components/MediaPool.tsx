@@ -77,6 +77,7 @@ import { retryImage } from '@/lib/retry-image';
 import { boxBetween, boxHits, boxPick, moveTargets, pickItem, type Box } from '@/lib/media-selection';
 import { barLayout, type BarWords } from '@/lib/media-bar';
 import { byName, folderFaces } from '@/lib/media-folders';
+import { isMediaFileDrop, mediaDropFiles } from '@/lib/media-drop';
 
 type Filter = 'all' | 'video' | 'image' | 'audio' | 'page' | 'other';
 type SortKey = 'name' | 'time' | 'duration' | 'type';
@@ -85,7 +86,7 @@ const SORTS: readonly SortKey[] = ['name', 'time', 'duration', 'type'];
 /** Tiles dragged inside the pane, to be moved into a folder: their paths, a line each (a name has no line break). */
 const FOLDER_DRAG = 'application/x-openfilm-media';
 /** Files dragged in from the computer, not a tile of this pane (the browser adds a dragged picture as a file). */
-const fromComputer = (dt: DataTransfer) => dt.types.includes('Files') && !dt.types.includes(FOLDER_DRAG);
+const fromComputer = isMediaFileDrop;
 /** The open folder per project, kept across remounts (the layout re-mounts the pane). */
 const OPEN_FOLDER = new Map<string, string>();
 
@@ -213,6 +214,17 @@ export interface MediaPoolProps {
    * picked; dragging it there is the usual way).
    */
   onAdd?: (file: WorkspaceResource) => void;
+  /** The full library uses this same browser, with its own navigation and organization actions. */
+  browser?: {
+    flat?: boolean;
+    recent?: boolean;
+    folder?: { path: string; seq: number };
+    onFolder?: (path: string) => void;
+    onSelection?: (files: WorkspaceResource[]) => void;
+    menu?: (files: WorkspaceResource[]) => ContextMenuEntry[];
+    protectedPath?: (path: string) => boolean;
+    badge?: (file: WorkspaceResource) => string;
+  };
 }
 
 export function MediaPool({
@@ -251,6 +263,7 @@ export function MediaPool({
   shown = true,
   litPath,
   onAdd,
+  browser,
 }: MediaPoolProps) {
   const t = useT();
   const [view, setView] = React.useState<ViewState>(() => loadView(projectId));
@@ -272,6 +285,10 @@ export function MediaPool({
   const [osDrag, setOsDrag] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const inSaved = scope === 'saved';
+  React.useEffect(() => {
+    if (browser?.folder) { setAt(browser.folder.path); setQuery(''); setPicked([]); }
+  }, [browser?.folder, setAt]);
+  React.useEffect(() => { browser?.onFolder?.(at); }, [at, browser?.onFolder]);
   React.useEffect(() => { setQuery(''); }, [scope]);
   /* the top folder: All of the project's media, or Saved */
   const topName = inSaved ? t('saved.title') : t('media.filter_all');
@@ -341,10 +358,10 @@ export function MediaPool({
     };
     /* searching or showing one kind looks through every folder at once */
     const said = (f: WorkspaceResource, of?: (file: WorkspaceResource) => string | undefined) => Boolean(q && of && mediaNameMatches(of(f) ?? '', q));
-    if (q || view.filter !== 'all') {
+    if (q || view.filter !== 'all' || browser?.flat) {
       const found = stacked(allFiles
         .filter((f) => (view.filter === 'all' || filterOf(f) === view.filter) && (mediaNameMatches(f.name, q) || said(f, wordsOf)))
-        .sort(order));
+        .sort(browser?.recent ? (a, b) => (b.addedMs ?? b.mtimeMs) - (a.addedMs ?? a.mtimeMs) : order));
       return { items: found.files.map((file) => ({ type: 'file', file })), counts: found.counts };
     }
     /* the project's pages are at the top; a page put in a folder is in its folder */
@@ -352,7 +369,7 @@ export function MediaPool({
     /* the folders here, what each holds and its cover (lib/media-folders) */
     const sub = folderFaces(allFiles, folders, at, (path) => (inMedia(path) ? assetRel(path) : null)).map((face) => ({ type: 'folder' as const, ...face }));
     return { items: [...sub, ...here.files.map((file) => ({ type: 'file' as const, file }))], counts: here.counts };
-  }, [allFiles, folders, at, query, view, assetRel, inMedia, wordsOf, stacked]);
+  }, [allFiles, folders, at, query, view, assetRel, inMedia, wordsOf, stacked, browser?.flat, browser?.recent]);
   const items = listed?.items ?? null;
   const stackCounts = listed?.counts;
 
@@ -492,6 +509,7 @@ export function MediaPool({
   const [moveAsk, setMoveAsk] = React.useState<{ paths: string[]; intoRel: string; unseen: { file: string; unseen: string[] }[] } | null>(null);
   /** Move files and folders into a folder (`intoRel` under assets/, '' its top), one after another. */
   const moveAll = async (paths: readonly string[], intoRel: string, asked = false) => {
+    if (paths.some(path => browser?.protectedPath?.(path))) { setNotice(t('assetLibrary.externalReadOnly')); return; }
     const into = folderPath(intoRel);
     const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
     /* what is there already stays, and a folder never goes into itself */
@@ -539,6 +557,7 @@ export function MediaPool({
   };
   /** Ask to delete these (picked) items. */
   const askDelete = (keys: readonly string[]) => {
+    if (keys.some(path => browser?.protectedPath?.(path))) { setNotice(t('assetLibrary.externalReadOnly')); return; }
     const targets = keys.flatMap((key) => { const item = itemByKey.get(key); return item ? [{ path: key, folder: item.type === 'folder' }] : []; });
     const first = targets[0] ? itemByKey.get(targets[0].path) : undefined;
     if (first) setConfirm({ targets, name: first.type === 'folder' ? first.name : first.file.name });
@@ -546,6 +565,7 @@ export function MediaPool({
 
   const rename = async (path: string, name: string, folder: boolean) => {
     setRenaming(null);
+    if (browser?.protectedPath?.(path)) { setNotice(t('assetLibrary.externalReadOnly')); return; }
     const to = renamedPath(path, name, folder);
     if (!to) return;
     /* a file's ending says what it is: the server refuses one that would change it, and this says why */
@@ -627,6 +647,7 @@ export function MediaPool({
     };
   };
   const fileMenu = (file: WorkspaceResource): ContextMenuEntry[] => [
+    ...(browser?.menu?.([file]) ?? []),
     ...(fileRef && onRefer ? [
       { id: 'refer', label: t('host.refer'), icon: <MessageSquarePlus size={14} />, onSelect: () => onRefer(fileRef(file)) },
       { id: 'refer-sep', separator: true } as const,
@@ -647,20 +668,25 @@ export function MediaPool({
     }] : []),
     ...(file.kind === 'image' && onSetCover ? [{ id: 'cover', label: t('projects.setAsCover'), icon: <ImagePlus size={14} />, onSelect: () => onSetCover(file.path) }] : []),
     /* a page of the project is named in other pages' code (not renamed here); one of Saved is its own folder */
-    ...(file.kind === 'mg' && !file.bundle ? [] : [{ id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(file.path) }]),
-    moveEntry([file.path]),
-    { id: 'delete', label: t('assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirm({ targets: [{ path: file.path, folder: false }], name: file.name }) },
+    ...(browser?.protectedPath?.(file.path) ? [] : [
+      ...(file.kind === 'mg' && !file.bundle ? [] : [{ id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(file.path) }]),
+      moveEntry([file.path]),
+      { id: 'delete', label: t('assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirm({ targets: [{ path: file.path, folder: false }], name: file.name }) },
+    ]),
   ];
-  const folderMenu = (rel: string, name: string): ContextMenuEntry[] => [
+  const folderMenu = (rel: string): ContextMenuEntry[] => [
     ...commonEntries(`${root}/${rel}`),
     { id: 'sep', separator: true },
     ...linkEntries(`${root}/${rel}`, true),
-    { id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(`${root}/${rel}`) },
-    moveEntry([`${root}/${rel}`]),
-    { id: 'delete', label: t('assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirm({ targets: [{ path: `${root}/${rel}`, folder: true }], name }) },
+    ...(browser?.protectedPath?.(`${root}/${rel}`) ? [] : [
+      { id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(`${root}/${rel}`) },
+      moveEntry([`${root}/${rel}`]),
+      { id: 'delete', label: t('assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => askDelete([`${root}/${rel}`]) },
+    ]),
   ];
   /** Several picked: what can be done to all of them at once. */
   const manyMenu = (keys: readonly string[]): ContextMenuEntry[] => [
+    ...(browser?.menu?.(keys.flatMap(key => { const item = itemByKey.get(key); return item?.type === 'file' ? [item.file] : []; })) ?? []),
     ...(onCollect && keys.some((key) => linkOf(key) && !linkOf(key)!.missing) ? [{
       id: 'collect', label: t('media.collect'), note: t('media.collectNote'), icon: <HardDriveDownload size={14} />,
       onSelect: () => { void collectAll(keys.filter((key) => linkOf(key) && !linkOf(key)!.missing)); },
@@ -711,7 +737,7 @@ export function MediaPool({
     const key = keyOf(item);
     if (chosen.length > 1 && chosen.includes(key)) { openMenuAt(e, manyMenu(chosen)); return; }
     press(item);
-    openMenuAt(e, item.type === 'folder' ? folderMenu(item.rel, item.name) : fileMenu(item.file));
+    openMenuAt(e, item.type === 'folder' ? folderMenu(item.rel) : fileMenu(item.file));
   };
   /** What a drag of this item moves: every one picked when it is one of them. */
   const dragKeys = (key: string) => (chosen.length > 1 && chosen.includes(key) ? chosen : [key]);
@@ -818,7 +844,11 @@ export function MediaPool({
   const searching = bar.cramped && (searchOpen || Boolean(query));
 
   const crumbs = at ? at.split('/') : [];
-  const flat = Boolean(query.trim()) || view.filter !== 'all';
+  const flat = Boolean(query.trim()) || view.filter !== 'all' || Boolean(browser?.flat);
+
+  const selectedFiles = chosen.flatMap(key => { const item = itemByKey.get(key); return item?.type === 'file' ? [item.file] : []; });
+  const selectionKey = selectedFiles.map(file => file.path).join('\n');
+  React.useEffect(() => { browser?.onSelection?.(selectedFiles); }, [selectionKey, browser?.onSelection]);
   const rows = view.layout === 'list';
   /* results come from every folder: where a name shows more than once, each says which folder it is in */
   const repeated = React.useMemo(() => {
@@ -850,9 +880,10 @@ export function MediaPool({
         void moveAll(paths.split('\n').filter(Boolean), intoRel);
         return;
       }
-      if (!fromComputer(e.dataTransfer) || !e.dataTransfer.files.length) return;
+      if (!fromComputer(e.dataTransfer)) return;
+      const files = mediaDropFiles(e.dataTransfer);
       e.preventDefault(); e.stopPropagation(); setDropTarget(null); setOsDrag(false);
-      void importFiles([...e.dataTransfer.files], intoRel);
+      void importFiles(files, intoRel);
     },
   });
 
@@ -867,6 +898,7 @@ export function MediaPool({
       ref={setRootEl}
       /* a drag let go back in the pane ends at once (lib/resource-drag) */
       data-drag-home=""
+      data-media-dropzone=""
       className="relative flex h-full min-h-0 flex-col"
       /* the pane's keys, while they are its own (the timeline's Delete is the timeline's): Delete (or Backspace) asks to
          delete what is picked, as an editor's project panel does; Enter puts the one file picked on the timeline, as
@@ -882,7 +914,7 @@ export function MediaPool({
           return;
         }
         if (!chosen.length) return;
-        if (e.key === 'Escape' && plain) { setPicked([]); return; }
+        if (e.key === 'Escape' && plain) { e.preventDefault(); e.stopPropagation(); setPicked([]); showFile(null); return; }
         const only = chosen.length === 1 ? itemByKey.get(chosen[0]!) : undefined;
         if (e.key === 'Enter' && onAdd && plain && only?.type === 'file' && canAdd(only.file)) {
           e.preventDefault();
@@ -893,17 +925,19 @@ export function MediaPool({
         if (e.key !== 'Delete' && e.key !== 'Backspace') return;
         e.preventDefault();
         e.stopPropagation();
+        if (chosen.some(path => browser?.protectedPath?.(path))) { setNotice(t('assetLibrary.externalReadOnly')); return; }
         askDelete(chosen);
       }}
       /* files from the computer: a drag of this pane's own tiles is not one, whatever the browser adds to it (a picture
          dragged carries itself as a file) */
-      onDragEnter={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); setOsDrag(true); } }}
-      onDragOver={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+      onDragEnter={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); e.stopPropagation(); setOsDrag(true); } }}
+      onDragOver={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; setOsDrag(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) { setOsDrag(false); setDropTarget(null); } }}
       onDrop={(e) => {
-        if (!fromComputer(e.dataTransfer) || !e.dataTransfer.files.length) return;
-        e.preventDefault(); setOsDrag(false); setDropTarget(null);
-        void importFiles([...e.dataTransfer.files]);
+        if (!fromComputer(e.dataTransfer)) return;
+        const files = mediaDropFiles(e.dataTransfer);
+        e.preventDefault(); e.stopPropagation(); setOsDrag(false); setDropTarget(null);
+        void importFiles(files);
       }}
     >
       {/* the bar at the pane's width (lib/media-bar): the search field fills the room left; narrowing, Upload is its
@@ -1092,7 +1126,7 @@ export function MediaPool({
                 {...(fileRef ? { studioRef: () => fileRef(item.file) } : {})}
                 moving={() => dragKeys(item.file.path)}
                 onPress={(e) => press(item, e)}
-                typeText={item.file.bundle ? t(`saved.kind_${item.file.bundle.kind}`) : item.file.kind === 'mg' ? t('assets.kindPage') : extOf(item.file.name).toUpperCase()}
+                typeText={browser?.badge?.(item.file) ?? (item.file.bundle ? t(`saved.kind_${item.file.bundle.kind}`) : item.file.kind === 'mg' ? t('assets.kindPage') : extOf(item.file.name).toUpperCase())}
                 library={inSaved}
                 {...(stackCounts?.get(item.file.path) ? { versions: stackCounts.get(item.file.path)!, versionsLabel: t('made.versions').replace('{n}', String(stackCounts.get(item.file.path))) } : {})}
                 {...(item.file.bundle?.props ? { componentMark: t('saved.component') } : {})}
@@ -1108,7 +1142,7 @@ export function MediaPool({
 
       {/* over a folder, the folder shows where they go */}
       {osDrag && dropTarget == null ? (
-        <div className="pointer-events-none absolute inset-1 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-[var(--accent)] bg-[var(--bg-raised)]/80 text-[13px] text-[var(--text)]">
+        <div data-media-drop-overlay="" className="pointer-events-none absolute inset-1 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-[var(--accent)] bg-[var(--bg-raised)]/80 text-[13px] text-[var(--text)]">
           {t('media.dropHint')}
         </div>
       ) : null}

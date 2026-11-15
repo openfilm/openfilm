@@ -37,7 +37,7 @@ function keepClosed(projectId: string, ids: Set<string>) {
 }
 
 export interface ExportTrayHandle {
-  /** Track jobs as soon as they are queued, even before the event stream catches up. */
+  /** Track and reveal newly queued exports, even before the event stream catches up. */
   push: (jobs: ExportJob[]) => void;
 }
 
@@ -79,7 +79,10 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
   }, []);
 
   React.useImperativeHandle(ref, () => ({
-    push: merge,
+    push: (queued) => {
+      merge(queued);
+      if (queued.length) setOpen(true);
+    },
   }), [merge]);
 
   /* when the project opens: exports still running from before are still shown; then every change as it happens */
@@ -234,6 +237,7 @@ function JobLine({ job, cancelling, t }: { job: ExportJob; cancelling: boolean; 
     const left = job.etaMs != null ? `${t('exportTray.eta')} ${formatDuration(job.etaMs)}` : '';
     return (
       <div className="mt-1.5">
+        {job.software ? <p className="mb-1.5 text-[11.5px] leading-snug text-[var(--warn)]">{t('exportTray.software')}</p> : null}
         <div className="h-[3px] overflow-hidden rounded-full bg-[var(--bg-field)]">
           <div className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-500" style={{ width: `${pct}%` }} />
         </div>

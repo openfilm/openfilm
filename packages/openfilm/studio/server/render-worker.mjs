@@ -4,8 +4,8 @@
  * process's, so whatever breaks in them (a browser's pipe, a crash, memory running out) ends its renders and says why,
  * and Studio keeps serving.
  *
- * Told `{ args, opts }` once: one render, then it exits; says `progress`, then `done` (render's result) or `failed`;
- * `cancel` stops it. A render whose browser crashed or stopped answering is drawn once more in a new one.
+ * Told `{ args, opts }` once: one render, then it exits; says `progress` (and `software`, when its browser draws
+ * without a graphics chip), then `done` (render's result) or `failed`; `cancel` stops it. A render whose browser crashed or stopped answering is drawn once more in a new one.
  *
  * Started with `--pool` (an editing project's pages): told `{ type: 'render', id, args, opts }` for each render, at
  * any time, `{ type: 'cancel', id }` to stop one and `{ type: 'close' }` when no more come; says `progress`, `done`
@@ -71,6 +71,7 @@ if (process.argv.includes('--pool')) {
           result = await render(args, {
             ...opts, signal: abort.signal,
             onProgress: (/** @type {number} */ done, /** @type {number} */ total) => { process.send?.({ type: 'progress', done, total }); },
+            onSoftware: () => { process.send?.({ type: 'software' }); },
           });
           break;
         } catch (e) {
