@@ -2116,6 +2116,12 @@ export const en = {
     importUploading: 'Uploading…',
     importPreparing: 'Preparing media…',
     clipTools: {
+      about: { edit: 'Say what to change; the camera, motion and timing stay', extend: 'Carry on from the clip\'s last frame', motion: 'The clip\'s camera and motion, with new people or a new look', restyle: 'Keep the framing, performance and rhythm in another style', recast: 'Put the people you pick in place of the clip\'s', lipsync: 'Make the person speak this recording' },
+      hint: { edit: 'What to change, e.g. the red coat into a white suit', extend: 'What happens next (optional)', motion: 'Anything else about the look (optional)', restyle: 'Anything else about the style (optional)', recast: 'Anything else (optional)', lipsync: 'Anything else (optional)' },
+      needs: { edit: 'Say what to change first', extend: '', motion: 'Pick a picture first', restyle: 'Pick a style first', recast: 'Pick who goes in first', lipsync: 'Pick a recording first' },
+      extendBy: 'How much longer (the clip is {s} s)', pickStyle: 'Style', pickAudio: 'Recording', pickPeople: 'Who goes in', pickLook: 'The new people or look', pickPictures: 'Reference pictures (optional)',
+      noAudioFiles: 'No recordings in the project yet. Bring one in, or take one out with Extract audio.', noPictures: 'No pictures in the project yet. Upload one or make one on the canvas.',
+      byReference: '{model} has no tool for this: it makes the clip with yours as a reference, which may drift from it.', make: 'Make', madeFor: 'Made for this',
       edit: 'Video edit', extend: 'Extend', motion: 'Motion transfer', restyle: 'Restyle', recast: 'Recast', lipsync: 'Lip sync',
       frames: 'Grab frame', framesAbout: 'A frame kept as a picture beside it', frameAbout: { current: 'The frame playing now', first: 'The first frame', last: 'The last frame' },
       trim: 'Trim', trimHint: 'Drag the ends to keep a part · Space plays · I / O set in and out · Enter trims', trimApply: 'Trim', kept: '{s} s kept',

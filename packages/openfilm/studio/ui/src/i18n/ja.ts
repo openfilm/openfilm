@@ -2115,6 +2115,12 @@ export const ja: Words = {
     importUploading: 'アップロード中…',
     importPreparing: '素材を準備中…',
     clipTools: {
+      about: { edit: '変えたいことを書くだけ。カメラ・動き・タイミングはそのまま', extend: '最後のフレームから続きを撮る', motion: 'この動画のカメラワークと動きで、新しい人物や画面に', restyle: '構図・演技・リズムはそのまま、別の画風に', recast: '動画の人物を選んだ人に差し替え', lipsync: '人物がこの録音どおりに話す' },
+      hint: { edit: '変えたいこと（例：赤いコートを白いスーツに）', extend: 'この後に起きること（任意）', motion: '画面への追加の指示（任意）', restyle: 'スタイルへの追加の指示（任意）', recast: '追加の指示（任意）', lipsync: '追加の指示（任意）' },
+      needs: { edit: '先に変えたいことを書いてください', extend: '', motion: '先に画像を選んでください', restyle: '先にスタイルを選んでください', recast: '先に差し替える人を選んでください', lipsync: '先に録音を選んでください' },
+      extendBy: 'どれだけ延ばすか（元の動画 {s} 秒）', pickStyle: 'スタイルを選ぶ', pickAudio: '録音を選ぶ', pickPeople: '差し替える人を選ぶ', pickLook: '新しい人物や画面を選ぶ', pickPictures: '参考画像（任意）',
+      noAudioFiles: 'プロジェクトに録音がありません。録音を入れるか「音声を分離」で取り出してください。', noPictures: 'プロジェクトに画像がありません。アップロードするかキャンバスで作ってください。',
+      byReference: '{model} にはこの機能がないため、動画を参考にして作ります。元の動画とずれることがあります。', make: '生成', madeFor: 'この機能専用のモデル',
       edit: '動画編集', extend: '動画延長', motion: 'モーション転写', restyle: 'スタイル変換', recast: '人物差し替え', lipsync: 'リップシンク',
       frames: 'フレーム切り出し', framesAbout: '1 フレームを画像として横に置く', frameAbout: { current: '再生中のフレーム', first: '最初のフレーム', last: '最後のフレーム' },
       trim: 'トリミング', trimHint: '両端をドラッグして残す部分を選択 · スペースで再生 · I / O でイン・アウト · Enter で切り出し', trimApply: '切り出す', kept: '{s} 秒を残す',

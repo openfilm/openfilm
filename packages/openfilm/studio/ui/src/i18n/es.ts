@@ -2115,6 +2115,12 @@ export const es: Words = {
     importUploading: 'Subiendo…',
     importPreparing: 'Preparando medios…',
     clipTools: {
+      about: { edit: 'Di qué cambiar; la cámara, el movimiento y el ritmo se quedan', extend: 'Sigue desde el último fotograma del clip', motion: 'La cámara y el movimiento del clip, con otras personas u otro aspecto', restyle: 'El encuadre, la actuación y el ritmo en otro estilo', recast: 'Las personas que elijas en lugar de las del clip', lipsync: 'Que la persona diga esta grabación' },
+      hint: { edit: 'Qué cambiar, p. ej. el abrigo rojo por un traje blanco', extend: 'Qué pasa después (opcional)', motion: 'Algo más sobre el aspecto (opcional)', restyle: 'Algo más sobre el estilo (opcional)', recast: 'Algo más (opcional)', lipsync: 'Algo más (opcional)' },
+      needs: { edit: 'Primero di qué cambiar', extend: '', motion: 'Primero elige una imagen', restyle: 'Primero elige un estilo', recast: 'Primero elige a quién poner', lipsync: 'Primero elige una grabación' },
+      extendBy: 'Cuánto más (el clip dura {s} s)', pickStyle: 'Estilo', pickAudio: 'Grabación', pickPeople: 'A quién poner', pickLook: 'Las nuevas personas o el aspecto', pickPictures: 'Imágenes de referencia (opcional)',
+      noAudioFiles: 'Aún no hay grabaciones en el proyecto. Añade una o sácala con Separar audio.', noPictures: 'Aún no hay imágenes en el proyecto. Sube una o hazla en el lienzo.',
+      byReference: '{model} no tiene esta herramienta: hace el clip con el tuyo como referencia y puede alejarse de él.', make: 'Hacer', madeFor: 'Hecho para esto',
       edit: 'Editar vídeo', extend: 'Extender', motion: 'Transferir movimiento', restyle: 'Cambiar estilo', recast: 'Cambiar personaje', lipsync: 'Sincronía labial',
       frames: 'Capturar fotograma', framesAbout: 'Un fotograma guardado como imagen a su lado', frameAbout: { current: 'El fotograma que se ve ahora', first: 'El primer fotograma', last: 'El último fotograma' },
       trim: 'Recortar tramo', trimHint: 'Arrastra los extremos para elegir la parte · Espacio reproduce · I / O marcan entrada y salida · Intro recorta', trimApply: 'Recortar', kept: 'Se quedan {s} s',

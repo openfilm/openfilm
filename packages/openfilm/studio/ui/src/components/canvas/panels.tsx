@@ -20,6 +20,7 @@ const PRESET_PICTURES: Record<string, string> = Object.fromEntries(Object.entrie
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import { studioHost } from '@/lib/host';
 import { frameOf } from './pixels';
+import { CLIP_TOOLS, clipModels, type ClipToolKey } from '@/lib/canvas-clip';
 import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
 import { keepLastModel, lastModel, useBoard, type Choice, type MakeData } from './board';
@@ -246,26 +247,9 @@ export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceReso
   };
   /* a clip made from the picture as its first frame: moving on its own, from words, to a last frame picked, with a camera move */
   const clip = (data: Partial<MakeData>) => { setOpen(null); return board.spawn(id, 'video', { ...data, opts: { mode: 'first', ...(shape ? { ratio: shape } : {}), ...data.opts } }); };
-  /* a clip made from this clip: by the tool's own model when one is connected (Kling, Gemini, Luma, MiniMax, sync),
-     else by one that takes a clip as a reference; a tool with neither is not shown */
+  /* a clip made from this clip by a model: a tool only when a connected model does it, opening what it asks */
   const clipChoices = video ? board.choices('video') : [];
-  const own = (model: string) => clipChoices.find((c) => c.model === model || c.model?.endsWith(`/${model}`));
-  const referenced = clipChoices.find((c) => c.spec?.clip && !c.spec.needs);
-  const fromClip = (preset: string, choice: Choice, pick: boolean) => {
-    setOpen(null);
-    const made = board.spawn(id, 'video', { via: choice.via, ...(choice.model ? { model: choice.model } : {}), preset,
-      opts: { ...(choice.spec?.needs ? {} : { mode: 'omni' as const }), ...(shape ? { ratio: shape } : {}) } });
-    /* one that needs more wired in (who to put in, the recording to follow) asks for it */
-    if (pick) board.pick(made);
-  };
-  const clipTools = [
-    { key: 'edit', icon: Wand2, preset: 'clipEdit', choice: own('kling-o3-edit') ?? referenced, pick: false },
-    { key: 'extend', icon: ChevronsRight, preset: 'clipExtend', choice: own('gemini-omni-1.2-flash') ?? referenced, pick: false },
-    { key: 'motion', icon: PersonStanding, preset: 'clipMotion', choice: own('kling-o3-reference') ?? referenced, pick: false },
-    { key: 'restyle', icon: Brush, preset: 'clipRestyle', choice: own('luma-ray-3.2') ?? referenced, pick: false },
-    { key: 'recast', icon: UserRound, preset: 'clipRecast', choice: own('minimax-h3-max-recast'), pick: true },
-    { key: 'lipsync', icon: Mic, preset: 'clipLipsync', choice: own('sync-3'), pick: true },
-  ].flatMap(({ choice, ...c }) => (choice ? [{ ...c, run: () => fromClip(c.preset, choice, c.pick) }] : []));
+  const clipTools = CLIP_TOOLS.filter((c) => clipModels(c, clipChoices).length).map((c) => ({ key: c.key, icon: CLIP_ICONS[c.key], run: () => { setOpen(null); board.clipAI(id, file.path, c.key); } }));
   /* a frame of the clip as a picture beside it: where it is playing, its first, its last */
   const grabFrame = async (mode: 'current' | 'first' | 'last') => {
     setOpen(null);
@@ -423,7 +407,7 @@ const MODE_ICONS: Record<VideoMode, React.ComponentType<{ size?: number }>> = { 
  * faint. Dragged, clicked, typed or stepped with the arrows, it keeps to what the model makes (only its own lengths,
  * when it makes only some).
  */
-function LengthPicker({ value, range, only, onChange }: { value: number; range: [number, number]; only?: number[]; onChange: (n: number) => void }) {
+export function LengthPicker({ value, range, only, onChange }: { value: number; range: [number, number]; only?: number[]; onChange: (n: number) => void }) {
   const t = useT();
   const end = Math.max(5, Math.ceil(range[1] / 5) * 5);
   const fit = (n: number) => (only?.length ? only.reduce((best, x) => (Math.abs(x - n) < Math.abs(best - n) ? x : best))
@@ -783,6 +767,9 @@ function ToolTiles({ label, caption, tone, icon: Icon, items, open = true, onDon
     </>
   );
 }
+
+/** each clip tool done by a model, as a mark */
+const CLIP_ICONS: Record<ClipToolKey, React.ComponentType<{ size?: number; strokeWidth?: number }>> = { edit: Wand2, extend: ChevronsRight, motion: PersonStanding, restyle: Brush, recast: UserRound, lipsync: Mic };
 
 /* ── a card's toolbar as the person lays it out ── */
 

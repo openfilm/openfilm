@@ -399,6 +399,8 @@ export interface Board {
   cutout: (id: string, path: string) => void;
   /** a clip worked on this computer: a part of it (asks where), its sound, cropped to a shape; beside it, wired from it */
   clipTool: (id: string, path: string, op: 'trim' | 'audio' | 'crop', ratio?: string) => void;
+  /** a clip tool done by a model opened for a clip: what it asks, then the clip made beside it */
+  clipAI: (id: string, path: string, tool: import('@/lib/canvas-clip').ClipToolKey) => void;
   /** a clip's shots, a still where each begins, in a group beside it */
   shots: (id: string, path: string) => void;
   /** the agent reading a clip (its shots) into words beside it: a shot list, or a prompt to make it again */

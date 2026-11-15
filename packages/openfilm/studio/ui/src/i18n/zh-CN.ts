@@ -2116,6 +2116,12 @@ export const zhCN: Words = {
     importUploading: '正在上传…',
     importPreparing: '正在准备素材…',
     clipTools: {
+      about: { edit: '说出要改什么，镜头、动作和时间都不变', extend: '接着视频的最后一帧继续往下拍', motion: '用这段视频的运镜和动作，换成新的人物或画面', restyle: '保留构图、表演和节奏，换一种画风', recast: '把视频里的人换成你选的人', lipsync: '让视频里的人按这段录音说话' },
+      hint: { edit: '要改什么，比如：把红色外套换成白色西装', extend: '接下来发生什么（可不写）', motion: '补充画面要求（可不写）', restyle: '补充风格要求（可不写）', recast: '补充要求（可不写）', lipsync: '补充要求（可不写）' },
+      needs: { edit: '先写下要改什么', extend: '', motion: '先选一张图片', restyle: '先选一种风格', recast: '先选要换上的人', lipsync: '先选一段录音' },
+      extendBy: '再往后延长多久（原视频 {s} 秒）', pickStyle: '选择风格', pickAudio: '选择录音', pickPeople: '选择要换上的人', pickLook: '选择新的人物或画面', pickPictures: '参考图片（可不选）',
+      noAudioFiles: '项目里还没有录音。先把录音放进项目，或用“分离音频”取出一段。', noPictures: '项目里还没有图片。先上传图片或在画布上生成一张。',
+      byReference: '{model} 没有专门的这个功能，会把视频当参考来生成，效果可能和原视频有出入。', make: '生成', madeFor: '专门做这件事的模型',
       edit: '视频编辑', extend: '视频延长', motion: '动作迁移', restyle: '风格重绘', recast: '换角色', lipsync: '对口型',
       frames: '截取帧', framesAbout: '把一帧存成图片，放在旁边', frameAbout: { current: '正在播放的这一帧', first: '第一帧', last: '最后一帧' },
       trim: '片段截取', trimHint: '拖动两端选出要保留的部分 · 空格播放 · I / O 设入点出点 · 回车截取', trimApply: '截取', kept: '保留 {s} 秒',

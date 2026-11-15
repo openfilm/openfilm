@@ -2112,6 +2112,12 @@ export const ko: Words = {
     importUploading: '업로드 중…',
     importPreparing: '미디어 준비 중…',
     clipTools: {
+      about: { edit: '바꿀 것만 말하면 카메라, 동작, 타이밍은 그대로', extend: '마지막 프레임에서 이어서 촬영', motion: '이 영상의 카메라 무빙과 동작으로 새 인물이나 화면을', restyle: '구도, 연기, 리듬은 두고 다른 화풍으로', recast: '영상 속 인물을 고른 사람으로 교체', lipsync: '인물이 이 녹음대로 말하게' },
+      hint: { edit: '바꿀 것 (예: 빨간 코트를 흰 정장으로)', extend: '이어서 일어날 일 (선택)', motion: '화면에 대한 추가 요청 (선택)', restyle: '스타일에 대한 추가 요청 (선택)', recast: '추가 요청 (선택)', lipsync: '추가 요청 (선택)' },
+      needs: { edit: '먼저 바꿀 것을 적으세요', extend: '', motion: '먼저 이미지를 고르세요', restyle: '먼저 스타일을 고르세요', recast: '먼저 넣을 사람을 고르세요', lipsync: '먼저 녹음을 고르세요' },
+      extendBy: '얼마나 더 늘릴지 (원본 {s}초)', pickStyle: '스타일 선택', pickAudio: '녹음 선택', pickPeople: '넣을 사람 선택', pickLook: '새 인물이나 화면 선택', pickPictures: '참고 이미지 (선택)',
+      noAudioFiles: '프로젝트에 녹음이 없습니다. 녹음을 넣거나 \'오디오 분리\'로 꺼내세요.', noPictures: '프로젝트에 이미지가 없습니다. 업로드하거나 캔버스에서 만드세요.',
+      byReference: '{model}에는 이 기능이 없어 영상을 참고로 만듭니다. 원본과 다를 수 있습니다.', make: '생성', madeFor: '이 기능 전용 모델',
       edit: '영상 편집', extend: '영상 연장', motion: '모션 전이', restyle: '스타일 변환', recast: '인물 교체', lipsync: '립싱크',
       frames: '프레임 캡처', framesAbout: '한 프레임을 이미지로 옆에 둡니다', frameAbout: { current: '재생 중인 프레임', first: '첫 프레임', last: '마지막 프레임' },
       trim: '구간 자르기', trimHint: '양 끝을 끌어 남길 부분 선택 · 스페이스로 재생 · I / O로 시작·끝 지정 · Enter로 자르기', trimApply: '자르기', kept: '{s}초 남김',
