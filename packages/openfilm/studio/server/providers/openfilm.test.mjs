@@ -124,6 +124,93 @@ test('a Seedance run sends the clip and pictures named by its reference flags, i
   assert.equal(result.receipt.dur, 5);
 });
 
+test('a Seedance first-and-last-frame run sends both pictures with Chinese names and spaces', async () => {
+  seen.length = 0;
+  const first = 'assets/春日长椅上的羞涩等待 4.png';
+  const last = 'assets/春日长椅上的羞涩等待 5.png';
+  const files = { [first]: Uint8Array.of(1, 2, 3), [last]: Uint8Array.of(4, 5, 6) };
+  reply = (call) => {
+    if (call.url.pathname === '/v1/media/uploads') return [404, {}];
+    const { args, inputs } = JSON.parse(call.body);
+    const sent = new Map(inputs.map(({ path, base64 }) => [path, base64]));
+    for (const flag of ['first-frame', 'last-frame']) {
+      if (!sent.has(args[flag])) return [422, { message: `${args[flag]} was not sent with the run.` }];
+      assert.equal(sent.get(args[flag]), Buffer.from(files[args[flag]]).toString('base64'));
+    }
+    assert.equal(inputs.length, 2);
+    return [200, { receipt: { dur: 5 } }];
+  };
+  const result = await openfilm.run('video', {
+    prompt: '两人在长椅上相视而笑', 'first-frame': first, 'last-frame': last, out: 'scene',
+  }, ctx(files, 'openrouter/bytedance/seedance-2.5'));
+  assert.equal(result.receipt.dur, 5);
+});
+
+test('transcription sends a recording with spaces in its path', async () => {
+  seen.length = 0;
+  const src = 'assets/录音/对白 01.wav';
+  const bytes = Uint8Array.of(1, 2, 3);
+  reply = (call) => {
+    if (call.url.pathname === '/v1/media/uploads') return [404, {}];
+    const body = JSON.parse(call.body);
+    assert.deepEqual(body.inputs, [{ path: src, base64: Buffer.from(bytes).toString('base64') }]);
+    assert.equal(body.args.src, src);
+    return [200, { receipt: { text: '你好' } }];
+  };
+  const result = await openfilm.run('asr', { src, out: 'transcript' }, ctx({ [src]: bytes }, 'elevenlabs/scribe_v2'));
+  assert.equal(result.receipt.text, '你好');
+});
+
+test('all media file flags send exact paths regardless of punctuation, language or platform separators', async () => {
+  const names = [
+    'spaces and\u00a0nonbreaking spaces', '中文 日本語 한글', 'العَرَبِيَّة नमस्ते', 'Café', 'Cafe\u0301', '👩🏽‍🎨 🎬',
+    "# + %20 & = ; ' ` $ () [] {} !", 'what? quote" star* colon: pipe|', 'two..dots',
+  ];
+  for (const name of names) {
+    const picture = `assets/${name}/first.png`;
+    const last = `assets/${name}/last.png`;
+    const clip = `assets/${name}/clip.mp4`;
+    const audio = `assets/${name}/audio.wav`;
+    const cases = [
+      ['asr', { src: audio }, [audio]],
+      ['cutout', { src: picture }, [picture]],
+      ['image', { ref: [picture, last, picture], mask: last, markup: picture }, [picture, last]],
+      ['video', { 'first-frame': picture, 'last-frame': last }, [picture, last]],
+      ['video', { video: [clip], 'input-reference': [picture, last], audio, voice: [audio] }, [picture, last, clip, audio]],
+    ];
+    for (const [verb, args, paths] of cases) {
+      seen.length = 0;
+      const files = Object.fromEntries(paths.map((path, i) => [path, Uint8Array.of(i, 0, 255)]));
+      reply = (call) => {
+        if (call.url.pathname === '/v1/media/uploads') return [404, {}];
+        const body = JSON.parse(call.body);
+        assert.deepEqual(body.args, args);
+        assert.deepEqual(body.inputs, paths.map((path) => ({ path, base64: Buffer.from(files[path]).toString('base64') })));
+        return [200, { receipt: {} }];
+      };
+      await openfilm.run(verb, args, ctx(files));
+      assert.equal(seen.filter((c) => c.url.pathname === '/v1/media/run').length, 1, `${verb}: ${name}`);
+    }
+  }
+  const windows = 'assets\\参考 图片\\首帧 #1 + 100%.png';
+  reply = (call) => {
+    if (call.url.pathname === '/v1/media/uploads') return [404, {}];
+    assert.equal(JSON.parse(call.body).inputs[0].path, windows);
+    return [200, {}];
+  };
+  await openfilm.run('video', { 'first-frame': windows }, ctx({ [windows]: Uint8Array.of(1) }));
+});
+
+test('voice IDs, prompts and output names that resemble paths are never treated as input files', async () => {
+  seen.length = 0;
+  reply = (call) => {
+    assert.deepEqual(JSON.parse(call.body).inputs, []);
+    return [200, {}];
+  };
+  await openfilm.run('tts', { text: 'assets/对白 01.wav', voice: 'voice.test', out: 'output.test' }, ctx());
+  assert.equal(seen.length, 1);
+});
+
 test('files go straight to the service\'s storage and come straight from where their maker keeps them', async () => {
   seen.length = 0;
   const base = process.env.OPENFILM_API_URL;
@@ -157,6 +244,14 @@ test('an unreadable reference is reported locally instead of submitting an incom
   seen.length = 0;
   const video = 'assets/Weixin Videos 01.mp4';
   await assert.rejects(openfilm.run('video', { prompt: 'Make a clip', video, out: 'scene' }, ctx()), /no assets\/Weixin Videos 01\.mp4/);
+  assert.equal(seen.length, 0);
+});
+
+test('a missing last frame stops the whole run before submitting the first frame or charging', async () => {
+  seen.length = 0;
+  const first = 'assets/首帧 #1.png';
+  const last = 'assets/尾帧 #2.png';
+  await assert.rejects(openfilm.run('video', { 'first-frame': first, 'last-frame': last }, ctx({ [first]: Uint8Array.of(1) })), /no assets\/尾帧 #2\.png/);
   assert.equal(seen.length, 0);
 });
 

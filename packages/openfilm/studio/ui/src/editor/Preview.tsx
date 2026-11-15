@@ -67,7 +67,7 @@ export type PreviewRender = { a: number; b: number; src: string };
  * playing, the film's frames drawn, how many refreshes got no new frame (`late`), whether a render played, and per half
  * second of film [its start, refreshes, late].
  */
-export type PlayedReport = { frames: number; drawn: number; late: number; rendered: boolean; ms: number; spans: [number, number, number][] };
+export type PlayedReport = { frames: number; drawn: number; late: number; rendered: boolean; ms: number; spans: [number, number, number][]; detailSpans?: [number, number][] };
 
 /**
  * What the film's stage tells on its own: the words of an in-place text edit as they are typed, the edit ended
@@ -142,7 +142,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
    * null: the screen's own. A load of the film keeps the scale it was made with; another one, kept a moment, loads
    * the film again behind the picture.
    */
-  const { fitPages } = usePreviewPrefs();
+  const { fitPages, effects: effectMode } = usePreviewPrefs();
   /* for the zoom the picture settled at: one on the move only scales it (components/ViewerZoom) */
   const zoom = useContext(PictureZoom);
   const pageScale = fitPages && fit.w > 0 ? zoomedPageScale(fit.k, zoom.z, zoom.drawn, window.devicePixelRatio || 1, stage) : null;
@@ -198,6 +198,8 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
    * A frame loads film.html as the folder has it when it starts; the films given since (`update`) are kept, and a frame
    * that comes up after some is given the latest, so a load in progress never misses an edit.
    */
+  const effectModeRef = useRef(effectMode); effectModeRef.current = effectMode;
+  useEffect(() => { for (const key of up.current) post(key, { type: 'vision-preview', options: { mode: effectMode } }); }, [effectMode]);
   const updates = useRef(0);
   const latest = useRef<Film | null>(null);
   /* the film file's head as last told (its styles): a frame loaded with another one is loaded again */
@@ -387,6 +389,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
       if (m.type === 'ready') {
         onInfo(m as FilmInfo);
         up.current.add(key);
+        post(key, { type: 'vision-preview', options: { mode: effectModeRef.current } });
         if (rendered.current.length) post(key, { type: 'renders', list: rendered.current });
         /* where its clock is: first by where each clock started, then by pings */
         if (Number(m.origin) > 0) clocks.current.set(key, { offset: performance.timeOrigin - Number(m.origin), rtt: Infinity });

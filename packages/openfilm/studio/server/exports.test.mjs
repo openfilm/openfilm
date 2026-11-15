@@ -16,6 +16,7 @@ import { launch } from '../../src/host.mjs';
 import { layoutTracks } from '../ui/src/lib/timeline-layout.ts';
 import { filmHtml } from '../../src/film-doc.mjs';
 import { JIANYING_DRAFT_PATH } from './jianying.mjs';
+import { draftRasterFilter } from '../../scripts/draft-bench-frames.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 const ffmpeg = { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 };
@@ -1127,12 +1128,14 @@ test('剪映: the same timeline as a draft in 剪映\'s drafts folder, its media
   /* a page lossless, with its alpha (剪映 shows PNG's on both systems), and clear where the page draws nothing */
   const page = join(folder, 'media', 'title.mov');
   assert.equal(probe(page, 'stream=codec_name,pix_fmt'), 'png,rgba');
-  const corner = execFileSync('ffmpeg', ['-v', 'error', '-i', page, '-frames:v', '1', '-vf', 'crop=1:1:200:120,format=rgba', '-f', 'rawvideo', '-']);
+  const info = JSON.parse(readFileSync(done.out, 'utf8'));
+  const material = info.materials.videos.find((m) => m.path.endsWith('/title.mov'));
+  const placed = info.tracks.flatMap((t) => t.segments).find((s) => s.material_id === material.id);
+  const corner = execFileSync('ffmpeg', ['-v', 'error', '-i', page, '-frames:v', '1', '-vf', `${draftRasterFilter(info, placed)},crop=1:1:200:120,format=rgba`, '-f', 'rawvideo', '-']);
   assert.equal(corner[3], 0, 'transparent away from the page\'s box');
   /* the page holds still: its first and last pictures, for its whole second */
   assert.equal(frameCount(page), 2);
   assert.equal(Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', page]).toString()), 1);
-  const info = JSON.parse(readFileSync(done.out, 'utf8'));
   const meta = JSON.parse(readFileSync(join(folder, 'draft_meta_info.json'), 'utf8'));
   assert.deepEqual([meta.draft_name, meta.draft_fold_path, meta.draft_root_path, meta.draft_id], ['Cut', folder, drafts, info.id]);
   assert.deepEqual(info.canvas_config, { width: 320, height: 180, ratio: 'original' });
@@ -1360,18 +1363,26 @@ test('a PNG video keeps each picture once, for as long as it shows: a pixel apar
     assert.equal(frameCount(steps), stepPictures);
     assert.deepEqual(decoded(steps), stepsBefore);
     assert.deepEqual(readdirSync(dir).filter((n) => n.endsWith('.filter')), [], 'its sum file gone');
-    /* drawn as a quick PNG and changing in every frame: every frame kept, written again at ffmpeg's own settings */
+    /* A changing quick PNG is already lossless: leave its encoded packets alone. */
     const quick = join(dir, 'quick.mov');
     const own = join(dir, 'own.mov');
     const moving = ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=64x36:r=30:d=1,format=rgba'];
     execFileSync('ffmpeg', [...moving, '-c:v', 'png', '-compression_level', '1', '-pred', 'sub', quick]);
     execFileSync('ffmpeg', [...moving, '-c:v', 'png', own]);
     const quickBefore = decoded(quick);
-    await keepChanges(quick, new AbortController().signal);
-    assert.equal(frameCount(quick), 30);
-    assert.deepEqual(decoded(quick), quickBefore, 'the same pixels at the same time');
     const packets = (f) => execFileSync('ffmpeg', ['-v', 'error', '-i', f, '-map', '0:v:0', '-c', 'copy', '-f', 'framemd5', '-']).toString().split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(',').pop());
-    assert.deepEqual(packets(quick), packets(own), 'written as ffmpeg writes a PNG');
+    const quickPackets = packets(quick);
+    await keepChanges(quick, new AbortController().signal);
+    const quickKept = quickPackets.filter((s, i) => i === 0 || i === quickPackets.length - 1 || s !== quickPackets[i - 1]);
+    assert.equal(frameCount(quick), quickKept.length);
+    assert.deepEqual(decoded(quick), quickBefore, 'the same pixels at the same time');
+    assert.deepEqual(packets(quick), quickKept, 'no second PNG encoding');
+    const mostly = join(dir, 'mostly.mov');
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=32x32:r=24:d=1,fps=30,format=rgba', '-c:v', 'png', mostly]);
+    const mostlyBefore = decoded(mostly);
+    await keepChanges(mostly, new AbortController().signal);
+    assert.ok(frameCount(mostly) < mostlyBefore.length, 'duplicates removed even when most frames change');
+    assert.deepEqual(decoded(mostly), mostlyBefore);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

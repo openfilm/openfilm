@@ -33,6 +33,8 @@ export interface OwnProvider {
   signIn: boolean;
   /** signed in: the account's email */
   account: string | null;
+  /** signed in to OpenFilm: the account's name and picture as its website shows them (studio/server/account-profile.mjs) */
+  profile?: { name: string | null; avatar: string | null };
   /** The saved account credential was rejected by OpenFilm; reconnect in either Agents or Services. */
   connectionError?: string;
 }

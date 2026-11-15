@@ -125,7 +125,7 @@ export function PlayerControlsBar({
         onCommit={onCommit}
       />
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, color: '#fff', fontSize: 12 }}>
-        <TransportIconBtn onClick={onToggle} title={playing ? t('player.pauseTitle') : t('player.playTitle')}>
+        <TransportIconBtn onClick={onToggle} title={playing ? t('viewer.pause') : t('viewer.play')} action="play-pause">
           <Icon d={playing ? PATH_PAUSE : PATH_PLAY} />
         </TransportIconBtn>
         <VolumeControl
@@ -154,7 +154,7 @@ export function PlayerControlsBar({
           rate={rate}
           onRateChange={onRateChange}
         />
-        <TransportIconBtn onClick={onExitFullscreen} title={t('player.exitFullscreenTitle')}>
+        <TransportIconBtn onClick={onExitFullscreen} title={t('player.exitFullscreenTitle').replace(/[（(][^）)]*[）)]/g, '').trim()} action="preview-fullscreen">
           <Icon d={PATH_FULLSCREEN_EXIT} />
         </TransportIconBtn>
       </div>

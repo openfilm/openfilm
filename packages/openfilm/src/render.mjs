@@ -1,20 +1,21 @@
 // film render: the deliverable. Frames are rendered in parallel page instances, averaged
 // over the shutter for motion blur, encoded with tagged BT.709 color, and muxed with the mix of the film's sounds.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { availableParallelism, freemem, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { clipKind, FILM_FILE } from './film-doc.mjs';
-import { alphaCompositeFilter, broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, prores709 } from './encoders.mjs';
+import { alphaCompositeFilter, broken, chipDelivery, encoders, FRAMES_709, hardwareEncoder, holdsQuality, prores709, unheld } from './encoders.mjs';
 import { memoryError } from './browser-memory.mjs';
-import { FilmPage, launch } from './host.mjs';
+import { FilmPage, launch, SOFTWARE_GL } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
 import { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey } from './seekable.mjs';
 import { ffmpeg, filmSound, fmt, kill, locate, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
 import { burned } from './burn.mjs';
 import { renderSelection, selectionClips, selectionFrame } from './render-ranges.mjs';
 import { isLoudness, LOUDNESS_RANGE, LOUDNESS_SLACK, loudnessText, toLoudness, TRUE_PEAK } from './loudness.mjs';
-import { chunkStore, chunksOf, settingsOf, signature } from './render-resume.mjs';
+import { CHUNK_SECONDS, chunkStore, chunksOf, settingsOf, signature } from './render-resume.mjs';
+import { alike, captionsAlone, layersOf, settle, straight, straightPlan, straightRuns } from './direct.mjs';
 
 const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
 const TAG_709 = ['-bsf:v', 'h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0'];
@@ -31,7 +32,8 @@ const CHIP_BPP = 0.165;
 
 /**
  * The container's picture through the graphics chip, when it has an encoder that works and takes the picture's size:
- * H.264 for an MP4, a key frame every two seconds; ProRes 4444 for a MOV. Null otherwise: the container's own.
+ * H.264 for an MP4, held to Studio's "high" quality when the chip holds one (else given its bitrate), a key frame
+ * every two seconds; ProRes 4444 for a MOV. Null otherwise: the container's own.
  * @param {string} ext @param {{ w: number, h: number }} size @param {number} fps
  */
 async function chipFormat(ext, size, fps) {
@@ -40,7 +42,9 @@ async function chipFormat(ext, size, fps) {
   if (ext === '.mp4') {
     const encoder = await hardwareEncoder('h264', have);
     const bits = Math.min(120e6, Math.max(2e6, size.w * size.h * fps * CHIP_BPP));
-    return encoder ? { encoder, format: { video: [...hardwareOptions(encoder, bits, { gop: fps * 2 }), ...BT709] } } : null;
+    if (!encoder) return null;
+    const quality = await holdsQuality(encoder) ? /** @type {const} */ ('high') : undefined;
+    return { encoder, format: chipDelivery(encoder, bits, { gop: fps * 2, quality }, BT709) };
   }
   if (ext === '.mov') {
     const encoder = await hardwareEncoder('prores', have);
@@ -114,9 +118,10 @@ export async function render(args, opts = {}) {
   let copies = new Map();
   /** @type {Map<string, string>} the graded copies of the film's videos graded by LUTs, by their keys (seekable.mjs) */
   let graded = new Map();
-  const swap = (/** @type {string} */ file, /** @type {URLSearchParams | undefined} */ query) => {
+  const swap = (/** @type {string} */ file, /** @type {URLSearchParams | undefined} */ query, /** @type {string} */ source = file) => {
     if (clipKind(file) === 'video') videos.add(file);
     if (!used.has(file)) used.set(file, signature(file));
+    if (source !== file && !used.has(source)) used.set(source, signature(source));
     return graded.get(query?.get('of-grade') ?? '') ?? copies.get(file) ?? null;
   };
   /* a video graded by LUTs plays its graded copy, made before any frame is drawn; its LUTs are what its chunks are
@@ -143,11 +148,59 @@ export async function render(args, opts = {}) {
   const dir = opts.nameAs?.dir ?? probe.dir;
   const name = opts.nameAs?.name ?? probe.name;
   const meta = probe.film.meta;
-  await probe.film.close();
-
+  /* drawn without a graphics chip (no driver that reaches it, a virtual machine): every frame is slow, and a host is
+     told at once (`onSoftware`), to say so while it waits */
+  const software = SOFTWARE_GL.test(await probe.film.gpu().catch(() => ''));
+  if (software) opts.onSoftware?.();
   /* 29.97 is 30000/1001, as the footage shot at it is (rate.mjs) */
   const rate = exactRate(Number(opts.fps ?? 30));
   const fps = rate.fps;
+  /** @type {Map<number, Promise<FilmPage>>} pages of the film that draw its captions alone, by their scale (direct.mjs) */
+  const captionPages = new Map();
+  const captionPage = (/** @type {number} */ k) => {
+    if (!captionPages.has(k)) captionPages.set(k, FilmPage.open(browser, site.url, entry, { scale: k, transparent: true }).then(async (page) => { await captionsAlone(page); return page; }));
+    return /** @type {Promise<FilmPage>} */ (captionPages.get(k));
+  };
+  const closeCaptionPages = async () => {
+    const open = [...captionPages.values()];
+    captionPages.clear();
+    await Promise.allSettled(open.map((page) => page.then((p) => p.close())));
+  };
+  /* a film's footage that is its whole picture is read straight from its files, not drawn here (direct.mjs): which
+     clips are plain footage is read from the film's page while it is open, and a frame of each file drawn both ways
+     has to be the same picture. Not for a picture with alpha, frames mixed for motion blur, or a film in pieces */
+  const footage = opts.straight !== false && isFilm && meta.duration != null && !opts.alpha && !opts.ranges && !(Number(opts.samples ?? (opts.blur ? 8 : 1)) > 1)
+    ? await (async () => {
+      const film = await layersOf(probe.film, root, entry);
+      if (film?.layers.some((l) => l.footage)) await settle(probe.film, film, rate, meta.duration);
+      if (!film?.layers.some((l) => l.footage)) return null;
+      /* its captions, drawn alone and laid over the footage, have to come to the picture the page draws: told on
+         the first frame that has both. When they do not, the frames with a cue on are drawn */
+      if (film.captions.tracks.length && film.captions.still) {
+        let same = false;
+        const total = Math.round(meta.duration * fps);
+        for (let f = 0; f < total; f++) {
+          const plan = straightPlan(film, f, f + 1, fps, meta.duration);
+          if (!plan?.overlays.length || !plan.files.length) continue;
+          const t = Math.min(f / fps, meta.duration - 1e-4);
+          const alone = await captionPage(1);
+          await alone.seek(t);
+          const picture = join(outDir(dir, 'render'), `.captions-check-${process.pid}.png`);
+          mkdirSync(dirname(picture), { recursive: true });
+          writeFileSync(picture, await alone.capture({ format: 'png' }));
+          await probe.film.seek(t);
+          same = await alike(plan, await probe.film.capture({ format: 'png' }), { stage: film.stage, rate, ground: film.ground, pictures: new Map([[plan.overlays[0].key, picture]]) });
+          rmSync(picture, { force: true });
+          break;
+        }
+        film.captions.still = same;
+        await closeCaptionPages();
+      }
+      return film;
+    })().catch(() => null)
+    : null;
+  await probe.film.close();
+
   /* a page without a duration has no end: it is rendered by a range */
   const end = meta.duration ?? Infinity;
   if (!range && !opts.ranges && meta.duration == null) { await probe.close(); await pool?.give(lent); throw new UsageError('this page has no duration, so it has no end: give a range to render, e.g. openfilm render 0-6'); }
@@ -186,9 +239,23 @@ export async function render(args, opts = {}) {
   let format = chip ? { ...own, ...chip.format } : own;
   let encoder = chip?.encoder ?? encoderOf(own.video);
   let onChip = !!chip;
-  /* `partSeconds` (a host encoding at a bitrate): each part that long at least, and no more browsers than parts */
-  const chunks = chunksOf(f0, f1, fps, opts.partSeconds);
-  const workers = Math.max(1, Math.min(pool ? lent.length : Number(opts.workers ?? defaultWorkers(machine(), total)), total, chunks.length));
+  /* the film in chunks (render-resume.mjs). A film with footage read straight is cut where that footage begins and
+     ends being its whole picture, on whole seconds from its first frame as any chunk is: each stretch of it in chunks
+     as long as they come (one ffmpeg reads them, one after another), each stretch drawn in chunks for the browsers
+     to share. The cut depends on the film alone, so a render that stopped finds its chunks. `partSeconds` (a host
+     encoding at a bitrate): each part drawn that long at least, and no more browsers than parts */
+  const second = Math.max(1, Math.round(fps));
+  const chunks = footage
+    ? straightRuns(footage, f0, f1, fps, end, { grid: second, least: second }).flatMap((run) => (run.straight
+      ? Array.from({ length: Math.ceil((run.b - run.a) / (CHUNK_SECONDS * second)) }, (_, i) => ({ a: run.a + i * CHUNK_SECONDS * second, b: Math.min(run.b, run.a + (i + 1) * CHUNK_SECONDS * second) }))
+      : chunksOf(run.a, run.b, fps, opts.partSeconds)))
+    : chunksOf(f0, f1, fps, opts.partSeconds);
+  /** @type {Map<{ a: number, b: number }, import('./direct.mjs').Plan>} the chunks that are footage alone, each with its plan */
+  const plans = new Map();
+  if (footage) for (const c of chunks) { const plan = straightPlan(footage, c.a, c.b, fps, end); if (plan) plans.set(c, plan); }
+  /* the browsers draw the rest: as many as those frames are worth */
+  const drawnFrames = Math.max(1, chunks.reduce((n, c) => n + (plans.has(c) ? 0 : c.b - c.a), 0));
+  const workers = Math.max(1, Math.min(pool ? lent.length : Number(opts.workers ?? defaultWorkers(machine(), drawnFrames)), drawnFrames, chunks.length));
   /** @type {string[]} videos whose copy could not be made: drawn as they are, said as it happens and in the result */
   const uncopied = [];
   /* the videos get copies this browser plays: those it does not decode here (ProRes; HEVC without a chip for it), and
@@ -214,8 +281,11 @@ export async function render(args, opts = {}) {
     }
   }
   if (opts.seekable !== false) {
-    /* a video only ever graded plays its graded copy: it needs no other */
-    const files = [...new Set([...videos, ...(film ? filmVideos(root, film, { ungraded: true }) : []), ...ungraded])];
+    /* a video only ever graded plays its graded copy: it needs no other; a file whose every frame in this render is
+       read straight needs no copy: no browser plays it */
+    const drawn = new Set(footage?.layers.filter((l) => l.file && chunks.some((c) => !plans.has(c) && l.at < c.b / fps && l.end > c.a / fps)).map((l) => l.file));
+    const straightOnly = new Set(footage?.layers.filter((l) => l.file && !drawn.has(l.file)).map((l) => l.file));
+    const files = [...new Set([...videos, ...(film ? filmVideos(root, film, { ungraded: true }) : []), ...ungraded])].filter((file) => !straightOnly.has(file));
     /* one the browser does not decode then fails its first frame, by its clip (timeline.mjs): never drawn black */
     const failed = (/** @type {string} */ file) => {
       uncopied.push(file);
@@ -246,6 +316,8 @@ export async function render(args, opts = {}) {
   let reused = 0;
   let done = 0;
   let drawn = 0;
+  /** frames read straight from their footage (direct.mjs) */
+  let straightFrames = 0;
   /* a terminal gets a live counter; an agent's shell (no TTY) a line every tenth, so a long render never looks hung */
   let t0 = Date.now();
   let told = 0;
@@ -311,21 +383,67 @@ export async function render(args, opts = {}) {
       reused = chunks.length - left.length;
       done = total - left.reduce((n, c) => n + c.b - c.a, 0);
       drawn = 0;
+      straightFrames = 0;
       told = Math.floor((done / total) * 10);
       if (reused && !opts.onProgress && !process.stderr.isTTY) process.stderr.write(`  ${done} of ${total} frames were drawn by a render that stopped: drawing the rest\n`);
       if (done) opts.onProgress?.(done, total);
       const stop = new AbortController();
       const quit = () => stop.abort();
       opts.signal?.addEventListener('abort', quit, { once: true });
-      const runs = pages.map(async (film) => {
+      /* the chunks that are footage alone are read straight from their files, one after another, while the browsers
+         draw the others. One ffmpeg fails at is drawn in a browser after all, with the rest */
+      const read = left.filter((c) => plans.has(c));
+      for (const c of read) left.splice(left.indexOf(c), 1);
+      const draw = (/** @type {FilmPage} */ film) => async () => {
         for (let c = left.shift(); c && !stop.signal.aborted; c = left.shift()) {
           await encode({ film, a: c.a, b: c.b, file: store.drawing(c) }, { fps, rate, samples, shutter, alpha, duration: end, first: f0, format: f, onFrame: progress, still: alpha || opts.fine ? 'png' : 'jpeg', opaque, signal: stop.signal,
             sourceFrame: selection ? (frame) => selectionFrame(selection.spans, frame) : (frame) => frame });
           store.finished(c, used);
         }
-      });
+      };
+      /** @type {{ a: number, b: number }[]} */
+      const refused = [];
+      /** @type {Map<string, string>} the captions' pictures made so far, by the cues in them */
+      const pictures = new Map();
+      const reading = (async () => {
+        for (const c of read) {
+          if (stop.signal.aborted) return;
+          const plan = /** @type {import('./direct.mjs').Plan} */ (plans.get(c));
+          try {
+            /* the captions over it: each set of cues drawn once, alone, the first time it is on */
+            for (const over of plan.overlays) {
+              if (pictures.has(over.key)) continue;
+              const alone = await captionPage(scale);
+              await alone.seek(Math.min(over.at / fps, end - 1e-4));
+              const picture = join(work, `captions-${pictures.size}.png`);
+              writeFileSync(picture, await alone.capture({ format: 'png' }));
+              pictures.set(over.key, picture);
+            }
+            await straight(plan, store.drawing(c), { size, rate, ground: /** @type {import('./direct.mjs').Layers} */ (footage).ground, format: f, pictures, signal: stop.signal });
+          } catch (e) {
+            if (stop.signal.aborted) throw e;
+            refused.push(c);
+            continue;
+          }
+          for (const file of plan.files) if (!used.has(file)) used.set(file, signature(file));
+          store.finished(c, used);
+          straightFrames += c.b - c.a;
+          for (let n = c.a; n < c.b; n++) progress();
+        }
+      })();
+      const runs = [...pages.map((film) => draw(film)()), reading];
       try {
         await unlessCancelled(Promise.all(runs));
+        /* what could not be read straight: drawn now, from a copy the browser plays where it needs one */
+        if (refused.length && !stop.signal.aborted) {
+          for (const c of refused) plans.delete(c);
+          if (opts.seekable !== false) {
+            const late = [...new Set(refused.flatMap((c) => /** @type {import('./direct.mjs').Layers} */ (footage).layers.filter((l) => l.file && l.at < c.b / fps && l.end > c.a / fps).map((l) => /** @type {string} */ (l.file))))].filter((file) => !copies.has(file));
+            copies = new Map([...copies, ...await browserCopies(browser, site.url, root, late, { signal: opts.signal, slow: true, fine: !!opts.fine, failed: () => {} })]);
+          }
+          left.push(...refused);
+          await unlessCancelled(Promise.all(pages.map((film) => draw(film)())));
+        }
       } catch (e) {
         stop.abort();
         if (e !== gone) await Promise.allSettled(runs);
@@ -352,13 +470,24 @@ export async function render(args, opts = {}) {
       await drawAll(format);
     } catch (e) {
       /* the chip's encoder gave up partway (a driver, a size it does not take): the frames again without it, and the
-         rest of this launch does without it */
-      if (!chip || !onChip || clear || opts.signal?.aborted || !/^ffmpeg/.test(e instanceof Error ? e.message : '')) throw e;
-      broken(chip.encoder);
-      onChip = false;
-      format = own;
-      encoder = encoderOf(own.video);
-      await drawAll(format);
+         rest of this launch does without it. One held to a quality is first given its bitrate, as it was before it
+         could be held, and only gives the frames to the processor's when that fails too */
+      const gaveUp = (/** @type {unknown} */ err) => !!chip && onChip && !clear && !opts.signal?.aborted && /^ffmpeg/.test(err instanceof Error ? err.message : '');
+      if (!chip || !gaveUp(e)) throw e;
+      let failure = /** @type {unknown} */ (e);
+      if (chip.format.ceiling) {
+        unheld(chip.encoder);
+        format = { ...own, video: chip.format.ceiling.video };
+        failure = await drawAll(format).then(() => null, (err) => err);
+        if (failure && !gaveUp(failure)) throw failure;
+      }
+      if (failure) {
+        broken(chip.encoder);
+        onChip = false;
+        format = own;
+        encoder = encoderOf(own.video);
+        await drawAll(format);
+      }
     }
     if (process.stderr.isTTY && !opts.onProgress) process.stderr.write('\n');
     for (const p of pages) problems.push(...p.problems);
@@ -380,11 +509,18 @@ export async function render(args, opts = {}) {
        not three times (a long page drawn as PNG for an editing project is gigabytes). A part with nothing to add is
        `out` already, moved into place */
     const parts = chunks.map((c) => store.file(c));
-    if (parts.length > 1 || sound || after.length || !moved(parts[0], out)) {
+    /* a chip held to a quality gives a film busy in every frame (grain, static) many times the file its bitrate
+       makes: past what it may come to (`ceiling`, encoders.mjs chipDelivery), the picture is encoded once more at a
+       bitrate as the parts are joined, from the parts as they are. Should that fail, the parts are the film */
+    const ceiling = format.ceiling;
+    const over = !!ceiling && parts.reduce((bytes, p) => bytes + statSync(p).size, 0) * 8 > ceiling.bits * (total / fps);
+    if (over || parts.length > 1 || sound || after.length || !moved(parts[0], out)) {
       /* names, not paths: concat reads them beside the list, and a path can hold a `'` (C:\\Users\\O'Brien) */
       if (parts.length > 1) writeFileSync(join(work, 'list.txt'), parts.map((p) => `file '${basename(p)}'`).join('\n'));
       const video = parts.length > 1 ? ['-f', 'concat', '-safe', '0', '-i', join(work, 'list.txt')] : ['-i', parts[0]];
-      await ffmpeg([...video, ...(sound ? ['-i', sound, '-map', '0:v', '-map', '1:a'] : []), '-c', 'copy', ...after, out]).done;
+      const joined = (/** @type {string[]} */ codec) => ffmpeg([...video, ...(sound ? ['-i', sound, '-map', '0:v', '-map', '1:a'] : []), ...codec, ...after, out]).done;
+      const again = over ? await joined([...ceiling.video, '-c:a', 'copy']).then(() => true, (e) => { if (opts.signal?.aborted) throw e; return false; }) : false;
+      if (!again) await joined(['-c', 'copy']);
     }
     failed = false;
   } finally {
@@ -392,6 +528,7 @@ export async function render(args, opts = {}) {
     /* a render that ended takes its chunks away, and so does one cancelled on purpose (a 4K export's chunks are tens of
        GB, out of sight); one that stopped on its own (an error, a crash, the app quit) keeps those it finished for the next */
     store.close(!failed || !!opts.signal?.aborted);
+    await closeCaptionPages();
     await Promise.allSettled(browsers.map((b) => b.close()));
     if (pool) await Promise.allSettled(tabs.map((p) => p.close()));
     await probe.close();
@@ -402,11 +539,16 @@ export async function render(args, opts = {}) {
   return {
     out,
     encoder,
+    ...(software ? { software } : {}),
+    ...(straightFrames ? { straight: straightFrames } : {}),
     ...(selection ? { ranges: selection.spans.map((part) => [part.from, part.to]) } : {}),
     ...(clearFormat ? { clear } : {}),
+    ...(opts.dependencies ? { dependencies: [...used.keys()].filter((file) => !file.startsWith(work)),
+      cacheable: [probe.film, ...tabs].every((p) => p.externalRequests.size === 0) } : {}),
     lines: [
       `→ ${shown(out)}`,
       `  ${total} frames · ${fmt(to - from)} at ${Number(fps.toFixed(3))} fps · ${Math.round(meta.width * scale)}×${Math.round(meta.height * scale)}${samples > 1 ? ` · ${samples} samples/frame` : ''}${alpha ? ' · alpha' : ''} · ${workers} worker${workers > 1 ? 's' : ''} · ${encoder} · ${seconds.toFixed(1)} s`,
+      ...(straightFrames ? [`  ${straightFrames} of them read straight from the footage`] : []),
       ...loudnessLines(opts.loudness, loud, opts.silent),
       ...(reused ? [`  ${reused} of ${chunks.length} chunks were drawn by a render that stopped, and used`] : []),
       ...uncopied.map((file) => `✗ copy: ${shown(file)}: could not be made, drawn as it is`),

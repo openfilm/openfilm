@@ -18,7 +18,7 @@
 import * as React from 'react';
 import type { CaptionsActions } from '@/components/library/CaptionsPane';
 import type { LibraryActions } from '@/components/library/LibraryDrawer';
-import type { LibraryVoice, VoiceAccess } from '@/lib/library-voices';
+import type { SpeakVoice } from '@/lib/library-voices';
 import type { BlockSizer } from '@/lib/workspace-preview';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import type { useProjectFrame } from './ProjectFrame';
@@ -158,7 +158,7 @@ export interface Wiring {
     /** Where a caption track comes from (components/library/CaptionsPane). */
     captions: CaptionsActions;
     /** Words spoken in a voice of the library, put on the film at the playhead: null, or why not. */
-    speak: (voice: LibraryVoice, access: VoiceAccess, text: string) => Promise<string | null>;
+    speak: SpeakVoice;
   };
 }
 

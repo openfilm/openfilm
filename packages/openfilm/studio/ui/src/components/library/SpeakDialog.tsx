@@ -8,7 +8,8 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { CircleHelp, Loader2 } from 'lucide-react';
 import { useT } from '@/i18n';
-import type { LibraryVoice } from '@/lib/library-voices';
+import type { LibraryVoice, VoiceSpeech } from '@/lib/library-voices';
+import { isPrivateVoice } from '@/lib/private-voices';
 import { Card, CardActions, CardButton } from '../Card';
 
 /** Each service's marks: what a kind of mark does (its words in the app's language) and a few to put in. */
@@ -35,7 +36,7 @@ export function SpeakDialog({ voice, service, onSpeak, onClose }: {
   voice: LibraryVoice;
   service: string;
   /** The words made into sound and put at the playhead: null, or why not. */
-  onSpeak: (text: string) => Promise<string | null>;
+  onSpeak: (text: string) => Promise<VoiceSpeech | string | null>;
   onClose: () => void;
 }) {
   const t = useT();
@@ -43,6 +44,9 @@ export function SpeakDialog({ voice, service, onSpeak, onClose }: {
   const [help, setHelp] = React.useState(false);
   const [making, setMaking] = React.useState(false);
   const [problem, setProblem] = React.useState<string | null>(null);
+  const [result, setResult] = React.useState<VoiceSpeech | null>(null);
+  const [activation, setActivation] = React.useState(false);
+  const needsActivation = isPrivateVoice(voice) && voice.activationFee;
   const field = React.useRef<HTMLTextAreaElement>(null);
   React.useEffect(() => { field.current?.focus(); }, []);
   React.useEffect(() => {
@@ -59,23 +63,35 @@ export function SpeakDialog({ voice, service, onSpeak, onClose }: {
     const before = text.slice(0, at);
     const gap = before && !/\s$/.test(before) && mark.startsWith('[') ? ' ' : '';
     setText(`${before}${gap}${mark}${text.slice(to)}`);
+    setResult(null);
     requestAnimationFrame(() => { el?.focus(); const end = at + gap.length + mark.length; el?.setSelectionRange(end, end); });
   };
   const go = async () => {
-    if (!text.trim() || making) return;
+    if (!text.trim() || making || (needsActivation && !activation)) return;
     setMaking(true);
     setProblem(null);
-    const why = await onSpeak(text.trim());
-    setMaking(false);
-    if (why) setProblem(why); else onClose();
+    try {
+      const made = await onSpeak(text.trim());
+      if (typeof made === 'string') setProblem(made);
+      else if (made) setResult(made);
+      else onClose();
+    } catch (error) { setProblem(error instanceof Error ? error.message : String(error)); }
+    finally { setMaking(false); }
+  };
+  const add = async () => {
+    if (!result || making) return;
+    setMaking(true); setProblem(null);
+    try { const why = await result.add(); if (why) setProblem(why); else onClose(); }
+    catch (error) { setProblem(error instanceof Error ? error.message : String(error)); }
+    finally { setMaking(false); }
   };
   return createPortal(
     <div className="fixed inset-0 z-[10100] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]" onClick={() => { if (!making) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-label={t('voiceSpeak.title')} data-speak-dialog="" className="w-full max-w-[460px]" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={t('voiceSpeak.title').replace('{voice}', voice.name)} data-speak-dialog="" className="w-full max-w-[460px]" onClick={(e) => e.stopPropagation()}>
         <Card title={t('voiceSpeak.title').replace('{voice}', voice.name)} body={`${service}${voice.language ? ` · ${voice.language}` : ''}`} onClose={making ? undefined : onClose}>
           <div className="relative mt-3">
-            <textarea ref={field} value={text} onChange={(e) => setText(e.target.value)} rows={6} maxLength={5000}
-              onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void go(); } }}
+            <textarea ref={field} value={text} disabled={making} onChange={(e) => { setText(e.target.value); setResult(null); }} rows={6} maxLength={5000}
+              onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void (result ? add() : go()); } }}
               placeholder={t('voiceSpeak.text')}
               className="block w-full resize-y rounded-md bg-[var(--bg-field)] px-2.5 py-2 pr-8 text-[12.5px] leading-relaxed text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus:ring-1 focus:ring-[var(--accent)]" />
             <button type="button" data-speak-help="" aria-label={t('voiceSpeak.help')} title={t('voiceSpeak.help')} aria-expanded={help} onClick={() => setHelp(!help)}
@@ -105,12 +121,15 @@ export function SpeakDialog({ voice, service, onSpeak, onClose }: {
             </div>
           ) : null}
           <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-faint)]">{t('voiceSpeak.note')}</p>
+          {needsActivation ? <label className="mt-2 flex items-start gap-2 text-[11.5px] text-[var(--text-muted)]"><input type="checkbox" checked={activation} onChange={(e) => setActivation(e.target.checked)} className="mt-0.5" /><span>{t('voiceSpeak.activation')}</span></label> : null}
+          {result ? <audio controls src={result.url} aria-label={t('voiceSpeak.preview')} className="mt-3 h-10 w-full" /> : null}
           {problem ? <p role="alert" className="mt-1.5 break-words text-[11.5px] text-[var(--err)]">{problem}</p> : null}
           <CardActions>
             <span className="mr-auto text-[10.5px] tabular-nums text-[var(--text-faint)]">{t('voiceSpeak.count').replace('{n}', String(text.length))}</span>
             <CardButton weight="quiet" disabled={making} onClick={onClose}>{t('confirm.cancel')}</CardButton>
-            <CardButton weight="primary" data-speak-go="" disabled={!text.trim() || making} onClick={() => void go()}>
-              {making ? <Loader2 size={13} className="animate-spin" /> : null}{t(making ? 'voiceSpeak.making' : 'voiceSpeak.go')}
+            {result ? <CardButton disabled={making} onClick={() => void go()}>{t('voiceSpeak.regenerate')}</CardButton> : null}
+            <CardButton weight="primary" data-speak-go="" disabled={!text.trim() || making || (!result && needsActivation && !activation)} onClick={() => void (result ? add() : go())}>
+              {making ? <Loader2 size={13} className="animate-spin" /> : null}{t(making ? 'voiceSpeak.making' : result ? 'voiceSpeak.add' : 'voiceSpeak.go')}
             </CardButton>
           </CardActions>
         </Card>

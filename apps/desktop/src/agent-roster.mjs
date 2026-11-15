@@ -231,6 +231,7 @@ export async function probeModel({ format, baseUrl, key, model, fetch: fetchImpl
  *   onChange: (list: any[]) => void,
  *   openfilm?: ReturnType<typeof import('./openfilm-agent.mjs').createOpenFilmAgent>,
  *   catalog?: (id: string) => any,
+ *   updateState?: (id: string) => any,
  *   fetch?: typeof fetch,
  *   signInWait?: { ms: number, pollMs: number },
  * }} deps
@@ -303,6 +304,7 @@ export function createRoster(deps) {
       ...(configurationRevision.has(id) ? { configurationRevision: configurationRevision.get(id) } : {}),
       ...(id === 'byok' && choices.byok ? { byok: { models: choices.byok.models.map((m) => ({ ...m, levels: [...m.levels] })) } } : {}),
       ...(deps.catalog && id !== 'openfilm' ? { catalog: deps.catalog(id) } : {}),
+      ...(deps.updateState ? { update: deps.updateState(id) } : {}),
     }));
   }
 

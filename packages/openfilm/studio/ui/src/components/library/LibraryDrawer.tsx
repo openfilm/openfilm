@@ -15,16 +15,18 @@ import React from 'react';
 import { ChevronDown, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
+import { openResourceCenter } from '@/lib/asset-library';
 import {
   BUILT_IN, TEXT_COMPONENT, askHere, builtInItem, prepareLibraryItem, isLibraryItemReady, libraryDragItem, libraryUrl, mayNeedFetch, nameOf, posterUrl, prepareTemplatePreview, previewUrl, templateExamplePath, templatePreviewUrl, toggleFavorite,
   useLibraryFavorites, useLibraryHere, useLibraryIndex, type HereState, type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
-import { useLibraryVoices, type LibraryVoice, type VoiceAccess } from '@/lib/library-voices';
+import { useLibraryVoices, type SpeakVoice } from '@/lib/library-voices';
+import { MY_VOICES } from '@/lib/private-voices';
 import { ADD_COLOR, AudioArtwork, FOOT_ROOM, HereButton, MiniPlayer, MusicCard, ROUND, SoundRow, usePlayer, type LibraryHover } from './AudioList';
 import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
 import { Empty } from './icons';
-import { FEATURED, STARRED, VoicesPane, type VoiceSample } from './VoicesPane';
+import { STARRED, VoicesPane, type VoiceSample } from './VoicesPane';
 import { CategoryMark, useCategoryName, usePluginTabs, withTabs } from './plugin-tabs';
 import { PluginSurface } from '../surfaces';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
@@ -85,7 +87,7 @@ const SHOWN = {
   stickerOpen: { live: true, still: false } as Record<StickerSection, boolean>,
 };
 /* the line a category opens on the first time: a new line of words for the text, the moving stickers */
-const firstLine = (cat: Category) => SHOWN.group[cat] ?? (cat === 'text' ? NEW_TEXT : cat === 'sticker' ? LIVE : '');
+const firstLine = (cat: Category) => cat === 'voice' && SHOWN.group[cat] === 'featured' ? '' : SHOWN.group[cat] ?? (cat === 'text' ? NEW_TEXT : cat === 'sticker' ? LIVE : '');
 
 export interface LibraryActions {
   /** Enter or "+": a page or a sound at the playhead (a transition on the cut), a look on the clip. */
@@ -112,7 +114,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   /** where a caption track comes from: what is said, a file, or new (none: no workbench makes captions, and they are not shown) */
   captions?: CaptionsActions;
   /** words spoken in a voice of the library, put on the film at the playhead (VoicesPane): null, or why not */
-  speak?: (voice: LibraryVoice, access: VoiceAccess, text: string) => Promise<string | null>;
+  speak?: SpeakVoice;
   /** Settings › Services: where a voice's service is connected */
   onServices: () => void;
   /** the project shown, for its own skills */
@@ -457,6 +459,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 {/* this project's media; Mine, the person's own for every film (what they keep there, in their folders) */}
                 <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
                 <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mine')}</SideBox>
+                <SideBox on={false} onClick={openResourceCenter}>{t('resourceCenter.open')}</SideBox>
               </>
             ) : cat === 'text' ? (
               <>
@@ -489,8 +492,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
             ) : (
               <>
                 <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
-                {cat === 'voice' ? <SideBox on={group === FEATURED && !q} onClick={() => pickGroup(FEATURED)}>{t('assetDrawer.featured')}</SideBox> : null}
-                <SideBox on={group !== FAVORITES && group !== FEATURED && folded && !q} holds={group !== FAVORITES && group !== FEATURED && !folded && !q} open={!folded} onClick={fold}>
+                {cat === 'voice' ? <SideBox on={group === MY_VOICES && !q} onClick={() => pickGroup(MY_VOICES)}>{t('myVoices.title')}</SideBox> : null}
+                <SideBox on={group !== FAVORITES && group !== MY_VOICES && folded && !q} holds={group !== FAVORITES && group !== MY_VOICES && !folded && !q} open={!folded} onClick={fold}>
                   {t(cat === 'voice' ? 'assetDrawer.services' : 'assetDrawer.library')}
                 </SideBox>
                 {folded ? null : (
@@ -533,6 +536,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 </div>
               ) : null}
               {cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} speak={speak}
+                  onMyVoices={() => pickGroup(MY_VOICES)}
+                  projectId={projectId}
                   player={voicePlayer} previewBar={previewBar} picked={picked} onPick={(id) => { setPicked(id); onPreviewStart(); }} onClosePreview={closePreview} /> : (
               <>
               {/* a click on nothing lets the picked thing go */}

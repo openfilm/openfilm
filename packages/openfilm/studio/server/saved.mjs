@@ -347,9 +347,10 @@ async function copyIn(from, files, to, fresh = false) {
  * files copied to `saved/<its place>/` there (a file there already is kept as it is, but OpenFilm's line of words) and
  * the clip, a group's clips or the page, with their files' places there. OpenFilm's things go to `saved/openfilm/<its place, one name>/`.
  * @param {string} root @param {unknown} path
+ * @param {{ mode?: 'copy' | 'link' }} [options]
  * @returns {Promise<{ clip: Record<string, unknown> & { src: string } } | { clips: { track: number, at: number, clip: Record<string, unknown> & { src: string } }[] } | { path: string }>}
  */
-export async function takeSaved(root, path) {
+export async function takeSaved(root, path, options = {}) {
   const builtIn = typeof path === 'string' && path.startsWith(`${BUILT_IN}/`);
   const lib = builtIn ? builtInRoot() : await libraryRoot();
   const rel = builtIn ? /** @type {string} */ (path).slice(BUILT_IN.length + 1) : libraryRel(path);
@@ -360,6 +361,11 @@ export async function takeSaved(root, path) {
   const at = filter ? inside(lib, FILTER_LAYER) : (builtIn ? await fetchLibrary(rel) : null) ?? readable(lib, rel);
   const info = await stat(at).catch(() => null);
   if (!info) throw new SavedError('That is not in Saved any more.', 404);
+  if (info.isFile() && !builtIn && options.mode) {
+    const [landed] = await bringIn(root, 'assets', [at], options.mode);
+    if (!landed) throw new SavedError('That is not in Saved any more.', 404);
+    return { path: landed };
+  }
   /* a file the person linked into Saved (kept on another disk, often big) comes in as media from this computer does:
      taking no room where the disk allows, big media from another disk linked where it is */
   if (info.isFile() && !builtIn && !realpathSync.native(at).startsWith(`${realpathSync.native(lib)}${sep}`)) {

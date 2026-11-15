@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { filmHtml } from '../../src/film-doc.mjs';
 import { createExports, framing } from './exports.mjs';
 import { JIANYING_DRAFT_PATH } from './jianying.mjs';
+import { draftRasterFilter } from '../../scripts/draft-bench-frames.mjs';
 
 const haveFfmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 const ffmpeg = { skip: !haveFfmpeg, timeout: 180_000 };
@@ -37,6 +39,23 @@ function pixel(file, seconds = 0, vp9 = false) {
   const at = (45 * 160 + 80) * 4;
   return [...raw.subarray(at, at + 4)];
 }
+
+test('changing a remote stylesheet is rendered again instead of reusing stale draft media', ffmpeg, async () => {
+  const root = join(scratch, 'remote-style'); mkdirSync(root);
+  let color = 'red';
+  const server = createServer((_req, res) => { res.setHeader('Content-Type', 'text/css'); res.end(`body{margin:0;background:${color}}`); });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/style.css`;
+    writeFileSync(join(root, 'page.html'), `<link rel="stylesheet" href="${url}"><script>window.film={width:160,height:90,duration:1,frame(){}}</script>`);
+    writeFileSync(join(root, 'film.html'), filmHtml({ stage: { w: 160, h: 90 }, tracks: [{ clips: [{ id: 'page', src: 'page.html', time: [0, 1] }] }] }));
+    const first = dirname(await exported(root, { kind: 'nle', format: 'capcut', alpha: 'png', fps: 30, subtitles: false }));
+    assert.deepEqual(pixel(join(first, 'media', 'page.mov')), [255, 0, 0, 255]);
+    color = 'lime';
+    const second = dirname(await exported(root, { kind: 'nle', format: 'capcut', alpha: 'png', fps: 30, subtitles: false }));
+    assert.deepEqual(pixel(join(second, 'media', 'page.mov')), [0, 255, 0, 255]);
+  } finally { await new Promise((done) => server.close(done)); }
+});
 
 test('draft exports keep original audio when video is only scaled, with native placement or CSS', ffmpeg, async () => {
   const root = join(scratch, 'scaled-audio'); mkdirSync(root);
@@ -155,7 +174,7 @@ Second
   assert.equal(untouched.path, `${JIANYING_DRAFT_PATH}/media/source.mp4`);
   const meta = JSON.parse(readFileSync(join(folder, 'draft_meta_info.json'), 'utf8'));
   assert.ok(meta.draft_materials[0].value.some((m) => m.file_Path === './media/mask.mov'));
-  const rgba = execFileSync('ffmpeg', ['-v', 'error', '-i', rendered.path.replace(JIANYING_DRAFT_PATH, folder), '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
+  const rgba = execFileSync('ffmpeg', ['-v', 'error', '-i', rendered.path.replace(JIANYING_DRAFT_PATH, folder), '-vf', draftRasterFilter(info, mask), '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
   assert.equal(rgba[3], 0, 'the corner outside the mask is transparent even on the bottom track');
   assert.equal(rgba[(45 * 160 + 80) * 4 + 3], 255, 'the middle of the mask remains visible');
   assert.equal(plain.speed, 2);
@@ -208,7 +227,7 @@ Caption
     const material = info.materials.videos.find((m) => m.id === layer.segments[0].material_id);
     assert.match(material.material_name, /captions/i);
     const file = material.path.replace(JIANYING_DRAFT_PATH, folder);
-    const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vf', 'fps=30', '-ss', '0.3', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
+    const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vf', `fps=30,${draftRasterFilter(info, layer.segments[0])}`, '-ss', '0.3', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
     const at = (x, y) => [...raw.subarray((y * 160 + x) * 4, (y * 160 + x) * 4 + 4)];
     const visible = [];
     for (let y = 0; y < 90; y++) for (let x = 0; x < 160; x++) if (at(x, y)[3]) visible.push([x, y]);

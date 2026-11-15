@@ -58,6 +58,7 @@ import {
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { CcMark } from './CcMark';
+import type { ActionId } from '@/lib/keymap';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
 import { ownTrackHeight } from '@/lib/track-heights';
 import type { Op } from '@/api';
@@ -2258,8 +2259,14 @@ export const Timeline = React.memo(function Timeline({
         void (action === 'ripple-delete' ? rippleRemove(picked) : magnetRemove(picked));
         return;
       }
-      /* ⌘= / ⌘- / ⌘0 zoom the timeline (only when it is visible) */
+      /* Plain + / = / - zoom in the timeline; modified shortcuts also work elsewhere in Studio. */
       if (action === 'zoom-in' || action === 'zoom-out' || action === 'zoom-reset') {
+        if (e.defaultPrevented || e.isComposing) return;
+        if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+          const inside = e.target instanceof Node && rootRef.current?.contains(e.target);
+          if (!inside && !(activeRef.current && e.target === document.body)) return;
+          if (document.querySelector('[role="menu"], [role="listbox"], [data-popover-panel]')) return;
+        }
         if (!playable || !scrollRef.current?.checkVisibility?.({ visibilityProperty: true })) return;
         e.preventDefault();
         if (action === 'zoom-reset') zoomToStable(ZOOM_DEFAULT);
@@ -4261,7 +4268,7 @@ export const Timeline = React.memo(function Timeline({
         {onEditOps && layers ? (
           <span data-timeline-snap={snap ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('snap')} active={snap} label={t('timeline.snap')}
-              hint={snap ? t('timeline.snapOn') : t('timeline.snapOff')}>
+              action="toggle-snap" note={snap ? t('timeline.snapOn') : t('timeline.snapOff')}>
               <SeparatorVertical size={15} />
             </ToolButton>
           </span>
@@ -4269,19 +4276,19 @@ export const Timeline = React.memo(function Timeline({
         {onEditOps && !layers ? <>
           <span data-timeline-snap={snap ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('snap')} active={snap} label={t('timeline.snap')}
-              hint={snap ? t('timeline.snapOn') : t('timeline.snapOff')}>
+              action="toggle-snap" note={snap ? t('timeline.snapOn') : t('timeline.snapOff')}>
               <SeparatorVertical size={15} />
             </ToolButton>
           </span>
           <span data-timeline-magnet={prefs.magnet ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('magnet')} active={prefs.magnet} label={t('timeline.magnet')}
-              hint={prefs.magnet ? t('timeline.magnetOn') : t('timeline.magnetOff')}>
+              action="toggle-magnet" note={prefs.magnet ? t('timeline.magnetOn') : t('timeline.magnetOff')}>
               <Magnet size={15} />
             </ToolButton>
           </span>
           <span data-timeline-linkage={prefs.linkage ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('linkage')} active={prefs.linkage} label={t('timeline.linkage')}
-              hint={prefs.linkage ? t('timeline.linkageOn') : t('timeline.linkageOff')}>
+              action="toggle-linkage" note={prefs.linkage ? t('timeline.linkageOn') : t('timeline.linkageOff')}>
               <Paperclip size={15} />
             </ToolButton>
           </span>
@@ -4842,6 +4849,8 @@ function ToolButton({
   disabled,
   label,
   hint,
+  action,
+  note,
   active = false,
   children,
 }: {
@@ -4850,13 +4859,18 @@ function ToolButton({
   label: string;
   /** The shortcut, already formatted by shortcutHint (⌘ on Mac, Ctrl elsewhere); shown as `Label (⌘Z)`. */
   hint?: string;
+  action?: ActionId;
+  note?: string;
   /** Pressed state: a toggle that is on. */
   active?: boolean;
   children: React.ReactNode;
 }) {
+  const keyHint = useKeyHint();
+  hint = action ? keyHint(action) : hint;
+  label = note ? `${label} · ${note}` : label;
   const title = hint ? `${label} (${hint})` : label;
   return (
-    <Tooltip side="bottom" label={label} {...(hint ? { shortcut: hint } : {})}>
+    <Tooltip side="bottom" label={label} action={action} wrap={Boolean(note)} {...(hint ? { shortcut: hint } : {})}>
       <button
         type="button"
         onClick={() => { if (!disabled) onClick(); }}
