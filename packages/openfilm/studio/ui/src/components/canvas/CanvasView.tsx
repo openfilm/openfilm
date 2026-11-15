@@ -1273,6 +1273,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const at = spotBeside(sourceId, 'source', NOTE_W);
     const note = canvasId('n');
     add({ nodes: [{ id: note, x: at.x, y: at.y, w: NOTE_W, h: CARD_H, text: '', title: t(`canvas.clipTools.${kind === 'shots' ? 'shotList' : 'prompt'}`) }], edges: [] }, false);
+    /* nothing written: the empty note goes, the reason is said */
+    const dropNote = () => setNodes((list) => list.filter((n) => n.id !== note));
     try {
       /* as many shots as the writer takes attached */
       const { paths, times = [] } = await api.clipTool(projectId, { op: 'shots', path, most: WRITING_ATTACHMENT_LIMIT, work: true });
@@ -1281,8 +1283,8 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         ? `The attached pictures are the shots of one video clip, in order, each where a shot begins (at ${when}). Write the clip's shot list: one numbered line per shot with its start time, shot size, camera angle, lens, camera movement, light and what happens; then one line on the cutting rhythm. No preamble. Write it in ${tongue}.`
         : `The attached pictures are frames of one video clip, in order (at ${when}). Write one detailed prompt a video model could use to make this clip again: the subject and the action as it unfolds, the setting, the camera and how it moves, the light, the colors, the style and the mood. One paragraph, no preamble. Write it in ${tongue}.`;
       const error = await write(note, ask, paths);
-      if (error) onError(error);
-    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+      if (error) { dropNote(); onError(error); }
+    } catch (e) { dropNote(); onError(e instanceof Error ? e.message : String(e)); }
   };
   /**
    * A picture parted into layers: its subject cut out (on this computer), and the background without it — the subject's
