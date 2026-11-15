@@ -35,9 +35,11 @@
  */
 
 /**
- * What a run gives back. Files go under `assets/` only (no `..`); `index` says what is in them.
+ * What a run gives back. Files go under `assets/` only (no `..`); `index` says what is in them. A file is its bytes,
+ * or, when the run was asked to hand results off (`RunContext.handOff`), the web address it can be fetched from without
+ * any key, for whoever ran it to fetch (`type`, its media type, when known).
  * @typedef {{
- *   files: { path: string, bytes: Uint8Array }[],
+ *   files: ({ path: string, bytes: Uint8Array } | { path: string, url: string, type?: string })[],
  *   index: IndexRow[],
  *   receipt: Record<string, unknown>,
  *   cost?: { note?: string },
@@ -61,7 +63,9 @@
  * `link`: a temporary web (https) address of a project file, for a service that fetches what it is given from an
  * address only; there only when the run can make one (OpenFilm's service: kept until the run ends, then deleted).
  * `model`: the id of the model, one of the provider's `models` for the verb, the person chose (a provider uses its first
- * when there is none).
+ * when there is none). `handOff`: whoever ran it fetches a made file itself from a web address that needs no key (a
+ * signed address of the service's own storage), so the file need not pass through the run (OpenFilm's service: the
+ * person's computer fetches it straight from there).
  * @typedef {{
  *   key: string,
  *   model?: string,
@@ -70,6 +74,7 @@
  *   say: (line: string) => void,
  *   read: (path: string) => Promise<Uint8Array>,
  *   link?: (path: string) => Promise<string>,
+ *   handOff?: boolean,
  * }} RunContext
  */
 

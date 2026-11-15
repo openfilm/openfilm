@@ -88,6 +88,17 @@ test('references: pictures, clips and recordings by role; clips and recordings o
   await assert.rejects(volcengine.run('video', { prompt: 'p', voice: 'v.mp3', out: 'r' }, ctx(files, 'doubao-seedance-2-0-mini-260615', link)), /needs a reference picture or clip/);
 });
 
+test('with an address to give, pictures go as addresses; handed off, the clip is its signed address, not fetched', async () => {
+  seen.length = 0;
+  reply = task(1, { status: 'succeeded', duration: 6, usage: { completion_tokens: 100 } });
+  const link = async (p) => `https://relay.example/${p}`;
+  const result = await volcengine.run('video', { prompt: 'p', 'first-frame': 'a.png', out: 'r' }, { ...ctx({}, undefined, link), handOff: true });
+  assert.deepEqual(JSON.parse(seen[0].body).content[1], { type: 'image_url', image_url: { url: 'https://relay.example/a.png' }, role: 'first_frame' }, 'Ark fetches it: the run never read it');
+  assert.ok(!seen.some((c) => c.url.pathname.startsWith('/files/')), 'the clip is not fetched');
+  assert.deepEqual(result.files, [{ path: 'assets/video/r.mp4', url: `${base}/files/cgt-1.mp4?X-Tos-Signature=s`, type: 'video/mp4' }]);
+  assert.equal(result.index[0].dur, 6, 'its length as Ark says it');
+});
+
 test('Seedance 2.5: up to 30 s; it keeps the shape of a first frame, and of a clip it may edit, whose length it chooses', async () => {
   seen.length = 0;
   reply = task(1);

@@ -25,14 +25,22 @@ export async function call(service, url, init, ctx) {
     throw new Error(`${service} could not be reached (${/** @type {Error} */ (e).message}).`);
   }
   if (res.ok) return res;
+  throw await failure(service, res, ctx);
+}
+
+/**
+ * The error a service's refusal (`res`, not ok) is, as `call` says it: its key or plan, its balance, or what it said.
+ * @param {string} service @param {Response} res @param {RunContext} ctx @returns {Promise<Error>}
+ */
+export async function failure(service, res, ctx) {
   const text = await res.text().catch(() => '');
-  if (KEY_LIMIT.test(text)) throw keyLimit(service);
-  if (outOfBalance(res.status, text)) throw noBalance(service);
+  if (KEY_LIMIT.test(text)) return keyLimit(service);
+  if (outOfBalance(res.status, text)) return noBalance(service);
   /* with no key (a keyless provider) there is nothing to blank out */
   const reason = (ctx.key ? reasonOf(text).split(ctx.key).join('•••') : reasonOf(text)).slice(0, 500);
-  if (PAID_PLAN.test(text)) throw new Error(`${service} needs a paid plan for this (${res.status})${reason ? `: ${reason}` : ''}`);
-  if (res.status === 401 || res.status === 403) throw new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Services.`);
-  throw new Error(`${service} answered ${res.status}${reason ? `: ${reason}` : ''}`);
+  if (PAID_PLAN.test(text)) return new Error(`${service} needs a paid plan for this (${res.status})${reason ? `: ${reason}` : ''}`);
+  if (res.status === 401 || res.status === 403) return new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Services.`);
+  return new Error(`${service} answered ${res.status}${reason ? `: ${reason}` : ''}`);
 }
 
 /**
