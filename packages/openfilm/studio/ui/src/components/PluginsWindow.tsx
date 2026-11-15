@@ -4,11 +4,11 @@
  * what they made). Kinds (feature-kinds: workbenches, skills, connectors, the library's templates, stickers, sounds…) are
  * filters of Discover's one catalog, listed once and open to more; a thing added goes back to where it is used (the top
  * right, the conversation, the agent, the library's tabs). Import (a folder or a link, its kind read from what it is) at
- * the side's foot. Opened from the compass beside the chat's "+", the OpenFilm menu, and links to a skill
- * (lib/plugins-window). The design and the research behind it: internal/community.md.
+ * the side's foot. In early testing, which Discover and Publish say. Opened from the button beside the chat's "+", the
+ * OpenFilm menu, and links to a skill (lib/plugins-window). The design and the research behind it: internal/community.md.
  */
 import React from 'react';
-import { CircleCheck, Compass, Globe, Import, Upload } from 'lucide-react';
+import { CircleCheck, Compass, Import, Upload } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import type { Plugin } from '@/lib/plugins';
@@ -46,10 +46,10 @@ export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string 
               </LargeDialogPlace>
             ))}
           </LargeDialogGroup>
-          {/* sharing what one made, and bringing in what is elsewhere (a folder or a link: its kind is read from what it is) */}
+          {/* sharing what one made, and bringing in what is elsewhere (a folder or a link: its kind is read from what it is);
+              the community's other sources are at the foot of Added */}
           <div className="mt-auto flex flex-col gap-0.5 pt-6">
             <LargeDialogPlace icon={<Upload {...ICON} />} active={line === 'publish'} onClick={() => showPluginsLine('publish')}>{t('assetDrawer.place_publish')}</LargeDialogPlace>
-            <LargeDialogPlace icon={<Globe {...ICON} />} active={line === 'sources'} onClick={() => showPluginsLine('sources')}>{t('assetDrawer.place_sources')}</LargeDialogPlace>
             {importAny ? <LargeDialogPlace icon={<Import {...ICON} />} active={false} onClick={importAny}>{t('assetDrawer.importAny')}</LargeDialogPlace> : null}
           </div>
         </>

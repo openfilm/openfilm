@@ -18,7 +18,7 @@
 import React from 'react';
 import {
   ArrowLeft, ArrowUpRight, AudioLines, Box, Check, ChevronRight, Clapperboard, Cloud, Film, FolderOpen, Images, Languages, Layers, Loader2, Megaphone, Mic,
-  Compass, Globe, Music, Music2, Palette, Projector, Puzzle, RefreshCw, Scissors, Send, Spline, SquareTerminal, Upload, Workflow, Github, type LucideIcon,
+  Globe, Music, Music2, Palette, Projector, Puzzle, RefreshCw, Scissors, Send, Spline, SquareTerminal, Upload, Workflow, Github, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type HostAgentId } from '@/lib/host';
@@ -33,9 +33,8 @@ import {
 import { CATEGORIES, categoryOfPlugin, categoryOfSkill, usesOfPlugin, type Category } from '@/lib/plugin-profile';
 import { ProfileStrip } from './PluginProfile';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
-import { CommunityChannels } from '../CommunityChannels';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
-import { FEATURE_KINDS, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
+import { COMMUNITY_ICON, FEATURE_KINDS, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
 import { nameOf, posterUrl, useLibraryIndex, type LibraryCategory, type LibraryItem } from '@/lib/library';
 
 export const PLUGIN_ICONS: Record<string, LucideIcon> = {
@@ -258,16 +257,23 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
           </SettingsGroup>
         ))}
         {nothing ? <Empty text={t(q ? 'assetDrawer.noSkillsFound' : 'assetDrawer.addedNone')} action={q ? undefined : { label: t('assetDrawer.place_discover'), run: () => showPluginsLine('discover') }} /> : null}
+        {/* where Discover reads from: the OpenFilm Community, and others the person added (rarely: kept out of the side) */}
+        {!q ? (
+          <p className="mt-10 flex flex-wrap items-center gap-x-2 text-[13.5px] text-[var(--text-faint)]">
+            {t('assetDrawer.sourcesLine')}
+            <button type="button" onClick={() => showPluginsLine('sources')} className="text-[var(--text-muted)] underline-offset-2 hover:text-[var(--text)] hover:underline">{t('assetDrawer.sourcesManage')}</button>
+          </p>
+        ) : null}
       </PluginsPage>
     );
   }
 
-  /* Publish: how what one made reaches everyone; what one published shows here once one signs in (to come) */
   /* Publish: one's own, published to the community from here (PublishFlow); the other ways; the community's other
-     indexes are under Sources */
+     indexes are under Sources (from Added's foot) */
   if (line === 'publish') {
     return (
-      <PluginsPage title={t('assetDrawer.publishTitle')} note={t('assetDrawer.note_publish')}>
+      <PluginsPage title={t('assetDrawer.publishTitle')} note={t('assetDrawer.note_publish')} badge={t('assetDrawer.communityEarly')}>
+        <p className="mb-8 rounded-[10px] bg-[var(--bg-field)] px-4 py-3 text-[14px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.publishEarly')}</p>
         <PublishPanel skills={skills.filter((k) => k.source === 'mine' && !k.core)} words={words} />
       </PluginsPage>
     );
@@ -358,9 +364,11 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     const heroItem = hero ? skillCard(hero) : storeOf('workbenches')[0];
     const shelves = FEATURE_KINDS.map((kind) => ({ kind, items: storeOf(kind) })).filter((x) => x.items.length);
     return (
-      <PluginsPage title={t('assetDrawer.place_discover')} note={t('assetDrawer.note_discoverHome')}>
+      <PluginsPage title={t('assetDrawer.place_discover')} note={t('assetDrawer.note_discoverHome')} badge={t('assetDrawer.communityEarly')}>
         {consent.dialog}
         {status}
+        {/* in early testing: OpenFilm's own first, opened to everyone's work step by step */}
+        {!q ? <p className="mb-8 rounded-[10px] bg-[var(--bg-field)] px-4 py-3 text-[14px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.earlyNote')}</p> : null}
         {heroItem && !q ? <Hero item={heroItem} preview={hero?.preview} poster={hero?.cover} label={t('assetDrawer.featuredLabel')} /> : null}
         {/* every kind at a glance, as a store's departments: the open list, with how many each has */}
         {!q ? (
@@ -387,15 +395,6 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
             {items.slice(0, 3).map((item) => <StoreCard key={item.key} item={item} />)}
           </StoreShelf>
         ))}
-        {!q ? publishCall(t('assetDrawer.publishCall')) : null}
-        {/* where the community talks, beside what it makes */}
-        {!q ? (
-          <section className="mt-10">
-            <h3 className="mb-1 text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('assetDrawer.talkTitle')}</h3>
-            <p className="mb-4 text-[14px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.talkNote')}</p>
-            <CommunityChannels />
-          </section>
-        ) : null}
       </PluginsPage>
     );
   }
@@ -540,11 +539,14 @@ function Empty({ text, action }: { text: string; action?: { label: string; run: 
 }
 
 /** A list's page: its title, what the list is in one line, then the list, in the middle of the room the window gives. */
-function PluginsPage({ title, note, children }: { title: string; note: string; children: React.ReactNode }) {
+function PluginsPage({ title, note, badge, children }: { title: string; note: string; badge?: string; children: React.ReactNode }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-9">
       <div className="mx-auto w-full max-w-[920px]">
-        <h2 className="text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{title}</h2>
+        <h2 className="flex items-center gap-2.5 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">
+          {title}
+          {badge ? <span className="rounded-full bg-[var(--bg-field)] px-2 text-[12px] font-medium leading-[20px] tracking-normal text-[var(--text-muted)]">{badge}</span> : null}
+        </h2>
         <p className="mb-6 mt-2 max-w-[640px] text-[14.5px] leading-relaxed text-[var(--text-muted)]">{note}</p>
         {children}
       </div>
@@ -901,7 +903,7 @@ function SourcesPanel({ onChanged }: { onChanged: () => void }) {
   return (
     <>
       <SettingsGroup title={t('assetDrawer.sourcesOfficial')}>
-        <PluginRow mark={<KindMark kind="workbenches" icon={Compass} />} title="openfilm/community" note={t('gallery.trustReviewed')} summary={t('assetDrawer.sourcesOfficialNote')} control={null} />
+        <PluginRow mark={<KindMark kind="workbenches" icon={COMMUNITY_ICON} />} title="openfilm/community" note={t('gallery.trustReviewed')} summary={t('assetDrawer.sourcesOfficialNote')} control={null} />
       </SettingsGroup>
       <SettingsGroup title={t('assetDrawer.sourcesAdded')} footnote={t('assetDrawer.sourcesWarning')}>
         {(sources ?? []).map((address) => (

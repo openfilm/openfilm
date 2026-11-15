@@ -16,3 +16,4 @@
 .logo:focus-visible { box-shadow:0 0 0 1px var(--accent); }
 @keyframes appear { from { opacity:0; } to { opacity:1; } }
 @media (prefers-reduced-motion: reduce) { .menu,.flyout { animation:none; } .logo { transition:none; } .logo:hover,.logo:focus-visible { transform:none; } }
+.tag { flex-shrink:0; margin-left:8px; padding:0 6px; border-radius:999px; background:color-mix(in srgb,var(--text) 9%,transparent); color:var(--text-muted); font-size:10.5px; font-weight:500; line-height:17px; }

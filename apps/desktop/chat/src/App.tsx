@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Coins, Compass, CornerDownLeft, LibraryBig, Loader2, Plus, Square } from 'lucide-react';
+import { ArrowDown, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, Shapes, Square } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
@@ -1109,7 +1109,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
         {app.showExamples ? (
           <Tooltip label={t('project.plugins')}>
             <button type="button" onClick={() => app.showExamples?.({ kind: 'plugins' })} className="openfilm-composer-tool" aria-label={t('project.plugins')}>
-              <Compass size={16} strokeWidth={1.75} />
+              <Shapes size={16} strokeWidth={1.75} />
             </button>
           </Tooltip>
         ) : null}
