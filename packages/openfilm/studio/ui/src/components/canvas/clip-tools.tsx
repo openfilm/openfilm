@@ -15,9 +15,13 @@ import { ProviderMark } from '../settings/ProviderMark';
 import { CanvasModal, stylePicture } from './libraries';
 import { LengthPicker } from './panels';
 
-export interface ClipMade { choice: ClipChoice; words: string; sec?: number; extras: string[]; style?: string }
+export interface ClipMade { choice: ClipChoice; words: string; sec?: number; extras: string[]; style?: string; part?: [number, number] }
 
-export function ClipToolEditor({ tool, src, length, models, first, files, srcOf, onClose, onMake }: {
+/** the most of a clip a model takes as a reference (every one connected takes 15 s; Seedance 2.5 more) */
+export const CLIP_REFERENCE_MAX = 15;
+const clock = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+
+export function ClipToolEditor({ tool, src, length: told, models, first, files, srcOf, onClose, onMake }: {
   tool: ClipTool;
   src: string;
   /** the clip's length, s */
@@ -42,13 +46,21 @@ export function ClipToolEditor({ tool, src, length, models, first, files, srcOf,
   const range = lengthRange('video', picked?.spec, 'omni');
   const [sec, setSec] = React.useState(() => lengthOf('video', 5, picked?.spec, 'omni') ?? 5);
   const [busy, setBusy] = React.useState(false);
+  /* the part of a clip longer than a model takes: its end to carry on from, else its start; moved by dragging */
+  const [length, setLength] = React.useState(told);
+  const long = length > CLIP_REFERENCE_MAX + 0.05;
+  const [from, setFrom] = React.useState(0);
+  React.useEffect(() => { setFrom(tool.length ? Math.max(0, length - CLIP_REFERENCE_MAX) : 0); }, [length, tool.length]);
+  const part: [number, number] = [from, Math.min(length, from + CLIP_REFERENCE_MAX)];
+  const strip = React.useRef<HTMLDivElement>(null);
+  const grab = React.useRef<{ x: number; from: number } | null>(null);
   const most = tool.pictures ? Math.max(1, picked?.spec?.refs ?? 4) : 1;
   const wanted = tool.audio ? files.filter((f) => f.kind === 'audio') : tool.pictures ? files.filter((f) => f.kind === 'image') : [];
   const missing = (tool.words === 'required' && !words.trim()) || (tool.pictures === 'required' && !extras.length) || (tool.audio && !extras.length) || (tool.style && !style);
   const make = async () => {
     if (busy || missing || !picked) return;
     setBusy(true);
-    try { await onMake({ choice: picked, words: words.trim(), ...(tool.length ? { sec } : {}), extras, ...(style ? { style } : {}) }); }
+    try { await onMake({ choice: picked, words: words.trim(), ...(tool.length ? { sec } : {}), extras, ...(style ? { style } : {}), ...(long ? { part } : {}) }); }
     finally { setBusy(false); }
   };
   const toggle = (path: string) => setExtras((list) => (list.includes(path) ? list.filter((p) => p !== path)
@@ -64,10 +76,29 @@ export function ClipToolEditor({ tool, src, length, models, first, files, srcOf,
       </div>
       <div className="flex min-h-0 flex-1 gap-5 p-5">
         <div className="flex min-w-0 flex-1 items-center justify-center rounded-[14px] bg-black/40">
-          <video src={src} autoPlay loop muted playsInline controls className="max-h-full max-w-full rounded-[10px]" />
+          <video src={src} autoPlay loop muted playsInline controls className="max-h-full max-w-full rounded-[10px]"
+            onLoadedMetadata={(event) => { const d = event.currentTarget.duration; if (Number.isFinite(d) && Math.abs(d - length) > 0.05) setLength(d); }} />
         </div>
         {/* what the tool asks */}
         <aside className="flex w-[340px] shrink-0 flex-col gap-5 overflow-y-auto pr-1">
+          {long ? (
+            /* the part sent: as long as a model takes, moved along the clip */
+            <div>
+              <div className={section}>{t('canvas.clipTools.partOf').replace('{max}', String(CLIP_REFERENCE_MAX)).replace('{s}', length.toFixed(1))}</div>
+              <div ref={strip} className="nodrag relative h-9 touch-none select-none rounded-[9px] bg-[var(--cv-chip)]"
+                onPointerDown={(event) => { grab.current = { x: event.clientX, from }; event.currentTarget.setPointerCapture(event.pointerId); }}
+                onPointerMove={(event) => {
+                  if (!grab.current || !strip.current) return;
+                  const per = length / strip.current.getBoundingClientRect().width;
+                  setFrom(Math.min(length - CLIP_REFERENCE_MAX, Math.max(0, grab.current.from + (event.clientX - grab.current.x) * per)));
+                }}
+                onPointerUp={() => { grab.current = null; }}>
+                <div className="absolute inset-y-0 cursor-grab rounded-[8px] border-2 border-[#4aa3ff] bg-[color-mix(in_srgb,#4aa3ff_18%,transparent)] active:cursor-grabbing"
+                  style={{ left: `${(part[0] / length) * 100}%`, width: `${((part[1] - part[0]) / length) * 100}%` }} />
+              </div>
+              <div className="mt-1.5 text-[11.5px] tabular-nums text-[var(--cv-ink-3)]">{clock(part[0])} – {clock(part[1])}</div>
+            </div>
+          ) : null}
           {tool.length && range ? (
             <div>
               <div className={section}>{t('canvas.clipTools.extendBy').replace('{s}', length.toFixed(1))}</div>

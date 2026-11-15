@@ -28,7 +28,7 @@ import { useLanguage, useT } from '@/i18n';
 import { ApiError, api, projectEvents, type CanvasBoard, type CanvasCharacter, type SubjectKind } from '@/api';
 import { BoardSwitcher, boardName, nextBoardName } from './boards';
 import {
-  CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modeOf, frameRatio, ratioOf, receiptOf,
+  CARD_H, CUT_W, FILE_W, GROUP_COLORS, MAKE_MEDIA, MAKE_W, NOTE_H, NOTE_W, canvasId, cardWidth, makeSize, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modeOf, frameRatio, lengthOf, ratioOf, receiptOf,
   nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
   type CanvasDoc, type CanvasHistory, type MediaOf,
 } from '@/lib/canvas';
@@ -1192,26 +1192,43 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     const clip = byPath.get(path);
     const ratio = frameRatio(clip?.w, clip?.h, made.choice.spec) ?? '16:9';
     const size = makeSize('video', ratio);
-    const at = spotBeside(sourceId, 'source', size.w);
+    /* a clip longer than a model takes: the part picked, cut here first (a work file, out of the library) */
+    let input = path;
+    if (made.part) {
+      try { input = (await api.clipTool(projectId, { op: 'trim', path, from: made.part[0], to: made.part[1], work: true })).paths[0]!; }
+      catch (e) { onError(e instanceof Error ? e.message : String(e)); return; }
+    }
+    /* what goes in besides: in a column between the clip and what is made from it, each wired in its order */
+    const ins = [...(made.part ? [input] : []), ...made.extras];
+    const COLUMN = ins.length ? FILE_W + 80 : 0;
+    const at = spotBeside(sourceId, 'source', size.w + COLUMN);
     const id = canvasId('n');
     const onBoard = (p: string) => now.current.nodes.find((n) => (n.type === 'file' || n.type === 'make') && n.data.path === p && !n.parentId);
     const brought: CanvasDoc['nodes'] = [];
-    const from = made.extras.map((p, i) => {
-      const there = onBoard(p);
+    const wired = ins.map((p, i) => {
+      const there = p !== input && onBoard(p);
       if (there) return there.id;
       const node = canvasId('n');
-      brought.push({ id: node, path: p, x: at.x + i * (FILE_W + 24), y: at.y + size.h + 80, w: FILE_W, h: CARD_H });
+      brought.push({ id: node, path: p, x: at.x, y: at.y + i * (CARD_H + 24), w: FILE_W, h: CARD_H,
+        ...(p === input && made.part ? { title: nameFrom(sourceId, `${t('canvas.clipTools.part')} ${made.part.map((v) => v.toFixed(1)).join('–')}s`) } : {}) });
       return node;
     });
+    /* as long as what it is made from (a clip carried on: as long as asked), within what the model makes */
+    const used = made.part ? made.part[1] - made.part[0] : (clip?.durationMs ?? 5000) / 1000;
+    const sec = made.sec ?? lengthOf('video', Math.round(used), made.choice.spec, 'omni') ?? undefined;
     add({
-      nodes: [{ id, x: at.x, y: at.y, w: size.w, h: size.h, make: 'video', prompt: made.words, preset: tool.preset, via: made.choice.via,
+      nodes: [{ id, x: at.x + COLUMN, y: at.y, w: size.w, h: size.h, make: 'video', prompt: made.words, preset: tool.preset, via: made.choice.via,
         ...(made.choice.model ? { model: made.choice.model } : {}), title: nameFrom(sourceId, t(`canvas.clipTools.${tool.key}`)),
-        opts: { ...(made.choice.spec?.needs ? {} : { mode: 'omni' as const }), ratio, ...(made.sec ? { sec: made.sec } : {}), ...(made.style ? { style: made.style } : {}) } }, ...brought],
-      edges: [{ id: canvasId('e'), from: sourceId, to: id, order: 0 }, ...from.map((node, i) => ({ id: canvasId('e'), from: node, to: id, order: i + 1 }))],
+        opts: { ...(made.choice.spec?.needs ? {} : { mode: 'omni' as const }), ratio, ...(sec ? { sec } : {}), ...(made.style ? { style: made.style } : {}) } }, ...brought],
+      edges: [
+        ...(made.part ? [] : [{ id: canvasId('e'), from: sourceId, to: id, order: 0 }]),
+        ...wired.map((node, i) => ({ id: canvasId('e'), from: node, to: id, order: i + (made.part ? 0 : 1) })),
+      ],
     }, false);
     keepLastModel('video', made.choice);
     setClipAI(null);
     await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+    void flow.fitView({ nodes: [{ id: sourceId }, { id }], padding: 0.2, maxZoom: 1, duration: 300 });
     void makeNow(id);
   };
   /** a clip's shots, a still where each begins, laid out in a group beside it as wide as the clip */

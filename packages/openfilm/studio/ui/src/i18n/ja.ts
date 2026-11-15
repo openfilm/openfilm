@@ -2115,6 +2115,7 @@ export const ja: Words = {
     importUploading: 'アップロード中…',
     importPreparing: '素材を準備中…',
     clipTools: {
+      partOf: 'どの部分を使うか（モデルは最大 {max} 秒、元の動画 {s} 秒）', part: '部分',
       about: { edit: '変えたいことを書くだけ。カメラ・動き・タイミングはそのまま', extend: '最後のフレームから続きを撮る', motion: 'この動画のカメラワークと動きで、新しい人物や画面に', restyle: '構図・演技・リズムはそのまま、別の画風に', recast: '動画の人物を選んだ人に差し替え', lipsync: '人物がこの録音どおりに話す' },
       hint: { edit: '変えたいこと（例：赤いコートを白いスーツに）', extend: 'この後に起きること（任意）', motion: '画面への追加の指示（任意）', restyle: 'スタイルへの追加の指示（任意）', recast: '追加の指示（任意）', lipsync: '追加の指示（任意）' },
       needs: { edit: '先に変えたいことを書いてください', extend: '', motion: '先に画像を選んでください', restyle: '先にスタイルを選んでください', recast: '先に差し替える人を選んでください', lipsync: '先に録音を選んでください' },
@@ -2256,6 +2257,7 @@ export const ja: Words = {
     loadFailed: 'キャンバスを読み込めませんでした',
     reload: '再読み込み',
     make: {
+      failedTitle: '生成できませんでした',
       tts: 'ナレーション',
       noVoice: '先に声を選んでください',
       image: '画像',

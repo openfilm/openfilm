@@ -10,7 +10,7 @@
 import React from 'react';
 import { Handle, NodeResizeControl, NodeResizer, NodeToolbar, Position, useStore, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
-  AudioLines, BookmarkPlus, Bot, Clapperboard, Download, FileQuestion, Image as ImageIcon, Layers, LayoutGrid, Loader2, Maximize2, Mic, Music, Play, Plus, Scissors,
+  AudioLines, BookmarkPlus, CircleAlert, Bot, Clapperboard, Download, FileQuestion, Image as ImageIcon, Layers, LayoutGrid, Loader2, Maximize2, Mic, Music, Play, Plus, Scissors,
   MessageSquareQuote, Square, Trash2, Type as TypeIcon, Ungroup, UserRound, Video,
 } from 'lucide-react';
 import { useT } from '@/i18n';
@@ -634,6 +634,7 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
   /* something wired in: it is made from that, so nothing to start with is offered */
   const [versionsOpen, setVersionsOpen] = React.useState(false);
   const run = board.run(id);
+  const failed = board.error(id);
   const Icon = MAKE_ICON[data.make];
   const media = MAKE_MEDIA[data.make];
   const versions = data.versions ?? [];
@@ -697,6 +698,12 @@ export function MakeNodeView({ id, data, selected }: NodeProps<MakeNode>) {
               )}
           {uploading ? <UploadPanel upload={uploading} /> : run ? (
             <Making since={run.started} typical={typical} onStop={() => board.stop(id)} />
+          ) : failed && !file ? (
+            /* it failed: said on the card itself (the whole reason in its composer) */
+            <div title={failed} className="absolute inset-x-3 bottom-3 flex items-start gap-2 rounded-[10px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] leading-snug text-red-300 backdrop-blur-sm">
+              <CircleAlert size={14} className="mt-px shrink-0" />
+              <span className="min-w-0"><span className="font-medium">{t('canvas.make.failedTitle')}</span><span className="line-clamp-2 text-red-300/80">{failed}</span></span>
+            </div>
           ) : null}
         </div>
       </Frame>

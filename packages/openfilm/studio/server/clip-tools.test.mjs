@@ -24,6 +24,7 @@ test('a clip: a part cut out, its sound alone, cropped to a shape, its shots whe
   assert.deepEqual(trim.paths, ['assets/clip-trim.mp4']);
   assert.ok(Math.abs((await probe(root, 'assets/clip-trim.mp4')).duration - 2) < 0.15);
   assert.deepEqual((await clipTool(root, { op: 'trim', path: 'assets/clip.mp4', from: 0, to: 1 })).paths, ['assets/clip-trim-2.mp4']);
+  assert.deepEqual((await clipTool(root, { op: 'trim', path: 'assets/clip.mp4', from: 0, to: 2, work: true })).paths, ['assets/.canvas/clip-trim.mp4']);
   const sound = await clipTool(root, { op: 'audio', path: 'assets/clip.mp4' });
   assert.deepEqual(sound.paths, ['assets/clip-audio.m4a']);
   const tall = await clipTool(root, { op: 'crop', path: 'assets/clip.mp4', ratio: '9:16' });
