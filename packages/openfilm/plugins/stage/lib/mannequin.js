@@ -136,26 +136,33 @@ export function stand() {
 }
 
 /**
- * Walking: the pose after `distance` meters, a step every `stride / 2` meters. With `stopAt` (the length of the walk),
- * the steps settle into standing over the last half meter, so the figure comes to rest instead of freezing mid-step.
- * @returns {Pose}
+ * Walking: the pose after `distance` meters, a step every `stride / 2` meters. The steps grow out of standing over the
+ * first half meter after `from` (0; `null`: already walking when the shot starts), and with `stopAt` (the length of
+ * the walk) settle into standing over the last half meter, so the figure starts and stops instead of freezing
+ * mid-step. @returns {Pose}
  */
-export function walk(distance, { stride = 1.3, swing = 0.42, stopAt = Infinity } = {}) {
-  const d = Math.min(distance, stopAt);
-  const phase = (d / stride) * Math.PI * 2;
-  const p = gait(phase, { swing, knee: 0.75, arm: 0.32, elbow: 0.25, lean: 0.04 });
-  const rest = Math.min(1, Math.max(0, (stopAt - d) / 0.5));
-  return rest < 1 ? mix(stand(), p, rest) : p;
+export function walk(distance, { stride = 1.3, swing = 0.42, from = 0, stopAt = Infinity } = {}) {
+  const p = gait(phaseOf(distance, stride, stopAt), { swing, knee: 0.75, arm: 0.32, elbow: 0.25, lean: 0.04 });
+  return settled(p, distance, from, stopAt, 0.5);
 }
 
-/** Running: the pose after `distance` meters; `stopAt` as for `walk`, over the last meter. @returns {Pose} */
-export function run(distance, { stride = 2.4, swing = 0.75, stopAt = Infinity } = {}) {
-  const d = Math.min(distance, stopAt);
-  const phase = (d / stride) * Math.PI * 2;
+/** Running: the pose after `distance` meters; `from` and `stopAt` as for `walk`, over a meter. @returns {Pose} */
+export function run(distance, { stride = 2.4, swing = 0.75, from = 0, stopAt = Infinity } = {}) {
+  const phase = phaseOf(distance, stride, stopAt);
   const p = gait(phase, { swing, knee: 1.5, arm: 0.65, elbow: 1.4, lean: 0.22 });
   p.bob = 0.05 * Math.abs(Math.sin(phase));
-  const rest = Math.min(1, Math.max(0, (stopAt - d) / 1));
-  return rest < 1 ? mix(stand(), p, rest) : p;
+  return settled(p, distance, from, stopAt, 1);
+}
+
+const phaseOf = (distance, stride, stopAt) => (Math.min(distance, stopAt) / stride) * Math.PI * 2;
+
+/** A gait's pose, eased out of standing after `from` and back into it before `stopAt`, each over `over` meters. */
+function settled(p, distance, from, stopAt, over) {
+  const d = Math.min(distance, stopAt);
+  const start = from == null ? 1 : Math.min(1, Math.max(0, (d - from) / over));
+  const end = Math.min(1, Math.max(0, (stopAt - d) / over));
+  const k = Math.min(start, end);
+  return k < 1 ? mix(stand(), p, k) : p;
 }
 
 /** The shared cycle of a walk and a run: legs swinging in turn, each arm against its leg. */

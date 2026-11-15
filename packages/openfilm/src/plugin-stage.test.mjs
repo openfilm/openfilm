@@ -45,6 +45,11 @@ test('a walk given its length settles into standing at the end, and a pose is th
   assert.deepEqual(walk(7, { stopAt: 5 }), stand());
   assert.notDeepEqual(walk(4.7, { stopAt: 5 }), stand());
   assert.deepEqual(walk(2.3), walk(2.3));
+  /* a walk grows out of standing, unless it was under way as the shot starts */
+  assert.deepEqual(walk(0), stand());
+  assert.notDeepEqual(walk(0.25), stand());
+  assert.notDeepEqual(walk(0, { from: null }), stand());
+  assert.deepEqual(run(0), stand());
   const half = mix(stand(), sit(1), 0.5);
   assert.equal(half.seat, 0.5);
 });
@@ -128,7 +133,7 @@ test('stage look tells where the figure and the camera are, what is wrong, and s
   const looked = stage('look', 's1');
   assert.equal(looked.status, 0, looked.stderr + looked.stdout);
   assert.match(looked.stdout, /^stage\/s1 · 6\.0 s · ana · frames at 0\.0, 1\.2, 2\.4, 3\.6, 4\.8, 6\.0 s$/m);
-  assert.match(looked.stdout, /^camera {2}0\.0 s {2}at x 2\.6 y 2\.2 z 6\.5 m · fov 42°/m);
+  assert.match(looked.stdout, /^camera {2}0\.0 s {2}at x 2\.6 y 2\.2 z 6\.5 m · fov 38°/m);
   assert.match(looked.stdout, /^ana {2}0\.0 s {2}at x −2\.2 z −4\.4 m · facing 17° · moving 0\.90 m\/s · in frame/m);
   assert.match(looked.stdout, /✓ the camera is never inside anything/);
   for (const f of ['s1-frames.jpg', 's1-above.png']) assert.ok(existsSync(join(project, '.film/look/stage', f)), f);
@@ -146,8 +151,16 @@ test('stage look tells where the figure and the camera are, what is wrong, and s
   assert.match(shots[0].problems.camera[0].what, /^room-back-/);
   assert.equal(shots[0].problems.through[0].what, 'table');
 
+  /* the camera close and low on a figure standing still: its head is cut by the top of the frame */
+  writeFileSync(shot, readFileSync(join(project, 'stage/s1/shot.js'), 'utf8')
+    .replace(/function frame\(t\) \{[^]*?draw\(\);/, 'function frame(t) {\n    ana.root.position.set(0, 0, 0);\n    apply(ana, walk(0));\n    camera.position.set(0, 1, 1.2);\n    camera.lookAt(0, 0.9, 0);\n    draw();'));
+  const close = stage('look', 's2');
+  assert.match(close.stdout, /! ana's head is cut by the top of the frame from 0\.0 s to 5\.9 s/);
+  assert.doesNotMatch(close.stdout, /every figure is in frame/);
+
   const one = stage('look', 's1', '2.5');
   assert.match(one.stdout, /frames at 2\.5 s/);
+  assert.ok(existsSync(join(project, '.film/look/stage/s1-2.5-frames.jpg')), 'a moment looked at keeps pictures of its own');
   assert.equal(stage('look', 'nope').status, 2);
 });
 
@@ -162,7 +175,7 @@ test('stage render draws a shot, or a stretch of it, as a video beside it', () =
   const rendered = stage('render', 's1', '0-1', '--fps', '12');
   assert.equal(rendered.status, 0, rendered.stderr);
   assert.ok(existsSync(join(project, 'stage/s1/whitebox-0-1.mp4')));
-  assert.match(rendered.stdout, /rendered {2}\[s1\]\(stage\/s1\/whitebox-0-1\.mp4\)/);
+  assert.match(rendered.stdout, /rendered {2}\[s1\]\(stage\/s1\/whitebox-0-1\.mp4\) · 1 s of it · drawn in \d+\.\d s/);
   assert.equal(stage('render', 's1', '2').status, 2);
   assert.equal(stage('render').status, 2);
 });

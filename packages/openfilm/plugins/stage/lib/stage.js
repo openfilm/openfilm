@@ -137,11 +137,13 @@ export function wall(parent, { from, to, height = 3, thickness = 0.2, openings =
  * A room: a floor `width` (x) by `depth` (z) centered on the origin, and walls `height` high on its back (-z), left (-x)
  * and right (+x) sides; the front (+z) is open for the camera unless `front` is given. Each side is `true`, `false`
  * (none) or `{ openings }` (see `wall`, `at` measured from the side's left end as seen from inside, facing it).
- * Returns the floor and the walls by side.
+ * `ceiling`: a ceiling on the walls (none unless asked: the sun lights the room through where it would be).
+ * Returns the floor, the walls by side and the ceiling.
  */
-export function room(parent, { width = 8, depth = 8, height = 3, thickness = 0.2, back = true, left = true, right = true, front = false, color = GREY, floor = FLOOR, name = 'room' } = {}) {
+export function room(parent, { width = 8, depth = 8, height = 3, thickness = 0.2, back = true, left = true, right = true, front = false, ceiling = false, color = GREY, floor = FLOOR, name = 'room' } = {}) {
   const w = width / 2, d = depth / 2, t = thickness / 2;
   const ground = box(parent, { size: [width, 0.1, depth], at: [0, -0.1, 0], color: floor, name: `${name}-floor` });
+  const top = ceiling ? box(parent, { size: [width + thickness * 2, 0.1, depth + thickness * 2], at: [0, height, 0], color, name: `${name}-ceiling` }) : null;
   const sides = {
     back: { from: [-w - t * 2, -d - t], to: [w + t * 2, -d - t] },
     right: { from: [w + t, -d - t * 2], to: [w + t, d] },
@@ -154,7 +156,15 @@ export function room(parent, { width = 8, depth = 8, height = 3, thickness = 0.2
     if (!said) continue;
     walls[side] = wall(parent, { ...sides[side], height, thickness, openings: said === true ? [] : said.openings ?? [], color, name: `${name}-${side}` });
   }
-  return { floor: ground, walls };
+  return { floor: ground, walls, ceiling: top };
+}
+
+/**
+ * Open ground for a shot outdoors: `size` meters square around the origin, a darker grey than the sky so the horizon
+ * reads. @returns {THREE.Mesh}
+ */
+export function ground(parent, { size = 120, color = 0x99958d, name = 'ground' } = {}) {
+  return box(parent, { size: [size, 0.1, size], at: [0, -0.1, 0], color, name });
 }
 
 /** `x` held to 0–1. */

@@ -43,6 +43,7 @@ await command(async () => {
     out, fps, root: project, onSoftware: () => { software = true; },
   });
   const path = relative(project, out).split('\\').join('/');
-  console.log(`rendered  [${shot.name}](${path})  ${((Date.now() - started) / 1000).toFixed(1)} s`);
+  const length = range ? range[1] - range[0] : null;
+  console.log(`rendered  [${shot.name}](${path})${length != null ? ` · ${length} s of it` : ' · the whole shot'} · drawn in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   if (software) console.log('! WebGL was drawn without the graphics chip here: slower, the same picture');
 }, 'render');

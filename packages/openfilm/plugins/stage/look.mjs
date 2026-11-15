@@ -17,8 +17,9 @@ const USAGE = `${RUN} stage look [shot] [t | a-b] [--json]
 
   A shot as the camera sees it, and from above: frames (six over its length, or the one moment asked), the paths of
   the figures and the camera, where each is at those moments (meters; facing in degrees, 0° toward +z, 90° toward +x),
-  and what is wrong over the whole length (✗ the camera inside something, a figure walking through something;
-  ! something right in front of the lens, a figure out of frame or hidden). No shot: every shot. Pictures go in .film/look/stage/.`;
+  where heads look and arms point when they turn away from the body, and what is wrong over the whole length
+  (✗ the camera inside something, a figure walking through something; ! something right in front of the lens, a
+  figure out of frame, hidden, its head cut by the top of the frame or at the side edge). No shot: every shot. Pictures go in .film/look/stage/.`;
 
 /** The moments a look shows: the one asked, or six across the stretch. @param {number | null} at @param {[number, number] | null} range @param {number} duration */
 export function momentsOf(at, range, duration) {
@@ -79,8 +80,10 @@ process.exitCode = await runLook(async ({ project, what, at, range, dir, shown }
         const [from, to] = range ? [range[0], Math.min(range[1], duration)] : [0, duration - 1 / 24];
         const step = Math.max(0.1, (to - from) / 120);
         const seen = await tab.evaluate(lookInPage, { times, from, to, step });
-        const sheet = join(dir(), `${shot.name.replace(/\//g, '-')}-frames.jpg`);
-        const plan = join(dir(), `${shot.name.replace(/\//g, '-')}-above.png`);
+        /* a moment or a stretch looked at has pictures of its own, beside the whole shot's */
+        const base = `${shot.name.replace(/\//g, '-')}${at != null ? `-${at}` : range ? `-${range[0]}-${range[1]}` : ''}`;
+        const sheet = join(dir(), `${base}-frames.jpg`);
+        const plan = join(dir(), `${base}-above.png`);
         writeFileSync(sheet, Buffer.from(seen.sheet.split(',')[1], 'base64'));
         writeFileSync(plan, Buffer.from(seen.plan.split(',')[1], 'base64'));
         files.push(sheet, plan);
@@ -99,7 +102,11 @@ process.exitCode = await runLook(async ({ project, what, at, range, dir, shown }
             const speed = other ? Math.hypot(other.figures[name].at[0] - f.at[0], other.figures[name].at[1] - f.at[1]) / Math.abs(other.t - samples[i].t) : 0;
             const how = f.seated ? 'seated' : speed > 0.05 ? `moving ${speed.toFixed(2)} m/s` : 'still';
             const shownAs = !f.visible ? 'out of frame' : f.hidden ? `hidden behind ${f.hidden}` : `in frame, head to feet ${Math.round(f.screen.height * 100)} % of the frame's height, head ${Math.round(f.screen.x * 100)} % across`;
-            lines.push(`${name}  ${sec(t)}  at x ${m(f.at[0])} z ${m(f.at[1])} m · facing ${deg(f.facing)} · ${how} · ${shownAs}`);
+            const turned = f.looking && Math.abs(Math.atan2(Math.sin(f.looking.heading - f.facing), Math.cos(f.looking.heading - f.facing))) > 0.17;
+            const nod = f.looking && Math.abs(f.looking.up) > 0.35; // past the lean of a walk, a run or a seat
+            const looks = turned || nod ? ` · looking ${deg(f.looking.heading)}${nod ? `, ${f.looking.up > 0 ? 'up' : 'down'} ${Math.abs(Math.round((f.looking.up * 180) / Math.PI))}°` : ''}` : '';
+            const arms = Object.entries(f.arms ?? {}).map(([side, a]) => ` · ${side} arm raised toward ${deg(a.heading)}, ${a.up >= 0 ? 'up' : 'down'} ${Math.abs(Math.round((a.up * 180) / Math.PI))}°`).join('');
+            lines.push(`${name}  ${sec(t)}  at x ${m(f.at[0])} z ${m(f.at[1])} m · facing ${deg(f.facing)}${looks}${arms} · ${how} · ${shownAs}`);
           }
         }
         const wrong = spans(samples, (s) => s.camera.inside);
@@ -108,18 +115,20 @@ process.exitCode = await runLook(async ({ project, what, at, range, dir, shown }
         }));
         const through = seen.figures.flatMap((/** @type {any} */ f) => spans(samples, (s) => s.figures[f.name].through).map((sp) => ({ ...sp, who: f.name })));
         const out = seen.figures.flatMap((/** @type {any} */ f) => spans(samples, (s) => !s.figures[f.name].visible && 'out').map((sp) => ({ ...sp, who: f.name })));
+        const cut = seen.figures.flatMap((/** @type {any} */ f) => spans(samples, (s) => s.figures[f.name].cut).map((sp) => ({ ...sp, who: f.name })));
         const hidden = seen.figures.flatMap((/** @type {any} */ f) => spans(samples, (s) => s.figures[f.name].hidden).map((sp) => ({ ...sp, who: f.name })));
         for (const s of wrong) lines.push(`✗ the camera is inside ${s.what} ${between(s)}`);
         for (const s of blocked) lines.push(`! ${s.what} is less than a meter in front of the camera, covering up to ${Math.round(s.share * 100)} % of the frame, ${between(s)}`);
         for (const s of through) lines.push(`✗ ${s.who} goes through ${s.what} ${between(s)}`);
         for (const s of out) lines.push(`! ${s.who} is out of frame ${between(s)}`);
+        for (const s of cut) lines.push(s.what === 'top' ? `! ${s.who}'s head is cut by the top of the frame ${between(s)}` : `! ${s.who} is at the side edge of the frame ${between(s)}`);
         for (const s of hidden) lines.push(`! ${s.who} is hidden behind ${s.what} ${between(s)}`);
         if (!wrong.length && !through.length) lines.push('✓ the camera is never inside anything, and no figure goes through anything');
-        if (seen.figures.length && !out.length && !hidden.length) lines.push('✓ every figure is in frame and in sight the whole time');
+        if (seen.figures.length && !out.length && !hidden.length && !cut.length) lines.push('✓ every figure is in frame and in sight the whole time');
         if (!seen.drawn) lines.push('! the shot does not use createStage (stage/lib/stage.js): the view from above shows only the paths');
         if (errors.length) { ok = false; lines.push(...errors.map((e) => `✗ the page said: ${e}`)); }
         lines.push(`→ ${shown(sheet)}`, `→ ${shown(plan)}`, '');
-        data.push({ shot: shot.name, duration, times, figures: seen.figures, problems: { camera: wrong, blocked, through, out, hidden }, samples: seen.samples });
+        data.push({ shot: shot.name, duration, times, figures: seen.figures, problems: { camera: wrong, blocked, through, out, cut, hidden }, samples: seen.samples });
       } catch (e) {
         ok = false;
         lines.push(`✗ ${e instanceof Error ? e.message : String(e)}`, '');

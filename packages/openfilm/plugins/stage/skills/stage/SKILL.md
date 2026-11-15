@@ -14,8 +14,9 @@ and change the shot. They see no coordinates, so never ask them for numbers: say
   copies `stage/lib/` in: three.js, `stage.js` (the stage and set pieces) and `mannequin.js` (the figures). Those are the
   project's own copies: add a pose or a piece there when a shot needs one.
 - `openfilm stage look [shot] [t | a-b]`: your eyes. Frames from the camera, a view from above with every path, where
-  each figure and the camera are (meters; facing 0° = toward +z, 90° = toward +x), and what is wrong. Run it after
-  every change and read its pictures; a shot is not done while it says ✗, and each ! is fixed or meant.
+  each figure and the camera are (meters; facing 0° = toward +z, 90° = toward +x), where a head looks and an arm points
+  when they turn from the body, and what is wrong. Run it after every change and read its pictures; a shot is not done
+  while it says ✗, and each ! is fixed or meant.
 - `openfilm stage render <shot> [a-b]`: the white-box video, `stage/<shot>/whitebox.mp4` (a stretch:
   `whitebox-<a>-<b>.mp4`). It is what a video model is given as its reference for the camera and the movement.
 
@@ -34,11 +35,18 @@ import { createStage, room, wall, box, lerp, progress } from '../lib/stage.js';
 import { mannequin, apply, stand, walk, run, sit, turn, mix, move, lookAt, point } from '../lib/mannequin.js';
 ```
 
-- `createStage({ pass })`: renderer, scene, `camera`, a sky and a sun; options `background`, `sky`, `ground`,
-  `skyIntensity`, `sun: { from, to, intensity, area }`, `fov`.
-- `room(scene, { width, depth, height, back, left, right, front })`: a floor and walls; each side `true`, `false` or
-  `{ openings: [{ at, width, bottom, top }] }` (`at` meters from the side's left end seen from inside; `bottom: 0` is a
-  door, 2.1 m high unless `top` says). `wall(scene, { from: [x, z], to: [x, z], height, openings })` for any other wall.
+- `createStage({ pass })`: renderer, scene, `camera`, a sky and a sun. Options: `fov` (degrees), `background` (the color
+  behind everything), `sky` and `ground` (the colors of the light from above and from below), `skyIntensity`, `sun:
+  { from: [x, y, z], to: [x, y, z], intensity, area }` (`area`: meters around `to` that get shadows). Colors are numbers
+  such as `0xbfc3c7`.
+- `room(scene, { width, depth, height, back, left, right, front, ceiling })`: a floor and walls on the back (-z), left
+  (-x) and right (+x); `front` (+z) is open and there is no ceiling unless asked (`front: true`, `ceiling: true`; a
+  ceiling puts the room in shade). Each side is `true`, `false` or `{ openings: [{ at, width, bottom, top }] }`: `at` is
+  the opening's middle, in meters from the side's left end seen from inside; `bottom: 0` is a door, 2.1 m high unless
+  `top` says; a window is `bottom: 0.9, top: 2.1`. `wall(scene, { from: [x, z], to: [x, z], height, openings })` for
+  any other wall (`at` from `from`).
+- Outdoors: `ground(scene)`, open ground darker than the sky so the horizon reads, then buildings, cars and the rest
+  as boxes.
 - `box(scene, { name, size: [w, h, d], at: [x, y, z], turn })`: `at` is the middle of its bottom. Other shapes are three.js
   meshes with `MeshStandardMaterial`; give every object a `name`, `castShadow` and `receiveShadow`.
 - Real sizes: a door 0.9–1.1 × 2.1 m, a ceiling 2.6–3 m, a table 0.75 m high, a chair seat 0.45 m, a counter 0.9 m,
@@ -52,15 +60,20 @@ import { mannequin, apply, stand, walk, run, sit, turn, mix, move, lookAt, point
 
 1. Where: `move(ana, path, distance)` puts it `distance` meters along `path` (`[[x, z], …]`), facing where it goes and
    turning smoothly at corners; it returns `{ length, done }`. Or set `ana.root.position` and `ana.root.rotation.y`.
-2. The pose: `apply(ana, pose)`, a pose from `stand()`, `walk(distance, { stopAt })`, `run(distance, { stopAt })`,
-   `sit(amount, { seat })`, `turn(angle)`, or `mix(a, b, k)` of two. `apply` keeps the lower foot on the floor.
-3. Then `lookAt(ana, [x, y, z], amount)` (the head, a little of the chest) and `point(ana, [x, y, z], { side, amount })`.
+2. The pose: `apply(ana, pose)`, a pose from `stand()`, `walk(distance, { from, stopAt })`, `run(distance, { from,
+   stopAt })`, `sit(amount, { seat })` (`seat`: the seat's height in meters, 0.45 if not said), `turn(angle)` (radians
+   turned so far), or `mix(a, b, k)` of two. `apply` keeps the lower foot on the floor.
+3. Then `lookAt(ana, [x, y, z], amount)` (the head, a little of the chest) and `point(ana, [x, y, z], { side: 'right'
+   or 'left', amount })`, each at most once per figure per frame (they add to the pose); `amount` 0–1 eases them in.
 
-- Walking is about 1.2 m/s, strolling 0.8, running 3–4: `distance = speed * (t - start)`. Give `walk` and `run` the
-  path's length as `stopAt`, so the steps settle into standing at the end instead of freezing mid-step.
+- Walking is about 1.2 m/s, strolling 0.8, running 3–4: `distance = speed * (t - start)`. The steps grow out of
+  standing over the first half meter (`from: null` when the figure is already walking as the shot starts); give the
+  path's length as `stopAt`, so they settle into standing at the end instead of freezing mid-step.
 - Change one action into the next with `mix` over half a second or more, the amount from `progress(t, a, b)`: nothing
   snaps. Turning on the spot: turn `root.rotation.y` and apply `turn(angle turned so far)`.
-- Sitting: the root goes at the middle of the seat, facing away from the chair's back; `sit(progress(t, a, a + 1))`.
+- Sitting: walk to a spot half a meter in front of the seat (not past the chair), turn to face away from the chair's
+  back, then over a second move the root back onto the middle of the seat while sitting:
+  `ana.root.position.set(lerp(fx, sx, k), 0, lerp(fz, sz, k)); apply(ana, sit(k))` with `k = progress(t, a, a + 1)`.
 - Names stay the same from frame to frame: the person's references and `look` find figures by them.
 
 ## The camera

@@ -78,9 +78,27 @@ export async function lookInPage({ times, from, to, step }) {
       }
       const a = top.clone().project(camera), b = feet.clone().project(camera);
       const through = insideOf(feet.clone().setY(0.5)) ?? insideOf(feet.clone().setY(1.2));
+      // the head cut by the top of the frame, or the figure at its side edge
+      let cut = null;
+      const h = head.clone().project(camera);
+      if (visible && h.z < 1 && a.y > 1 && Math.abs(h.x) <= 1) cut = 'top';
+      else if (onScreen(head) && Math.abs(h.x) > 0.94) cut = 'edge';
+      // where the head looks, and an arm raised (more than 65° from hanging down) and where it points
+      const neck = fig.getObjectByName(`${fig.name}-neck`);
+      const looks = neck ? new THREE.Vector3(0, 0, 1).applyQuaternion(neck.getWorldQuaternion(new THREE.Quaternion())) : null;
+      const arms = {};
+      for (const side of ['right', 'left']) {
+        const joint = fig.getObjectByName(`${fig.name}-${side}-arm-joint`);
+        if (!joint) continue;
+        const d = new THREE.Vector3(0, -1, 0).applyQuaternion(joint.getWorldQuaternion(new THREE.Quaternion()));
+        if (d.y < -Math.cos((65 * Math.PI) / 180)) continue; // swinging in a walk or a run stays under 65°
+        arms[side] = { heading: Math.atan2(d.x, d.z), up: Math.asin(d.y) };
+      }
       s.figures[fig.name] = {
         at: [feet.x, feet.z], facing: fig.rotation.y, seated: (fig.userData.seat ?? 0) > 0.5,
-        visible, hidden, through: through ? nameOf(through) : null,
+        visible, hidden, cut, through: through ? nameOf(through) : null,
+        looking: looks ? { heading: Math.atan2(looks.x, looks.z), up: Math.asin(Math.max(-1, Math.min(1, looks.y))) } : null,
+        arms,
         screen: visible ? { x: (a.x + 1) / 2, y: (1 - a.y) / 2, height: Math.abs(a.y - b.y) / 2 } : null,
       };
     }
@@ -139,8 +157,9 @@ export async function lookInPage({ times, from, to, step }) {
   };
   // a label goes below the ones already placed that it would cover
   const placed = [];
-  const label = (text, x, y) => {
+  const label = (text, x0, y) => {
     const w = pc.measureText(text).width, h = u * 3;
+    const x = Math.max(u, Math.min(W - w - u, x0));
     let ty = y;
     while (placed.some((r) => x < r.x + r.w && x + w > r.x && ty - h < r.y && ty > r.y - h)) ty += h;
     placed.push({ x, y: ty, w });
@@ -148,29 +167,41 @@ export async function lookInPage({ times, from, to, step }) {
     pc.fillStyle = '#111'; pc.fillText(text, x, ty);
   };
   const nearest = (t) => samples.reduce((a, b) => (Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a));
+  /* the moments, those at the same place (within a few pixels) taken as one: `[first, last, x, y]` */
+  const stays = (where) => {
+    const out = [];
+    for (const t of times) {
+      const [x, y] = where(t);
+      const last = out[out.length - 1];
+      if (last && Math.hypot(last[2] - x, last[3] - y) < u * 1.5) last[1] = t;
+      else out.push([t, t, x, y]);
+    }
+    return out;
+  };
+  const span = (stay) => (stay[0] === stay[1] ? `${stay[0].toFixed(1)}s` : `${stay[0].toFixed(1)}–${stay[1].toFixed(1)}s`);
   for (const fig of figures) {
     const color = colorOf(fig);
     pathOf(samples.map((s) => px(s.figures[fig.name].at[0], 0, s.figures[fig.name].at[1])), color, false);
-    for (const t of times) {
-      const f = nearest(t).figures[fig.name];
-      const [x, y] = px(f.at[0], 0, f.at[1]);
+    for (const stay of stays((t) => { const f = nearest(t).figures[fig.name]; return px(f.at[0], 0, f.at[1]); })) {
+      const f = nearest(stay[1]).figures[fig.name];
+      const [x, y] = [stay[2], stay[3]];
       pc.fillStyle = color; pc.beginPath(); pc.arc(x, y, u * 1.1, 0, Math.PI * 2); pc.fill();
       const [hx, hy] = px(f.at[0] + Math.sin(f.facing) * 0.45, 0, f.at[1] + Math.cos(f.facing) * 0.45);
       pc.strokeStyle = color; pc.beginPath(); pc.moveTo(x, y); pc.lineTo(hx, hy); pc.stroke();
-      label(`${fig.name} ${t.toFixed(1)}s`, x + u * 1.6, y - u * 1.2);
+      label(`${fig.name} ${span(stay)}`, x + u * 1.6, y - u * 1.2);
     }
   }
   pathOf(samples.map((s) => px(s.camera.at[0], 0, s.camera.at[2])), '#111', true);
-  for (const t of times) {
-    const c = nearest(t).camera;
-    const [x, y] = px(c.at[0], 0, c.at[2]);
+  for (const stay of stays((t) => { const c = nearest(t).camera; return px(c.at[0], 0, c.at[2]); })) {
+    const c = nearest(stay[1]).camera;
+    const [x, y] = [stay[2], stay[3]];
     const half = Math.atan(Math.tan((c.fov * Math.PI) / 360) * (W / H));
     const reach = 1.4;
     const [lx, ly] = px(c.at[0] + Math.sin(c.heading - half) * reach, 0, c.at[2] + Math.cos(c.heading - half) * reach);
     const [rx, ry] = px(c.at[0] + Math.sin(c.heading + half) * reach, 0, c.at[2] + Math.cos(c.heading + half) * reach);
     pc.fillStyle = 'rgba(17,17,17,0.18)'; pc.strokeStyle = '#111';
     pc.beginPath(); pc.moveTo(x, y); pc.lineTo(lx, ly); pc.lineTo(rx, ry); pc.closePath(); pc.fill(); pc.stroke();
-    label(`camera ${t.toFixed(1)}s`, x + u * 1.6, y + u * 3);
+    label(`camera ${span(stay)}`, x + u * 1.6, y + u * 3);
   }
   const legend = 'from above · +x right · +z down ·';
   const [m0] = px(0, 0, 0), [m1] = px(1, 0, 0);
