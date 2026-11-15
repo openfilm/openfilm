@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 /* the workbenches of OpenFilm's own plugins, built with the editor as Studio's own page builds them */
-import { workbenchImportMap, workbenchInputs } from '../../../packages/openfilm/studio/ui/workbenches';
+import { workbenchImportMap, workbenchInputs } from '../../../packages/openfilm/studio/ui/workbenches.ts';
 
 /*
  * The app's window: one page, Studio's editor and the chat beside it, built into shell/dist and served by the app's
