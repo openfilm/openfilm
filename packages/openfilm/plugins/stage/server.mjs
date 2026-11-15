@@ -82,7 +82,7 @@ export default (studio) => ({
       { op: 'add', kind: 'note', id: `${group}-note`, text: note, group },
       { op: 'add', kind: 'file', id: `${group}-box`, path: `assets/stage/${shot}/whitebox.mp4`, group },
       { op: 'add', kind: 'file', id: `${group}-still`, path: `assets/stage/${shot}/still.png`, group },
-      { op: 'add', kind: 'image', id: `${group}-look`, prompt: 'The same framing as the picture, as a real film still', inputs: [`${group}-note`, `${group}-still`], group },
+      { op: 'add', kind: 'image', id: `${group}-look`, prompt: 'The same framing, layout and poses as the picture, as a photograph of the real place, filling the whole frame', inputs: [`${group}-note`, `${group}-still`], group },
       { op: 'add', kind: 'video', id: `${group}-video`, prompt: 'Follow the reference video for the camera and the movement', opts: { mode: 'omni', sec }, inputs: [`${group}-note`, `${group}-look`, `${group}-box`], group },
     ])], port);
     studio.emit(path, { shot, making: null });

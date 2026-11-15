@@ -54,6 +54,7 @@ Make the shot put it there at that moment, the rest of its move kept continuous;
 
 With the canvas plugin on: `openfilm stage render <shot> --still`, then one `openfilm canvas apply` in a group named
 after the shot: a note of what is seen, `file` nodes for `assets/stage/<shot>/whitebox.mp4` and `still.png`, an
-`image` node from the note and the still (the same framing, as a real film still), and a `video` node with `opts:
-{ mode: "omni", sec }` from the note, the image and the white box, in that order. The person picks the model and
-presses Make, unless they ask you to (it costs money).
+`image` node from the note and the still (the same framing, as a photograph filling the whole frame; it sets the look),
+and a `video` node with `opts: { mode: "omni", sec }` from the note, the image and the white box, in that order. The
+white box alone already carries the camera and the movement. The person picks the model and presses Make, unless they
+ask you to (it costs money).
