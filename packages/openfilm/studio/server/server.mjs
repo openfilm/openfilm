@@ -74,6 +74,7 @@ import { allowProjectSkill, revocationOf, revokedNow, skillFiles, commandsIn, co
 import { startPluginPages } from './plugin-pages.mjs';
 import { startPluginPrograms } from './plugin-programs.mjs';
 import { createPluginServers } from './plugin-servers.mjs';
+import { communityStats, countInstall } from './community-stats.mjs';
 import { communitySources, entrySources, setCommunitySources, catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
 import { localModelsRoute } from './local-models.mjs';
@@ -742,6 +743,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const uid = decodeURIComponent(parts[1]);
       if (installed) {
         try { await installSkill(uid); } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 500, e instanceof Error ? e.message : String(e)); }
+        /* one more counted, for one OpenFilm's community lists (not another index's): its uid alone (community-stats.mjs) */
+        if (!entrySources().has(uid)) countInstall(uid);
       } else if (!(await uninstallSkill(uid))) throw new HttpError(404, 'no such installed skill');
       return json(res, 200, { installed });
     }
@@ -799,6 +802,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       try {
         return json(res, 200, { url: await pluginPrograms.ensure({ uid: skill.uid, source: skill.source, folder: skill.folder, program }, { id: project.id, path: project.path }) });
       } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 500, e instanceof Error ? e.message : String(e)); }
+    }
+    /* how many use each community item (community-stats.mjs): { stats: { uid: { installs } } }, none when unknown */
+    if (parts[0] === 'community' && parts[1] === 'stats' && parts.length === 2 && req.method === 'GET') {
+      return json(res, 200, { stats: await communityStats() });
     }
     /* the other community indexes the person added (GET: { sources }; PUT { sources }): read after OpenFilm's own, the
        next time Discover is read (skill-catalog.mjs communitySources) */
