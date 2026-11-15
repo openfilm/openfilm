@@ -407,7 +407,7 @@ const MODE_ICONS: Record<VideoMode, React.ComponentType<{ size?: number }>> = { 
  * faint. Dragged, clicked, typed or stepped with the arrows, it keeps to what the model makes (only its own lengths,
  * when it makes only some).
  */
-export function LengthPicker({ value, range, only, onChange }: { value: number; range: [number, number]; only?: number[]; onChange: (n: number) => void }) {
+export function LengthPicker({ value, range, only, label, onChange }: { value: number; range: [number, number]; only?: number[]; label?: string; onChange: (n: number) => void }) {
   const t = useT();
   const end = Math.max(5, Math.ceil(range[1] / 5) * 5);
   const fit = (n: number) => (only?.length ? only.reduce((best, x) => (Math.abs(x - n) < Math.abs(best - n) ? x : best))
@@ -427,7 +427,7 @@ export function LengthPicker({ value, range, only, onChange }: { value: number; 
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-[11.5px] text-[var(--cv-ink-3)]">{t('canvas.make.length')}</span>
+        <span className="text-[11.5px] text-[var(--cv-ink-3)]">{label ?? t('canvas.make.length')}</span>
         <label className="flex h-8 items-baseline gap-1 rounded-[9px] bg-[var(--cv-chip)] px-2.5 pt-[5px] focus-within:ring-1 focus-within:ring-[var(--cv-ring)]">
           <input value={typed ?? String(value)} inputMode="numeric" aria-label={t('canvas.make.length')}
             onChange={(event) => setTyped(event.target.value.replace(/\D/g, '').slice(0, 3))} onBlur={commit}
