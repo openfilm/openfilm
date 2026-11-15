@@ -32,7 +32,7 @@ export const ACTIONS = [
   { id: 'overwrite-track-down', tab: 'timeline', keys: ['alt+ArrowDown'] },
   { id: 'toggle-magnet', tab: 'timeline', keys: ['p', 'shift+n'] },
   { id: 'toggle-snap', tab: 'timeline', keys: ['n'] },
-  { id: 'toggle-linkage', tab: 'timeline', keys: ['`', 'shift+`'] },
+  { id: 'toggle-linkage', tab: 'timeline', keys: ['shift+`'] },
   { id: 'zoom-in', tab: 'timeline', keys: ['mod++', 'mod+='] },
   { id: 'zoom-out', tab: 'timeline', keys: ['mod+-'] },
   { id: 'zoom-reset', tab: 'timeline', keys: ['mod+0'] },
@@ -46,6 +46,7 @@ export const ACTIONS = [
   { id: 'compound', tab: 'timeline', keys: ['alt+g'] },
   { id: 'uncompound', tab: 'timeline', keys: ['alt+shift+g'] },
   /* the player */
+  { id: 'preview-fullscreen', tab: 'player', keys: ['`'] },
   { id: 'play-pause', tab: 'player', keys: ['Space'] },
   { id: 'play-range', tab: 'player', keys: ['shift+Space'] },
   { id: 'loop', tab: 'player', keys: ['shift+l'] },
@@ -321,7 +322,7 @@ function keyName(e: Pick<KeyPress, 'key' | 'code' | 'shiftKey' | 'altKey'>): str
  * shortcut off a Mac). `+` is the same with or without ⇧ (⌘+ is ⌘⇧= on a US keyboard).
  */
 export function comboOf(e: KeyPress, mac: boolean): string | null {
-  if (MODIFIER_KEYS.has(e.key) || e.key === 'Dead' || e.key === 'Unidentified' || !e.key) return null;
+  if (MODIFIER_KEYS.has(e.key) || (e.key === 'Dead' && e.code !== 'Backquote') || e.key === 'Unidentified' || !e.key) return null;
   if (!mac && e.metaKey) return null;
   const key = keyName(e);
   const mods = new Set<Modifier>();
@@ -376,7 +377,11 @@ export interface CustomScheme { base: BuiltInScheme; keys: Partial<Record<Action
 /** A custom scheme's keys. An action added after it was made takes its base's keys, unless one of them is used. */
 export function customKeymap(custom: CustomScheme, mac: boolean): Keymap {
   const base = schemeKeymap(custom.base, mac);
-  return layered((id) => base[id], custom.keys, mac);
+  // Copies of the old defaults assigned both backquote forms to linkage. Free only that legacy pair.
+  const own = { ...custom.keys };
+  const linkage = own['toggle-linkage'];
+  if (!Object.hasOwn(own, 'preview-fullscreen') && linkage?.length === 2 && linkage.includes('`') && linkage.includes('shift+`')) own['toggle-linkage'] = ['shift+`'];
+  return layered((id) => base[id], own, mac);
 }
 
 /* ── finding, showing and changing keys ── */
