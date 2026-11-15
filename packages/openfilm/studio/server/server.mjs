@@ -48,7 +48,8 @@ import { exampleFile, exampleFolder, listExamples } from './examples.mjs';
 import { pickFiles, pickFolder } from './folder-picker.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
 import { ensureProxies, playChecks } from './proxies.mjs';
-import { ensurePreviews, knownLate } from './preview-cache.mjs';
+import { ensurePreviews, knownLate, pausePreviews, cancelPreviews, clearPreviews, retryPreviews } from './preview-cache.mjs';
+import { stopVisionDownloads } from '../../src/vision-assets.mjs';
 import { npmOpenfilm, olderThanThis } from '../client.mjs';
 import { createWatchers } from './watch.mjs';
 import { projectMissing } from './project-presence.mjs';
@@ -1126,15 +1127,20 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* renders of the stretches the preview played late (preview-cache.mjs), asked for when not made yet: each one's
        name and state, at the proxies' size */
     if (rest === 'preview-cache' && (req.method === 'POST' || req.method === 'GET')) {
-      /* GET: the stretches known to play late (from an earlier session) and theirs */
-      const { ranges, fps } = /** @type {{ ranges?: unknown, fps?: unknown }} */ (req.method === 'GET'
-        ? { ranges: knownLate(project.path), fps: url.searchParams.get('fps') }
-        : await readJson(req));
+      const body = req.method === 'GET' ? { ranges: knownLate(project.path), fps: url.searchParams.get('fps') } : await readJson(req);
+      const { ranges, fps, action, playing: isPlaying } = /** @type {{ ranges?: unknown, fps?: unknown, action?: unknown, playing?: boolean }} */ (body);
+      if (action === 'retry') { retryPreviews(project.path); return json(res, 200, { retried: true }); }
+      if (action === 'clear') { clearPreviews(project.path); return json(res, 200, { late: [], ranges: [] }); }
+      if (action === 'cancel') { cancelPreviews(project.path); return json(res, 200, { late: [], ranges: [] }); }
+      if (action === 'pause') { pausePreviews(project.path, true); return json(res, 200, { paused: true }); }
       const rate = Number(fps);
-      const list = Array.isArray(ranges) ? ranges.filter((r) => Array.isArray(r) && r.length === 2 && r.every(Number.isFinite) && r[1] > r[0] && r[0] >= 0).slice(0, 50) : [];
+      const list = Array.isArray(ranges) ? ranges.filter((r) => Array.isArray(r) && r.length === 2 && r.every(Number.isFinite) && r[1] > r[0] && r[0] >= 0).slice(0, 1000) : [];
       if (!(rate > 0 && rate <= 240)) throw new HttpError(400, 'fps: a frame rate');
       const { proxies } = readPrefs();
-      return json(res, 200, { late: list, ranges: list.length ? ensurePreviews(project.path, /** @type {[number, number][]} */ (list), rate, proxies.height) : [] });
+      if (req.method === 'POST' && isPlaying) pausePreviews(project.path, true);
+      const result = list.length ? ensurePreviews(project.path, /** @type {[number, number][]} */ (list), rate, proxies.height, undefined, { schedule: req.method === 'POST' && !isPlaying }) : [];
+      if (req.method === 'POST' && !isPlaying) pausePreviews(project.path, false);
+      return json(res, 200, { late: list, ranges: result });
     }
     /* what the project is missing (media-reconnect.mjs): links that lead nowhere, files its clips name that are gone */
     /* how the project's media was made, by path (media-made.mjs): what each was asked with, by whom, from which
@@ -1538,6 +1544,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (advertise && advertised()?.pid === process.pid) rmSync(runFile(), { force: true });
     /* a running export stops, and cleans up after itself while the rest closes: its half-made files go before Studio */
     const exporting = exports.stopAll();
+    stopVisionDownloads();
+    for (const project of await listProjects().catch(() => [])) cancelPreviews(project.path);
     fetches.stopAll();
     autoVersions.stop();
     if (sweepMedia) clearTimeout(sweepMedia);

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { connect } from 'node:net';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { crc32, deflateSync } from 'node:zlib';
@@ -75,6 +76,82 @@ test('OpenFilm runs Pi on the shared account, switches cloud models and sends Op
     assert.ok(svc.bodies[0].tools.length > 0, 'the built-in agent can use its tools');
     assert.ok(svc.bodies[0].messages.some((m) => m.role === 'system'));
   } finally { session.close(); svc.close(); }
+});
+
+test('OpenFilm account model requests follow the configured HTTP proxy', { timeout: 30_000 }, async () => {
+  const svc = await service();
+  const tunnels = [];
+  const sockets = new Set();
+  const proxy = createServer();
+  proxy.on('connection', (socket) => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
+  proxy.on('connect', (req, socket, head) => {
+    tunnels.push(req.url);
+    const upstream = connect(Number(new URL(svc.url).port), '127.0.0.1', () => {
+      socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head.length) upstream.write(head);
+      socket.pipe(upstream).pipe(socket);
+    });
+    upstream.on('error', () => socket.destroy());
+    socket.on('error', () => upstream.destroy());
+    socket.once('close', () => upstream.destroy());
+  });
+  await new Promise((done) => proxy.listen(0, '127.0.0.1', done));
+  const url = `http://127.0.0.1:${proxy.address().port}`;
+  const model = 'anthropic/claude-opus-5.5';
+  const offer = agentOffer({ default: model, data: [{ id: model, name: 'Claude Opus 5.5', efforts: ['high'], default_effort: 'high' }] }, 'http://model.openfilm.invalid/v1');
+  const session = new AgentSession({ agent: 'openfilm', cwd: mkdtempSync(join(tmpdir(), 'of-pi-proxy-')),
+    harness: { home: mkdtempSync(join(tmpdir(), 'of-pi-proxy-home-')), ...offer,
+      env: { OPENFILM_ACCOUNT_KEY: 'ofk-test-account', HTTP_PROXY: url, HTTPS_PROXY: url, http_proxy: url, https_proxy: url, NO_PROXY: '', no_proxy: '' } },
+  });
+  try {
+    await session.start();
+    assert.equal(await session.prompt([{ type: 'text', text: 'hello through the system proxy' }]), 'end_turn');
+    assert.deepEqual(svc.asked, [model]);
+    assert.deepEqual(svc.keys, ['Bearer ofk-test-account']);
+    assert.ok(tunnels.includes('model.openfilm.invalid:80'), 'the proxy carries the model request without resolving the target locally');
+  } finally {
+    session.close();
+    for (const socket of sockets) socket.destroy();
+    proxy.close();
+    svc.close();
+  }
+});
+
+test('OpenFilm account requests bypass an unavailable proxy for NO_PROXY hosts', { timeout: 30_000 }, async () => {
+  const svc = await service();
+  const model = 'anthropic/claude-opus-5.5';
+  const offer = agentOffer({ default: model, data: [{ id: model, name: 'Claude Opus 5.5' }] }, svc.url);
+  const session = new AgentSession({ agent: 'openfilm', cwd: mkdtempSync(join(tmpdir(), 'of-pi-no-proxy-')),
+    harness: { home: mkdtempSync(join(tmpdir(), 'of-pi-no-proxy-home-')), ...offer,
+      env: { OPENFILM_ACCOUNT_KEY: 'ofk-test-account', HTTP_PROXY: 'http://127.0.0.1:1', HTTPS_PROXY: 'http://127.0.0.1:1',
+        http_proxy: 'http://127.0.0.1:1', https_proxy: 'http://127.0.0.1:1', NO_PROXY: '127.0.0.1', no_proxy: '127.0.0.1' } },
+  });
+  try {
+    await session.start();
+    assert.equal(await session.prompt([{ type: 'text', text: 'hello directly' }]), 'end_turn');
+    assert.deepEqual(svc.asked, [model]);
+  } finally { session.close(); svc.close(); }
+});
+
+test('HTTPS model requests reach the configured HTTPS proxy before connecting to the target', { timeout: 30_000 }, async () => {
+  const tunnels = [];
+  const proxy = createServer();
+  proxy.on('connect', (req, socket) => {
+    tunnels.push(req.url);
+    socket.end('HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');
+  });
+  await new Promise((done) => proxy.listen(0, '127.0.0.1', done));
+  const url = `http://127.0.0.1:${proxy.address().port}`;
+  const session = new AgentSession({ agent: 'byok', cwd: mkdtempSync(join(tmpdir(), 'of-pi-https-proxy-')),
+    harness: { home: mkdtempSync(join(tmpdir(), 'of-pi-https-proxy-home-')), models: [own('a', 'https://model.openfilm.invalid/v1')], model: 'a',
+      env: { OPENFILM_BYOK_KEY_a: 'sk-test', HTTPS_PROXY: url, https_proxy: url, HTTP_PROXY: '', http_proxy: '', NO_PROXY: '', no_proxy: '' } },
+  });
+  try {
+    await session.start();
+    await assert.rejects(session.prompt([{ type: 'text', text: 'hello through the HTTPS proxy' }]));
+    assert.ok(tunnels.length > 0);
+    assert.ok(tunnels.every((target) => target === 'model.openfilm.invalid:443'));
+  } finally { session.close(); proxy.close(); }
 });
 
 test("the own key's models, each on its own service and key, are the session's model option; a turn after a switch goes to the other service", { timeout: 60_000 }, async () => {
@@ -255,7 +332,7 @@ function noisePng(w, h) {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(rows, { level: 0 })), chunk('IEND', Buffer.alloc(0))]);
 }
 
-test('a turn with 38 screenshot reads stores small previews and reports dropped context to the model and log', { timeout: 60_000 }, async () => {
+test('38 screenshot reads keep small previews and preserve each earlier request prefix', { timeout: 60_000 }, async () => {
   const svc = await service({ reads: 38 });
   const root = mkdtempSync(join(tmpdir(), 'of-pi-previews-'));
   const updates = [];
@@ -269,18 +346,56 @@ test('a turn with 38 screenshot reads stores small previews and reports dropped 
     await session.prompt([{ type: 'text', text: 'Check the film' }], { turnId: 'local-preview-test' });
     assert.equal(svc.bodies.length, 39);
     const last = JSON.stringify(svc.bodies.at(-1));
-    assert.match(last, /frame.png.*was left out of this request/);
+    assert.doesNotMatch(last, /was left out of this request|picture was omitted/);
     const images = [...last.matchAll(/data:image\/[^;]+;base64,([a-z0-9+/=]+)/gi)];
-    assert.ok(images.length >= 1 && images.length <= 5);
+    assert.equal(images.length, 38, 'read previews are retained while the request is within its limits');
     assert.ok(images.every(([, data]) => data.length <= 128 * 1024));
     const stored = join(root, '.film', 'chat', 'agent');
     const transcript = readFileSync(join(stored, readdirSync(stored).find(name => name.endsWith('.jsonl'))), 'utf8');
-    assert.ok(transcript.length < 4.5 * 1024 * 1024, 'stored transcript stays small after all reads');
-    assert.equal(updates.filter(update => update.sessionUpdate === 'notice' && /Older pictures/.test(update.title)).length, 1);
+    assert.ok(transcript.length < 6 * 1024 * 1024, 'stored transcript keeps bounded per-image previews');
+    for (let i = 1; i < svc.bodies.length; i++) {
+      const previous = svc.bodies[i - 1].messages;
+      assert.deepEqual(svc.bodies[i].messages.slice(0, previous.length), previous, `request ${i + 1} appends without rewriting earlier screenshots`);
+    }
+    assert.equal(updates.filter(update => update.sessionUpdate === 'notice' && /Older pictures/.test(update.title)).length, 0);
     const logged = readFileSync(join(root, '.film', 'logs', 'local-preview-test.model.jsonl'), 'utf8');
-    assert.match(logged, /"imageContext":\{"keptBytes":\d+,"removed":\d+\}/);
+    assert.doesNotMatch(logged, /"imageContext"/, 'no cleanup or cache rebuild was necessary');
   } finally {
     session.close();
+    svc.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('batch omissions are stored outside model context and survive restarting the agent', { timeout: 60_000 }, async () => {
+  const svc = await service();
+  const root = mkdtempSync(join(tmpdir(), 'of-pi-image-resume-'));
+  const options = { agent: 'byok', cwd: root,
+    harness: { home: join(root, 'home'), models: [own('a', svc.url)], model: 'a', env: { OPENFILM_BYOK_KEY_a: 'sk' } } };
+  const first = new AgentSession(options);
+  let resumed;
+  const picture = { type: 'image', mimeType: 'image/png', data: noisePng(1, 1).toString('base64') };
+  const countPictures = (body) => (JSON.stringify(body).match(/data:image\//g) ?? []).length;
+  try {
+    const info = await first.start();
+    await first.prompt([{ type: 'text', text: 'Compare these pictures' }, ...Array.from({ length: 101 }, () => picture)], { turnId: 'image-batch' });
+    assert.equal(countPictures(svc.bodies[0]), 50, 'the count guard clears a batch with room for future pictures');
+    const stored = join(root, '.film', 'chat', 'agent');
+    const transcript = readFileSync(join(stored, readdirSync(stored).find(name => name.endsWith('.jsonl'))), 'utf8');
+    assert.match(transcript, /"customType":"openfilm-image-context"/);
+    assert.doesNotMatch(JSON.stringify(svc.bodies[0]), /openfilm-image-context/, 'extension state is not sent to the model');
+    const logged = readFileSync(join(root, '.film', 'logs', 'image-batch.model.jsonl'), 'utf8');
+    assert.match(logged, /"pruned":51,"reason":"count"/, 'the local model log explains the one cache rebuild');
+    first.close();
+    resumed = new AgentSession({ ...options, resume: info.sessionId });
+    assert.equal((await resumed.start()).resumed, true);
+    await resumed.prompt([{ type: 'text', text: 'One more picture' }, picture]);
+    assert.equal(countPictures(svc.bodies[1]), 51, 'old pictures remain omitted and the newly attached picture is visible');
+    const previous = svc.bodies[0].messages;
+    assert.deepEqual(svc.bodies[1].messages.slice(0, previous.length), previous, 'restoration preserves the previously sent prefix');
+  } finally {
+    first.close();
+    resumed?.close();
     svc.close();
     rmSync(root, { recursive: true, force: true });
   }
@@ -302,6 +417,9 @@ test('a request refused as too large is tried again at once with half of its pic
     const last = JSON.stringify(svc.bodies.at(-1));
     assert.ok(last.length < 8 * 1024 * 1024, 'the request tried again is within the service\'s size');
     assert.equal((last.match(/left out of this request to keep it small/g) ?? []).length, 7, 'half of the pictures left out, the oldest');
+    const prefix = svc.bodies.at(-1).messages;
+    await session.prompt([{ type: 'text', text: 'Continue' }]);
+    assert.deepEqual(svc.bodies.at(-1).messages.slice(0, prefix.length), prefix, 'the following request retains the recovered prefix');
   } finally {
     session.close();
     svc.close();

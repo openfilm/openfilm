@@ -161,9 +161,9 @@ export function agentProblem(entry, step, e, turnId = null) {
  * in (agent-skills.mjs).
  * @param {{ trusted: (event: any) => boolean, binDir?: string | null, fallbackDir?: string | null, env?: Record<string, string>,
  *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void, onAsking?: (folders: string[]) => void, onTurn?: (turn: { kind: 'done' | 'failed' | 'asking', agent: string, cwd: string, meta: any, error?: string }) => void, onConnectionResult?: (id: string, error: unknown | null) => void, logDir?: () => string | null,
- *           skills?: { dataDir: string, mine: string } | null }} opts
+ *           skills?: { dataDir: string, mine: string } | null, isAgentUpdating?: (id: string) => boolean }} opts
  */
-export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, onAsking = () => {}, onTurn = (_turn) => {}, onConnectionResult = (_agent, _error) => {}, logDir = () => null, skills = null }) {
+export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, onAsking = () => {}, onTurn = (_turn) => {}, onConnectionResult = (_agent, _error) => {}, logDir = () => null, skills = null, isAgentUpdating = () => false }) {
   const harnessFor = async (agent) => (HARNESS_AGENTS.includes(agent) ? harness(agent) : undefined);
   const skillRecord = skills ? skillStore(skills.dataDir) : null;
   /* what went wrong, kept in Studio's home with Studio's own problems (openfilm's problems.mjs), for its report */
@@ -268,6 +268,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     /* the turn it starts for: a start that fails is written in that turn's log, as a prompt that fails is */
     const meta = opts?.meta && typeof opts.meta === 'object' ? opts.meta : null;
     if (!isChatAgent(agent)) return { ok: false, error: `Unknown agent: ${String(agent)}` };
+    if (isAgentUpdating(agent)) return { ok: false, code: 'agent-updating', error: 'This agent is updating. Wait for it to finish, then try again.' };
     if (typeof cwd !== 'string' || !cwd) return { ok: false, error: 'Missing project folder.' };
     lastAgent = agent;
     /* the conversation still open here (the page was reloaded): taken up as it is, no second process */
@@ -344,6 +345,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     const key = opts?.key;
     const entry = sessions.get(key);
     if (!entry) return { ok: false, error: 'This session has ended.' };
+    if (isAgentUpdating(entry.agent)) return { ok: false, code: 'agent-updating', error: 'This agent is updating. Wait for it to finish, then try again.' };
     const meta = opts?.meta && typeof opts.meta === 'object' ? opts.meta : null;
     const file = meta ? openLog(entry.cwd, meta.turnId, (e) => log(`turn log ${meta.turnId}: ${e.message}\n`)) : null;
     const turn = meta ? { meta, log: [], done: null, file } : null;
@@ -560,6 +562,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       }
     },
     closeAll: () => [...sessions.keys()].forEach(close),
+    isAgentBusy: (agent) => [...sessions.values()].some((entry) => entry.agent === agent && entry.running > 0),
     /** an agent disconnected in Settings: its sessions close */
     closeAgent: (agent) => { for (const [key, entry] of [...sessions]) if (entry.agent === agent) close(key); },
     /**

@@ -30,7 +30,8 @@ import { registerSkillsIpc } from './skills-ipc.mjs';
 import { createRoster } from './agent-roster.mjs';
 import { createOpenFilmAgent } from './openfilm-agent.mjs';
 import { createAgentCatalogs } from './agent-catalogs.mjs';
-import { AGENTS, checkAgentProgram, closeEverySession, diagnoseAgent, forgetAgentStatus, listAgents, localAgent, openAgentInstaller, openAgentSignIn, setChosenPaths, signOutAgent } from './agents.mjs';
+import { createAgentUpdates } from './agent-updates.mjs';
+import { AGENTS, checkAgentProgram, closeEverySession, diagnoseAgent, forgetAgentStatus, listAgents, localAgent, openAgentInstaller, openAgentUpdate, openAgentSignIn, setChosenPaths, signOutAgent } from './agents.mjs';
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
 import { installOpenfilmCommand } from './openfilm-command.mjs';
 import { startUpdates } from './updates.mjs';
@@ -123,6 +124,7 @@ let localAgents = null;
 /** @type {ReturnType<typeof createRoster> | null} */
 let roster = null;
 let agentCatalogs = null;
+let agentUpdates = null;
 
 /** the board Studio's panes sit on (its --bg-app), so the window never flashes another color */
 const BACKGROUND = { light: '#e4e4e8', dark: '#141414' };
@@ -748,6 +750,7 @@ async function start() {
     /* a turn done, stopped or waiting, told by the system while the window is not in front */
     onTurn: (turn) => void noticeTurn(turn),
     onConnectionResult: (id, error) => roster?.recordConnectionResult(id, error),
+    isAgentUpdating: (id) => agentUpdates?.state(id).status === 'updating',
     /* the `openfilm` command first (with the app's ffmpeg and browser in it); the app's ffmpeg last, for a computer
        that has none of its own: the person's own ffmpeg and browsers are what the agent's commands use */
     binDir: installOpenfilmCommand(DATA, { ffmpeg: ffmpegHere, env: browsers }),
@@ -801,6 +804,7 @@ async function start() {
     openfilm: openfilmAgent,
     dataDir: DATA,
     catalog: (id) => agentCatalogs.state(id),
+    updateState: (id) => agentUpdates?.state(id),
     localAgents: listAgents,
     localAgent,
     openSignIn: (id) => openAgentSignIn(id, { track: true }),
@@ -814,7 +818,7 @@ async function start() {
     resetAgent: (id) => { forgetAgentStatus(id); forgetAgentUsage(id); localAgents?.refreshSkills(id); },
     seal,
     unseal,
-    onChange: (list) => { agentCatalogs.sync(list); broadcast('desktop:agents', roster?.list() ?? list); },
+    onChange: (list) => { agentCatalogs.sync(list); agentUpdates?.sync(list); broadcast('desktop:agents', roster?.list() ?? list); },
     /* the program the person points at, for an agent not found where it is looked for */
     usePaths: setChosenPaths,
     pickProgram: async (_id, words) => {
@@ -824,6 +828,16 @@ async function start() {
     checkProgram: checkAgentProgram,
     diagnose: (id) => diagnoseAgent(id, { appVersion: app.getVersion() }),
   });
+  agentUpdates = createAgentUpdates({
+    dataDir: DATA, appVersion: app.getVersion(),
+    getAgents: () => roster.list(), readVersion: checkAgentProgram,
+    onChange: () => broadcast('desktop:agents', roster.list()),
+    onUpdated: async (id) => { await roster.recheck(id); agentCatalogs.refresh(id, { fresh: true }); },
+    isBusy: (id) => localAgents?.isAgentBusy(id) ?? false,
+    openCommand: openAgentUpdate, openLink: (url) => shell.openExternal(url),
+    openDesktop: () => updates?.manualCheck?.(menuLanguage),
+  });
+  agentUpdates.start();
   const agentHandle = (channel, fn) => ipcMain.handle(channel, (event, opts) => {
     if (!fromPage(event)) throw new Error('not the window\'s page');
     return fn(opts ?? {});
@@ -840,6 +854,13 @@ async function start() {
   agentHandle('desktop:agents:automatic', ({ id }) => roster.useAutomatic(String(id)));
   agentHandle('desktop:agents:install', ({ id }) => roster.install(String(id)));
   agentHandle('desktop:agents:diagnose', ({ id }) => roster.diagnose(String(id)));
+  agentHandle('desktop:agents:update-check', async ({ id }) => {
+    if (!id || id === 'openfilm' || id === 'byok') void updates?.check();
+    if (id) await agentUpdates.check(String(id), { fresh: true });
+    else await agentUpdates.checkAll({ fresh: true });
+    return roster.list();
+  });
+  agentHandle('desktop:agents:update', ({ id }) => agentUpdates.update(String(id)));
   agentHandle('desktop:agents:setup', async ({ id }) => {
     if (id !== 'claude') return { ok: false, error: 'No desktop setup for this agent.' };
     try { await shell.openExternal('claude://'); return { ok: true }; }
@@ -953,6 +974,6 @@ app.on('before-quit', (event) => {
   quitAfterStudio(event, {
     quitting, markQuitting: () => { quitting = true; }, studio,
     /* and the ones opened only to ask (signed in? its options?), which belong to no chat */
-    closeAgents: () => { agentCatalogs?.close(); localAgents?.closeAll(); closeEverySession(); }, quit: () => app.quit(),
+    closeAgents: () => { agentUpdates?.stop(); agentCatalogs?.close(); localAgents?.closeAll(); closeEverySession(); }, quit: () => app.quit(),
   });
 });

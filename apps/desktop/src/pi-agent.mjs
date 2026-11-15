@@ -16,9 +16,9 @@
  * context, as Pi sends it, and the answer) is written there (chat-store.mjs's `<turn>.model.jsonl`), only what is new
  * since the request before.
  *
- * Pictures are kept within the model services' size limits (pi-config.mjs): a request carries those of the latest
- * KEEP_PICTURE_RESULTS tool results that hold one, and at most IMAGE_BUDGET of them, the oldest left out of the request
- * first. Tool pictures are reduced before Pi saves them. A service refusing a request as too large (HTTP 413, a proxy's page included) is
+ * Pictures stay unchanged until a request reaches its size/count limit, then a batch of the oldest is left out with
+ * room for more (Claude Code's strategy, pi-config.mjs). Pi's custom session entries remember the omissions, including
+ * across restoration and compaction. Tool pictures are reduced before Pi saves them. A service refusing a request as too large (HTTP 413, a proxy's page included) is
  * tried again once with half of those pictures, as Pi tries a busy one; that half stays the conversation's limit. A
  * request with no pictures in it is not tried again: its own words are too large, and the turn says so.
  *
@@ -30,7 +30,7 @@ import { dirname, join, resolve } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import * as acp from '@agentclientprotocol/sdk';
 import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, createAgentSession, formatDimensionNote, resizeImage } from '@earendil-works/pi-coding-agent';
-import { Agent, install, setGlobalDispatcher } from 'undici';
+import { EnvHttpProxyAgent, install, setGlobalDispatcher } from 'undici';
 import { agentSessionsDir, openLog } from './chat-store.mjs';
 import { IMAGE_BUDGET, THINKING, TOO_LARGE, WAIT_MINUTES, contextUsed, effortOption, fitImages, modelOption, modelsJson, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
 
@@ -43,8 +43,11 @@ const WAIT_MS = WAIT_MINUTES * 60_000;
 const PROGRESS_MS = 2 * 60_000;
 const TOOL_IMAGE_SIDE = 768;
 const TOOL_IMAGE_BYTES = 96 * 1024;
-const TURN_TOOL_IMAGE_CHARS = 4 * 1024 * 1024;
-setGlobalDispatcher(new Agent({ headersTimeout: WAIT_MS, bodyTimeout: WAIT_MS }));
+/* environment.mjs passes on the person's proxy; a plain Agent would silently bypass it. */
+setGlobalDispatcher(new EnvHttpProxyAgent({
+  headersTimeout: WAIT_MS, bodyTimeout: WAIT_MS, proxyTunnel: true,
+  connect: { autoSelectFamilyAttemptTimeout: 2000 },
+}));
 install();
 
 const config = JSON.parse(process.env.OPENFILM_PI ?? '{}');
@@ -132,9 +135,20 @@ async function open(client, cwd, resumeId) {
   let sessionId = null;
   /* the pictures a request carries at most (pi-config.mjs IMAGE_BUDGET), and those the last one carried (bytes) */
   let imageBudget = IMAGE_BUDGET;
+  const omittedImages = new Set();
+  const imageContextType = 'openfilm-image-context';
+  for (const entry of sessionManager.getBranch()) {
+    if (entry.type !== 'custom' || entry.customType !== imageContextType) continue;
+    for (const key of Array.isArray(entry.data?.omitted) ? entry.data.omitted : []) if (typeof key === 'string') omittedImages.add(key);
+    if (Number.isInteger(entry.data?.budget) && entry.data.budget >= 0) imageBudget = Math.min(imageBudget, entry.data.budget);
+  }
+  const saveImageContext = (omitted = []) => sessionManager.appendCustomEntry(imageContextType, { omitted, budget: imageBudget });
+  /* A 413 already halves the budget; that recovery need not halve it a second time for headroom. */
+  let imageHeadroom = 0.5;
   let imagesSent = 0;
   let imagesRemoved = 0;
-  let toolImageChars = 0;
+  let imagesPruned = 0;
+  let imagePruneReason = null;
   let toldAboutImages = false;
   let awaitingAnswer = false;
   let lastVisible = Date.now();
@@ -152,13 +166,23 @@ async function open(client, cwd, resumeId) {
     appendSystemPromptOverride: () => [],
     agentsFilesOverride: ({ agentsFiles }) => ({ agentsFiles: agentsFiles.filter((f) => dirname(resolve(f.path)) === resolve(cwd)) }),
     extensionFactories: [
-      /* each request's pictures within the budget, the oldest left out first: the request only, never the session */
+      /* Check the complete context, including its system/tools, before logging it. Keep history stable between batches. */
       { name: 'openfilm-images', hidden: true, factory: (pi) => {
-        pi.on('context', (event) => {
-          const fitted = fitImages(event.messages, imageBudget);
+        pi.on('context_with_system', (event, ctx) => {
+          const model = ctx.model;
+          const fitted = fitImages(event.messages, imageBudget, {
+            omitted: omittedImages, headroom: imageHeadroom,
+            maxRequestBytes: Math.min(IMAGE_BUDGET, model?.inputLimits?.maxRequestBytes ?? IMAGE_BUDGET),
+            // Claude's API accepts 600 on long-context models, 100 on 200K models. Unknown gateways use the lower guard.
+            maxImages: model?.inputLimits?.images?.maxPerRequest ?? (/claude/i.test(model?.id ?? '') && model.contextWindow > 200_000 ? 600 : 100),
+          });
+          imageHeadroom = 0.5;
           imagesSent = fitted.kept;
           imagesRemoved = fitted.removed;
-          if (imagesRemoved && !toldAboutImages) {
+          imagesPruned = fitted.pruned.length;
+          imagePruneReason = fitted.reason;
+          if (imagesPruned) saveImageContext(fitted.pruned);
+          if (imagesPruned && !toldAboutImages) {
             toldAboutImages = true;
             send({ sessionUpdate: 'notice', severity: 'info', title: 'Older pictures were left out of the model’s context.' });
           }
@@ -169,15 +193,13 @@ async function open(client, cwd, resumeId) {
           const content = [];
           for (const block of event.content) {
             if (block.type !== 'image') { content.push(block); continue; }
-            const available = Math.min(TOOL_IMAGE_BYTES, Math.floor((TURN_TOOL_IMAGE_CHARS - toolImageChars) / 4) * 3);
-            const preview = available >= 1024 ? await resizeImage(Buffer.from(block.data, 'base64'), block.mimeType, {
-              maxWidth: TOOL_IMAGE_SIDE, maxHeight: TOOL_IMAGE_SIDE, maxBytes: available,
-            }).catch(() => null) : null;
-            if (!preview || toolImageChars + preview.data.length > TURN_TOOL_IMAGE_CHARS) {
+            const preview = await resizeImage(Buffer.from(block.data, 'base64'), block.mimeType, {
+              maxWidth: TOOL_IMAGE_SIDE, maxHeight: TOOL_IMAGE_SIDE, maxBytes: TOOL_IMAGE_BYTES,
+            }).catch(() => null);
+            if (!preview) {
               content.push({ type: 'text', text: '[The picture was omitted to keep this turn small. The original is still on disk.]' });
               continue;
             }
-            toolImageChars += preview.data.length;
             content.push({ type: 'image', mimeType: preview.mimeType, data: preview.data });
             const dimensions = formatDimensionNote(preview);
             if (dimensions) content.push({ type: 'text', text: dimensions });
@@ -186,7 +208,8 @@ async function open(client, cwd, resumeId) {
         });
       } },
       { name: 'openfilm-log', hidden: true, factory: (pi) => {
-        pi.on('context_with_system', (event) => { pending = { startedAt: Date.now(), messages: event.messages, imageContext: { keptBytes: imagesSent, removed: imagesRemoved } }; });
+        pi.on('context_with_system', (event) => { pending = { startedAt: Date.now(), messages: event.messages,
+          imageContext: { keptBytes: imagesSent, removed: imagesRemoved, pruned: imagesPruned, reason: imagePruneReason } }; });
       } },
       { name: 'openfilm-ask', hidden: true, factory: (pi) => pi.registerTool(askTool(client, () => sessionId, (waiting) => { awaitingAnswer = waiting; })) },
     ],
@@ -213,7 +236,6 @@ async function open(client, cwd, resumeId) {
   sessionId = session.sessionId;
   entry.startProgress = () => {
     lastVisible = Date.now();
-    toolImageChars = 0;
     toldAboutImages = false;
     return setInterval(() => {
       if (!awaitingAnswer && Date.now() - lastVisible >= PROGRESS_MS) {
@@ -236,7 +258,11 @@ async function open(client, cwd, resumeId) {
         /* the turn's last answer: Pi drops one too long for the model from the conversation as it tries to recover */
         entry.answer = message;
         /* refused as too large: the request tried again (see below) carries half of its pictures */
-        if (message.stopReason === 'error' && TOO_LARGE.test(String(message.errorMessage ?? '')) && imagesSent > 0) imageBudget = Math.floor(imagesSent / 2);
+        if (message.stopReason === 'error' && TOO_LARGE.test(String(message.errorMessage ?? '')) && imagesSent > 0) {
+          imageBudget = Math.floor(imagesSent / 2);
+          imageHeadroom = 1;
+          saveImageContext();
+        }
         if (pending && entry.log) {
           const toolsNow = (session.agent?.state?.tools ?? []).map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
           entry.log.write({ ...pending, toolsNow, answer: { message, systemPrompt: session.systemPrompt } });
