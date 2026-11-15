@@ -72,7 +72,16 @@ test('links to media kept elsewhere ride on their files and folders', () => {
     links: { 'assets/nas': { to: '/Volumes/NAS/shoot' }, 'assets/off.png': { to: '/Volumes/NAS/off.png', missing: true } },
   });
   assert.deepEqual(listing.linkedDirs, { nas: { to: '/Volumes/NAS/shoot' } });
-  assert.deepEqual(listing.files.map((f) => f.link ?? null), [null, { to: '/Volumes/NAS/off.png', missing: true }]);
+  assert.deepEqual(listing.files.map((f) => f.link ?? null), [{ to: '/Volumes/NAS/shoot/take.mp4' }, { to: '/Volumes/NAS/off.png', missing: true }]);
+});
+
+test('last-seen descendants inherit the disconnected directory status and original location', () => {
+  const listing = mediaListingOf({
+    files: [{ path: 'saved/Camera/Day 1/frame.png', kind: 'image', size: 90, mtime: 1 }],
+    folders: ['saved/Camera', 'saved/Camera/Day 1'], pages: [],
+    links: { 'saved/Camera': { to: '/Volumes/Footage/Camera', missing: true } },
+  }, undefined, undefined, 'saved');
+  assert.deepEqual(listing.files[0]?.link, { to: '/Volumes/Footage/Camera/Day 1/frame.png', missing: true });
 });
 
 test('a clip with a fragment in its src still hits its file', () => {

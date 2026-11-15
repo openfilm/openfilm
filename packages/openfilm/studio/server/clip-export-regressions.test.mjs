@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { filmHtml } from '../../src/film-doc.mjs';
 import { createExports, framing } from './exports.mjs';
 import { JIANYING_DRAFT_PATH } from './jianying.mjs';
+import { draftRasterFilter } from '../../scripts/draft-bench-frames.mjs';
 
 const haveFfmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 const ffmpeg = { skip: !haveFfmpeg, timeout: 180_000 };
@@ -155,7 +156,7 @@ Second
   assert.equal(untouched.path, `${JIANYING_DRAFT_PATH}/media/source.mp4`);
   const meta = JSON.parse(readFileSync(join(folder, 'draft_meta_info.json'), 'utf8'));
   assert.ok(meta.draft_materials[0].value.some((m) => m.file_Path === './media/mask.mov'));
-  const rgba = execFileSync('ffmpeg', ['-v', 'error', '-i', rendered.path.replace(JIANYING_DRAFT_PATH, folder), '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
+  const rgba = execFileSync('ffmpeg', ['-v', 'error', '-i', rendered.path.replace(JIANYING_DRAFT_PATH, folder), '-vf', draftRasterFilter(info, mask), '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
   assert.equal(rgba[3], 0, 'the corner outside the mask is transparent even on the bottom track');
   assert.equal(rgba[(45 * 160 + 80) * 4 + 3], 255, 'the middle of the mask remains visible');
   assert.equal(plain.speed, 2);
@@ -208,7 +209,7 @@ Caption
     const material = info.materials.videos.find((m) => m.id === layer.segments[0].material_id);
     assert.match(material.material_name, /captions/i);
     const file = material.path.replace(JIANYING_DRAFT_PATH, folder);
-    const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vf', 'fps=30', '-ss', '0.3', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
+    const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vf', `fps=30,${draftRasterFilter(info, layer.segments[0])}`, '-ss', '0.3', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-']);
     const at = (x, y) => [...raw.subarray((y * 160 + x) * 4, (y * 160 + x) * 4 + 4)];
     const visible = [];
     for (let y = 0; y < 90; y++) for (let x = 0; x < 160; x++) if (at(x, y)[3]) visible.push([x, y]);

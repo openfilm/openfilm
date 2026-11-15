@@ -774,7 +774,7 @@ export async function relink(root, rel, to) {
     return rel;
   }
   const part = `${abs}.${process.pid}.linking`;
-  await symlink(from, part, info.isDirectory() ? 'dir' : 'file');
+  await symlink(from, part, info.isDirectory() ? (process.platform === 'win32' ? 'junction' : 'dir') : 'file');
   await rename(part, abs);
   return rel;
 }

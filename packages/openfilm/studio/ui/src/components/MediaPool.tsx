@@ -40,6 +40,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Star,
   Trash2,
   Upload,
   AudioLines,
@@ -77,6 +78,7 @@ import { retryImage } from '@/lib/retry-image';
 import { boxBetween, boxHits, boxPick, moveTargets, pickItem, type Box } from '@/lib/media-selection';
 import { barLayout, type BarWords } from '@/lib/media-bar';
 import { byName, folderFaces } from '@/lib/media-folders';
+import { isMediaFileDrop, mediaDropFiles } from '@/lib/media-drop';
 
 type Filter = 'all' | 'video' | 'image' | 'audio' | 'page' | 'other';
 type SortKey = 'name' | 'time' | 'duration' | 'type';
@@ -85,7 +87,7 @@ const SORTS: readonly SortKey[] = ['name', 'time', 'duration', 'type'];
 /** Tiles dragged inside the pane, to be moved into a folder: their paths, a line each (a name has no line break). */
 const FOLDER_DRAG = 'application/x-openfilm-media';
 /** Files dragged in from the computer, not a tile of this pane (the browser adds a dragged picture as a file). */
-const fromComputer = (dt: DataTransfer) => dt.types.includes('Files') && !dt.types.includes(FOLDER_DRAG);
+const fromComputer = isMediaFileDrop;
 /** The open folder per project, kept across remounts (the layout re-mounts the pane). */
 const OPEN_FOLDER = new Map<string, string>();
 
@@ -213,6 +215,21 @@ export interface MediaPoolProps {
    * picked; dragging it there is the usual way).
    */
   onAdd?: (file: WorkspaceResource) => void;
+  /** The full library uses this same browser, with its own navigation and organization actions. */
+  browser?: {
+    flat?: boolean;
+    recent?: boolean;
+    tileMin?: number;
+    empty?: { title: string; body?: string; canImport?: boolean };
+    onOpen?: (file: WorkspaceResource) => void;
+    folder?: { path: string; seq: number };
+    onFolder?: (path: string) => void;
+    onSelection?: (files: WorkspaceResource[]) => void;
+    menu?: (files: WorkspaceResource[]) => ContextMenuEntry[];
+    protectedPath?: (path: string) => boolean;
+    badge?: (file: WorkspaceResource) => string;
+    starred?: (file: WorkspaceResource) => boolean;
+  };
 }
 
 export function MediaPool({
@@ -251,6 +268,7 @@ export function MediaPool({
   shown = true,
   litPath,
   onAdd,
+  browser,
 }: MediaPoolProps) {
   const t = useT();
   const [view, setView] = React.useState<ViewState>(() => loadView(projectId));
@@ -262,6 +280,7 @@ export function MediaPool({
   const [picked, setPicked] = React.useState<string[]>(() => (selectedPath ? [selectedPath] : []));
   /** The one clicked last: where a ⇧-click's run starts. */
   const anchor = React.useRef<string | null>(selectedPath ?? null);
+  const keyboardPick = React.useRef<string | null>(null);
   const [renaming, setRenaming] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [menu, setMenu] = React.useState<{ x: number; y: number; flipTo?: number; items: ContextMenuEntry[]; dense?: boolean } | null>(null);
@@ -272,6 +291,10 @@ export function MediaPool({
   const [osDrag, setOsDrag] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const inSaved = scope === 'saved';
+  React.useEffect(() => {
+    if (browser?.folder) { setAt(browser.folder.path); setQuery(''); setPicked([]); }
+  }, [browser?.folder, setAt]);
+  React.useEffect(() => { browser?.onFolder?.(at); }, [at, browser?.onFolder]);
   React.useEffect(() => { setQuery(''); }, [scope]);
   /* the top folder: All of the project's media, or Saved */
   const topName = inSaved ? t('saved.title') : t('media.filter_all');
@@ -341,10 +364,10 @@ export function MediaPool({
     };
     /* searching or showing one kind looks through every folder at once */
     const said = (f: WorkspaceResource, of?: (file: WorkspaceResource) => string | undefined) => Boolean(q && of && mediaNameMatches(of(f) ?? '', q));
-    if (q || view.filter !== 'all') {
+    if (q || view.filter !== 'all' || browser?.flat) {
       const found = stacked(allFiles
         .filter((f) => (view.filter === 'all' || filterOf(f) === view.filter) && (mediaNameMatches(f.name, q) || said(f, wordsOf)))
-        .sort(order));
+        .sort(browser?.recent ? (a, b) => (b.addedMs ?? b.mtimeMs) - (a.addedMs ?? a.mtimeMs) : order));
       return { items: found.files.map((file) => ({ type: 'file', file })), counts: found.counts };
     }
     /* the project's pages are at the top; a page put in a folder is in its folder */
@@ -352,12 +375,23 @@ export function MediaPool({
     /* the folders here, what each holds and its cover (lib/media-folders) */
     const sub = folderFaces(allFiles, folders, at, (path) => (inMedia(path) ? assetRel(path) : null)).map((face) => ({ type: 'folder' as const, ...face }));
     return { items: [...sub, ...here.files.map((file) => ({ type: 'file' as const, file }))], counts: here.counts };
-  }, [allFiles, folders, at, query, view, assetRel, inMedia, wordsOf, stacked]);
+  }, [allFiles, folders, at, query, view, assetRel, inMedia, wordsOf, stacked, browser?.flat, browser?.recent]);
   const items = listed?.items ?? null;
   const stackCounts = listed?.counts;
 
   /* a file asked to be shown: its folder opened (pages are at the top), a search or a filter that hides it let go */
   const gridRef = React.useRef<HTMLDivElement>(null);
+  const moreRef = React.useRef<HTMLDivElement>(null);
+  const [renderCount, setRenderCount] = React.useState(160);
+  React.useEffect(() => { setRenderCount(160); }, [query, view.filter, view.sort, at, browser?.folder]);
+  React.useEffect(() => {
+    if (!moreRef.current || !gridRef.current || renderCount >= (items?.length ?? 0)) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) setRenderCount(count => count + 160);
+    }, { root: gridRef.current, rootMargin: '240px' });
+    observer.observe(moreRef.current);
+    return () => observer.disconnect();
+  }, [renderCount, items?.length]);
   const revealFile = reveal && !reveal.done ? allFiles?.find((f) => f.path === reveal.path) : undefined;
   const revealFilter = revealFile ? filterOf(revealFile) : null;
   const revealFolder = revealFile && inMedia(revealFile.path) ? relDir(assetRel(revealFile.path)) : '';
@@ -391,6 +425,7 @@ export function MediaPool({
   }, [at, media, setAt]);
 
   const folderPath = (rel: string) => (rel ? `${root}/${rel}` : root);
+  const readOnly = Boolean(browser?.protectedPath?.(folderPath(at)));
   const keyOf = React.useCallback((item: Item) => (item.type === 'folder' ? `${root}/${item.rel}` : item.file.path), [root]);
   /* the items as shown, by key: a ⇧-click's run goes along them */
   const order = React.useMemo(() => (items ?? []).map(keyOf), [items, keyOf]);
@@ -402,6 +437,7 @@ export function MediaPool({
 
   const importFiles = async (list: File[], intoRel = at) => {
     if (!list.length) return;
+    if (browser?.protectedPath?.(folderPath(intoRel))) { setNotice(t('assetLibrary.externalReadOnly')); return; }
     setNotice(null);
     /* a card each, at once, where it goes: a picture shows itself while it is sent */
     const batch: Upload[] = list.map((file) => {
@@ -426,6 +462,7 @@ export function MediaPool({
    * while it comes. Where there is no dialog, an import is the browser's pick.
    */
   const bringFrom = async (mode: 'auto' | 'link', folder: boolean, intoRel = at) => {
+    if (browser?.protectedPath?.(folderPath(intoRel))) { setNotice(t('assetLibrary.externalReadOnly')); return; }
     if (!onPick || !onBring) { inputRef.current?.click(); return; }
     setNotice(null);
     const paths = await onPick(t(mode === 'auto' ? 'media.pickImport' : folder ? 'media.pickLinkFolder' : 'media.pickLink'), folder);
@@ -492,7 +529,9 @@ export function MediaPool({
   const [moveAsk, setMoveAsk] = React.useState<{ paths: string[]; intoRel: string; unseen: { file: string; unseen: string[] }[] } | null>(null);
   /** Move files and folders into a folder (`intoRel` under assets/, '' its top), one after another. */
   const moveAll = async (paths: readonly string[], intoRel: string, asked = false) => {
+    if (paths.some(path => browser?.protectedPath?.(path))) { setNotice(t('assetLibrary.externalReadOnly')); return; }
     const into = folderPath(intoRel);
+    if (browser?.protectedPath?.(into)) { setNotice(t('assetLibrary.externalReadOnly')); return; }
     const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
     /* what is there already stays, and a folder never goes into itself */
     const going = paths.filter((path) => hereOf(path) !== intoRel && into !== path && !into.startsWith(`${path}/`));
@@ -539,6 +578,7 @@ export function MediaPool({
   };
   /** Ask to delete these (picked) items. */
   const askDelete = (keys: readonly string[]) => {
+    if (keys.some(path => browser?.protectedPath?.(path))) { setNotice(t('assetLibrary.externalReadOnly')); return; }
     const targets = keys.flatMap((key) => { const item = itemByKey.get(key); return item ? [{ path: key, folder: item.type === 'folder' }] : []; });
     const first = targets[0] ? itemByKey.get(targets[0].path) : undefined;
     if (first) setConfirm({ targets, name: first.type === 'folder' ? first.name : first.file.name });
@@ -546,6 +586,7 @@ export function MediaPool({
 
   const rename = async (path: string, name: string, folder: boolean) => {
     setRenaming(null);
+    if (browser?.protectedPath?.(path)) { setNotice(t('assetLibrary.externalReadOnly')); return; }
     const to = renamedPath(path, name, folder);
     if (!to) return;
     /* a file's ending says what it is: the server refuses one that would change it, and this says why */
@@ -616,7 +657,7 @@ export function MediaPool({
     const moving = keys.filter((key) => itemByKey.get(key)?.type === 'folder').map(assetRel);
     return {
       id: 'move-to', label: t('media.moveTo'), icon: <FolderInput size={14} />,
-      submenu: moveTargets(folders, moving).map((rel) => {
+      submenu: moveTargets(folders, moving).filter(rel => !browser?.protectedPath?.(folderPath(rel))).map((rel) => {
         const here = heres.size === 1 && heres.has(rel);
         return {
           id: `move:${rel}`, label: rel ? rel.split('/').join(' / ') : topName, checked: here, disabled: here,
@@ -627,6 +668,7 @@ export function MediaPool({
     };
   };
   const fileMenu = (file: WorkspaceResource): ContextMenuEntry[] => [
+    ...(browser?.menu?.([file]) ?? []),
     ...(fileRef && onRefer ? [
       { id: 'refer', label: t('host.refer'), icon: <MessageSquarePlus size={14} />, onSelect: () => onRefer(fileRef(file)) },
       { id: 'refer-sep', separator: true } as const,
@@ -647,20 +689,25 @@ export function MediaPool({
     }] : []),
     ...(file.kind === 'image' && onSetCover ? [{ id: 'cover', label: t('projects.setAsCover'), icon: <ImagePlus size={14} />, onSelect: () => onSetCover(file.path) }] : []),
     /* a page of the project is named in other pages' code (not renamed here); one of Saved is its own folder */
-    ...(file.kind === 'mg' && !file.bundle ? [] : [{ id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(file.path) }]),
-    moveEntry([file.path]),
-    { id: 'delete', label: t('assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirm({ targets: [{ path: file.path, folder: false }], name: file.name }) },
+    ...(browser?.protectedPath?.(file.path) ? [] : [
+      ...(file.kind === 'mg' && !file.bundle ? [] : [{ id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(file.path) }]),
+      moveEntry([file.path]),
+      { id: 'delete', label: t('assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirm({ targets: [{ path: file.path, folder: false }], name: file.name }) },
+    ]),
   ];
-  const folderMenu = (rel: string, name: string): ContextMenuEntry[] => [
+  const folderMenu = (rel: string): ContextMenuEntry[] => [
     ...commonEntries(`${root}/${rel}`),
     { id: 'sep', separator: true },
     ...linkEntries(`${root}/${rel}`, true),
-    { id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(`${root}/${rel}`) },
-    moveEntry([`${root}/${rel}`]),
-    { id: 'delete', label: t('assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirm({ targets: [{ path: `${root}/${rel}`, folder: true }], name }) },
+    ...(browser?.protectedPath?.(`${root}/${rel}`) ? [] : [
+      { id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(`${root}/${rel}`) },
+      moveEntry([`${root}/${rel}`]),
+      { id: 'delete', label: t('assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => askDelete([`${root}/${rel}`]) },
+    ]),
   ];
   /** Several picked: what can be done to all of them at once. */
   const manyMenu = (keys: readonly string[]): ContextMenuEntry[] => [
+    ...(browser?.menu?.(keys.flatMap(key => { const item = itemByKey.get(key); return item?.type === 'file' ? [item.file] : []; })) ?? []),
     ...(onCollect && keys.some((key) => linkOf(key) && !linkOf(key)!.missing) ? [{
       id: 'collect', label: t('media.collect'), note: t('media.collectNote'), icon: <HardDriveDownload size={14} />,
       onSelect: () => { void collectAll(keys.filter((key) => linkOf(key) && !linkOf(key)!.missing)); },
@@ -669,9 +716,11 @@ export function MediaPool({
       id: 'save', label: t('saved.add'), icon: <BookmarkPlus size={14} />,
       onSelect: () => onSave(keys.flatMap((key) => { const item = itemByKey.get(key); return item?.type === 'file' ? [item.file] : []; })),
     }] : []),
-    moveEntry(keys),
-    { id: 'sep', separator: true },
-    { id: 'delete', label: t('media.deleteMany').replace('{n}', String(keys.length)), icon: <Trash2 size={14} />, danger: true, onSelect: () => askDelete(keys) },
+    ...(keys.some(key => browser?.protectedPath?.(key)) ? [] : [
+      moveEntry(keys),
+      { id: 'sep', separator: true } as const,
+      { id: 'delete', label: t('media.deleteMany').replace('{n}', String(keys.length)), icon: <Trash2 size={14} />, danger: true, onSelect: () => askDelete(keys) },
+    ]),
   ];
   /* what Upload offers: a copy in the project, or a link to where the media is kept (a NAS, another disk); where
      nothing is linked (Saved), Upload picks the files to copy in at once */
@@ -680,8 +729,8 @@ export function MediaPool({
     { id: 'link', label: t('media.linkFiles'), note: t('media.linkFilesNote'), icon: <Link2 size={14} />, onSelect: () => { void bringFrom('link', false); } },
     { id: 'link-folder', label: t('media.linkFolder'), icon: <FolderSymlink size={14} />, onSelect: () => { void bringFrom('link', true); } },
   ];
-  const blankMenu: ContextMenuEntry[] = [
-    { id: 'new-folder', label: t('assets.newFolder'), icon: <FolderPlus size={14} />, onSelect: () => setCreating(true) },
+  const blankMenu: ContextMenuEntry[] = readOnly ? commonEntries(folderPath(at)) : [
+    ...(!browser?.flat ? [{ id: 'new-folder', label: t('assets.newFolder'), icon: <FolderPlus size={14} />, onSelect: () => setCreating(true) }] : []),
     { id: 'import', label: t('media.import'), icon: <Plus size={14} />, onSelect: () => (onPick && onBring ? void bringFrom('auto', false) : inputRef.current?.click()) },
     ...(onPick && onBring && links ? [
       { id: 'link', label: t('media.linkFiles'), icon: <Link2 size={14} />, onSelect: () => { void bringFrom('link', false); } },
@@ -698,6 +747,7 @@ export function MediaPool({
   /* a click picks (lib/media-selection pickItem); the viewer shows the file clicked while it is picked, else the film */
   const press = (item: Item, e?: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }) => {
     const key = keyOf(item);
+    keyboardPick.current = key;
     const mods = { toggle: Boolean(e && (e.metaKey || e.ctrlKey)), range: Boolean(e?.shiftKey) };
     const next = pickItem(chosen, key, order, anchor.current, mods);
     if (!mods.range) anchor.current = key;
@@ -711,7 +761,7 @@ export function MediaPool({
     const key = keyOf(item);
     if (chosen.length > 1 && chosen.includes(key)) { openMenuAt(e, manyMenu(chosen)); return; }
     press(item);
-    openMenuAt(e, item.type === 'folder' ? folderMenu(item.rel, item.name) : fileMenu(item.file));
+    openMenuAt(e, item.type === 'folder' ? folderMenu(item.rel) : fileMenu(item.file));
   };
   /** What a drag of this item moves: every one picked when it is one of them. */
   const dragKeys = (key: string) => (chosen.length > 1 && chosen.includes(key) ? chosen : [key]);
@@ -800,7 +850,7 @@ export function MediaPool({
   const [fontsTick, setFontsTick] = React.useState(0);
   React.useEffect(() => { void document.fonts?.ready.then(() => setFontsTick((n) => n + 1)); }, []);
   const hint = t('media.searchShort');
-  const uploadWord = t('media.upload');
+  const uploadWord = t(browser ? 'media.import' : 'media.upload');
   const words = React.useMemo((): BarWords | null => {
     const ctx = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
     if (!rootEl || !ctx) return null;
@@ -818,7 +868,11 @@ export function MediaPool({
   const searching = bar.cramped && (searchOpen || Boolean(query));
 
   const crumbs = at ? at.split('/') : [];
-  const flat = Boolean(query.trim()) || view.filter !== 'all';
+  const flat = Boolean(query.trim()) || view.filter !== 'all' || Boolean(browser?.flat);
+
+  const selectedFiles = chosen.flatMap(key => { const item = itemByKey.get(key); return item?.type === 'file' ? [item.file] : []; });
+  const selectionKey = selectedFiles.map(file => file.path).join('\n');
+  React.useEffect(() => { browser?.onSelection?.(selectedFiles); }, [selectionKey, browser?.onSelection]);
   const rows = view.layout === 'list';
   /* results come from every folder: where a name shows more than once, each says which folder it is in */
   const repeated = React.useMemo(() => {
@@ -850,9 +904,10 @@ export function MediaPool({
         void moveAll(paths.split('\n').filter(Boolean), intoRel);
         return;
       }
-      if (!fromComputer(e.dataTransfer) || !e.dataTransfer.files.length) return;
+      if (!fromComputer(e.dataTransfer)) return;
+      const files = mediaDropFiles(e.dataTransfer);
       e.preventDefault(); e.stopPropagation(); setDropTarget(null); setOsDrag(false);
-      void importFiles([...e.dataTransfer.files], intoRel);
+      void importFiles(files, intoRel);
     },
   });
 
@@ -867,6 +922,9 @@ export function MediaPool({
       ref={setRootEl}
       /* a drag let go back in the pane ends at once (lib/resource-drag) */
       data-drag-home=""
+      data-media-dropzone=""
+      data-library-browser={browser ? '' : undefined}
+      data-layout={view.layout}
       className="relative flex h-full min-h-0 flex-col"
       /* the pane's keys, while they are its own (the timeline's Delete is the timeline's): Delete (or Backspace) asks to
          delete what is picked, as an editor's project panel does; Enter puts the one file picked on the timeline, as
@@ -881,9 +939,40 @@ export function MediaPool({
           setPicked(order);
           return;
         }
+        if (browser && !e.metaKey && !e.ctrlKey && !e.altKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key) && order.length) {
+          e.preventDefault(); e.stopPropagation();
+          const tiles = [...(gridRef.current?.querySelectorAll<HTMLElement>('[data-media-key]') ?? [])];
+          const firstTop = tiles[0]?.offsetTop;
+          const columns = rows ? 1 : Math.max(1, tiles.filter(tile => tile.offsetTop === firstTop).length);
+          const current = chosen.length ? order.indexOf(keyboardPick.current ?? chosen.at(-1) ?? '') : -1;
+          const step = e.key === 'ArrowUp' ? -columns : e.key === 'ArrowDown' ? columns : e.key === 'ArrowLeft' ? -1 : 1;
+          const nextIndex = e.key === 'Home' ? 0 : e.key === 'End' ? order.length - 1 : current < 0 ? 0 : Math.max(0, Math.min(order.length - 1, current + step));
+          const key = order[nextIndex]!;
+          keyboardPick.current = key;
+          const next = pickItem(chosen, key, order, anchor.current, { toggle: false, range: e.shiftKey });
+          if (!e.shiftKey) anchor.current = key;
+          setPicked(next);
+          const item = itemByKey.get(key);
+          showFile(item?.type === 'file' ? item.file : null);
+          if (nextIndex >= renderCount) setRenderCount(nextIndex + 160);
+          requestAnimationFrame(() => gridRef.current?.querySelector<HTMLElement>(`[data-media-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest' }));
+          return;
+        }
+        if (browser && e.key === 'ArrowUp' && (e.metaKey || e.altKey) && at && !flat) {
+          e.preventDefault(); e.stopPropagation(); setPicked([]); setAt(at.split('/').slice(0, -1).join('/')); return;
+        }
         if (!chosen.length) return;
-        if (e.key === 'Escape' && plain) { setPicked([]); return; }
+        if (e.key === 'Escape' && plain) { e.preventDefault(); e.stopPropagation(); setPicked([]); showFile(null); return; }
         const only = chosen.length === 1 ? itemByKey.get(chosen[0]!) : undefined;
+        if (browser && e.key === 'Enter' && plain && only?.type === 'folder') {
+          e.preventDefault(); e.stopPropagation(); setPicked([]); setAt(only.rel); return;
+        }
+        if ((e.key === 'Enter' || e.key === ' ') && browser?.onOpen && plain && only?.type === 'file') {
+          e.preventDefault();
+          e.stopPropagation();
+          browser.onOpen(only.file);
+          return;
+        }
         if (e.key === 'Enter' && onAdd && plain && only?.type === 'file' && canAdd(only.file)) {
           e.preventDefault();
           e.stopPropagation();
@@ -893,22 +982,24 @@ export function MediaPool({
         if (e.key !== 'Delete' && e.key !== 'Backspace') return;
         e.preventDefault();
         e.stopPropagation();
+        if (chosen.some(path => browser?.protectedPath?.(path))) { setNotice(t('assetLibrary.externalReadOnly')); return; }
         askDelete(chosen);
       }}
       /* files from the computer: a drag of this pane's own tiles is not one, whatever the browser adds to it (a picture
          dragged carries itself as a file) */
-      onDragEnter={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); setOsDrag(true); } }}
-      onDragOver={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+      onDragEnter={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); e.stopPropagation(); setOsDrag(true); } }}
+      onDragOver={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; setOsDrag(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) { setOsDrag(false); setDropTarget(null); } }}
       onDrop={(e) => {
-        if (!fromComputer(e.dataTransfer) || !e.dataTransfer.files.length) return;
-        e.preventDefault(); setOsDrag(false); setDropTarget(null);
-        void importFiles([...e.dataTransfer.files]);
+        if (!fromComputer(e.dataTransfer)) return;
+        const files = mediaDropFiles(e.dataTransfer);
+        e.preventDefault(); e.stopPropagation(); setOsDrag(false); setDropTarget(null);
+        void importFiles(files);
       }}
     >
       {/* the bar at the pane's width (lib/media-bar): the search field fills the room left; narrowing, Upload is its
           icon first, then the field shortens, then the search is a button that opens over the bar */}
-      <div className={`relative flex shrink-0 items-center pb-1.5 pt-2.5 ${tight ? 'gap-0.5 px-2' : 'gap-1 px-2.5'}`}>
+      <div data-browser-toolbar="" className={`relative flex shrink-0 items-center pb-1.5 pt-2.5 ${tight ? 'gap-0.5 px-2' : 'gap-1 px-2.5'}`}>
         {/* one field throughout: opened over the bar it is restyled, not made again, so it keeps the focus; there, its
             see-through fill is laid on the pane's own, so the buttons under it do not show */}
         {bar.field || searching ? (
@@ -935,10 +1026,10 @@ export function MediaPool({
           </Tooltip>
         )}
         {/* bringing media in is what this pane is for: the one labeled button, right after the search */}
-        <Tooltip label={t('media.import')} side="bottom">
-          <button type="button" aria-label={t('media.import')} aria-haspopup={onPick && onBring ? 'menu' : undefined}
+        <Tooltip label={t(readOnly ? 'assetLibrary.externalReadOnly' : 'media.import')} side="bottom">
+          <button type="button" aria-label={t('media.import')} disabled={readOnly} aria-haspopup={onPick && onBring ? 'menu' : undefined}
             onClick={(e) => (onPick && onBring ? (links ? barMenu(e, importMenu) : void bringFrom('auto', false)) : inputRef.current?.click())}
-            className={`flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[var(--bg-pressed)] text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-strong)] ${bar.uploadWord ? 'px-2.5' : 'w-7'}`}>
+            className={`flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md disabled:opacity-40 bg-[var(--bg-pressed)] text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--border-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-strong)] ${bar.uploadWord ? 'px-2.5' : 'w-7'}`}>
             <Upload size={13} strokeWidth={2.2} />
             {bar.uploadWord ? uploadWord : null}
           </button>
@@ -949,23 +1040,26 @@ export function MediaPool({
             <Bookmark size={14} {...(inSaved ? { fill: 'currentColor' } : {})} />
           </BarButton>
         ) : null}
-        <BarButton label={t(rows ? 'media.viewGrid' : 'media.viewList')} onClick={() => setView((v) => ({ ...v, layout: rows ? 'grid' : 'list' }))}>
+        {browser ? <span data-browser-views="">
+          <BarButton label={t('media.viewGrid')} on={!rows} onClick={() => setView(v => ({ ...v, layout: 'grid' }))}><LayoutGrid size={14} /></BarButton>
+          <BarButton label={t('media.viewList')} on={rows} onClick={() => setView(v => ({ ...v, layout: 'list' }))}><List size={14} /></BarButton>
+        </span> : <BarButton label={t(rows ? 'media.viewGrid' : 'media.viewList')} onClick={() => setView((v) => ({ ...v, layout: rows ? 'grid' : 'list' }))}>
           {rows ? <LayoutGrid size={14} /> : <List size={14} />}
-        </BarButton>
+        </BarButton>}
         <BarButton label={t('media.filter')} on={view.filter !== 'all'} onClick={(e) => barMenu(e, FILTERS.map((f) => ({
           id: f, label: `${t(`media.filter_${f}`)}  ${counts[f]}`, checked: view.filter === f, onSelect: () => setView((v) => ({ ...v, filter: f })),
         })))}><ListFilter size={14} /></BarButton>
         <BarButton label={t('media.sort')} onClick={(e) => barMenu(e, SORTS.map((key) => ({
           id: key, label: t(`media.sort_${key}`), checked: view.sort === key, onSelect: () => setView((v) => ({ ...v, sort: key })),
         })))}><ArrowUpDown size={14} /></BarButton>
-        <BarButton label={t('assets.newFolder')} onClick={() => { setQuery(''); setView((v) => ({ ...v, filter: 'all' })); setCreating(true); }}><FolderPlus size={14} /></BarButton>
+        {!browser?.flat && !readOnly ? <BarButton label={t('assets.newFolder')} onClick={() => { setQuery(''); setView((v) => ({ ...v, filter: 'all' })); setCreating(true); }}><FolderPlus size={14} /></BarButton> : null}
         {/* any kind of file: what Studio cannot play is still the project's material */}
         <input ref={inputRef} type="file" multiple className="hidden"
           onChange={(e) => { const list = [...(e.target.files ?? [])]; e.target.value = ''; void importFiles(list); }} />
       </div>
 
       {/* where you are: All, then the folders you went into (drop a file on one to move it there) */}
-      <div className="flex h-7 shrink-0 items-center gap-0.5 overflow-hidden px-2.5 text-[12.5px]">
+      {(!browser?.flat || query.trim() || view.filter !== 'all') ? <div className="flex h-7 shrink-0 items-center gap-0.5 overflow-hidden px-2.5 text-[12.5px]">
         {flat ? (
           <span className="truncate text-[var(--text-muted)]">
             {view.filter !== 'all' ? t(`media.filter_${view.filter}`) : t('media.results')}
@@ -991,7 +1085,7 @@ export function MediaPool({
             })}
           </>
         )}
-      </div>
+      </div> : null}
 
       {missing > 0 && onFindMissing ? (
         <div data-media-missing="" className="mx-2.5 mb-2 flex shrink-0 items-center gap-2 rounded-md bg-[var(--bg-hover)] px-2 py-1.5 text-[12px] text-[var(--text-muted)]">
@@ -1010,6 +1104,7 @@ export function MediaPool({
 
       <div
         ref={gridRef}
+        data-browser-scroll=""
         tabIndex={-1}
         className="relative min-h-0 flex-1 overflow-y-auto px-2.5 pb-[calc(var(--drawer-under,0px)+12px)] pt-1 outline-none"
         onPointerDown={startBox}
@@ -1028,19 +1123,19 @@ export function MediaPool({
             style={{ left: marquee.left, top: marquee.top, width: marquee.right - marquee.left, height: marquee.bottom - marquee.top }} />
         ) : null}
         {items && !items.length && !creating && !(flat ? [] : uploads.filter((u) => u.into === at)).length ? (
-          flat ? <p className="px-1 pt-6 text-center text-[12px] text-[var(--text-muted)]">{t('media.noMatch')}</p> : (
+          flat && (!browser?.flat || query.trim() || view.filter !== 'all') ? <p className="px-1 pt-6 text-center text-[12px] text-[var(--text-muted)]">{t('media.noMatch')}</p> : (
             <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
               <Clapperboard size={22} className="text-[var(--text-faint)]" />
-              <div className="text-[13px] font-medium text-[var(--text)]">{t(at ? 'media.emptyFolder' : inSaved ? 'saved.emptyTitle' : 'media.emptyTitle')}</div>
-              {at ? null : <p className="max-w-[30ch] text-[12px] leading-relaxed text-[var(--text-muted)]">{t(inSaved ? 'saved.emptyBody' : 'media.emptyBody')}</p>}
-              <button type="button" onClick={() => (onPick && onBring ? void bringFrom('auto', false) : inputRef.current?.click())}
+              <div className="text-[13px] font-medium text-[var(--text)]">{browser?.empty?.title ?? t(at ? 'media.emptyFolder' : inSaved ? 'saved.emptyTitle' : 'media.emptyTitle')}</div>
+              {at ? null : <p className="max-w-[30ch] text-[12px] leading-relaxed text-[var(--text-muted)]">{browser?.empty ? browser.empty.body : t(inSaved ? 'saved.emptyBody' : 'media.emptyBody')}</p>}
+              {browser?.empty?.canImport !== false && !readOnly ? <button type="button" onClick={() => (onPick && onBring ? void bringFrom('auto', false) : inputRef.current?.click())}
                 className="mt-1 inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 text-[12.5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)]">
                 <Plus size={13} />{t('media.import')}
-              </button>
+              </button> : null}
             </div>
           )
         ) : (
-          <div className={rows ? '@container flex flex-col gap-px' : 'grid gap-x-2 gap-y-2.5'} style={rows ? undefined : { gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))' }}>
+          <div data-browser-grid="" className={rows ? '@container flex flex-col gap-px' : 'grid gap-x-2 gap-y-2.5'} style={rows ? undefined : { gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${browser?.tileMin ?? 104}px), 1fr))` }}>
             {rows ? (
               <div className="flex h-6 shrink-0 select-none items-center gap-2 px-1.5 text-[11px] text-[var(--text-faint)]">
                 <span className="w-[46px] shrink-0" />
@@ -1053,7 +1148,7 @@ export function MediaPool({
             ) : null}
             {creating ? <NewFolderTile row={rows} label={t('assets.newFolder')} onDone={(name) => void makeFolder(name)} onCancel={() => setCreating(false)} /> : null}
             {pendingFolder && !pendingListed ? <NewFolderTile row={rows} label={pendingFolder} /> : null}
-            {(items ?? []).map((item) => item.type === 'folder' ? (
+            {(items ?? []).slice(0, renderCount).map((item) => item.type === 'folder' ? (
               <FolderTile
                 key={`d:${item.rel}`}
                 row={rows}
@@ -1079,6 +1174,8 @@ export function MediaPool({
               <FileTile
                 key={item.file.path}
                 row={rows}
+                refined={Boolean(browser)}
+                starred={Boolean(browser?.starred?.(item.file))}
                 file={item.file}
                 sources={sources}
                 duration={formatClipDuration(item.file.durationMs ?? 0)}
@@ -1092,7 +1189,8 @@ export function MediaPool({
                 {...(fileRef ? { studioRef: () => fileRef(item.file) } : {})}
                 moving={() => dragKeys(item.file.path)}
                 onPress={(e) => press(item, e)}
-                typeText={item.file.bundle ? t(`saved.kind_${item.file.bundle.kind}`) : item.file.kind === 'mg' ? t('assets.kindPage') : extOf(item.file.name).toUpperCase()}
+                onOpen={browser?.onOpen ? () => browser.onOpen!(item.file) : undefined}
+                typeText={browser?.badge?.(item.file) ?? (item.file.bundle ? t(`saved.kind_${item.file.bundle.kind}`) : item.file.kind === 'mg' ? t('assets.kindPage') : extOf(item.file.name).toUpperCase())}
                 library={inSaved}
                 {...(stackCounts?.get(item.file.path) ? { versions: stackCounts.get(item.file.path)!, versionsLabel: t('made.versions').replace('{n}', String(stackCounts.get(item.file.path))) } : {})}
                 {...(item.file.bundle?.props ? { componentMark: t('saved.component') } : {})}
@@ -1101,14 +1199,15 @@ export function MediaPool({
                 onCancelRename={() => setRenaming(null)}
               />
             ))}
-            {flat ? null : uploads.filter((u) => u.into === at).map((u) => <UploadTile key={u.id} upload={u} row={rows} />)}
+            {uploads.filter((u) => flat || u.into === at).map((u) => <UploadTile key={u.id} upload={u} row={rows} />)}
           </div>
         )}
+        {renderCount < (items?.length ?? 0) ? <div ref={moreRef} className="flex justify-center py-3"><button type="button" className="rounded-md px-3 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-hover)]" onClick={() => setRenderCount(count => count + 160)}>{t('assetLibrary.loadMore')}</button></div> : null}
       </div>
 
       {/* over a folder, the folder shows where they go */}
       {osDrag && dropTarget == null ? (
-        <div className="pointer-events-none absolute inset-1 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-[var(--accent)] bg-[var(--bg-raised)]/80 text-[13px] text-[var(--text)]">
+        <div data-media-drop-overlay="" className="pointer-events-none absolute inset-1 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-[var(--accent)] bg-[var(--bg-raised)]/80 text-[13px] text-[var(--text)]">
           {t('media.dropHint')}
         </div>
       ) : null}
@@ -1147,7 +1246,7 @@ export function MediaPool({
 function BarButton({ label, on, onClick, children }: { label: string; on?: boolean; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; children: React.ReactNode }) {
   return (
     <Tooltip label={label} side="bottom">
-      <button type="button" aria-label={label} onClick={onClick}
+      <button type="button" aria-label={label} aria-pressed={on} onClick={onClick}
         /* two states, on and off: hovered, only the ground lights; an on button keeps its color */
         className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] ${on ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
         {children}
@@ -1228,7 +1327,7 @@ function FolderTile(p: {
   if (p.row) {
     return (
       <div className={`${ROW} ${on ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'} ${p.target ? 'ring-1 ring-inset ring-[var(--accent)]' : ''}`}
-        data-media-folder="" data-media-key={p.pickKey} draggable={!p.renaming} onDragStart={p.onDragStart}
+        data-media-folder="" data-selected={p.selected || undefined} data-media-key={p.pickKey} draggable={!p.renaming} onDragStart={p.onDragStart}
         onClick={p.onPress} onDoubleClick={p.onOpen} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); p.onMenu(e); }} {...p.drop}>
         <span className={ROW_THUMB}>
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -1249,7 +1348,7 @@ function FolderTile(p: {
   }
   const grid = cells >= 4 ? 'grid-cols-2 grid-rows-2' : cells === 3 ? 'grid-cols-2 grid-rows-2' : cells === 2 ? 'grid-cols-2 grid-rows-1' : 'grid-cols-1 grid-rows-1';
   return (
-    <div className="group min-w-0 cursor-default select-none" data-media-folder="" data-media-key={p.pickKey} draggable={!p.renaming} onDragStart={p.onDragStart}
+    <div className="group min-w-0 cursor-default select-none" data-media-folder="" data-selected={p.selected || undefined} data-media-key={p.pickKey} draggable={!p.renaming} onDragStart={p.onDragStart}
       onClick={p.onPress} onDoubleClick={p.onOpen} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); p.onMenu(e); }} {...p.drop}>
       <div className="relative pt-[7px]">
         {/* the stack: two cards peeking out above the cover */}
@@ -1273,7 +1372,7 @@ function FolderTile(p: {
           </span>
         </div>
       </div>
-      <div className="mt-1 min-w-0 px-0.5">
+      <div data-card-caption="" className="mt-1 min-w-0 px-0.5">
         {p.renaming ? <NameInput value={p.name} onDone={p.onRename} onCancel={p.onCancelRename} />
           : <div className={`truncate text-[12px] font-medium ${on ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} style={KEEP_SPACES}>{p.name}</div>}
       </div>
@@ -1313,6 +1412,7 @@ function NewFolderTile({ label, onDone, onCancel, row = false }: { label: string
 
 function FileTile(p: {
   file: WorkspaceResource; sources: MediaSources; duration: string;
+  refined?: boolean; starred?: boolean;
   /** Its folder, shown under the name (search results where the name repeats). */
   where?: string | undefined;
   selected: boolean; renaming: boolean;
@@ -1323,6 +1423,7 @@ function FileTile(p: {
   studioRef?: () => StudioRef;
   /** What a drag of it moves into a folder: it, or every one picked with it. */
   moving: () => readonly string[];
+  onOpen?: (() => void) | undefined;
   onPress: (e?: React.MouseEvent) => void; onMenu: (e: React.MouseEvent) => void; onRename: (name: string) => void; onCancelRename: () => void;
   /** A link to media kept elsewhere: what to say of it (where it is kept, or that it cannot be reached). */
   linkLabel?: string;
@@ -1348,6 +1449,8 @@ function FileTile(p: {
       className={p.row
         ? `${ROW} outline-none ${lit ? 'ring-1 ring-inset ring-[var(--accent)]' : ''} ${p.selected ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'}`
         : 'group min-w-0 cursor-default select-none outline-none'}
+      data-resource-card={p.refined && !p.row ? '' : undefined}
+      data-selected={p.selected || undefined}
       data-media-path={p.file.path}
       data-media-key={p.file.path}
       data-chat-lit={p.lit ? '' : undefined}
@@ -1368,6 +1471,7 @@ function FileTile(p: {
       /* focusable, so the keys pressed after picking it are the pane's (Delete asks to delete it) */
       tabIndex={-1}
       onClick={(e) => { e.currentTarget.focus({ preventScroll: true }); p.onPress(e); }}
+      onDoubleClick={p.onOpen}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); p.onMenu(e); }}
     >
       {p.row ? (
@@ -1380,6 +1484,7 @@ function FileTile(p: {
             {p.renaming ? <NameInput value={p.file.name} onDone={p.onRename} onCancel={p.onCancelRename} />
               : (
                 <span className="flex min-w-0 items-center gap-1" title={p.linkLabel}>
+                  {p.refined && p.starred ? <Star size={11} fill="currentColor" className="shrink-0 text-[var(--text-muted)]" /> : null}
                   {p.file.link ? (p.file.link.missing ? <Unlink size={12} className="shrink-0 text-[var(--err)]" /> : <Link2 size={12} className="shrink-0 text-[var(--text-faint)]" />) : null}
                   <span className={`block truncate text-[12.5px] ${p.file.link?.missing ? 'text-[var(--text-faint)]' : p.selected ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} style={KEEP_SPACES}>{p.file.name}</span>
                 </span>
@@ -1393,9 +1498,10 @@ function FileTile(p: {
         </>
       ) : <>
       {/* the same room above as a folder's stacked cards, so covers and names line up across a row */}
-      <div className="pt-[7px]">
-        <div className={`${TILE_BOX} bg-[var(--bg-hover)] ${lit ? 'ring-[var(--accent)] shadow-[0_0_10px_1px_color-mix(in_srgb,var(--accent)_55%,transparent)]' : p.selected ? 'ring-[var(--accent)]' : 'ring-transparent group-hover:ring-[var(--border)]'}`}>
+      <div data-card-cover="" className="pt-[7px]">
+        <div data-card-thumb="" className={`${TILE_BOX} bg-[var(--bg-hover)] ${lit ? 'ring-[var(--accent)] shadow-[0_0_10px_1px_color-mix(in_srgb,var(--accent)_55%,transparent)]' : p.selected ? 'ring-[var(--accent)]' : 'ring-transparent group-hover:ring-[var(--border)]'}`}>
           {p.file.kind === 'mg' ? <PagePoster file={p.file} sources={p.sources} /> : <MediaPreview file={p.file} sources={p.sources} />}
+          {p.refined && p.starred ? <span data-card-star=""><Star size={11} fill="currentColor" /></span> : null}
           {/* a link to media kept elsewhere: marked; one that cannot be reached (a NAS that is off) says so over it */}
           {p.file.link?.missing ? (
             <span className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-black/65 text-[10.5px] text-white/85" title={p.linkLabel}>
@@ -1428,9 +1534,10 @@ function FileTile(p: {
           {p.duration ? <span className="absolute bottom-1 right-1 z-10 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white">{p.duration}</span> : null}
         </div>
       </div>
-      <div className="mt-1 min-w-0 px-0.5">
+      <div data-card-caption="" className="mt-1 min-w-0 px-0.5">
         {p.renaming ? <NameInput value={p.file.name} onDone={p.onRename} onCancel={p.onCancelRename} />
           : <div className={`truncate text-[12px] ${p.selected ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} style={KEEP_SPACES}>{p.file.name}</div>}
+        {p.refined ? <div data-card-meta=""><span>{p.typeText}</span><span>{p.file.w && p.file.h ? `${p.file.w} × ${p.file.h}` : p.file.size ? formatFileSize(p.file.size) : ''}</span></div> : null}
         {p.where ? <div className="truncate text-left text-[11px] text-[var(--text-faint)]" dir="rtl"><bdi>{p.where}</bdi></div> : null}
       </div>
       </>}

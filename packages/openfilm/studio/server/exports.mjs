@@ -77,7 +77,7 @@ import { homedir, setPriority, tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FilmPage, launch } from '../../src/host.mjs';
-import { alphaCompositeFilter, broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, onTheChip, prores709, proresOptions } from '../../src/encoders.mjs';
+import { alphaCompositeFilter, broken, chipDelivery, encoders, FRAMES_709, hardwareEncoder, holdsQuality, onTheChip, prores709, proresOptions, unheld } from '../../src/encoders.mjs';
 import { COMMAND_ROOM, filmSound, filterScriptOption, kill as killProcess, mix, open } from '../../src/shared.mjs';
 import { defaultWorkers, machine } from '../../src/render.mjs';
 import { isLoudness, LOUDNESS_RANGE, toLoudness } from '../../src/loudness.mjs';
@@ -87,7 +87,7 @@ import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFil
 import { layerBlocks, rowBadges, trackKind } from './track-layout.mjs';
 import { fcpxmlDocument } from './fcpxml.mjs';
 import { markHevcStraightAlpha } from './hevc-alpha.mjs';
-import { frameSpan, NLE_FPS, nleFps, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
+import { frameSpan, NLE_FPS, nleFps, ownLook, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
 import { draftsRoot, jianyingClipLook, jianyingDraft } from './jianying.mjs';
 import { captionNeedsRendering, jianyingCaptionFonts } from './jianying-captions.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
@@ -102,6 +102,7 @@ import { mediaReferences, referenceSource } from '../../src/media-links.mjs';
 import { PROJECT_PARTS, TOOL_DIR } from './projects.mjs';
 import { exportsRoot } from '../../src/locations.mjs';
 import { recordProblem } from '../../src/problems.mjs';
+import { cropDraftPng, draftCache, draftEngineVersion } from './draft-media.mjs';
 
 /** The exports folder: the one chosen in Settings, else the Desktop, where a file just made is found (src/locations.mjs). */
 export { exportsRoot };
@@ -132,7 +133,8 @@ export { exportsRoot };
  *   status: 'waiting' | 'running' | 'done' | 'failed' | 'cancelled', progress: number, phase: ExportPhase | null,
  *   framesDone: number, framesTotal: number, rate: number, etaMs: number | null, encoder: string | null,
  *   out?: string, outputs: string[], bytes: number | null, alpha: { any: boolean } | null, error?: string, cancelling?: boolean,
- *   at: number, startedAt: number | null, finishedAt: number | null, draftsRefused?: string, diskFull?: boolean }} ExportJob
+ *   at: number, startedAt: number | null, finishedAt: number | null, draftsRefused?: string, diskFull?: boolean, software?: boolean,
+ *   mediaStats?: Record<string, unknown>[] }} ExportJob
  */
 
 /** Whether an error is the disk being full, in ffmpeg's words or the system's (a Mac, Linux, Windows). @param {unknown} e */
@@ -668,21 +670,25 @@ const chipCodec = (codec, quality) => ((codec === 'h264' || codec === 'hevc') &&
 
 /**
  * How render should encode a codec: its encoder (for the person's list), and the container format render takes,
- * through the graphics chip's encoder when it has one that works (`hw`: hardwareEncoder for chipCodec).
- * @param {VideoCodec} codec @param {Quality} quality @param {{ w: number, h: number }} size @param {number} fps @param {Set<string>} have @param {string | null} [hw]
+ * through the graphics chip's encoder when it has one that works (`hw`: hardwareEncoder for chipCodec). `held`: the
+ * chip's H.264 or HEVC is held to the quality (holdsQuality), as x264 and x265 are to their CRF: each frame gets what
+ * its picture needs, and its file may not pass two and a half times the bitrate (chipDelivery). Else the chip is
+ * given the bitrate.
+ * @param {VideoCodec} codec @param {Quality} quality @param {{ w: number, h: number }} size @param {number} fps @param {Set<string>} have @param {string | null} [hw] @param {boolean} [held]
  */
-function encoding(codec, quality, size, fps, have, hw = null) {
+function encoding(codec, quality, size, fps, have, hw = null, held = false) {
   const bits = (/** @type {number} */ k) => Math.min(120e6, Math.max(2e6, size.w * size.h * fps * BPP[quality] * k));
   const bitrate = (/** @type {number} */ k) => `${Math.round(bits(k) / 1000)}k`;
   /* a key frame every two seconds */
   const gop = Math.round(fps * 2);
+  const chip = { gop, ...(held && quality !== 'master' ? { quality } : {}) };
   switch (codec) {
     case 'h264':
       /* with room for screen text: half again the dialog's scale */
-      if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(1.5), { gop }), ...BT709] } };
+      if (hw) return { encoder: hw, format: chipDelivery(hw, bits(1.5), chip, BT709) };
       return { encoder: 'libx264', format: { video: ['-c:v', 'libx264', '-preset', quality === 'master' ? 'slow' : 'medium', '-crf', String(H264_CRF[quality]), ...BT709] } };
     case 'hevc':
-      if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(0.8), { gop }), ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
+      if (hw) return { encoder: hw, format: { ...chipDelivery(hw, bits(0.8), chip, BT709), tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
       if (have.has('libx265')) {
         /* master in 10 bits (Main 10), with finer grain-aware encoding: small changing dither must not become one
            frozen texture. It costs more time and bytes; the smaller delivery qualities keep their settings. */
@@ -819,43 +825,44 @@ const execFileP = promisify(execFile);
  * drawing it.
  */
 const QUICK_PNG = { video: ['-c:v', 'png', '-compression_level', '1', '-pred', 'sub'], pix: 'format=rgba' };
+// One lossless encode. Level 3 + SUB retains the small files of the slow second pass on real noisy/photographic pages.
+const DRAFT_PNG = { video: ['-c:v', 'png', '-compression_level', '3', '-pred', 'sub'], pix: 'format=rgba' };
 
 /**
  * A PNG video with each picture kept once: a frame that repeats the one before is dropped and the one before lasts
  * until the next (the timestamps say so), so a page that holds still is one picture, not a second's worth. A repeat is
- * found by its bytes: one encoder at one setting writes the same picture the same way, so a frame a pixel apart is
- * never taken for one; the frames kept are written again as PNG at ffmpeg's own settings, the same pixels. The last
- * frame stays, so the length does too; a video that changes in most of its frames keeps every frame, written again the
- * same way (it may have been drawn as a quick PNG).
+ * found by its bytes: one encoder at one setting writes the same picture the same way. Only identical packets are
+ * removed. No PNG is decoded or encoded again; PTS and the last sample retain the original picture clock.
  * @param {string} file @param {AbortSignal} signal
  */
 export async function keepChanges(file, signal) {
   const { stdout } = await execFileP('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-i', file, '-map', '0:v:0', '-c', 'copy', '-f', 'framemd5', '-'],
     { maxBuffer: 256 << 20, signal, windowsHide: true });
   const sums = String(stdout).split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(',').pop()?.trim());
-  const kept = sums.flatMap((sum, i) => (i === 0 || i === sums.length - 1 || sum !== sums[i - 1] ? [i] : []));
+  const dropped = sums.flatMap((sum, i) => (i > 0 && i < sums.length - 1 && sum === sums[i - 1] ? [i] : []));
+  if (!dropped.length) return { frames: sums.length, kept: sums.length };
   /* frames kept one after another are one term; the terms are added as a balanced tree, since ffmpeg parses no more
      than 100 in a row */
   /** @type {[number, number][]} */
   const runs = [];
-  for (const i of kept) { const last = runs.at(-1); if (last && last[1] === i - 1) last[1] = i; else runs.push([i, i]); }
+  for (const i of dropped) { const last = runs.at(-1); if (last && last[1] === i - 1) last[1] = i; else runs.push([i, i]); }
   /** @type {(part: [number, number][]) => string} */
   const sum = (part) => (part.length === 1 ? (part[0][0] === part[0][1] ? `eq(n,${part[0][0]})` : `between(n,${part[0][0]},${part[0][1]})`)
     : `(${sum(part.slice(0, part.length >> 1))}+${sum(part.slice(part.length >> 1))})`);
   const part = `${file}.part.mov`;
-  const all = kept.length > sums.length / 2;
-  const graph = all ? '' : `[0:v:0]select='${sum(runs)}'[v]`;
-  /* a long one goes in a file: Windows takes a command of no more than 32,767 characters, and a long page that steps
-     every few frames keeps thousands of runs */
-  const script = graph.length > COMMAND_ROOM ? `${part}.filter` : null;
+  const graph = `noise=amount=0:drop='${sum(runs)}'`;
+  /* FFmpeg's option-file syntax keeps even an hours-long expression below Windows' command-line limit. */
+  const script = graph.length > COMMAND_ROOM ? `${part}.bsf` : null;
   if (script) await writeFile(script, graph, 'utf8');
   try {
-    const select = all ? ['-map', '0:v:0'] : [...(script ? [await filterScriptOption(), script] : ['-filter_complex', graph]), '-map', '[v]', '-fps_mode', 'vfr'];
-    await run(['-i', file, ...select, '-c:v', 'png', part], signal);
+    await run(['-i', file, '-map', '0:v:0', '-map', '0:a?', '-c', 'copy',
+      ...(script ? ['-/bsf:v', script] : ['-bsf:v', graph]), part], signal);
+    await renameSafely(part, file);
   } finally {
     if (script) await tidy(script);
+    await tidy(part);
   }
-  await renameSafely(part, file);
+  return { frames: sums.length, kept: sums.length - dropped.length };
 }
 
 const IMAGE_TYPES = /** @type {Record<string, string>} */ ({ svg: 'image/svg+xml', webp: 'image/webp', avif: 'image/avif', gif: 'image/gif', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', bmp: 'image/bmp' });
@@ -958,7 +965,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
   /** Render the film (or `target`) to `out`, with progress. @param {ExportJob} job @param {string} target @param {string} out @param {Record<string, unknown>} opts @param {AbortSignal} signal */
   const renderTo = (job, target, out, opts, signal, share = 0.96) => {
     const range = job.ask.range ? [`${num(job.ask.range[0])}-${num(job.ask.range[1])}`] : [];
-    return render([target, ...range], { ...opts, ...(job.ask.ranges ? { ranges: job.ask.ranges } : {}), out, signal, onProgress: frames(job, share) });
+    return render([target, ...range], { ...opts, ...(job.ask.ranges ? { ranges: job.ask.ranges } : {}), out, signal, onProgress: frames(job, share),
+      /* drawn without a graphics chip: said on the export while it runs, slowly */
+      onSoftware: () => update(job, { software: true }) });
   };
 
   /** @param {ExportJob} job @param {string} root @param {string} dir @param {AbortSignal} signal */
@@ -992,9 +1001,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       /* a bitrate asked is held on the processor (targetEncoding) */
       const chipFor = ask.bitrate ? null : chipCodec(codec, quality);
       const hw = ask.hardware !== false && chipFor ? await hardwareEncoder(chipFor, have) : null;
+      let held = hw ? await holdsQuality(hw) : false;
       /** @param {string | null} chip */
       const how = (chip) => {
-        const { encoder, format } = ask.bitrate ? targetEncoding(codec, ask.bitrate, ask.maxrate, have) : encoding(codec, quality, size, fps ?? 30, have, chip);
+        const { encoder, format } = ask.bitrate ? targetEncoding(codec, ask.bitrate, ask.maxrate, have) : encoding(codec, quality, size, fps ?? 30, have, chip, held);
         const container = /** @type {{ pix?: string }} */ (format).pix ?? (codec === 'h264' || codec === 'hevc' ? YUV_709('yuv420p') : codec === 'vp9' ? YUV_709('yuva420p') : 'format=yuva444p10le');
         /* master: frames taken as PNG and footage read from copies near the file (`fine`), so nothing on the way bands */
         return { encoder, opts: { fps, samples: ask.samples, shutter: ask.shutter, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(quality === 'master' ? { fine: true } : {}), ...(ask.bitrate ? { partSeconds: PART_SECONDS } : {}), ...(clip || burn ? { root } : {}) } };
@@ -1028,13 +1038,27 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           }
         } catch (e) {
           /* the graphics chip's encoder gave up partway (a driver, a size it does not take, sessions or memory it ran out
-             of): the rest of this launch encodes without it, starting with this export again */
-          if (!hw || signal.aborted || !/^ffmpeg[: ]/.test(e instanceof Error ? e.message : '')) throw e;
-          broken(hw);
-          ({ encoder, opts } = how(null));
-          update(job, { encoder, framesDone: 0, progress: 0, etaMs: null });
-          const rendered = await renderTo(job, target, part, { ...opts, resumeAs: out }, signal);
-          selectedRanges = rendered.ranges ?? null;
+             of): the rest of this launch encodes without it, starting with this export again. One held to a quality is
+             first given its bitrate, as it was before it could be held */
+          const gaveUp = (/** @type {unknown} */ err) => !signal.aborted && /^ffmpeg[: ]/.test(err instanceof Error ? err.message : '');
+          if (!hw || !gaveUp(e)) throw e;
+          const again = async (/** @type {string | null} */ chip) => {
+            ({ encoder, opts } = how(chip));
+            update(job, { encoder, framesDone: 0, progress: 0, etaMs: null });
+            const rendered = await renderTo(job, target, part, { ...opts, resumeAs: out }, signal);
+            selectedRanges = rendered.ranges ?? null;
+          };
+          let failure = /** @type {unknown} */ (e);
+          if (held) {
+            unheld(hw);
+            held = false;
+            failure = await again(hw).then(() => null, (err) => err);
+            if (failure && !gaveUp(failure)) throw failure;
+          }
+          if (failure) {
+            broken(hw);
+            await again(null);
+          }
         }
         await renameSafely(part, out);
         update(job, { out, outputs: [out] });
@@ -1330,7 +1354,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     const have = await encoders();
     /** how a page with alpha is drawn: PNG (a draft's a quick one, its pictures thinned after; PNG's alpha is exact,
         ProRes's comes back a little off full), or (null) ProRes 4444, whose encoder render picks */
-    const pngFormat = app ? QUICK_PNG : alpha === 'png' ? encoding('png', 'master', { w: 0, h: 0 }, fps, have).format : null;
+    const pngFormat = app ? DRAFT_PNG : alpha === 'png' ? encoding('png', 'master', { w: 0, h: 0 }, fps, have).format : null;
     /* the edit with every track shown: a hidden track comes over disabled, one click from back on, so it is drawn too */
     const doc = existsSync(join(root, FILM_FILE)) ? filmDoc(root)
       : { stage: await stageOf(root), tracks: [{ clips: [{ src: 'index.html', id: title }] }] };
@@ -1352,9 +1376,11 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       await filmElsewhere(root, scratch, { stage: doc.stage, tracks: doc.tracks.map((t) => ({ clips: t.clips })) });
       const probe = await open(scratch, { root });
       /** @type {{ id: string, at: number, end: number, from: number, to: number, speed: number, native: number | null, w: number | null, h: number | null,
-       * hasEffect: boolean, draftStyle: import('./jianying.mjs').DraftStyle | null, animationTiming?: { durations: number[], delays: number[] } }[]} */
+       * hasEffect: boolean, draftStyle: import('./jianying.mjs').DraftStyle | null, fit: string | null, position: string | null, animationTiming?: { durations: number[], delays: number[] } }[]} */
       let loaded;
+      let browserVersion = '';
       try {
+        browserVersion = probe.browser.version();
         loaded = await probe.film.page.evaluate(() => /** @type {any} */ (window).__filmEditor.stage.clips().map((/** @type {any} */ c) => {
           const css = c.el ? getComputedStyle(c.el) : null;
           const seconds = (/** @type {string} */ value) => value.split(',').map((v) => parseFloat(v) * (v.trim().endsWith('ms') ? 0.001 : 1));
@@ -1365,10 +1391,11 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           const simple = Boolean(css && standardMask && css.clipPath === 'none' && css.filter === 'none' && css.backdropFilter === 'none'
             && css.mixBlendMode === 'normal' && css.borderRadius === '0px' && css.borderWidth === '0px' && css.boxShadow === 'none'
             && css.backgroundColor === 'rgba(0, 0, 0, 0)' && css.backgroundImage === 'none'
-            && css.objectFit === 'contain' && css.objectPosition === '50% 50%' && !timing);
+            && !timing);
           const hasEffect = Boolean(css && (css.maskImage !== 'none' || css.clipPath !== 'none' || css.filter !== 'none' || css.opacity !== '1' || timing));
           const draftStyle = css ? { opacity: Number(css.opacity), maskImage: css.maskImage, maskComposite: css.maskComposite, simple } : null;
           return { id: c.id, at: c.at, end: c.end, from: c.span.from, to: c.span.to, speed: c.span.speed, hasEffect, draftStyle,
+            fit: css ? css.objectFit : null, position: css ? css.objectPosition : null,
             native: Number.isFinite(c.native) ? c.native : null, w: c.nw ?? null, h: c.nh ?? null,
             ...(timing && [...timing.durations, ...timing.delays].every(Number.isFinite) ? { animationTiming: timing } : {}) };
         }));
@@ -1427,7 +1454,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             }
             pictures.push({ id: row.id, kind, src: row.src, path, at: c.at, end: c.end, from: c.from, speed: c.speed, box: row.box,
               ...(draftLook ? { draftLook } : {}),
-              track: ti, hidden: Boolean(track.hidden || row.disabled), styled: Boolean(row.class || row.style || c.hasEffect), ...(fade ? { faded: true } : {}), facts: f,
+              track: ti, hidden: Boolean(track.hidden || row.disabled), styled: Boolean(row.class || ownLook(row.style ?? '').length || c.hasEffect),
+              ...(c.fit ? { fit: c.fit } : {}), ...(c.position ? { position: c.position } : {}), ...(fade ? { faded: true } : {}), facts: f,
               ...(c.animationTiming ? { animationTiming: c.animationTiming } : {}) });
           }
           if (kind === 'sound' || kind === 'video') {
@@ -1470,6 +1498,18 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         { title, fps, audio: mode, media: ask.media ?? 'copy', mediaDir: join(final, 'media'), stems: [...stems.keys()],
           audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app), embeddedAudio: Boolean(app), footage: ask.footage ?? 'auto' });
       const staged = (/** @type {import('./nle.mjs').NleFile} */ f) => join(staging, 'media', basename(f.path));
+      const cache = app ? draftCache(root, `${await draftEngineVersion()}:${browserVersion}`) : null;
+      const head = (existsSync(join(root, FILM_FILE)) ? readFileSync(join(root, FILM_FILE), 'utf8') : '').split(/<body\b/i)[0];
+      /** @type {Record<string, unknown>[]} */ const mediaStats = [];
+      const reportMedia = (/** @type {Record<string, unknown>} */ stats) => { mediaStats.push(stats); update(job, { mediaStats: [...mediaStats] }); };
+      const restoreCrop = (/** @type {import('./nle.mjs').NleFile} */ file, /** @type {import('./draft-media.mjs').Crop | null} */ crop) => {
+        if (!crop || !file.video) return;
+        file.video.w = crop.w; file.video.h = crop.h;
+        for (const track of timeline.video) for (const clip of track.clips) if (clip.fileId === file.id) {
+          clip.motion = { scale: 100, center: { h: (crop.x + crop.w / 2) / timeline.width - 0.5, v: (crop.y + crop.h / 2) / timeline.height - 0.5 } };
+          clip.rasterCrop = crop;
+        }
+      };
 
       /* each web page (and each picture Basic Motion can't place) drawn alone, full frame, with alpha. Several are drawn at
          once, the longest first, with as many browsers in all as one render of every frame would get (render.mjs
@@ -1505,7 +1545,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const asEditorsPlay = async (draw, codec) => {
         /** @param {string | null} encoder */
         const formats = (encoder) => (codec === 'h264'
-          ? { format: { video: [...encoding('h264', 'master', doc.stage, timeline.rate.fps, have, encoder).format.video, ...H264_709], pix: YUV_709('yuv420p') }, clear: QUICK_PNG }
+          ? { format: { video: [...encoding('h264', 'master', doc.stage, timeline.rate.fps, have, encoder).format.video, ...H264_709], pix: YUV_709('yuv420p') }, clear: DRAFT_PNG }
           : { format: prores709(encoder ?? 'prores_ks', false), clear: prores709(encoder ?? 'prores_ks', true) });
         const chip = await hardwareEncoder(codec, have);
         try {
@@ -1518,10 +1558,29 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           return draw(formats(null));
         }
       };
-      /** @param {import('./nle.mjs').NleFile} file @param {number} workers @param {() => void} drawn */
-      const page = async (file, workers, drawn) => {
+      /** @param {import('./nle.mjs').NleFile} file @param {number} workers */
+      const page = async (file, workers) => {
+        const started = performance.now();
         const { clip: id, frames, fullSource } = /** @type {Extract<import('./nle.mjs').NleMediaJob, { kind: 'render' }>} */ (file.job);
         const p = /** @type {import('./nle.mjs').NlePicture} */ (pictures.find((x) => x.id === id));
+        const row = doc.tracks.flatMap((t) => t.clips).find((c) => c.id === id);
+        const cacheKey = cache?.keyOf({ head, stage: doc.stage, row: row ?? { captions: cues, tracks: doc.tracks.filter((t) => t.captions) }, frames, fullSource,
+          fps: timeline.rate.fps, alpha, footage: ask.footage, job: { ...file.job, clip: row?.id ?? 'captions' } });
+        const hit = cache && cacheKey ? await cache.get(cacheKey, staged(file)) : null;
+        if (hit) {
+          file.durationFrames = hit.durationFrames;
+          for (const t of timeline.video) for (const c of t.clips) if (c.fileId === file.id && hit.durationFrames < frames) {
+            c.out = fullSource ? Math.min(c.out, hit.durationFrames) : hit.durationFrames;
+            c.end = c.start + Math.round((c.out - c.in) / (c.speed ?? 1));
+          }
+          restoreCrop(file, hit.crop);
+          drawnFrames.set(file.id, framesOf(file));
+          tick([...drawnFrames.values()].reduce((n, d) => n + d, 0), totalFrames);
+          reportMedia({ clip: id, cached: true, bytes: (await stat(staged(file))).size, seconds: (performance.now() - started) / 1000, crop: hit.crop });
+          return;
+        }
+        /** @type {string[]} */ let dependencies = [];
+        let renderSeconds = 0;
         const native = byId.get(id)?.native ?? p.facts?.duration ?? Infinity;
         /* as long as its frames on the sequence: a page holds its last frame, a still lasts as long as it is told */
         const time = p.kind === 'video' ? [p.from, Math.min(native, p.from + (frames / timeline.rate.fps) * p.speed)] : [p.from, p.from + frames / timeline.rate.fps];
@@ -1545,7 +1604,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             /** @param {Record<string, unknown>} how */
             const draw = async (how) => {
               const result = await pool.render([one.dir], {
-                root, alpha: !ground, silent: true, fps: timeline.rate.fps, out: staged(file), signal: stop.signal, workers,
+                root, alpha: !ground, silent: true, fps: timeline.rate.fps, out: staged(file), signal: stop.signal, workers, dependencies: true,
                 ...(ground ? { format: how.format } : how),
                 /* a page drawn again counts from where it was: it holds until the second drawing passes it */
                 onProgress: (/** @type {number} */ done) => {
@@ -1554,6 +1613,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
                 },
               });
               if (result.encoder !== job.encoder) update(job, { encoder: result.encoder });
+              dependencies = result.dependencies ?? [];
               return result;
             };
             if (app && alpha !== 'png') clear = (await asEditorsPlay(draw, alpha === 'prores' ? 'prores' : 'h264')).clear === true;
@@ -1562,7 +1622,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             await one.remove();
           }
         } finally {
-          drawn();
+          renderSeconds = (performance.now() - started) / 1000;
         }
         /* a source shorter than its place by a frame of rounding: the clip ends where its picture does */
         const made = await countFrames(staged(file));
@@ -1575,7 +1635,13 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         }
         /* a draft's PNG page keeps each picture once, for as long as it shows (剪映 plays a picture's own length): a
            fraction of the frames, the same pixels */
-        if (app && clear && alpha !== 'prores') await keepChanges(staged(file), stop.signal);
+        let analysis = null;
+        const postStarted = performance.now();
+        if (app && clear && alpha !== 'prores') {
+          const compact = await keepChanges(staged(file), stop.signal);
+          analysis = await cropDraftPng(staged(file), { ...doc.stage, frames: compact.kept, fps: timeline.rate.fps }, stop.signal);
+          restoreCrop(file, analysis.crop);
+        }
         /* A rendered picture still owns the sound recorded with it. Put that sound on the rendered media's clock;
            clip gain, mute and fades remain editable in the draft instead of becoming detached audio clips. */
         const audio = /** @type {Extract<import('./nle.mjs').NleMediaJob, { kind: 'render' }>} */ (file.job).audio;
@@ -1590,6 +1656,12 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             await rename(temp, staged(file));
           } finally { await rm(temp, { force: true }); }
         }
+        const stats = { clip: id, cached: false, bytes: (await stat(staged(file))).size, seconds: (performance.now() - started) / 1000,
+          renderSeconds, postSeconds: (performance.now() - postStarted) / 1000, crop: analysis?.crop ?? null, alphaSpans: analysis?.spans };
+        const cacheStarted = performance.now();
+        if (cache && cacheKey) await cache.put(cacheKey, staged(file), dependencies, { crop: analysis?.crop ?? null, durationFrames: file.durationFrames }, file.path).catch(() => {});
+        Object.assign(stats, { cacheWriteSeconds: (performance.now() - cacheStarted) / 1000, seconds: (performance.now() - started) / 1000 });
+        reportMedia(stats);
       };
       try {
         let left = totalFrames;
@@ -1604,10 +1676,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           let drawn = () => {};
           const slot = new Promise((r) => { drawn = () => r(undefined); }).then(() => { drawing.delete(slot); free += workers; });
           drawing.add(slot);
-          pages.push(page(file, workers, drawn).catch((e) => {
+          pages.push(page(file, workers).catch((e) => {
             failed ??= e;
             stop.abort();
-          }));
+          }).finally(drawn));
         }
         await Promise.all(pages);
       } finally {
@@ -1891,7 +1963,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
  * @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, lines: string[], ranges?: [number, number][] }>}
  */
 function render(args, opts) {
-  const { signal, onProgress, ...rest } = opts;
+  const { signal, onProgress, onSoftware, ...rest } = opts;
   return new Promise((done, fail) => {
     if (signal?.aborted) return fail(new Error('cancelled'));
     const child = fork(fileURLToPath(new URL('./render-worker.mjs', import.meta.url)), [], { stdio: ['ignore', 'inherit', 'pipe', 'ipc'] });
@@ -1910,6 +1982,7 @@ function render(args, opts) {
     signal?.addEventListener('abort', cancel, { once: true });
     child.on('message', (/** @type {any} */ m) => {
       if (m?.type === 'progress') onProgress?.(m.done, m.total);
+      else if (m?.type === 'software') onSoftware?.();
       else if (m?.type === 'done') settle(() => done(m.result));
       else if (m?.type === 'failed') settle(() => fail(new Error(m.error)));
     });
@@ -1959,7 +2032,7 @@ function drawer() {
     end(new Error(`the renderer stopped (${sig ?? `exit ${code}`})${last ? `: ${last.slice(0, 300)}` : ''}`));
   });
   return {
-    /** @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, clear?: boolean, lines: string[] }>} */
+    /** @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, clear?: boolean, dependencies?: string[], lines: string[] }>} */
     render(args, opts) {
       const { signal, onProgress, ...rest } = opts;
       return new Promise((done, fail) => {

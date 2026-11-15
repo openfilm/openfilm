@@ -6,8 +6,8 @@
  *
  * The first is wide, the others in a grid; cards are posters that play their preview under the pointer. One
  * opened is a page of two columns in place of the list: its preview on the left, what it is
- * and what to do with it on the right; Back (or Esc) returns to the list as it was. The title row is the projects
- * window's own, so switching views moves nothing.
+ * and what to do with it on the right; Back (or Esc) returns to the list as it was. Its top row is the same as the
+ * projects' beside the window's sidebar, so switching between them moves nothing.
  */
 import React from 'react';
 import { ArrowLeft, Clapperboard, ExternalLink, MessageCircleQuestion, Play, Workflow, X } from 'lucide-react';
@@ -24,22 +24,8 @@ export type ExamplePart = { from: number; to: number; segment?: string } | null;
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-/** Two titles in the title row, the one shown bright (the projects window's switch is the same). */
-export function TitleSwitch<T extends string>({ items, value, onChange }: { items: Array<{ id: T; label: string }>; value: T; onChange: (id: T) => void }) {
-  return (
-    <div role="tablist" className="mr-auto flex items-baseline gap-5">
-      {items.map((item) => (
-        <button key={item.id} type="button" role="tab" aria-selected={value === item.id} onClick={() => onChange(item.id)}
-          className={`text-[17px] font-semibold tracking-[-0.01em] transition ${value === item.id ? 'text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text-muted)]'}`}>
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export function ExamplesGallery({ heading, initial, onClose, onStart, onReference, onUseCanvas, onExplain }: {
-  /** the title row's left (the projects window's switch) */
+  /** the top row's left: what this is ("Examples") */
   heading: React.ReactNode;
   /** open on this example's page (its id: a pill of one clicked in the chat) */
   initial?: string;
@@ -127,23 +113,23 @@ export function ExamplesGallery({ heading, initial, onClose, onStart, onReferenc
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* the same row as the projects' (ProjectsView): switching between them moves nothing */}
-      <header className="flex shrink-0 flex-col px-6 pb-4 pt-5">
-        <div className="flex min-h-8 items-center gap-1">
+      <header className="flex shrink-0 flex-col border-b border-[var(--border)] px-[14px] py-[10px]">
+        <div className="flex min-h-[30px] items-center gap-1">
           {/* an example opened has its way back here, where the switch was */}
           {opened ? (
-            <button type="button" onClick={() => setOpened(null)} className="mr-auto flex h-8 items-center gap-1.5 rounded-lg pl-1 pr-2.5 text-[13.5px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+            <button type="button" onClick={() => setOpened(null)} className="mr-auto flex h-[30px] items-center gap-1.5 rounded-lg pl-1 pr-2.5 text-[13.5px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
               <ArrowLeft size={16} strokeWidth={1.75} />{t('gallery.back')}
             </button>
           ) : heading}
           {onClose ? (
             <button type="button" onClick={onClose} aria-label={t('project.close')}
-              className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-              <X size={16} strokeWidth={1.75} />
+              className="ml-1 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+              <X size={17} />
             </button>
           ) : null}
         </div>
       </header>
-      <div ref={scroller} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">{body}</div>
+      <div ref={scroller} className="min-h-0 min-w-0 flex-1 overflow-y-auto pt-5 [scrollbar-gutter:stable]">{body}</div>
     </div>
   );
 }

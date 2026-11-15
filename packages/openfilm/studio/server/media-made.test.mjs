@@ -7,6 +7,7 @@ import { fingerprint } from '../../src/media-fingerprint.mjs';
 import { carryMade, madeAnywhere, madeFile, madeView, noteMade, readMade, wordsByFingerprint } from './media-made.mjs';
 import { scanProject } from './media-index.mjs';
 import { createProject } from './projects.mjs';
+import { isOutputName } from './providers/common.mjs';
 
 const KEYS = ['OPENFILM_HOME', 'OPENFILM_SHARED_HOME', 'OPENFILM_LIBRARY'];
 let before;
@@ -56,7 +57,7 @@ test('a file made says the words it was asked with, who made it and from what, u
   assert.deepEqual(Object.keys(view), ['assets/image/the fox.png']);
   assert.deepEqual(view['assets/image/the fox.png'].refs, [{ as: 'ref', path: 'assets/ref/portrait.png', name: 'portrait.png' }]);
   assert.deepEqual(view['assets/image/the fox.png'].again, { verb: 'image', via: 'fal', model: 'flux-2',
-    args: { out: 'the-fox-2', ratio: '16:9', prompt: 'a fox in snow', ref: 'assets/ref/portrait.png' } });
+    args: { out: 'the fox-2', ratio: '16:9', prompt: 'a fox in snow', ref: 'assets/ref/portrait.png' } });
 });
 
 test('what it was made from gone, it still says how it was made, and is not offered again', async () => {
@@ -69,6 +70,22 @@ test('what it was made from gone, it still says how it was made, and is not offe
   assert.deepEqual(made.refs, [{ as: 'ref', path: null, name: 'face.png' }]);
   assert.equal(made.again, undefined);
   assert.equal(made.words, 'a fox');
+});
+
+test('making media again keeps names in every script and fits the new numbered name before it is offered', async () => {
+  const { path: root } = await createProject('Names');
+  const names = ["春日 #1 + 100% & Bob's 🎬", 'नमस्ते', 'العَرَبِيَّة', 'Cafe\u0301', '图'.repeat(80), `${'a'.repeat(115)}🎬`];
+  for (const [i, name] of names.entries()) await picture(root, name, i + 1, { prompt: name });
+  media(root, 'assets/image/Café-2.png', 99);
+  const view = await madeView(root);
+  for (const name of names) {
+    const made = Object.entries(view).find(([path]) => path.normalize('NFC') === `assets/image/${name}.png`.normalize('NFC'))?.[1];
+    const out = made.again.args.out;
+    assert.ok(isOutputName(out), out);
+    assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(out), 'no half of an emoji');
+    if (name === 'Cafe\u0301') assert.equal(out.normalize('NFC'), 'Café-3', 'skip names occupied in another Unicode normalization');
+    else if (name.length < 100 && Buffer.byteLength(name) < 200) assert.equal(out.normalize('NFC'), `${name}-2`.normalize('NFC'));
+  }
 });
 
 test('files asked for the same way are versions of one thing, the oldest first; so is a picture redrawn from one', async () => {
@@ -163,7 +180,7 @@ test('a file brought in from another project keeps how it was made, under where 
   copyFileSync(join(from.path, 'assets/image/hero.png'), join(into.path, 'assets/the fox.png'));
   assert.equal(await carryMade(into.path, 'assets/the fox.png'), true);
   const made = (await madeView(into.path))['assets/the fox.png'];
-  assert.deepEqual({ words: made.words, by: made.by, model: made.model, out: made.again.args.out }, { words: 'a fox in snow', by: 'fal.ai', model: 'flux-2', out: 'the-fox-2' });
+  assert.deepEqual({ words: made.words, by: made.by, model: made.model, out: made.again.args.out }, { words: 'a fox in snow', by: 'fal.ai', model: 'flux-2', out: 'the fox-2' });
   /* known here already, or known nowhere: nothing is done */
   assert.equal(await carryMade(into.path, 'assets/the fox.png'), false);
   media(into.path, 'assets/own.png', 5);
