@@ -208,6 +208,7 @@ export const zhCN: Words = {
     missingOpen: '此项目的文件夹已不在原处：它被移动、重命名或删除了。你可以将它从列表中移除。',
     agentRunning: 'Agent 运行中',
     agentRunningRename: 'Agent 正在这个项目里运行，请先停止它，再重命名项目。',
+    folderBusyRename: 'Windows 无法重命名这个文件夹：还有程序打开着它或其中的文件。关掉占用它的程序（终端，或正在显示其中文件的其他应用），再重命名项目。',
     exportRunningRename: '这个项目有正在进行或排队中的导出。请等待导出完成或取消后，再重命名项目。',
     agentRunningDelete: 'Agent 正在这个项目里运行，请先停止它，再删除项目。',
     agentRunningDeleteMany: '其中 {n} 个项目里有 Agent 正在运行，请先停止，再删除。',

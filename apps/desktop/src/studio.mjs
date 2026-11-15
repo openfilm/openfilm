@@ -82,10 +82,11 @@ async function takeOver(home, log) {
 
 /**
  * @param {{ home: string, port: number, env: Record<string, string>, onOpen: (url: string) => void,
- *           onBrowser: (state: { state: string, message?: string }) => void, onAsk?: AskHandler, log: (line: string) => void }} options
+ *           onBrowser: (state: { state: string, message?: string }) => void, onAsk?: AskHandler,
+ *           onRelease?: (folder: string) => Promise<void> | void, log: (line: string) => void }} options
  * @returns {Promise<{ origin: string, filmOrigin: string, key: string, child: Electron.UtilityProcess, readAccount: (options?: { fresh?: boolean }) => Promise<any> }>}
  */
-function fork({ port, env, onOpen, onBrowser, onAsk, log }) {
+function fork({ port, env, onOpen, onBrowser, onAsk, onRelease, log }) {
   return new Promise((resolve, reject) => {
     const child = utilityProcess.fork(ENTRY, [], {
       serviceName: 'OpenFilm Studio',
@@ -108,6 +109,10 @@ function fork({ port, env, onOpen, onBrowser, onAsk, log }) {
       } else if (message?.type === 'open') onOpen(message.url);
       else if (message?.type === 'browser' || message?.type === 'ffmpeg') onBrowser(message);
       else if (message?.type === 'ask' || message?.type === 'ask-cancel') onAsk?.(message, (answer) => child.postMessage(answer));
+      /* a folder about to be renamed: what the app runs in it stops first (studio-process.mjs release) */
+      else if (message?.type === 'release') {
+        void Promise.resolve(onRelease?.(String(message.folder ?? ''))).catch(() => {}).then(() => child.postMessage({ type: 'released', id: message.id }));
+      }
     });
     child.once('exit', (code) => {
       if (settled) return;
@@ -128,10 +133,11 @@ function fork({ port, env, onOpen, onBrowser, onAsk, log }) {
 
 /**
  * Start the window's Studio. `onExit` hears when it stops after it had started (a crash): `restart()` starts it again.
- * `onAsk` answers Studio's questions for the person's agent (studio-process.mjs askAgent).
+ * `onAsk` answers Studio's questions for the person's agent (studio-process.mjs askAgent). `onRelease` stops what the
+ * app runs in a project folder about to be renamed (studio-process.mjs release).
  * @param {{ home: string, port: number, env: Record<string, string>, onOpen: (url: string) => void,
  *           onBrowser: (state: { state: string, message?: string }) => void, onExit: (code: number) => void,
- *           onAsk?: AskHandler, log: (line: string) => void }} options
+ *           onAsk?: AskHandler, onRelease?: (folder: string) => Promise<void> | void, log: (line: string) => void }} options
  */
 export async function startWindowStudio(options) {
   await takeOver(options.home, options.log);

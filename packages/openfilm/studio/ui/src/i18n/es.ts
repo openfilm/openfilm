@@ -207,6 +207,7 @@ export const es: Words = {
     missingOpen: 'La carpeta de este proyecto ya no está: se movió, se renombró o se eliminó. Puedes quitarlo de la lista.',
     agentRunning: 'Agente en marcha',
     agentRunningRename: 'Hay un agente trabajando en este proyecto. Detenlo antes de cambiarle el nombre al proyecto.',
+    folderBusyRename: 'Windows no deja cambiar el nombre de la carpeta: un programa todavía la tiene abierta, o tiene abierto un archivo suyo. Cierra lo que la usa (una terminal u otra app que muestre uno de sus archivos) y vuelve a cambiar el nombre del proyecto.',
     exportRunningRename: 'Este proyecto tiene una exportación en curso o en cola. Espera a que termine o cancélala antes de cambiarle el nombre.',
     agentRunningDelete: 'Un agente está trabajando en este proyecto. Detenlo primero y luego elimina el proyecto.',
     agentRunningDeleteMany: 'Un agente está trabajando en {n} de estos proyectos. Detenlo primero y luego elimínalos.',

@@ -1,6 +1,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createFolder, createProject, deleteProject, duplicateProject, forgetProject, listFolders, listProjects, locateProject, moveFolder, moveLibrary, moveProjectToFolder, openProject, projectById, renameProject, ProjectError } from './projects.mjs';
@@ -160,6 +161,47 @@ test('renaming a project renames its folder; a taken name is refused', async () 
   assert.equal((await createProject('Two  spaces')).name, 'Two  spaces');
   /* the same name in another case is the same folder, not a taken one */
   if (existsSync(join(scratch, 'MY  FILM ✨ 日本'))) assert.equal((await renameProject(p.id, 'MY  FILM ✨ 日本')).name, 'MY  FILM ✨ 日本');
+});
+
+/** A process working in `folder` (an app's agent between turns), once it has started, until it is stopped. */
+async function workIn(/** @type {string} */ folder) {
+  const child = spawn(process.execPath, ['-e', 'process.stdout.write("up"); setInterval(() => {}, 1000)'], { cwd: folder, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+  const ended = new Promise((done) => child.once('exit', done));
+  await new Promise((done) => child.stdout.once('data', done));
+  return { stop: () => { child.kill(); return ended; } };
+}
+
+test('a project an agent process works in is let go of first, then renamed', { skip: process.platform !== 'win32' && 'Windows refuses to rename a folder a process works in' }, async () => {
+  const p = await openProject(join(scratch, 'Untitled'));
+  const agent = await workIn(p.path);
+  /** @type {string[]} */
+  const released = [];
+  const renamed = await renameProject(p.id, 'My Film', { release: async (path) => { released.push(path); await agent.stop(); } });
+  assert.deepEqual(released, [p.path]);
+  assert.equal(renamed.name, 'My Film');
+  assert.ok(existsSync(join(scratch, 'My Film', 'film.html')) && !existsSync(join(scratch, 'Untitled')));
+});
+
+test('a project folder still held on Windows is refused as busy, and stays where it is', { skip: process.platform !== 'win32' && 'Windows refuses to rename a folder a process works in' }, async () => {
+  const p = await openProject(join(scratch, 'Untitled'));
+  const other = await workIn(p.path);
+  try {
+    await assert.rejects(renameProject(p.id, 'My Film'), (e) => e instanceof ProjectError && e.status === 409 && e.code === 'folder-busy' && /EBUSY/.test(e.message));
+    assert.equal((await projectById(p.id))?.path, p.path);
+    assert.ok(existsSync(join(p.path, 'film.html')) && !existsSync(join(scratch, 'My Film')));
+  } finally { await other.stop(); }
+  /* let go of: the same rename goes through */
+  assert.equal((await renameProject(p.id, 'My Film')).name, 'My Film');
+});
+
+test('a rename to the same name or a taken one lets go of nothing', async () => {
+  const p = await openProject(join(scratch, 'draft'));
+  await openProject(join(scratch, 'taken'));
+  let released = 0;
+  const release = () => { released++; };
+  await renameProject(p.id, 'draft', { release });
+  await assert.rejects(renameProject(p.id, 'taken', { release }), (e) => e instanceof ProjectError && e.status === 409);
+  assert.equal(released, 0);
 });
 
 test('forgetting a project leaves its folder; a deleted folder shows as missing', async () => {

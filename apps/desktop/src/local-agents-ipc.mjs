@@ -45,7 +45,7 @@
  * into `.film/logs/<turn>.model.jsonl`, as the app's own agent writes its own.
  */
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { recordProblem, problemsFile } from 'openfilm/problems';
 import { LOG_SETTLE_MS } from './agent-logs.mjs';
 import { RECORDED_AGENTS, agentRecordCalls, compactCalls, recordedModel } from './agent-records.mjs';
@@ -540,6 +540,18 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       }
     },
     closeAll: () => [...sessions.keys()].forEach(close),
+    /**
+     * A project folder about to be renamed: its sessions between turns close (each agent's process works in the
+     * folder, and Windows will not rename it under that), and their processes are waited for. A session mid-turn or
+     * waiting for an answer stays: the rename is refused for it as before. Its next turn starts in the new folder.
+     */
+    release: async (/** @type {string} */ folder) => {
+      const norm = (/** @type {string} */ p) => (process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p));
+      const same = (/** @type {string} */ p) => norm(p) === norm(folder);
+      const closing = [...sessions].filter(([, e]) => e.session && same(e.cwd) && !(e.running > 0) && !(e.turn && !e.turn.done) && e.pending.size === 0);
+      for (const [key] of closing) close(key);
+      await Promise.all(closing.map(([, e]) => e.session.ended()));
+    },
     /** an agent disconnected in Settings: its sessions close */
     closeAgent: (agent) => { for (const [key, entry] of [...sessions]) if (entry.agent === agent) close(key); },
     /**

@@ -42,6 +42,7 @@ export function ProjectTabs({ current, onProjects, onRenameCurrent, onCoverCurre
     } catch (e) {
       toast.showError(e instanceof ApiError && e.body.code === 'agent-running' ? t('projects.agentRunningRename')
         : e instanceof ApiError && e.body.code === 'export-running' ? t('projects.exportRunningRename')
+        : e instanceof ApiError && e.body.code === 'folder-busy' ? t('projects.folderBusyRename')
         : e instanceof ApiError && e.status === 409 ? t('projects.renameTaken').replace('{name}', name) : t('project.renameFailed'));
     }
   };
