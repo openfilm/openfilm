@@ -14,7 +14,7 @@ import { wav } from './providers/common.mjs';
 import { changeSettings, kindOf, providersFile } from './keys.mjs';
 import { listProviders } from './providers/index.mjs';
 import { startStudio } from './server.mjs';
-import { filmHtml } from '../../src/film-doc.mjs';
+import { filmHtml, readFilmFile } from '../../src/film-doc.mjs';
 import { libraryGet, libraryVerbs } from '../../src/library-search.mjs';
 import { bringIn } from './files.mjs';
 import { changeMediaReferences } from '../../src/media-links.mjs';
@@ -168,8 +168,8 @@ test('wrong options are refused before anything is sent (exit 2)', async () => {
     await assert.rejects(runGet(root, verb, args), (e) => e.code === 2 && pattern.test(e.message));
   };
   await refused('tts', { out: 'intro', text: 'hi' }, /needs --voice <voiceId>/);
-  await refused('tts', { out: 'vo/intro', text: 'hi', voice: 'v' }, /--out is a simple name/);
-  await refused('tts', { out: 'intro.mp3', text: 'hi', voice: 'v' }, /--out is a simple name/);
+  await refused('tts', { out: 'vo/intro', text: 'hi', voice: 'v' }, /--out is a name/);
+  await refused('tts', { out: 'intro.mp3', text: 'hi', voice: 'v' }, /--out is a name/);
   await refused('tts', { out: 'intro', text: 'hi', voice: 'v', speed: '2' }, /tts has no --speed/);
   await refused('sfx', { out: 'ding', prompt: 'a chime', sec: '40' }, /--sec is a number from 0.5 to 22/);
   await refused('image', { out: 'hero', prompt: 'a key', ratio: '5:4' }, /--ratio is one of/);
@@ -556,7 +556,7 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
     assert.match(get(scratch, 'tts').stdout, /is not in a project; `openfilm open` makes one/);
     const wrong = get(root, 'tts', '--out', 'a/b', '--text', 'hi', '--voice', 'v');
     assert.equal(wrong.status, 2);
-    assert.match(wrong.stdout, /--out is a simple name/);
+    assert.match(wrong.stdout, /--out is a name/);
     assert.equal(get(root, 'tts', 'extra', '--out', 'x').status, 2);
     assert.equal(get(root, 'tts', '--via', 'nobody', '--out', 'x', '--text', 'hi', '--voice', 'v').status, 2);
   } finally {
@@ -633,4 +633,64 @@ test('what a run lands is on record with how it was made, and the run says so on
   writeFileSync(join(root, 'assets/upload/talk.wav'), wav(new Uint8Array(32000), 16000));
   await runGet(root, 'asr', { src: 'assets/upload/talk.wav' }, { made: (at) => told.push(at) });
   assert.equal(told.length, 1);
+});
+
+test('generated files retain multilingual names, spaces and URL punctuation on disk and in a film', async () => {
+  const root = project();
+  for (const out of ['春日长椅 01', '日本語 한글 🎬', 'नमस्ते', 'العَرَبِيَّة', 'Cafe\u0301', "take #1 + 100% & Bob's [$] (v2);=!"]) {
+    const receipt = JSON.parse(await runGet(root, 'tts', { out, text: SAID, voice: 'v-1' }));
+    const src = `assets/audio/vo/${out}.mp3`;
+    assert.equal(receipt.src, src);
+    assert.equal(readFileSync(join(root, src)).length, mp3(2.8).length);
+    assert.ok(existsSync(join(root, `assets/audio/vo/${out}.vtt`)));
+    const written = filmHtml({ stage: { w: 1920, h: 1080 }, tracks: [{ clips: [{ id: 'speech', src, at: 0, time: [0, 2.8] }] }] });
+    const { doc, problems } = readFilmFile(written);
+    assert.deepEqual(problems, []);
+    assert.equal(doc.tracks[0].clips[0].src, src);
+  }
+});
+
+test('invalid output names fail before contacting a paid provider', async () => {
+  const root = project();
+  for (const out of ['../outside', 'a\\b', '.hidden', 'a:b', 'a?b', 'a*b', 'a"b', 'a<b', 'a>b', 'a|b', 'a\0b', 'a\nb',
+    'CON', 'aux', 'nul', 'LPT1', 'COM¹', 'trailing.', 'trailing ', '图'.repeat(81)]) {
+    await assert.rejects(runGet(root, 'tts', { out, text: SAID, voice: 'v-1' }), (e) => e.code === 2, JSON.stringify(out));
+  }
+  assert.equal(calls.length, 0);
+});
+
+test('OpenFilm video uploads real first and last frames unchanged and saves a result with special characters', async () => {
+  const { default: openfilm } = await import('./providers/openfilm.mjs');
+  const original = process.env.OPENFILM_API_URL;
+  const root = join(project(), '工程 🎬 #1 & 100%');
+  mkdirSync(join(root, 'assets'), { recursive: true });
+  writeFileSync(join(root, 'film.html'), filmHtml({ stage: { w: 1920, h: 1080 }, tracks: [] }));
+  const first = "assets/首帧 Cafe\u0301 #1 + 100% & Bob's [`$].PNG";
+  const last = 'assets/尾帧 日本語 한글 👩🏽‍🎨.png';
+  const files = { [first]: Buffer.from('first picture'), [last]: Buffer.from('last picture') };
+  for (const [path, bytes] of Object.entries(files)) writeFileSync(join(root, path), bytes);
+  const out = "春日 🎬 #1 + 100% & Bob's [$]";
+  const src = `assets/video/${out}.mp4`;
+  const model = 'openrouter/bytedance/seedance-2.5';
+  refuse = (call) => {
+    if (call.path === '/v1/media/models') return [200, { models: { video: [{ id: model, name: 'Seedance 2.5' }] } }];
+    assert.equal(call.path, '/v1/media/run');
+    const body = JSON.parse(call.body.toString('utf8'));
+    assert.equal(body.args['first-frame'], first);
+    assert.equal(body.args['last-frame'], last);
+    assert.deepEqual(body.inputs, Object.entries(files).map(([path, bytes]) => ({ path, base64: bytes.toString('base64') })));
+    return [200, { files: [{ path: src, base64: b64('generated mp4') }], index: [{ src, kind: 'video', dur: 5 }], receipt: { src, dur: 5 } }];
+  };
+  try {
+    process.env.OPENFILM_API_URL = base;
+    await openfilm.refresh({ force: true });
+    await changeSettings((s) => { s.keys.openfilm = 'ofk_test0123456789'; });
+    const receipt = JSON.parse(await runGet(root, 'video', { out, prompt: '两人在长椅上相视而笑', 'first-frame': first, 'last-frame': last }, { via: 'openfilm', model, yes: true }));
+    assert.equal(receipt.src, src);
+    assert.equal(readFileSync(join(root, src), 'utf8'), 'generated mp4');
+    assert.equal(calls.filter((call) => call.path === '/v1/media/run').length, 1);
+  } finally {
+    if (original === undefined) delete process.env.OPENFILM_API_URL;
+    else process.env.OPENFILM_API_URL = original;
+  }
 });

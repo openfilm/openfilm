@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { colorTagsOf, decoderCandidates, encoders, h264ColorTags, hardwareDecoding, hardwareEncoder, hardwareOptions, onTheChip, proresOptions } from './encoders.mjs';
+import { chipDelivery, colorTagsOf, decoderCandidates, encoders, h264ColorTags, hardwareDecoding, hardwareEncoder, hardwareOptions, holdsQuality, onTheChip, proresOptions, unheld } from './encoders.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 const ffmpeg = { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 };
@@ -20,6 +20,74 @@ test('each graphics chip\'s encoder gets a bitrate it keeps to, a key frame inte
     assert.equal(keyed[keyed.indexOf('-g') + 1], '60', encoder);
   }
   assert.ok(hardwareOptions('h264_mf', 8e6).join(' ').includes('-hw_encoding 1'), 'never Windows\' software encoder');
+});
+
+test('each maker\'s encoder is held to a quality in its own way, the better the quality asked; Windows\' own keeps its bitrate', () => {
+  const flag = { videotoolbox: '-q:v', nvenc: '-cq', qsv: '-global_quality', amf: '-qvbr_quality_level' };
+  for (const [maker, option] of Object.entries(flag)) {
+    for (const codec of ['h264', 'hevc']) {
+      const encoder = `${codec}_${maker}`;
+      const high = hardwareOptions(encoder, 8e6, { gop: 60, quality: 'high' });
+      const standard = hardwareOptions(encoder, 8e6, { gop: 60, quality: 'standard' });
+      assert.deepEqual(high.slice(0, 2), ['-c:v', encoder]);
+      const [h, s] = [high, standard].map((options) => Number(options[options.indexOf(option) + 1]));
+      assert.ok(Number.isFinite(h) && Number.isFinite(s), `${encoder}: ${option}`);
+      /* the Mac's is a share of its best; the others count down to the best */
+      assert.ok(maker === 'videotoolbox' ? h > s : h < s, `${encoder}: high is the better picture`);
+      assert.equal(high[high.indexOf('-g') + 1], '60', encoder);
+      assert.equal(high.includes('hvc1'), codec === 'hevc', encoder);
+      /* no average bitrate to spend on a frame with nothing in it; AMD's is the most it may come to */
+      const average = high.includes('-b:v') ? high[high.indexOf('-b:v') + 1] : null;
+      assert.equal(average, maker === 'nvenc' ? '0' : maker === 'amf' ? '8000k' : null, encoder);
+    }
+  }
+  /* the ceiling, where the encoder takes one with a quality */
+  assert.equal(hardwareOptions('h264_nvenc', 8e6, { quality: 'high' }).join(' ').includes('-maxrate 12000k'), true);
+  assert.equal(hardwareOptions('h264_videotoolbox', 8e6, { quality: 'high' }).includes('-maxrate'), false, 'the Mac\'s draws worse under one');
+  assert.deepEqual(hardwareOptions('h264_mf', 8e6, { quality: 'high' }), hardwareOptions('h264_mf', 8e6), 'Media Foundation holds none');
+});
+
+test('which encoders can be held to a quality: H.264 and HEVC on a chip that takes it, never ProRes, Windows\' own or the processor\'s', ffmpeg, async () => {
+  for (const encoder of ['prores_videotoolbox', 'h264_mf', 'hevc_mf', 'libx264']) assert.equal(await holdsQuality(encoder), false, encoder);
+  const have = await encoders();
+  /* Apple silicon's media engine takes a quality; an Intel Mac's does not, and is given its bitrate */
+  if (process.platform === 'darwin' && process.arch === 'arm64' && have.has('h264_videotoolbox')) assert.equal(await holdsQuality('h264_videotoolbox'), true);
+  /* an encoder this ffmpeg has not, or with no chip behind it, is not held to one */
+  if (!have.has('h264_nvenc')) assert.equal(await holdsQuality('h264_nvenc'), false);
+  /* one that gave up while held is given its bitrate from then on */
+  unheld('hevc_videotoolbox');
+  assert.equal(await holdsQuality('hevc_videotoolbox'), false);
+});
+
+test('a chip\'s delivery: at its bitrate, or held to a quality with a bitrate\'s options for a file past two and a half times it', () => {
+  const more = ['-colorspace', 'bt709'];
+  const byRate = chipDelivery('h264_nvenc', 8e6, { gop: 60 }, more);
+  assert.deepEqual(byRate, { video: [...hardwareOptions('h264_nvenc', 8e6, { gop: 60 }), ...more] });
+  const held = chipDelivery('h264_nvenc', 8e6, { gop: 60, quality: 'high' }, more);
+  assert.deepEqual(held.video, [...hardwareOptions('h264_nvenc', 8e6, { gop: 60, quality: 'high' }), ...more]);
+  assert.deepEqual(held.ceiling, { bits: 20e6, video: [...hardwareOptions('h264_nvenc', 12e6, { gop: 60 }), ...more] });
+});
+
+test('held to a quality, a title card comes to a fraction of its bitrate\'s file', ffmpeg, async (t) => {
+  const encoder = await hardwareEncoder('h264', await encoders());
+  if (!encoder || !await holdsQuality(encoder)) return t.skip('no chip encoder here that holds a quality');
+  const dir = mkdtempSync(join(tmpdir(), 'of-chip-quality-'));
+  try {
+    /* a title card: two seconds of a plain ground and a bar of white, with the faint flicker a screen recording has.
+       At a bitrate every frame is given its share to spend on it */
+    const card = ['-f', 'lavfi', '-i', 'color=c=0x202830:size=1280x720:rate=30,drawbox=x=200:y=300:w=880:h=120:color=white:t=fill,noise=alls=2:allf=t', '-t', '2', '-vf', 'format=yuv420p'];
+    const bits = 1280 * 720 * 30 * 0.165;
+    const size = (/** @type {string} */ name, /** @type {string[]} */ options) => {
+      const file = join(dir, name);
+      execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...card, ...options, file]);
+      return statSync(file).size;
+    };
+    const byRate = size('rate.mp4', hardwareOptions(encoder, bits, { gop: 60 }));
+    const byQuality = size('quality.mp4', hardwareOptions(encoder, bits, { gop: 60, quality: 'high' }));
+    assert.ok(byQuality < byRate / 2, `${byQuality} bytes held to a quality, ${byRate} at the bitrate`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('ProRes: 4444 keeps its alpha and 422 HQ its ten bits, on the Mac\'s ProRes engine or with ffmpeg\'s own encoder', () => {

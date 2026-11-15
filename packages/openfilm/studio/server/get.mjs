@@ -40,7 +40,7 @@ import { kindOf, modelFor, providerKey } from './keys.mjs';
 import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
 import { noteMade } from './media-made.mjs';
 import { addedDir } from './providers/added.mjs';
-import { mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
+import { isOutputName, mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
 
 /**
@@ -256,8 +256,8 @@ export async function checkArgs(root, verb, given) {
     if (args[name] === undefined && option.default !== undefined) args[name] = option.default;
     if (args[name] === undefined && option.required) throw usage(`${verb} needs ${flagHelp(name, option)}`);
   }
-  if (typeof args.out === 'string' && (!/^[\p{L}\p{N}][\p{L}\p{N}._-]{0,120}$/u.test(args.out) || /\.[a-z0-9]{2,4}$/i.test(args.out))) {
-    throw usage('--out is a simple name, without a folder or an extension (e.g. --out intro)');
+  if (args.out !== undefined && (!isOutputName(args.out) || /\.[a-z0-9]{2,4}$/i.test(args.out))) {
+    throw usage('--out is a name, without a folder or an extension, up to 120 characters valid on macOS, Windows and Linux (e.g. --out intro)');
   }
   for (const [name, option] of Object.entries(spec.options)) {
     if (!option.path || args[name] === undefined) continue;

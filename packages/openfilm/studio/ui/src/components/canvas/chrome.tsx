@@ -254,7 +254,7 @@ export function CornerBar({ outline, onOutline, map, onMap, wires, onWires, snap
   const act = (run: () => void) => () => { run(); setOpen(false); };
   return (
     <div className={`${CORNER} right-2`}>
-      <Tooltip label={t('canvas.outline.title')} side="top">
+      <Tooltip label={t('canvas.outline.title')} shortcut={`${MOD}F`} side="top">
         <button type="button" aria-label={t('canvas.outline.title')} onClick={onOutline} className={`${SMALL} ${outline ? ON : ''}`}><ListTree {...SMALL_ICON} /></button>
       </Tooltip>
       <Tooltip label={t('canvas.toolbar.map')} side="top">

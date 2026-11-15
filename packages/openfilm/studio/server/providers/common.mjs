@@ -128,10 +128,26 @@ export function needed(/** @type {Record<string, unknown>} */ args, /** @type {s
   return value;
 }
 
+/**
+ * A result's name can use every script, combining marks, emoji, spaces and punctuation that file systems allow.
+ * Leave room for the extension and numbered results, and reject Windows device names even on macOS or Linux.
+ * @param {unknown} name @returns {name is string}
+ */
+export function isOutputName(name) {
+  return typeof name === 'string' && name.length <= 120 && Buffer.byteLength(name, 'utf8') <= 240 && portableName(name);
+}
+
+/** A single file name, without any size limit (the completed name includes its extension). @param {string} name */
+function portableName(name) {
+  return name.length > 0 && name === name.trim() && !name.startsWith('.') && !name.endsWith('.')
+    && !/[/\\:*?"<>|\u0000-\u001f\u007f]/.test(name)
+    && !/^(?:con|conin\$|conout\$|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(name);
+}
+
 /** Where a result lands: `assets/<dir>/<out>.<ext>`; `--out` is a name, not a path. */
 export function landing(/** @type {string} */ dir, /** @type {unknown} */ out, /** @type {string} */ ext) {
   const name = text(out).replace(/\.[a-z0-9]{2,4}$/i, '');
-  if (!name || name === '.' || name === '..' || /[/\\\u0000-\u001f]/.test(name)) throw new Error('--out is a name (no folders, no extension), e.g. --out intro.');
+  if (!portableName(name) || Buffer.byteLength(`${name}.${ext}`, 'utf8') > 255) throw new Error('--out is a name (no folders, no extension), e.g. --out intro.');
   return `assets/${dir}/${name}.${ext}`;
 }
 

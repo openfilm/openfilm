@@ -7,6 +7,7 @@
 import React from 'react';
 import { Brush, Eraser, PenLine, Sparkles, Trash2, Undo2 } from 'lucide-react';
 import { useT } from '@/i18n';
+import { Tooltip } from '../Tooltip';
 import { CanvasModal } from './libraries';
 
 export type RedrawWay = 'mask' | 'markup';
@@ -146,12 +147,12 @@ export function RedrawEditor({ src, onClose, onMake }: {
             ))}
           </span>
         ) : null}
-        <button type="button" title="E" className={tool(erase)} onClick={() => setErase((v) => !v)}><Eraser size={14} />{t('canvas.redraw.erase')}</button>
+        <Tooltip label={t('canvas.redraw.erase')} shortcut="E"><button type="button" className={tool(erase)} onClick={() => setErase((v) => !v)}><Eraser size={14} />{t('canvas.redraw.erase')}</button></Tooltip>
         <label title="[ ]" className="flex items-center gap-2 px-1 text-[12px] text-[var(--cv-ink-3)]">
           {t('canvas.redraw.size')}
           <input type="range" min={1} max={15} value={size} onChange={(event) => setSize(Number(event.target.value))} className="h-1 w-24 cursor-pointer accent-[var(--cv-ink)]" />
         </label>
-        <button type="button" title={`${MOD}Z`} className={tool(false)} disabled={!strokes.length} onClick={undo}><Undo2 size={14} />{t('canvas.redraw.undo')}</button>
+        <Tooltip label={t('canvas.redraw.undo')} shortcut={`${MOD}Z`}><button type="button" className={tool(false)} disabled={!strokes.length} onClick={undo}><Undo2 size={14} />{t('canvas.redraw.undo')}</button></Tooltip>
         <button type="button" className={tool(false)} disabled={!strokes.length} onClick={() => { setUndone([]); setStrokes([]); }}><Trash2 size={14} />{t('canvas.redraw.clear')}</button>
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-4">
@@ -169,10 +170,10 @@ export function RedrawEditor({ src, onClose, onMake }: {
           onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); void make(); } }}
           placeholder={t(way === 'mask' ? 'canvas.redraw.maskHint' : 'canvas.redraw.markupHint')}
           className="min-w-0 flex-1 resize-none bg-transparent text-[13.5px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]" />
-        <button type="button" disabled={!drawn || !prompt.trim() || busy} onClick={() => { void make(); }}
+        <Tooltip label={t('canvas.redraw.make')} shortcut={`${MOD}↵`}><button type="button" disabled={!drawn || !prompt.trim() || busy} onClick={() => { void make(); }}
           className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-[var(--cv-invert)] px-4 text-[13px] font-medium text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:opacity-35">
           <Sparkles size={13} />{t('canvas.redraw.make')}
-        </button>
+        </button></Tooltip>
       </div>
     </CanvasModal>
   );

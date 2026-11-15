@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { changeSettings, cleanKey, modelFor, providerKey, providersFile, readSettings } from './keys.mjs';
@@ -207,4 +207,14 @@ test('the library is searched by meaning at OpenFilm\'s service unless turned of
   assert.equal((await api('/api/providers/library-search', { method: 'PUT', body: { on: 'yes' } })).status, 400);
   state = await (await api('/api/providers/library-search', { method: 'PUT', body: { on: true } })).json();
   assert.equal(state.librarySearch, 'openfilm');
+});
+
+test('strict: a settings file that is there but cannot be read throws instead of reading as no keys; none yet is none', async () => {
+  const folder = mkdtempSync(join(tmpdir(), 'of-keys-strict-'));
+  /* a folder where the file should be: reading it fails as a held file would */
+  const held = join(folder, 'held.json');
+  mkdirSync(held);
+  assert.deepEqual((await readSettings(held)).keys, {});
+  await assert.rejects(readSettings(held, { strict: true }), { code: 'EISDIR' });
+  assert.deepEqual((await readSettings(join(folder, 'none.json'), { strict: true })).keys, {});
 });

@@ -91,6 +91,30 @@ where, and CSS that says how each looks. A page draws a shot.
     looking at its middle), which the film has once any picture of it is in 3D. `--fx-ax` and `--fx-ay` (lengths) are
     its anchor point, stage px from its box's middle: its animation's `rotate` and `scale`, and its turns in 3D, are
     about there.
+  - Video clips use local person effects through ordinary CSS custom properties. `--of-cutout: 1` enables
+    background removal. `--of-cutout-mode` chooses fast portrait (0), bundled portrait detail (1, default), optional
+    detailed subject extraction (2), chroma key (3), or optional person edge refinement (4). `--of-cutout-edge` is spatial, image-guided edge softness
+    (0–1, default .25); `--of-cutout-shrink` contracts positive / expands negative (-1–1, default 0);
+    `--of-cutout-despill` reduces foreground edge color contamination (0–1, default .35). Chroma key uses
+    `--of-cutout-color` (a hex color, default #00ff00), `--of-cutout-key-tolerance` and `--of-cutout-key-softness`.
+    Face retouching uses the `--of-beauty-` properties `smooth`, `light`, `warm`, `rosy`, `detail`, `even`,
+    `dark-circles`, `eye-bright`, `teeth`, `slim`, `jaw`, `chin`, `eyes`, `nose`, `lip`, `blush`, `shadow`, `blemish`, and `highlights`.
+    Strengths default to 0 and range 0–1; `warm` and `chin` also accept negative values down to -1. Pigment colors
+    are `--of-beauty-lip-color`, `--of-beauty-blush-color`, and `--of-beauty-shadow-color` (hex colors).
+    `--of-beauty-quality` chooses landmark regions (0, default) or optional semantic face regions (1).
+    `--of-beauty-texture` retains fine residual texture (0–1, default .6); `--of-beauty-protect-glasses`
+    attenuates eye/nose reshaping around semantically detected spectacles (0–1, default 1). Neither option alone
+    activates beauty processing. Face shaping is aligned to the eye axis with aspect correction.
+    `--of-vision-bypass: 1` shows the original. These affect only the picture, keeping timing, placement and sound.
+    The host processes decoded source frames before applying clip CSS. Preview may use a smaller analysis/output
+    resolution; paused frames, reverse seeks and exports analyze their corresponding frames. Only explicit fast
+    mode can reuse a mask, for at most 1/30 second during continuous forward playback. Analysis caches are bounded
+    and distinguish source, timestamp, model, beauty, dimensions and preview quality. Quality modes never reuse an
+    older mask for a different source time. Full-quality subject extraction may be substantially slower than playback.
+    The reference host bundles small portrait/face models and ONNX/MediaPipe runtimes. The larger subject, refinement and semantic face models are
+    optional, version-pinned, checksum-verified downloads, cached atomically on disk. No frames are sent to a service.
+    Model sources, licenses and sizes are in `src/vision-models.mjs`; bundled licenses are in `models/vision/licenses`.
+    All AI paths analyze frames independently, so reverse seeks and parallel exports do not rely on prior state.
   - `overrides` are the person's changes made in Studio, as JSON, a list of entries. An entry with `at` (a CSS
     selector), on a page clip only, tweaks an element of the page, applied by the host after each frame: optional `n`
     (which match, from 1), `t` (translate px), `s` (scale), `r` (rotate degrees) as the independent CSS transform

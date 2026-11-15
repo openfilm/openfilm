@@ -17,7 +17,6 @@ import { api, ApiError, type ProjectFilm } from '@/api';
 import { useT } from '@/i18n';
 import { readCanvasDoc } from '@/lib/canvas';
 import { studioHost } from '@/lib/host';
-import { useKeyHint } from '@/lib/keymap-store';
 import { leaveProject, openProject } from '@/lib/navigate';
 import { AppMenu } from '@/components/AppMenu';
 import { DesktopDialog } from '@/components/DesktopDialog';
@@ -67,7 +66,6 @@ export function TopBar({ frame }: { frame: ReturnType<typeof useProjectFrame> })
 
 function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loaded: ProjectFilm }) {
   const t = useT();
-  const keyHint = useKeyHint();
   const bar = useWiring('topBar')?.topBar;
   const {
     projectId, setLoaded, toast, reveal, title, setProjectsOpen, setSettingsOpen, desktopOpen, setDesktopOpen,
@@ -141,7 +139,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
         <PluginTools />
         {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
         {pickBench ? <ModeSwitcher now={surface ?? (canvasOpen ? 'canvas' : 'edit')} plugins={benchPlugins} onPick={showWorkbench} disabled={layoutEditing} />
-          : canToggleCanvas ? <Tooltip label={[t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas'), keyHint('work-mode')].filter(Boolean).join(' · ')} side="bottom">
+          : canToggleCanvas ? <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} action="work-mode" side="bottom">
           <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} disabled={layoutEditing} onClick={() => setCanvasOpen(!canvasOpen)}
             className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
             {canvasOpen ? <Workflow size={14} /> : <Scissors size={14} />}

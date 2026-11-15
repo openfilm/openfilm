@@ -82,6 +82,7 @@ function dropLanesOf(lanes: readonly TimelineTrack[], except: readonly string[])
     ...(lane.docIndex != null ? { docIndex: lane.docIndex } : {}),
     ...(lane.locked ? { locked: true } : {}),
     ...(lane.role === 'audio' ? { sound: true } : {}),
+    ...(lane.captions ? { captions: true } : {}),
     occupied: lane.docIndex == null ? [] : occupied.get(lane.docIndex) ?? [],
   }));
 }

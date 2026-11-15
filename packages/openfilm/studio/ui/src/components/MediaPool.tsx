@@ -77,6 +77,7 @@ import { retryImage } from '@/lib/retry-image';
 import { boxBetween, boxHits, boxPick, moveTargets, pickItem, type Box } from '@/lib/media-selection';
 import { barLayout, type BarWords } from '@/lib/media-bar';
 import { byName, folderFaces } from '@/lib/media-folders';
+import { isMediaFileDrop, mediaDropFiles } from '@/lib/media-drop';
 
 type Filter = 'all' | 'video' | 'image' | 'audio' | 'page' | 'other';
 type SortKey = 'name' | 'time' | 'duration' | 'type';
@@ -85,7 +86,7 @@ const SORTS: readonly SortKey[] = ['name', 'time', 'duration', 'type'];
 /** Tiles dragged inside the pane, to be moved into a folder: their paths, a line each (a name has no line break). */
 const FOLDER_DRAG = 'application/x-openfilm-media';
 /** Files dragged in from the computer, not a tile of this pane (the browser adds a dragged picture as a file). */
-const fromComputer = (dt: DataTransfer) => dt.types.includes('Files') && !dt.types.includes(FOLDER_DRAG);
+const fromComputer = isMediaFileDrop;
 /** The open folder per project, kept across remounts (the layout re-mounts the pane). */
 const OPEN_FOLDER = new Map<string, string>();
 
@@ -850,9 +851,10 @@ export function MediaPool({
         void moveAll(paths.split('\n').filter(Boolean), intoRel);
         return;
       }
-      if (!fromComputer(e.dataTransfer) || !e.dataTransfer.files.length) return;
+      if (!fromComputer(e.dataTransfer)) return;
+      const files = mediaDropFiles(e.dataTransfer);
       e.preventDefault(); e.stopPropagation(); setDropTarget(null); setOsDrag(false);
-      void importFiles([...e.dataTransfer.files], intoRel);
+      void importFiles(files, intoRel);
     },
   });
 
@@ -867,6 +869,7 @@ export function MediaPool({
       ref={setRootEl}
       /* a drag let go back in the pane ends at once (lib/resource-drag) */
       data-drag-home=""
+      data-media-dropzone=""
       className="relative flex h-full min-h-0 flex-col"
       /* the pane's keys, while they are its own (the timeline's Delete is the timeline's): Delete (or Backspace) asks to
          delete what is picked, as an editor's project panel does; Enter puts the one file picked on the timeline, as
@@ -897,13 +900,14 @@ export function MediaPool({
       }}
       /* files from the computer: a drag of this pane's own tiles is not one, whatever the browser adds to it (a picture
          dragged carries itself as a file) */
-      onDragEnter={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); setOsDrag(true); } }}
-      onDragOver={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+      onDragEnter={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); e.stopPropagation(); setOsDrag(true); } }}
+      onDragOver={(e) => { if (fromComputer(e.dataTransfer)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; setOsDrag(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) { setOsDrag(false); setDropTarget(null); } }}
       onDrop={(e) => {
-        if (!fromComputer(e.dataTransfer) || !e.dataTransfer.files.length) return;
-        e.preventDefault(); setOsDrag(false); setDropTarget(null);
-        void importFiles([...e.dataTransfer.files]);
+        if (!fromComputer(e.dataTransfer)) return;
+        const files = mediaDropFiles(e.dataTransfer);
+        e.preventDefault(); e.stopPropagation(); setOsDrag(false); setDropTarget(null);
+        void importFiles(files);
       }}
     >
       {/* the bar at the pane's width (lib/media-bar): the search field fills the room left; narrowing, Upload is its
@@ -1108,7 +1112,7 @@ export function MediaPool({
 
       {/* over a folder, the folder shows where they go */}
       {osDrag && dropTarget == null ? (
-        <div className="pointer-events-none absolute inset-1 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-[var(--accent)] bg-[var(--bg-raised)]/80 text-[13px] text-[var(--text)]">
+        <div data-media-drop-overlay="" className="pointer-events-none absolute inset-1 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-[var(--accent)] bg-[var(--bg-raised)]/80 text-[13px] text-[var(--text)]">
           {t('media.dropHint')}
         </div>
       ) : null}

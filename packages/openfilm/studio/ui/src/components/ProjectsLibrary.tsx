@@ -276,6 +276,7 @@ export function ProjectsPopover({
   const showView = setView;
   const [pendingDelete, setPendingDelete] = React.useState<string[] | null>(null);
   const [pendingFolder, setPendingFolder] = React.useState<ProjectFolder | null>(null);
+  const [pendingBatch, setPendingBatch] = React.useState<{ projectIds: string[]; folders: ProjectFolder[] } | null>(null);
   const [busy, setBusy] = React.useState<'creating' | 'opening' | 'duplicating' | null>(null);
   /* Studio's folder browser (no app to pick folders), "Get from GitHub", and a folder without a film to start one in */
   const [browser, setBrowser] = React.useState<{ mode: 'open' } | { mode: 'locate'; project: LibraryProject } | null>(null);
@@ -285,10 +286,10 @@ export function ProjectsPopover({
 
   React.useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !pendingDelete && !pendingFolder && !askStart) close(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !pendingDelete && !pendingFolder && !pendingBatch && !askStart) close(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, close, pendingDelete, pendingFolder, askStart]);
+  }, [open, close, pendingDelete, pendingFolder, pendingBatch, askStart]);
 
   const go = (projectId: string, kind: 'creating' | 'opening') => {
     /* the project already open: nowhere to go, and an "Opening" that would never end */
@@ -517,11 +518,21 @@ export function ProjectsPopover({
                 if (working) lib.flash(lib.agentRunning(working, ids.length));
                 else setPendingDelete(ids);
               })}
+              onDeleteItems={(projectIds, folderIds) => {
+                const selectedFolders = lib.folders.filter(f => folderIds.includes(f.id));
+                const held = new Set(lib.folders.filter(f => folderTrail(lib.folders, f.id).some(up => folderIds.includes(up.id))).map(f => f.id));
+                const allIds = [...new Set([...projectIds, ...lib.projects.filter(p => p.folderId && held.has(p.folderId)).map(p => p.id)])];
+                void lib.workingIn(allIds).then(working => {
+                  if (working) lib.flash(lib.agentRunning(working, allIds.length));
+                  else setPendingBatch({ projectIds, folders: selectedFolders });
+                });
+              }}
               folders={lib.folders}
               onCreateFolder={lib.createFolder}
               onRenameFolder={lib.renameFolder}
               onDeleteFolder={(folder) => {
-                const inside = lib.projects.filter((p) => p.folderId === folder.id).map((p) => p.id);
+                const held = new Set(lib.folders.filter(f => folderTrail(lib.folders, f.id).some(up => up.id === folder.id)).map(f => f.id));
+                const inside = lib.projects.filter((p) => p.folderId && held.has(p.folderId)).map((p) => p.id);
                 void lib.workingIn(inside).then((working) => {
                   if (working) lib.flash(lib.agentRunning(working, inside.length));
                   else setPendingFolder(folder);
@@ -628,6 +639,28 @@ export function ProjectsPopover({
             if (deleted.size) void studioHost?.tabs?.gone?.([...deleted]);
             if (deleted.has(currentProjectId)) onCurrentRemoved();
           });
+        }}
+      />
+      <ConfirmDialog
+        open={!!pendingBatch}
+        title={t('projectBrowser.deleteTitle')}
+        description={t('projectBrowser.deleteDesc')}
+        confirmLabel={t('confirm.delete')}
+        cancelLabel={t('confirm.cancel')}
+        danger
+        onCancel={() => setPendingBatch(null)}
+        onConfirm={() => {
+          const batch = pendingBatch;
+          setPendingBatch(null);
+          if (!batch) return;
+          void (async () => {
+            const deleted = new Set<string>();
+            // Independent roots only: nested selections are folded into their selected parent by ProjectsView.
+            for (const folder of batch.folders) for (const id of await lib.deleteFolder(folder)) deleted.add(id);
+            if (batch.projectIds.length) for (const id of await lib.deleteProjects(batch.projectIds)) deleted.add(id);
+            if (deleted.size) void studioHost?.tabs?.gone?.([...deleted]);
+            if (deleted.has(currentProjectId)) onCurrentRemoved();
+          })();
         }}
       />
     </>

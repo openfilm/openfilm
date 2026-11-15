@@ -42,18 +42,26 @@ const ALSO = /** @type {Record<string, string[]>} */ ({ GEMINI_API_KEY: ['GOOGLE
 const plain = (/** @type {unknown} */ v) => v && typeof v === 'object' && !Array.isArray(v) ? /** @type {Record<string, unknown>} */ (v) : {};
 const strings = (/** @type {unknown} */ v) => /** @type {Record<string, string>} */ (Object.fromEntries(Object.entries(plain(v)).filter(([, s]) => typeof s === 'string')));
 
-/** The saved keys and choices (empty when there are none yet). */
-export async function readSettings(file = providersFile()) {
+/**
+ * The saved keys and choices (empty when there are none yet). `strict`: a file there that cannot be read now (on
+ * Windows, held for a moment by an antivirus or indexer) throws instead of reading as none.
+ */
+export async function readSettings(file = providersFile(), { strict = false } = {}) {
   try {
     const info = await stat(file);
-    /* someone loosened it: keys are this user's alone */
-    if (info.mode & 0o077) await chmod(file, 0o600);
+    /* someone loosened it: keys are this user's alone (Windows has no such bits: it always looks loosened) */
+    if (process.platform !== 'win32' && info.mode & 0o077) await chmod(file, 0o600).catch(() => {});
     const raw = plain(JSON.parse(await readFile(file, 'utf8')));
     /* 'auto' was a choice once: it means none now */
     const use = Object.fromEntries(Object.entries(strings(raw.use)).filter(([, id]) => id !== 'auto'));
     const off = Array.isArray(raw.off) ? raw.off.filter((id) => typeof id === 'string') : [];
     return /** @type {ProviderSettings} */ ({ keys: strings(raw.keys), use, model: strings(raw.model), off, custom: keptServices(raw.custom), accounts: strings(raw.accounts), libraryOff: raw.libraryOff === true });
-  } catch { return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [], custom: [], accounts: {}, libraryOff: false }); }
+  } catch (e) {
+    /* none yet, or not JSON, reads as none; a file that is there but cannot be read is not "none" */
+    const code = /** @type {NodeJS.ErrnoException} */ (e).code;
+    if (strict && code && code !== 'ENOENT') throw e;
+    return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [], custom: [], accounts: {}, libraryOff: false });
+  }
 }
 
 /**
