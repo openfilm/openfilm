@@ -7,7 +7,7 @@
  * ffmpeg runs a few at a time: a project opened with fifty clips must not start fifty decoders. The editor's sound of
  * each file (soundOf) is made a few at a time of its own, so a long recording's does not hold up the thumbnails.
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm, stat } from 'node:fs/promises';
@@ -141,8 +141,9 @@ const RATE = 8000;
 export async function waveform(root, rel) {
   const { abs, key } = await source(root, rel);
   const bytes = await cached(root, 'waves', `${key}.json`, async () => {
-    const pcm = await tool('ffmpeg', ['-v', 'error', '-i', abs, '-vn', '-ac', '1', '-ar', String(RATE), '-f', 's16le', '-']);
-    return Buffer.from(JSON.stringify(peaksOf(pcm)));
+    /* read as ffmpeg writes it: a two-hour recording is never held in memory whole */
+    const wave = await streamedPeaks(['-v', 'error', '-nostdin', '-i', abs, '-vn', '-ac', '1', '-ar', String(RATE), '-f', 's16le', '-']);
+    return Buffer.from(JSON.stringify(wave));
   });
   return JSON.parse(bytes.toString());
 }
@@ -217,6 +218,51 @@ export async function mixLoudness(root, sounds, duration) {
     measuringMixes.set(id, pending);
   }
   return JSON.parse((await pending).toString());
+}
+
+/**
+ * ffmpeg's mono 16-bit samples at RATE, made into `{ duration (s), peaks }` as they come out of it, in one of `slots`:
+ * any length of sound in the memory of one window of samples.
+ * @param {string[]} args @param {Slots} [slots]
+ * @returns {Promise<{ duration: number, peaks: number[] }>}
+ */
+async function streamedPeaks(args, slots = SLOTS) {
+  if (slots.busy >= slots.size) await new Promise((r) => slots.waiting.push(() => r(undefined)));
+  slots.busy++;
+  try {
+    return await new Promise((resolve, reject) => {
+      const child = spawn('ffmpeg', ['-hide_banner', ...args], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      const per = RATE / PEAKS_PER_SECOND;
+      /** @type {number[]} */
+      const peaks = [];
+      let max = 0, inWindow = 0, samples = 0, err = '';
+      /** @type {Buffer | null} */
+      let odd = null;
+      child.stdout.on('data', (/** @type {Buffer} */ chunk) => {
+        const buf = odd ? Buffer.concat([odd, chunk]) : chunk;
+        const even = buf.length - (buf.length % 2);
+        for (let o = 0; o < even; o += 2) {
+          const v = Math.abs(buf.readInt16LE(o));
+          if (v > max) max = v;
+          if (++inWindow === per) { peaks.push(Math.round((max / 32768) * 1000) / 1000); max = 0; inWindow = 0; }
+        }
+        samples += even / 2;
+        odd = even < buf.length ? buf.subarray(even) : null;
+      });
+      child.stderr.on('data', (/** @type {Buffer} */ d) => { err = (err + d.toString()).slice(-4000); });
+      child.on('error', (error) => reject(/** @type {NodeJS.ErrnoException} */ (error).code === 'ENOENT'
+        ? new MediaError('ffmpeg is not installed (macOS: brew install ffmpeg · Debian/Ubuntu: sudo apt install ffmpeg · Windows: winget install ffmpeg)', 501)
+        : error));
+      child.on('close', (code) => {
+        if (code !== 0) return reject(new MediaError(err.trim().split('\n').pop() || `ffmpeg ended with ${code}`));
+        if (inWindow) peaks.push(Math.round((max / 32768) * 1000) / 1000);
+        resolve({ duration: samples / RATE, peaks });
+      });
+    });
+  } finally {
+    slots.busy--;
+    slots.waiting.shift()?.();
+  }
 }
 
 /** Mono 16-bit samples at RATE → `{ duration (s), peaks }`. */

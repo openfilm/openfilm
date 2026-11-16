@@ -65,6 +65,16 @@ test('waveform: loud where the tone is, silent after', { skip: !hasFfmpeg && 'no
   assert.ok(peaks[10] > 0.05 && peaks[70] < 0.001, `${peaks[10]} ${peaks[70]}`);
 });
 
+test('waveform: a recording longer than an hour (more samples than one read could hold) has its whole wave', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  /* 75 minutes: a tone for the first minute and the last, silence between */
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=300:duration=60:sample_rate=8000', '-f', 'lavfi', '-i', 'anullsrc=r=8000:cl=mono:d=4380',
+    '-f', 'lavfi', '-i', 'sine=frequency=300:duration=60:sample_rate=8000', '-filter_complex', '[0][1][2]concat=n=3:v=0:a=1', '-c:a', 'flac', join(root, 'assets', 'long.flac')]);
+  const { duration, peaks } = await waveform(root, 'assets/long.flac');
+  assert.ok(Math.abs(duration - 4500) < 1, String(duration));
+  assert.ok(Math.abs(peaks.length - 4500 * 40) <= 2, String(peaks.length));
+  assert.ok(peaks[40 * 30] > 0.05 && peaks[40 * 2000] < 0.001 && peaks[40 * 4470] > 0.05, 'loud at the ends, silent between');
+});
+
 test('loudness: the part of the file asked for, in LUFS; 6 dB quieter reads 6 LU less; silence has none', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
   /* a 1 kHz tone at ffmpeg's level (1/8 of full scale), and the same 6 dB quieter, then silence */
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=3', '-af', 'volume=0.5,apad=pad_dur=1', join(root, 'assets', 'half.wav')]);
