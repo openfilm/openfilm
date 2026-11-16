@@ -2155,7 +2155,6 @@ export const ko: Words = {
       purple: "보라",
     },
     trackHeight: "트랙 높이",
-    waveformRatio: "파형 비율",
     allTracksHeight: "모든 트랙의 높이",
     size: {
       small: "작게",

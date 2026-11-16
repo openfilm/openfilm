@@ -59,7 +59,6 @@ import { useLanguage, useT } from '@/i18n';
 import { CcMark } from './CcMark';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
 import { ownTrackHeight } from '@/lib/track-heights';
-import { WAVEFORM_RATIOS } from '@/lib/track-waveforms';
 import type { Op } from '@/api';
 import type { ClipEdit } from '@/lib/film-clip-edits';
 import { laneOfBlock, pasteLane, trackByLane } from '@/lib/timeline-clipboard';
@@ -234,6 +233,12 @@ const INFO_H = 15;
 const SCRUB_TELL_MS = 15;
 /** While scrubbing, how often the timeline renders itself for the time (ms): the line itself moves each frame. */
 const SCRUB_STATE_MS = 100;
+/**
+ * The minimum audio band at the bottom of a video clip: its own sound draws its waveform here; a video without
+ * sound keeps the band empty but still takes its height, so neighboring videos' preview bands line up. A page or
+ * a still has no sound at all: its picture takes the whole clip.
+ */
+const AUDIO_BAND_H = INFO_H;
 /** The gap between rows: two rows read as two, not as one area. */
 const GAP = 2;
 /**
@@ -3134,10 +3139,8 @@ export const Timeline = React.memo(function Timeline({
             const visual = block.kind === 'mg' || block.kind === 'video';
             const soundBand = compound ? Boolean(block.ownAudio) : block.kind === 'video' && !(block.src && filmSrcIsStill(block.src));
             const bandAudio = visual && !!block.ownAudio && !block.silent;
-            /* The chosen share of the content grows with its track. Keep the name and at least 6 px each of
-               picture and sound, including at the smallest track height. */
-            const waveformRatio = track.waveformRatio ?? WAVEFORM_RATIOS[0];
-            const audioBandH = Math.min(h - INFO_H - 6, Math.max(6, Math.round((h - INFO_H) * waveformRatio / 100)));
+            /* The sound grows with its track, but a small track keeps the band it had before. */
+            const audioBandH = Math.max(AUDIO_BAND_H, Math.round((h - INFO_H) * 0.3));
             const previewH = Math.max(6, h - INFO_H - (soundBand ? audioBandH : 0));
             /* where its sound starts: the top of a video's audio band, or of a sound's waveform (a page's or a still's
                picture, which has none). The volume line is across it */

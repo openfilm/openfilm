@@ -25,7 +25,6 @@ import { useKeyHint } from '@/lib/keymap-store';
 import type { TimelineBlock, TimelineTrack } from '@/lib/timeline-layout';
 import type { MediaListing } from '@/lib/workspace-resources';
 import { ownTrackHeight, sizeOf, trackHeightsOf, withTrackHeight, TRACK_SIZES, type TrackSize } from '@/lib/track-heights';
-import { waveformRatiosOf, withWaveformRatio, WAVEFORM_RATIOS, type WaveformRatio } from '@/lib/track-waveforms';
 import type { Player } from '@/editor/player';
 import type { OutsideStep } from '@/editor/use-film';
 import type { ContextMenuEntry } from './ContextMenu';
@@ -52,7 +51,7 @@ export function useEditorTools({
   tracks: readonly TimelineTrack[];
   film: Film | null;
   settings: ProjectSettings | null;
-  patchSettings: (patch: Parameters<typeof api.patchSettings>[1]) => Promise<void>;
+  patchSettings: (patch: Parameters<typeof api.patchSettings>[1]) => void;
   player: React.MutableRefObject<Player>;
   /** where the playhead is, ms */
   timeRef: React.MutableRefObject<number>;
@@ -178,21 +177,10 @@ export function useEditorTools({
   const [live, setLive] = React.useState<{ docIndex: number; height: number } | null>(null);
   React.useEffect(() => { setLive(null); }, [settings]);
   const heights = React.useMemo(() => trackHeightsOf(settings?.trackHeights ?? [], film?.tracks ?? []), [settings, film]);
-  const waveforms = React.useMemo(() => waveformRatiosOf(settings?.trackWaveforms ?? [], film?.tracks ?? []), [settings, film]);
-  const waveformWrites = React.useRef<Promise<unknown>>(Promise.resolve());
-  const setWaveformRatio = React.useCallback((index: number, ratio: WaveformRatio) => {
-    const tracks = filmRef.current?.tracks ?? [];
-    /* Each choice reads after the previous write: a slow response must not make the next track lose its setting. */
-    waveformWrites.current = waveformWrites.current.then(async () => {
-      const kept = await api.settings(projectId);
-      await patchSettings({ trackWaveforms: withWaveformRatio(kept.trackWaveforms ?? [], tracks, index, ratio) });
-    }).catch((e: Error) => { toast.showError(e.message); });
-  }, [projectId, patchSettings, toast]);
   const shownTracks = React.useMemo(() => tracks.map((tr) => {
     const h = tr.docIndex == null ? undefined : live?.docIndex === tr.docIndex ? live.height : heights.get(tr.docIndex);
-    const waveformRatio = tr.docIndex == null ? undefined : waveforms.get(tr.docIndex);
-    return h == null && waveformRatio == null ? tr : { ...tr, ...(h == null ? {} : { height: h }), waveformRatio };
-  }), [tracks, heights, waveforms, live]);
+    return h == null ? tr : { ...tr, height: h };
+  }), [tracks, heights, live]);
   const setHeights = React.useCallback((indexes: readonly number[], height: number | null) => {
     patchSettings({ trackHeights: withTrackHeight(settings?.trackHeights ?? [], filmRef.current?.tracks ?? [], indexes, height) });
   }, [settings, patchSettings]);
@@ -220,15 +208,6 @@ export function useEditorTools({
         })),
       },
       {
-        id: 'waveform-ratio',
-        label: t('editorTools.waveformRatio'),
-        disabled: track.kind !== 'visual' || !track.blocks.some((b) => (b.kind === 'video' || b.kind === 'mg') && b.ownAudio && !b.silent),
-        submenu: WAVEFORM_RATIOS.map((ratio) => ({
-          id: `waveform:${ratio}`, label: `${ratio}%`, checked: (waveforms.get(docIndex) ?? WAVEFORM_RATIOS[0]) === ratio,
-          onSelect: () => setWaveformRatio(docIndex, ratio),
-        })),
-      },
-      {
         id: 'tracks-height',
         label: t('editorTools.allTracksHeight'),
         submenu: sizes.map((s) => ({
@@ -247,7 +226,7 @@ export function useEditorTools({
         })),
       },
     ];
-  }, [heights, waveforms, setWaveformRatio, setHeights, patchSettings, t]);
+  }, [heights, setHeights, patchSettings, t]);
 
   /* ── loudness ── */
   const [measuring, setMeasuring] = React.useState(false);

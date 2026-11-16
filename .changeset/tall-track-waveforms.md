@@ -1,5 +1,5 @@
 ---
-"openfilm": minor
+"openfilm": patch
 ---
 
-Let video waveforms grow with their tracks and choose 30%, 60% or 90% waveform proportions beside the track height presets.
+Let video waveforms grow with their tracks while keeping the audio band at least 15 px tall.

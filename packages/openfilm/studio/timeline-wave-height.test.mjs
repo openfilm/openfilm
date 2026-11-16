@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
@@ -39,7 +39,15 @@ test('resizing video and sound tracks grows their waveforms and keeps the sound 
       for (let i = 0; i < 100; i += 1) { if (await check()) return; await page.waitForTimeout(100); }
       assert.fail(what);
     };
-    const videoDefaults = [];
+    const resize = async (head, height) => {
+      const box = await head.boundingBox();
+      const grip = await head.locator('[data-track-resize]').boundingBox();
+      await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 + height - box.height, { steps: 8 });
+      await page.mouse.up();
+      await until(async () => (await head.boundingBox()).height === height, `track reaches ${height}px`);
+    };
     for (const [kind, index] of [['audio', 0], ['video', 0], ['video', 1]]) {
       const clip = page.locator(kind === 'audio' ? '[data-block-id]:not([data-block-kind="video"]):not([data-block-kind="mg"])' : '[data-block-id][data-block-kind="video"]').nth(index);
       const canvas = clip.locator('canvas[data-wave-volume]');
@@ -58,13 +66,9 @@ test('resizing video and sound tracks grows their waveforms and keeps the sound 
       const peakBefore = await peakHeight();
       const head = page.locator(`[data-lane-type="${kind === 'audio' ? 'audio' : 'visual'}"]`).nth(index);
       const defaultH = (await head.boundingBox()).height;
-      if (kind === 'video') videoDefaults.push(defaultH);
+      const volume = await canvas.getAttribute('data-wave-volume');
       const audioBand = clip.locator('[data-audio-band="on"]');
-      const grip = await head.locator('[data-track-resize]').boundingBox();
-      await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 + 40, { steps: 8 });
-      await page.mouse.up();
+      await resize(head, defaultH + 40);
       await until(async () => (await canvas.boundingBox()).height > before * 1.2, `${kind} waveform grows with its track (was ${before}px)`);
       await until(async () => canvas.evaluate((el) => el.height === Math.round(el.getBoundingClientRect().height * window.devicePixelRatio)), `${kind} canvas redraws at the new height`);
       assert.ok((await peakHeight()) > peakBefore, 'the drawn peaks grow with the canvas');
@@ -77,93 +81,23 @@ test('resizing video and sound tracks grows their waveforms and keeps the sound 
         const line = await clip.locator('[data-volume-line]').boundingBox();
         assert.ok(Math.abs(dot.y + dot.height / 2 - band.y) <= 1, 'fade dot follows the top of the taller sound band');
         assert.ok(line.y >= band.y && line.y < band.y + band.height, 'volume line stays inside the sound band');
+        await until(async () => (await clip.locator('img').count()) > 0, 'the taller sound band keeps the video picture');
       }
-      /* At the minimum height the picture, name and sound still fit. Double-click restores the default. */
-      const tallerGrip = await head.locator('[data-track-resize]').boundingBox();
-      await page.mouse.move(tallerGrip.x + 3, tallerGrip.y + 3);
-      await page.mouse.down();
-      await page.mouse.move(tallerGrip.x + 3, tallerGrip.y - 200, { steps: 8 });
-      await page.mouse.up();
-      await until(async () => (await head.boundingBox()).height === 28, 'track reaches its minimum height');
-      assert.ok((await canvas.boundingBox()).height > 0, 'waveform remains visible at minimum height');
-      await head.locator('[data-track-resize]').dblclick();
-      await until(async () => (await canvas.boundingBox()).height === before, 'default waveform height is restored');
-      const defaultGrip = await head.locator('[data-track-resize]').boundingBox();
-      await page.mouse.move(defaultGrip.x + 3, defaultGrip.y + 3);
-      await page.mouse.down();
-      await page.mouse.move(defaultGrip.x + 3, defaultGrip.y + 200, { steps: 8 });
-      await page.mouse.up();
-      await until(async () => (await head.boundingBox()).height === 160, 'track reaches its maximum height');
+      /* Small and minimum-height video tracks keep the original 15 px band (13 px canvas). */
+      for (const height of [kind === 'audio' ? 30 : 36, 28]) {
+        await resize(head, height);
+        assert.equal((await canvas.boundingBox()).height, kind === 'audio' ? height - 17 : 13, 'small waveforms keep their original height');
+        if (kind !== 'audio') assert.equal((await audioBand.boundingBox()).height, 15, 'the video sound band never shrinks below 15px');
+      }
+      await resize(head, 160);
       if (kind !== 'audio') {
         assert.equal((await audioBand.boundingBox()).height, 44, '30 percent of the maximum content height is 44px');
       }
       assert.ok((await canvas.boundingBox()).height > before, 'waveform grows at maximum height');
+      assert.equal(await canvas.getAttribute('data-wave-volume'), volume, 'resizing preserves clip volume');
       await head.locator('[data-track-resize]').dblclick();
       await until(async () => (await canvas.boundingBox()).height === before, 'default height is restored after maximum');
-      await head.click({ button: 'right', position: { x: 4, y: 8 } });
-      const proportion = page.getByRole('menuitem', { name: 'Waveform proportion', exact: true });
-      if (kind === 'audio') {
-        assert.equal(await proportion.isDisabled(), true, 'a sound-only track has no video/waveform split to adjust');
-        await page.keyboard.press('Escape');
-      } else {
-        assert.equal(await proportion.isDisabled(), false);
-        const entries = await page.getByRole('menuitem').allTextContents();
-        assert.equal(entries.findIndex((s) => s.includes('Waveform proportion')), entries.findIndex((s) => s.includes('Track height')) + 1, 'proportion is beside the height presets');
-        const volume = await canvas.getAttribute('data-wave-volume');
-        for (const [ratio, expected] of [[60, defaultH === 76 ? 37 : 29], [90, defaultH === 76 ? 55 : 43], [30, defaultH === 76 ? 18 : 15]]) {
-          if (ratio !== 60) await head.click({ button: 'right', position: { x: 4, y: 8 } });
-          await page.getByRole('menuitem', { name: 'Waveform proportion', exact: true }).hover();
-          await page.getByRole('menuitem', { name: `${ratio}%`, exact: true }).click();
-          await until(async () => (await audioBand.boundingBox()).height === expected, `${ratio}% changes the waveform's share`);
-          assert.equal((await head.boundingBox()).height, defaultH, 'choosing a proportion preserves track height');
-          assert.equal(await canvas.getAttribute('data-wave-volume'), volume, 'the display choice preserves volume');
-          assert.ok((await clip.locator('img').count()) > 0, 'every waveform preset keeps the video picture visible');
-        }
-      }
     }
-    assert.deepEqual(videoDefaults.sort((a, b) => a - b), [64, 76], 'both ordinary and main video tracks were checked');
-    /* The first response is slow: a second track's choice must wait and preserve the first track's setting. */
-    let release, firstResponse;
-    const held = new Promise((resolve) => { release = resolve; });
-    const received = new Promise((resolve) => { firstResponse = resolve; });
-    let patches = 0;
-    await page.route(/\/settings(?:\?|$)/, async (route) => {
-      if (route.request().method() === 'PATCH' && route.request().postDataJSON()?.trackWaveforms) {
-        patches += 1;
-        if (patches === 1) {
-          const response = await route.fetch();
-          firstResponse();
-          await held;
-          await route.fulfill({ response });
-          return;
-        }
-      }
-      await route.continue();
-    });
-    const choose = async (index, ratio) => {
-      await page.locator('[data-lane-type="visual"]').nth(index).click({ button: 'right', position: { x: 4, y: 8 } });
-      await page.getByRole('menuitem', { name: 'Waveform proportion', exact: true }).hover();
-      await page.getByRole('menuitem', { name: `${ratio}%`, exact: true }).click();
-    };
-    try {
-      await choose(0, 90);
-      await received;
-      await choose(1, 60);
-      assert.equal(patches, 1, 'the second write waits for the first response');
-    } finally { release(); }
-    await until(async () => {
-      const settings = JSON.parse(await readFile(join(root, '.film/settings.json'), 'utf8'));
-      return settings.trackWaveforms?.map((w) => w.ratio).sort().join(',') === '60,90';
-    }, 'both tracks keep their proportions after a delayed response');
-    await page.unrouteAll({ behavior: 'wait' });
-    await page.reload();
-    const firstVideo = page.locator('[data-block-kind="video"]').first();
-    await until(async () => (await firstVideo.locator('[data-audio-band="on"]').boundingBox())?.height >= ((await firstVideo.boundingBox())?.height - 15) * 0.85, 'the largest waveform proportion is retained after reload');
-    await firstVideo.click({ button: 'right', position: { x: 20, y: 10 } });
-    await page.getByRole('menuitem', { name: /^Detach audio/ }).click();
-    await until(async () => (await firstVideo.locator('[data-audio-band="on"]').count()) === 0 && (await firstVideo.locator('img').count()) > 0, 'detaching audio at the largest proportion keeps the video picture visible');
-    await page.locator('[data-lane-type="visual"]').first().click({ button: 'right', position: { x: 4, y: 8 } });
-    assert.equal(await page.getByRole('menuitem', { name: 'Waveform proportion', exact: true }).isDisabled(), true, 'a detached video disables the proportion menu');
   } finally {
     await browser?.close();
     await studio?.close();
