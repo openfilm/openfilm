@@ -111,9 +111,9 @@
 .usage small { font-size: 10px; color: var(--text-muted); }
 .addActions { display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 19px; border-top: 1px solid var(--border); }
 .addActions label { display: flex; flex-direction: column; gap: 8px; color: var(--text-muted); font-size: 11px; }
-.addActions select { width: 100%; min-width: 0; height: 35px; padding: 6px 9px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--bg-field); color: var(--text); font-size: 12px; outline: none; }
-.addActions select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent); }
-.addActions select:disabled { color: var(--text-muted); border-color: var(--border); }
+.addActions .choice { width: 100%; min-width: 0; height: 35px; padding: 6px 9px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--bg-field); color: var(--text); font-size: 12px; outline: none; }
+.addActions .choice:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent); }
+.addActions .choice:disabled { color: var(--text-muted); border-color: var(--border); }
 .primary, .secondary { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 35px; padding: 7px 10px; border-radius: 7px; font-size: 12px; font-weight: 550; transition: background-color 120ms ease, border-color 120ms ease; }
 .primary { background: var(--primary); color: var(--on-primary); box-shadow: 0 1px 3px #0002; }
 .primary:hover:not(:disabled) { background: var(--primary-hover); }

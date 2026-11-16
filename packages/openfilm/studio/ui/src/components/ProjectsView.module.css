@@ -155,6 +155,11 @@
   background: var(--bg-hover);
   color: var(--text);
 }
+/* its page shown in the right side: marked as a sidebar line in hand is */
+.storage[data-active='true'] {
+  background: var(--bg-pressed);
+  color: var(--text);
+}
 .storage small {
   margin-left: auto;
   color: var(--text-faint);
@@ -548,6 +553,9 @@
 .projectTabs > button:hover { color: var(--text); }
 .projectTabs > button:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
 .navigation > .search { width: 240px; max-width: 40%; min-width: 120px; margin-left: 16px; }
+/* between the toolbar's groups (going, making, seeing): a thin line with room around it */
+.toolGap { flex: none; width: 1px; height: 18px; margin: 0 8px; background: var(--border); }
+.navigation > .toolGap + .toolGap { display: none; }
 .subnav { padding-left: 13px; margin: 3px 0 0 13px; border-left: 1px solid var(--border); }
 .subnav .treeRow { height: 31px; }
 .brand { min-height: 32px; padding: 0 10px 18px; }
@@ -600,4 +608,3 @@
 
 .destinationDialog .destinationFolders { display: block; }
 .pinHeading { display: flex; align-items: center; gap: 7px; padding: 4px 14px 9px; font-size: 11px; color: var(--text-faint); }
-.folderLocationHint { margin: -6px 0 0; font-size: 11px; color: var(--text-faint); }

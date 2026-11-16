@@ -57,23 +57,20 @@ test('the shared asset library organizes originals, survives an offline drive, a
     let library = page.locator('[data-asset-library]');
     const item = path => library.locator(`[data-media-path="saved/${path}"]`);
     const sidebar = () => page.locator('[data-resource-sidebar]');
-    const projectShortcut = () => sidebar().locator('[data-quick-pin="projects:"] button');
-    const libraryShortcut = () => sidebar().locator('[data-quick-pin="assets:"] button');
-    const showHome = () => sidebar().getByRole('button', { name: 'This PC', exact: true }).click();
+    const projectShortcut = () => sidebar().locator('[data-fixed-place="projects:"] button');
+    const libraryShortcut = () => sidebar().locator('[data-fixed-place="assets:"] button');
+    const showHome = () => sidebar().getByRole('button', { name: 'Resource center', exact: true }).click();
     const showStarred = async () => { await showHome(); await library.getByRole('button', { name: 'Starred', exact: true }).click(); };
     const showOffline = async () => { await showHome(); await library.getByRole('button', { name: 'Offline', exact: true }).click(); };
     await page.getByRole('tablist', { name: 'Projects', exact: true }).waitFor();
     assert.equal(await sidebar().getByRole('button', { name: 'Home', exact: true }).count(), 0);
-    await sidebar().locator('[data-quick-pin="assets:"]').dragTo(sidebar().locator('[data-quick-pin="projects:"]'));
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem('openfilm.resource-center.pins'))[0].kind === 'assets');
-    await page.getByRole('dialog', { name: 'Resource center', exact: true }).getByRole('button', { name: 'Close', exact: true }).first().click();
-    await open.click();
-    await item('Brand.svg').waitFor();
+    /* 项目 and 素材库 are OpenFilm's own places: always first, in that order, never moved or unpinned */
+    assert.deepEqual(await sidebar().locator('[data-fixed-place]').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-fixed-place'))), ['projects:', 'assets:']);
     for (const key of ['projects:', 'assets:']) {
-      const shortcut = sidebar().locator(`[data-quick-pin="${key}"]`);
-      assert.equal(await shortcut.getAttribute('draggable'), 'true', 'default pins can be reordered');
-      await shortcut.getByRole('button').click({ button: 'right' });
-      assert.equal(await page.getByRole('menuitem', { name: 'Unpin from Quick access', exact: true }).count(), 0, 'built-in roots cannot be unpinned, including migrated empty preferences');
+      const place = sidebar().locator(`[data-fixed-place="${key}"]`);
+      assert.equal(await place.getAttribute('draggable'), null, 'a fixed place is not dragged');
+      await place.getByRole('button').click({ button: 'right' });
+      assert.equal(await page.getByRole('menuitem', { name: 'Unpin from Quick access', exact: true }).count(), 0, 'built-in roots cannot be unpinned');
     }
     await sidebar().evaluate(element => { window.resourceSidebar = element; });
     const sidebarLabels = await sidebar().innerText();
@@ -139,7 +136,9 @@ test('the shared asset library organizes originals, survives an offline drive, a
     await item('Brand.svg').waitFor();
     assert.equal(await item('Background.svg').count(), 0);
     await item('Brand.svg').click();
-    await library.getByRole('button', { name: 'Add to collection', exact: true }).click();
+    /* adding to a collection is about what is picked: its right-click menu, not the bar */
+    await item('Brand.svg').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Add to collection', exact: true }).hover();
     await page.getByRole('menuitem', { name: 'New collection', exact: true }).click();
     await page.getByRole('dialog', { name: 'New collection', exact: true }).getByRole('textbox', { name: 'Collection name' }).fill('Brand kit');
     await page.getByRole('dialog', { name: 'New collection', exact: true }).getByRole('button', { name: 'Create', exact: true }).click();
@@ -152,7 +151,7 @@ test('the shared asset library organizes originals, survives an offline drive, a
     await page.keyboard.press('Escape');
     await preview.waitFor({ state: 'detached' });
     assert.equal(await library.isVisible(), true, 'Escape closes the preview first');
-    await details().getByRole('button', { name: 'Add to project', exact: true }).click();
+    await details().getByRole('button', { name: 'Add to project', exact: true }).and(page.locator(':not([aria-haspopup])')).click();
     await details().getByRole('button', { name: 'Already in project', exact: true }).waitFor();
     const clips = async () => readFilmFile(await readFile(join(root, 'film.html'), 'utf8')).doc.tracks.flatMap(t => t.clips);
     assert.equal((await clips()).length, 0, 'adding leaves the timeline unchanged');
@@ -203,12 +202,13 @@ test('the shared asset library organizes originals, survives an offline drive, a
     assert.ok(await readFile(join(external, 'Day 1', 'Frame.svg'), 'utf8'), 'unpinning preserves the original');
     assert.equal(await library.getByRole('button', { name: 'Import media', exact: true }).isDisabled(), true, 'connected folders offer browsing without writes to the originals');
     // Copy/paste and links use known source paths; the NAS originals remain untouched.
-    await showHome();
+    /* the resource center lists only places connected from outside; a new folder is made in the library itself */
+    await libraryShortcut().click();
     await library.locator('[data-explorer-toolbar]').getByRole('button', { name: 'New folder', exact: true }).click();
-    const newFolder = page.getByRole('dialog', { name: 'New folder', exact: true });
-    await newFolder.getByRole('textbox', { name: 'New folder', exact: true }).fill('Transfers');
-    await newFolder.getByRole('button', { name: 'Create', exact: true }).click();
-    await library.locator('[data-resource-home]').getByRole('button', { name: /Transfers/ }).waitFor();
+    const newFolder = library.getByRole('textbox').and(page.locator(':focus'));
+    await newFolder.fill('Transfers');
+    await page.keyboard.press('Enter');
+    await library.locator('[data-media-key="saved/Transfers"]').waitFor();
     await page.reload(); await open.click();
     await sidebar().getByRole('button', { name: 'Camera', exact: true }).click();
     await library.locator('[data-media-key="saved/Camera/Day 1"]').dblclick();
@@ -264,7 +264,7 @@ test('the shared asset library organizes originals, survives an offline drive, a
     await library.getByText('Location offline', { exact: true }).first().waitFor();
     await showOffline();
     await item('Camera/Day 1/Frame.svg').click();
-    assert.equal(await details().getByRole('button', { name: 'Add to project', exact: true }).isDisabled(), true);
+    assert.equal(await details().getByRole('button', { name: 'Add to project', exact: true }).and(page.locator(':not([aria-haspopup])')).isDisabled(), true);
     await page.evaluate(moved => { window.pickFolder = moved; }, moved);
     await sidebar().getByRole('button', { name: 'Camera', exact: true }).click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Reconnect folder…', exact: true }).click();
@@ -295,6 +295,7 @@ test('the shared asset library organizes originals, survives an offline drive, a
     await library.getByRole('button', { name: 'Close', exact: true }).first().click();
     await Promise.all(Array.from({ length: 420 }, (_, index) => writeFile(join(process.env.OPENFILM_SAVED, `Note ${String(index).padStart(3, '0')}.txt`), 'Reference notes')));
     await open.click();
+    await libraryShortcut().click();
     await item('Brand.svg').waitFor();
     assert.ok(await library.locator('[data-media-path]').count() <= 160, 'initial DOM is bounded');
     const search = library.getByRole('textbox').first();

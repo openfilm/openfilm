@@ -36,6 +36,7 @@ import { LARGE_DIALOG_SIZE, LARGE_DIALOG_SURFACE } from './dialog-chrome';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import resourceStyles from './ProjectsView.module.css';
 import { ResourceCenterSidebar } from './ResourceCenterSidebar';
+import { StoragePane } from './ProjectsStorage';
 import { useSavedListing, savedActions, SAVED } from '@/lib/saved';
 import { readResourcePins, isDefaultResourcePin, normalizeResourcePins, pinKey, RESOURCE_PINS_KEY, readResourceView, RESOURCE_VIEW_KEY, type ResourceNavigation, type ResourceAssetLocation, type ResourcePin, type ResourceSourceRequest } from '@/lib/resource-center';
 
@@ -235,7 +236,7 @@ function useProjectLibrary(open: boolean) {
 }
 
 /** The resource center's project, asset-library, and example views, picked in its sidebar. */
-export type LauncherView = 'projects' | 'examples' | 'assets';
+export type LauncherView = 'projects' | 'examples' | 'assets' | 'storage';
 
 /** How long the projects window waits for the tab it opened to cover it before it closes anyway. */
 const COVER_WAIT_MS = 4000;
@@ -553,11 +554,11 @@ export function ProjectsPopover({
           <div className={resourceStyles.resourceFrame}>
             <ResourceCenterSidebar library={library} active={view === 'assets' ? assetNavigation.location : null} projectFolder={projectFolder} folders={lib.folders}
               pins={pins} onPin={onPin} onUnpin={onUnpin} onReorder={(from, to) => setPins(old => { const next = [...old]; const a = next.findIndex(p => pinKey(p) === from); const b = next.findIndex(p => pinKey(p) === to); if (a < 0 || b < 0) return old; next.splice(b, 0, ...next.splice(a, 1)); return next; })}
-              onProjects={navigateProjects} onAssets={navigateAssets} onNotice={setSidebarNotice}
+              onProjects={navigateProjects} onAssets={navigateAssets} storage={view === 'storage'} onStorage={() => { setView('storage'); setSidebarNotice(''); }} onNotice={setSidebarNotice}
               sourceRequest={sourceRequest} onSourceHandled={clearSourceRequest} collectionRequest={collectionRequest} onRequestHandled={clearCollectionRequest} />
             <div className={resourceStyles.resourceContent}>
               {sidebarNotice ? <div role="status" className={resourceStyles.resourceNotice}><span>{sidebarNotice}</span><button type="button" className={resourceStyles.iconButton} aria-label={t('media.dismiss')} onClick={() => setSidebarNotice('')}><X size={13} /></button></div> : null}
-          {view === 'assets' ? (
+          {view === 'storage' ? <StoragePane onClose={onClose} /> : view === 'assets' ? (
             <React.Suspense fallback={<div className="flex flex-1 items-center justify-center text-[var(--text-faint)]"><Loader2 size={20} className="animate-spin" /></div>}>
               <AssetLibraryView projects={lib.projects} currentProjectId={currentProjectId}
               library={library} onSearch={setAssetQuery} onSourceRequest={setSourceRequest} onMove={async (from, to) => { const result = await savedActions.move(from, to); if (result === 'ok') setPins(old => old.map(pin => { if (pin.kind !== 'assets') return pin; const path = `${SAVED}/${pin.path}`; return path === from || path.startsWith(`${from}/`) ? { ...pin, path: `${to}${path.slice(from.length)}`.slice(SAVED.length + 1) } : pin; })); return result; }} history={{ canBack: assetHistory.current.index > 0, canForward: assetHistory.current.index < assetHistory.current.entries.length - 1, go: step => { const kept = assetHistory.current; kept.index = Math.max(0, Math.min(kept.entries.length - 1, kept.index + step)); setAssetNavigation(old => ({ location: kept.entries[kept.index]!, seq: old.seq + 1 })); } }} pins={pins} onPin={onPin} onUnpin={onUnpin} onProjects={navigateProjects} folders={lib.folders} onFolder={assetFolderChanged} navigation={assetNavigation} onNavigate={navigateAssets} onNewCollection={setCollectionRequest} display={display} onDisplay={setDisplay} onClose={onClose}

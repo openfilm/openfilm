@@ -594,7 +594,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const busy = agentIn(p.path) || exports.list(p.id).some((job) => job.status === 'waiting' || job.status === 'running');
         freed += await clearProjectCache(p.path, { busy });
       }
-      return json(res, 200, { freed, ...await storage() });
+      return json(res, 200, { freed, ...await storage({ fresh: true }) });
     }
     /* OpenFilm's plugins (src/plugins.mjs): each with whether it is on; one turned on or off (PUT plugins/:id { on }),
        answered with them all. 409 for one not made yet */

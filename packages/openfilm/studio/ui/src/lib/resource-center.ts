@@ -39,4 +39,4 @@ export interface ResourcePinActions {
   onUnpin: (pin: ResourcePin) => void;
 }
 
-export type ResourceSourceRequest = { kind: 'connect' } | { kind: 'new-folder' } | { kind: 'menu'; path: string; x: number; y: number } | { kind: 'reconnect'; path: string };
+export type ResourceSourceRequest = { kind: 'connect' } | { kind: 'menu'; path: string; x: number; y: number } | { kind: 'reconnect'; path: string };

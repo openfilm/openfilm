@@ -39,7 +39,13 @@ export type ProjectSettings = { fps?: number; trackNames?: { name: string; index
 export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: string; size: number; mtime: number }[]; links?: Record<string, { to: string; missing?: boolean }> };
 /** Media a project is missing (studio/server/media-reconnect.mjs): a link that leads nowhere (`linked`), or a file its clips name that is gone; `was`: where it was. */
 /** What the listed projects take on disk, the biggest first, in bytes: `clearable` is the cache that is made again when needed. */
-export type StorageUsage = { projects: { id: string; name: string; path: string; total: number; clearable: number }[]; total: number; clearable: number };
+/** What OpenFilm takes on disk (studio/server/storage.mjs): each project by kind (`linked`: a folder elsewhere, opened in
+    place), and OpenFilm's other folders */
+export type ProjectUsage = { id: string; name: string; path: string; linked?: boolean; total: number; media: number; cache: number; clearable: number; history: number; talk: number };
+export type StorageUsage = {
+  projects: ProjectUsage[]; total: number; clearable: number;
+  places?: { saved: number; skills: number; exports: number; app: number };
+};
 export type MissingMedia = { path: string; name: string; folder: boolean; linked: boolean; was: string };
 /**
  * How a media file was made (studio/server/media-made.mjs): the words it was asked with, who made it with which model,

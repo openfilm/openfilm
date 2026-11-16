@@ -13,7 +13,9 @@
  * Media kept elsewhere and linked (src/media-links.mjs) takes no room in the project: a link is not followed.
  */
 import { lstat, readdir, rm, stat } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, join, relative, isAbsolute } from 'node:path';
+import { exportsRoot, libraryRoot, savedRoot, sharedHome, studioHomeDir } from '../../src/locations.mjs';
+import { mySkillsDir } from '../../src/skills.mjs';
 import { TOOL_DIR, listProjects } from './projects.mjs';
 
 /** The cache's folders that hold only what can be made again. */
@@ -84,13 +86,46 @@ export async function clearProjectCache(root, { busy = false, now = Date.now() }
   return Math.max(0, before - (await projectUsage(root)).clearable);
 }
 
+/** The bytes a folder takes, links not followed (0: not there). @param {string} dir */
+async function folderSize(dir) {
+  let bytes = 0;
+  await walk(dir, [], (_, n) => { bytes += n; });
+  return bytes;
+}
+
+const inside = (/** @type {string} */ root, /** @type {string} */ path) => { const r = relative(root, path); return r === '' || (!r.startsWith('..') && !isAbsolute(r)); };
+
 /**
- * Every listed project that is there, with what it takes, the biggest first, and the sums.
- * @returns {Promise<{ projects: ({ id: string, name: string, path: string } & Usage)[], total: number, clearable: number }>}
+ * Every listed project that is there, with what it takes, the biggest first (`linked`: a folder elsewhere, opened in
+ * place, not in the projects' folder), and the sums; and the room OpenFilm's other folders take: the person's own media and skills, the exports, and what the app keeps
+ * for itself (models, the library it downloaded, its logs).
+ * @returns {Promise<{ projects: ({ id: string, name: string, path: string, linked: boolean } & Usage)[], total: number, clearable: number,
+ *   places: { saved: number, skills: number, exports: number, app: number } }>}
  */
-export async function storage() {
+async function measure() {
+  const root = libraryRoot();
   const projects = [];
-  for (const p of (await listProjects()).filter((p) => !p.missing)) projects.push({ id: p.id, name: p.name || basename(p.path), path: p.path, ...await projectUsage(p.path) });
+  for (const p of (await listProjects()).filter((p) => !p.missing)) projects.push({ id: p.id, name: p.name || basename(p.path), path: p.path, linked: !inside(root, p.path), ...await projectUsage(p.path) });
   projects.sort((a, b) => b.total - a.total);
-  return { projects, total: projects.reduce((sum, p) => sum + p.total, 0), clearable: projects.reduce((sum, p) => sum + p.clearable, 0) };
+  const homes = [...new Set([studioHomeDir(), sharedHome()])];
+  const [saved, skills, exported, ...app] = await Promise.all([folderSize(savedRoot()), folderSize(mySkillsDir()), folderSize(exportsRoot()), ...homes.map(folderSize)]);
+  return {
+    projects, total: projects.reduce((sum, p) => sum + p.total, 0), clearable: projects.reduce((sum, p) => sum + p.clearable, 0),
+    places: { saved, skills, exports: exported, app: app.reduce((a, b) => a + b, 0) },
+  };
+}
+
+/* measured once for every window that asks at the same time, and kept a little: the card opens at once when it is
+   opened again, and a walk of every project's folder never runs twice side by side */
+const KEEP = 30_000;
+/** @type {{ at: number, value: Awaited<ReturnType<typeof measure>> } | null} */
+let kept = null;
+/** @type {Promise<Awaited<ReturnType<typeof measure>>> | null} */
+let measuring = null;
+
+/** What OpenFilm takes on disk (see measure). `fresh`: measured again now (after a clear). */
+export async function storage({ fresh = false } = {}) {
+  if (!fresh && kept && Date.now() - kept.at < KEEP) return kept.value;
+  if (!measuring) measuring = measure().then((value) => { kept = { at: Date.now(), value }; return value; }).finally(() => { measuring = null; });
+  return measuring;
 }

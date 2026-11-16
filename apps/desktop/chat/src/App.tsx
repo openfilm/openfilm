@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, ArrowLeft, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, Shapes, Square } from 'lucide-react';
+import { ArrowDown, ChevronLeft, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, Shapes, Square } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
@@ -335,7 +335,10 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     if (!block) return undefined;
     const tell = () => {
       const height = Math.ceil(block.getBoundingClientRect().height);
-      app.setComposerHeight(height, height - Math.floor(backRowRef.current?.getBoundingClientRect().height ?? 0));
+      const back = Math.floor(backRowRef.current?.getBoundingClientRect().height ?? 0);
+      /* the way back stands on the drawer itself, nothing shading it: the panel's color begins under it */
+      block.style.setProperty('--back-row', `${back}px`);
+      app.setComposerHeight(height, height - back);
     };
     tell();
     const seen = new ResizeObserver(tell);
@@ -1145,7 +1148,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
           <StickToBottomContext.Provider value={thread}>
             {/* with the assets open only the composer shows, at the bottom, floating over Studio's drawer: the drawer
                 runs on under it, fading out behind it so the words under the composer stay clear */}
-            <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden ${assetsOverlay ? 'mt-auto shrink-0 bg-[linear-gradient(to_bottom,transparent,var(--bg-panel)_36px)]' : 'flex-1 bg-[var(--bg-panel)]'}`}>
+            <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden ${assetsOverlay ? 'mt-auto shrink-0' : 'flex-1 bg-[var(--bg-panel)]'}`}>
               <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOverlay ? 'hidden' : 'flex'}`}>
                 <ConversationBar
                   sessions={shownSessions}
@@ -1207,12 +1210,12 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
               </div>
 
               {/* Measure the whole footer so the drawer keeps its controls clear of the return action and composer. */}
-              <div ref={composerBlockRef} className="relative flex shrink-0 flex-col px-4 pb-1.5">
+              <div ref={composerBlockRef} className={`relative flex shrink-0 flex-col px-4 pb-1.5 ${assetsOverlay ? 'bg-[linear-gradient(to_bottom,transparent_var(--back-row,0px),var(--bg-panel)_var(--back-row,0px))]' : ''}`}>
                 {assetsOverlay ? (
                   <div ref={backRowRef} className="flex justify-center pb-2 pt-1">
                     <button type="button" className="pointer-events-auto openfilm-chat-pill" style={{ background: 'var(--bg-panel)' }}
                       onClick={() => { app.setAssetsOpen(false); composerRef.current?.focus(); }}>
-                      <ArrowLeft size={14} aria-hidden />{t('project.backToChat')}
+                      <ChevronLeft size={15} aria-hidden />{t('project.backToChat')}
                     </button>
                   </div>
                 ) : null}

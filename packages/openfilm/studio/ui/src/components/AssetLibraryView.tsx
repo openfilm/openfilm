@@ -4,14 +4,13 @@ import {
   ArrowLeft,
   Folder,
   House,
-  Monitor,
+  FolderTree,
   Pin,
   Clock3,
   Clapperboard,
   FolderPlus,
   FolderSymlink,
   MoreHorizontal,
-  Folders,
   LibraryBig,
   Loader2,
   Maximize2,
@@ -22,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
+import { MenuSelect } from './MenuSelect';
 import { assetLibrary, type AssetUse } from '@/lib/asset-library';
 import {
   importIntoSaved,
@@ -264,7 +264,7 @@ export function AssetLibraryView({
       setBusy(false);
     }
   };
-  const title = currentCollection?.name ?? (view.startsWith('collection:') ? t('assetLibrary.collections') : view === 'home' || view === 'computer' ? t(`resourceCenter.${view}`) : view === 'all' || view === 'managed' || location ? t('saved.title') : t(`assetLibrary.${view}`));
+  const title = currentCollection?.name ?? (view.startsWith('collection:') ? t('assetLibrary.collections') : view === 'computer' ? t('resourceCenter.title') : view === 'home' ? t('resourceCenter.home') : view === 'all' || view === 'managed' || location ? t('saved.title') : t(`assetLibrary.${view}`));
   const physical = view === 'all' || view === 'managed' || Boolean(location);
   const folderPinMenu = (path: string): ContextMenuEntry[] => { if (!path) return []; const pin = { kind: 'assets' as const, path }; const pinned = pins.some(p => pinKey(p) === pinKey(pin)); return [{ id: 'pin-folder', icon: <Pin size={14} />, label: t(pinned ? 'resourceCenter.unpin' : 'resourceCenter.pin'), onSelect: () => pinned ? onUnpin(pin) : onPin(pin) }]; };
   const selectFile = React.useCallback((file: WorkspaceResource | null) => {
@@ -344,16 +344,16 @@ export function AssetLibraryView({
                   flat: !physical,
                   explorer: {
                     history,
-                    title, icon: view === 'home' ? <House size={15} /> : view === 'computer' ? <Monitor size={15} /> : undefined,
+                    title, icon: view === 'home' ? <House size={15} /> : view === 'computer' ? <FolderTree size={15} /> : undefined,
                     onUp: () => onNavigate('computer'),
                     canUp: view !== 'computer',
                     hideItems: false,
-                    onNewFolder: view === 'computer' ? () => onSourceRequest({ kind: 'new-folder' }) : undefined,
+                    onNewFolder: undefined,
                     onConnect: view === 'computer' ? () => onSourceRequest({ kind: 'connect' }) : undefined,
-                    tools: <><button type="button" className={shared.iconButton} data-explorer-command="" aria-label={t('assetLibrary.addToCollection')} title={t('assetLibrary.addToCollection')} disabled={!selection.length} onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); const entry = organizeMenu(selection).find(item => !('separator' in item) && item.id === 'collection'); setMenu({ x: rect.left, y: rect.bottom, items: entry && 'submenu' in entry ? [...(entry.submenu ?? [])] : [] }); }}><Folders size={15} /></button><button type="button" className={shared.iconButton} aria-label={t('assetLibrary.details')} title={t('assetLibrary.details')} aria-pressed={!detailsClosed} onClick={() => setDetailsClosed(value => !value)}><PanelRight size={16} /></button>{onClose ? <button type="button" className={shared.iconButton} aria-label={t('project.close')} onClick={onClose}><X size={17} /></button> : null}</>,
+                    tools: <><span className={shared.toolGap} aria-hidden /><button type="button" className={shared.iconButton} aria-label={t('assetLibrary.details')} title={t('assetLibrary.details')} aria-pressed={!detailsClosed} onClick={() => setDetailsClosed(value => !value)}><PanelRight size={16} /></button>{onClose ? <button type="button" className={shared.iconButton} aria-label={t('project.close')} onClick={onClose}><X size={17} /></button> : null}</>,
                     leading: view === 'home' || view === 'computer' ? <div className={styles.home} data-resource-home="">
-                      <details open><summary>{t(view === 'home' ? 'resourceCenter.quickAccess' : 'assetLibrary.locations')}</summary><div className={styles.quickGrid}>
-                        {(view === 'home' ? pins : [{ kind: 'projects' as const, folderId: null }, { kind: 'assets' as const, path: '' }, ...(listing?.dirs ?? []).filter(path => !path.includes('/') && !connections.some(([source]) => source === path)).map(path => ({ kind: 'assets' as const, path })), ...connections.map(([path]) => ({ kind: 'assets' as const, path }))]).map(pin => <button key={pinKey(pin)} type="button" onDoubleClick={() => pin.kind === 'projects' ? onProjects(pin.folderId) : onNavigate(pin.path ? `location:${pin.path}` : 'all')} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); pin.kind === 'projects' ? onProjects(pin.folderId) : onNavigate(pin.path ? `location:${pin.path}` : 'all'); } }} onContextMenu={e => { if (pin.kind === 'assets' && listing?.linkedDirs?.[pin.path]) { requestSourceMenu(pin.path, e); return; } e.preventDefault(); const pinned = pins.some(p => pinKey(p) === pinKey(pin)); setMenu({ x: e.clientX, y: e.clientY, items: [{ id: 'open', label: t('projectMenu.open'), onSelect: () => pin.kind === 'projects' ? onProjects(pin.folderId) : onNavigate(pin.path ? `location:${pin.path}` : 'all') }, ...(!isDefaultResourcePin(pin) ? [{ id: 'pin', label: t(pinned ? 'resourceCenter.unpin' : 'resourceCenter.pin'), onSelect: () => pinned ? onUnpin(pin) : onPin(pin) }] : []), ...(pin.kind === 'assets' && pin.path && !listing?.linkedDirs?.[pin.path] ? [{ id: 'delete-folder', label: t('assets.delete'), danger: true, onSelect: () => setPendingDirectory(pin.path) }] : [])] }); }}>
+                      <details open><summary>{t(view === 'home' ? 'resourceCenter.quickAccess' : 'resourceCenter.connectedPlaces')}</summary><div className={styles.quickGrid}>
+                        {/* the resource center: only the places connected from outside OpenFilm (项目 and 素材库 are its own, in the sidebar) */}{(view === 'home' ? pins : connections.map(([path]) => ({ kind: 'assets' as const, path }))).map(pin => <button key={pinKey(pin)} type="button" onDoubleClick={() => pin.kind === 'projects' ? onProjects(pin.folderId) : onNavigate(pin.path ? `location:${pin.path}` : 'all')} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); pin.kind === 'projects' ? onProjects(pin.folderId) : onNavigate(pin.path ? `location:${pin.path}` : 'all'); } }} onContextMenu={e => { if (pin.kind === 'assets' && listing?.linkedDirs?.[pin.path]) { requestSourceMenu(pin.path, e); return; } e.preventDefault(); const pinned = pins.some(p => pinKey(p) === pinKey(pin)); setMenu({ x: e.clientX, y: e.clientY, items: [{ id: 'open', label: t('projectMenu.open'), onSelect: () => pin.kind === 'projects' ? onProjects(pin.folderId) : onNavigate(pin.path ? `location:${pin.path}` : 'all') }, ...(!isDefaultResourcePin(pin) ? [{ id: 'pin', label: t(pinned ? 'resourceCenter.unpin' : 'resourceCenter.pin'), onSelect: () => pinned ? onUnpin(pin) : onPin(pin) }] : []), ...(pin.kind === 'assets' && pin.path && !listing?.linkedDirs?.[pin.path] ? [{ id: 'delete-folder', label: t('assets.delete'), danger: true, onSelect: () => setPendingDirectory(pin.path) }] : [])] }); }}>
                           {pin.kind === 'assets' && !pin.path ? <LibraryBig size={28} strokeWidth={1.5} /> : pin.kind === 'assets' && listing?.linkedDirs?.[pin.path]?.missing ? <Unplug size={28} strokeWidth={1.5} /> : pin.kind === 'assets' && listing?.linkedDirs?.[pin.path] ? <FolderSymlink size={30} strokeWidth={1.4} /> : <Folder size={30} strokeWidth={1.4} />}<span><strong>{pin.kind === 'projects' ? pin.folderId ? folders.find(f => f.id === pin.folderId)?.name ?? t('resourceCenter.unavailable') : t('resourceCenter.projects') : pin.path.split('/').at(-1) || t('saved.title')}</strong><small title={pin.kind === 'assets' ? listing?.linkedDirs?.[pin.path]?.to : undefined}>{pin.kind === 'assets' && listing?.linkedDirs?.[pin.path]?.missing ? t('resourceCenter.sourceOffline') : pin.kind === 'assets' && pin.path ? listing?.linkedDirs?.[pin.path]?.to ?? t('saved.title') : t('resourceCenter.computer')}</small></span>{view === 'home' ? <Pin size={11} /> : null}
                         </button>)}
                       </div>{view === 'computer' ? <div className={styles.connectLocation}><button type="button" className={shared.action} onClick={() => onSourceRequest({ kind: 'connect' })}><FolderPlus size={15} />{t('resourceCenter.addLocation')}</button><p>{t('resourceCenter.networkHint')}</p></div> : null}</details>
@@ -371,7 +371,8 @@ export function AssetLibraryView({
                   recent: view === 'recent' || view === 'computer',
                   display: { value: display, onChange: onDisplay },
                   starred: file => Boolean(catalog.items[file.path]?.starred),
-                  ...(currentCollection || view === 'starred' || view === 'offline' ? { empty: {
+                  ...(view === 'computer' ? { empty: { title: t('resourceCenter.recentEmpty'), body: t('resourceCenter.recentEmptyHint'), canImport: false } }
+                    : currentCollection || view === 'starred' || view === 'offline' ? { empty: {
                     title: t(currentCollection ? 'assetLibrary.emptyCollection' : view === 'starred' ? 'assetLibrary.emptyStarred' : 'assetLibrary.emptyOffline'),
                     body: t(currentCollection ? 'assetLibrary.emptyCollectionHint' : view === 'starred' ? 'assetLibrary.emptyStarredHint' : 'assetLibrary.emptyOfflineHint'),
                     canImport: false,
@@ -483,33 +484,19 @@ export function AssetLibraryView({
                 <div className={styles.addActions}>
                   <label>
                     {t('assetLibrary.target')}
-                    <select
-                      aria-label={t('assetLibrary.target')}
-                      value={target}
-                      onChange={(event) => setTarget(event.target.value)}
-                    >
-                      <option value="">{t('assetLibrary.chooseProject')}</option>
-                      {projects
-                        .filter((project) => !project.missing)
-                        .map((project) => (
-                          <option key={project.id} value={project.id}>
-                            {project.name}
-                          </option>
-                        ))}
-                    </select>
+                    <MenuSelect label={t('assetLibrary.target')} value={target} onPick={setTarget} size="md" layer={10080} className={styles.choice}
+                      groups={[{ choices: [{ value: '', label: t('assetLibrary.chooseProject') }, ...projects.filter((project) => !project.missing).map((project) => ({ value: project.id, label: project.name }))] }]} />
                   </label>
                   {toAdd.some(file => !file.bundle) ? (
                     <label>
                       {t('assetLibrary.useMode')}
-                      <select
-                        aria-label={t('assetLibrary.useMode')}
+                      <MenuSelect
+                        label={t('assetLibrary.useMode')}
                         disabled={alreadyAdded}
                         value={currentUse?.mode ?? mode}
-                        onChange={(event) => setMode(event.target.value as 'copy' | 'link')}
-                      >
-                        <option value="copy">{t('assetLibrary.copy')}</option>
-                        <option value="link">{t('assetLibrary.reference')}</option>
-                      </select>
+                        onPick={(value) => setMode(value as 'copy' | 'link')}
+                        size="md" layer={10080} className={styles.choice}
+                        groups={[{ choices: [{ value: 'copy', label: t('assetLibrary.copy') }, { value: 'link', label: t('assetLibrary.reference') }] }]} />
                     </label>
                   ) : (
                     <p className={styles.muted}>{t('assetLibrary.bundleCopy')}</p>
