@@ -238,3 +238,18 @@ test('a person speaking a recording (--audio): from a picture or a clip, the lip
   assert.deepEqual([voiced.input.audio_urls, voiced.input.image_urls.length, voiced.input.image_url], [['https://v3b.fal.media/files/clip.mp4'], 1, undefined]);
   await assert.rejects(fal.run('video', { out: 'x', prompt: 'p', voice: 'assets/audio/vo/line.wav' }, { ...ctx(files), model: 'seedance-2.0' }), /goes with a picture or a clip/);
 });
+
+test('a job taken is told as it is taken, and given back after a restart it is waited for, never submitted again', async () => {
+  seen.length = 0;
+  reply = queue('fal-ai/flux-2-pro', { images: [{ url: `${base}/files/out.png`, width: 64, height: 64, content_type: 'image/png' }] }, 1);
+  /** @type {any} */
+  let kept;
+  await fal.run('image', { out: 'hero', prompt: 'a brass key' }, { ...ctx(), handOff: true, checkpoint: async (job) => { kept = job; } });
+  assert.equal(kept?.request_id, 'r1', 'its own answer, kept right after it was taken');
+  assert.equal(seen.filter((c) => c.method === 'POST').length, 1);
+  seen.length = 0;
+  const again = await fal.run('image', { out: 'hero', prompt: 'a brass key' }, { ...ctx(), handOff: true, resume: kept });
+  assert.equal(seen.filter((c) => c.method === 'POST').length, 0, 'not submitted (and paid) again');
+  assert.equal(again.files[0].url, `${base}/files/out.png`);
+  seen.length = 0;
+});

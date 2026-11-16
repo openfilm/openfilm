@@ -325,8 +325,10 @@ async function video(args, ctx) {
   if (refs.length && frames.length) said.push('reference pictures go with a clip made from the prompt: the frames were used');
 
   const root = base();
-  const job = /** @type {any} */ (await (await call(NAME, `${root}/api/v1/videos`, { method: 'POST', headers: { ...auth(ctx), 'content-type': 'application/json' }, body: JSON.stringify(body) }, ctx)).json());
+  /* a job taken before (saved, the run started again) is waited for, never submitted and paid again */
+  const job = /** @type {any} */ (ctx.resume ?? await (await call(NAME, `${root}/api/v1/videos`, { method: 'POST', headers: { ...auth(ctx), 'content-type': 'application/json' }, body: JSON.stringify(body) }, ctx)).json());
   if (!text(job?.id)) throw new Error(`${NAME} did not take the request.`);
+  await ctx.checkpoint?.(job);
   /* its own addresses, which the key goes to: on its origin only */
   const pollUrl = ownAddress(NAME, text(job.polling_url) || `${root}/api/v1/videos/${encodeURIComponent(job.id)}`, root);
   let state = job;

@@ -56,19 +56,39 @@ async function privateDirectory(/** @type {string} */ root) {
   }
   return dir;
 }
+/** How long a transfer may move nothing before it is cut and tried again (a slow one that moves goes on). */
+export const IDLE_MS = { value: 60_000 };
+
+/**
+ * A signal that aborts when `touch` has not been called for IDLE_MS (or `outer` aborts): a transfer touches it as bytes
+ * move. @param {AbortSignal} outer
+ */
+export function idleSignal(outer) {
+  const controller = new AbortController();
+  /** @type {NodeJS.Timeout | undefined} */
+  let timer;
+  const touch = () => { clearTimeout(timer); timer = setTimeout(() => controller.abort(new Error('The transfer stopped moving.')), IDLE_MS.value); };
+  touch();
+  return { signal: AbortSignal.any([outer, controller.signal]), touch, clear: () => clearTimeout(timer) };
+}
+
 /** The descriptor's URLs are short-lived capabilities; only this private directory sees them, never logs or the agent's receipt. */
 export async function mediaTransfer(/** @type {string} */ root, /** @type {AbortSignal} */ signal) {
   if (!root || !(await stat(root).catch(() => null))?.isDirectory()) return null;
   const dir = await privateDirectory(root);
   return {
-    async request(/** @type {string} */ scope, /** @type {unknown} */ identity, fresh = false) {
+    /**
+     * The saved request for a run (`identity`: what makes it the same run), made or found. `about`: what was asked
+     * (`{ verb, args, via, model }`), kept with it so a request left pending can be named and asked again (pending()).
+     */
+    async request(/** @type {string} */ scope, /** @type {unknown} */ identity, fresh = false, /** @type {Record<string, unknown> | undefined} */ about = undefined) {
       const file = join(dir, hash(scope + '\0' + stable(identity)) + '.request.json');
       const release = await lock(file + '.lock');
       try {
       const old = fresh ? null : await json(file);
       if (!fresh && !old && await lstat(file).catch(() => null)) throw new Error('The saved media request is damaged. Check its outcome before intentionally starting a new take with --fresh.');
       if (old && (typeof old.key !== 'string' || !/^[\w-]{20,80}$/.test(old.key) || !Number.isFinite(old.created))) throw new Error('Invalid saved media request.');
-      const row = old ?? { key: randomUUID(), created: Date.now() };
+      const row = old ?? { key: randomUUID(), created: Date.now(), ...(about ? { about } : {}) };
       if (old && Date.now() - old.created > DAY) throw new Error('An earlier identical media request expired. Its outcome must be checked before starting another paid generation; use --fresh only to intentionally create a new take.');
       await writeAtomic(file, JSON.stringify(row), { mode: 0o600 });
       return { key: row.key, resumed: Boolean(old), reply: row.reply, release,
@@ -82,6 +102,20 @@ export async function mediaTransfer(/** @type {string} */ root, /** @type {Abort
         },
       };
       } catch (e) { await release(); throw e; }
+    },
+    /**
+     * The requests left pending here (asked, not yet saved in the project), newest first, each with what was asked:
+     * what a person can ask again to recover what may already be paid for.
+     * @returns {Promise<{ key: string, created: number, about: Record<string, unknown> }[]>}
+     */
+    async pending() {
+      const rows = [];
+      for (const name of await readdir(dir)) {
+        if (!name.endsWith('.request.json')) continue;
+        const row = await json(join(dir, name));
+        if (row && typeof row.key === 'string' && Number.isFinite(row.created) && row.about && typeof row.about === 'object' && Date.now() - row.created <= DAY) rows.push({ key: row.key, created: row.created, about: row.about });
+      }
+      return rows.sort((a, b) => b.created - a.created);
     },
     async download(/** @type {{path:string,url:string,bytes?:number,sha256?:string}} */ file, /** @type {string} */ key, /** @type {(path:string)=>Promise<any>} */ refresh) {
       const name = hash(key + '\0' + file.path), part = join(dir, name + '.part'), metaFile = join(dir, name + '.part.json');
@@ -105,7 +139,11 @@ export async function mediaTransfer(/** @type {string} */ root, /** @type {Abort
             const validator = meta.etag || meta.modified;
             const offset = size && validator ? size : 0;
             const headers = { 'accept-encoding': 'identity', ...(offset ? { range: `bytes=${offset}-`, 'if-range': validator } : {}) };
-            const res = await fetch(file.url, { headers, signal });
+            /* cut when it moves nothing for a while, not after a fixed time: a slow download that moves goes on */
+            const idle = idleSignal(signal);
+            try {
+            const res = await fetch(file.url, { headers, signal: idle.signal });
+            idle.touch();
             if ([401, 403, 404].includes(res.status) && attempt < 3) { await res.body?.cancel(); file = await refresh(file.path); continue; }
             if (!res.ok) throw new Error(`Media download answered ${res.status}.`);
             if (/^(text\/html|application\/(json|xml))\b/.test(res.headers.get('content-type') ?? '')) { await res.body?.cancel(); throw new Error('The media address returned an error document instead of a media file.'); }
@@ -121,14 +159,16 @@ export async function mediaTransfer(/** @type {string} */ root, /** @type {Abort
             if (!res.body) throw new Error('Media download returned no file.');
             let received = append ? offset : 0;
             await pipeline(Readable.fromWeb(/** @type {import('node:stream/web').ReadableStream} */ (res.body)), new Transform({ transform(chunk, _encoding, done) {
+              idle.touch();
               received += chunk.length;
               if (received > 2 * 1024 ** 3) return done(new Error('The generated file exceeds the 2 GB download limit.'));
               done(null, chunk);
-            } }), createWriteStream(part, { flags: append ? 'a' : 'w', mode: 0o600 }), { signal });
+            } }), createWriteStream(part, { flags: append ? 'a' : 'w', mode: 0o600 }), { signal: idle.signal });
             if ((expected !== null && received !== expected) || (file.bytes !== undefined && received !== file.bytes) || received === 0) throw new Error('The generated file was not received completely.');
             const sha256 = await digest(part);
             if (file.sha256 && file.sha256 !== sha256) { await rm(part, { force: true }); meta = {}; throw new Error('The generated file checksum did not match.'); }
             meta = { ...meta, size: received, sha256 }; await writeAtomic(metaFile, JSON.stringify(meta), { mode: 0o600 });
+            } finally { idle.clear(); }
             break;
           } catch (e) { last = e; if (signal.aborted || attempt === 3) throw e; await new Promise(resolve => setTimeout(resolve, 100 * 2 ** attempt)); }
         }

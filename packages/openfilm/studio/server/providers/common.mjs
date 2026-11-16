@@ -37,7 +37,8 @@ export async function call(service, url, init, ctx, how = {}) {
       await res.body?.cancel();
     } catch (e) {
       if (ctx.signal.aborted) throw e;
-      if (Date.now() + wait > until) throw new Error(`${service} could not be reached (${/** @type {Error} */ (e).message}).`);
+      /* never reached: whether it was taken is not known (`unreached`) */
+      if (Date.now() + wait > until) throw Object.assign(new Error(`${service} could not be reached (${/** @type {Error} */ (e).message}).`), { unreached: true });
     }
     await sleep(wait, ctx.signal);
   }

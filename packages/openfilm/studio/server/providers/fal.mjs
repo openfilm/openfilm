@@ -378,8 +378,10 @@ async function sound(verb, args, ctx) {
 async function queued(model, input, ctx, every) {
   const auth = { authorization: `Key ${ctx.key}` };
   const base = serviceUrl('FAL', 'https://queue.fal.run');
-  const job = await (await call(NAME, `${base}/${model}`, { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify(input) }, ctx)).json();
+  /* a job taken before (saved, the run started again) is waited for, never submitted and paid again */
+  const job = ctx.resume ?? await (await call(NAME, `${base}/${model}`, { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify(input) }, ctx)).json();
   if (!text(job?.status_url) || !text(job?.response_url)) throw new Error(`${NAME} did not take the request.`);
+  await ctx.checkpoint?.(job);
   /* the queue's own addresses, which the key goes to: on the queue's origin only */
   const statusUrl = ownAddress(NAME, job.status_url, base);
   const responseUrl = ownAddress(NAME, job.response_url, base);

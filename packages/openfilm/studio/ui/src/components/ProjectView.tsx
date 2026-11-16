@@ -4432,6 +4432,28 @@ export function ProjectView({ projectId, onProject }: {
      with room there */
   /* words spoken in a voice of the library (VoicesPane's Generate), made by Studio's `get tts` as an agent's are (its
      words timed beside it: its captions come by themselves), put on a sound track at the playhead the same way */
+  /* paid runs left pending when Studio or the network went (asked, never saved in the project): said as the project
+     opens, with the way to collect them; collecting never makes and pays them again (server/get.mjs recoverRuns) */
+  const pendingFolder = loaded?.project.path;
+  React.useEffect(() => {
+    if (!pendingFolder) return;
+    let live = true;
+    const post = (what: 'pending' | 'recover') => fetch(`/api/get/${what}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ folder: pendingFolder }) })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    void post('pending').then((body: { runs?: unknown[] } | null) => {
+      const n = body?.runs?.length ?? 0;
+      if (!live || !n) return;
+      showToast(t('media.pendingRuns').replace('{n}', String(n)), { label: t('media.pendingCollect'), run: () => {
+        showToast(t('media.pendingCollecting'));
+        void post('recover').then((done: { recovered?: string[]; failed?: { why: string }[] } | null) => {
+          const got = done?.recovered?.length ?? 0, lost = done?.failed?.length ?? 0;
+          showToast(lost ? t('media.pendingSome').replace('{n}', String(got)).replace('{m}', String(lost)) : t('media.pendingDone').replace('{n}', String(got)));
+        });
+      } });
+    });
+    return () => { live = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFolder]);
   const speakVoice = React.useCallback(async (voice: LibraryVoice, access: VoiceAccess, text: string): Promise<VoiceSpeech | string> => {
     const folder = loaded?.project.path;
     if (!folder) return t('timeline.editFail');

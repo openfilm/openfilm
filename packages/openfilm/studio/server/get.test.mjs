@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { filmCaptions, translateFilmSubtitles } from './captions.mjs';
 import { readTranscript } from './transcripts.mjs';
-import { VERBS, WEB_VERBS, WHERE_TO_CONNECT, catalog, flagHelp, runGet, services, subtitleTranslator } from './get.mjs';
+import { VERBS, WEB_VERBS, WHERE_TO_CONNECT, catalog, flagHelp, pendingRuns, recoverRuns, runGet, services, subtitleTranslator } from './get.mjs';
 import { wav } from './providers/common.mjs';
 import { changeSettings, kindOf, providersFile } from './keys.mjs';
 import { listProviders } from './providers/index.mjs';
@@ -701,4 +701,54 @@ test('OpenFilm video uploads real first and last frames unchanged and saves a re
     if (original === undefined) delete process.env.OPENFILM_API_URL;
     else process.env.OPENFILM_API_URL = original;
   }
+});
+
+test('a job on the person\'s own key cut off mid-run is waited for when the same run starts again; one over is let go', async (t) => {
+  const root = project();
+  const fal = listProviders().find((p) => p.id === 'fal');
+  const resumed = [];
+  let step = 0;
+  t.mock.method(fal, 'run', async (_verb, _args, ctx) => {
+    resumed.push(ctx.resume?.request_id ?? null);
+    step++;
+    if (step === 1) { await ctx.checkpoint({ request_id: 'job-1' }); throw Object.assign(new Error('fal.ai could not be reached (socket hang up).'), { unreached: true }); }
+    if (step === 3) throw Object.assign(new Error('fal.ai answered 422: the prompt was refused'), { status: 422, answered: true });
+    return { files: [{ path: 'assets/image/key.png', bytes: Buffer.from('png') }], index: [], receipt: { images: [{ src: 'assets/image/key.png' }] } };
+  });
+  const args = { out: 'key', prompt: 'a brass key' };
+  await assert.rejects(runGet(root, 'image', args), /could not be reached/);
+  await runGet(root, 'image', args);
+  assert.deepEqual(resumed, [null, 'job-1'], 'the job taken before, waited for: not submitted and paid again');
+  /* done: the next run of the same is a new one; a refused one is over too */
+  await assert.rejects(runGet(root, 'image', { ...args, out: 'key2' }), /refused/);
+  await runGet(root, 'image', { ...args, out: 'key2' });
+  assert.deepEqual(resumed, [null, 'job-1', null, null]);
+});
+
+test('paid runs left pending are listed and collected from the project; one never taken is not started from there', async (t) => {
+  const root = project();
+  const fal = listProviders().find((p) => p.id === 'fal');
+  let calls = 0, taken = true;
+  t.mock.method(fal, 'run', async (_verb, _args, ctx) => {
+    calls++;
+    if (!ctx.resume) {
+      if (taken) await ctx.checkpoint({ request_id: 'job-9' });
+      throw Object.assign(new Error('fal.ai could not be reached (socket hang up).'), { unreached: true });
+    }
+    return { files: [{ path: 'assets/image/lost.png', bytes: Buffer.from('png') }], index: [], receipt: { images: [{ src: 'assets/image/lost.png' }] } };
+  });
+  await assert.rejects(runGet(root, 'image', { out: 'lost', prompt: 'a lost key' }), /could not be reached/);
+  assert.deepEqual((await pendingRuns(root)).map(({ verb, out, via }) => ({ verb, out, via })), [{ verb: 'image', out: 'lost', via: 'fal' }]);
+  const got = await recoverRuns(root); assert.deepEqual(got, { recovered: ['lost'], failed: [] }, JSON.stringify(got.failed));
+  assert.ok(existsSync(join(root, 'assets/image/lost.png')));
+  assert.deepEqual(await pendingRuns(root), []);
+  /* asked, but never taken by the provider: nothing to collect, and not made (and paid) from here */
+  taken = false;
+  await assert.rejects(runGet(root, 'image', { out: 'never', prompt: 'never sent' }), /could not be reached/);
+  const before = calls;
+  const { recovered, failed } = await recoverRuns(root);
+  assert.deepEqual(recovered, []);
+  assert.match(failed[0]?.why ?? '', /never took this run/);
+  assert.equal(calls, before, 'the provider was not asked to make it');
+  assert.deepEqual(await pendingRuns(root), []);
 });

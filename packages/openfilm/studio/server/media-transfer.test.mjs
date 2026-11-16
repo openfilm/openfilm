@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mediaTransfer } from './media-transfer.mjs';
+import { IDLE_MS, mediaTransfer } from './media-transfer.mjs';
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'media-transfer-'));
@@ -104,4 +104,30 @@ test('wrong checksums and unsafe or linked paths never become local media', asyn
   for (const path of ['../outside','assets/../outside','assets/a\\b','assets/C:/a']) await assert.rejects(transfer.download({path,url},'key',async()=>{}),/invalid/);
   await symlink(tmpdir(),join(root,'assets'));
   await assert.rejects(transfer.download({path:'assets/out.mp3',url},'key',async()=>{}),/link/);
+});
+
+test('a download that stops moving is cut and resumed where it stopped, not awaited until the deadline', async t => {
+  const {root,transfer} = await fixture(t);
+  const bytes = Buffer.from('0123456789abcdefghij');
+  const was = IDLE_MS.value; IDLE_MS.value = 150; t.after(() => { IDLE_MS.value = was; });
+  let asks = 0;
+  const url = await server(t, (req, res) => {
+    asks++;
+    if (!req.headers.range) {
+      /* half of it, then nothing more: a connection that stalls */
+      res.writeHead(200, {'content-length': String(bytes.length), etag: '"e1"', 'content-type': 'audio/mpeg'});
+      res.write(bytes.subarray(0, 10));
+      return;
+    }
+    assert.equal(req.headers.range, 'bytes=10-');
+    res.writeHead(206, {'content-range': `bytes 10-19/${bytes.length}`, 'content-length': '10', etag: '"e1"', 'content-type': 'audio/mpeg'});
+    res.end(bytes.subarray(10));
+  });
+  const started = Date.now();
+  const made = await transfer.download({path:'assets/audio/a.mp3',url,bytes:bytes.length,sha256:sha(bytes)}, 'key-idle', async () => ({path:'assets/audio/a.mp3',url}));
+  assert.ok(Date.now() - started < 5000, 'cut after the quiet, not after a fixed long wait');
+  assert.equal(asks, 2, 'resumed with a range');
+  await mkdir(join(root,'assets/audio'), {recursive:true});
+  await made.commit(join(root,'assets/audio/a.mp3'));
+  assert.deepEqual(await readFile(join(root,'assets/audio/a.mp3')), bytes);
 });

@@ -162,9 +162,11 @@ async function video(args, ctx) {
     ...(spec.keepsShape && clips.length ? { omni_reference_task_type: 'auto' } : {}),
   };
 
-  const created = /** @type {any} */ (await (await call(NAME, tasks(), { method: 'POST', headers: { ...auth(ctx), 'content-type': 'application/json' }, body: JSON.stringify(body) }, ctx)).json());
+  /* a job taken before (saved, the run started again) is waited for, never submitted and paid again */
+  const created = /** @type {any} */ (ctx.resume ?? await (await call(NAME, tasks(), { method: 'POST', headers: { ...auth(ctx), 'content-type': 'application/json' }, body: JSON.stringify(body) }, ctx)).json());
   const id = text(created?.id);
   if (!id) throw new Error(`${NAME} did not take the request.`);
+  await ctx.checkpoint?.(created);
   let state = created;
   while (state?.status !== 'succeeded') {
     if (['failed', 'expired', 'cancelled'].includes(state?.status)) throw new Error(`${NAME} could not make it: ${text(state.error?.message) || text(state.error?.code) || state.status}`);

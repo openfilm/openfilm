@@ -30,6 +30,8 @@ import { realpathSync } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
+import { createHash } from 'node:crypto';
+import { mediaTransfer } from './media-transfer.mjs';
 import { fileURLToPath } from 'node:url';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
 import { spokenLines } from './captions.mjs';
@@ -307,9 +309,9 @@ async function projectFile(root, rel, name, want) {
  * `model`: the provider's model for this run, instead of the person's choice for this kind of media.
  * @param {string} root @param {string} verb @param {Record<string, unknown>} given
  * `tell`: says a Notice to the person in Studio. `made`: told once how the files it landed were made is on record.
- * @param {{ via?: string, model?: string, yes?: boolean, ask?: Ask, tell?: (notice: Notice) => void, made?: (root: string) => void, signal?: AbortSignal }} [options]
+ * @param {{ via?: string, model?: string, yes?: boolean, ask?: Ask, tell?: (notice: Notice) => void, made?: (root: string) => void, signal?: AbortSignal, recoverOnly?: boolean }} [options] `recoverOnly`: only collect a run already taken (pendingRuns), never start one
  */
-export async function runGet(root, verb, given, { via, model, yes = false, ask, tell, made, signal = new AbortController().signal } = {}) {
+export async function runGet(root, verb, given, { via, model, yes = false, ask, tell, made, signal = new AbortController().signal, recoverOnly = false } = {}) {
   const args = await checkArgs(root, verb, given);
   const fresh = args.fresh === true;
   delete args.fresh;
@@ -376,8 +378,24 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     signal: clock.signal,
     say: (/** @type {string} */ line) => { said.push(line); },
     read: (/** @type {string} */ path) => readInput(root, path, verb === 'asr' && path === args.src, clock.signal, provider.speechFormat),
+    /* what was asked, kept with a paid run's saved request: asked again from the project to recover it (pendingRuns) */
+    about: { verb, args: Object.fromEntries(Object.entries(given).filter(([name]) => name !== 'fresh')), via: provider.id, model: runModel ?? null },
+    /* only what was already taken is collected: a run never taken is not started (and paid) from here */
+    ...(recoverOnly ? { recoverOnly: true } : {}),
     ...(provider.id === 'openfilm' ? { fresh, openInput: (/** @type {string} */ path) => mediaInput(root, path, { speech: verb === 'asr' && path === args.src, signal: clock.signal }) } : {}),
   };
+  /* a job a provider takes on the person's own key (fal, OpenRouter, Volcengine) is kept as it is taken, and waited for
+     again when the same run starts again after a restart: never submitted and paid twice (media-transfer.mjs) */
+  let journal = null;
+  if (RESUMABLE.has(provider.id)) {
+    const identity = { verb, args: { ...args, fresh: undefined }, model: runModel ?? null, inputs: await inputVersions(root, spec, args) };
+    journal = await mediaTransfer(root, clock.signal).then((t) => t?.request(`${provider.id}\0${keyTag(ctx.key)}`, identity, fresh, ctx.about) ?? null).catch(() => null);
+  }
+  if (journal) Object.assign(ctx, { resume: journal.reply?.job, checkpoint: (/** @type {unknown} */ job) => journal.remember({ job }) });
+  if (recoverOnly && RESUMABLE.has(provider.id) && !journal?.reply?.job) {
+    await journal?.finish(); await journal?.release(); clock.clear();
+    throw new GetError(`${provider.name} never took this run, so there is nothing to collect and nothing was paid. Make it again to have it.`);
+  }
   /** @type {RunResult | undefined} */
   let result;
   try {
@@ -398,9 +416,13 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     if (noted) made?.(root);
     const receipt = await receiptFor(root, verb, args, result.receipt);
     await result.complete?.();
+    await journal?.finish();
     const other = madeWith(provider, runModel, offered, settings, kind, verb);
     return [...said, show(other ? { ...receipt, madeWith: other } : receipt)].join('\n');
   } catch (e) {
+    /* a job known to be over (refused, or failed at the provider) is let go; one cut off or never reached is kept */
+    const unknown = clock.signal.aborted || /** @type {{ unreached?: boolean, name?: string }} */ (e)?.unreached || /** @type {Error} */ (e)?.name === 'AbortError';
+    if (journal && !unknown) await journal.finish().catch(() => {});
     if (clock.timedOut()) throw new GetError(provider.id === 'openfilm'
       ? `OpenFilm did not deliver this within ${waitSec} s. The task may already be complete and paid. Run the same command to recover its original result; use --fresh only when the person intentionally wants another paid take.`
       : `${provider.name} did not finish within ${waitSec} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
@@ -416,8 +438,61 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     throw e;
   } finally {
     await result?.cleanup?.();
+    await journal?.release();
     clock.clear();
   }
+}
+
+/**
+ * The paid runs of a project left pending (asked, never saved in it: Studio closed, the network gone), newest first:
+ * what was asked, to say to the person and to ask again (recoverRuns) without paying again.
+ * @param {string} root @returns {Promise<{ verb: string, out: string | null, via: string, created: number }[]>}
+ */
+export async function pendingRuns(root) {
+  const transfer = await mediaTransfer(root, new AbortController().signal);
+  return (await transfer?.pending() ?? []).map(({ about, created }) => ({
+    verb: String(about.verb ?? ''), out: typeof (/** @type {any} */ (about.args))?.out === 'string' ? /** @type {any} */ (about.args).out : null,
+    via: String(about.via ?? ''), created,
+  }));
+}
+
+/**
+ * Ask each pending paid run again, as it was asked: the service (or the provider, on the person's key) gives back what
+ * it made, never makes and charges it again. → what came back, and what did not (with why).
+ * @param {string} root @param {{ made?: (root: string) => void, signal?: AbortSignal }} [options]
+ */
+export async function recoverRuns(root, { made, signal } = {}) {
+  const transfer = await mediaTransfer(root, signal ?? new AbortController().signal);
+  const recovered = [], failed = [];
+  for (const { about } of await transfer?.pending() ?? []) {
+    const args = /** @type {Record<string, unknown>} */ (about.args ?? {});
+    try {
+      await runGet(root, String(about.verb), /** @type {any} */ (args), { via: String(about.via), ...(typeof about.model === 'string' ? { model: about.model } : {}), yes: true, recoverOnly: true, ...(made ? { made } : {}), ...(signal ? { signal } : {}) });
+      recovered.push(typeof args.out === 'string' ? args.out : String(about.verb));
+    } catch (e) {
+      failed.push({ out: typeof args.out === 'string' ? args.out : String(about.verb), why: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { recovered, failed };
+}
+
+/** The providers that take a job on the person's own key and can be given it back (`resume`) after a restart. */
+const RESUMABLE = new Set(['fal', 'openrouter', 'volcengine']);
+
+/** A key's short, one-way tag: a record is the key's, without the key written anywhere. @param {string} key */
+const keyTag = (key) => createHash('sha256').update(key).digest('hex').slice(0, 16);
+
+/**
+ * The project files a run reads, as they are now (size and time): the same run on changed files is another run.
+ * @param {string} root @param {VerbSpec} spec @param {Record<string, unknown>} args
+ */
+async function inputVersions(root, spec, args) {
+  const paths = Object.keys(spec.options).filter((name) => spec.options[name].path).flatMap((name) => [args[name]].flat())
+    .filter((p) => typeof p === 'string');
+  return Promise.all(paths.map(async (p) => {
+    const info = await stat(join(root, String(p))).catch(() => null);
+    return [p, info ? `${info.size}:${Math.round(info.mtimeMs)}` : null];
+  }));
 }
 
 /**
@@ -808,6 +883,13 @@ export async function getRoute(req, res, parts, asks, made) {
     const given = args && typeof args === 'object' && !Array.isArray(args) ? /** @type {Record<string, string | true>} */ (args) : {};
     if (typeof verb !== 'string' || !(verb in LIBRARY_VERBS) || 'take' in given) throw new HttpError(400, 'a search of the library, please');
     return json(res, 200, await libraryGet(verb, given));
+  }
+  /* the project's paid runs left pending ({ folder }): listed, or collected again (never made and paid again) */
+  if ((parts[0] === 'pending' || parts[0] === 'recover') && parts.length === 1 && req.method === 'POST') {
+    const folder = /** @type {{ folder?: unknown }} */ (await readJson(req) ?? {}).folder;
+    const root = resolve(String(folder ?? ''));
+    if (!(await stat(join(root, FILM_FILE)).catch(() => null))?.isFile()) throw new HttpError(400, 'folder: a project');
+    return json(res, 200, parts[0] === 'pending' ? { runs: await pendingRuns(root) } : await recoverRuns(root, made ? { made } : {}));
   }
   if (parts.length || req.method !== 'POST') throw new HttpError(404, 'no such API');
   const body = /** @type {{ folder?: unknown, verb?: unknown, args?: unknown, via?: unknown, model?: unknown, yes?: unknown }} */ (await readJson(req));

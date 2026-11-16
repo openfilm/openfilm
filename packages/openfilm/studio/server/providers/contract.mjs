@@ -67,7 +67,9 @@
  * `model`: the id of the model, one of the provider's `models` for the verb, the person chose (a provider uses its first
  * when there is none). `handOff`: whoever ran it fetches a made file itself from a web address that needs no key (a
  * signed address of the service's own storage), so the file need not pass through the run (OpenFilm's service: the
- * person's computer fetches it straight from there).
+ * person's computer fetches it straight from there). `checkpoint`: told the job a provider took (its own answer), right
+ * after it is taken, so whoever ran it can keep it; `resume`: that job, given back when the same run starts again (a
+ * restart): the provider waits for it instead of submitting it again and charging twice.
  * @typedef {{
  *   key: string,
  *   model?: string,
@@ -81,6 +83,10 @@
  *   keep?: (path: string, response: Response) => Promise<{ path: string, url: string, type?: string, bytes: number }>,
  *   openInput?: (path:string) => Promise<{size:number,version:string,stream:()=>ReadableStream,verify?:()=>Promise<void>,dispose?:()=>Promise<void>}>,
  *   fresh?: boolean,
+ *   about?: Record<string, unknown>,
+ *   recoverOnly?: boolean,
+ *   resume?: any,
+ *   checkpoint?: (job: any) => Promise<void>,
  * }} RunContext
  */
 

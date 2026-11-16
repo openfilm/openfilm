@@ -14,7 +14,7 @@
  * service that predates this gets the files inside the run and gives them back inside its answer.
  */
 import { createHash, randomUUID } from 'node:crypto';
-import { mediaTransfer } from '../media-transfer.mjs';
+import { idleSignal, mediaTransfer } from '../media-transfer.mjs';
 import { billedBy, call, failure, list, serviceUrl, sleep } from './common.mjs';
 import openai from './openai.mjs';
 import google from './google.mjs';
@@ -142,9 +142,13 @@ async function inputsOf(files, base, headers, ctx) {
       for (let attempt = 0; ; attempt++) {
         ctx.signal.throwIfAborted();
         try {
-          const init = Object.assign({ method: 'PUT', headers: to.headers ?? {}, body: file.bytes ?? file.stream?.(), signal: ctx.signal }, file.stream ? { duplex: 'half' } : {});
-          const sent = await fetch(to.url, /** @type {RequestInit} */ (init));
-          await sent.body?.cancel();
+          /* cut when it sends nothing for a while, not after a fixed time: a large upload that moves goes on */
+          const idle = idleSignal(ctx.signal);
+          const source = file.stream ? file.stream() : new Blob([new Uint8Array(/** @type {Uint8Array} */ (file.bytes))]).stream();
+          const body = source.pipeThrough(new TransformStream({ transform(chunk, controller) { idle.touch(); controller.enqueue(chunk); } }));
+          const init = { method: 'PUT', headers: to.headers ?? {}, body, signal: idle.signal, duplex: 'half' };
+          let sent;
+          try { sent = await fetch(to.url, /** @type {RequestInit} */ (init)); await sent.body?.cancel(); } finally { idle.clear(); }
           if (!sent.ok) throw new Error(`Upload answered ${sent.status}.`);
           await file.verify?.(); break;
         } catch (e) { if (ctx.signal.aborted || attempt >= 2) throw e; await sleep(polling.first * 2 ** attempt, ctx.signal); }
@@ -229,8 +233,10 @@ export default {
     let returned = false;
     try {
     const transfer = await mediaTransfer(ctx.root, ctx.signal);
-    const scope = createHash('sha256').update(base + '\0' + ctx.key).digest('hex');
-    journal = await transfer?.request(scope, { verb, args, model: ctx.model ?? null, inputs: sources.map(({path,version}) => ({path,version})) }, ctx.fresh);
+    /* the service's, not the key's: signed out and in again mid-run (a new key), the paid run is still found; another
+       account asking the same is a run of its own there (the service keeps runs by account) */
+    const scope = createHash('sha256').update(base).digest('hex');
+    journal = await transfer?.request(scope, { verb, args, model: ctx.model ?? null, inputs: sources.map(({path,version}) => ({path,version})) }, ctx.fresh, ctx.about);
     const runKey = journal?.key ?? randomUUID();
     /** @type {any} */
     let body = null;
@@ -265,6 +271,11 @@ export default {
     let res, brokenBodies = 0;
     try { res = journal?.reply ? new Response(JSON.stringify(journal.reply)) : journal?.resumed ? await get() : await post(); }
     catch (e) { throw await over(e); }
+    /* collecting only: a run the service never had is not started (and paid) from here */
+    if (ctx.recoverOnly && (!journal?.resumed || res.status === 404)) {
+      await journal?.finish();
+      throw new Error(`${NAME} never had this run, so there is nothing to collect and nothing was paid. Make it again to have it.`);
+    }
     try {
     for (;;) {
       for (let wait = Math.min(polling.first, polling.ms); [202, 404, 409].includes(res.status); wait = Math.min(polling.ms, wait * 2)) {
