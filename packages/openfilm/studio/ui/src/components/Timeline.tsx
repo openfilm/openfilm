@@ -2282,7 +2282,8 @@ export const Timeline = React.memo(function Timeline({
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (scrollRef.current?.closest('[inert]')) return;
-      if (isTypingTarget(e.target)) return;
+      /* A popover can unmount during capture. Its consumed Escape still belongs to it after its DOM is gone. */
+      if (e.defaultPrevented || isTypingTarget(e.target)) return;
       if ((e.target as Element | null)?.closest?.('[role="dialog"]')) return;
       const picked = tracks.flatMap((tr) => tr.blocks).filter((b) => selected.includes(b.id) && b.loc);
       if (e.key === 'Escape' && (selected.length || gap || pickedTransition || range) && !e.metaKey && !e.ctrlKey && !e.altKey

@@ -19,7 +19,7 @@ export function CanvasModal({ onClose, side, children, label }: {
 }) {
   const t = useT();
   React.useEffect(() => {
-    const key = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.isComposing) { event.stopPropagation(); onClose(); } };
+    const key = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.isComposing && !event.defaultPrevented && !document.querySelector('[data-popover-panel]')) { event.stopPropagation(); onClose(); } };
     window.addEventListener('keydown', key, true);
     return () => window.removeEventListener('keydown', key, true);
   }, [onClose]);

@@ -14,7 +14,7 @@ export type MenuChoice = { value: string; label: string };
 export type MenuGroup = { label?: string; choices: MenuChoice[] };
 
 export function MenuSelect({
-  label, value, groups, onPick, onPreview, onRevert, disabled = false, className = '', size = 'sm', prefix, menuWidth = 'trigger',
+  label, value, groups, onPick, onPreview, onRevert, disabled = false, className = '', size = 'sm', prefix, menuWidth = 'trigger', block = true, layer = 10000, ...triggerProps
 }: {
   /** what it chooses, for screen readers (the field shows the choice) */
   label: string;
@@ -27,13 +27,17 @@ export function MenuSelect({
   onRevert?: () => void;
   disabled?: boolean;
   className?: string;
-  /** `sm`: the inspector's fields; `md`: a dialog's (the export's) */
-  size?: 'sm' | 'md';
+  /** `xs`: compact motion rows; `sm`: inspector fields; `md`: dialogs. */
+  size?: 'xs' | 'sm' | 'md';
   /** A word before the choice (Blend), as the inspector's other fields have their mark. */
   prefix?: string;
   /** Long choices can size the open menu independently of a compact field. */
   menuWidth?: 'trigger' | 'content';
-}) {
+  /** Compact motion controls keep their intrinsic width; other fields fill their column. */
+  block?: boolean;
+  /** Menus opened inside an overlay stay above that overlay. */
+  layer?: number;
+} & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'value' | 'onChange' | 'onClick' | 'onKeyDown' | 'size' | 'prefix' | 'children'>) {
   const [open, setOpen] = React.useState(false);
   const [width, setWidth] = React.useState(0);
   const [active, setActive] = React.useState(-1);
@@ -99,8 +103,9 @@ export function MenuSelect({
 
   let index = -1;
   return (
-    <Popover open={open && !disabled} onOpenChange={(next) => setOpen(next && !disabled)} placement="auto" block trigger={(
+    <Popover open={open && !disabled} onOpenChange={(next) => setOpen(next && !disabled)} placement="auto" clampToViewport block={block} layer={layer} trigger={(
       <button
+        {...triggerProps}
         ref={triggerRef}
         type="button"
         aria-label={label}
@@ -110,7 +115,7 @@ export function MenuSelect({
         /* the popover keeps focus where it was on a press: the keys need it here */
         onClick={(e) => e.currentTarget.focus()}
         onKeyDown={onKeyDown}
-        className={`flex min-w-0 flex-1 items-center gap-1.5 border border-[var(--border)] bg-[var(--bg-field)] text-left text-[var(--text)] ${size === 'md' ? 'h-9 rounded-lg pl-3 pr-2 text-[13px]' : 'h-7 rounded-md pl-2 pr-1.5 text-[11px]'} outline-none transition hover:border-[var(--text-faint)] focus-visible:border-[var(--accent)] disabled:opacity-50 ${open ? 'border-[var(--accent)]' : ''} ${className}`}
+        className={`flex min-w-0 flex-1 items-center gap-1.5 border text-left text-[var(--text)] ${size === 'xs' ? 'h-[18px] rounded-[4px] border-[var(--dock-line)] bg-transparent pl-1.5 pr-1 text-[11px] hover:bg-[var(--bg-hover)]' : `border-[var(--border)] bg-[var(--bg-field)] ${size === 'md' ? 'h-9 rounded-lg pl-3 pr-2 text-[13px]' : 'h-7 rounded-md pl-2 pr-1.5 text-[11px]'}`} outline-none transition hover:border-[var(--text-faint)] focus-visible:border-[var(--accent)] disabled:opacity-50 ${open ? 'border-[var(--accent)]' : ''} ${className}`}
       >
         {prefix ? <span className="shrink-0 whitespace-nowrap text-[10.5px] text-[var(--text-faint)]">{prefix}</span> : null}
         <span className="min-w-0 flex-1 truncate">{current?.label ?? value}</span>

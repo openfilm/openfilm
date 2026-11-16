@@ -28,6 +28,8 @@ import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { FILTER_EFFECTS, ITEM_DRAG, applyItem, itemApplies, itemOfKey, type MotionItem } from './motion-items';
 import { Stopwatch } from './KeyframesSection';
 import { LANE_H, LANE_PAD, MotionLaneHeads, MotionLaneRows, lanesHeight, type MotionLanes } from './MotionLanes';
+import { MenuSelect } from './MenuSelect';
+import { isTextField } from './typing-target';
 
 /**
  * A layer: a clip of the film, or an element of a page (a composition opened); `clipId` names it (an element's is
@@ -160,7 +162,6 @@ const LABEL: Record<string, string> = { video: '#4ca3ad', mg: '#a594d6', still: 
 const labelOf = (layer: Layer) => LABEL[layer.kind] ?? '#8a8f98';
 /** A layer's bar on the time: its label color, toned down so its name reads on it. */
 export const layerBarColor = (kind: string) => `color-mix(in srgb, ${LABEL[kind] ?? '#8a8f98'} 58%, #1b2326)`;
-const SELECT = 'h-[18px] rounded-[4px] border border-[var(--dock-line)] bg-transparent px-1 text-[11px] text-[var(--text-muted)] outline-none hover:bg-[var(--bg-hover)]';
 
 function follow(e: React.PointerEvent, move: (dx: number, ev: PointerEvent) => void, done: (dx: number, moved: boolean) => void) {
   const x0 = e.clientX;
@@ -336,8 +337,7 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (e.defaultPrevented || isTextField(e.target)) return;
       const now = live.current;
       /* a mask's picked keyframes: as a clip's (F9 and its ⇧/⌘⇧, ⌫, ⌥←/→, Esc) */
       if (now.maskPick?.keys.size) {
@@ -493,10 +493,9 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
     if (text && text.anim !== undefined) {
       const anim = text.anim;
       group('text', t('canvas.textGroup'), anim === null ? <span className="text-[11px] text-[var(--text-faint)]">{t('canvas.textCustom')}</span> : (
-        <select aria-label={t('canvas.textAnimate')} value={anim.preset} data-text-preset={id} className={SELECT}
-          onPointerDown={(e) => e.stopPropagation()} onChange={(e) => text.set(textAnimDefault(e.target.value as TextPreset, anim))}>
-          {TEXT_PRESETS.map((x) => <option key={x} value={x}>{t(`canvas.textPresets.${x}`)}</option>)}
-        </select>
+        <MenuSelect label={t('canvas.textAnimate')} value={anim.preset} data-text-preset={id} size="xs" block={false}
+          onPointerDown={(e) => e.stopPropagation()} onPick={(value) => text.set(textAnimDefault(value as TextPreset, anim))}
+          groups={[{ choices: TEXT_PRESETS.map((value) => ({ value, label: t(`canvas.textPresets.${value}`) })) }]} />
       ), anim === null ? undefined : () => text.set(null),
       /* its turns drawn on the time from when they start */
       anim ? (px) => <div className="pointer-events-none absolute inset-y-[6px] rounded-[2px] bg-[#d0706f]/50" style={{ left: anim.start * 1000 * px, width: Math.max(3, anim.secs * 1000 * px) }} /> : undefined,
@@ -507,10 +506,9 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
     if (mk?.shape) {
       group('mask', t('inspector.mask'), (
         <>
-          <select aria-label={t('inspector.maskShape')} value={mk.shape} data-mask-shape={id} className={SELECT}
-            onPointerDown={(e) => e.stopPropagation()} onChange={(e) => mk.setShape(e.target.value as MaskShape)}>
-            {MASK_SHAPES.map((shape) => <option key={shape} value={shape}>{t(`inspector.maskShapes.${shape}`)}</option>)}
-          </select>
+          <MenuSelect label={t('inspector.maskShape')} value={mk.shape} data-mask-shape={id} size="xs" block={false}
+            onPointerDown={(e) => e.stopPropagation()} onPick={(value) => mk.setShape(value as MaskShape)}
+            groups={[{ choices: MASK_SHAPES.map((value) => ({ value, label: t(`inspector.maskShapes.${value}`) })) }]} />
           <label className="flex items-center gap-1 text-[11px]" onPointerDown={(e) => e.stopPropagation()}>
             <input type="checkbox" checked={mk.invert} onChange={(e) => mk.setInvert(e.target.checked)} data-mask-invert={id} />
             {t('inspector.maskInvert')}
@@ -650,12 +648,10 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
           ) : null}
         </span>
         <span className="relative shrink-0" style={{ width: MODE_W }}>
-          <select aria-label={t('canvas.motionMode')} value={host.blend} data-layer-mode={layer.clipId}
-            onPointerDown={(e) => e.stopPropagation()} onChange={(e) => host.setBlend(e.target.value)}
-            className={`h-[18px] w-full appearance-none truncate rounded-[4px] bg-transparent pl-1.5 pr-4 text-[11px] outline-none hover:bg-[var(--bg-hover)] ${host.blend === 'normal' ? 'text-[var(--text-faint)]' : 'text-[var(--text)]'}`}>
-            {BLEND_MODES.map((mode) => <option key={mode} value={mode}>{t(`inspector.blendModes.${mode}`)}</option>)}
-          </select>
-          <ChevronDown size={10} className="pointer-events-none absolute right-1 top-[4px] text-[var(--text-faint)]" />
+          <MenuSelect label={t('canvas.motionMode')} value={host.blend} data-layer-mode={layer.clipId} size="xs"
+            onPointerDown={(e) => e.stopPropagation()} onPick={host.setBlend}
+            className={`w-full border-transparent ${host.blend === 'normal' ? 'text-[var(--text-faint)]' : 'text-[var(--text)]'}`}
+            groups={[{ choices: BLEND_MODES.map((value) => ({ value, label: t(`inspector.blendModes.${value}`) })) }]} />
         </span>
       </div>
     );
@@ -707,24 +703,19 @@ export function useMotionLayers(p: MotionLayersArgs): MotionLayersView {
  * when the first starts, how far apart, how long each.
  */
 function TextParams({ layer, host, anim, t }: { layer: Layer; host: NonNullable<LayerHost['text']>; anim: TextAnim; t: (key: string) => string }) {
-  const sel = SELECT;
   const set = (part: Partial<TextAnim>) => host.set({ ...anim, ...part });
   return (
     <div className="flex h-full items-center gap-1.5 overflow-hidden text-[11px] text-[var(--text-muted)]" style={{ paddingLeft: AV_W + 34 }}>
-      <select aria-label={t('canvas.textDir')} value={anim.dir ?? 'in'} className={`${sel} w-[58px]`} data-text-dir={layer.clipId} onPointerDown={(e) => e.stopPropagation()}
-        onChange={(e) => {
-          const dir = e.target.value as 'in' | 'out';
+      <MenuSelect label={t('canvas.textDir')} value={anim.dir ?? 'in'} size="xs" block={false} className="w-[58px]" data-text-dir={layer.clipId} onPointerDown={(e) => e.stopPropagation()}
+        onPick={(value) => {
+          const dir = value as 'in' | 'out';
           /* going out: near the end of the page, where a line leaves */
           set(dir === 'out' ? { dir, start: Math.max(0, Math.round((layer.endMs / 1000 - anim.secs - 0.6) * 100) / 100) } : { dir: undefined, start: 0 });
-        }}>
-        {(['in', 'out'] as const).map((d) => <option key={d} value={d}>{t(`canvas.textDirs.${d}`)}</option>)}
-      </select>
-      <select aria-label={t('canvas.textBy')} value={anim.by} className={`${sel} w-[64px]`} onPointerDown={(e) => e.stopPropagation()} onChange={(e) => set({ by: e.target.value as TextAnim['by'] })}>
-        {(['char', 'word', 'line'] as const).map((b) => <option key={b} value={b}>{t(`canvas.textBys.${b}`)}</option>)}
-      </select>
-      <select aria-label={t('canvas.textOrder')} value={anim.order} className={`${sel} w-[72px]`} onPointerDown={(e) => e.stopPropagation()} onChange={(e) => set({ order: e.target.value as TextAnim['order'] })}>
-        {(['forward', 'reverse', 'center', 'random'] as const).map((o) => <option key={o} value={o}>{t(`canvas.textOrders.${o}`)}</option>)}
-      </select>
+        }} groups={[{ choices: ['in', 'out'].map((value) => ({ value, label: t(`canvas.textDirs.${value}`) })) }]} />
+      <MenuSelect label={t('canvas.textBy')} value={anim.by} size="xs" block={false} className="w-[64px]" onPointerDown={(e) => e.stopPropagation()} onPick={(value) => set({ by: value as TextAnim['by'] })}
+        groups={[{ choices: ['char', 'word', 'line'].map((value) => ({ value, label: t(`canvas.textBys.${value}`) })) }]} />
+      <MenuSelect label={t('canvas.textOrder')} value={anim.order} size="xs" block={false} className="w-[72px]" onPointerDown={(e) => e.stopPropagation()} onPick={(value) => set({ order: value as TextAnim['order'] })}
+        groups={[{ choices: ['forward', 'reverse', 'center', 'random'].map((value) => ({ value, label: t(`canvas.textOrders.${value}`) })) }]} />
       <Scrub label={t('canvas.textStart')} value={anim.start} unit="s" step={0.01} digits={2} onCommit={(n) => set({ start: Math.max(0, n) })} />
       <Scrub label={t('canvas.textStagger')} value={anim.stagger} unit="s" step={0.002} digits={3} onCommit={(n) => set({ stagger: Math.max(0, n) })} />
       <Scrub label={t('canvas.textSecs')} value={anim.secs} unit="s" step={0.01} digits={2} onCommit={(n) => set({ secs: Math.max(0.01, n) })} />

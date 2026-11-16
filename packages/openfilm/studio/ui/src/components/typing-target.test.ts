@@ -47,3 +47,10 @@ test('a text field or editable text types; a slider or checkbox does not', () =>
   assert.equal(isTypingTarget(element({ tag: 'INPUT', type: 'range' })), false);
   assert.equal(isTypingTarget(element({ tag: 'INPUT', type: 'checkbox' })), false);
 });
+
+test('custom selection menus keep arrows, Space and editing shortcuts away from the film', () => {
+  assert.equal(isTypingTarget(element({ tag: 'BUTTON', above: ['[aria-haspopup="listbox"]'] })), true);
+  assert.equal(isTypingTarget(element({ tag: 'SPAN', above: ['[role="listbox"]'] })), true);
+  assert.equal(isTypingTarget(element({ tag: 'SELECT' })), true);
+  assert.equal(isTypingTarget(element({ tag: 'BUTTON' })), false);
+});

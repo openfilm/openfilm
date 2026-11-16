@@ -16,6 +16,7 @@ import { Empty } from './icons';
 import { SpeakDialog } from './SpeakDialog';
 import { CloneVoiceDialog } from './CloneVoiceDialog';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { MenuSelect } from '../MenuSelect';
 import { isPrivateVoice, MY_VOICES, privateVoiceAccess, refreshPrivateVoice, removePrivateVoice, syncPrivateVoices, usePrivateVoices, type PrivateVoice } from '@/lib/private-voices';
 import { providerName } from '@/lib/providers';
 import {
@@ -141,15 +142,11 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, onMyVoi
       </div> : null}
       {problem || (group === MY_VOICES && mine.error) ? <p role="alert" className="px-3 pb-2 text-[11.5px] text-[var(--err)]">{problem ?? mine.error}</p> : null}
       <div className="flex items-center gap-3 px-3 pb-2">
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          aria-label={t('assetDrawer.language')}
-          className="h-7 min-w-0 max-w-[150px] rounded-md bg-[var(--bg-field)] px-2 text-[12px] text-[var(--text)] outline-none hover:bg-[var(--bg-hover)]"
-        >
-          <option value="">{t('assetDrawer.anyLanguage')}</option>
-          {languages.map((l) => <option key={l} value={l}>{languageName(l)}</option>)}
-        </select>
+        <div className="min-w-0 max-w-[150px] flex-1">
+          <MenuSelect label={t('assetDrawer.language')} value={language} onPick={setLanguage}
+            groups={[{ choices: [{ value: '', label: t('assetDrawer.anyLanguage') }, ...languages.map((l) => ({ value: l, label: languageName(l) }))] }]}
+            className="text-[12px]" />
+        </div>
         <span className={`flex items-center gap-2.5 ${group === MY_VOICES ? 'hidden' : ''}`}>
           <button type="button" className={chip(!gender)} aria-pressed={!gender} onClick={() => setGender('')}>{t('assetDrawer.all')}</button>
           <button type="button" className={chip(gender === 'f')} aria-pressed={gender === 'f'} onClick={() => setGender('f')}>{t('assetDrawer.female')}</button>

@@ -8,6 +8,7 @@ import { ArrowUp, Box, Lightbulb, RotateCcw, Square } from 'lucide-react';
 import { useT } from '@/i18n';
 import { PRESETS } from '@/lib/canvas-presets';
 import { CanvasModal } from './libraries';
+import { ColorSwatch } from '../ColorPicker';
 
 const PICTURES: Record<string, string> = Object.fromEntries(Object.entries(import.meta.glob<string>('./presets/light*.webp', { eager: true, import: 'default' }))
   .map(([path, url]) => [path.slice('./presets/'.length, -'.webp'.length), url]));
@@ -490,10 +491,8 @@ export function LightPanel({ src, onClose, onMake }: {
                 <div className={label}>{t('canvas.light.color')}<span className="text-[var(--cv-ink-2)]">{COLORS.find((c) => c.hex === color) ? t(`canvas.light.colors.${COLORS.find((c) => c.hex === color)!.id}`) : null}</span></div>
                 <Swatches value={color} onPick={(hex) => { setColor(hex); setTyping(null); }} />
                 <div className="mt-2 flex items-center gap-2 px-1">
-                  <label className="relative h-7 w-7 shrink-0 cursor-pointer overflow-hidden rounded-full ring-1 ring-inset ring-white/20" title={t('canvas.light.custom')} style={{ background: color }}>
-                    <input type="color" value={color} onChange={(event) => { setColor(event.target.value.toLowerCase()); setTyping(null); }}
-                      aria-label={t('canvas.light.custom')} className="absolute inset-0 cursor-pointer opacity-0" />
-                  </label>
+                  <ColorSwatch label={t('canvas.light.custom')} value={color} onCommit={(hex) => { setColor(hex); setTyping(null); }}
+                    className="h-7 w-7 overflow-hidden rounded-full ring-1 ring-inset ring-white/20" />
                   <input value={typing ?? color} spellCheck={false} aria-label={t('canvas.light.hex')}
                     onChange={(event) => { setTyping(event.target.value); const hex = hexOf(event.target.value); if (hex) setColor(hex); }}
                     onBlur={() => setTyping(null)}

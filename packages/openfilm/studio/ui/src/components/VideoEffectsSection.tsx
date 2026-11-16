@@ -15,6 +15,7 @@ import { PreviewRenderControls } from './PreviewRenderControls';
 import { useT } from '@/i18n';
 import type { Look } from '@/lib/look';
 import { MIXED, Section, SectionAction, ColorField, SelectField, SliderField } from './inspector-fields';
+import { ColorSwatch } from './ColorPicker';
 export type VisionStatus = {
   phase: 'idle' | 'loading' | 'processing' | 'ready' | 'error';
   preview?: 'draft' | 'quality' | 'original' | 'cached' | 'export' | null;
@@ -244,16 +245,15 @@ export function VideoEffectsSection({
             ) : null}
             {settings.mode === 3 ? (
               <>
-                <label className="flex h-7 items-center justify-between text-[11px] text-[var(--text-muted)]">
+                <div className="flex h-7 items-center justify-between text-[11px] text-[var(--text-muted)]">
                   {t('videoEffects.keyColor')}
-                  <input
-                    type="color"
-                    aria-label={t('videoEffects.keyColor')}
+                  <ColorSwatch
+                    label={t('videoEffects.keyColor')}
                     value={settings.keyColor}
-                    onChange={(event) => look.commit(() => ({ '--of-cutout-color': event.target.value }))}
-                    className="h-6 w-12 cursor-pointer rounded border-0 bg-transparent"
+                    onCommit={(value) => look.commit(() => ({ '--of-cutout-color': value }))}
+                    className="h-6 w-12 rounded border border-[var(--border)]"
                   />
-                </label>
+                </div>
                 {slider('keyTolerance')}
                 {slider('keySoftness')}
               </>

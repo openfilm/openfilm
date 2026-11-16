@@ -8,8 +8,29 @@
 import React from 'react';
 import { Pipette, X } from 'lucide-react';
 import { useT } from '@/i18n';
+import { Popover } from './Popover';
 
 type Hsv = { h: number; s: number; v: number; a: number };
+
+/** An RGB swatch using the same picker on every OS, instead of the system color dialog. */
+export function ColorSwatch({ label, value, onCommit, className = '' }: {
+  label: string;
+  value: string;
+  onCommit: (hex: string) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [live, setLive] = React.useState<string | null>(null);
+  const close = (next: boolean) => { setOpen(next); if (!next) setLive(null); };
+  return (
+    <Popover open={open} onOpenChange={close} placement="auto" clampToViewport trigger={(
+      <button type="button" aria-label={label} aria-haspopup="dialog" aria-expanded={open} className={`shrink-0 cursor-pointer ${className}`} style={{ background: live ?? value }} />
+    )}>
+      <ColorPicker label={label} value={value} opaque onPreview={setLive}
+        onCommit={(next) => { setLive(null); if (next !== value) onCommit(next); }} onClose={() => close(false)} />
+    </Popover>
+  );
+}
 
 const clamp = (x: number, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, x));
 
@@ -83,7 +104,7 @@ const CHECKER = { backgroundImage: 'repeating-conic-gradient(#d9d9d9 0 25%, #fff
 const NUMBER = 'h-[26px] min-w-0 rounded-[5px] bg-[var(--bg-field)] px-2 text-[11px] text-[var(--text)] outline-none tabular-nums ring-1 ring-inset ring-transparent focus:bg-[var(--bg-panel)] focus:ring-[1.5px] focus:ring-[var(--accent)]';
 
 export function ColorPicker({
-  label, value, onPreview, onCommit, onClose,
+  label, value, onPreview, onCommit, onClose, opaque = false,
 }: {
   label: string;
   /** `#rrggbb` or `#rrggbbaa` */
@@ -91,9 +112,11 @@ export function ColorPicker({
   onPreview: (hex: string) => void;
   onCommit: (hex: string) => void;
   onClose: () => void;
+  /** RGB-only controls such as a light or chroma key have no opacity. */
+  opaque?: boolean;
 }) {
   const t = useT();
-  const [c, setC] = React.useState<Hsv>(() => hexToHsv(value) ?? { h: 0, s: 0, v: 1, a: 1 });
+  const [c, setC] = React.useState<Hsv>(() => ({ ...(hexToHsv(value) ?? { h: 0, s: 0, v: 1, a: 1 }), ...(opaque ? { a: 1 } : {}) }));
   const [typed, setTyped] = React.useState<string | null>(null);
   const [recent, setRecent] = React.useState<string[]>(STARTERS);
   React.useEffect(() => { setRecent(readRecent()); }, []);
@@ -127,7 +150,10 @@ export function ColorPicker({
   return (
     <div
       data-color-picker=""
-      className="w-[240px] select-none rounded-[12px] border border-[var(--border-strong)] bg-[var(--bg-raised)] p-3 text-[var(--text)] shadow-[0_16px_40px_-8px_rgba(0,0,0,.35),0_4px_12px_rgba(0,0,0,.14)]"
+      role="dialog"
+      aria-label={label}
+      className="w-[240px] select-none overflow-y-auto rounded-[12px] border border-[var(--border-strong)] bg-[var(--bg-raised)] p-3 text-[var(--text)] shadow-[0_16px_40px_-8px_rgba(0,0,0,.35),0_4px_12px_rgba(0,0,0,.14)]"
+      style={{ maxHeight: 'var(--popover-max-h, calc(100vh - 24px))' }}
     >
       <div className="mb-2.5 flex h-5 items-center">
         <span className="text-[11px] font-semibold">{label}</span>
@@ -154,10 +180,10 @@ export function ColorPicker({
             style={{ background: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}>
             <span className={KNOB} style={{ left: `${(c.h / 360) * 100}%`, top: '50%', background: `hsl(${c.h} 100% 50%)` }} />
           </div>
-          <div ref={alpha.ref} onPointerDown={alpha.onPointerDown} className="relative h-[10px] cursor-pointer rounded-full" style={CHECKER}>
+          {!opaque ? <div ref={alpha.ref} onPointerDown={alpha.onPointerDown} className="relative h-[10px] cursor-pointer rounded-full" style={CHECKER}>
             <span className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(to right, transparent, ${solid})` }} />
             <span className={KNOB} style={{ left: `${c.a * 100}%`, top: '50%', background: solid }} />
-          </div>
+          </div> : null}
         </div>
       </div>
 
@@ -171,7 +197,7 @@ export function ColorPicker({
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitTyped(); } }}
           className={`${NUMBER} flex-1 font-mono uppercase`}
         />
-        <div className="relative w-[58px]">
+        {!opaque ? <div className="relative w-[58px]">
           <input
             aria-label={`${label} opacity`}
             value={Math.round(c.a * 100)}
@@ -181,7 +207,7 @@ export function ColorPicker({
             className={`${NUMBER} w-full pr-5`}
           />
           <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10.5px] text-[var(--text-faint)]">%</span>
-        </div>
+        </div> : null}
       </div>
 
       <div className="mt-3 border-t border-[var(--border)] pt-2.5">

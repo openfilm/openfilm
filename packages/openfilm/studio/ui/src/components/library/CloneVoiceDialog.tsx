@@ -9,6 +9,7 @@ import {
 } from '@/lib/private-voices';
 import { Card, CardActions, CardButton } from '../Card';
 import { providerName } from '@/lib/providers';
+import { MenuSelect } from '../MenuSelect';
 
 type Source = 'upload' | 'record' | 'project';
 const PREVIEW_TEXT: Record<string, string> = {
@@ -64,7 +65,7 @@ export function CloneVoiceDialog({ mode, services, projectId, onClose, onSaved }
   }, []);
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
+      if (event.key === 'Escape' && !event.defaultPrevented && !document.querySelector('[data-popover-panel]')) { event.preventDefault(); event.stopPropagation(); onClose(); }
       if (event.key === 'Tab') {
         const fields = [...(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], audio[controls]') ?? [])].filter((el) => el.getClientRects().length);
         const first = fields[0], last = fields.at(-1);
@@ -142,20 +143,24 @@ export function CloneVoiceDialog({ mode, services, projectId, onClose, onSaved }
           <div className="mt-3 flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.name')}<input className={field} value={name} maxLength={80} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>
             {!voice ? <>
-              <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.service')}<select className={field} value={provider} disabled={busy} onChange={(event) => setProvider(event.target.value)}>{services.map((s) => <option key={s.id} value={s.id}>{providerName(s)}{s.connected ? '' : ` · ${t('myVoices.notConnected')}`}</option>)}</select></label>
+              <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.service')}<MenuSelect label={t('myVoices.service')} value={provider} disabled={busy} onPick={setProvider} size="md" layer={10120}
+                groups={[{ choices: services.map((s) => ({ value: s.id, label: `${providerName(s)}${s.connected ? '' : ` · ${t('myVoices.notConnected')}`}` })) }]} /></label>
               {mode === 'import' ? <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.voiceId')}<input className={field} value={speakerId} maxLength={256} disabled={busy} onChange={(event) => setSpeakerId(event.target.value)} /></label> : <>
                 <div className="flex gap-1 rounded-lg bg-[var(--bg-field)] p-1" aria-label={t('myVoices.source')}>
                   {(['upload', 'record', ...(projectId ? ['project'] : [])] as Source[]).map((s) => <button key={s} type="button" aria-pressed={source === s} disabled={busy} onClick={() => changeSource(s)} className={`min-w-0 flex-1 rounded-md px-2 py-1.5 text-[12px] ${source === s ? 'bg-[var(--bg-raised)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{t(`myVoices.source_${s}`)}</button>)}
                 </div>
                 {source === 'project' ? <>
-                  <select aria-label={t('myVoices.projectAudio')} className={field} value={path} disabled={busy} onChange={(event) => setPath(event.target.value)}><option value="">{t('myVoices.selectProjectAudio')}</option>{projectFiles.map((src) => <option key={src} value={src}>{src}</option>)}</select>
+                  <MenuSelect label={t('myVoices.projectAudio')} value={path} disabled={busy} onPick={setPath} size="md" layer={10120}
+                    groups={[{ choices: [{ value: '', label: t('myVoices.selectProjectAudio') }, ...projectFiles.map((src) => ({ value: src, label: src }))] }]} />
                   <div className="flex gap-2">{[['start', start, setStart], ['end', end, setEnd]].map(([key, value, change]) => <label key={String(key)} className="flex min-w-0 flex-1 flex-col gap-1 text-[11px] text-[var(--text-muted)]">{t(`myVoices.${key}`)}<input type="number" min="0" step="0.1" className={field} value={String(value)} disabled={busy} onChange={(event) => (change as (v: string) => void)(event.target.value)} /></label>)}</div>
                 </> : <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-[var(--border-strong)] px-3 py-4" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!busy) takeFile(event.dataTransfer.files[0] ?? null); }}>
                   {source === 'record' ? <CardButton disabled={busy} onClick={() => { void (recording ? stop() : record()); }}>{recording ? <Square size={14} /> : <Mic size={14} />}{t(recording ? 'myVoices.stopRecording' : 'myVoices.startRecording')}</CardButton>
                     : <><Upload size={20} className="text-[var(--text-muted)]" /><CardButton disabled={busy} onClick={() => fileInput.current?.click()}>{t('myVoices.chooseFile')}</CardButton><input ref={fileInput} hidden type="file" accept="audio/*" onChange={(event) => takeFile(event.target.files?.[0] ?? null)} /></>}
                   {file ? <><span className="max-w-full truncate text-[12px] text-[var(--text)]">{file.name}</span>{localUrl ? <audio controls src={localUrl} className="h-8 w-full" /> : null}</> : <p className="text-center text-[11px] text-[var(--text-faint)]">{t('myVoices.audioHint')}</p>}
                 </div>}
-                <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.language')}<select className={field} value={spokenLanguage} disabled={busy} onChange={(event) => { setSpokenLanguage(event.target.value); setPreviewText(PREVIEW_TEXT[event.target.value] ?? PREVIEW_TEXT.en!); }}>{[['zh', '中文'], ['en', 'English'], ['ja', '日本語'], ['ko', '한국어'], ['es', 'Español'], ['fr', 'Français'], ['de', 'Deutsch']].map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+                <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.language')}<MenuSelect label={t('myVoices.language')} value={spokenLanguage} disabled={busy} size="md" layer={10120}
+                  onPick={(value) => { setSpokenLanguage(value); setPreviewText(PREVIEW_TEXT[value] ?? PREVIEW_TEXT.en!); }}
+                  groups={[{ choices: [['zh', '中文'], ['en', 'English'], ['ja', '日本語'], ['ko', '한국어'], ['es', 'Español'], ['fr', 'Français'], ['de', 'Deutsch']].map(([value, label]) => ({ value: value!, label: label! })) }]} /></label>
                 {provider === 'doubao' ? <details><summary className="text-[11px] text-[var(--text-muted)]">{t('myVoices.prepaid')}</summary><input className={`${field} mt-2`} value={speakerId} placeholder="S_…" maxLength={256} disabled={busy} onChange={(event) => setSpeakerId(event.target.value)} /></details> : null}
                 <label className="flex items-start gap-2 text-[11.5px] text-[var(--text-muted)]"><input type="checkbox" checked={consent} disabled={busy} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 accent-[var(--accent)]" /><span>{t('myVoices.consent')}</span></label>
               </>}
