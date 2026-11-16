@@ -8,7 +8,7 @@
 
 <p align="center">1 つの HTML ファイル、1 つの関数、1 つの本物のエディタ。</p>
 
-<p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <b>日本語</b></p>
+<p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <b>日本語</b> · <a href="README.tr.md">Türkçe</a></p>
 
 ## 概要
 

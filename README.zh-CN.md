@@ -8,7 +8,7 @@
 
 <p align="center">一个 HTML 文件，一个函数，一个真正的剪辑器。</p>
 
-<p align="center"><a href="README.md">English</a> · <b>简体中文</b> · <a href="README.ja.md">日本語</a></p>
+<p align="center"><a href="README.md">English</a> · <b>简体中文</b> · <a href="README.ja.md">日本語</a> · <a href="README.tr.md">Türkçe</a></p>
 
 ## 简介
 
