@@ -216,11 +216,12 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
   const chat = React.useMemo(() => (chatThere ? { open: chatOpen, toggle: does.toggleChat } : undefined), [chatThere, chatOpen, does]);
   /* where the library's pane is: docked on its own, or in the app's panel over the chat, with the seam that sizes the
      panel while the pane covers it. Open or not, the side it is docked on and its box, `free` when the panels float,
-     how much of its foot the app's composer covers (`under`), and that seam (null: none) */
+     how much of its foot the app's composer covers (`under`; `beside`, beside the way back to the chat), and that seam
+     (null: none) */
   const libraryPane = useSame({
     open: libraryOpen, dock: independentLibrary ? dockGeometry.dock : 'chat' as const,
     rect: independentLibrary ? freeGeometry?.panels.library ?? dockGeometry.library : chatLibraryRect,
-    free: Boolean(freeGeometry), under: !independentLibrary ? hostAssets?.bottom ?? 0 : 0,
+    free: Boolean(freeGeometry), under: !independentLibrary ? hostAssets?.bottom ?? 0 : 0, beside: !independentLibrary ? hostAssets?.beside ?? 0 : 0,
     seam: !freeGeometry && !independentLibrary && hostAssets?.open && hostPanel ? { label: hostPanel.label, width: hostPanel.width, bottom: hostAssets.bottom, side: workspacePrefs.chatSide } : null,
   });
   const layoutEditing = Boolean(layoutDraft.draft);

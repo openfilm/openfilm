@@ -8,6 +8,7 @@ import {
   type PrivateVoice, type VoiceConnection,
 } from '@/lib/private-voices';
 import { Card, CardActions, CardButton } from '../Card';
+import { providerName } from '@/lib/providers';
 
 type Source = 'upload' | 'record' | 'project';
 const PREVIEW_TEXT: Record<string, string> = {
@@ -141,7 +142,7 @@ export function CloneVoiceDialog({ mode, services, projectId, onClose, onSaved }
           <div className="mt-3 flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.name')}<input className={field} value={name} maxLength={80} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>
             {!voice ? <>
-              <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.service')}<select className={field} value={provider} disabled={busy} onChange={(event) => setProvider(event.target.value)}>{services.map((s) => <option key={s.id} value={s.id}>{s.name}{s.connected ? '' : ` · ${t('myVoices.notConnected')}`}</option>)}</select></label>
+              <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.service')}<select className={field} value={provider} disabled={busy} onChange={(event) => setProvider(event.target.value)}>{services.map((s) => <option key={s.id} value={s.id}>{providerName(s)}{s.connected ? '' : ` · ${t('myVoices.notConnected')}`}</option>)}</select></label>
               {mode === 'import' ? <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.voiceId')}<input className={field} value={speakerId} maxLength={256} disabled={busy} onChange={(event) => setSpeakerId(event.target.value)} /></label> : <>
                 <div className="flex gap-1 rounded-lg bg-[var(--bg-field)] p-1" aria-label={t('myVoices.source')}>
                   {(['upload', 'record', ...(projectId ? ['project'] : [])] as Source[]).map((s) => <button key={s} type="button" aria-pressed={source === s} disabled={busy} onClick={() => changeSource(s)} className={`min-w-0 flex-1 rounded-md px-2 py-1.5 text-[12px] ${source === s ? 'bg-[var(--bg-raised)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{t(`myVoices.source_${s}`)}</button>)}

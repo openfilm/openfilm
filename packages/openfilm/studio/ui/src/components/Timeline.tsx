@@ -51,6 +51,7 @@ import {
   BetweenHorizontalStart,
   ArrowLeftToLine,
   ArrowRightToLine,
+  ArrowRightFromLine,
   TriangleAlert,
   Blend,
   Waypoints,
@@ -104,6 +105,7 @@ import {
   planCloseGap,
   planCloseMainGaps,
   planCloseTrackGaps,
+  planFillGaps,
   planLink,
   planRemove,
   planRippleTrimTo,
@@ -308,7 +310,7 @@ function LaneMark({ track }: { track: TimelineTrack }) {
 }
 
 /** The entries of a clip's menu a caption's cues keep. */
-const CUE_MENU = new Set(['split', 'duplicate', 'remove', 'ripple', 'ripple-start', 'ripple-end']);
+const CUE_MENU = new Set(['split', 'fill-gaps', 'duplicate', 'remove', 'ripple', 'ripple-start', 'ripple-end']);
 
 /** A caption track's row, and a row of the library's text: narrow, each cue or clip a line of words. */
 const CAPTION_ROW_H = 26;
@@ -4024,6 +4026,14 @@ export const Timeline = React.memo(function Timeline({
         disabled: !under,
         hint: pickedLocked ? t('timeline.trackLocked') : t('timeline.menuSplitOutside'),
         onSelect: () => { rippleTrimToPlayhead('end', [one]); },
+      });
+    }
+    /* the gaps after the picked clips filled, each running on to the next one (captions read through a pause) */
+    const fill = onEditOps && picked.length ? planFillGaps(modelRef.current, picked.flatMap((b) => (b.clipId ? [b.clipId] : []))) : null;
+    if (fill?.ops.length) {
+      out.push({
+        id: 'fill-gaps', label: t('timeline.menuFillGaps'), icon: <ArrowRightFromLine size={14} />,
+        onSelect: () => { void runPlan(fill, 'history.stepGapsFilled'); },
       });
     }
     /* its speed by its edges (lib/clip-speed): on, the edge handles change the speed instead of trimming */

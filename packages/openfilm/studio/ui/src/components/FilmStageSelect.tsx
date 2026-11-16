@@ -693,13 +693,19 @@ function FilmStageSelectImpl({
     const at = parseFilmDocLoc(clipLocOf(docRef.current, id) ?? '');
     return Boolean(at && isLibraryClip(docRef.current.tracks[at.track]?.clips[at.clip]?.src ?? ''));
   };
+  /* gone into a thing of the library (a double-click took a layer of it): until a click lands outside it, its layers
+     are hovered and clicked one by one, as the children of a frame one has gone into */
+  /* the thing gone into when a press began: the press lets go of what is in hand at once, and its release, a click on
+     another layer of the same thing, stays in it */
+  const pressedInside = React.useRef<string | null>(null);
+  const insideOf = (id: string) => (pickedRef.current?.layer?.clip ?? pressedInside.current) === id;
   /** A layer as the picture holds it. */
   const layerHit = React.useCallback((layer: StageLayer): Hit => ({ rect: layer.rect, label: layer.label, element: elementOf(layer), layer }), [elementOf]);
   /* a thing of the library (a sticker, an effect, a title, a line of words: lib/library isLibraryClip) is one thing on
      the picture: pointed at, hovered or pressed, it is its whole clip (one frame, never a part of its page moved out of
      its box and cut by it); a double-click on its words goes in to type (layerHit) */
   const hitOf = React.useCallback((layer: StageLayer): Hit => {
-    const loc = isWholeClipId(layer.clip) ? clipLocOf(docRef.current, layer.clip) : undefined;
+    const loc = isWholeClipId(layer.clip) && !insideOf(layer.clip) ? clipLocOf(docRef.current, layer.clip) : undefined;
     const info = loc ? infoOf(loc) : null;
     return info ? describeClip(info, stage) : layerHit(layer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -737,6 +743,7 @@ function FilmStageSelectImpl({
   }, [setMulti, setPicked]);
 
   const commitHit = React.useCallback((hit: Hit | null, clips?: readonly string[]) => {
+    pressedInside.current = null;
     rowClipLocs.current = hit ? clips : undefined;
     setMulti(null);
     setPickLost(false);
@@ -1436,6 +1443,18 @@ function FilmStageSelectImpl({
       /* a panel open over the inspector (the color picker, the font list, a menu) closes on its own Esc: the
          selection stays */
       if (document.querySelector('[data-popover-panel], [role="menu"], [role="listbox"], [role="dialog"]')) return;
+      /* a layer gone into in a thing of the library: Esc goes back out, its whole clip in hand */
+      const inLayer = pickedRef.current?.layer;
+      const outer = inLayer && isWholeClipId(inLayer.clip) ? clipLocOf(docRef.current, inLayer.clip) : undefined;
+      const outerInfo = outer ? infoOf(outer) : null;
+      if (outerInfo) {
+        /* that Esc is spent here: the timeline's own would clear the clip just taken in hand */
+        e.preventDefault?.();
+        e.stopPropagation?.();
+        setHover(null);
+        commitHit(describeClip(outerInfo, stage));
+        return;
+      }
       dropPick();
       onSelectElement?.(null);
     };
@@ -1705,7 +1724,7 @@ function FilmStageSelectImpl({
   const hoverQueue = React.useMemo(() => new Latest<{ x: number; y: number; from: number | null }>(async (p) => {
     let found = await ask<StageOutline>('hit', p);
     /* a thing of the library: its whole clip's outline (hitOf) */
-    if (found?.of && isWholeClipId(found.of)) found = clipOutlineRef.current(found.of);
+    if (found?.of && isWholeClipId(found.of) && !insideOf(found.of)) found = clipOutlineRef.current(found.of);
     if (!found) {
       const id = await ask<string>('clipAt', { x: p.x, y: p.y });
       found = id ? clipOutlineRef.current(id) : null;
@@ -2606,7 +2625,9 @@ function FilmStageSelectImpl({
       }
       if (!inside || !held?.element?.text) {
         const layer = await ask<StageLayer>('hit', { ...at, from: held?.layer?.handle ?? null, detail: true });
-        if (token !== pressSeq.current || !layer?.text) return;
+        if (token !== pressSeq.current || !layer) return;
+        /* not words (a shape, a picture, a group): gone into, that layer taken in hand */
+        if (!layer.text) { if (layer.handle !== held?.layer?.handle) commitHit(layerHit(layer)); return; }
         /* a line of words: typed in at once, its whole clip staying in hand */
         if (isTextClipId(layer.clip)) { startTextEditRef.current({ element: elementOf(layer), layer }); return; }
         commitHit(layerHit(layer));
@@ -3257,6 +3278,7 @@ function FilmStageSelectImpl({
          the timeline (several: no handles) is not a press elsewhere */
       cycleFrom.current = e.altKey ? pickedRef.current?.layer?.handle ?? null : null;
       pressedFrom.current = pickedRef.current?.layer?.handle ?? null;
+      pressedInside.current = pickedRef.current?.layer?.clip ?? null;
       /* with Shift, what is selected stays drawn: the click or the box adds to it */
       const clearPrevious = () => {
         if (!shiftBase.current?.length) dropPick();

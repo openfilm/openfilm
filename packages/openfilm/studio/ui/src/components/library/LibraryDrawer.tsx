@@ -13,7 +13,7 @@
  */
 import { onRevealInLibrary, takeRevealed, type Revealed } from '@/lib/library-reveal';
 import React from 'react';
-import { ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Search, Star, X } from 'lucide-react';
+import { ChevronDown, ChevronsLeft, ChevronsRight, FolderOpen, Plus, Search, Star, Users, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import { openResourceCenter } from '@/lib/asset-library';
@@ -40,6 +40,8 @@ import { arrangedCategories } from '@/lib/library-categories';
 import { PLAIN } from './OnPicture';
 import { isClipMotion } from '@/lib/clip-presets';
 import { useLibraryArrangement } from './arrangement';
+import { providerName } from '@/lib/providers';
+import { Tooltip } from '../Tooltip';
 
 type OwnCategory = 'media' | 'voice' | 'captions' | LibraryCategory;
 /** One of OpenFilm's own categories, or a plugin's tab (by its plugin's id). */
@@ -47,7 +49,7 @@ type Category = OwnCategory | (string & {});
 /* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, then the templates,
    the most a film is made with at once; the plugins' tabs come after these (the plugins themselves have a window of
    their own, PluginsWindow) */
-export const CATEGORIES: OwnCategory[] = ['media', 'template', 'captions', 'voice', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
+export const CATEGORIES: OwnCategory[] = ['media', 'voice', 'captions', 'template', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
 
 /** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
 const FAVORITES = STARRED;
@@ -101,7 +103,7 @@ export interface LibraryActions {
 }
 
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, folder = '', under = 0, shown: isShown = true }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, folder = '', under = 0, beside = under, shown: isShown = true }: {
   media: React.ReactNode;
   /** the project's own media, or Mine (the person's own, for every film) */
   mediaScope: 'project' | 'saved';
@@ -128,6 +130,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   /** how much of its foot the app's composer floats over: the lists run on under it, their ends scrolled clear of it
       (--drawer-under) */
   under?: number;
+  /** as much beside the app's way back to the chat (over the middle only): the side bar's foot runs on down to it */
+  beside?: number;
   shown?: boolean;
 }) {
   const t = useT();
@@ -335,7 +339,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
 
   /* the library's own lines under its fold: all of it, then its groups (a voice's: the services) */
   const own = cat === 'voice'
-    ? (voices?.providers ?? []).map((s) => ({ id: s.id, name: s.name }))
+    ? (voices?.providers ?? []).map((s) => ({ id: s.id, name: providerName(s, lang) }))
     : (index?.groups[cat as LibraryCategory] ?? []).filter((g) => !g.by && !clipMotionGroups.has(g.id)).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }))
       /* the groups of what moves first, those of stills (the emoji's) after them */
       .sort((a, b) => Number(stillGroup(a.id)) - Number(stillGroup(b.id)));
@@ -435,7 +439,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   return (
     /* a drag let go back in the drawer ends at once (lib/resource-drag) */
     <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey} onPointerDownCapture={stopHover} onDragStartCapture={stopHover} data-drag-home="" data-studio-library=""
-      style={{ '--drawer-under': `${under}px` } as React.CSSProperties}>
+      style={{ '--drawer-under': `${under}px`, '--drawer-beside': `${beside}px` } as React.CSSProperties}>
       {isShown && previewPicture && voicePlayer.item ? (
         <AudioArtwork target={previewPicture} voice={voicePlayer.item.voice} name={voicePlayer.item.voice.name} playing={voicePlayer.playing} readLevel={voicePlayer.readLevel} />
       ) : isShown && previewPicture && player.item ? (
@@ -485,7 +489,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
         {/* as wide as the person dragged its edge (RAIL), kept for next time */}
         <div className="relative flex shrink-0" style={{ width: rail }}>
           <RailEdge width={rail} onWidth={setRail} />
-          <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[calc(var(--drawer-under,0px)+10px)] pt-2.5">
+          <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[calc(var(--drawer-beside,0px)+10px)] pt-2.5">
             {cat === 'media' ? (
               <>
                 {/* this project's media; Mine, the person's own for every film (what they keep there, in their folders) */}
@@ -542,18 +546,18 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 ) : null}
               </>
             )}
-            {cat === 'media' ? (
-              <button type="button" onClick={openResourceCenter}
-                className="mt-auto flex min-h-8 shrink-0 items-center gap-1 px-2.5 py-2 text-left text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent)]">
-                {t('resourceCenter.open')}
-              </button>
-            ) : null}
-            {/* more of this kind, in the Community */}
-            {inCommunity ? (
-              <button type="button" onClick={() => openPlugins({ line: `kind:${cat as LibraryCategory}` })}
-                className="mt-auto flex h-8 shrink-0 items-center gap-1 rounded-md px-2.5 text-left text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-                {t('assetDrawer.findMore')}<ChevronRight size={13} aria-hidden />
-              </button>
+            {/* at the side bar's foot, a way out of the drawer: the Resource Center for the media; more of this kind, in the
+                Community */}
+            {cat === 'media' || inCommunity ? (
+              /* said short beside its icon (the rail is narrow), in full to the pointer and to a screen reader */
+              <Tooltip label={cat === 'media' ? t('resourceCenter.open') : t('assetDrawer.findMore')}>
+                <button type="button" onClick={cat === 'media' ? openResourceCenter : () => openPlugins({ line: `kind:${cat as LibraryCategory}` })}
+                  aria-label={cat === 'media' ? t('resourceCenter.open') : t('assetDrawer.findMore')}
+                  className="mt-auto flex h-8 shrink-0 items-center gap-2 rounded-md px-2.5 text-left text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent)]">
+                  {cat === 'media' ? <FolderOpen size={14} aria-hidden className="shrink-0" /> : <Users size={14} aria-hidden className="shrink-0" />}
+                  <span className="truncate">{cat === 'media' ? t('resourceCenter.title') : t('assetDrawer.moreOf').replace('{kind}', categoryName(cat))}</span>
+                </button>
+              </Tooltip>
             ) : null}
           </nav>
         </div>

@@ -68,8 +68,9 @@ interface AppBridge {
   onAssetsOverlay?(listener: (open: boolean) => void): () => void;
   setAssetsOpen(open: boolean): void;
   onAssets(listener: (open: boolean) => void): () => void;
-  /** while the assets are open: the composer's height (all the view keeps), and a menu of ours open (it needs the column) */
-  setComposerHeight(px: number): void;
+  /** while the assets are open: the composer's height (all the view keeps), and the height beside the way back to the
+      chat (over the drawer's middle only); and a menu of ours open (it needs the column) */
+  setComposerHeight(px: number, beside?: number): void;
   setMenuOpen(open: boolean): void;
   /** the project's chat record, in its folder: conversations and finished turns (.film/chat), each turn's log (.film/logs) */
   chat: {

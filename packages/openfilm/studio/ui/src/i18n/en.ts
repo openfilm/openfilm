@@ -101,6 +101,8 @@ export const en = {
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
   projectTabs: {"label": "Open projects", "new": "Open another project", "closeNamed": "Close {name}", "revealFailed": "Could not open the project folder.", "coverCurrent": "Switch to this tab to use its current frame as the cover."},
   switcher: { oneClip: '1 clip', clips: '{n} clips', label: 'Switch project', open: 'Other open projects', all: 'All projects…', close: 'Close', working: 'Working', asking: 'Waiting for you', exporting: 'Exporting {n}%', cover: 'Set current frame as cover', coverShort: "Set cover", reveal: 'Show folder' },
+  /** a provider's name where a language says it otherwise (its own name elsewhere) */
+  providerNames: { doubao: 'Doubao' },
   launcher: { projects: 'Projects', examples: 'Examples' },
   appMenu: {
     docs: 'Documentation',
@@ -943,6 +945,7 @@ export const en = {
     stepUncompound: 'Broke apart {clip}',
     stepRippleTrimmed: 'Ripple trimmed {clip}',
     stepGapClosed: 'Closed a gap',
+    stepGapsFilled: 'Filled gaps',
     stepGapsClosed: 'Closed the gaps on a track',
     stepMainClosed: 'Closed up the main track',
     stepLinked: 'Linked {clip}',
@@ -1327,7 +1330,8 @@ export const en = {
     place_favorites: "Favorites",
     seeDetails: "See details",
     addedPacks: "Added packs",
-    findMore: "Find more in Community",
+    findMore: "More in Community",
+    moreOf: "More {kind}",
     packs: "Packs",
     allItems: "All",
     countItems: "{n} items",
@@ -2795,6 +2799,7 @@ export const en = {
     menuCloseGaps: 'Close all gaps on this track',
     menuRippleStart: 'Ripple trim start to playhead',
     menuRippleEnd: 'Ripple trim end to playhead',
+    menuFillGaps: 'Fill gaps',
     menuLink: 'Link',
     menuUnlink: 'Unlink',
     speed: "Speed: drag the clip's edges",

@@ -17,6 +17,7 @@ import { SpeakDialog } from './SpeakDialog';
 import { CloneVoiceDialog } from './CloneVoiceDialog';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { isPrivateVoice, MY_VOICES, privateVoiceAccess, refreshPrivateVoice, removePrivateVoice, syncPrivateVoices, usePrivateVoices, type PrivateVoice } from '@/lib/private-voices';
+import { providerName } from '@/lib/providers';
 import {
   languageOf, sampleUrl, useLibraryVoices, useServices, voiceAccess, voiceKey, voiceLook, voiceRef,
   type LibraryVoice, type VoiceAccess, type VoiceService, type SpeakVoice,
@@ -205,6 +206,8 @@ function useLanguageName(lang: Language) {
 }
 
 /** What the words fade into under a row's buttons: the row's own color (its field over the drawer), so solid */
+const SHADE_FIELD = 'bg-[linear-gradient(to_right,transparent,var(--bg-field)_36px),linear-gradient(to_right,transparent,var(--bg-panel)_36px)]';
+const SHADE_PANEL = 'bg-[linear-gradient(to_right,transparent,var(--bg-panel)_36px)]';
 const SHADE_HOVER = 'group-hover:bg-[linear-gradient(to_right,transparent,var(--bg-field)_36px),linear-gradient(to_right,transparent,var(--bg-panel)_36px)]';
 
 function VoiceRow({ voice, service, access, showService, picked, sounding, here, kept, languageName, onPlay, onUse, onServices, onSpeak, onRefresh, onRemove }: {
@@ -221,9 +224,9 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, here,
     voice.gender === 'f' ? t('assetDrawer.female') : voice.gender === 'm' ? t('assetDrawer.male') : null,
     voice.age ? t(`assetDrawer.age_${voice.age}`) : null,
     voice.language ? languageName(languageOf(voice) ?? '') : null,
-    showService ? service?.name : null,
+    showService && service ? providerName(service) : null,
   ].filter(Boolean).join(' · ');
-  const useTip = access ? t('assetDrawer.useVoice') : t('assetDrawer.connectFirst').replace('{service}', service?.name ?? voice.provider);
+  const useTip = access ? t('assetDrawer.useVoice') : t('assetDrawer.connectFirst').replace('{service}', service ? providerName(service) : voice.provider);
   return (
     <div
       data-library-voice=""
@@ -244,7 +247,8 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, here,
       </span>
       {/* what it offers, over the row's end under the pointer, the words fading out under the row's own color; else a
           star kept */}
-      <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-10 pr-2 ${SHADE_HOVER}`}>
+      {/* a button shown at rest (to download, a picked row's "+", one's own voice's) has the words fade under it then too */}
+      <span className={`absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-r-lg pl-10 pr-2 ${picked ? SHADE_FIELD : here !== 'here' || own ? SHADE_PANEL : ''} ${SHADE_HOVER}`}>
         {own ? <>
           {state === 'creating' || state === 'training' ? <Loader2 size={12} className="animate-spin text-[var(--text-muted)]" /> : null}
           {onRefresh ? <button type="button" aria-label={t('myVoices.refresh')} disabled={state === 'creating'} onClick={(e) => { e.stopPropagation(); onRefresh(); }} className={`${PANEL_ROUND} text-[var(--text-muted)] hover:text-[var(--text)] disabled:opacity-40`}><RotateCw size={12} /></button> : null}

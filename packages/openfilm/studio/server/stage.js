@@ -379,8 +379,24 @@
     try { nodes = [...doc.querySelectorAll(o.at)]; } catch { return []; }
     return o.n ? nodes.slice(o.n - 1, o.n) : nodes;
   };
+  /**
+   * The selector of the clip's kept entry that finds this layer and only it (`.t1`, as the agent wrote it), last first:
+   * a layer named so takes every change into that one entry, never another one beside it. Null when none does.
+   */
+  const keptAt = (el) => {
+    const kept = clipOfNode(el)?.overrides ?? [];
+    for (let i = kept.length - 1; i >= 0; i -= 1) {
+      const o = kept[i];
+      if (typeof o?.at !== 'string' || o.n) continue;
+      const found = matches(el.ownerDocument, o);
+      if (found.length === 1 && found[0] === el) return o.at;
+    }
+    return null;
+  };
   /** Its selector, and which match it is when the selector finds several. */
   const locOf = (el) => {
+    const kept = keptAt(el);
+    if (kept) return { at: kept, loc: kept };
     const at = selectorOf(el);
     const all = matches(el.ownerDocument, { at });
     if (all.length <= 1) return { at, loc: at };

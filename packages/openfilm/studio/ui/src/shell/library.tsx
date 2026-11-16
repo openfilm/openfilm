@@ -256,7 +256,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
         onResize={updateWorkspace}>
           <LibraryDrawer media={media} mediaScope={mediaScope} onMediaScope={switchMedia} mediaRequest={revealMedia?.seq} actions={actions}
             tried={library?.tried ?? null} templateStatus={library?.templateStatus ?? NO_STATUS} previewBar={canvasOpen ? null : library?.preview.bar ?? null} previewPicture={canvasOpen ? null : library?.preview.picture ?? null} dismissRef={library?.preview.dismissRef ?? noDismiss}
-            onPreviewStart={canvasOpen ? pauseWorkbench : library?.preview.begin ?? nothing} onDownloadFailed={onLibraryDownloadFailed} shown={pane.open} under={pane.under}
+            onPreviewStart={canvasOpen ? pauseWorkbench : library?.preview.begin ?? nothing} onDownloadFailed={onLibraryDownloadFailed} shown={pane.open} under={pane.under} beside={pane.beside}
             captions={library?.captions}
             speak={library?.speak}
             onServices={openServices} projectId={projectId} folder={loaded.project.path} />

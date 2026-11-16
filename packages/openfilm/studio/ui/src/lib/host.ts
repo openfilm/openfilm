@@ -75,13 +75,13 @@ export interface StudioHost {
     width: number;
     /** Its preferred width, including while closed (when the shown width is zero). */
     preferredWidth?: number;
-    assets?: { open: boolean; bottom: number };
+    assets?: { open: boolean; bottom: number; beside?: number };
     setOpen: (open: boolean) => void;
     setAssetsOpen?: (open: boolean) => void;
     setWidth?: (width: number, done?: boolean) => void;
     setBounds?: (bounds: { left: number; top: number; width: number; height: number } | null) => void;
     setPlacement?: (placement: { side: 'left' | 'right'; libraryDock: 'left' | 'right' | 'bottom' | 'chat' }) => void;
-    onChange: (listener: (state: { open: boolean; width: number; preferredWidth?: number; assets?: { open: boolean; bottom: number } }) => void) => void | (() => void);
+    onChange: (listener: (state: { open: boolean; width: number; preferredWidth?: number; assets?: { open: boolean; bottom: number; beside?: number } }) => void) => void | (() => void);
   };
   /**
    * The app's chat names a skill in the message being written: the library's skills call this for one tried there,
@@ -508,7 +508,9 @@ export type HostPanel = {
   preferredWidth: number;
   setOpen: (open: boolean) => void;
   /** null: the app keeps no assets of its own (Studio's left pane holds them) */
-  assets: { open: boolean; bottom: number; setOpen: (open: boolean) => void } | null;
+  /** `bottom`: how much of the drawer's foot the app's composer covers; `beside`: as much beside its way back to the
+      chat, which covers the middle only */
+  assets: { open: boolean; bottom: number; beside: number; setOpen: (open: boolean) => void } | null;
   setWidth: (width: number, done?: boolean) => void;
   setBounds: (bounds: { left: number; top: number; width: number; height: number } | null) => void;
   setPlacement: (placement: { side: 'left' | 'right'; libraryDock: 'left' | 'right' | 'bottom' | 'chat' }) => void;
@@ -526,7 +528,7 @@ function keepPanelWidth({ open, width }: { open: boolean; width: number }) {
 export function useHostPanel(): HostPanel | null {
   const panel = studioHost?.panel;
   const preferredWidth = React.useRef(panel?.preferredWidth || panel?.width || 420);
-  const read = (next: { open: boolean; width: number; preferredWidth?: number; assets?: { open: boolean; bottom: number } }) => {
+  const read = (next: { open: boolean; width: number; preferredWidth?: number; assets?: { open: boolean; bottom: number; beside?: number } }) => {
     if ((next.preferredWidth ?? next.width) > 0) preferredWidth.current = next.preferredWidth || next.width;
     return {
       open: Boolean(next.open),
@@ -534,6 +536,7 @@ export function useHostPanel(): HostPanel | null {
       preferredWidth: preferredWidth.current,
       assetsOpen: Boolean(next.assets?.open),
       bottom: Math.max(0, Number(next.assets?.bottom) || 0),
+      beside: Math.max(0, Number(next.assets?.beside ?? next.assets?.bottom) || 0),
     };
   };
   const [state, setState] = React.useState(() => (panel ? read(panel) : null));
@@ -558,7 +561,7 @@ export function useHostPanel(): HostPanel | null {
     setWidth: (width, done) => panel.setWidth?.(width, done),
     setBounds: bounds => panel.setBounds?.(bounds),
     setPlacement: placement => panel.setPlacement?.(placement),
-    assets: setAssetsOpen ? { open: state.assetsOpen, bottom: state.bottom, setOpen: (open) => setAssetsOpen(open) } : null,
+    assets: setAssetsOpen ? { open: state.assetsOpen, bottom: state.bottom, beside: state.beside, setOpen: (open) => setAssetsOpen(open) } : null,
   };
 }
 

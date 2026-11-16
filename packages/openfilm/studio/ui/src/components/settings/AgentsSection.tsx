@@ -331,7 +331,6 @@ export function AgentsSection() {
             {connectedStatus || !description && helpButton ? <span className="inline-flex items-center gap-1">
               {connectedStatus}{!description ? helpButton : null}
             </span> : null}
-            {agent.path && agent.update?.version ? <span className="text-[11px] tabular-nums text-[var(--text-faint)]">v{agent.update.version}</span> : null}
             {agent.path && agent.update && ['available', 'unknown', 'queued', 'updating', 'error'].includes(agent.update.status) ? <button type="button" onClick={() => setHelp(agent.id)}
               className="rounded-full border border-[var(--border)] px-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--text)]">
               {t(`settings.agents.updates.${agent.update.status}`)}

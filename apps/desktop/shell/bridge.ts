@@ -69,7 +69,7 @@ const column = document.getElementById('of-chat')!;
 const layout = { open: true, width: 420, min: 340, studioMin: 640, side: 'left' as 'left' | 'right', libraryDock: 'left' as 'left' | 'right' | 'bottom' | 'chat' };
 /** the assets open in the column (Studio draws them, above the composer); `bottom`: the composer's height, all the
     chat shows then */
-const assets = { open: false, bottom: 120 };
+const assets = { open: false, bottom: 120, beside: 120 };
 const assetsSignal = signal(false);
 const assetsOverlaySignal = signal(false);
 const chatOpenSignal = signal(true);
@@ -77,7 +77,7 @@ const chatOpenSignal = signal(true);
 /** The column's width as the window allows it: Studio keeps its least width, the chat its own while it fits. */
 let workspaceBounds: { left: number; top: number; width: number; height: number } | null = null;
 const shownWidth = () => workspaceBounds && layout.open ? workspaceBounds.width : (layout.open ? workspaceChatWidth(innerWidth, layout.width, layout.min, layout.studioMin) : 0);
-const panelState = () => ({ open: layout.open, width: shownWidth(), preferredWidth: layout.width, assets: { open: assets.open && (layout.libraryDock !== 'chat' || layout.open), bottom: assets.bottom } });
+const panelState = () => ({ open: layout.open, width: shownWidth(), preferredWidth: layout.width, assets: { open: assets.open && (layout.libraryDock !== 'chat' || layout.open), bottom: assets.bottom, beside: assets.beside } });
 const panelListeners = new Set<Listener<ReturnType<typeof panelState>>>();
 
 /** The page shows a project (not a new tab's launcher): only then is there a chat to show. */
@@ -470,10 +470,14 @@ function commandFor(ref: StudioRef): StudioCommand {
   onAssets: assetsSignal.on,
   assetsOverlay: () => assetsOverlaySignal.get(),
   onAssetsOverlay: assetsOverlaySignal.on,
-  setComposerHeight(px: number) {
+  setComposerHeight(px: number, besidePx?: number) {
     const bottom = Math.round(px);
-    if (!Number.isFinite(bottom) || bottom < 40 || bottom === assets.bottom) return;
+    if (!Number.isFinite(bottom) || bottom < 40) return;
+    /* beside the way back to the chat: the composer alone */
+    const beside = Number.isFinite(besidePx) ? Math.min(bottom, Math.max(0, Math.round(besidePx!))) : bottom;
+    if (bottom === assets.bottom && beside === assets.beside) return;
     assets.bottom = bottom;
+    assets.beside = beside;
     place();
   },
   /* a menu of the chat's floats in its own layer over everything: nothing to make room for */

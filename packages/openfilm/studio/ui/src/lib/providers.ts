@@ -6,6 +6,7 @@
  */
 import React from 'react';
 import { studioHost } from './host.ts';
+import { lookup, useLanguage, type Language } from '../i18n/index.ts';
 
 export type ProviderVerb = 'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'cutout' | 'image-search' | 'video-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch';
 
@@ -232,9 +233,18 @@ export interface ProvidersHook {
   removeService: (id: string) => Promise<void>;
 }
 
+/** A provider's name as the language shown says it (Doubao is 豆包 in Chinese), else its own. */
+export function providerName(p: Pick<OwnProvider, 'id' | 'name'>, language?: Language): string {
+  const path = `providerNames.${p.id}`;
+  const said = lookup(path, language);
+  return said === path ? p.name : said;
+}
+
 /** The shared providers, with errors and changes in progress local to the control using them. */
 export function useProviders(): ProvidersHook {
-  const state = React.useSyncExternalStore(subscribe, current, current);
+  const shared = React.useSyncExternalStore(subscribe, current, current);
+  const language = useLanguage();
+  const state = React.useMemo(() => shared && { ...shared, providers: shared.providers.map((p) => ({ ...p, name: providerName(p, language) })) }, [shared, language]);
   const [problem, setProblem] = React.useState<string | null>(null);
   const [problemFor, setProblemFor] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);

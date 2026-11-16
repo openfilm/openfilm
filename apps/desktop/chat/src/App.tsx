@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Coins, CornerDownLeft, LibraryBig, Loader2, MessageSquare, Plus, Shapes, Square } from 'lucide-react';
+import { ArrowDown, ArrowLeft, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, Shapes, Square } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
@@ -328,10 +328,15 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
   /* the composer and what stands on it (a question, a permission): its height is all this view keeps while the assets
      are open, the drawer above meeting it */
   const composerBlockRef = React.useRef<HTMLDivElement>(null);
+  /* the way back to the chat, over the middle of the drawer only: beside it the drawer runs on down to the composer */
+  const backRowRef = React.useRef<HTMLDivElement>(null);
   React.useLayoutEffect(() => {
     const block = composerBlockRef.current;
     if (!block) return undefined;
-    const tell = () => app.setComposerHeight(Math.ceil(block.getBoundingClientRect().height));
+    const tell = () => {
+      const height = Math.ceil(block.getBoundingClientRect().height);
+      app.setComposerHeight(height, height - Math.floor(backRowRef.current?.getBoundingClientRect().height ?? 0));
+    };
     tell();
     const seen = new ResizeObserver(tell);
     seen.observe(block);
@@ -1204,10 +1209,10 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
               {/* Measure the whole footer so the drawer keeps its controls clear of the return action and composer. */}
               <div ref={composerBlockRef} className="relative flex shrink-0 flex-col px-4 pb-1.5">
                 {assetsOverlay ? (
-                  <div className="flex justify-center pb-2 pt-1">
+                  <div ref={backRowRef} className="flex justify-center pb-2 pt-1">
                     <button type="button" className="pointer-events-auto openfilm-chat-pill" style={{ background: 'var(--bg-panel)' }}
                       onClick={() => { app.setAssetsOpen(false); composerRef.current?.focus(); }}>
-                      <MessageSquare size={14} aria-hidden />{t('project.backToChat')}
+                      <ArrowLeft size={14} aria-hidden />{t('project.backToChat')}
                     </button>
                   </div>
                 ) : null}

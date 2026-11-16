@@ -791,6 +791,25 @@ export function planCloseMainGaps(model: EditModel, sw: Switches): EditPlan {
   return main == null ? emptyPlan() : planCloseTrackGaps(model, main, sw);
 }
 
+/**
+ * The gaps after these clips filled: each one's end drawn out to where the next clip on its track starts, nothing
+ * moving (captions read through a pause). The last on its track stays, as does one with no more of its source to show
+ * (it goes as far as it can) or on a locked track.
+ */
+export function planFillGaps(model: EditModel, ids: readonly string[]): EditPlan {
+  const d = draftOf(model);
+  const picked = new Set(ids);
+  for (const track of d.tracks) {
+    if (track.locked) continue;
+    track.clips.forEach((clip, i) => {
+      const next = track.clips[i + 1];
+      if (!picked.has(clip.id) || !next || next.startMs - clip.endMs <= TOUCH_MS) return;
+      clip.endMs += Math.min(next.startMs - clip.endMs, tailRoomOf(clip));
+    });
+  }
+  return planOf(d);
+}
+
 /* ── delete ── */
 
 /**
