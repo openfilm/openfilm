@@ -376,3 +376,13 @@ test('each picture model takes as many references and the sizes OpenRouter lists
   assert.equal(spec('image', 'openai/gpt-image-2.6-flare').refs, 16);
   assert.deepEqual(spec('video', 'heygen/heygen-video-1').seconds, [5, 15]);
 });
+
+test('an accepted supplier job survives a restart and is recovered using GET requests only',async()=>{
+  seen.length=0;
+  reply=clip(1,{status:'completed',urls:['https://storage.vendor.example/original.mp4'],duration:5});
+  const checkpoint={id:'v1',status:'queued',polling_url:`${base}/api/v1/videos/v1`};
+  let saved;
+  const result=await openrouter.run('video',{prompt:'a cloud',out:'original',duration:5},{...ctx({},'bytedance/seedance-2.5'),handOff:true,resume:checkpoint,checkpoint:async job=>{saved=job;}});
+  assert.equal(saved.id,'v1');assert.equal(result.receipt.taskId,'v1');
+  assert.ok(seen.length>0);assert.ok(seen.every(call=>call.method==='GET'));
+});

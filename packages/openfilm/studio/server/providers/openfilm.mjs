@@ -123,7 +123,8 @@ async function filesOf(verb, args, ctx) {
  * @param {UploadFile[]} files @param {string} base @param {Record<string,string>} headers @param {RunContext} ctx */
 async function inputsOf(files, base, headers, ctx) {
   if (!files.length) return [];
-  const asked = await call(NAME, `${base}/v1/media/uploads`, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+  /* asking where to upload charges nothing: its own key lets it be asked again when a connection drops */
+  const asked = await call(NAME, `${base}/v1/media/uploads`, { method: 'POST', headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': randomUUID() },
     body: JSON.stringify({ files: files.map(file => ({ path: file.path, bytes: file.size })) }) }, { ...ctx, networkTimeoutMs: 45_000 }, { patience: polling.patience, keep: [404, 405] });
   if ([404, 405].includes(asked.status)) {
     if (files.reduce((n, file) => n + file.size, 0) > 48 * 1024 ** 2) throw new Error('This server requires inline uploads. Update the service before sending files larger than 48 MB. Nothing was generated.');

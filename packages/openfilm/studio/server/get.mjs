@@ -421,7 +421,8 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     return [...said, show(other ? { ...receipt, madeWith: other } : receipt)].join('\n');
   } catch (e) {
     /* a job known to be over (refused, or failed at the provider) is let go; one cut off or never reached is kept */
-    const unknown = clock.signal.aborted || /** @type {{ unreached?: boolean, name?: string }} */ (e)?.unreached || /** @type {Error} */ (e)?.name === 'AbortError';
+    const unknown = clock.signal.aborted || /** @type {{ unreached?: boolean, mediaUncertain?: boolean }} */ (e)?.unreached
+      || /** @type {{ mediaUncertain?: boolean }} */ (e)?.mediaUncertain || /** @type {Error} */ (e)?.name === 'AbortError';
     if (journal && !unknown) await journal.finish().catch(() => {});
     if (clock.timedOut()) throw new GetError(provider.id === 'openfilm'
       ? `OpenFilm did not deliver this within ${waitSec} s. The task may already be complete and paid. Run the same command to recover its original result; use --fresh only when the person intentionally wants another paid take.`

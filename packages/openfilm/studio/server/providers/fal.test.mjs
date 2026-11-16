@@ -253,3 +253,12 @@ test('a job taken is told as it is taken, and given back after a restart it is w
   assert.equal(again.files[0].url, `${base}/files/out.png`);
   seen.length = 0;
 });
+
+test('a server timeout leaves a durably checkpointed job running for recovery',async()=>{
+  seen.length=0;reply=queue('bytedance/seedance-2.0/text-to-video',{},Infinity);
+  const stop=new AbortController();let saved;
+  const run=fal.run('video',{out:'recover-original',prompt:'clouds'},{...ctx({},stop.signal),checkpoint:async job=>{saved=job;}});
+  await new Promise(done=>setTimeout(done,30));stop.abort();await assert.rejects(run);
+  await new Promise(done=>setTimeout(done,20));assert.equal(saved.request_id,'r1');
+  assert.ok(!seen.some(call=>call.method==='PUT'),'the service must poll the accepted job after a restart, not cancel it at a transport deadline');
+});

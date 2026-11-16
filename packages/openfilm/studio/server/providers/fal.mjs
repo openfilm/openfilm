@@ -386,11 +386,12 @@ async function queued(model, input, ctx, every) {
   const statusUrl = ownAddress(NAME, job.status_url, base);
   const responseUrl = ownAddress(NAME, job.response_url, base);
   const cancelUrl = text(job.cancel_url) ? ownAddress(NAME, job.cancel_url, base) : null;
-  const cancel = () => { if (cancelUrl) fetch(cancelUrl, { method: 'PUT', headers: auth }).then((r) => r.body?.cancel(), () => {}); };
+  const cancel = () => { if (ctx.checkpoint) return; if (cancelUrl) fetch(cancelUrl, { method: 'PUT', headers: auth }).then((r) => r.body?.cancel(), () => {}); };
   ctx.signal.addEventListener('abort', cancel, { once: true });
   try {
     for (;;) {
       const status = await (await call(NAME, statusUrl, { headers: auth }, ctx)).json();
+      if (['FAILED','CANCELLED','CANCELED'].includes(status?.status)) throw new Error(`${NAME} could not make it: ${text(status.error) || status.status}`);
       if (status?.status === 'COMPLETED') {
         if (status.error) throw new Error(`${NAME} could not make it: ${text(status.error) || JSON.stringify(status.error)}`);
         break;

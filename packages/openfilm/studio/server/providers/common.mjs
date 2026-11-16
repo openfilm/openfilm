@@ -36,6 +36,7 @@ export async function call(service, url, init, ctx, how = {}) {
       /* the answer not taken: let its connection go before asking again */
       await res.body?.cancel();
     } catch (e) {
+      if (init.method === 'POST' && !new Headers(init.headers).has('idempotency-key')) throw Object.assign(new Error(`${service} connection ended before its outcome was confirmed.`), { mediaUncertain: true });
       if (ctx.signal.aborted) throw e;
       /* never reached: whether it was taken is not known (`unreached`) */
       if (Date.now() + wait > until) throw Object.assign(new Error(`${service} could not be reached (${/** @type {Error} */ (e).message}).`), { unreached: true });
@@ -44,7 +45,9 @@ export async function call(service, url, init, ctx, how = {}) {
   }
   if (res.ok || how.keep?.includes(res.status)) return res;
   /* its status, and whether the service itself said it (a JSON answer, not a gateway's page): a run it refused is over */
-  throw Object.assign(await failure(service, res, ctx), { status: res.status, answered: /json/i.test(res.headers.get('content-type') ?? '') });
+  const error = Object.assign(await failure(service, res, ctx), { status: res.status, answered: /json/i.test(res.headers.get('content-type') ?? '') });
+  if (init.method === 'POST' && res.status >= 500 && !new Headers(init.headers).has('idempotency-key')) Object.assign(error, { mediaUncertain: true });
+  throw error;
 }
 
 /**
