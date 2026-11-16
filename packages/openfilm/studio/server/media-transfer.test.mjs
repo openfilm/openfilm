@@ -97,6 +97,23 @@ test('an expired URL is refreshed through the original task; streamed downloads 
   assert.equal(gets,2); assert.equal(renewals,1); assert.equal(await readFile(join(root,file.path),'utf8'),'audio');
 });
 
+test('a download that fails at its address is tried again at the other addresses the service gave for it', async t => {
+  const {root,transfer} = await fixture(t);
+  const originalFetch = globalThis.fetch;
+  const asked = [];
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async url => {
+    asked.push(url);
+    if (url === 'https://storage.example/out') return new Response('', {status:502});
+    return new Response('video', {headers:{'content-length':'5','content-type':'video/mp4'}});
+  };
+  const file = {path:'assets/clip.mp4',url:'https://storage.example/out',alternate_urls:['https://origin.example/out'],bytes:5,sha256:sha('video')};
+  const staged = await transfer.download(file,'alt-key',async()=>{throw Error('a failing address is not an expired one');});
+  await mkdir(join(root,'assets')); await staged.commit(join(root,file.path));
+  assert.deepEqual(asked, ['https://storage.example/out','https://origin.example/out']);
+  assert.equal(await readFile(join(root,file.path),'utf8'),'video');
+});
+
 test('wrong checksums and unsafe or linked paths never become local media', async t => {
   const {root,transfer} = await fixture(t);
   const url = await server(t,(_req,res)=>res.end('wrong'));

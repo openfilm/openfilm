@@ -117,7 +117,7 @@ export async function mediaTransfer(/** @type {string} */ root, /** @type {Abort
       }
       return rows.sort((a, b) => b.created - a.created);
     },
-    async download(/** @type {{path:string,url:string,bytes?:number,sha256?:string}} */ file, /** @type {string} */ key, /** @type {(path:string)=>Promise<any>} */ refresh) {
+    async download(/** @type {{path:string,url:string,alternate_urls?:string[],bytes?:number,sha256?:string}} */ file, /** @type {string} */ key, /** @type {(path:string)=>Promise<any>} */ refresh) {
       const name = hash(key + '\0' + file.path), part = join(dir, name + '.part'), metaFile = join(dir, name + '.part.json');
       const target = await assetTarget(root, file.path);
       if ((await lstat(part).catch(() => null))?.isSymbolicLink()) throw new Error('The download staging file must not be a link.');
@@ -142,7 +142,10 @@ export async function mediaTransfer(/** @type {string} */ root, /** @type {Abort
             /* cut when it moves nothing for a while, not after a fixed time: a slow download that moves goes on */
             const idle = idleSignal(signal);
             try {
-            const res = await fetch(file.url, { headers, signal: idle.signal });
+            /* a try after the first goes to the file's other addresses in turn, when the service gives some (its own
+               origin beside the storage's): a path to one that fails is not the only way to the file */
+            const address = attempt && file.alternate_urls?.length ? file.alternate_urls[(attempt - 1) % file.alternate_urls.length] : file.url;
+            const res = await fetch(address, { headers, signal: idle.signal });
             idle.touch();
             if ([401, 403, 404].includes(res.status) && attempt < 3) { await res.body?.cancel(); file = await refresh(file.path); continue; }
             if (!res.ok) throw new Error(`Media download answered ${res.status}.`);
