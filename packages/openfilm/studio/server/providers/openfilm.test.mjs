@@ -370,3 +370,22 @@ test('a cut-off signed download retries only the file, without leaking the accou
   assert.equal(downloads, 2);
   assert.equal(seen.filter(call => call.method === 'POST').length, 1);
 });
+
+test('a run the service refused is over: the same settings make a new run; one with no answer from the service keeps its key', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'openfilm-refused-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const keys = () => seen.filter((c) => c.method === 'POST' && c.url.pathname === '/v1/media/run').map((c) => c.headers['idempotency-key']);
+  const args = { text: 'hi', voice: 'v', out: 'hello' };
+  seen.length = 0;
+  /* the service's own answer: no balance (refunded, nothing to recover), then a provider busy, said by the service */
+  reply = () => [402, { error: 'insufficient_credits', message: 'Not enough credits.' }];
+  await assert.rejects(openfilm.run('tts', args, { ...ctx(), root }), (e) => e.code === 'balance');
+  reply = () => [422, { error: 'command_failed', message: 'provider busy' }];
+  await assert.rejects(openfilm.run('tts', args, { ...ctx(), root }), /provider busy/);
+  assert.equal(new Set(keys()).size, 2, 'topped up or retried: a new run, not the old refusal replayed');
+  /* a gateway's page, not the service: the outcome is not known, so the same key is asked again next time */
+  seen.length = 0;
+  reply = () => [400, Buffer.from('<html>bad gateway</html>'), 'text/html'];
+  await assert.rejects(openfilm.run('tts', args, { ...ctx(), root }));
+  await assert.rejects(openfilm.run('tts', args, { ...ctx(), root }));
+  assert.equal(new Set(keys()).size, 1, 'kept to recover');
+});

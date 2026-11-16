@@ -73,6 +73,7 @@
  *   model?: string,
  *   root: string,
  *   signal: AbortSignal,
+ *   networkTimeoutMs?: number,
  *   say: (line: string) => void,
  *   read: (path: string) => Promise<Uint8Array>,
  *   link?: (path: string) => Promise<string>,

@@ -4439,7 +4439,8 @@ export function ProjectView({ projectId, onProject }: {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         folder, verb: 'tts', via: access.via, ...(access.models[0] ? { model: access.models[0] } : {}),
-        args: { text, voice: voice.id, out: `vo-${Date.now().toString(36)}` },
+        /* named by what it says and in whose voice: asked again after an interruption, the paid take is recovered */
+        args: { text, voice: voice.id, out: `vo-${stableName(`${access.via}\0${voice.id}\0${text}`)}` },
       }),
     }).catch(() => null);
     const body = await res?.json().catch(() => null) as { ok?: boolean; text?: string } | null;
@@ -5647,4 +5648,11 @@ function createGeometryStore(): GeometryStore {
 function LiveGeometryInspector({ store, ...props }: Omit<React.ComponentProps<typeof FilmInspector>, 'geometry'> & { store: GeometryStore }) {
   const geometry = React.useSyncExternalStore(store.subscribe, store.get, store.get);
   return <FilmInspector {...props} geometry={geometry} />;
+}
+
+/** A short name a text always gives (FNV-1a, base 36): the same request, the same file. */
+function stableName(text: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36);
 }

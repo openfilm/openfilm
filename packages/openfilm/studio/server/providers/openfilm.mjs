@@ -124,7 +124,7 @@ async function filesOf(verb, args, ctx) {
 async function inputsOf(files, base, headers, ctx) {
   if (!files.length) return [];
   const asked = await call(NAME, `${base}/v1/media/uploads`, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
-    body: JSON.stringify({ files: files.map(file => ({ path: file.path, bytes: file.size })) }) }, ctx, { patience: polling.patience, keep: [404, 405] });
+    body: JSON.stringify({ files: files.map(file => ({ path: file.path, bytes: file.size })) }) }, { ...ctx, networkTimeoutMs: 45_000 }, { patience: polling.patience, keep: [404, 405] });
   if ([404, 405].includes(asked.status)) {
     if (files.reduce((n, file) => n + file.size, 0) > 48 * 1024 ** 2) throw new Error('This server requires inline uploads. Update the service before sending files larger than 48 MB. Nothing was generated.');
     const result = [];
@@ -241,16 +241,31 @@ export default {
     /* a release restarts the service: a request is said again through it, and a run it no longer knows (404) is posted
        again with the same key, which never charges twice; one it still counts as running elsewhere (409) is waited for */
     const steady = { patience: polling.patience, keep: [409] };
-    const post = async () => call(NAME, `${base}/v1/media/run`, {
-      method: 'POST',
-      headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': runKey, prefer: 'respond-async' },
-      body: await requestBody(),
-    }, ctx, steady);
+    /* a short request that hears nothing for 45 s is asked again (the same key: never a second charge); one carrying
+       its inputs inline (a service with no upload address) is given its whole time */
+    const short = { ...ctx, networkTimeoutMs: 45_000 };
+    const post = async () => {
+      const body = await requestBody();
+      return call(NAME, `${base}/v1/media/run`, {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': runKey, prefer: 'respond-async' },
+        body,
+      }, body.length < 1_000_000 ? short : ctx, steady);
+    };
     const until = Date.now() + polling.most;
-    const get = () => call(NAME, `${base}/v1/media/run?key=${encodeURIComponent(runKey)}&results=links`, { headers }, ctx, { ...steady, keep: [404, 409] });
+    const get = () => call(NAME, `${base}/v1/media/run?key=${encodeURIComponent(runKey)}&results=links`, { headers }, short, { ...steady, keep: [404, 409] });
     /** @type {{ call_id?: string, files_unavailable?: boolean, files?: { path: string, base64?: string, url?: string }[], index?: import('./contract.mjs').IndexRow[], receipt?: Record<string, unknown> }} */
     let done;
-    let res = journal?.reply ? new Response(JSON.stringify(journal.reply)) : journal?.resumed ? await get() : await post(), brokenBodies = 0;
+    /* the service's own answer that the run did not happen (no balance, a limit, the model failed: refunded): the saved
+       request is over, so the same settings make a new run next time; an outcome not known (no answer) is kept */
+    const over = async (/** @type {any} */ e) => {
+      if (!ctx.signal.aborted && e?.answered && e.status >= 400 && e.status !== 408) await journal?.finish();
+      return e;
+    };
+    let res, brokenBodies = 0;
+    try { res = journal?.reply ? new Response(JSON.stringify(journal.reply)) : journal?.resumed ? await get() : await post(); }
+    catch (e) { throw await over(e); }
+    try {
     for (;;) {
       for (let wait = Math.min(polling.first, polling.ms); [202, 404, 409].includes(res.status); wait = Math.min(polling.ms, wait * 2)) {
         if (Date.now() > until) throw new Error(`${NAME} has not delivered this after ${Math.round(polling.most / 60_000)} minutes. It may already be complete and charged. Keep request ${runKey} to recover it; do not start a new generation just to fetch its result.`);
@@ -266,6 +281,7 @@ export default {
         res = await get();
       }
     }
+    } catch (e) { throw await over(e); }
     if (done.files_unavailable) throw new Error(`${NAME} already completed this run (${done.call_id ?? runKey}), but its files are no longer available. This recovery did not generate or charge again. Contact support; do not start a new generation just to fetch its result.`);
     await journal?.remember(done);
     const refresh = async (/** @type {string} */ path) => {

@@ -360,7 +360,9 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
 
   const spec = VERBS[verb];
   const said = /** @type {string[]} */ ([]);
-  const clock = deadline(spec.timeoutSec + 60, signal);
+  /* OpenFilm's service may run a job up to 21 minutes, and its result is fetched after: wait longer than it can take */
+  const waitSec = provider.id === 'openfilm' ? 50 * 60 : spec.timeoutSec + 60;
+  const clock = deadline(waitSec, signal);
   /** @param {Spend} spend */
   const approve = async (spend) => {
     if (yes) return;
@@ -400,8 +402,8 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     return [...said, show(other ? { ...receipt, madeWith: other } : receipt)].join('\n');
   } catch (e) {
     if (clock.timedOut()) throw new GetError(provider.id === 'openfilm'
-      ? `OpenFilm did not deliver this within ${spec.timeoutSec + 60} s. The task may already be complete and paid. Run the same command to recover its original result; use --fresh only when the person intentionally wants another paid take.`
-      : `${provider.name} did not finish within ${spec.timeoutSec + 60} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
+      ? `OpenFilm did not deliver this within ${waitSec} s. The task may already be complete and paid. Run the same command to recover its original result; use --fresh only when the person intentionally wants another paid take.`
+      : `${provider.name} did not finish within ${waitSec} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
     if (/** @type {{ code?: string, limit?: boolean }} */ (e)?.code === 'balance' && /** @type {{ limit?: boolean }} */ (e).limit) {
       throw new GetError(`This did not run: the ${provider.name} key reached the spending limit set on it. The person can raise or remove that limit where `
         + `the key was made (${provider.keysUrl}), or use another key. Nothing was made. Stop and tell them; do not run it again until they say so.`, 1, 'balance');

@@ -30,8 +30,11 @@ export async function call(service, url, init, ctx, how = {}) {
   let res;
   for (let wait = steadily.first; ; wait = Math.min(steadily.most, wait * 2)) {
     try {
-      res = await fetch(url, { ...init, signal: ctx.signal });
+      /* a short call can be given its own limit (`networkTimeoutMs`), so a silent connection is retried instead of awaited */
+      res = await fetch(url, { ...init, signal: ctx.networkTimeoutMs ? AbortSignal.any([ctx.signal, AbortSignal.timeout(ctx.networkTimeoutMs)]) : ctx.signal });
       if (!PASSING.has(res.status) || Date.now() + wait > until) break;
+      /* the answer not taken: let its connection go before asking again */
+      await res.body?.cancel();
     } catch (e) {
       if (ctx.signal.aborted) throw e;
       if (Date.now() + wait > until) throw new Error(`${service} could not be reached (${/** @type {Error} */ (e).message}).`);
@@ -39,7 +42,8 @@ export async function call(service, url, init, ctx, how = {}) {
     await sleep(wait, ctx.signal);
   }
   if (res.ok || how.keep?.includes(res.status)) return res;
-  throw await failure(service, res, ctx);
+  /* its status, and whether the service itself said it (a JSON answer, not a gateway's page): a run it refused is over */
+  throw Object.assign(await failure(service, res, ctx), { status: res.status, answered: /json/i.test(res.headers.get('content-type') ?? '') });
 }
 
 /**
