@@ -9,7 +9,7 @@
  */
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -172,7 +172,9 @@ export async function mixedWaveform(root, sounds, duration) {
       const pcm = join(scratch, 'mix.pcm');
       try {
         await mix(clips, duration, pcm, ['-ac', '1', '-ar', String(RATE), '-f', 's16le']);
-        return Buffer.from(JSON.stringify(peaksOf(await readFile(pcm))));
+        const peaks = peakCounter();
+        for await (const piece of createReadStream(pcm)) peaks.add(piece);
+        return Buffer.from(JSON.stringify(peaks.done()));
       } finally {
         await rm(scratch, { recursive: true, force: true });
       }
@@ -221,8 +223,8 @@ export async function mixLoudness(root, sounds, duration) {
 }
 
 /**
- * ffmpeg's mono 16-bit samples at RATE, made into `{ duration (s), peaks }` as they come out of it, in one of `slots`:
- * any length of sound in the memory of one window of samples.
+ * ffmpeg's mono 16-bit samples at RATE, made into `{ duration (s), peaks }` as they come out of it (peakCounter), in
+ * one of `slots`: any length of sound in the memory of one window of samples.
  * @param {string[]} args @param {Slots} [slots]
  * @returns {Promise<{ duration: number, peaks: number[] }>}
  */
@@ -232,31 +234,16 @@ async function streamedPeaks(args, slots = SLOTS) {
   try {
     return await new Promise((resolve, reject) => {
       const child = spawn('ffmpeg', ['-hide_banner', ...args], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
-      const per = RATE / PEAKS_PER_SECOND;
-      /** @type {number[]} */
-      const peaks = [];
-      let max = 0, inWindow = 0, samples = 0, err = '';
-      /** @type {Buffer | null} */
-      let odd = null;
-      child.stdout.on('data', (/** @type {Buffer} */ chunk) => {
-        const buf = odd ? Buffer.concat([odd, chunk]) : chunk;
-        const even = buf.length - (buf.length % 2);
-        for (let o = 0; o < even; o += 2) {
-          const v = Math.abs(buf.readInt16LE(o));
-          if (v > max) max = v;
-          if (++inWindow === per) { peaks.push(Math.round((max / 32768) * 1000) / 1000); max = 0; inWindow = 0; }
-        }
-        samples += even / 2;
-        odd = even < buf.length ? buf.subarray(even) : null;
-      });
+      const counter = peakCounter();
+      let err = '';
+      child.stdout.on('data', counter.add);
       child.stderr.on('data', (/** @type {Buffer} */ d) => { err = (err + d.toString()).slice(-4000); });
       child.on('error', (error) => reject(/** @type {NodeJS.ErrnoException} */ (error).code === 'ENOENT'
         ? new MediaError('ffmpeg is not installed (macOS: brew install ffmpeg · Debian/Ubuntu: sudo apt install ffmpeg · Windows: winget install ffmpeg)', 501)
         : error));
       child.on('close', (code) => {
         if (code !== 0) return reject(new MediaError(err.trim().split('\n').pop() || `ffmpeg ended with ${code}`));
-        if (inWindow) peaks.push(Math.round((max / 32768) * 1000) / 1000);
-        resolve({ duration: samples / RATE, peaks });
+        resolve(counter.done());
       });
     });
   } finally {
@@ -265,18 +252,37 @@ async function streamedPeaks(args, slots = SLOTS) {
   }
 }
 
-/** Mono 16-bit samples at RATE → `{ duration (s), peaks }`. */
-function peaksOf(/** @type {Buffer} */ pcm) {
-  const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.length / 2));
+/**
+ * Mono 16-bit samples at RATE, taken a piece at a time (`add`) → `{ duration (s), peaks }` (`done`): the loudest
+ * sample of each 1/PEAKS_PER_SECOND s, between 0 and 1. A piece may end inside a sample: its byte waits for the next.
+ */
+export function peakCounter() {
   const per = RATE / PEAKS_PER_SECOND;
+  /** @type {number[]} */
   const peaks = [];
-  for (let i = 0; i < samples.length; i += per) {
-    let max = 0;
-    const end = Math.min(samples.length, i + per);
-    for (let j = i; j < end; j++) { const v = Math.abs(samples[j]); if (v > max) max = v; }
-    peaks.push(Math.round((max / 32768) * 1000) / 1000);
-  }
-  return { duration: samples.length / RATE, peaks };
+  let max = 0;
+  let inWindow = 0;
+  let count = 0;
+  /** @type {Buffer | null} */
+  let half = null;
+  const peak = () => peaks.push(Math.round((max / 32768) * 1000) / 1000);
+  return {
+    add: (/** @type {Buffer} */ piece) => {
+      const bytes = half ? Buffer.concat([half, piece]) : piece;
+      const n = bytes.length >> 1;
+      half = bytes.length & 1 ? bytes.subarray(bytes.length - 1) : null;
+      for (let i = 0; i < n; i++) {
+        const v = Math.abs(bytes.readInt16LE(i * 2));
+        if (v > max) max = v;
+        if (++inWindow === per) { peak(); max = 0; inWindow = 0; }
+      }
+      count += n;
+    },
+    done: () => {
+      if (inWindow) peak();
+      return { duration: count / RATE, peaks };
+    },
+  };
 }
 
 /** Sound files small and compressed enough to be played as they are. */

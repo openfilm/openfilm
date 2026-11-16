@@ -34,8 +34,10 @@ export function commandScript(node, cli, { ffmpeg = null, env = {} } = {}) {
 
 /** The same for Windows: a `.cmd` (what a command line there finds as `openfilm`). */
 export function commandScriptWindows(node, cli, { ffmpeg = null, env = {} } = {}) {
-  const set = [...Object.entries(env).map(([k, v]) => `set "${k}=${v}"\r\n`), ...(ffmpeg ? [`set "PATH=${ffmpeg};%PATH%"\r\n`] : [])];
-  return `@echo off\r\nrem OpenFilm's own copy of the openfilm command (written by the app; changes are lost)\r\nsetlocal\r\n${set.join('')}set ELECTRON_RUN_AS_NODE=1\r\nset OPENFILM_NO_UPDATE_CHECK=1\r\n"${node}" "${cli}" %*\r\n`;
+  // Inside `set "K=V"` quotes cmd already takes & | < > ^ literally; only % needs doubling.
+  const esc = (v) => String(v).replace(/%/g, '%%');
+  const set = [...Object.entries(env).map(([k, v]) => `set "${k}=${esc(v)}"\r\n`), ...(ffmpeg ? [`set "PATH=${esc(ffmpeg)};%PATH%"\r\n`] : [])];
+  return `@echo off\r\nrem OpenFilm's own copy of the openfilm command (written by the app; changes are lost)\r\nsetlocal\r\n${set.join('')}set ELECTRON_RUN_AS_NODE=1\r\nset OPENFILM_NO_UPDATE_CHECK=1\r\n"${esc(node)}" "${esc(cli)}" %*\r\n`;
 }
 
 /**

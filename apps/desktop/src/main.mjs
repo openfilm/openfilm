@@ -555,6 +555,8 @@ async function runStudio(env) {
   studio = await startWindowStudio({
     secrets,
     onAsk: answerStudio,
+    /* a project renamed: the chat's agents between turns in its folder stop (their next turn resumes them) */
+    onRelease: (folder) => localAgents?.release(folder),
     home: env.OPENFILM_HOME,
     port: IDENTITY.studioPort,
     /* Studio serves the window's page as its editor (shell/: its editor with the chat beside it) */

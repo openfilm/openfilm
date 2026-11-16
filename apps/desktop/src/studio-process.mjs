@@ -15,6 +15,8 @@
  *   ← { type: 'answer', id, text | error, code? }    its answer
  *   ← { type: 'quit' }                               stop (history is written first)
  *   ← { type: 'working', folders }                   the folders the chat's agents are working in now (not deletable)
+ *   → { type: 'release', id, folder }                a project folder about to be renamed: the chat's idle agents in it stop
+ *   ← { type: 'released', id }                       they have
  *   ← { type: 'account:read', id }                   read the Services account for the built-in agent
  *   → { type: 'account', id, account | error }       credentials, only on this private process channel
  *   → { type: 'secrets:read' }                       as it starts: Studio's own key and its keys' vault
@@ -54,11 +56,14 @@ let working = [];
 /** the questions asked of the person's agent, waiting for their answers, by id; and those asked to hear each piece */
 const asking = new Map();
 const hearing = new Map();
+/** the folders being let go of before a rename, by id */
+const releasing = new Map();
 parent.on('message', ({ data }) => {
   if (data?.type === 'quit') void stop();
   if (data?.type === 'working' && Array.isArray(data.folders)) working = data.folders.filter((f) => typeof f === 'string');
   if (data?.type === 'answer-part' && typeof data.delta === 'string') hearing.get(data.id)?.(data.delta);
   if (data?.type === 'answer') asking.get(data.id)?.(data);
+  if (data?.type === 'released') releasing.get(data.id)?.();
   if (data?.type === 'account:read') {
     void desktopAccount({ fresh: data.fresh === true, strict: true }).then(
       (account) => send({ type: 'account', id: data.id, account }),
@@ -91,6 +96,22 @@ function askAgent(text, signal, model, images, onText) {
   });
 }
 
+/**
+ * A project folder about to be renamed: the main process closes the chat's sessions in it that are between turns (each
+ * agent's process works in the folder, and Windows will not rename a folder under that). At most RELEASE_WAIT_MS.
+ * @param {string} folder @returns {Promise<void>}
+ */
+function release(folder) {
+  const id = randomUUID();
+  return new Promise((done) => {
+    const finish = () => { clearTimeout(timer); releasing.delete(id); done(); };
+    const timer = setTimeout(finish, RELEASE_WAIT_MS);
+    releasing.set(id, finish);
+    send({ type: 'release', id, folder });
+  });
+}
+const RELEASE_WAIT_MS = 5000;
+
 const port = Number(process.env.OPENFILM_STUDIO_PORT);
 try {
   const { key, vault } = await secrets;
@@ -105,6 +126,7 @@ try {
     askAgent,
     /* the person's own Studio: it keeps the record of their media up to date (media-index.mjs) */
     indexMedia: true,
+    release,
     /* the window's page, Studio's editor with the chat beside it (shell/), in place of the editor alone */
     ...(process.env.OPENFILM_EDITOR_DIR ? { editorDir: process.env.OPENFILM_EDITOR_DIR } : {}),
   });

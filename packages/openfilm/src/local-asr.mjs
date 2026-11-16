@@ -21,13 +21,16 @@ export const RUNTIME = 'models/onnxruntime-web-1.31.1/ort.wasm.min.mjs';
 export const TRANSFORMERS = 'models/transformers-4.3.2/transformers.min.js';
 
 /**
- * The runtime's folder, as its threads find its files: a path with forward slashes (a file: URL is fetched, which
- * Node cannot do from a worker).
+ * A file's folder as the runtime finds its files by. A path with forward slashes, as its threads read it (a file: URL
+ * is fetched, which Node cannot do from a worker); on Windows that path (`C:/…`) reads as an address of scheme `c:`,
+ * so there a file: URL, and the runtime runs on one thread (threads), with no worker to fetch it.
  */
-export const runtimeFolder = () => `${dirname(modelFile(RUNTIME)).split(sep).join('/')}/`;
+export const folderAddress = (/** @type {string} */ file, platform = process.platform) =>
+  platform === 'win32' ? pathToFileURL(`${dirname(file)}${sep}`).href : `${dirname(file).split(sep).join('/')}/`;
+export const runtimeFolder = () => folderAddress(modelFile(RUNTIME));
 
-/** How many threads the runtime takes: most of the computer, not all of it. */
-export const threads = () => Math.max(1, Math.min(4, availableParallelism() - 1));
+/** How many threads the runtime takes: most of the computer, not all of it; on Windows one, the only way it starts there. */
+export const threads = () => (process.platform === 'win32' ? 1 : Math.max(1, Math.min(4, availableParallelism() - 1)));
 
 /**
  * transformers.js on the library's runtime. It is its browser build (the Node build needs a native runtime): told to

@@ -155,10 +155,11 @@ export function personsSay(parts, method) {
  * (translating subtitles); without it, that goes to a service connected for it. `sealer`: the person's service keys
  * are kept sealed with it (keys.mjs), those found plain sealed now. `keepKey`: Studio's own `key` is the app's, kept in
  * its memory only: run.json names the agents' key (projects.mjs agentKeyOf, `keyKind: 'agent'`), so no file holds a
- * key to the person's say. Resolves once both servers listen.
- * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent, indexMedia?: boolean, sealer?: import('./keys.mjs').Sealer, keepKey?: boolean }} [options]
+ * key to the person's say. `release`: an app's own processes in a project folder (its agent between turns) let go of
+ * it, before the folder is renamed. Resolves once both servers listen.
+ * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent, indexMedia?: boolean, sealer?: import('./keys.mjs').Sealer, keepKey?: boolean, release?: (path: string) => Promise<void> }} [options]
  */
-export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent, indexMedia = false, sealer, keepKey = false } = {}) {
+export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent, indexMedia = false, sealer, keepKey = false, release } = {}) {
   void refreshCommunity();
   let COOKIE = cookieName(port);
   let FRAMED = framedCookieName(port);
@@ -1051,7 +1052,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (exports.list(project.id).some((job) => job.status === 'waiting' || job.status === 'running')) {
           throw new HttpError(409, 'An export is queued or running in this project: wait for it to finish or stop it first, then rename the project.', { code: 'export-running' });
         }
-        const renamed = await renameProject(project.id, String(name ?? ''));
+        /* the app's agent between turns works in the folder, and Windows will not rename it under that: let go first */
+        const renamed = await renameProject(project.id, String(name ?? ''), { release });
         if (renamed.path !== project.path || renamed.name !== project.name) {
           watchers.move(project.path, renamed.path);
           exportRoots.set(project.id, renamed.path);

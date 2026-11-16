@@ -130,6 +130,27 @@ test('installed and discoverable skills can both be starred and unstarred in sha
   }
 });
 
+test('skill favorites survive saving and reading without a catalog or the project that owns them', () => {
+  const before = process.env.OPENFILM_SHARED_HOME;
+  const home = mkdtempSync(join(tmpdir(), 'of-skill-favorites-'));
+  process.env.OPENFILM_SHARED_HOME = home;
+  try {
+    const ids = ['skill:river/remake', 'skill:openfilm/remake', 'skill:local/my-style', 'skill:project/my-style', 'effects/snow'];
+    const invalid = ['skill:remake', 'skill:../remake', 'skill:river/remake/extra', 'skill:River/remake', 'skill:/remake', `skill:river/${'a'.repeat(65)}`, 'nope/none', null, 7];
+    assert.deepEqual(setLibraryFavorites([...ids, ids[0], ...invalid]), ids);
+    assert.deepEqual(libraryFavorites(), ids);
+    assert.deepEqual(JSON.parse(readFileSync(join(home, 'prefs.json'), 'utf8')).libraryFavorites, ids);
+    // Older or edited preferences pass the same validation on read.
+    writeFileSync(join(home, 'prefs.json'), JSON.stringify({ libraryFavorites: [...ids, ids[0], ...invalid] }));
+    assert.deepEqual(libraryFavorites(), ids);
+    assert.deepEqual(setLibraryFavorites(ids.slice(1)), ids.slice(1));
+    assert.deepEqual(libraryFavorites(), ids.slice(1), 'removing one owner leaves the other skill of the same name');
+  } finally {
+    if (before === undefined) delete process.env.OPENFILM_SHARED_HOME; else process.env.OPENFILM_SHARED_HOME = before;
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('the voices are the voice-over services\' own, each once, said as `openfilm get tts` takes them; a star can be on one', async () => {
   const { providers, voices } = /** @type {{ providers: any[], voices: any[] }} */ (libraryVoices());
   assert.deepEqual(providers.map((p) => p.id), ['elevenlabs', 'inworld', 'cartesia', 'doubao']);

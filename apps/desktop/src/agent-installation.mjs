@@ -419,8 +419,9 @@ export function cmdTarget(cmd, depth = 0) {
       if (next) return next;
       continue;
     }
-    // MiniMax's SQLite is built for the installer's Node, which can differ from Electron's module ABI.
-    if (/[\\/]@minimax-ai[\\/]code[\\/]/i.test(target) && existsFile(target)) return null;
+    // MiniMax's SQLite is built for the installer's Node, which can differ from Electron's module ABI; DeepSeek
+    // Harness (from 0.2.2) loads an addon that starts only on the Electron builds it names, which the app's may not be.
+    if (/[\\/](?:@minimax-ai[\\/]code|@deepseek-ai[\\/]dsh)[\\/]/i.test(target) && existsFile(target)) return null;
     if (/[\\/]@openai[\\/]codex[\\/]/i.test(target) && /\.js$/i.test(target)) {
       const triple = process.arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc';
       const pkg = target.replace(/[\\/]bin[\\/][^\\/]+$/, '');

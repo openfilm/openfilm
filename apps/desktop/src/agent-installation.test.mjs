@@ -665,6 +665,19 @@ test('MiniMax npm CLI keeps its launcher so native SQLite uses the installing No
   assert.equal(chosenProgram(shim, { names: ['mcode'], win: true }), shim);
 });
 
+test('DeepSeek Harness from npm keeps its launcher: its require-builtin addon refuses an Electron build it does not name', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-dsh-npm-'));
+  put(join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+  const shim = put(join(root, 'dsh.cmd'), npmShim('node_modules\\@deepseek-ai\\dsh\\lib\\bin.js'));
+  assert.equal(cmdTarget(shim), null);
+  assert.equal(findExecutable('dsh', [], { PATH: root }, { win: true }), shim);
+  assert.equal(chosenProgram(shim, { names: ['dsh'], win: true }), shim);
+  /* another package whose name starts the same is not it */
+  put(join(root, 'node_modules', '@deepseek-ai', 'dsh-other', 'cli.js'));
+  const other = put(join(root, 'other.cmd'), npmShim('node_modules\\@deepseek-ai\\dsh-other\\cli.js'));
+  assert.equal(cmdTarget(other), join(root, 'node_modules', '@deepseek-ai', 'dsh-other', 'cli.js'));
+});
+
 test("Codex on Windows: never the copy in the Store app's own folder, which Windows won't start; the copy the Codex app starts", () => {
   const home = mkdtempSync(join(tmpdir(), 'of-home-'));
   const store = put(join(home, 'Program Files', 'WindowsApps', 'OpenAI.Codex_26.1002.7124.0_x64__2p2nqsd0c76g0', 'app', 'resources', 'codex.exe'));
