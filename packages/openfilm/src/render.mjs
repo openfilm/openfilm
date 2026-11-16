@@ -7,6 +7,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { clipKind, FILM_FILE } from './film-doc.mjs';
 import { alphaCompositeFilter, broken, chipDelivery, encoders, FRAMES_709, hardwareEncoder, holdsQuality, prores709, unheld } from './encoders.mjs';
 import { memoryError } from './browser-memory.mjs';
+import { encoderWait } from './encoder-wait.mjs';
 import { FilmPage, launch, SOFTWARE_GL } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
 import { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey } from './seekable.mjs';
@@ -329,6 +330,7 @@ export async function render(args, opts = {}) {
   /** frames read straight from their footage (direct.mjs) */
   let straightFrames = 0;
   let heldFrames = 0;
+  opts.onEncoder?.(encoder);
   /* a terminal gets a live counter; an agent's shell (no TTY) a line every tenth, so a long render never looks hung */
   let t0 = Date.now();
   let told = 0;
@@ -407,7 +409,7 @@ export async function render(args, opts = {}) {
       for (const c of read) left.splice(left.indexOf(c), 1);
       const draw = (/** @type {FilmPage} */ film) => async () => {
         for (let c = left.shift(); c && !stop.signal.aborted; c = left.shift()) {
-          const held = await encode({ film, a: c.a, b: c.b, file: store.drawing(c) }, { fps, rate, samples, shutter, alpha, duration: end, first: f0, format: f, onFrame: progress, still: alpha || opts.fine ? 'png' : 'jpeg', opaque, signal: stop.signal, frameHolds,
+          const held = await encode({ film, a: c.a, b: c.b, file: store.drawing(c) }, { fps, rate, samples, shutter, alpha, duration: end, first: f0, format: f, onFrame: progress, still: alpha || opts.fine ? 'png' : 'jpeg', opaque, signal: stop.signal, frameHolds, encoderTimeoutMs: opts.encoderTimeoutMs,
             sourceFrame: selection ? (frame) => selectionFrame(selection.spans, frame) : (frame) => frame });
           heldFrames += held;
           store.finished(c, used);
@@ -476,6 +478,7 @@ export async function render(args, opts = {}) {
         heldFrames = 0;
         format = clearFormat;
         encoder = encoderOf(format.video);
+        opts.onEncoder?.(encoder);
         await encodeAll(format, false);
       }
     };
@@ -488,7 +491,8 @@ export async function render(args, opts = {}) {
       const gaveUp = (/** @type {unknown} */ err) => !!chip && onChip && !clear && !opts.signal?.aborted && /^ffmpeg/.test(err instanceof Error ? err.message : '');
       if (!chip || !gaveUp(e)) throw e;
       let failure = /** @type {unknown} */ (e);
-      if (chip.format.ceiling) {
+      const stalled = /** @type {{ code?: string }} */ (e)?.code === 'ENCODER_STALLED';
+      if (chip.format.ceiling && !stalled) {
         unheld(chip.encoder);
         format = { ...own, video: chip.format.ceiling.video };
         failure = await drawAll(format).then(() => null, (err) => err);
@@ -499,6 +503,8 @@ export async function render(args, opts = {}) {
         onChip = false;
         format = own;
         encoder = encoderOf(own.video);
+        if (stalled) process.stderr.write(`openfilm: ${chip.encoder} stopped responding; encoding again with ${encoder}\n`);
+        opts.onEncoder?.(encoder);
         await drawAll(format);
       }
     }
@@ -665,7 +671,7 @@ function alphaWatch() {
 }
 
 /** Frames [a, b) of one page into one file; sub-frames are averaged by ffmpeg (tmix) and every n-th kept. */
-async function encode({ film, a, b, file }, { fps, rate, samples, shutter, alpha, duration, first = a, format, onFrame, still, opaque, signal, frameHolds = null, sourceFrame = (frame) => frame }) {
+async function encode({ film, a, b, file }, { fps, rate, samples, shutter, alpha, duration, first = a, format, onFrame, still, opaque, signal, frameHolds = null, encoderTimeoutMs, sourceFrame = (frame) => frame }) {
   /* a 4:2:0 picture wants even dimensions. A --scale between two pixels (1920 x .667) makes the browser's surface
      1281 wide: the file was written, and every strict H.264 encoder after it said `width not divisible by 2`.
      Crop the odd last column or row on the way in: scaling 1281 to 1280 would resample the whole frame, a crop keeps
@@ -693,6 +699,7 @@ async function encode({ film, a, b, file }, { fps, rate, samples, shutter, alpha
   ended.catch(() => {});
   signal?.addEventListener('abort', stop, { once: true });
   let previous = null, held = 0;
+  const wait = (pending) => encoderWait(pending, { signal, timeoutMs: encoderTimeoutMs });
   try {
     /* a tab's first two pictures come out a little off the rest (a transparent page's soft edges, by a level or two):
        two are taken and thrown away first, of the two frames before this part (of its first frame for the render's
@@ -718,25 +725,30 @@ async function encode({ film, a, b, file }, { fps, rate, samples, shutter, alpha
           frame = await film.capture(still === 'png' ? { format: 'png' } : { format: 'jpeg', quality: 95 });
           previous = frame;
         } else held++;
-        await Promise.race([write(enc.proc.stdin, frame), ended]);
-        if (watch) await Promise.race([write(watch.proc.stdin, frame), unwatched]);
+        await wait(Promise.race([write(enc.proc.stdin, frame), ended]));
+        if (watch) await wait(Promise.race([write(watch.proc.stdin, frame), unwatched]));
       }
       onFrame();
     }
-  } finally {
-    signal?.removeEventListener('abort', stop);
     enc.proc.stdin.end();
     watch?.proc.stdin.end();
+    /* Keep cancellation and the inactivity deadline active while ffmpeg flushes its last frames too. */
+    await wait(enc.done);
+    if (watch) {
+      const code = await wait(watch.ended);
+      if (watch.clear) throw showsThrough('in its last frames');
+      if (code !== 0 || watch.read !== (b - a) * samples) throw showsThrough(`(its alpha could not be read: ${watch.read} of ${(b - a) * samples} frames, exit ${code})`);
+    }
+    return held;
+  } catch (error) {
+    stop();
+    throw error;
+  } finally {
+    signal?.removeEventListener('abort', stop);
+    enc.proc.stdin.destroy();
+    watch?.proc.stdin.destroy();
     /* stopped: told once ffmpeg has exited, so the part it was writing can be removed (Windows keeps a file open
        until then, and a kill there takes a moment) */
     if (stopped) await Promise.allSettled([enc.done, watch?.ended]);
   }
-  await enc.done;
-  /* opaque only when every frame was read and none let anything through */
-  if (watch) {
-    const code = await watch.ended;
-    if (watch.clear) throw showsThrough('in its last frames');
-    if (code !== 0 || watch.read !== (b - a) * samples) throw showsThrough(`(its alpha could not be read: ${watch.read} of ${(b - a) * samples} frames, exit ${code})`);
-  }
-  return held;
 }

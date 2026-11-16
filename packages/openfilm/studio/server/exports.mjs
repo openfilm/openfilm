@@ -978,6 +978,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
   const renderTo = (job, target, out, opts, signal, share = 0.96) => {
     const range = job.ask.range ? [`${num(job.ask.range[0])}-${num(job.ask.range[1])}`] : [];
     return render([target, ...range], { ...opts, ...(job.ask.workers != null ? { workers: renderWorkerLimit(job.ask.workers) } : {}), ...(job.ask.ranges ? { ranges: job.ask.ranges } : {}), out, signal, onProgress: frames(job, share),
+      onEncoder: (/** @type {string} */ encoder) => update(job, { encoder, rate: 0, etaMs: null }),
       /* drawn without a graphics chip: said on the export while it runs, slowly */
       onSoftware: () => update(job, { software: true }) });
   };
@@ -1374,6 +1375,23 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     update(job, { encoder: prores && !app ? (await hardwareEncoder('prores', have)) ?? 'prores_ks' : 'png' });
     /* a source out of the project fails the export before anything is drawn */
     for (const track of doc.tracks) for (const row of track.clips) clipPath(root, row.src);
+    /* A failed probe used to look like a source without sound, silently dropping whole audio tracks while the
+       export reported success. Check sound sources before opening the browser, including muted/disabled clips:
+       those still belong in the editing project and must be possible to turn back on. */
+    /** @type {Map<string, import('./nle.mjs').SourceFacts>} */
+    const facts = new Map();
+    const factsOf = async (/** @type {string} */ path) => {
+      if (!facts.has(path)) facts.set(path, existsSync(path) ? await probeSource(path) : {});
+      return /** @type {import('./nle.mjs').SourceFacts} */ (facts.get(path));
+    };
+    for (const track of doc.tracks) for (const row of track.clips) {
+      const kind = kindOf(row);
+      if (kind !== 'sound' && kind !== 'video') continue;
+      const path = clipPath(root, row.src);
+      const source = await factsOf(path);
+      if (kind === 'sound' && !source.hasAudio) throw new ExportError(`Cannot export audio clip "${row.id}" (${row.src}): ${existsSync(path) ? 'the file has no readable audio stream' : 'the file is missing'}.`);
+      if (source.hasAudio === undefined) throw new ExportError(`Cannot inspect the audio in video clip "${row.id}" (${row.src}); check that the media file can be read.`);
+    }
     const { cues, style: shown } = await subtitlesOf(root, true).catch((error) => {
       if (fcp) throw error;
       return { cues: [], style: null };
@@ -1433,13 +1451,6 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const badges = rowBadges(rows.map((row) => row.kind));
       const sourceRows = new Map(rows.flatMap((row, i) => row.clips.map((clip) => [clip.id, badges[i]])));
 
-      /* every source's facts, once */
-      /** @type {Map<string, import('./nle.mjs').SourceFacts>} */
-      const facts = new Map();
-      const factsOf = async (/** @type {string} */ path) => {
-        if (!facts.has(path)) facts.set(path, existsSync(path) ? await probeSource(path) : {});
-        return /** @type {import('./nle.mjs').SourceFacts} */ (facts.get(path));
-      };
       /** @type {import('./nle.mjs').NlePicture[]} */
       const pictures = [];
       /** @type {import('./nle.mjs').NleSound[]} */
@@ -1449,7 +1460,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         for (const row of track.clips) {
           const c = byId.get(row.id);
           const kind = kindOf(row);
-          if (!c || !kind) continue;
+          if (!kind) continue;
+          if (!c) throw new ExportError(`Cannot export ${kind === 'sound' ? 'audio' : kind} clip "${row.id}" (${row.src}): the clip did not load.`);
           const path = clipPath(root, row.src);
           const volume = /** @type {{ volume?: number }} */ (row).volume ?? 1;
           const heard = !track.muted && !track.hidden && !row.disabled && volume > 0;
@@ -1520,7 +1532,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
 
       const timeline = planNleTimeline({ stage: doc.stage, duration: duration || 0.001, pictures, sounds },
         { title, fps, audio: mode, media: ask.media ?? 'copy', mediaDir: join(final, 'media'), stems: [...stems.keys()],
-          audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app), embeddedAudio: Boolean(app), footage: ask.footage ?? 'auto' });
+          audioTracks: fcp || app ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app), embeddedAudio: Boolean(app), footage: ask.footage ?? 'auto' });
       const staged = (/** @type {import('./nle.mjs').NleFile} */ f) => join(staging, 'media', basename(f.path));
       const cache = app ? draftCache(root, `${await draftEngineVersion()}:${browserVersion}`) : null;
       const rgbProfile = alpha === 'auto' && have.has('libx264rgb') ? await draftRgbProfile(app) : null;
@@ -1654,6 +1666,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
                 root, alpha: !ground, silent: true, fps: timeline.rate.fps, out: staged(file), signal: stop.signal, workers, dependencies: true,
                 ...(frameHolds ? { frameHolds } : {}),
                 ...(ground ? { format: how.format } : how),
+                onEncoder: (/** @type {string} */ encoder) => update(job, { encoder, rate: 0, etaMs: null }),
                 /* a page drawn again counts from where it was: it holds until the second drawing passes it */
                 onProgress: (/** @type {number} */ done) => {
                   drawnFrames.set(file.id, Math.max(drawnFrames.get(file.id) ?? 0, done));
@@ -2039,7 +2052,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
  * @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, lines: string[], ranges?: [number, number][] }>}
  */
 function render(args, opts) {
-  const { signal, onProgress, onSoftware, ...rest } = opts;
+  const { signal, onProgress, onSoftware, onEncoder, ...rest } = opts;
   return new Promise((done, fail) => {
     if (signal?.aborted) return fail(new Error('cancelled'));
     const child = fork(fileURLToPath(new URL('./render-worker.mjs', import.meta.url)), [], { stdio: ['ignore', 'inherit', 'pipe', 'ipc'] });
@@ -2059,6 +2072,7 @@ function render(args, opts) {
     child.on('message', (/** @type {any} */ m) => {
       if (m?.type === 'progress') onProgress?.(m.done, m.total);
       else if (m?.type === 'software') onSoftware?.();
+      else if (m?.type === 'encoder') onEncoder?.(m.encoder);
       else if (m?.type === 'done') settle(() => done(m.result));
       else if (m?.type === 'failed') settle(() => fail(new Error(m.error)));
     });
@@ -2083,7 +2097,7 @@ function drawer() {
   below(child);
   let said = '';
   child.stderr?.on('data', (d) => { said = (said + d).slice(-4000); process.stderr.write(d); });
-  /** @type {Map<string, { onProgress?: (done: number, total: number) => void, done: (r: any) => void, fail: (e: Error) => void, signal?: AbortSignal }>} */
+  /** @type {Map<string, { onProgress?: (done: number, total: number) => void, onEncoder?: (encoder: string) => void, done: (r: any) => void, fail: (e: Error) => void, signal?: AbortSignal }>} */
   const jobs = new Map();
   /** @type {Error | null} */
   let gone = null;
@@ -2092,6 +2106,7 @@ function drawer() {
     const job = jobs.get(m?.id);
     if (!job) return;
     if (m.type === 'progress') job.onProgress?.(m.done, m.total);
+    else if (m.type === 'encoder') job.onEncoder?.(m.encoder);
     else if (m.type === 'done' || m.type === 'failed') {
       jobs.delete(m.id);
       if (m.type === 'done') job.done(m.result);
@@ -2110,7 +2125,7 @@ function drawer() {
   return {
     /** @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, clear?: boolean, heldFrames?: number, dependencies?: string[], dependencySignatures?: [string, string][], cacheable?: boolean, lines: string[] }>} */
     render(args, opts) {
-      const { signal, onProgress, ...rest } = opts;
+      const { signal, onProgress, onEncoder, ...rest } = opts;
       return new Promise((done, fail) => {
         if (signal?.aborted) return fail(new Error('cancelled'));
         if (gone) return fail(gone);
@@ -2118,7 +2133,7 @@ function drawer() {
         const cancel = () => { if (child.connected) child.send({ type: 'cancel', id }); };
         signal?.addEventListener('abort', cancel, { once: true });
         const off = () => signal?.removeEventListener('abort', cancel);
-        jobs.set(id, { onProgress, signal, done: (r) => { off(); done(r); }, fail: (e) => { off(); fail(e); } });
+        jobs.set(id, { onProgress, onEncoder, signal, done: (r) => { off(); done(r); }, fail: (e) => { off(); fail(e); } });
         child.send({ type: 'render', id, args, opts: rest });
       });
     },

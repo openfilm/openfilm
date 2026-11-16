@@ -1244,8 +1244,10 @@ test('剪映: the same timeline as a draft in 剪映\'s drafts folder, its media
   assert.equal(shot.volume, 0.5);
   assert.deepEqual(shot.target_timerange, { start: 0, duration: 1_600_000 });
   assert.deepEqual(shot.source_timerange, { start: 400_000, duration: 1_600_000 });
-  /* the muted bed comes muted */
-  assert.equal(info.tracks.find((t) => t.type === 'audio' && t.name === 'Music').attribute, 1);
+  /* the muted bed comes muted on its source row (drafts no longer regroup rows by sound role) */
+  const bed = info.tracks.find((t) => t.type === 'audio' && t.segments.some((s) => materials.get(s.material_id)?.path.endsWith('bed.wav')));
+  assert.ok(bed, 'the standalone music track remains on the timeline');
+  assert.equal(bed.attribute, 1);
   const text = info.tracks.find((t) => t.type === 'text');
   assert.deepEqual(info.materials.texts.map((m) => JSON.parse(m.content).text), CUES.map((c) => c.text));
   assert.deepEqual(text.segments.map((s) => s.target_timerange.start), [0, 800_000]);

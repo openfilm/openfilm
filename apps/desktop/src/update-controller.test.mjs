@@ -19,8 +19,28 @@ function fixture({ prepareRestart = async () => ({ ok: true }), install, mac = t
   });
   /** the zip downloaded, and (on macOS) Squirrel.Mac done with it */
   const downloaded = (version = '1.1.0') => { updater.emit('update-downloaded', { version }); nativeUpdater?.emit('update-downloaded'); };
-  return { controller, updater, nativeUpdater, calls, downloaded, finish: () => finish() };
+  return { controller, updater, nativeUpdater, calls, downloaded, finish: (result) => finish(result) };
 }
+
+test('a background update download rejecting after the check is handled without an unhandled rejection', async () => {
+  const f = fixture({ mac: false });
+  let rejectDownload;
+  const downloadPromise = new Promise((_, reject) => { rejectDownload = reject; });
+  const checking = f.controller.check();
+  f.updater.emit('update-available', { version: '1.1.0' });
+  f.finish({ downloadPromise });
+  await checking;
+  assert.equal(f.controller.snapshot().status, 'available', 'checking does not wait for the download');
+  rejectDownload(new Error('net::ERR_QUIC_PROTOCOL_ERROR'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.controller.snapshot().status, 'error');
+  assert.equal(f.controller.snapshot().error, 'offline');
+});
+
+test('QUIC transport failures are network errors in both Electron error forms', () => {
+  assert.equal(classifyUpdateError(new Error('net::ERR_QUIC_PROTOCOL_ERROR')), 'offline');
+  assert.equal(classifyUpdateError({ code: 'ERR_QUIC_PROTOCOL_ERROR' }), 'offline');
+});
 
 test('checks are shared; the updater downloads in the background, installs on quit, never downgrades or takes prereleases', async () => {
   const f = fixture();

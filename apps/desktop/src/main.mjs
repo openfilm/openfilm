@@ -53,6 +53,9 @@ const overlayColours = (t) => ({ color: t === 'dark' ? '#111114' : '#e9e9eb', sy
 
 /* HTML-in-Canvas in Studio's viewer, as in the renderer (the `openfilm` package's src/host.mjs) */
 app.commandLine.appendSwitch('enable-blink-features', 'CanvasDrawElement');
+/* Some Windows networks/drivers fail Chromium's HTTP/3 requests in the main process. Use TCP for downloads
+   and update checks as well as the window's requests, before any network session is created. */
+app.commandLine.appendSwitch('disable-quic');
 if (mac) {
   /* Flush small Canvas2D batches: blur on hundreds of strokes otherwise queues gigabytes of intermediate
      textures. Keep GPU canvas-to-WebGL uploads fast without changing the rest of Graphite's batching. */

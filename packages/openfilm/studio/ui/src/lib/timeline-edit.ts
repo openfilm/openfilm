@@ -78,9 +78,9 @@ export type EditModel = readonly EditTrack[];
 export interface Switches { magnet: boolean; linkage: boolean }
 export const NO_SWITCHES: Switches = { magnet: false, linkage: false };
 
-/** The main track: the lowest picture track (V1), film.html's last track that is not a sound track. */
-export function mainTrackOf(model: readonly Pick<EditTrack, 'index' | 'role'>[]): number | null {
-  const pictures = model.filter((t) => t.index >= 0 && t.role !== 'audio');
+/** The main picture track (V1): caption rows keep their cues and never take the main track's magnet. */
+export function mainTrackOf(model: readonly Pick<EditTrack, 'index' | 'role' | 'captions'>[]): number | null {
+  const pictures = model.filter((t) => t.index >= 0 && t.role !== 'audio' && !t.captions);
   return pictures.length ? Math.max(...pictures.map((t) => t.index)) : null;
 }
 
@@ -946,7 +946,12 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
     if (typeof dest === 'number' ? Boolean(trackAt(d, dest)!.captions) !== cue : cue) return null;
   }
   const main = mainTrackOf(model);
-  const magnet = Boolean(spec.magnet) && magnetOn(model, main, true);
+  /* A horizontal selection across tracks is one translation: repacking its main-track clips would reset the
+     whole selection's landing (including captions), or change the distance between it and the captions. */
+  const translatingGroup = spec.mode === 'place'
+    && new Set(ids.map(id => d.before.get(id)!.track)).size > 1
+    && ids.every(id => destOf(id) === d.before.get(id)!.track);
+  const magnet = !translatingGroup && Boolean(spec.magnet) && magnetOn(model, main, true);
   const rides = spec.linkage ? ridesOf(d, main, hand) : new Map<string, Ride>();
   /* take them off their tracks */
   const lifted = new Map<string, EditClip>();

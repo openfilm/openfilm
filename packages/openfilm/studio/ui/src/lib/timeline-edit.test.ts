@@ -593,6 +593,30 @@ test('with the magnet a delete on the main track closes up; with linkage the pic
   ]);
 });
 
+test('a caption track below footage never becomes the magnetic main track, locked or unlocked', () => {
+  const m = model(
+    { role: 'video', clips: [['shot', 1, 5]] },
+    { role: 'mg', clips: [['cue', 1, 2, { cue: true, still: true }]] },
+  ).map((t, i) => i === 1 ? { ...t, captions: true } : t);
+  assert.equal(mainTrackOf(m), 0);
+  assert.equal(mainTrackOf([{ ...m[1]!, index: 0 }]), null, 'a captions-only film has no magnetic main track');
+  assert.deepEqual(after(m, planMove(m, { ids: ['cue'], deltaMs: 2000, pointerMs: 3500, mode: 'place', ...ON })!), [[['shot', 1, 5]], [['cue', 3, 4]]]);
+  assert.equal(mainTrackOf([m[0]!, { ...m[1]!, locked: true }]), 0);
+});
+
+test('a mixed selection of captions and media keeps one horizontal offset with the main-track magnet on', () => {
+  const m = model(
+    { role: 'mg', clips: [['cue', 1, 2, { cue: true, still: true }]] },
+    { role: 'video', clips: [['a', 1, 5], ['b', 5, 8]] },
+    { role: 'audio', clips: [['voice', 1, 4]] },
+  ).map((t, i) => i === 0 ? { ...t, captions: true } : t);
+  for (const ids of [['a', 'b', 'cue', 'voice'], ['cue', 'a', 'b', 'voice']]) {
+    const plan = planMove(m, { ids, deltaMs: 2000, pointerMs: 3500, mode: 'place', ...ON });
+    assert.ok(plan);
+    assert.deepEqual(after(m, plan), [[['cue', 3, 4]], [['a', 3, 7], ['b', 7, 10]], [['voice', 3, 6]]]);
+  }
+});
+
 test('a caption track\'s cues are clips: they ride on the main track, go with their shot, never leave caption tracks', () => {
   const m = model(
     { role: 'mg', clips: [['on-b', 5, 6.5, { cue: true, still: true }], ['long', 0, 12, { cue: true, still: true }]] },
