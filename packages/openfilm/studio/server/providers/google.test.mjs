@@ -206,6 +206,16 @@ test('a video run in the background: asked after until done, then deleted; one t
   await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /could not make the clip: prompt was blocked/);
   assert.equal(deleted, 1, 'a failed interaction is deleted too');
 
+  /* a poll that fails leaves a clip that may still be being made, and paid for, alone */
+  deleted = 0;
+  reply = (call) => {
+    if (isStart(call)) return [200, { id: 'v1_bg', status: 'in_progress' }];
+    if (call.method === 'DELETE') { deleted += 1; return [200, {}]; }
+    return [503, { error: { message: 'unavailable' } }];
+  };
+  await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /503/);
+  assert.equal(deleted, 0, 'an interaction not yet at a final status is not deleted');
+
   reply = () => [200, { id: '../files/x', status: 'in_progress' }];
   await assert.rejects(google.run('video', { out: 'x', prompt: 'y' }, ctx()), /did not start the video/);
 

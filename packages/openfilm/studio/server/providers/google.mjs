@@ -293,6 +293,8 @@ async function video(args, ctx, base, send) {
   const given = clip ? await omniUpload(clip, ctx, base, send) : null;
   /** @type {string} the interaction's address, once it has started */
   let at = '';
+  /* whether it reached a final status: only then may it be deleted */
+  let ended = false;
   try {
     /* the role of a single first frame, and of reference pictures, is set; two frames are read as a start and an end;
        whether a clip is edited or continued, the prompt says */
@@ -320,6 +322,7 @@ async function video(args, ctx, base, send) {
       if (ctx.signal?.aborted) send(`${at}/cancel`, { method: 'POST' }, AbortSignal.timeout(30_000)).catch(() => {});
       throw e;
     }
+    ended = ['completed', 'failed', 'cancelled'].includes(text(answer?.status));
     const why = text(answer?.error?.message) || interactionText(answer);
     if (text(answer?.status) && answer.status !== 'completed') throw new Error(`Gemini Omni could not make the clip${why ? `: ${why}` : ` (${answer.status})`}.`);
     const made = interactionContents(answer).find((/** @type {any} */ c) => c?.type === 'video' && (typeof c.data === 'string' || typeof c.uri === 'string'));
@@ -340,8 +343,9 @@ async function video(args, ctx, base, send) {
       cost: billedBy(NAME),
     };
   } finally {
-    /* a finished interaction is deleted, as Google otherwise keeps it with the clip in it (a cancelled one is left to the cancel) */
-    if (at && !ctx.signal?.aborted) await send(at, { method: 'DELETE' }).catch(() => {});
+    /* a finished interaction is deleted, as Google otherwise keeps it with the clip in it; one that is still being made
+       (a poll failed, or the run was stopped and left to the cancel) is not, as deleting it would lose a clip being paid for */
+    if (at && ended) await send(at, { method: 'DELETE' }).catch(() => {});
     /* an uploaded clip otherwise stays in the person's Gemini project for up to 48 hours */
     if (given) await send(`${base}/v1beta/${given.name}`, { method: 'DELETE' }).catch(() => {});
   }
