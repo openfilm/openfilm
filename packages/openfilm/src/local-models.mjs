@@ -129,9 +129,16 @@ export function modelBytesHere(/** @type {ModelEntry} */ m) {
   return bytes;
 }
 
+/**
+ * The environment a Node program of OpenFilm's own runs in when it is started with `process.execPath`. In the desktop
+ * app, Studio runs on Electron (a utility process), whose program is the app: without ELECTRON_RUN_AS_NODE it would
+ * start the app again (which steps aside for the one running) instead of running the program, and nothing would happen.
+ */
+export const nodeEnv = () => (process.versions.electron ? { ...process.env, ELECTRON_RUN_AS_NODE: '1' } : process.env);
+
 /** The fetch, in a process of its own that outlives what began it. */
 function startFetch(/** @type {ModelEntry} */ m) {
-  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), 'fetch', m.id], { detached: true, stdio: 'ignore', windowsHide: true });
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), 'fetch', m.id], { detached: true, stdio: 'ignore', windowsHide: true, env: nodeEnv() });
   /* said at once, so that what asks next finds it coming before it has begun */
   if (child.pid) writeFileSync(stateFile(m), JSON.stringify({ pid: child.pid, at: Date.now() }));
   child.unref();
