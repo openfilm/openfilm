@@ -10,6 +10,7 @@ import type { RedrawStart } from './redraw';
 import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, receiptOf } from '@/lib/canvas';
 import type { ProvidersState } from '@/lib/providers';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
+import { pendingCanvasMedia } from '@/lib/canvas-media-recovery';
 
 export type UploadStatus = { name: string; kind: WorkspaceResource['kind']; progress: number };
 export function fileCardWidth(file?: WorkspaceResource | null) {
@@ -295,7 +296,7 @@ export const useRuns = () => React.useSyncExternalStore((watch) => { runWatchers
 
 /** Whether it made one (false: it failed, was stopped, or was being made already). */
 export async function startRun(project: string, folder: string, node: string, request: { verb: string; args: Record<string, string | string[]> }, pick: { via?: string; model?: string }, key: string,
-  say: { nothing: string; balance: string }, board = 'main'): Promise<boolean> {
+  say: { nothing: string; balance: string }, board = 'main', recovery?: {scope:string;onResumed?:()=>void}): Promise<boolean> {
   const id = `${project}/${node}`;
   if (runs.has(id)) return false;
   const abort = new AbortController();
@@ -304,12 +305,15 @@ export async function startRun(project: string, folder: string, node: string, re
   runErrors.delete(id);
   runsChanged();
   try {
+    const pending = recovery ? await pendingCanvasMedia([folder,board,node,recovery.scope],request,pick) : null;
+    if (pending?.resumed) recovery?.onResumed?.();
     /* the person pressed Make on it: what it costs is not asked again, as an agent's would be */
-    const receipt = receiptOf<{ src?: string; images?: Array<{ src?: string }> }>(await api.make(folder, request.verb, request.args, { ...pick, yes: true }, abort.signal));
+    const asked = pending?.request ?? request;
+    const receipt = receiptOf<{ src?: string; images?: Array<{ src?: string }> }>(await api.make(folder, asked.verb, asked.args, { ...pick, yes: true }, abort.signal));
     const path = receipt.src ?? receipt.images?.[0]?.src;
-    /* stopped: it was paid for once it started, so it is kept in the project (and its history), not on the node */
-    if (run.left) return false;
     if (!path) throw new Error(say.nothing);
+    /* stopped: it was paid for once it started, so it is kept in the project (and its history), not on the node */
+    if (run.left) { pending?.finish(); return false; }
     const made = { path, made: key };
     const shown = shownBoards.get(project);
     if (shown?.board === board) shown.take(node, made);
@@ -318,6 +322,7 @@ export async function startRun(project: string, folder: string, node: string, re
       const doc = readCanvasDoc(await api.canvas(project, board));
       await api.putCanvas(project, { ...doc, nodes: doc.nodes.map((n) => (n.id === node ? withVersion(n, made) : n)) }, board);
     }
+    pending?.finish();
     return true;
   } catch (e) {
     /* what the service's account lacked is said to the person (its dialog says where to top it up), not as told to an agent */

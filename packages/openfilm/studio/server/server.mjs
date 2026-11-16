@@ -20,7 +20,7 @@ import { basename, dirname, extname, isAbsolute, join, normalize, relative, reso
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { pipeline } from 'node:stream';
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, symlink } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { EditError, editProjectFilm, pageClipLook, readProjectFilm, settleProjectFilm } from './film.mjs';
@@ -29,13 +29,14 @@ import { PARTS, compoundFolder, srcInto } from './compound.mjs';
 import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { mediaReferences } from '../../src/media-links.mjs';
-import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
+import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes, renderDefaults } from './exports.mjs';
 import { MediaError, frame, loudness, mixLoudness, mixedWaveform, poster, probe, waveform } from './derived.mjs';
 import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, restoreFilm, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
 import * as personEdits from './person-edits.mjs';
 import { createAutoVersions } from './auto-versions.mjs';
 import { createHistoryPreviews } from './history-previews.mjs';
 import { ownHost, servable, startPages } from './pages.mjs';
+import { transferLibraryEntries } from './library-transfer.mjs';
 import { HttpError, cookie, json, readJson } from './http.mjs';
 import { acceptWebSocket } from './websocket.mjs';
 import {
@@ -51,7 +52,8 @@ import { exampleFile, exampleFolder, listExamples } from './examples.mjs';
 import { pickFiles, pickFolder } from './folder-picker.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
 import { ensureProxies, playChecks } from './proxies.mjs';
-import { ensurePreviews, knownLate } from './preview-cache.mjs';
+import { ensurePreviews, knownLate, pausePreviews, cancelPreviews, clearPreviews, retryPreviews } from './preview-cache.mjs';
+import { stopVisionDownloads } from '../../src/vision-assets.mjs';
 import { npmOpenfilm, olderThanThis } from '../client.mjs';
 import { createWatchers } from './watch.mjs';
 import { projectMissing } from './project-presence.mjs';
@@ -65,7 +67,8 @@ import { carryMade, madeView } from './media-made.mjs';
 import { pluginOfSkill, pluginStates, pluginsDir, setPluginOn } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
-import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { addLibraryAsset, assetCatalog, assetUsage, catalogListing, createAssetCollection, editAssetCatalog, existingLibraryAsset, moveAssetCatalog, refreshLibraryReferences, registerLibraryLinks, registerLibraryFolder, forgetLibraryPath, removeAssetCollection } from './asset-library.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
@@ -79,6 +82,7 @@ import { verifyPublished } from './community-publish.mjs';
 import { publishCheck } from '../../src/publish-cli.mjs';
 import { communitySources, entrySources, setCommunitySources, catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
+import { voicesRoute } from './voices.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
 import { projectSettingsRoute, readProjectSettings } from './project-settings.mjs';
@@ -133,7 +137,7 @@ export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
 export function personsSay(parts, method) {
   if (method === 'GET' || method === 'HEAD') return false;
   const [head] = parts;
-  if (head === 'providers' || head === 'local-models' || head === 'prefs') return true;
+  if (head === 'providers' || head === 'local-models' || head === 'prefs' || head === 'voices') return true;
   if (head === 'plugins') return parts.length === 2;
   if (head === 'skills') return !(parts.length === 2 && parts[1] === 'catalog');
   return false;
@@ -408,6 +412,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* ── own keys and who makes each kind of media (Settings → Services): never a key back; see providers/index.mjs ── */
     if (parts[0] === 'providers') return providersRoute(req, res, parts.slice(1), { openBrowser });
+    if (parts[0] === 'voices') return voicesRoute(req, res, parts.slice(1));
     /* the models that run on this computer (Settings → Services → Local services; local-models.mjs) */
     if (parts[0] === 'local-models') return localModelsRoute(req, res, parts.slice(1));
     /* what the person changed in a project while an agent worked, kept over its writes: the note for the agent named
@@ -456,20 +461,41 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const lib = await savedLibrary();
       const rel = (/** @type {unknown} */ path) => { try { return libraryRel(path); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); } };
       const at = url.searchParams.get('path') ?? '';
+      if (sub === 'catalog' && req.method === 'GET') return json(res, 200, await assetCatalog());
+      if (sub === 'catalog' && req.method === 'PATCH') return json(res, 200, await editAssetCatalog(await readJson(req)));
+      if (sub === 'collections' && req.method === 'POST') {
+        const body = await readJson(req);
+        return json(res, 200, { collection: await createAssetCollection(body?.name) });
+      }
+      if (sub === 'collections' && req.method === 'DELETE') { await removeAssetCollection(url.searchParams.get('id')); return json(res, 200, {}); }
+      if (sub === 'usage' && req.method === 'GET') return json(res, 200, await assetUsage(at));
+      if (sub === 'relink' && req.method === 'POST') {
+        const { path: linked, to } = await readJson(req) ?? {};
+        if (typeof to !== 'string') throw new HttpError(400, 'Choose the new source folder.');
+        await relink(lib, rel(linked), to);
+        await registerLibraryLinks([libraryPath(rel(linked))]);
+        await refreshLibraryReferences(libraryPath(rel(linked)));
+        return json(res, 200, {});
+      }
+      if (sub === 'files/transfer' && req.method === 'POST') return json(res, 200, await transferLibraryEntries(await readJson(req)));
       if (sub === 'files') {
         /* `folder`: the library as the film's origin serves it, so a saved page plays in the media pane's viewer as a
            project's does */
-        if (req.method === 'GET') return json(res, 200, { ...await listLibrary(), folder: pages.folderUrl({ id: SAVED_ORIGIN_ID, path: lib }) });
+        if (req.method === 'GET') return json(res, 200, { ...await catalogListing(url.searchParams.get('at') ?? '', url.searchParams.get('view') ?? '', url.searchParams.get('q') ?? ''), folder: pages.folderUrl({ id: SAVED_ORIGIN_ID, path: lib }) });
         if (req.method === 'PUT') return json(res, 200, { path: libraryPath((await importFile(lib, rel(at), req)).path) });
         if (req.method === 'PATCH') {
           const { from, to } = /** @type {{ from?: unknown, to?: unknown }} */ (await readJson(req) ?? {});
-          return json(res, 200, { path: libraryPath((await moveFile(lib, rel(from), rel(to))).path) });
+          const path = libraryPath((await moveFile(lib, rel(from), rel(to))).path);
+          await moveAssetCatalog(libraryPath(rel(from)), path);
+          return json(res, 200, { path });
         }
-        if (req.method === 'DELETE') { await trashFile(lib, rel(at)); return json(res, 200, {}); }
+        if (req.method === 'DELETE') { if (!rel(at)) throw new HttpError(403, 'The asset-library root cannot be deleted.'); await trashFile(lib, rel(at)); await forgetLibraryPath(libraryPath(rel(at))); return json(res, 200, {}); }
       }
       if (sub === 'folders' && req.method === 'POST') {
         const { path: folder } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
-        return json(res, 200, { path: libraryPath(await makeFolder(lib, rel(folder))) });
+        const path = libraryPath(await makeFolder(lib, rel(folder)));
+        await registerLibraryFolder(path);
+        return json(res, 200, { path });
       }
       /* files or folders of this computer copied in, or (`mode: link`) linked where they are kept: the paths given,
          else the person's pick. { landed } */
@@ -478,12 +504,16 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
         const picked = Array.isArray(paths) ? paths.map(String)
           : await (folder === true ? pickFolder(ask).then((p) => (p ? [p] : [])) : pickFiles(ask)).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); });
-        return json(res, 200, { landed: (await bringIn(lib, rel(into ?? 'saved'), picked, mode === 'link' ? 'link' : mode === 'auto' ? 'auto' : 'copy', { anywhere: true })).map(libraryPath) });
+        const landed = (await bringIn(lib, rel(into ?? 'saved'), picked, mode === 'link' ? 'link' : mode === 'auto' ? 'auto' : 'copy', { anywhere: true,
+          makeLink: (source, destination, kind) => symlink(source, destination, process.platform === 'win32' && kind === 'dir' ? 'junction' : kind),
+        })).map(libraryPath);
+        await registerLibraryLinks(landed);
+        return json(res, 200, { landed });
       }
       if (sub === 'reveal' && req.method === 'POST') {
-        const { path: shown } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
+        const { path: shown, original } = /** @type {{ path?: unknown, original?: boolean }} */ (await readJson(req) ?? {});
         const where = rel(shown ?? 'saved');
-        if (where) reveal(inside(lib, where)); else openFile(lib);
+        if (where) reveal(original ? realpathSync.native(readable(lib, where)) : inside(lib, where)); else openFile(lib);
         return json(res, 200, {});
       }
       if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, readable(lib, rel(at)));
@@ -1234,15 +1264,20 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* renders of the stretches the preview played late (preview-cache.mjs), asked for when not made yet: each one's
        name and state, at the proxies' size */
     if (rest === 'preview-cache' && (req.method === 'POST' || req.method === 'GET')) {
-      /* GET: the stretches known to play late (from an earlier session) and theirs */
-      const { ranges, fps } = /** @type {{ ranges?: unknown, fps?: unknown }} */ (req.method === 'GET'
-        ? { ranges: knownLate(project.path), fps: url.searchParams.get('fps') }
-        : await readJson(req));
+      const body = req.method === 'GET' ? { ranges: knownLate(project.path), fps: url.searchParams.get('fps') } : await readJson(req);
+      const { ranges, fps, action, playing: isPlaying } = /** @type {{ ranges?: unknown, fps?: unknown, action?: unknown, playing?: boolean }} */ (body);
+      if (action === 'retry') { retryPreviews(project.path); return json(res, 200, { retried: true }); }
+      if (action === 'clear') { clearPreviews(project.path); return json(res, 200, { late: [], ranges: [] }); }
+      if (action === 'cancel') { cancelPreviews(project.path); return json(res, 200, { late: [], ranges: [] }); }
+      if (action === 'pause') { pausePreviews(project.path, true); return json(res, 200, { paused: true }); }
       const rate = Number(fps);
-      const list = Array.isArray(ranges) ? ranges.filter((r) => Array.isArray(r) && r.length === 2 && r.every(Number.isFinite) && r[1] > r[0] && r[0] >= 0).slice(0, 50) : [];
+      const list = Array.isArray(ranges) ? ranges.filter((r) => Array.isArray(r) && r.length === 2 && r.every(Number.isFinite) && r[1] > r[0] && r[0] >= 0).slice(0, 1000) : [];
       if (!(rate > 0 && rate <= 240)) throw new HttpError(400, 'fps: a frame rate');
       const { proxies } = readPrefs();
-      return json(res, 200, { late: list, ranges: list.length ? ensurePreviews(project.path, /** @type {[number, number][]} */ (list), rate, proxies.height) : [] });
+      if (req.method === 'POST' && isPlaying) pausePreviews(project.path, true);
+      const result = list.length ? ensurePreviews(project.path, /** @type {[number, number][]} */ (list), rate, proxies.height, undefined, { schedule: req.method === 'POST' && !isPlaying }) : [];
+      if (req.method === 'POST' && !isPlaying) pausePreviews(project.path, false);
+      return json(res, 200, { late: list, ranges: result });
     }
     /* what the project is missing (media-reconnect.mjs): links that lead nowhere, files its clips name that are gone */
     /* how the project's media was made, by path (media-made.mjs): what each was asked with, by whom, from which
@@ -1337,9 +1372,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     if (rest === 'saved/take' && req.method === 'POST') {
       const { path: from } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
-      const taken = await savedCall(() => takeSaved(project.path, from));
+      const taken = await savedCall(async () => await existingLibraryAsset(project.path, from) ?? await takeSaved(project.path, from));
       if ('path' in taken) await carryMade(project.path, taken.path);
       return json(res, 200, taken);
+    }
+    if (rest === 'library/add' && req.method === 'POST') {
+      const { path: source, mode } = await readJson(req) ?? {};
+      const binding = await savedCall(() => addLibraryAsset(project.path, source, mode));
+      return json(res, 200, binding);
     }
     /* a page as text, read and written by what Studio writes into a page (layers pasted, page-text.mjs) */
     if (rest === 'page' && req.method === 'GET') return json(res, 200, await readPage(project.path, url.searchParams.get('path')));
@@ -1442,7 +1482,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        how many subtitle cues the film has (the subtitle choices need some), and how big the project and its parts are */
     if (rest === 'exports') {
       if (req.method === 'GET') {
-        return json(res, 200, { exports: exports.list(project.id), folder: exportsRoot(), can: await exportCapabilities(), drafts: draftApps(), subtitles: await exports.subtitles(project.path), captionTracks: await exports.captionTracks(project.path), project: await projectSizes(project.path) });
+        return json(res, 200, { exports: exports.list(project.id), folder: exportsRoot(), can: await exportCapabilities(), render: renderDefaults(), drafts: draftApps(), subtitles: await exports.subtitles(project.path), captionTracks: await exports.captionTracks(project.path), project: await projectSizes(project.path) });
       }
       if (req.method === 'POST') {
         exportRoots.set(project.id, project.path);
@@ -1648,6 +1688,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (advertise && advertised()?.pid === process.pid) rmSync(runFile(), { force: true });
     /* a running export stops, and cleans up after itself while the rest closes: its half-made files go before Studio */
     const exporting = exports.stopAll();
+    stopVisionDownloads();
+    for (const project of await listProjects().catch(() => [])) cancelPreviews(project.path);
     fetches.stopAll();
     autoVersions.stop();
     if (sweepMedia) clearTimeout(sweepMedia);

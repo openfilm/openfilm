@@ -66,10 +66,11 @@ export default {
       const res = verb === 'sfx'
         ? await post(`/v1/sound-generation?output_format=${FORMAT}`, { text: prompt, model_id: model, ...(sec !== null ? { duration_seconds: clamp(sec, 0.5, 30) } : {}) })
         : await post(`/v1/music?output_format=${FORMAT}`, { prompt, model_id: model, ...(sec !== null ? { music_length_ms: Math.round(clamp(sec, 3, 600) * 1000) } : {}) });
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      const dur = mp3Seconds(bytes);
+      const staged = ctx.handOff && ctx.keep ? await ctx.keep(path, res) : null;
+      const bytes = staged ? new Uint8Array() : new Uint8Array(await res.arrayBuffer());
+      const dur = staged ? Math.round(staged.bytes * 8 / 128_000 * 1000) / 1000 : mp3Seconds(bytes);
       return {
-        files: [{ path, bytes }],
+        files: [staged ?? { path, bytes }],
         index: [{ src: path, kind: 'audio', dur, from: { mode: 'generate', prompt, ...(sec !== null ? { sec } : {}), provider: 'elevenlabs', model } }],
         receipt: { provider: 'elevenlabs', model, src: path, dur },
         cost: billedBy(NAME),

@@ -9,6 +9,8 @@ description: Media for an OpenFilm film. Read it before you add music, a sound e
 
 Media can come from `get` (OpenFilm's library, or a service that makes it), any service the person uses (with its API docs and their key), or your own code. Save it under `assets/`.
 
+For OpenFilm-paid media, a timeout or failed download can happen after generation and charging. Repeat the exact same command to recover its original task; keep the same output name, prompt, model and reference files. Do not rename the output, switch models or generate a replacement just to retrieve a missing file. `--fresh` intentionally starts another paid take and is only for when the person wants one. A completed receipt without a saved, playable asset is not a delivered result; report an expired result to support with its call ID.
+
 When the person wants a service that is not built in to make pictures, clips or sounds (on the canvas too), add it as a provider: `openfilm get` ends by naming its folder, the contract it follows and a built-in one to read. Write it from the service's API docs, then try it with `get <verb> --via <id>` once the person has added its key in Settings → Services.
 
 The services and models are the person's choice: `get` uses the one they chose in Settings for each kind of media. Name another with `--via` or `--model` only when they ask for it, or when theirs cannot do what is asked (a picture changed in part needs one that redraws where a mask says), and say in your reply which model you used and why (a receipt with `madeWith` is one that was not theirs). Connecting or disconnecting a service, its keys, the choice in Settings, and which plugins and skills are on are theirs to change in Studio: Studio refuses them from you, so tell them what to change and why.

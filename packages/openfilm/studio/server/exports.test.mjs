@@ -16,6 +16,7 @@ import { launch } from '../../src/host.mjs';
 import { layoutTracks } from '../ui/src/lib/timeline-layout.ts';
 import { filmHtml } from '../../src/film-doc.mjs';
 import { JIANYING_DRAFT_PATH } from './jianying.mjs';
+import { draftRasterFilter } from '../../scripts/draft-bench-frames.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 const ffmpeg = { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 };
@@ -320,6 +321,66 @@ test('a cancelled export stops and leaves no file, and a bad ask is refused befo
     { kind: 'video', loudness: -3 }, { kind: 'video', loudness: '-14' }, { kind: 'nle', format: 'fcpxml', alpha: 'png' }, { kind: 'nle', alpha: 'auto' }, { kind: 'nle', format: 'jianying', alpha: 'hevc_alpha' }, { kind: 'nle', format: 'jianying', alpha: 'prores4444' }]) {
     assert.throws(() => exports.start(project(), bad), ExportError, JSON.stringify(bad));
   }
+});
+
+test('render concurrency rejects malformed counts and non-render exports before queuing work', () => {
+  const exports = createExports({ drafts: () => null });
+  for (const workers of [0, -1, 1.5, 9, NaN, Infinity, '4', null]) {
+    assert.throws(() => exports.start(project(), { kind: 'video', workers }), /workers:/);
+  }
+  for (const kind of ['audio', 'subtitles', 'project', 'stills', 'poster', 'slides']) {
+    assert.throws(() => exports.start(project(), { kind, workers: 2 }), /workers:/);
+  }
+  assert.equal(exports.list(project().id).length, 0);
+});
+
+test('manual draft concurrency shares one browser limit across pages, preserving complete decoded RGBA', ffmpeg, async () => {
+  const hashes = [];
+  for (const workers of [1, 4]) {
+    const folder = join(scratch, `Manual workers ${workers}`);
+    mkdirSync(folder, { recursive: true });
+    const clips = [];
+    for (let n = 0; n < 4; n++) {
+      const src = `p${n}.html`;
+      writeFileSync(join(folder, src), `<!doctype html><body data-page="${n}" style="margin:0;background:#123"><div style="position:absolute;top:20px;width:80px;height:80px;background:#fa0"></div>
+<script>window.film={duration:2,width:320,height:180,frame(t){document.querySelector('div').style.left=Math.floor(t*60)+'px'}}</script></body>`);
+      clips.push({ id: `p${n}`, src, at: n * 2, time: [0, 2] });
+    }
+    writeFileSync(join(folder, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips }] }));
+    const exports = createExports({ drafts: () => null });
+    const done = await ended(exports, exports.start(project(`Manual workers ${workers}`, folder), { kind: 'nle', format: 'jianying', alpha: 'png', fps: 30, workers }, { folder: join(scratch, `Manual output ${workers}`) }));
+    assert.equal(done.status, 'done', done.error);
+    assert.equal(done.renderWorkers, workers);
+    assert.equal(done.mediaStats.length, 4);
+    assert.ok(done.mediaStats.every((x) => !x.cached && x.workers === 1), 'short pages each take one browser from the shared budget');
+    hashes.push(done.outputs.filter((p) => /^p\d\.mov$/.test(basename(p))).sort().map((p) => execFileSync('ffmpeg', ['-v', 'error', '-i', p, '-map', '0:v:0', '-vf', 'fps=30,format=rgba', '-f', 'hash', '-hash', 'sha256', '-']).toString()));
+    assert.equal(hashes.at(-1).length, 4);
+  }
+  assert.deepEqual(hashes[0], hashes[1]);
+});
+
+test('cancelling a pipelined draft after its first processed page stops remaining work and removes staging media', ffmpeg, async () => {
+  const folder = join(scratch, 'Cancel pipeline'), output = join(scratch, 'Cancelled pipeline output');
+  mkdirSync(folder, { recursive: true });
+  const clips = [];
+  for (let n = 0; n < 4; n++) {
+    const src = `p${n}.html`;
+    writeFileSync(join(folder, src), `<!doctype html><body data-page="${n}" style="margin:0;background:#123"><div style="width:100px;height:100px;background:#f90"></div><script>window.film={width:320,height:180,duration:2,frame(t){document.querySelector('div').style.marginLeft=Math.floor(t*60)+'px'}}</script>`);
+    clips.push({ id: `p${n}`, src, at: n * 2, time: [0, 2] });
+  }
+  writeFileSync(join(folder, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips }] }));
+  let cancelled = false;
+  const exports = createExports({ drafts: () => null, onChange(job) {
+    if (!cancelled && job.status === 'running' && job.mediaStats?.length) {
+      cancelled = true;
+      exports.cancel(job.id);
+    }
+  } });
+  const done = await ended(exports, exports.start(project('Cancel pipeline', folder), { kind: 'nle', format: 'jianying', fps: 30, alpha: 'png', workers: 4 }, { folder: output }));
+  assert.ok(cancelled, 'cancellation happened after an actual page completed postprocessing');
+  assert.equal(done.status, 'cancelled', done.error);
+  assert.deepEqual(readdirSync(output), [], 'neither a partial draft nor a final draft was published');
+  await exports.stopAll();
 });
 
 test('a bitrate is held on the processor, near it on average and under it with its peaks held there; a wrong one is refused', ffmpeg, async () => {
@@ -1127,12 +1188,14 @@ test('剪映: the same timeline as a draft in 剪映\'s drafts folder, its media
   /* a page lossless, with its alpha (剪映 shows PNG's on both systems), and clear where the page draws nothing */
   const page = join(folder, 'media', 'title.mov');
   assert.equal(probe(page, 'stream=codec_name,pix_fmt'), 'png,rgba');
-  const corner = execFileSync('ffmpeg', ['-v', 'error', '-i', page, '-frames:v', '1', '-vf', 'crop=1:1:200:120,format=rgba', '-f', 'rawvideo', '-']);
+  const info = JSON.parse(readFileSync(done.out, 'utf8'));
+  const material = info.materials.videos.find((m) => m.path.endsWith('/title.mov'));
+  const placed = info.tracks.flatMap((t) => t.segments).find((s) => s.material_id === material.id);
+  const corner = execFileSync('ffmpeg', ['-v', 'error', '-i', page, '-frames:v', '1', '-vf', `${draftRasterFilter(info, placed)},crop=1:1:200:120,format=rgba`, '-f', 'rawvideo', '-']);
   assert.equal(corner[3], 0, 'transparent away from the page\'s box');
   /* the page holds still: its first and last pictures, for its whole second */
   assert.equal(frameCount(page), 2);
   assert.equal(Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', page]).toString()), 1);
-  const info = JSON.parse(readFileSync(done.out, 'utf8'));
   const meta = JSON.parse(readFileSync(join(folder, 'draft_meta_info.json'), 'utf8'));
   assert.deepEqual([meta.draft_name, meta.draft_fold_path, meta.draft_root_path, meta.draft_id], ['Cut', folder, drafts, info.id]);
   assert.deepEqual(info.canvas_config, { width: 320, height: 180, ratio: 'original' });
@@ -1228,7 +1291,9 @@ test('剪映: footage drawn with a look of its own and nothing under it is opaqu
   assert.ok(near(firstFrame(media('alone.mov')).at(160, 90), [255, 0, 0], 40), 'the footage itself');
   /* `under` has `over` on the track above at the same time, yet nothing under it: opaque too; `over` keeps its alpha */
   assert.equal(probe(media('under.mov'), 'stream=codec_name'), 'h264');
-  assert.equal(probe(media('over.mov'), 'stream=codec_name,pix_fmt'), 'png,rgba');
+  assert.match(probe(media('over.mov'), 'stream=codec_name,pix_fmt'), /^(?:png,rgba|qtrle,argb)$/);
+  const corner = execFileSync('ffmpeg', ['-v', 'error', '-i', media('over.mov'), '-vf', 'format=rgba,crop=1:1:2:2', '-frames:v', '1', '-f', 'rawvideo', '-']);
+  assert.equal(corner[3], 0, 'the adaptive lossless material keeps its transparent corner');
 });
 
 test('剪映: a page that fails stops the export, its error said, nothing left behind', { ...ffmpeg, timeout: 240_000 }, async () => {
@@ -1360,21 +1425,71 @@ test('a PNG video keeps each picture once, for as long as it shows: a pixel apar
     assert.equal(frameCount(steps), stepPictures);
     assert.deepEqual(decoded(steps), stepsBefore);
     assert.deepEqual(readdirSync(dir).filter((n) => n.endsWith('.filter')), [], 'its sum file gone');
-    /* drawn as a quick PNG and changing in every frame: every frame kept, written again at ffmpeg's own settings */
+    /* A changing quick PNG is already lossless: leave its encoded packets alone. */
     const quick = join(dir, 'quick.mov');
     const own = join(dir, 'own.mov');
     const moving = ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=64x36:r=30:d=1,format=rgba'];
     execFileSync('ffmpeg', [...moving, '-c:v', 'png', '-compression_level', '1', '-pred', 'sub', quick]);
     execFileSync('ffmpeg', [...moving, '-c:v', 'png', own]);
     const quickBefore = decoded(quick);
-    await keepChanges(quick, new AbortController().signal);
-    assert.equal(frameCount(quick), 30);
-    assert.deepEqual(decoded(quick), quickBefore, 'the same pixels at the same time');
     const packets = (f) => execFileSync('ffmpeg', ['-v', 'error', '-i', f, '-map', '0:v:0', '-c', 'copy', '-f', 'framemd5', '-']).toString().split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(',').pop());
-    assert.deepEqual(packets(quick), packets(own), 'written as ffmpeg writes a PNG');
+    const quickPackets = packets(quick);
+    await keepChanges(quick, new AbortController().signal);
+    const quickKept = quickPackets.filter((s, i) => i === 0 || i === quickPackets.length - 1 || s !== quickPackets[i - 1]);
+    assert.equal(frameCount(quick), quickKept.length);
+    assert.deepEqual(decoded(quick), quickBefore, 'the same pixels at the same time');
+    assert.deepEqual(packets(quick), quickKept, 'no second PNG encoding');
+    const mostly = join(dir, 'mostly.mov');
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=32x32:r=24:d=1,fps=30,format=rgba', '-c:v', 'png', mostly]);
+    const mostlyBefore = decoded(mostly);
+    await keepChanges(mostly, new AbortController().signal);
+    assert.ok(frameCount(mostly) < mostlyBefore.length, 'duplicates removed even when most frames change');
+    assert.deepEqual(decoded(mostly), mostlyBefore);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('RLE thinning removes only no-op updates and preserves one-level shadows, keyframes, sound and the final hold', ffmpeg, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-rle-holds-'));
+  try {
+    const file = join(dir, 'page.mov');
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=black@0:s=64x64:r=25:d=3,format=rgba,drawbox=x=3:y=5:w=1:h=1:color=0x01020301:t=fill:replace=1:enable=gte(n\\,45)',
+      '-f', 'lavfi', '-i', 'sine=frequency=330:sample_rate=48000:duration=3', '-c:v', 'qtrle', '-pix_fmt', 'argb', '-g', '25', '-c:a', 'pcm_s16le', file]);
+    const hashes = () => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vf', 'fps=25,format=rgba', '-f', 'framemd5', '-']).toString()
+      .split('\n').filter((s) => s && !s.startsWith('#')).map((s) => s.split(',').at(-1));
+    const audio = () => execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:a:0', '-f', 'hash', '-hash', 'sha256', '-']).toString();
+    const before = hashes(), sound = audio();
+    const result = await keepChanges(file, new AbortController().signal, 'qtrle');
+    assert.deepEqual(result, { frames: 75, kept: 5 });
+    assert.deepEqual(hashes(), before);
+    assert.equal(audio(), sound);
+    const pts = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time,duration_time', '-of', 'json', file])).packets;
+    assert.deepEqual(pts.map((p) => Number(p.pts_time)), [0, 1, 1.8, 2, 2.96]);
+    assert.equal(Number(pts.at(-1).duration_time), 0.04);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('opaque footage with neutral static classes reuses original media; unknown CSS and effects still render', ffmpeg, async () => {
+  const dir = join(scratch, 'Plain class footage'); mkdirSync(dir, { recursive: true });
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=168x90:r=25:d=2', '-c:v', 'libx264', join(dir, 'source.mp4')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 162, h: 90 }, tracks: [{ clips: [
+    { id: 'plain', src: 'source.mp4', at: 0, time: [0, 1], class: 'fill' },
+    { id: 'rounded', src: 'source.mp4', at: 1, time: [0, 1], class: 'round' },
+  ] }] }).replace('</head>', '<style>.fill{object-fit:cover;background:#000}.round{border-radius:20px}</style></head>'));
+  const drafts = join(scratch, 'Class footage drafts'); mkdirSync(drafts, { recursive: true });
+  const exports = createExports({ captions: subtitles, drafts: () => drafts });
+  const done = await ended(exports, exports.start(project('Class footage', dir), { kind: 'nle', format: 'jianying', fps: 25, subtitles: false }));
+  assert.equal(done.status, 'done', done.error);
+  const folder = dirname(done.out), info = JSON.parse(readFileSync(done.out, 'utf8'));
+  assert.deepEqual(readFileSync(join(folder, 'media', 'source.mp4')), readFileSync(join(dir, 'source.mp4')), 'the complete source is copied byte for byte');
+  assert.ok(!existsSync(join(folder, 'media', 'plain.mov')), 'no second encode for an unchanged opaque source');
+  assert.ok(existsSync(join(folder, 'media', 'rounded.mov')), 'rounded edges remain rendered');
+  const material = info.materials.videos.find((v) => v.path.endsWith('/source.mp4'));
+  const segment = info.tracks.flatMap((t) => t.segments).find((s) => s.material_id === material.id);
+  assert.deepEqual(segment.source_timerange, { start: 0, duration: 1_000_000 });
+  assert.equal(material.width, 168);
+  assert.ok(Math.abs(segment.clip.scale.x * (162 / 168) - 1) < 1e-12, 'cover retains the original pixel scale without rounding its reciprocal fit');
 });
 
 test('burned-in subtitles: drawn over the frame, bars included; a subtitle file beside the video', ffmpeg, async () => {

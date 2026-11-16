@@ -76,7 +76,7 @@ test('the library lists files of any kind and folders as a project\'s media, a b
   writeFileSync(join(saved, 'notes.pdf'), 'pdf');
   writeFileSync(join(saved, '.DS_Store'), 'x');
   await saveClip(root, 'title', { name: 'Lower third', durationMs: 2000, w: 400, h: 200, into: 'saved/Logos' });
-  const { files, folders, pages } = await listLibrary();
+  const { files, folders, pages } = await listLibrary({ recursive: true });
   assert.deepEqual(folders, ['saved/Logos']);
   assert.deepEqual(pages, []);
   assert.deepEqual(files.map((f) => [f.path, f.kind]), [['saved/Logos/acme.svg', 'image'], ['saved/Logos/Lower third', 'page'], ['saved/notes.pdf', 'other']]);
@@ -87,7 +87,7 @@ test('the library lists files of any kind and folders as a project\'s media, a b
   });
   /* a clip of a video or a sound: its file, which the pane plays and pictures (its waveform) as the file itself */
   await saveClip(root, 'v', { name: 'Shot' });
-  const shot = (await listLibrary()).files.find((f) => f.path === 'saved/Shot');
+  const shot = (await listLibrary({ recursive: true })).files.find((f) => f.path === 'saved/Shot');
   assert.equal(shot?.kind, 'video');
   assert.equal(/** @type {any} */ (shot?.saved)?.file, 'saved/Shot/files/assets/v.mp4');
 });
@@ -139,7 +139,7 @@ test('clips saved together keep their tracks and times from the first, and the l
     [1, 6, 'saved/Opener/assets/v.mp4', null],
     [2, 0, 'saved/Opener/assets/v.mp4', 'L'],
   ]);
-  const listed = (await listLibrary()).files.find((f) => f.path === path);
+  const listed = (await listLibrary({ recursive: true })).files.find((f) => f.path === path);
   assert.deepEqual([listed?.kind, listed?.saved?.kind, listed?.saved?.count], ['page', 'group', 4]);
   await assert.rejects(saveGroup(root, ['title', 'gone']), /not all in the film/);
 });
@@ -152,14 +152,18 @@ test('a file or folder linked into the library is listed and read where it is ke
   const lib = await libraryRoot();
   mkdirSync(join(lib, 'Shoots'));
   assert.deepEqual(await bringIn(lib, 'Shoots', [join(away, 'Footage'), join(away, 'cover.png')], 'link', { anywhere: true }), ['Shoots/Footage', 'Shoots/cover.png']);
-  const { files, folders, links } = await listLibrary();
+  const outer = await listLibrary({ recursive: true });
+  const opened = await listLibrary({ at: 'saved/Shoots/Footage/day 1' });
+  const files = [...outer.files, ...opened.files];
+  const folders = [...outer.folders, 'saved/Shoots/Footage/day 1'];
+  const links = outer.links;
   assert.deepEqual(folders, ['saved/Shoots', 'saved/Shoots/Footage', 'saved/Shoots/Footage/day 1']);
   assert.deepEqual(files.map((f) => [f.path, f.size]), [['saved/Shoots/cover.png', 3], ['saved/Shoots/Footage/day 1/a.mp4', 3]]);
   assert.deepEqual(Object.keys(links).sort(), ['saved/Shoots/Footage', 'saved/Shoots/cover.png']);
   assert.equal(readFileSync(readable(lib, 'Shoots/Footage/day 1/a.mp4'), 'utf8'), 'mp4');
   /* a link the person did not make leads nowhere it may be read */
   symlinkSync(tmpdir(), join(lib, 'Shoots', 'stray'));
-  assert.equal((await listLibrary()).links['saved/Shoots/stray'].missing, true);
+  assert.equal((await listLibrary({ recursive: true })).links['saved/Shoots/stray'].missing, true);
   assert.throws(() => readable(lib, 'Shoots/stray'));
   const other = mkdtempSync(join(tmpdir(), 'of-saved-other-'));
   const taken = await takeSaved(other, 'saved/Shoots/Footage/day 1/a.mp4');

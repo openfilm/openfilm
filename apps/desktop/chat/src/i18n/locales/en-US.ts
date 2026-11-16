@@ -227,6 +227,7 @@ export const enUS = {
   },
   project: {
     assets: 'Assets',
+    backToChat: 'Back to chat',
     addAttachment: 'Add files',
     plugins: 'Community',
     close: 'Close',

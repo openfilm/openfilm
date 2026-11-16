@@ -226,6 +226,7 @@ export const ja: Words = {
   },
   project: {
     assets: '素材',
+    backToChat: 'チャットに戻る',
     addAttachment: 'ファイルを追加',
     plugins: 'コミュニティ',
     close: '閉じる',

@@ -39,10 +39,12 @@
  * or, when the run was asked to hand results off (`RunContext.handOff`), the web address it can be fetched from without
  * any key, for whoever ran it to fetch (`type`, its media type, when known).
  * @typedef {{
- *   files: ({ path: string, bytes: Uint8Array } | { path: string, url: string, type?: string })[],
+ *   files: ({ path: string, bytes: Uint8Array } | { path: string, url: string, type?: string } | {path:string,commit:(target:string)=>Promise<void>})[],
  *   index: IndexRow[],
  *   receipt: Record<string, unknown>,
  *   cost?: { note?: string },
+ *   complete?: () => Promise<void>,
+ *   cleanup?: () => Promise<void>,
  * }} RunResult
  */
 
@@ -75,6 +77,9 @@
  *   read: (path: string) => Promise<Uint8Array>,
  *   link?: (path: string) => Promise<string>,
  *   handOff?: boolean,
+ *   keep?: (path: string, response: Response) => Promise<{ path: string, url: string, type?: string, bytes: number }>,
+ *   openInput?: (path:string) => Promise<{size:number,version:string,stream:()=>ReadableStream,verify?:()=>Promise<void>,dispose?:()=>Promise<void>}>,
+ *   fresh?: boolean,
  * }} RunContext
  */
 

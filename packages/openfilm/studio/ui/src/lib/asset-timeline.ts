@@ -50,7 +50,8 @@ function isEndless(file: { path: string; kind: string; endless?: boolean }): boo
 }
 
 /** The length a dropped clip is drawn and written with. */
-export function dropDurMsOf(file: { path: string; kind: string; durationMs?: number; endless?: boolean }): number {
+export function dropDurMsOf(file: { path: string; kind: string; durationMs?: number; endless?: boolean; range?: ResourceDragItem['range'] }): number {
+  if (file.range && file.range.outMs > file.range.inMs && !isEndless(file)) return file.range.outMs - file.range.inMs;
   if (file.durationMs && file.durationMs > 0) return Math.max(MIN_BLOCK_MS, file.durationMs);
   /* for a still this is the `time` written, so preview, placeholder and film.html share it — or the clip would change
      length once written */
@@ -97,7 +98,7 @@ export function assetPageFit(
  * canvas gets a box in its own shape (assetFitBox), a page without a size of its own its size and box (assetPageFit).
  */
 export function assetClipElement(
-  file: Pick<ResourceDragItem, 'path' | 'kind' | 'endless' | 'reflows'> & { w?: number | undefined; h?: number | undefined },
+  file: Pick<ResourceDragItem, 'path' | 'kind' | 'endless' | 'reflows' | 'range'> & { w?: number | undefined; h?: number | undefined },
   stage?: StageSize | null,
 ): Record<string, unknown> | null {
   const kind = assetClipKindOf(file);
@@ -108,6 +109,7 @@ export function assetClipElement(
   return {
     src,
     ...(isEndless(file) ? { time: [0, STILL_DROP_MS / 1000] } : {}),
+    ...(file.range && file.range.outMs > file.range.inMs && !isEndless(file) ? { time: [file.range.inMs / 1000, file.range.outMs / 1000] } : {}),
     ...(box ? { box } : {}),
     ...(page ? { box: page.box, size: page.size } : {}),
   };
@@ -196,7 +198,7 @@ function ownKindSpot(
 }
 
 export function assetDropSpot(
-  file: Pick<ResourceDragItem, 'path' | 'kind' | 'durationMs' | 'saved'>,
+  file: Pick<ResourceDragItem, 'path' | 'kind' | 'range' | 'durationMs' | 'saved'>,
   tracks: readonly TimelineTrack[],
   hit: AssetLaneHit | null,
   atMs: number,
@@ -273,7 +275,7 @@ export type AssetDropPlan =
  * answer, no track is named and the insert finds one of the kind.
  */
 export function assetDropInsert(
-  file: Pick<ResourceDragItem, 'path' | 'kind' | 'endless' | 'reflows' | 'w' | 'h'>,
+  file: Pick<ResourceDragItem, 'path' | 'kind' | 'range' | 'endless' | 'reflows' | 'w' | 'h'>,
   tracks: readonly TimelineTrack[],
   target: AssetDropTarget,
   atMs: number,
@@ -303,7 +305,7 @@ export type AssetRunInsert = { element: Record<string, unknown>; at: number; dur
  * document) are left out; none left is `not-clip`.
  */
 export function assetRunInsert(
-  files: readonly Pick<ResourceDragItem, 'path' | 'kind' | 'durationMs' | 'endless' | 'reflows' | 'w' | 'h'>[],
+  files: readonly Pick<ResourceDragItem, 'path' | 'kind' | 'range' | 'durationMs' | 'endless' | 'reflows' | 'w' | 'h'>[],
   tracks: readonly TimelineTrack[],
   hit: AssetLaneHit | null,
   atMs: number,
@@ -341,7 +343,7 @@ export function soundLaneHit(tracks: readonly TimelineTrack[], atMs: number, dur
 }
 
 /** The length a run of dropped files is drawn and written with, end to end. */
-export function assetRunMs(files: readonly Pick<ResourceDragItem, 'path' | 'kind' | 'durationMs' | 'endless'>[]): number {
+export function assetRunMs(files: readonly Pick<ResourceDragItem, 'path' | 'kind' | 'range' | 'durationMs' | 'endless'>[]): number {
   return files.reduce((sum, f) => sum + (assetClipElement(f) ? dropDurMsOf(f) : 0), 0);
 }
 
@@ -369,7 +371,7 @@ export type AssetDropPreview = {
 };
 
 export function assetDropPreview(
-  file: Pick<ResourceDragItem, 'path' | 'kind' | 'name' | 'durationMs' | 'saved' | 'words'>,
+  file: Pick<ResourceDragItem, 'path' | 'kind' | 'name' | 'range' | 'durationMs' | 'saved' | 'words'>,
   tracks: readonly TimelineTrack[],
   hit: AssetLaneHit | null,
   atMs: number,
@@ -425,7 +427,7 @@ export interface PendingDrop {
 
 /** How the clip is drawn from the moment it is dropped. */
 export function pendingDropOf(
-  file: Pick<ResourceDragItem, 'path' | 'kind' | 'name' | 'durationMs'>,
+  file: Pick<ResourceDragItem, 'path' | 'kind' | 'name' | 'range' | 'durationMs'>,
   target: AssetDropTarget,
   atMs: number,
 ): PendingDrop | null {

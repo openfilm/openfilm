@@ -335,21 +335,27 @@ async function video(args, ctx) {
     await sleep(polling.ms, ctx.signal);
     state = /** @type {any} */ (await (await call(NAME, pollUrl, { headers: auth(ctx) }, ctx)).json());
   }
-  const fileUrl = ownAddress(NAME, text(state.unsigned_urls?.[0]) || `${root}/api/v1/videos/${encodeURIComponent(job.id)}/content?index=0`, root);
-  const { bytes } = await download(NAME, fileUrl, ctx, { headers: auth(ctx) });
+  const signed = text(state.urls?.[0]);
+  let bytes = null, file;
+  if (ctx.handOff && signed) file = { path, url: signed, type: 'video/mp4' };
+  else {
+    const address = ownAddress(NAME, text(state.unsigned_urls?.[0]) || `${root}/api/v1/videos/${encodeURIComponent(job.id)}/content?index=0`, root);
+    if (ctx.handOff && ctx.keep) file = await ctx.keep(path, await call(NAME, address, { headers: auth(ctx) }, ctx));
+    else { bytes = (await download(NAME, address, ctx, { headers: auth(ctx) })).bytes; file = { path, bytes }; }
+  }
   /* its length and size as made, when the file says (a continued clip may come back longer than asked) */
-  const facts = mp4Facts(bytes);
-  const dur = facts?.seconds ?? seconds;
+  const facts = bytes ? mp4Facts(bytes) : null;
+  const dur = facts?.seconds ?? number(state.duration) ?? seconds;
   const size = facts?.w && facts.h ? { w: facts.w, h: facts.h } : {};
   const hasAudio = !spec.silent;
   return {
-    files: [{ path, bytes }],
+    files: [file],
     index: [{ src: path, kind: 'video', ...size, dur, hasAudio, from: {
       mode: 'generate', prompt, provider: 'openrouter', model, resolution, sec: dur,
       ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length && !frames.length ? { refs } : {}),
       ...(voices.length > 1 ? { voices } : voice ? { voice } : {}), ...(clips.length > 1 ? { clips } : clip ? { clip } : {}),
     } }],
-    receipt: { provider: 'openrouter', model, src: path, dur, ...(size.w ? { width: size.w, height: size.h } : {}), hasAudio, resolution,
+    receipt: { provider: 'openrouter', model, src: path, dur, taskId: job.id, ...(size.w ? { width: size.w, height: size.h } : {}), hasAudio, resolution,
       ...(spec.referenceInputSeconds && clip ? {
         referenceSeconds: number(state.input_video_duration ?? job.input_video_duration)
           ?? Math.min(durations.every((n) => n !== null) ? totalClipSeconds : spec.referenceInputSeconds, spec.referenceInputSeconds),
@@ -357,4 +363,13 @@ async function video(args, ctx) {
       ...reported(state.usage), ...notes(said) },
     cost: billedBy(NAME),
   };
+}
+
+/** Renew a stored video's signed URL by polling its existing job; never submit a generation. */
+/** @param {any} receipt @param {RunContext} ctx */
+export async function renewResult(receipt, ctx) {
+  if (typeof receipt?.taskId !== 'string') return null;
+  const state = await (await call(NAME, `${base()}/api/v1/videos/${encodeURIComponent(receipt.taskId)}`, { headers: auth(ctx) }, ctx)).json();
+  const url = text(state.urls?.[0]);
+  return url ? { path: receipt.src, url, type: 'video/mp4' } : null;
 }

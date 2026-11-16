@@ -17,7 +17,6 @@ import { api, ApiError, type ProjectFilm } from '@/api';
 import { useT } from '@/i18n';
 import { readCanvasDoc } from '@/lib/canvas';
 import { studioHost } from '@/lib/host';
-import { useKeyHint } from '@/lib/keymap-store';
 import { leaveProject, openProject } from '@/lib/navigate';
 import { AppMenu } from '@/components/AppMenu';
 import { DesktopDialog } from '@/components/DesktopDialog';
@@ -35,6 +34,7 @@ import { UpdateButton, WebUpdateButton } from '@/components/UpdateButton';
 import { commandTo, topBarTools } from '@/studio/hub';
 import type { useProjectFrame } from './ProjectFrame';
 import { useWiring } from './frame';
+import { RESOURCE_CENTER_EVENT } from '@/lib/asset-library';
 import { useHistoryWindow } from './history';
 import { LayoutMenu } from './layout';
 
@@ -52,7 +52,12 @@ export function usePageWindows(loaded: ProjectFilm | null) {
   React.useEffect(() => studioHost?.tabs?.onPick(() => setProjectsOpen(true)), []);
   React.useEffect(() => { if (title) studioHost?.tabs?.report({ title }); }, [title]);
   /* the projects window: closed, open on the projects (true), or on the examples (and one example's page) */
-  const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string }>(false);
+  const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string; assets?: boolean }>(false);
+  React.useEffect(() => {
+    const show = () => setProjectsOpen({ assets: true });
+    window.addEventListener(RESOURCE_CENTER_EVENT, show);
+    return () => window.removeEventListener(RESOURCE_CENTER_EVENT, show);
+  }, []);
   const [settingsOpen, setSettingsOpen] = useSettings();
   const [desktopOpen, setDesktopOpen] = React.useState(false);
   return { title, projectsOpen, setProjectsOpen, settingsOpen, setSettingsOpen, desktopOpen, setDesktopOpen };
@@ -67,7 +72,6 @@ export function TopBar({ frame }: { frame: ReturnType<typeof useProjectFrame> })
 
 function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loaded: ProjectFilm }) {
   const t = useT();
-  const keyHint = useKeyHint();
   const bar = useWiring('topBar')?.topBar;
   const {
     projectId, setLoaded, toast, reveal, title, setProjectsOpen, setSettingsOpen, desktopOpen, setDesktopOpen,
@@ -141,7 +145,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
         <PluginTools />
         {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
         {pickBench ? <ModeSwitcher now={surface ?? (canvasOpen ? 'canvas' : 'edit')} plugins={benchPlugins} onPick={showWorkbench} disabled={layoutEditing} />
-          : canToggleCanvas ? <Tooltip label={[t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas'), keyHint('work-mode')].filter(Boolean).join(' · ')} side="bottom">
+          : canToggleCanvas ? <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} action="work-mode" side="bottom">
           <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} disabled={layoutEditing} onClick={() => setCanvasOpen(!canvasOpen)}
             className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
             {canvasOpen ? <Workflow size={14} /> : <Scissors size={14} />}
@@ -177,12 +181,14 @@ function PluginTools() {
 /** The projects window and Settings: over the page, before the library's pane. */
 export function PageWindows({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
   const t = useT();
+  const library = useWiring('library')?.library;
   const { projectId, loaded, failure, toast, projectsOpen, setProjectsOpen, settingsOpen, setSettingsOpen, setCanvasOpen } = frame;
   if (!loaded || failure) return null;
   return (
     <>
       <ProjectsPopover open={projectsOpen !== false} currentProjectId={projectId}
-        {...(typeof projectsOpen === 'object' ? { examples: projectsOpen } : {})}
+        {...(typeof projectsOpen === 'object' ? projectsOpen.assets ? { assets: true } : { examples: projectsOpen } : {})}
+        {...(library ? { onInsertAsset: (file: import('@/lib/workspace-resources').WorkspaceResource) => { library.add(file, true); setProjectsOpen(false); } } : {})}
         onOpen={(id) => { if (!studioHost?.tabs) setProjectsOpen(false); openProject(id); }} onCurrentRemoved={leaveProject} onClose={() => setProjectsOpen(false)}
         onUseCanvas={(example) => {
           setProjectsOpen(false);

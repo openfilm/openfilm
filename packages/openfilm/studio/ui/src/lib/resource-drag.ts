@@ -28,6 +28,8 @@ export interface ResourceDragItem {
   mtimeMs?: number;
   /** Probed media length; without it a drop is drawn and written with a default length. */
   durationMs?: number;
+  /** The source viewer's marked part, in source milliseconds. */
+  range?: { inMs: number; outMs: number };
   /** A web page without a duration (no end): written with a length of its own, as a still. */
   endless?: boolean;
   /** A web page that sets no size of its own (its `w` × `h` is the size it is shown at alone). */
@@ -159,6 +161,10 @@ function normalizeResourceDragItem(value: unknown): ResourceDragItem | null {
   const w = num(item.w);
   const h = num(item.h);
   const fps = num(item.fps);
+  const range = item.range;
+  const outMs = range && typeof range.outMs === 'number' ? Math.min(range.outMs, durationMs ?? Infinity) : NaN;
+  const marked = range && Number.isFinite(range.inMs) && range.inMs >= 0 && Number.isFinite(outMs) && outMs > range.inMs
+    ? { inMs: range.inMs, outMs } : undefined;
   return {
     path: item.path,
     name: typeof item.name === 'string' && item.name ? item.name : item.path.slice(item.path.lastIndexOf('/') + 1),
@@ -167,6 +173,7 @@ function normalizeResourceDragItem(value: unknown): ResourceDragItem | null {
     size: typeof item.size === 'number' && Number.isFinite(item.size) ? item.size : 0,
     mtimeMs: typeof item.mtimeMs === 'number' && Number.isFinite(item.mtimeMs) ? item.mtimeMs : 0,
     ...(durationMs === undefined ? {} : { durationMs }),
+    ...(marked ? { range: marked } : {}),
     ...(item.endless === true ? { endless: true } : {}),
     ...(item.reflows === true ? { reflows: true } : {}),
     ...(w === undefined ? {} : { w }),

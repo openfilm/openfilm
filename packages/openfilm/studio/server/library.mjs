@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { communityCatalog, communityReady, fetchCommunity, isCommunity, refreshCommunity } from './community-library.mjs';
 import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
 import { SKILL_UID } from '../../src/skills.mjs';
+import { ownVoiceKeys } from './voice-store.mjs';
 
 export { refreshCommunity };
 
@@ -107,15 +108,31 @@ function fetchFile(rel) {
 
 /** One file of the published library into the cache: whole or not at all. */
 async function downloadFile(/** @type {string} */ rel) {
+  /* Doubao's official previews use the same local player/cache as the published library. Keep their verified
+     public source in the catalog so a new release works before its previews have been mirrored to our host. */
+  const source = officialVoiceSample(rel);
   /* a model is a hundred megabytes: time for a slow line */
-  const res = await fetch(`${libraryHost()}/${rel.split('/').map(encodeURIComponent).join('/')}`, { signal: AbortSignal.timeout(rel.startsWith('models/') ? 30 * 60_000 : 60_000) });
+  const res = await fetch(source ?? `${libraryHost()}/${rel.split('/').map(encodeURIComponent).join('/')}`, {
+    signal: AbortSignal.timeout(rel.startsWith('models/') ? 30 * 60_000 : 60_000), ...(source ? { redirect: 'error' } : {}),
+  });
   if (!res.ok) throw new Error(`the library's ${rel} came back ${res.status}`);
+  if (source && (!/^audio\//i.test(res.headers.get('content-type') ?? '') || Number(res.headers.get('content-length') ?? 0) > (20 << 20))) throw new Error('The voice service returned no playable sample.');
   const at = inside(libraryCache(), rel);
   await mkdir(dirname(at), { recursive: true });
   const part = `${at}.part-${process.pid}`;
   /* written as it comes: how far a model is can be read off its size (local-models.mjs) */
   try {
-    await pipeline(Readable.fromWeb(/** @type {import('node:stream/web').ReadableStream} */ (res.body)), createWriteStream(part));
+    const stream = Readable.fromWeb(/** @type {import('node:stream/web').ReadableStream} */ (res.body));
+    if (source) {
+      let size = 0;
+      await pipeline(stream, async function* (chunks) {
+        for await (const chunk of chunks) {
+          size += chunk.length;
+          if (size > (20 << 20)) throw new Error('The voice sample exceeded 20 MB.');
+          yield chunk;
+        }
+      }, createWriteStream(part));
+    } else await pipeline(stream, createWriteStream(part));
   } catch (e) {
     await rm(part, { force: true });
     throw e;
@@ -292,6 +309,18 @@ function addedIds(/** @type {unknown} */ ids) {
 /** The voices as library/voices.json has them: the services (each with its voice-over models) and their voices. */
 export const libraryVoices = () => read('voices.json', { version: 1, providers: [], voices: [] });
 
+/** Only an indexed public recording on the provider's own CDN, never an arbitrary URL supplied by the page. */
+function officialVoiceSample(/** @type {string} */ rel) {
+  if (!rel.startsWith('voices/doubao/')) return null;
+  const voice = /** @type {{ voices: { provider: string, sample?: string, sampleSource?: string }[] }} */ (libraryVoices()).voices.find((v) => v.provider === 'doubao' && v.sample === rel);
+  if (!voice?.sampleSource) return null;
+  try {
+    const url = new URL(voice.sampleSource);
+    return url.protocol === 'https:' && url.hostname === 'lf3-static.bytednsdoc.com' && !url.username && !url.password
+      && url.pathname.startsWith('/obj/eden-cn/lm_hz_ihsph/ljhwZthlaukjlkulzlp/portal/bigtts/') ? url.href : null;
+  } catch { return null; }
+}
+
 /** A voice's id among the starred things: `voice:<service>/<its id there>`. */
 export const voiceKey = (/** @type {{ provider: string, id: string }} */ v) => `voice:${v.provider}/${v.id}`;
 
@@ -300,6 +329,7 @@ function starrable() {
   return new Set([
     ...(/** @type {{ items: { id: string }[] }} */ (libraryIndex())).items.map((item) => item.id),
     ...(/** @type {{ voices: { provider: string, id: string }[] }} */ (libraryVoices())).voices.map(voiceKey),
+    ...ownVoiceKeys(),
     ...(/** @type {{ packs: { id: string }[] }} */ (libraryIndex())).packs.map((p) => `pack:${p.id}`),
   ]);
 }

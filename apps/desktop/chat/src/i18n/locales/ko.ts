@@ -222,6 +222,7 @@ export const ko: Words = {
   },
   project: {
     assets: '에셋',
+    backToChat: '채팅으로 돌아가기',
     addAttachment: '파일 추가',
     plugins: '커뮤니티',
     close: '닫기',

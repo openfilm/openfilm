@@ -2,6 +2,7 @@
 /** Doubao recorded-speech recognition with the person's Volcengine Speech API key. */
 import { randomUUID } from 'node:crypto';
 import { billedBy, needed, noBalance, serviceUrl } from './common.mjs';
+import { DOUBAO_TTS_MODELS, DOUBAO_VOICES, doubaoTts } from './doubao-tts.mjs';
 
 const NAME = 'Doubao';
 const MODEL = 'volc.bigasr.auc_turbo';
@@ -34,12 +35,14 @@ export function doubaoResult(body, status) {
 
 /** @type {import('./contract.mjs').Provider} */
 export default {
-  id: 'doubao', name: NAME, env: 'DOUBAO_ASR_API_KEY', speechFormat: 'mp3',
+  id: 'doubao', name: NAME, env: 'DOUBAO_SPEECH_API_KEY', speechFormat: 'mp3',
   keysUrl: 'https://console.volcengine.com/speech/app',
   billingUrl: 'https://console.volcengine.com/finance/overview/',
   pricingUrl: 'https://docs.volcengine.com/docs/doubao-voice/billing-instructions',
-  verbs: ['asr'], models: { asr: [{ id: MODEL, name: MODEL }] },
+  verbs: ['voice', 'tts', 'asr'], models: { tts: DOUBAO_TTS_MODELS, asr: [{ id: MODEL, name: MODEL }] },
   async run(verb, args, ctx) {
+    if (verb === 'tts') return doubaoTts(args, ctx);
+    if (verb === 'voice') return { files: [], index: [], receipt: { provider: 'doubao', voices: DOUBAO_VOICES.map((v) => ({ voiceId: v.id, name: v.name, language: v.language, gender: v.gender, description: v.description })) } };
     if (verb !== 'asr') throw new Error(`${NAME} does not do ${verb}.`);
     const src = needed(args, 'src');
     const bytes = Buffer.from(await ctx.read(src));

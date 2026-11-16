@@ -797,15 +797,19 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     }
     const request = makeRequest(node as MakingNode, inputs, makeName(node as MakingNode), spec);
     if (!String(request.args.prompt ?? request.args.text).trim()) { runErrors.set(`${projectId}/${id}`, t('canvas.make.noWords')); runsChanged(); return Promise.resolve(false); }
-    const pick = node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
+    const pick = choice?.via === 'openfilm' ? {via:choice.via,...(choice.model ? {model:choice.model} : {})}
+      : node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
     const say = { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') };
+    const account = providers?.providers.find(provider=>provider.id==='openfilm');
+    let resumed = false;
+    const recovery = choice?.via === 'openfilm' ? {scope:JSON.stringify([account?.account ?? '',account?.last4 ?? '']),onResumed:()=>{resumed=true;}} : undefined;
     /* two or four at once: one after another, each a version of its own (a clip asked again is made anew) */
     const count = node.opts?.count ?? 1;
     /* how long it took, kept to measure the progress of the next run with this model */
     const timed = async (run: ReturnType<typeof makeRequest>) => {
       const started = Date.now();
-      const ok = await startRun(projectId, folder, id, run, pick, inputsKey(node, inputs), say, boardId);
-      if (ok && choice) keepModelTime(choice.via, choice.model, (Date.now() - started) / 1000);
+      const ok = await startRun(projectId, folder, id, run, pick, inputsKey(node, inputs), say, boardId, recovery);
+      if (ok && choice && !resumed) keepModelTime(choice.via, choice.model, (Date.now() - started) / 1000);
       return ok;
     };
     if (count < 2) return timed(request);
@@ -816,7 +820,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
         if (node.make === 'video') again.args.force = 'true';
         const ok = await timed(again);
         made ||= ok;
-        if (!ok) break;
+        if (!ok || resumed) break;
       }
       return made;
     })();

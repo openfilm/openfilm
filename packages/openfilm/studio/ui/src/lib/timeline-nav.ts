@@ -112,16 +112,29 @@ export function planNudge(model: EditModel, ids: readonly string[], frames: numb
   return plan?.ops.length ? plan : null;
 }
 
-/** Overwrite on the next visible track at the same time, including when the main-track magnet is on. */
+/** Move a selection one visible film track in either direction, at the same time, as one overwrite/undo. */
+export function planOverwriteTrack(model: EditModel, tracks: readonly TimelineTrack[], ids: readonly string[], dir: -1 | 1): EditPlan | null {
+  const rows = [...new Map(tracks.filter((row) => row.docIndex != null && !row.folded).map((row) => [row.docIndex!, row])).values()];
+  const moving = [...new Set(ids)];
+  const to = new Map<string, number>();
+  for (const id of moving) {
+    const from = model.find((track) => track.clips.some((clip) => clip.id === id));
+    if (!from || from.locked || from.captions) return null;
+    const at = rows.findIndex((row) => row.docIndex === from.index);
+    const target = at < 0 ? undefined : rows[at + dir];
+    if (!target || target.docIndex == null || target.locked || target.captions || target.incomplete
+        || (target.role === 'audio') !== (from.role === 'audio')) return null;
+    if (tracks.some((row) => (row.docIndex === from.index || row.docIndex === target.docIndex) && row.blocks.some((block) => block.noLength))) return null;
+    to.set(id, target.docIndex);
+  }
+  if (!moving.length) return null;
+  const lead = model.flatMap((track) => track.clips).find((clip) => clip.id === moving[0])!;
+  return planMove(model, { ids: moving, to, mode: 'overwrite', deltaMs: 0, pointerMs: lead.startMs });
+}
+
+/** Kept for callers moving a single clip down. */
 export function planOverwriteDown(model: EditModel, tracks: readonly TimelineTrack[], id: string): EditPlan | null {
-  const from = model.find((track) => track.clips.some((clip) => clip.id === id));
-  if (!from || from.locked || from.captions) return null;
-  const target = tracks.find((row) => row.docIndex != null && row.docIndex > from.index && !row.folded);
-  if (!target || target.docIndex == null || target.locked || target.captions || target.incomplete
-      || (target.role === 'audio') !== (from.role === 'audio')) return null;
-  if (tracks.some((row) => row.docIndex === target.docIndex && row.blocks.some((block) => block.noLength))) return null;
-  const clip = from.clips.find((clip) => clip.id === id)!;
-  return planMove(model, { ids: [id], to: new Map([[id, target.docIndex]]), mode: 'overwrite', deltaMs: 0, pointerMs: clip.startMs });
+  return planOverwriteTrack(model, tracks, [id], 1);
 }
 
 export type ClipsOf = readonly { clips: readonly { id: string }[] }[];

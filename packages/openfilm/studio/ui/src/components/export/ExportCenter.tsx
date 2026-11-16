@@ -100,6 +100,7 @@ const WHOLE_FILM = '__film__';
 
 interface Settings {
   dest: Dest;
+  workers: number | 'auto';
   video: VideoExportSettings;
   gif: { width: number; fps: number; frame: FrameChoice; fill: FilmFrameFill; burn: boolean };
   /** `source`: a block's clip id, or the whole film. */
@@ -123,6 +124,7 @@ interface Settings {
 
 const DEFAULTS: Settings = {
   dest: 'video',
+  workers: 'auto',
   video: { ...DEFAULT_VIDEO_EXPORT },
   gif: { width: 640, fps: 15, frame: 'current', fill: 'contain', burn: true },
   alpha: { codec: 'prores4444', source: WHOLE_FILM, shortEdge: 1080, scale: 1, fps: 30, audio: true },
@@ -175,6 +177,7 @@ function loadSettings(language: string, projectFps: number): Settings {
       alpha: { ...DEFAULTS.alpha, ...raw.alpha, audio: true },
       audio: { ...DEFAULTS.audio, ...raw.audio, loudness: keptLoudness(raw.audio ? raw.audio.loudness : DELIVERY_LOUDNESS, raw.audio?.loudnessChosen === true) },
       nle,
+      workers: Number.isInteger(raw.workers) && Number(raw.workers) >= 1 && Number(raw.workers) <= 8 ? Number(raw.workers) : 'auto',
       subtitles: { ...DEFAULTS.subtitles, ...raw.subtitles },
       images,
       /* the parts besides the work start off each time (history, chat and logs are the person's own): only zip or
@@ -269,6 +272,7 @@ export function ExportCenter(props: ExportCenterProps) {
   /** the platforms offered in this language (a platform picked in another and not offered here is not exported) */
   const presets = React.useMemo(() => exportPresetsFor(language), [language]);
   const [can, setCan] = React.useState<ExportCapabilities | null>(null);
+  const [renderAuto, setRenderAuto] = React.useState<number | null>(null);
   /** 剪映 and CapCut on this computer: an editing project for one goes into its drafts */
   const [draftApps, setDraftApps] = React.useState<{ jianying: boolean; capcut: boolean }>({ jianying: false, capcut: false });
   const [s, setS] = React.useState<Settings>(DEFAULTS);
@@ -308,7 +312,7 @@ export function ExportCenter(props: ExportCenterProps) {
     setExportName(props.title);
     setNameTyped(false);
     setRange(false);
-    void listExports(props.projectId).then((r) => { setCan(r.can); setDraftApps({ jianying: Boolean(r.drafts?.jianying), capcut: Boolean(r.drafts?.capcut) }); setDefaultFolder(r.folder); setCaptionCount(r.subtitles ?? 0); setCaptionTracks(Boolean(r.captionTracks)); setProjectSizes(r.project ?? null); }).catch(() => {});
+    void listExports(props.projectId).then((r) => { setCan(r.can); setRenderAuto(r.render?.auto ?? null); setDraftApps({ jianying: Boolean(r.drafts?.jianying), capcut: Boolean(r.drafts?.capcut) }); setDefaultFolder(r.folder); setCaptionCount(r.subtitles ?? 0); setCaptionTracks(Boolean(r.captionTracks)); setProjectSizes(r.project ?? null); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -486,7 +490,9 @@ export function ExportCenter(props: ExportCenterProps) {
   /* the sound a video's size target leaves room for: none when the film is known to have none */
   const targetAudio = (r: ExportRequest) => (r.kind === 'video' && r.audio && !knownSilent ? targetAudioBps(r.codec) : 0);
   const requests = React.useMemo(() => {
-    const asked = canRange && range && parsedRanges ? applyRangeDelivery(baseRequests, parsedRanges, rangeDelivery) : baseRequests;
+    const ranged = canRange && range && parsedRanges ? applyRangeDelivery(baseRequests, parsedRanges, rangeDelivery) : baseRequests;
+    const requestedWorkers = s.workers;
+    const asked = ranged.map((r) => requestedWorkers !== 'auto' && ['video', 'gif', 'nle'].includes(r.kind) ? { ...r, workers: requestedWorkers } : r);
     if (dest !== 'video' || videoTarget !== 'size') return asked;
     /* a size is a bitrate for each file, from its own length, its peaks held to it: the file never comes out over */
     return asked.map((r) => {
@@ -495,7 +501,7 @@ export function ExportCenter(props: ExportCenterProps) {
       return { ...r, bitrate, maxrate: bitrate };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseRequests, canRange, range, parsedRanges, rangeDelivery, dest, videoTarget, s.video.targetMB, totalMs, knownSilent]);
+  }, [baseRequests, canRange, range, parsedRanges, rangeDelivery, dest, videoTarget, s.video.targetMB, s.workers, totalMs, knownSilent]);
 
   /* a range, not a size: what is in the picture decides a video's or a GIF's size (export-spec.ts); sound is exact */
   const estBytes = React.useMemo(() => requests.reduce<[number, number]>(([low, high], r) => {
@@ -695,6 +701,15 @@ export function ExportCenter(props: ExportCenterProps) {
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
             <div className="flex flex-col gap-5">
+              {['video', 'alpha', 'gif', 'nle'].includes(dest) && (
+                <Field label={t('exportCenter.workers')}>
+                  <Segmented<number | 'auto'> value={s.workers} options={[
+                    { value: 'auto', label: renderAuto == null ? t('exportCenter.workersAuto') : t('exportCenter.workersAutoCount').replace('{n}', String(renderAuto)) },
+                    ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ value: n, label: String(n) })),
+                  ]} onChange={(workers) => setS((current) => ({ ...current, workers }))} />
+                  <Hint>{t('exportCenter.workersHint')}</Hint>
+                </Field>
+              )}
               {dest === 'video' && (
                 <>
                   <Field label={t('exportCenter.videoPreset')}>
@@ -1407,7 +1422,7 @@ function Chips<V extends string | number>({ value, options, onChange }: {
   );
 }
 
-function Segmented<V extends string>({ value, options, onChange }: {
+function Segmented<V extends string | number>({ value, options, onChange }: {
   value: V;
   options: readonly { value: V; label: string }[];
   onChange: (v: V) => void;

@@ -97,6 +97,8 @@ export interface MediaListing {
   pages: readonly WorkspaceResource[];
   /** Folders that are links to media kept elsewhere (relative to the media root). */
   linkedDirs?: Readonly<Record<string, MediaLink>>;
+  scannedDirs?: readonly string[];
+  loading?: boolean;
 }
 
 /** Where the pane's pictures, sounds and pages come from. Addresses should carry the file's version (its mtime). */
@@ -176,6 +178,11 @@ export function mediaListingOf(
 ): MediaListing {
   const rel = (path: string) => (path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path);
   const dirOf = (path: string) => { const r = rel(path); return r.includes('/') ? r.slice(0, r.lastIndexOf('/')) : ''; };
+  const linkOf = (path: string): MediaLink | undefined => {
+    if (raw.links?.[path]) return raw.links[path];
+    const parent = Object.entries(raw.links ?? {}).filter(([root]) => path.startsWith(`${root}/`)).sort((a, b) => b[0].length - a[0].length)[0];
+    return parent ? { ...parent[1], to: parent[1].to + path.slice(parent[0].length) } : undefined;
+  };
   return {
     dir: root,
     /* a page put in a folder here is a page still: its poster, its preview, an mg clip */
@@ -203,7 +210,7 @@ export function mediaListingOf(
         ...(f.saved.h ? { h: f.saved.h } : {}),
       } : {}),
       ...facts?.(f.path),
-      ...(raw.links?.[f.path] ? { link: raw.links[f.path]! } : {}),
+      ...(linkOf(f.path) ? { link: linkOf(f.path)! } : {}),
     })),
     dirs: raw.folders.filter((d) => d.startsWith(`${root}/`)).map(rel),
     linkedDirs: Object.fromEntries(Object.entries(raw.links ?? {}).filter(([path]) => raw.folders.includes(path)).map(([path, link]) => [rel(path), link])),

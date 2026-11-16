@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import openrouter, { polling, videoModelSpec } from './openrouter.mjs';
+import openrouter, { polling, videoModelSpec, renewResult } from './openrouter.mjs';
 
 const KEY = 'sk-or-v1-test0123456789';
 /** A fake OpenRouter on 127.0.0.1: `reply` answers each request; `seen` keeps them. */
@@ -32,6 +32,32 @@ after(() => server.close());
 const ctx = (files = {}, model) => ({
   key: KEY, model, root: '/project', signal: new AbortController().signal, say: () => {},
   read: async (p) => { if (!(p in files)) throw new Error(`no ${p}`); return files[p]; },
+});
+
+test('signed video URLs pass through without copying; renewal polls the existing job and never sends the key to storage', async () => {
+  seen.length = 0;
+  reply = clip(1,{status:'completed',urls:['https://storage.vendor.example/signed.mp4'],unsigned_urls:['https://untrusted.example/protected'],duration:5});
+  const context = {...ctx({},'bytedance/seedance-2.5'),handOff:true};
+  const made = await openrouter.run('video',{prompt:'a drifting cloud',out:'cloud',duration:5},context);
+  assert.equal(made.files[0].url,'https://storage.vendor.example/signed.mp4');
+  assert.equal(made.files[0].bytes,undefined);
+  assert.ok(seen.every(call=>!call.url.pathname.endsWith('/content')));
+  const count = seen.filter(call=>call.method==='POST').length;
+  const renewed = await renewResult(made.receipt,context);
+  assert.equal(renewed.url,made.files[0].url);
+  assert.equal(seen.filter(call=>call.method==='POST').length,count);
+  assert.equal(seen.at(-1).url.pathname,'/api/v1/videos/v1');
+});
+
+test('protected video content stays server-side and streams to the relay when no public signed URL exists', async () => {
+  seen.length=0;reply=clip(1);
+  let staged=0;
+  const result=await openrouter.run('video',{prompt:'a cloud',out:'cloud',duration:5},{...ctx({},'bytedance/seedance-2.5'),handOff:true,
+    keep:async(path,response)=>{let size=0;for await(const chunk of response.body)size+=chunk.length;staged++;return {path,url:'https://relay.example/cloud.mp4',bytes:size,type:'video/mp4'};}});
+  assert.equal(staged,1);assert.equal(result.files[0].url,'https://relay.example/cloud.mp4');
+  const protectedGet=seen.find(call=>call.url.pathname.endsWith('/content'));
+  assert.equal(protectedGet.headers.authorization,`Bearer ${KEY}`);
+  assert.ok(!JSON.stringify(result.files).includes(KEY));
 });
 
 function png(w, h) {

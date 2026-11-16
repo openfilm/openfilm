@@ -226,6 +226,7 @@ export const es: Words = {
   },
   project: {
     assets: 'Recursos',
+    backToChat: 'Volver al chat',
     addAttachment: 'Añadir archivos',
     plugins: 'Comunidad',
     close: 'Cerrar',

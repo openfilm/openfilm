@@ -16,7 +16,7 @@ type Framing = { frame?: FilmFrameId; fill?: FilmFrameFill; burnSubtitles?: bool
  */
 export type NleAlpha = 'auto' | 'png' | 'prores' | 'prores4444';
 
-export type ExportRequest = { range?: [number, number]; ranges?: [number, number][]; label?: string; name?: string } & (
+export type ExportRequest = { range?: [number, number]; ranges?: [number, number][]; label?: string; name?: string; workers?: number } & (
   /* `bitrate`: the picture's bits a second, held on the processor, in place of `quality` (a delivery's rate or size);
      `maxrate`: its peaks (a size's are held to its bitrate) */
   | (Framing & { kind: 'video'; codec: ExportVideoCodec; shortEdge?: number; fps: number; quality?: ExportQuality; bitrate?: number; maxrate?: number; audio: boolean;
@@ -71,6 +71,12 @@ export interface ExportJob {
   draftsRefused?: string;
   /** The export stopped because the disk is full. */
   diskFull?: boolean;
+  /** The frames are drawn without a graphics chip (no driver that reaches it): the export is slow. */
+  software?: boolean;
+  /** Shared browser limit selected for an editing-project export. */
+  renderWorkers?: number;
+  /** Maximum simultaneous postprocessing tasks in an editing-project pipeline. */
+  postWorkers?: number;
   error?: string;
   /** Cancel was asked and the export is stopping (still `running` until it has). */
   cancelling?: boolean;
@@ -109,7 +115,7 @@ async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Pr
  * The project's exports, where they go by default, what this machine encodes, how many subtitle cues the film has, and
  * how big the project and its parts are.
  */
-export function listExports(projectId: string): Promise<{ exports: ExportJob[]; folder: string; can: ExportCapabilities; drafts?: { jianying: boolean; capcut: boolean }; subtitles?: number; captionTracks?: boolean; project?: ProjectSizes }> {
+export function listExports(projectId: string): Promise<{ exports: ExportJob[]; folder: string; can: ExportCapabilities; render?: { auto: number; max: number }; drafts?: { jianying: boolean; capcut: boolean }; subtitles?: number; captionTracks?: boolean; project?: ProjectSizes }> {
   return call(endpoint(projectId), { cache: 'no-store' });
 }
 

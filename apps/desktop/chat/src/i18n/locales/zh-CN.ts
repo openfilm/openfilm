@@ -226,6 +226,7 @@ export const zhCN: Words = {
   },
   project: {
     assets: '素材',
+    backToChat: '返回到对话',
     addAttachment: '添加文件',
     plugins: '社区',
     close: '关闭',

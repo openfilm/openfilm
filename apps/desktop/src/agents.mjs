@@ -753,6 +753,43 @@ export async function openAgentInstaller(id) {
   return r.ok ? { ok: true } : { ok: false, error: r.out.trim() || 'Terminal did not open.' };
 }
 
+/** An internally selected official update command, visible in the same terminal as installation/sign-in. */
+export async function openAgentUpdate(id, command) {
+  if (!AGENTS[id] || typeof command !== 'string' || !command) return { ok: false, error: 'No update command for this agent.' };
+  const dir = SIGN_IN_DIR(); mkdirSync(dir, { recursive: true });
+  const receipt = join(dir, `${randomUUID()}-update-exit`);
+  let finished = null;
+  const readCompletion = () => {
+    if (finished) return finished;
+    try {
+      const code = readFileSync(receipt, 'utf8').trim();
+      if (/^-?\d{1,10}$/.test(code)) { finished = { code: Number(code) }; unlinkSync(receipt); }
+    } catch { /* not finished */ }
+    return finished;
+  };
+  if (windows) {
+    try {
+      const child = await powerShellWindow(`${id}-update.ps1`, powerShellLine(`${AGENTS[id].label} update`, updateWithReceipt(command, receipt, { win: true })), childEnvironment({ shell: await loginShellVariables() }));
+      return { ok: true, completion: async () => readCompletion() ?? (child.exitCode !== null ? { code: null } : null) };
+    } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+  }
+  const r = await run('/usr/bin/osascript', ['-e', terminalScript(updateWithReceipt(command, receipt), { track: true })], 15_000);
+  if (!r.ok) return { ok: false, error: r.out.trim() || 'Terminal did not open.' };
+  const tty = r.stdout.trim();
+  return { ok: true, completion: async () => {
+    const done = readCompletion(); if (done) return done;
+    if (!/^\/dev\/tty[\w]+$/.test(tty)) return null;
+    const checked = await run('/usr/bin/osascript', ['-e', terminalTabOpenScript(tty)], 5000);
+    return checked.ok && checked.stdout.trim() === 'closed' ? { code: null } : null;
+  } };
+}
+
+/** Only an exit status is written, never terminal output or credentials. The visible window stays open. */
+export function updateWithReceipt(command, receipt, { win = false } = {}) {
+  if (!win) return `(\n${command}\n)\nprintf '%s' "$?" > ${shq(receipt)}`;
+  return `$openfilmUpdateExitCode = 0\r\ntry {\r\n${command}\r\n$openfilmUpdateSucceeded = $?\r\nif ($null -ne $LASTEXITCODE) { $openfilmUpdateExitCode = $LASTEXITCODE } elseif (-not $openfilmUpdateSucceeded) { $openfilmUpdateExitCode = 1 }\r\n} catch {\r\nWrite-Host $_\r\n$openfilmUpdateExitCode = 1\r\n} finally {\r\n[System.IO.File]::WriteAllText(${psq(receipt)}, [string]$openfilmUpdateExitCode)\r\n}`;
+}
+
 /**
  * The agents as they are on this machine, for the chat's picker. `setupRequired: 'code-tab'`: the Claude app is
  * here but has not downloaded Claude Code yet (opening its Code tab does). One not found: `app`, the maker's desktop

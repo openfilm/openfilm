@@ -25,7 +25,7 @@ import { EMPTY_FILM } from './film.mjs';
 import { FILM_FILE, filmHtml } from '../../src/film-doc.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { coverAt } from './cover.mjs';
-import { libraryProjects, libraryRoot } from '../../src/locations.mjs';
+import { libraryProjects, libraryRoot, savedRoot } from '../../src/locations.mjs';
 import { projectMissing } from './project-presence.mjs';
 import { compoundOuter } from './parts.mjs';
 
@@ -533,6 +533,8 @@ export async function renameProject(/** @type {string} */ id, /** @type {string}
 export async function deleteProject(/** @type {string} */ id) {
   const found = (await readState()).recent.find((r) => r.id === id);
   if (!found) throw new ProjectError('no such project', 404);
+  const canonical = (/** @type {string} */ path) => { try { return realpathSync(path); } catch { return resolve(path); } };
+  if ([libraryRoot(), savedRoot()].some(path => canonical(path) === canonical(found.path))) throw new ProjectError('Library roots cannot be deleted.', 403);
   if (!projectMissing(found.path)) await moveToTrash(found.path);
   await forgetProject(id);
 }

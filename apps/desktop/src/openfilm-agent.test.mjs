@@ -204,3 +204,40 @@ test('temporary cloud failures keep usable metadata, while an authoritative empt
   assert.deepEqual(s.agent.state().openfilm.models, []);
   await assert.rejects(s.agent.harness(), /no agent models/);
 });
+
+test('until the cloud answers it is checking, and while it cannot be reached it is offline, never "not available yet"', async () => {
+  const s = setup();
+  const seen = [];
+  const agent = createOpenFilmAgent({ dataDir: s.dataDir, readAccount: async () => ({ ...s.account }),
+    signIn() {}, cancelSignIn() {}, signOut() {}, closeSessions() {}, onChange: () => seen.push(agent.state().status) });
+  s.account.key = 'ofk-account';
+  s.account.connection = { status: 200, catalog, error: null };
+  await agent.refresh();
+  assert.deepEqual(seen, ['checking', 'ready']);
+  const fresh = createOpenFilmAgent({ dataDir: s.dataDir, readAccount: async () => ({ ...s.account }),
+    signIn() {}, cancelSignIn() {}, signOut() {}, closeSessions() {}, onChange() {} });
+  s.account.connection = { status: 0, catalog: null, error: 'OpenFilm could not be reached. Try connecting again.' };
+  await fresh.refresh();
+  assert.equal(fresh.state().status, 'offline');
+  assert.match(fresh.state().error, /could not be reached/);
+  s.account.connection = { status: 200, catalog, error: null };
+  await fresh.refresh();
+  assert.equal(fresh.state().status, 'ready');
+});
+
+test('an account that cannot be read for a moment keeps the account, its catalog and its sessions', async () => {
+  let failing = false;
+  let closed = 0;
+  const account = { key: 'ofk-account', baseUrl: 'https://openfilm.test/v1/agent', connection: { status: 200, catalog, error: null } };
+  const agent = createOpenFilmAgent({ dataDir: mkdtempSync(join(tmpdir(), 'of-account-agent-')),
+    readAccount: async () => { if (failing) throw new Error('The OpenFilm account could not be read.'); return { ...account }; },
+    signIn() {}, cancelSignIn() {}, signOut() {}, closeSessions: () => { closed++; }, onChange() {} });
+  await agent.refresh();
+  failing = true;
+  await agent.refresh();
+  assert.equal(agent.state().status, 'ready');
+  failing = false;
+  await agent.refresh();
+  assert.equal(agent.state().status, 'ready');
+  assert.equal(closed, 0);
+});

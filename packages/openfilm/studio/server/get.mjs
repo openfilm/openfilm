@@ -40,8 +40,11 @@ import { kindOf, modelFor, providerKey } from './keys.mjs';
 import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
 import { noteMade } from './media-made.mjs';
 import { addedDir } from './providers/added.mjs';
-import { mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
+import { isOutputName, mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
+import { privateVoiceForSpeech } from './voices.mjs';
+import { voiceWasUsed } from './voice-store.mjs';
+import { mediaInput } from './media-input.mjs';
 
 /**
  * @typedef {import('./http.mjs').Req} Req @typedef {import('./http.mjs').Res} Res
@@ -158,6 +161,9 @@ const makers = (verb) => {
   const names = listProviders().filter((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0] ?? 'no service here makes it yet';
 };
+/* Starting another paid take while a matching request is pending is an explicit choice. */
+for (const kind of ['tts', 'sfx', 'music', 'image', 'video', 'cutout', 'asr']) VERBS[kind].options.fresh = {};
+
 /** What is not connected here, which services make each, and where the person connects one. @param {string[]} verbs */
 const notConnected = (verbs) => `Not connected here: ${verbs.map((v) => `${v} (${makers(v)})`).join(', ')}. `
   + `Each works only once the person connects a service that makes it. ${WHERE_TO_CONNECT}`;
@@ -256,8 +262,8 @@ export async function checkArgs(root, verb, given) {
     if (args[name] === undefined && option.default !== undefined) args[name] = option.default;
     if (args[name] === undefined && option.required) throw usage(`${verb} needs ${flagHelp(name, option)}`);
   }
-  if (typeof args.out === 'string' && (!/^[\p{L}\p{N}][\p{L}\p{N}._-]{0,120}$/u.test(args.out) || /\.[a-z0-9]{2,4}$/i.test(args.out))) {
-    throw usage('--out is a simple name, without a folder or an extension (e.g. --out intro)');
+  if (args.out !== undefined && (!isOutputName(args.out) || /\.[a-z0-9]{2,4}$/i.test(args.out))) {
+    throw usage('--out is a name, without a folder or an extension, up to 120 characters valid on macOS, Windows and Linux (e.g. --out intro)');
   }
   for (const [name, option] of Object.entries(spec.options)) {
     if (!option.path || args[name] === undefined) continue;
@@ -305,6 +311,8 @@ async function projectFile(root, rel, name, want) {
  */
 export async function runGet(root, verb, given, { via, model, yes = false, ask, tell, made, signal = new AbortController().signal } = {}) {
   const args = await checkArgs(root, verb, given);
+  const fresh = args.fresh === true;
+  delete args.fresh;
   if (verb === 'call') {
     const { custom } = await providerSettings();
     const service = custom.find((s) => s.id === args.service);
@@ -317,6 +325,17 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     return show(await speechReceipt(root, 'asr', String(args.src), { skip: true, note: 'It has a transcript already, made since the file last changed (--force makes it again).' }));
   }
   const settings = await providerSettings();
+  let privateVoiceUid = '';
+  if (verb === 'tts' && typeof args.voice === 'string' && args.voice.startsWith('my:')) {
+    const voice = await privateVoiceForSpeech(args.voice, settings);
+    if (via && via !== voice.provider) throw usage('This private voice must use the service connection it belongs to.');
+    if (model && !voice.models.includes(model)) throw usage('This model does not support the selected private voice.');
+    via = voice.provider;
+    model ??= voice.models[0];
+    args.voice = voice.voiceId;
+    args.language = voice.language;
+    privateVoiceUid = voice.uid;
+  }
   /* `--via` names one: when it cannot, it says why (no such provider, not this verb, no key) */
   const provider = await chooseProvider(/** @type {Verb} */ (verb), { via: via ?? null, settings }).catch((e) => { throw usage(e.message); });
   if (!provider) {
@@ -355,7 +374,10 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     signal: clock.signal,
     say: (/** @type {string} */ line) => { said.push(line); },
     read: (/** @type {string} */ path) => readInput(root, path, verb === 'asr' && path === args.src, clock.signal, provider.speechFormat),
+    ...(provider.id === 'openfilm' ? { fresh, openInput: (/** @type {string} */ path) => mediaInput(root, path, { speech: verb === 'asr' && path === args.src, signal: clock.signal }) } : {}),
   };
+  /** @type {RunResult | undefined} */
+  let result;
   try {
     if (verb === 'video' && !yes) {
       const words = typeof args.prompt === 'string' ? args.prompt : '';
@@ -365,17 +387,21 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
       await approve({ kind: 'video', provider: provider.name, ...(named ? { model: named } : {}), seconds: from !== null ? Math.round(from) : Number(args.duration),
         ...(words ? { prompt: words.length > 200 ? `${words.slice(0, 199).trimEnd()}…` : words } : {}) });
     }
-    const result = await provider.run(/** @type {Verb} */ (verb), args, ctx);
+    result = await provider.run(/** @type {Verb} */ (verb), args, ctx);
     const files = await land(root, verb, args, result);
+    if (privateVoiceUid) await voiceWasUsed(privateVoiceUid).catch(() => {});
     /* how each was made, kept with the project (media-made.mjs): a generated file's name says nothing of it */
     const noted = await noteMade(root, { verb, args, paths: Object.keys(spec.options).filter((name) => spec.options[name].path), via: provider.id, by: provider.name,
       model: runModel, files, index: result.index });
     if (noted) made?.(root);
     const receipt = await receiptFor(root, verb, args, result.receipt);
+    await result.complete?.();
     const other = madeWith(provider, runModel, offered, settings, kind, verb);
     return [...said, show(other ? { ...receipt, madeWith: other } : receipt)].join('\n');
   } catch (e) {
-    if (clock.timedOut()) throw new GetError(`${provider.name} did not finish within ${spec.timeoutSec + 60} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
+    if (clock.timedOut()) throw new GetError(provider.id === 'openfilm'
+      ? `OpenFilm did not deliver this within ${spec.timeoutSec + 60} s. The task may already be complete and paid. Run the same command to recover its original result; use --fresh only when the person intentionally wants another paid take.`
+      : `${provider.name} did not finish within ${spec.timeoutSec + 60} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
     if (/** @type {{ code?: string, limit?: boolean }} */ (e)?.code === 'balance' && /** @type {{ limit?: boolean }} */ (e).limit) {
       throw new GetError(`This did not run: the ${provider.name} key reached the spending limit set on it. The person can raise or remove that limit where `
         + `the key was made (${provider.keysUrl}), or use another key. Nothing was made. Stop and tell them; do not run it again until they say so.`, 1, 'balance');
@@ -387,6 +413,7 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     }
     throw e;
   } finally {
+    await result?.cleanup?.();
     clock.clear();
   }
 }
@@ -523,18 +550,20 @@ async function land(root, verb, args, result) {
   const landed = [];
   for (const file of result.files ?? []) {
     /* a file handed off by its address is the service's to fetch (RunContext.handOff): Studio never asks for one */
-    if (!('bytes' in file) || !landable(file?.path) || file.path.endsWith('.vtt')) continue;
+    if ((!('bytes' in file) && !('commit' in file)) || !landable(file?.path) || file.path.endsWith('.vtt')) continue;
     const abs = join(root, file.path);
     /* a link the project brings under assets/ is not written through to wherever it leads */
     if (!(await landsInside(root, abs))) continue;
     if ((await lstat(abs).catch(() => null))?.isSymbolicLink()) await rm(abs);
     await mkdir(dirname(abs), { recursive: true });
-    await writeFile(abs, file.bytes);
+    if ('commit' in file) await file.commit(abs);
+    else if ('bytes' in file) await writeFile(abs, file.bytes);
     landed.push(file.path);
     /* a sound or video made again under its name: the old take's subtitles go (its own are written below) */
     const kind = clipKind(file.path);
     if (kind === 'sound' || kind === 'video') await dropTranscripts(root, file.path);
   }
+  if (result.files?.length && !landed.length) throw new Error('No generated file could be saved safely. The original request can be recovered; do not generate again.');
   if (verb !== 'tts' && verb !== 'asr') return landed;
   for (const row of result.index ?? []) {
     /* asr: beside the recording --src names, checked already (in the project, not the tools'); tts: beside the

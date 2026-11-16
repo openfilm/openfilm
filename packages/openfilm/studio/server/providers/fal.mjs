@@ -141,8 +141,9 @@ export default {
       const result = await queued(model, { prompt, image_size: pixels, output_format: 'png' }, ctx, polling.ms.image);
       const image = result?.images?.[0];
       if (!text(image?.url)) throw new Error(`${NAME} answered without a picture.`);
-      const { bytes, type } = await download(NAME, image.url, ctx);
+      const { bytes, type } = ctx.handOff ? { bytes: null, type: image.content_type } : await download(NAME, image.url, ctx);
       const path = landing('image', args.out, extOf(image.content_type ?? type, 'png'));
+      if (!bytes) return { files: [{ path, url: image.url, type: image.content_type ?? 'image/png' }], index: [{ src: path, kind: 'image', w: image.width, h: image.height, from: { mode: 'generate', prompt, provider: 'fal', model } }], receipt: { provider: 'fal', model, src: path, ...notes(said) }, cost: billedBy(NAME) };
       return { ...madePicture({ path, bytes, prompt, provider: 'fal', model, notes: said }), cost: billedBy(NAME) };
     }
     if (verb === 'video') return video(args, ctx);
@@ -210,10 +211,10 @@ async function video(args, ctx) {
   };
   const result = await queued(endpoint, input, ctx, polling.ms.video);
   if (!text(result?.video?.url)) throw new Error(`${NAME} answered without a clip.`);
-  const { bytes } = await download(NAME, result.video.url, ctx);
+  const file = ctx.handOff ? { path, url: result.video.url, type: 'video/mp4' } : { path, bytes: (await download(NAME, result.video.url, ctx)).bytes };
   const resolution = spec.resolution ? { resolution: spec.resolution } : {};
   return {
-    files: [{ path, bytes }],
+    files: [file],
     index: [{ src: path, kind: 'video', dur: seconds, hasAudio: true, from: {
       mode: 'generate', prompt, provider: 'fal', model: endpoint, ...resolution, sec: seconds,
       ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length ? { refs } : {}), ...(clip ? { clip } : {}),
@@ -268,9 +269,9 @@ async function fromClip(spec, args, ctx) {
   } else input = { video_url: video, reference_image_urls: images, ...(prompt ? { prompt } : {}), resolution: '1080P' };
   const result = await queued(spec.endpoint, input, ctx, polling.ms.video);
   if (!text(result?.video?.url)) throw new Error(`${NAME} answered without a clip.`);
-  const { bytes } = await download(NAME, result.video.url, ctx);
+  const file = ctx.handOff ? { path, url: result.video.url, type: 'video/mp4' } : { path, bytes: (await download(NAME, result.video.url, ctx)).bytes };
   return {
-    files: [{ path, bytes }],
+    files: [file],
     index: [{ src: path, kind: 'video', dur: seconds, hasAudio: true, from: { mode: 'generate', prompt, provider: 'fal', model: spec.endpoint, sec: seconds, clip, ...(refs.length ? { refs } : {}) } }],
     receipt: { provider: 'fal', model: spec.endpoint, src: path, dur: seconds, hasAudio: true, ...notes(said) },
     cost: billedBy(NAME),
@@ -303,10 +304,10 @@ async function fromSpeech(spec, args, ctx) {
     : { image_url: await dataUri(/** @type {string} */ (picture), ctx), audio_url: audioUrl, prompt: prompt || '.' };
   const result = await queued(spec.endpoint, input, ctx, polling.ms.video);
   if (!text(result?.video?.url)) throw new Error(`${NAME} answered without a clip.`);
-  const { bytes } = await download(NAME, result.video.url, ctx);
+  const file = ctx.handOff ? { path, url: result.video.url, type: 'video/mp4' } : { path, bytes: (await download(NAME, result.video.url, ctx)).bytes };
   const dur = seconds !== null ? Math.round(seconds * 1000) / 1000 : number(args.duration) ?? 5;
   return {
-    files: [{ path, bytes }],
+    files: [file],
     index: [{ src: path, kind: 'video', dur, hasAudio: true, from: { mode: 'generate', prompt, provider: 'fal', model: spec.endpoint, sec: dur, audio, ...(picture && spec.from === 'picture' ? { firstFrame: picture } : {}), ...(clip ? { clip } : {}) } }],
     receipt: { provider: 'fal', model: spec.endpoint, src: path, dur, hasAudio: true, ...notes(said) },
     cost: billedBy(NAME),
@@ -356,13 +357,13 @@ async function sound(verb, args, ctx) {
   const result = await queued(model, spec.input(prompt, sec), ctx, polling.ms.audio);
   const audio = result?.audio;
   if (!text(audio?.url)) throw new Error(`${NAME} answered without audio.`);
-  const { bytes, type } = await download(NAME, audio.url, ctx);
+  const { bytes, type } = ctx.handOff ? { bytes: null, type: audio.content_type } : await download(NAME, audio.url, ctx);
   /* a type it does not say plainly: the file's own extension, when it is one */
   const named = extname(text(audio.file_name)).slice(1).toLowerCase();
   const path = landing(dir, args.out, extOf(audio.content_type ?? type, /^[a-z0-9]{2,4}$/.test(named) ? named : 'wav'));
-  const dur = wavSeconds(bytes) ?? sec;
+  const dur = (bytes ? wavSeconds(bytes) : number(audio.duration)) ?? sec;
   return {
-    files: [{ path, bytes }],
+    files: [bytes ? { path, bytes } : { path, url: audio.url, type: audio.content_type ?? 'audio/wav' }],
     index: [{ src: path, kind: 'audio', ...(dur !== null ? { dur } : {}), from: { mode: 'generate', prompt, ...(asked !== null ? { sec: asked } : {}), provider: 'fal', model } }],
     receipt: { provider: 'fal', model, src: path, dur, ...notes(said) },
     cost: billedBy(NAME),

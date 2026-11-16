@@ -2,6 +2,8 @@
 import React from 'react';
 import { useT } from '@/i18n';
 import { stepFrames } from '@/lib/timecode';
+import { Tooltip } from '../Tooltip';
+import type { ActionId } from '@/lib/keymap';
 import { JUMP_FRAMES } from '@/lib/timeline-keys';
 
 /** The played part and the knob. */
@@ -247,19 +249,21 @@ export function TransportIconBtn({
   onClick,
   title,
   active,
+  action,
 }: {
   children: React.ReactNode;
   onClick(): void;
   title?: string;
+  action?: ActionId;
   /** Buttons that open a panel (settings): a light background while it is open. */
   active?: boolean;
 }) {
   const [hover, setHover] = React.useState(false);
   return (
+    <Tooltip label={title} action={action}>
     <button
       type="button"
       onClick={onClick}
-      title={title}
       aria-label={title}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -284,6 +288,7 @@ export function TransportIconBtn({
     >
       {children}
     </button>
+    </Tooltip>
   );
 }
 

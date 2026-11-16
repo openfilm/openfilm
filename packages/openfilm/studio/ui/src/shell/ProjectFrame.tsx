@@ -20,6 +20,7 @@ import { decodes, type PlayCheck } from '@/lib/decodes';
 import { studioHost, type StudioCommand } from '@/lib/host';
 import { linkOfCommand, routeLink } from '@/lib/links';
 import { mediaFetch } from '@/lib/media-queue';
+import { mediaProbeTargets } from '@/lib/media-probes';
 import { leaveProject } from '@/lib/navigate';
 import { recycleRefusalOf } from '@/lib/recycle';
 import { factsOfProbe, mediaListingOf, srcHitsAsset, warmProjectMedia, type MediaListing, type MediaProxy, type MediaResult, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
@@ -55,18 +56,12 @@ export function useProjectFrame(projectId: string) {
     setFacts((m) => { const next = new Map(m); for (const [path, f] of batch) next.set(path, f); return next; });
   }, 250), []);
   React.useEffect(() => () => factsIn.cancel(), [factsIn]);
-  React.useEffect(() => {
-    if (!rawListing) return;
-    const wanted = [
-      ...rawListing.files.filter((f) => f.kind === 'video' || f.kind === 'image' || f.kind === 'audio').map((f) => ({ f, page: false })),
-      /* pages: the project's, and any put in a folder of the media pane */
-      ...[...rawListing.pages, ...rawListing.files.filter((f) => f.kind === 'page')].map((f) => ({ f, page: true })),
-    ];
-    for (const { f, page } of wanted) {
-      const key = `${f.path}@${f.mtime}`;
+  const probeMedia = React.useCallback((sources: readonly string[]) => {
+    for (const { path, page, version } of mediaProbeTargets(rawListing, sources, filesTick)) {
+      const key = `${path}@${version}`;
       if (probed.current.has(key)) continue;
       probed.current.add(key);
-      void mediaFetch(`/api/projects/${encodeURIComponent(projectId)}/media?what=probe&path=${encodeURIComponent(f.path)}&v=${f.mtime}`, undefined, 'background')
+      void mediaFetch(`/api/projects/${encodeURIComponent(projectId)}/media?what=probe&path=${encodeURIComponent(path)}&v=${version}`, undefined, 'background')
         .then((r) => (r.ok ? r.json() : null))
         .then((probe) => {
           if (!probe) return;
@@ -75,10 +70,11 @@ export function useProjectFrame(projectId: string) {
             ...(page && !(probe.duration > 0) ? { endless: true } : {}),
             ...(page && probe.reflows ? { reflows: true } : {}),
           };
-          factsIn.set(f.path, facts);
+          factsIn.set(path, facts);
         }, () => {});
     }
-  }, [rawListing, projectId, factsIn]);
+  }, [rawListing, filesTick, projectId, factsIn]);
+  React.useEffect(() => { probeMedia([]); }, [probeMedia]);
 
   const folder = loaded?.folder ?? '';
   const mediaSources = React.useMemo<MediaSources>(() => {
@@ -358,7 +354,7 @@ export function useProjectFrame(projectId: string) {
   return {
     projectId, toast, showToast, slots, slotRefs,
     loaded, setLoaded, failure: read.failure, firstRead: read.firstRead, adoptFilm: read.adoptFilm, readFilm: read.readFilm, listFiles: read.listFiles,
-    filesTick, rawListing, facts, proxies, onUndecoded, prefsTick, folder, mediaSources, listing,
+    filesTick, rawListing, facts, probeMedia, proxies, onUndecoded, prefsTick, folder, mediaSources, listing,
     mediaMade, madeWords, madeVersions, missingMedia, setMissingMedia, findMissing,
     projectApi, onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, coverSet, onSetCover, onNewFolder, reveal,
     ...shown,

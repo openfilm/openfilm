@@ -13,7 +13,8 @@
  * comes straight from the address its maker keeps it at, when the service can give one (`results: 'links'`). A
  * service that predates this gets the files inside the run and gives them back inside its answer.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { mediaTransfer } from '../media-transfer.mjs';
 import { billedBy, call, failure, list, serviceUrl, sleep } from './common.mjs';
 import openai from './openai.mjs';
 import google from './google.mjs';
@@ -101,66 +102,83 @@ const FILE_FLAGS = /** @type {Partial<Record<Verb, string[]>>} */ ({
 /**
  * Every named file, under the path the receiving provider will use. The caller checks that these paths are inside the
  * project. If a file can't be read, stop before submitting an incomplete run.
- * @param {Verb} verb @param {Record<string, unknown>} args @param {RunContext} ctx
  */
+/** @typedef {{path:string,size:number,version:string,bytes?:Uint8Array,stream?:()=>ReadableStream,verify?:()=>Promise<void>,dispose?:()=>Promise<void>}} UploadFile */
+/** @param {Verb} verb @param {Record<string, unknown>} args @param {RunContext} ctx */
 async function filesOf(verb, args, ctx) {
-  const paths = new Set((FILE_FLAGS[verb] ?? []).flatMap((flag) => list(args[flag])));
-  /** @type {{ path: string, bytes: Uint8Array }[]} */
+  const paths = new Set((FILE_FLAGS[verb] ?? []).flatMap(flag => list(args[flag])));
+  /** @type {UploadFile[]} */
   const files = [];
-  for (const path of paths) {
-    ctx.signal.throwIfAborted();
-    files.push({ path, bytes: await ctx.read(path) });
-  }
-  return files;
+  try {
+    for (const path of paths) {
+      ctx.signal.throwIfAborted();
+      if (ctx.openInput) files.push({ path, ...await ctx.openInput(path) });
+      else { const bytes = await ctx.read(path); files.push({ path, bytes, size: bytes.byteLength, version: createHash('sha256').update(bytes).digest('hex') }); }
+    }
+    return files;
+  } catch (e) { await Promise.all(files.map(file => file.dispose?.())); throw e; }
 }
 
-/**
- * The run's files as it sends them: each put at the address the service gives for it (`{ path, upload }`), or, with a
- * service that gives none, inside the run (`{ path, base64 }`).
- * @param {{ path: string, bytes: Uint8Array }[]} files @param {string} base @param {Record<string, string>} headers @param {RunContext} ctx
- */
+/** Direct uploads are bounded to two streams, with no footage buffers; old servers get a bounded inline fallback.
+ * @param {UploadFile[]} files @param {string} base @param {Record<string,string>} headers @param {RunContext} ctx */
 async function inputsOf(files, base, headers, ctx) {
-  const inline = () => files.map((f) => ({ path: f.path, base64: Buffer.from(f.bytes.buffer, f.bytes.byteOffset, f.bytes.byteLength).toString('base64') }));
   if (!files.length) return [];
-  let asked;
-  try {
-    asked = await fetch(`${base}/v1/media/uploads`, {
-      method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
-      body: JSON.stringify({ files: files.map((f) => ({ path: f.path, bytes: f.bytes.byteLength })) }), signal: ctx.signal,
-    });
-  } catch (e) {
-    if (ctx.signal.aborted) throw e;
-    throw new Error(`${NAME} could not be reached (${/** @type {Error} */ (e).message}).`);
+  const asked = await call(NAME, `${base}/v1/media/uploads`, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({ files: files.map(file => ({ path: file.path, bytes: file.size })) }) }, ctx, { patience: polling.patience, keep: [404, 405] });
+  if ([404, 405].includes(asked.status)) {
+    if (files.reduce((n, file) => n + file.size, 0) > 48 * 1024 ** 2) throw new Error('This server requires inline uploads. Update the service before sending files larger than 48 MB. Nothing was generated.');
+    const result = [];
+    for (const file of files) { const bytes = file.bytes ?? new Uint8Array(await new Response(file.stream?.()).arrayBuffer()); result.push({ path: file.path, base64: Buffer.from(bytes).toString('base64') }); }
+    return result;
   }
-  /* a service from before uploads */
-  if (asked.status === 404 || asked.status === 405) return inline();
-  if (!asked.ok) throw await failure(NAME, asked, ctx);
-  const { uploads } = /** @type {{ uploads: { path: string, id: string, url: string, headers?: Record<string, string> }[] }} */ (await asked.json());
-  const put = [];
-  for (const f of files) {
-    const to = uploads.find((u) => u.path === f.path);
-    if (!to) throw new Error(`${NAME} gave no place for ${f.path}.`);
-    ctx.signal.throwIfAborted();
-    /* the bytes of a file read from disk, an ArrayBuffer's (never shared memory) */
-    const body = /** @type {Uint8Array<ArrayBuffer>} */ (f.bytes);
-    const res = await fetch(to.url, { method: 'PUT', headers: to.headers ?? {}, body, signal: ctx.signal });
-    if (!res.ok) throw new Error(`${f.path} could not be sent to ${NAME} (${res.status}). Try again.`);
-    put.push({ path: f.path, upload: to.id });
-  }
-  return put;
+  const { uploads } = /** @type {{uploads:{path:string,id:string,url:string,headers?:Record<string,string>}[]}} */ (await asked.json());
+  const pending = [...files];
+  const result = new Map();
+  const workers = await Promise.allSettled(Array.from({ length: Math.min(2, files.length) }, async () => {
+    while (pending.length) {
+      const file = pending.shift(); if (!file) break;
+      const to = uploads.find(upload => upload.path === file.path);
+      if (!to) throw new Error(`${NAME} gave no upload address for ${file.path}.`);
+      for (let attempt = 0; ; attempt++) {
+        ctx.signal.throwIfAborted();
+        try {
+          const init = Object.assign({ method: 'PUT', headers: to.headers ?? {}, body: file.bytes ?? file.stream?.(), signal: ctx.signal }, file.stream ? { duplex: 'half' } : {});
+          const sent = await fetch(to.url, /** @type {RequestInit} */ (init));
+          await sent.body?.cancel();
+          if (!sent.ok) throw new Error(`Upload answered ${sent.status}.`);
+          await file.verify?.(); break;
+        } catch (e) { if (ctx.signal.aborted || attempt >= 2) throw e; await sleep(polling.first * 2 ** attempt, ctx.signal); }
+      }
+      result.set(file.path, { path: file.path, upload: to.id });
+    }
+  }));
+  const failed = workers.find(worker => worker.status === 'rejected');
+  if (failed?.status === 'rejected') throw failed.reason;
+  return files.map(file => result.get(file.path));
 }
 
 /**
  * What the run made: each file as sent inside the answer, or fetched from the address its maker keeps it at.
  * @param {{ path: string, base64?: string, url?: string }[]} files @param {RunContext} ctx
+ * @param {Awaited<ReturnType<typeof mediaTransfer>>} transfer @param {string} key @param {(path:string)=>Promise<any>} refresh
  */
-async function madeOf(files, ctx) {
-  return Promise.all(files.map(async (f) => {
+async function madeOf(files, ctx, transfer, key, refresh) {
+  const results = await Promise.allSettled(files.map(async (f) => {
+    if (typeof f.url === 'string' && transfer) return transfer.download({ ...f, url: f.url }, key, refresh);
     if (typeof f.url !== 'string') return { path: f.path, bytes: new Uint8Array(Buffer.from(f.base64 ?? '', 'base64')) };
-    /* a signed address: no key goes with it */
-    const res = await call(NAME, f.url, {}, ctx);
-    return { path: f.path, bytes: new Uint8Array(await res.arrayBuffer()) };
+    /* A signed address: no key goes with it. Retrying a cut-off file is a GET, never another paid generation. */
+    for (let attempt = 0; ; attempt++) {
+      const res = await call(NAME, f.url, {}, ctx, { patience: polling.patience });
+      try { return { path: f.path, bytes: new Uint8Array(await res.arrayBuffer()) }; }
+      catch (e) {
+        if (ctx.signal.aborted || attempt >= 2) throw e;
+        await sleep(polling.first * 2 ** attempt, ctx.signal);
+      }
+    }
   }));
+  const failed = results.find(result => result.status === 'rejected');
+  if (failed?.status === 'rejected') throw failed.reason;
+  return results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
 }
 
 /** Where the service is: openfilm.dev, or OPENFILM_API_URL (a local one, for developing it). */
@@ -205,33 +223,72 @@ export default {
   async run(verb, args, ctx) {
     const base = service();
     const headers = { authorization: `Bearer ${ctx.key}` };
-    const runKey = randomUUID();
-    /* no model chosen: the service's default for that kind; what it makes, from its maker when it can */
-    const inputs = await inputsOf(await filesOf(verb, args, ctx), base, headers, ctx);
-    const body = { verb, ...(ctx.model ? { model: ctx.model } : {}), args, inputs, results: 'links' };
+    const sources = await filesOf(verb, args, ctx);
+    /** @type {Awaited<ReturnType<NonNullable<Awaited<ReturnType<typeof mediaTransfer>>>['request']>> | undefined} */
+    let journal;
+    let returned = false;
+    try {
+    const transfer = await mediaTransfer(ctx.root, ctx.signal);
+    const scope = createHash('sha256').update(base + '\0' + ctx.key).digest('hex');
+    journal = await transfer?.request(scope, { verb, args, model: ctx.model ?? null, inputs: sources.map(({path,version}) => ({path,version})) }, ctx.fresh);
+    const runKey = journal?.key ?? randomUUID();
+    /** @type {any} */
+    let body = null;
+    const requestBody = async () => {
+      if (!body) body = { verb, ...(ctx.model ? { model: ctx.model } : {}), args, inputs: await inputsOf(sources, base, headers, ctx), results: 'links' };
+      return JSON.stringify(body);
+    };
     /* a release restarts the service: a request is said again through it, and a run it no longer knows (404) is posted
        again with the same key, which never charges twice; one it still counts as running elsewhere (409) is waited for */
     const steady = { patience: polling.patience, keep: [409] };
-    const post = () => call(NAME, `${base}/v1/media/run`, {
+    const post = async () => call(NAME, `${base}/v1/media/run`, {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': runKey, prefer: 'respond-async' },
-      body: JSON.stringify(body),
+      body: await requestBody(),
     }, ctx, steady);
     const until = Date.now() + polling.most;
-    let res = await post();
-    for (let wait = Math.min(polling.first, polling.ms); [202, 404, 409].includes(res.status); wait = Math.min(polling.ms, wait * 2)) {
-      if (Date.now() > until) throw new Error(`${NAME} has not finished this after ${Math.round(polling.most / 60_000)} minutes: it is refunded if it never lands. Try again later.`);
-      await sleep(res.status === 409 ? polling.busy : wait, ctx.signal);
-      res = res.status === 202
-        ? await call(NAME, `${base}/v1/media/run?key=${encodeURIComponent(runKey)}`, { headers }, ctx, { ...steady, keep: [404, 409] })
-        : await post();
+    const get = () => call(NAME, `${base}/v1/media/run?key=${encodeURIComponent(runKey)}&results=links`, { headers }, ctx, { ...steady, keep: [404, 409] });
+    /** @type {{ call_id?: string, files_unavailable?: boolean, files?: { path: string, base64?: string, url?: string }[], index?: import('./contract.mjs').IndexRow[], receipt?: Record<string, unknown> }} */
+    let done;
+    let res = journal?.reply ? new Response(JSON.stringify(journal.reply)) : journal?.resumed ? await get() : await post(), brokenBodies = 0;
+    for (;;) {
+      for (let wait = Math.min(polling.first, polling.ms); [202, 404, 409].includes(res.status); wait = Math.min(polling.ms, wait * 2)) {
+        if (Date.now() > until) throw new Error(`${NAME} has not delivered this after ${Math.round(polling.most / 60_000)} minutes. It may already be complete and charged. Keep request ${runKey} to recover it; do not start a new generation just to fetch its result.`);
+        await sleep(res.status === 409 ? polling.busy : wait, ctx.signal);
+        res = res.status === 202 ? await get() : await post();
+      }
+      try { done = await res.json(); break; }
+      catch (e) {
+        // fetch() resolves at the headers: a 200 body can still be cut off. Fetch the same paid result again.
+        if (ctx.signal.aborted) throw e;
+        if (++brokenBodies >= 3 || Date.now() >= until) throw new Error(`${NAME}'s result could not be received completely. Keep request ${runKey} to recover it; do not start a new generation just to fetch its result.`);
+        await sleep(polling.first, ctx.signal);
+        res = await get();
+      }
     }
-    const done = /** @type {{ files?: { path: string, base64?: string, url?: string }[], index?: import('./contract.mjs').IndexRow[], receipt?: Record<string, unknown> }} */ (await res.json());
+    if (done.files_unavailable) throw new Error(`${NAME} already completed this run (${done.call_id ?? runKey}), but its files are no longer available. This recovery did not generate or charge again. Contact support; do not start a new generation just to fetch its result.`);
+    await journal?.remember(done);
+    const refresh = async (/** @type {string} */ path) => {
+      const response = await get();
+      const updated = await response.json();
+      const file = updated.files?.find((/** @type {{path:string}} */ file) => file.path === path);
+      if (!file?.url || updated.files_unavailable) throw new Error('The original result is no longer downloadable. Do not generate again to recover it.');
+      await journal?.remember(updated); return file;
+    };
+    const files = await madeOf(done.files ?? [], ctx, transfer, runKey, refresh);
+    returned = true;
     return {
-      files: await madeOf(done.files ?? [], ctx),
+      files,
+      cleanup: async () => { await journal?.release(); },
+      complete: async () => {
+        await call(NAME, `${base}/v1/media/ack`, { method: 'POST', headers: {...headers,'content-type':'application/json'}, body:JSON.stringify({key:runKey}) }, {...ctx, signal:AbortSignal.any([ctx.signal,AbortSignal.timeout(5000)])}, {keep:[404,405]}).catch(() => {});
+        await journal?.finish();
+        await journal?.release();
+      },
       index: done.index ?? [],
       receipt: done.receipt ?? {},
       cost: billedBy(NAME),
     };
+    } finally { await Promise.all(sources.map(source => source.dispose?.())); if (!returned) await journal?.release(); }
   },
 };

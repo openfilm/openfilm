@@ -27,6 +27,18 @@ after(() => server.close());
 const ctx = (files = {}) => ({ key: KEY, root: '/project', signal: new AbortController().signal, say: () => {}, read: async (p) => files[p] });
 const form = (call) => new Request('http://x', { method: 'POST', headers: { 'content-type': call.headers['content-type'] }, body: call.body }).formData();
 
+test('binary music is handed to the streaming relay rather than embedded in the result', async () => {
+  reply = () => [200, Buffer.alloc(32000)];
+  let kept = 0;
+  const result = await elevenlabs.run('music',{out:'bed',prompt:'calm pad',sec:30},{...ctx(),handOff:true,
+    keep:async(path,response)=>{
+      let bytes=0; for await(const chunk of response.body)bytes+=chunk.length;
+      kept++; return {path,url:'https://relay.example/temporary.mp3',type:'audio/mpeg',bytes};
+    }});
+  assert.equal(kept,1); assert.equal(result.files[0].url,'https://relay.example/temporary.mp3');
+  assert.equal(result.files[0].bytes,32000); assert.equal(result.index[0].dur,2);
+});
+
 test('voice-over: timed per character, landed as words, the length from the MP3\'s size', async () => {
   const said = 'Hello world.';
   const chars = [...said];

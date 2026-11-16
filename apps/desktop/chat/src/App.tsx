@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, Shapes, Square } from 'lucide-react';
+import { ArrowDown, Coins, CornerDownLeft, LibraryBig, Loader2, MessageSquare, Plus, Shapes, Square } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
@@ -1201,9 +1201,16 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
                 </div>
               </div>
 
-              {/* over the drawer it starts at its first card: the height it tells (setComposerHeight) is where the drawer's
-                  player ends, on the card, no strip between */}
+              {/* Measure the whole footer so the drawer keeps its controls clear of the return action and composer. */}
               <div ref={composerBlockRef} className="relative flex shrink-0 flex-col px-4 pb-1.5">
+                {assetsOverlay ? (
+                  <div className="flex justify-center pb-2 pt-1">
+                    <button type="button" className="pointer-events-auto openfilm-chat-pill" style={{ background: 'var(--bg-panel)' }}
+                      onClick={() => { app.setAssetsOpen(false); composerRef.current?.focus(); }}>
+                      <MessageSquare size={14} aria-hidden />{t('project.backToChat')}
+                    </button>
+                  </div>
+                ) : null}
                 <div className="flex flex-col gap-2" data-composer-cards="">
                   {/* what is said apart from the conversation, each a notice on the composer (NoticeCard): Studio's
                       own trouble, the asks waiting on the person, then this conversation's */}

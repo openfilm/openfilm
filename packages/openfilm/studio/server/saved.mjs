@@ -78,48 +78,66 @@ export const libraryPath = (/** @type {string} */ rel) => (rel ? `${LIBRARY}/${r
  * The library as the media pane lists a project's media (files.mjs listFiles): its files and folders, any depth, by
  * their `saved/` paths. A bundle is one entry, of the kind of its (top) file, with what it is in `saved`.
  */
-export async function listLibrary() {
+/**
+ * Read one directory. Recursive reads are reserved for an explicit search; directory links are never traversed
+ * merely because they appear in a listing. Known link kinds avoid stat/realpath calls into unopened NAS folders.
+ * @param {{ at?: string; recursive?: boolean; known?: { folders: string[]; files: { path: string; kind: string; size: number; mtime: number; added: number; saved?: object }[]; links: Record<string, { to: string; missing?: true }> } | null }} [options]
+ */
+export async function listLibrary({ at = '', recursive = false, known = null } = {}) {
   const root = await libraryRoot();
-  /** @type {{ path: string, kind: string, size: number, mtime: number, added: number, saved?: object }[]} */
-  const files = [];
-  /** @type {string[]} */
-  const folders = [];
-  /** links to media kept elsewhere, as a project's media has them (files.mjs listFiles): followed to a place the
-      person linked; one that leads nowhere (a disk that is out) is missing
-      @type {Record<string, { to: string, missing?: true }>} */
-  const links = {};
-  async function walk(/** @type {string} */ rel, /** @type {number} */ depth) {
-    const entries = await readdir(rel ? join(root, rel) : root, { withFileTypes: true }).catch(() => []);
-    for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue;
-      const at = rel ? `${rel}/${entry.name}` : entry.name;
+  const rel = libraryRel(at);
+  /** @type {{ path: string, kind: string, size: number, mtime: number, added: number, saved?: object }[]} */ const files = [];
+  /** @type {string[]} */ const folders = [];
+  /** @type {Record<string, { to: string, missing?: true }>} */ const links = {};
+  const knownFolders = new Set(known?.folders ?? []);
+  const knownFiles = new Map((known?.files ?? []).map(file => [file.path, file]));
+  let missing = false;
+  const external = Object.keys(known?.links ?? {}).some(path => knownFolders.has(path) && (libraryPath(rel) === path || libraryPath(rel).startsWith(`${path}/`)));
+  async function walk(/** @type {string} */ here) {
+    const absDir = here ? join(root, here) : root;
+    const entries = await readdir(absDir, { withFileTypes: true });
+    const visit = async (/** @type {import('node:fs').Dirent} */ entry) => {
+      if (entry.name.startsWith('.')) return;
+      const path = here ? `${here}/${entry.name}` : entry.name;
+      const key = libraryPath(path);
+      const abs = join(root, path);
       if (entry.isSymbolicLink()) {
-        const abs = join(root, at);
         const to = await readlink(abs).catch(() => '');
-        const info = readableLink(root, abs) ? await stat(abs).catch(() => null) : null;
-        links[libraryPath(at)] = { to: isAbsolute(to) ? to : join(dirname(abs), to), ...(info ? {} : { missing: true }) };
-        if (info?.isDirectory()) { folders.push(libraryPath(at)); if (depth < 8) await walk(at, depth + 1); continue; }
+        const target = isAbsolute(to) ? to : join(dirname(abs), to);
+        const oldFile = knownFiles.get(key);
+        const oldLink = known?.links[key];
+        // App-created connections are registered at creation. Legacy unclassified links need one kind lookup.
+        const info = knownFolders.has(key) || oldFile ? null : readableLink(root, abs) ? await stat(abs).catch(() => null) : null;
         const own = await lstat(abs).catch(() => null);
-        const shown = info ?? own;
-        if (shown) files.push({ path: libraryPath(at), kind: kindOf(entry.name), size: info ? info.size : 0, mtime: Math.round(shown.mtimeMs), added: Math.round((own ?? shown).mtimeMs) });
-        continue;
+        links[key] = { to: target, ...(oldLink?.to === target && oldLink.missing || !oldFile && !knownFolders.has(key) && !info ? { missing: true } : {}) };
+        if (knownFolders.has(key) || info?.isDirectory()) { folders.push(key); return; }
+        if (own) files.push(oldFile ? { ...oldFile, added: Math.round(own.mtimeMs) } : { path: key, kind: kindOf(entry.name), size: info?.size ?? 0, mtime: Math.round((info ?? own).mtimeMs), added: Math.round(own.mtimeMs) });
+        return;
       }
       if (entry.isDirectory()) {
-        const bundle = await readBundle(join(root, at));
-        if (bundle) { files.push(bundleEntry(at, bundle)); continue; }
-        folders.push(libraryPath(at));
-        if (depth < 8) await walk(at, depth + 1);
-        continue;
+        const bundle = external ? null : await readBundle(abs);
+        if (bundle) { files.push(bundleEntry(path, bundle)); return; }
+        folders.push(key);
+        if (recursive) await walk(path);
+        return;
       }
-      if (!entry.isFile()) continue;
-      const info = await stat(join(root, at)).catch(() => null);
-      if (info) files.push({ path: libraryPath(at), kind: kindOf(entry.name), size: info.size, mtime: Math.round(info.mtimeMs), added: Math.round(info.birthtimeMs || info.mtimeMs) });
-    }
+      if (!entry.isFile()) return;
+      const info = await stat(abs).catch(() => null);
+      if (info) files.push({ path: key, kind: kindOf(entry.name), size: info.size, mtime: Math.round(info.mtimeMs), added: Math.round(info.birthtimeMs || info.mtimeMs) });
+    };
+    let next = 0;
+    const worker = async () => { while (next < entries.length) await visit(entries[next++]); };
+    await Promise.all(Array.from({ length: Math.min(recursive ? 1 : 8, entries.length) }, worker));
   }
-  await walk('', 0);
-  const sort = (/** @type {{ path: string }} */ a, /** @type {{ path: string }} */ b) => a.path.localeCompare(b.path, undefined, { numeric: true });
+  try { if (rel) await stat(readable(root, rel)); await walk(rel); }
+  catch (error) {
+    const code = /** @type {NodeJS.ErrnoException} */ (error).code;
+    if (!['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'EIO', 'ENOTCONN', 'ESTALE'].includes(code ?? '') && !Object.keys(known?.links ?? {}).some(path => libraryPath(rel) === path || libraryPath(rel).startsWith(`${path}/`))) throw error;
+    missing = true;
+  }
+  files.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
   folders.sort();
-  return { files: files.sort(sort), folders, made: folders, pages: [], links };
+  return { files, folders, made: folders, pages: [], links, at: libraryPath(rel), missing };
 }
 
 /** A bundle's saved.json, or null when the folder is no bundle. @param {string} dir */
@@ -168,6 +186,13 @@ function bundleEntry(rel, item) {
     ...(overrides ? { overrides } : {}),
   };
   return { path: libraryPath(rel), kind: kind === 'page' ? 'page' : kind, size: 0, mtime: savedAt, added: savedAt, saved };
+}
+
+/** Describe an explicitly created/copied bundle without scanning any of its dependency folders. */
+export async function libraryBundleEntry(/** @type {string} */ path) {
+  const rel = libraryRel(path);
+  const bundle = await readBundle(join(await libraryRoot(), rel));
+  return bundle ? bundleEntry(rel, bundle) : null;
 }
 
 /** A bundle's picture, or null. */
@@ -347,9 +372,10 @@ async function copyIn(from, files, to, fresh = false) {
  * files copied to `saved/<its place>/` there (a file there already is kept as it is, but OpenFilm's line of words) and
  * the clip, a group's clips or the page, with their files' places there. OpenFilm's things go to `saved/openfilm/<its place, one name>/`.
  * @param {string} root @param {unknown} path
+ * @param {{ mode?: 'copy' | 'link' }} [options]
  * @returns {Promise<{ clip: Record<string, unknown> & { src: string } } | { clips: { track: number, at: number, clip: Record<string, unknown> & { src: string } }[] } | { path: string }>}
  */
-export async function takeSaved(root, path) {
+export async function takeSaved(root, path, options = {}) {
   const builtIn = typeof path === 'string' && path.startsWith(`${BUILT_IN}/`);
   const lib = builtIn ? builtInRoot() : await libraryRoot();
   const rel = builtIn ? /** @type {string} */ (path).slice(BUILT_IN.length + 1) : libraryRel(path);
@@ -360,6 +386,11 @@ export async function takeSaved(root, path) {
   const at = filter ? inside(lib, FILTER_LAYER) : (builtIn ? await fetchLibrary(rel) : null) ?? readable(lib, rel);
   const info = await stat(at).catch(() => null);
   if (!info) throw new SavedError('That is not in Saved any more.', 404);
+  if (info.isFile() && !builtIn && options.mode) {
+    const [landed] = await bringIn(root, 'assets', [at], options.mode);
+    if (!landed) throw new SavedError('That is not in Saved any more.', 404);
+    return { path: landed };
+  }
   /* a file the person linked into Saved (kept on another disk, often big) comes in as media from this computer does:
      taking no room where the disk allows, big media from another disk linked where it is */
   if (info.isFile() && !builtIn && !realpathSync.native(at).startsWith(`${realpathSync.native(lib)}${sep}`)) {

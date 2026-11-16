@@ -28,6 +28,22 @@ after(() => server.close());
 
 const ctx = (files = {}, signal = new AbortController().signal) => ({ key: KEY, root: '/project', signal, say: () => {}, read: async (p) => files[p] });
 
+test('native image and music URLs pass through without a download or another storage copy', async () => {
+  seen.length = 0;
+  reply = queue('fal-ai/flux-2-pro',{images:[{url:`${base}/files/out.png`,width:1536,height:864,content_type:'image/png'}]},1);
+  const image = await fal.run('image',{out:'hero',prompt:'a brass key'},{...ctx(),handOff:true});
+  assert.equal(image.files[0].url,`${base}/files/out.png`);
+  assert.equal(image.index[0].w,1536);
+  assert.ok(!seen.some(call=>call.url.pathname.startsWith('/files/')));
+  seen.length = 0;
+  reply = queue('fal-ai/stable-audio-25/text-to-audio',{audio:{url:`${base}/files/out.wav`,content_type:'audio/wav',duration:10}},1);
+  const music = await fal.run('music',{out:'bed',prompt:'lofi',sec:10},{...ctx(),handOff:true});
+  assert.equal(music.files[0].url,`${base}/files/out.wav`);
+  assert.equal(music.index[0].dur,10);
+  assert.ok(!seen.some(call=>call.url.pathname.startsWith('/files/')));
+  seen.length = 0;
+});
+
 /**
  * One queued model: submitted at /<model>, done after `ready` status asks (fal's status and result addresses use the
  * app's base id, so they are taken from the submit answer, never built).

@@ -16,7 +16,7 @@ import { basename, dirname, extname, isAbsolute, join, normalize, relative, reso
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
-import { savedRoot } from '../../src/locations.mjs';
+import { savedRoot, libraryRoot } from '../../src/locations.mjs';
 import { addLinkedPlaces, changeMediaReferences, mediaReference, mediaReferences, readableLink, referenceSource } from '../../src/media-links.mjs';
 import { changeProjectFilm, readProjectFilm } from './film.mjs';
 import { filesWritten } from './person-edits.mjs';
@@ -586,6 +586,7 @@ export async function freezeFrame(root, rel, ms) {
  * it is kept, untouched.
  */
 export async function trashFile(/** @type {string} */ root, /** @type {string} */ rel) {
+  if (!rel || rel === '.') throw new FileError('Library roots cannot be deleted.', 403);
   const alias = referenceEntry(root, rel);
   if (alias) {
     changeMediaReferences(root, (entries) => entries.filter((entry) => entry.name !== alias.name));
@@ -594,6 +595,8 @@ export async function trashFile(/** @type {string} */ root, /** @type {string} *
   const abs = entryInside(root, rel);
   if (lstatSync(abs, { throwIfNoEntry: false })?.isSymbolicLink()) { await unlink(abs); return; }
   if (!existsSync(abs)) throw new FileError(`${rel} is not there`, 404);
+  const canonical = (/** @type {string} */ path) => { try { return realpathSync.native(path); } catch { return resolve(path); } };
+  if ([savedRoot(), libraryRoot()].some(path => canonical(path) === canonical(abs))) throw new FileError('Library roots cannot be deleted.', 403);
   await moveToTrash(abs);
   changeMediaReferences(root, (entries) => entries.some((entry) => entry.name === rel || entry.name.startsWith(`${rel}/`))
     ? entries.filter((entry) => entry.name !== rel && !entry.name.startsWith(`${rel}/`)) : entries);
@@ -673,10 +676,10 @@ async function atLeast(/** @type {string} */ path, /** @type {number} */ limit) 
  * saved.mjs, whose folder is all media).
  * @param {string} root @param {string} into @param {string[]} paths @param {'copy' | 'link' | 'auto'} mode
  * @param {{ anywhere?: boolean, platform?: string, makeLink?: typeof symlink, onLinked?: (rel: string) => void,
- *   big?: number, clone?: (from: string, to: string, folder: boolean) => Promise<void>, sameFile?: typeof link }} [o]
+ *   big?: number, clone?: (from: string, to: string, folder: boolean) => Promise<void>, sameFile?: typeof link, sourceName?: (source: string) => string }} [o]
  */
 export async function bringIn(root, into, paths, mode, { anywhere = false, platform = process.platform, makeLink = symlink, onLinked, big = LEAVE_IN_PLACE,
-  clone = cloneTo, sameFile = link } = {}) {
+  clone = cloneTo, sameFile = link, sourceName } = {}) {
   if (!anywhere && into !== ASSETS && !into.startsWith(`${ASSETS}/`)) throw new FileError('media goes in assets/');
   const dir = into ? inside(root, into) : root;
   await mkdir(dir, { recursive: true });
@@ -709,7 +712,7 @@ export async function bringIn(root, into, paths, mode, { anywhere = false, platf
     if (typeof path !== 'string' || !isAbsolute(path)) throw new FileError('a full path, please');
     const from = realpathSync.native(path);
     const info = await stat(from);
-    const cleaned = cleanName(basename(from));
+    const cleaned = cleanName(sourceName ? sourceName(path) : basename(from));
     const name = platform === 'win32' ? cleaned.replace(/[. ]+$/, '') : cleaned;
     if (!name || name.startsWith('.')) throw new FileError(`${basename(from)} can't be named here`);
     if (mode === 'link') { landed.push(await linkIn(from, info, name)); continue; }
@@ -774,7 +777,7 @@ export async function relink(root, rel, to) {
     return rel;
   }
   const part = `${abs}.${process.pid}.linking`;
-  await symlink(from, part, info.isDirectory() ? 'dir' : 'file');
+  await symlink(from, part, info.isDirectory() ? (process.platform === 'win32' ? 'junction' : 'dir') : 'file');
   await rename(part, abs);
   return rel;
 }

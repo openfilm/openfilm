@@ -140,13 +140,21 @@
   const isGroup = (el) => Boolean(el?.hasAttribute?.('data-group'));
   const kebab = (key) => key.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`);
 
+  /**
+   * A copy a page draws of its own words (letters coming in one by one over a line left see-through): hidden from
+   * reading and from the pointer. The line it copies is the layer; the copy follows it.
+   */
+  const drawnCopy = (el) => {
+    const copy = el.closest('[aria-hidden="true"]');
+    return Boolean(copy) && css(copy).pointerEvents === 'none';
+  };
   /** Every element of a page that can be a layer, in document order. */
   const layersOf = (doc) => {
     const out = [];
     if (!doc.body) return out;
     for (const el of doc.body.querySelectorAll('*')) {
       if (out.length >= LIMIT) break;
-      if (SKIP.has(el.localName.toLowerCase()) || el.hasAttribute(EDITOR_ATTR) || el.closest(`[${EDITOR_ATTR}]`)) continue;
+      if (SKIP.has(el.localName.toLowerCase()) || el.hasAttribute(EDITOR_ATTR) || el.closest(`[${EDITOR_ATTR}]`) || drawnCopy(el)) continue;
       out.push(el);
     }
     return out;
@@ -1771,6 +1779,10 @@
       const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
       return (hooks()?.captions?.() ?? []).map(({ el, ...cue }) => ({ ...cue, box: rect(el), text: rect(el.querySelector('.cue-text') ?? el) }));
     },
+    vision({ id }) { return hooks()?.vision?.(id) ?? { phase: 'idle' }; },
+    visionPreview(args) { hooks()?.visionPreview?.(args); },
+    async visionClear() { await hooks()?.visionClear?.(); return true; },
+    visionRetry({ id }) { hooks()?.visionRetry?.(id); },
     /**
      * Show cues of a caption track moved by (dx, dy) stage px and scaled by `k` about their middle, not kept yet (`ids`
      * null: every one; none of them: in place again).
@@ -2333,7 +2345,7 @@
       listenAll();
       /* the line being typed was drawn anew (an undo, the page rewritten): what was typed is kept, the box closes */
       if (editing && !editing.el.isConnected) finishText(true);
-      result = fn ? fn(args) ?? null : null;
+      result = fn ? (await fn(args)) ?? null : null;
     } catch (error) {
       post({ type: 'stage', seq, result: null, error: String(error?.message ?? error) });
       return;
