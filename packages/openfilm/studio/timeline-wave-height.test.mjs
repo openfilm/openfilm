@@ -81,7 +81,9 @@ test('resizing video and sound tracks grows their waveforms and keeps the sound 
         const line = await clip.locator('[data-volume-line]').boundingBox();
         assert.ok(Math.abs(dot.y + dot.height / 2 - band.y) <= 1, 'fade dot follows the top of the taller sound band');
         assert.ok(line.y >= band.y && line.y < band.y + band.height, 'volume line stays inside the sound band');
-        await until(async () => (await clip.locator('img').count()) > 0, 'the taller sound band keeps the video picture');
+        /* the picture's room, between the info row and the sound band: measured, not waited for, since its
+           thumbnails come from ffmpeg in their own time (often over 10 s on a CI machine) */
+        assert.ok(band.y - (box.y + 15) > band.height, 'the taller sound band leaves the video picture more room than itself');
       }
       /* Small and minimum-height video tracks keep the original 15 px band (13 px canvas). */
       for (const height of [kind === 'audio' ? 30 : 36, 28]) {
