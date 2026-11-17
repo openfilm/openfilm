@@ -21,7 +21,6 @@ import { communityOf, makerOf, ownerOf, sourcesApi, type SkillEntry } from '@/li
 import { categoryOfSkill, type Category } from '@/lib/plugin-profile';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ProfileStrip } from './library/PluginProfile';
-import { SkillChatBand } from './library/SkillChatBand';
 import { DocLines, DocOff, DocSection, DocSteps, sortDetails } from './library/DocSections';
 import { SettingsSwitch } from './settings/ui';
 import { DetailShell, Facts, PageButton } from './library/Store';
@@ -227,9 +226,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn, on
     <DetailShell onBack={onBack} data={{ 'data-skill-page': skill.uid }} title={words.title} summary={words.summary || undefined}
       icon={<AppIcon src={skill.appIcon} kind="skill" size={88} className="shadow-[0_8px_24px_rgba(0,0,0,0.18)]" />}
       byline={byline} actions={actions} notice={notice} aside={aside}
-      /* one with no preview of its own: it at work in the conversation, from its own words */
-      hero={!skill.preview && !skill.cover && words.summary ? <SkillChatBand name={skill.as ?? skill.name} title={words.title} summary={words.summary}
-        {...(details ? { details } : {})} icon={<SkillMark skill={skill} size={36} />} /> : undefined}>
+      /* one with no preview of its own: it at work in the conversation, from its own words */>
       {/* what it looks like: its preview, or its cover */}
       {skill.preview || skill.cover || skill.source === 'mine' ? (
         <PageBlock title={t('assetDrawer.sectionPreview')}>

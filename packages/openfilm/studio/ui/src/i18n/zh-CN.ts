@@ -1751,8 +1751,6 @@ export const zhCN: Words = {
     docAgentNote: "你这样说，智能体这样做。点一句就放进对话。",
     docPut: "放进对话",
     docKeys: "快捷键",
-    bandUses: "使用技能「{name}」",
-    bandDone: "完成",
     metric_type: "类型",
     metricTip_type: "它是什么：有自己界面的编辑器，或智能体在对话里用的技能",
     typeNote_editor: "有自己的界面",

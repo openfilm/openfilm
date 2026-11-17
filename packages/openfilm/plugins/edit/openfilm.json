@@ -215,11 +215,7 @@
       "mark-in",
       "loop",
       "preview-fullscreen"
-    ],
-    "video": {
-      "src": "preview.mp4",
-      "poster": "preview.jpg"
-    }
+    ]
   },
   "about": "the film itself and its timeline: making and cutting the film",
   "category": "edit",

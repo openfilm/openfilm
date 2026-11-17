@@ -282,11 +282,7 @@
           "es": "Abrir la ayuda"
         }
       }
-    ],
-    "video": {
-      "src": "preview.mp4",
-      "poster": "preview.jpg"
-    }
+    ]
   },
   "about": "watching the film and pointing at what to change, for the chat",
   "category": "edit",

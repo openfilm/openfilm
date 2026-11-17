@@ -1738,8 +1738,6 @@ export const ko: Words = {
     docAgentNote: "이렇게 말하면 에이전트가 이렇게 합니다. 누르면 대화에 들어갑니다.",
     docPut: "대화에 넣기",
     docKeys: "단축키",
-    bandUses: "스킬 「{name}」 사용 중",
-    bandDone: "완료",
     metric_type: "유형",
     metricTip_type: "무엇인지: 자체 화면이 있는 에디터, 또는 에이전트가 대화에서 쓰는 스킬",
     typeNote_editor: "자체 화면",

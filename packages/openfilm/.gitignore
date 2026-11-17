@@ -6,7 +6,6 @@ studio/ui/dist/
 /film.html
 .dev/
 !library/**/preview.mp4
-!plugins/*/preview.mp4
 # voice samples: published with the library, not kept in git (scripts/library-voices.mjs makes them)
 library/voices/
 # the sounds and music of library/audio.json, with their waveforms: published with the library likewise

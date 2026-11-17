@@ -291,6 +291,5 @@ test('OpenFilm\'s editors have their page words in every language', () => {
       assert.equal(p.examples?.[lang]?.length, 3, `${p.id} ${lang} examples`);
       assert.equal(p.showcase?.highlights?.[lang]?.length, 4, `${p.id} ${lang} highlights`);
     }
-    assert.deepEqual(p.showcase?.video, { src: 'preview.mp4', poster: 'preview.jpg' }, `${p.id} recording`);
   }
 });

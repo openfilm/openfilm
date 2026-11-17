@@ -1740,8 +1740,6 @@ export const es: Words = {
     docAgentNote: "Di esto y tu agente hace aquello. Pulsa una para ponerla en la conversación.",
     docPut: "Poner en la conversación",
     docKeys: "Atajos de teclado",
-    bandUses: "Usando la habilidad {name}",
-    bandDone: "Hecho",
     metric_type: "Tipo",
     metricTip_type: "Qué es: un editor con su propia interfaz, o una habilidad que tu agente usa en la conversación",
     typeNote_editor: "Su propia interfaz",

@@ -33,9 +33,9 @@ import {
   byOrder, TrustMark, hostOf, useScriptsConsent, inLanguage, SkillCover, SkillMark, SkillPage, useSkillWords,
 } from '../SkillPage';
 import { CATEGORIES, categoryOfSkill, type Category } from '@/lib/plugin-profile';
-import { ProfileStrip } from './PluginProfile';
+import { Meter } from './PluginProfile';
 import { GhostPacks, GhostThings, SoonPill } from './StorePlaceholders';
-import { DocAgent, DocHighlights, DocKeys, DocLines, DocOff, DocSection, DocSteps, PreviewBand, sortDetails } from './DocSections';
+import { DocAgent, DocHighlights, DocKeys, DocLines, DocOff, DocSection, DocSteps, InfoBar, sortDetails } from './DocSections';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { ASSET_KINDS, COMMUNITY_ICON, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
@@ -797,18 +797,16 @@ function PluginPage({ plugin, error, onBack, onTurn, onRemove, connector }: {
       byline={<><span className="inline-flex items-center gap-1 text-[var(--text-muted)]">OpenFilm<BadgeCheck size={13} strokeWidth={2} aria-hidden /></span><span aria-hidden>·</span><span>{kind}</span></>}
       summary={summary} actions={actions}
       notice={error ? <p role="alert" className="mt-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
-      hero={plugin.showcase?.video && !plugin.mcpServers ? <PreviewBand plugin={plugin} /> : undefined}
-      aside={(
-        <Facts title={t('assetDrawer.factsTitle')} items={[
-          { key: 'kind', name: t('assetDrawer.factKind'), value: kind },
-          { key: 'maker', name: t('assetDrawer.factMaker'), value: t('assetDrawer.skillsOfficial') },
-          { key: 'state', name: t('assetDrawer.factState'), value: t(!got ? 'assetDrawer.stateNotGot' : !plugin.on ? 'assetDrawer.stateOff'
-            : connector ? (connector.state?.connected ? 'assetDrawer.connectorConnected' : 'assetDrawer.connectorNotConnected') : 'assetDrawer.stateInstalled') },
-          plugin.builtIn ? { key: 'builtin', name: t('assetDrawer.factBuiltIn'), value: t('assetDrawer.factBuiltInNote') } : null,
-        ]} />
-      )}>
+      >
       {/* a connector: connected or not, what to say, how it works and what it can do */}
       {/* the page laid out as every editor's, connector's and skill's: what it does, with the agent, how, keys, off */}
+      <InfoBar items={[
+        { key: 'kind', name: t('assetDrawer.factKind'), value: kind },
+        plugin.profile?.difficulty ? { key: 'difficulty', name: t('assetDrawer.metric_difficulty'), value: <Meter value={plugin.profile.difficulty} mark="dot" />, note: t(`assetDrawer.difficulty_${plugin.profile.difficulty}`) } : null,
+        plugin.profile?.ease ? { key: 'ease', name: t('assetDrawer.metric_ease'), value: <Meter value={plugin.profile.ease} mark="bolt" />, note: t(`assetDrawer.ease_${plugin.profile.ease}`) } : null,
+        { key: 'maker', name: t('assetDrawer.factMaker'), value: <span className="inline-flex items-center gap-1">OpenFilm<BadgeCheck size={14} strokeWidth={2} aria-hidden /></span> },
+        connector ? { key: 'state', name: t('assetDrawer.factState'), value: t(connector.state?.connected ? 'assetDrawer.connectorConnected' : 'assetDrawer.connectorNotConnected') } : null,
+      ]} />
       {connector ? <ConnectorBody plugin={plugin} title={title} state={connector.state} /> : (() => {
         const sorted = sortDetails(details);
         const steps = [...(how && !plugin.soon ? [t(how)] : []), ...sorted.how];
@@ -821,17 +819,21 @@ function PluginPage({ plugin, error, onBack, onTurn, onRemove, connector }: {
           const hint = keyHint(k as ActionId);
           return hint ? [{ keys: [hint], label: t(`settings.shortcuts.actions.${k}`) }] : [];
         }).filter((k) => k.label);
+        const profile = plugin.profile;
+        const audience = inLanguage(profile?.audience, lang);
         return <>
-          <ProfileStrip profile={plugin.profile} />
-          {highlights.length || about.length ? (
+          <div className="mt-8">
+          {highlights.length || about.length || audience ? (
             <DocSection title={t('assetDrawer.docAbout')}>
-              {highlights.length ? <DocHighlights items={highlights} /> : null}
-              {about.length ? <div className={highlights.length ? 'mt-4' : ''}><DocLines lines={about} /></div> : null}
+              {about.length ? <DocLines lines={about} /> : null}
+              {audience ? <div className={about.length ? 'mt-2' : ''}><DocLines lines={[{ lead: t('assetDrawer.metric_audience'), text: audience }]} /></div> : null}
+              {highlights.length ? <div className={about.length || audience ? 'mt-6' : ''}><DocHighlights items={highlights} /></div> : null}
             </DocSection>
           ) : null}
           {examples.length ? <DocSection title={t('assetDrawer.docAgent')} note={t('assetDrawer.docAgentNote')}><DocAgent examples={examples} put={t('assetDrawer.docPut')} /></DocSection> : null}
           {steps.length ? <DocSection title={t('assetDrawer.connectorHow')}><DocSteps steps={steps} /></DocSection> : null}
           {keys.length ? <DocSection title={t('assetDrawer.docKeys')}><DocKeys items={keys} /></DocSection> : null}
+          </div>
           <DocOff text={plugin.soon ? t('assetDrawer.pluginSoonNote') : sorted.off ?? t('assetDrawer.pluginOffNote')} />
         </>;
       })()}

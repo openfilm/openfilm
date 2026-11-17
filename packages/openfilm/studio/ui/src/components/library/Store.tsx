@@ -173,7 +173,7 @@ export function DetailShell({ onBack, icon, title, badges, byline, summary, acti
         </header>
         {notice}
         {hero}
-        <div className={`${hero ? 'mt-8' : 'mt-8 border-t border-[var(--border)] pt-7'} grid gap-x-12 gap-y-8 [grid-template-columns:minmax(0,1fr)] min-[1180px]:[grid-template-columns:minmax(0,1fr)_200px]`}>
+        <div className={`${hero ? 'mt-8' : 'mt-7 border-t border-[var(--border)]'} ${aside ? 'grid gap-x-12 gap-y-8 pt-7 [grid-template-columns:minmax(0,1fr)] min-[1180px]:[grid-template-columns:minmax(0,1fr)_200px]' : ''}`}>
           <div className="min-w-0">{children}</div>
           {aside ? <aside className="min-w-0" data-detail-aside="">{aside}</aside> : null}
         </div>

@@ -206,10 +206,6 @@
           "text": "Forma de onda, vectorscopio e histograma para ver antes de cambiar."
         }
       ]
-    },
-    "video": {
-      "src": "preview.mp4",
-      "poster": "preview.jpg"
     }
   },
   "about": "grading the film's color clip by clip: each clip's grade (a video, a page, a still) is a chain of color transform files of the project (--of-lut); a page's or a still's is drawn by the browser",

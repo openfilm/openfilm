@@ -13,7 +13,7 @@ import type { Profile } from '@/lib/plugin-profile';
 import { inLanguage } from '../SkillPage';
 
 /** A measure of five, as marks: so many lit, the rest dim. */
-function Meter({ value, mark }: { value: number; mark: 'dot' | 'bolt' }) {
+export function Meter({ value, mark }: { value: number; mark: 'dot' | 'bolt' }) {
   return (
     <span aria-hidden className="flex items-center gap-1">
       {Array.from({ length: 5 }, (_, i) => (mark === 'dot'
