@@ -1,0 +1,39 @@
+{
+  "order": 25,
+  "icon": "plug",
+  "title": {
+    "en": "Vimeo",
+    "zh-CN": "Vimeo",
+    "ja": "Vimeo",
+    "ko": "Vimeo",
+    "es": "Vimeo"
+  },
+  "summary": {
+    "en": "Publish with Vimeo: the agent uploads the film, sets its title and description, and reads how it does.",
+    "zh-CN": "用 Vimeo 发布：智能体上传片子、填标题和简介，还能看数据。",
+    "ja": "Vimeo で公開：映像をアップロードし、タイトルや説明を付け、反応を確認します。",
+    "ko": "Vimeo로 게시: 영상을 올리고, 제목과 설명을 달고, 반응을 확인합니다.",
+    "es": "Publica con Vimeo: el agente sube la película, pone título y descripción y consulta cómo va."
+  },
+  "details": {
+    "en": "When to use it: you host or share films on Vimeo (Professional, Studio or Enterprise plans; in beta).\nHow: turn it on, then ask \"upload the export to Vimeo as unlisted\". The first time it asks you to sign in to Vimeo.",
+    "zh-CN": "什么时候用：你在 Vimeo 上托管或分享片子（需要专业版、工作室版或企业版；测试中）。\n怎么用：打开后说「把导出的视频以不公开方式传到 Vimeo」。第一次会请你登录 Vimeo。",
+    "ja": "使うとき：Vimeo で映像を公開・共有しているとき（Professional、Studio、Enterprise プラン、ベータ）。\n使い方：オンにして「書き出しを限定公開で Vimeo にアップして」と頼みます。初回は Vimeo へのサインインを求められます。",
+    "ko": "언제: Vimeo에서 영상을 호스팅·공유할 때(Professional, Studio, Enterprise 요금제, 베타).\n사용법: 켠 뒤 \"내보낸 영상을 Vimeo에 일부 공개로 올려 줘\"라고 말합니다. 처음에는 Vimeo 로그인을 요청합니다.",
+    "es": "Cuándo: alojas o compartes películas en Vimeo (planes Professional, Studio o Enterprise; en beta).\nCómo: actívalo y pide «sube la exportación a Vimeo como oculta». La primera vez te pedirá iniciar sesión en Vimeo."
+  },
+  "about": "uploads films, edits their details and reads their analytics on Vimeo (Vimeo's own MCP server, beta)",
+  "category": "tool",
+  "difficulty": 1,
+  "ease": 5,
+  "cost": "free",
+  "audience": {
+    "en": "Anyone who publishes films on Vimeo",
+    "zh-CN": "在 Vimeo 发布片子的人",
+    "ja": "Vimeo で映像を公開する人",
+    "ko": "Vimeo에 영상을 게시하는 사람",
+    "es": "Quien publica sus películas en Vimeo"
+  },
+  "on": false,
+  "beta": true
+}

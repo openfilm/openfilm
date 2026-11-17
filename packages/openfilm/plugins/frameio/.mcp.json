@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "frameio": {
+      "type": "http",
+      "url": "https://mcp.frame.io/v1/mcp"
+    }
+  }
+}

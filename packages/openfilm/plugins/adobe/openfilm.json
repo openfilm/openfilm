@@ -1,0 +1,38 @@
+{
+  "order": 23,
+  "icon": "plug",
+  "title": {
+    "en": "Adobe",
+    "zh-CN": "Adobe",
+    "ja": "Adobe",
+    "ko": "Adobe",
+    "es": "Adobe"
+  },
+  "summary": {
+    "en": "Adobe's creative tools for the agent: Express, Firefly, Photoshop edits and Adobe Stock.",
+    "zh-CN": "让智能体用 Adobe 的创作工具：Express、Firefly、Photoshop 修图和 Adobe Stock。",
+    "ja": "Adobe のクリエイティブツールをエージェントに：Express、Firefly、Photoshop の編集、Adobe Stock。",
+    "ko": "에이전트가 Adobe 도구를: Express, Firefly, Photoshop 편집, Adobe Stock.",
+    "es": "Las herramientas creativas de Adobe para el agente: Express, Firefly, retoques de Photoshop y Adobe Stock."
+  },
+  "details": {
+    "en": "When to use it: you want a picture retouched, a design made or stock found with Adobe.\nHow: turn it on, then ask \"remove the background of the product shot with Adobe\". Some tools work signed out; the rest ask you to sign in with your Adobe ID.",
+    "zh-CN": "什么时候用：想用 Adobe 修图、做设计或找图库素材。\n怎么用：打开后说「用 Adobe 把产品图的背景去掉」。部分工具不登录也能用，其余会请你用 Adobe ID 登录。",
+    "ja": "使うとき：Adobe で画像を修正したり、デザインを作ったり、ストックを探したいとき。\n使い方：オンにして「Adobe で商品写真の背景を消して」と頼みます。一部はサインインなしで使え、残りは Adobe ID でのサインインを求められます。",
+    "ko": "언제: Adobe로 사진 보정, 디자인, 스톡 찾기를 하고 싶을 때.\n사용법: 켠 뒤 \"Adobe로 제품 사진 배경을 지워 줘\"라고 말합니다. 일부 도구는 로그인 없이 되고, 나머지는 Adobe ID 로그인을 요청합니다.",
+    "es": "Cuándo: quieres retocar una imagen, hacer un diseño o buscar stock con Adobe.\nCómo: actívalo y pide «quita el fondo de la foto del producto con Adobe». Algunas herramientas funcionan sin sesión; el resto te pide tu Adobe ID."
+  },
+  "about": "Adobe Express, Firefly, Photoshop and Adobe Stock tools (Adobe's own MCP server)",
+  "category": "picture",
+  "difficulty": 1,
+  "ease": 5,
+  "cost": "free",
+  "audience": {
+    "en": "Creators who use Adobe's tools",
+    "zh-CN": "用 Adobe 工具的创作者",
+    "ja": "Adobe のツールを使うクリエイター",
+    "ko": "Adobe 도구를 쓰는 크리에이터",
+    "es": "Creadores que usan las herramientas de Adobe"
+  },
+  "on": false
+}
