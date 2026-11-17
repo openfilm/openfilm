@@ -94,6 +94,13 @@ test('covers drawn as pictures at their own size, never over a file already ther
   assert.notEqual(third, first);
 });
 
+test('a cover copied to another shape: a thing of the library, placed by its width alone, keeps its shape and its middle', () => {
+  const film = { stage: { w: 1920, h: 1080 }, tracks: [{ clips: [{ id: 'heart', src: 'saved/openfilm/stickers-heart/heart.html', time: [0, 1], size: { w: 324, h: 324 }, box: { x: 1436, y: 83, w: 324 } }] }] };
+  const { tracks } = restaged(/** @type {any} */ (film), { w: 1080, h: 1440 });
+  /* its short side is the stage's: 1080 → 1080 keeps 324; its middle (1598, 245) of 1920 × 1080 is (899, 327) of 1080 × 1440 */
+  assert.deepEqual(tracks[0].clips[0].box, { x: 737, y: 165, w: 324 });
+});
+
 test('a cover copied to a bigger shape draws its moment of the film again, sharp at the new size', ffmpeg, async () => {
   const root = project();
   const first = await makeCover(root, { name: 'portrait', stage: { w: 270, h: 360 }, at: 1 });
@@ -105,6 +112,16 @@ test('a cover copied to a bigger shape draws its moment of the film again, sharp
   /* 320 × 180 grown to cover 270 × 480: 853 × 480 */
   assert.equal(probe(join(root, copy, 'frame-1000.jpg')), '853,480');
   assert.deepEqual(frame?.box, { x: -291, y: 0, w: 853, h: 480 });
+});
+
+test('a cover copied to another shape takes the library\'s words and stickers put in it along (its saved/ folder)', async () => {
+  const root = project();
+  const first = await makeCover(root, { name: 'landscape', stage: { w: 320, h: 180 }, color: '#123456' });
+  const sticker = join(root, first, 'saved', 'openfilm', 'stickers-heart');
+  mkdirSync(sticker, { recursive: true });
+  writeFileSync(join(sticker, 'heart.html'), '<p>♥</p>');
+  const copy = await makeCover(root, { name: 'portrait', stage: { w: 270, h: 360 }, from: first });
+  assert.equal(readFileSync(join(root, copy, 'saved', 'openfilm', 'stickers-heart', 'heart.html'), 'utf8'), '<p>♥</p>');
 });
 
 test('a cover of a picture of the project, or of a color: filling it, nothing that loads or runs let in', async () => {

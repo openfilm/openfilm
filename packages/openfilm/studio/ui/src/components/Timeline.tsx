@@ -184,6 +184,8 @@ import { cutNear, transitionSpan, type CutRef, type FilmTransition, type Transit
 const HEAD_W = 108;
 /** The column between the heads and the clips where the cover's tile stands, by the main track (components/cover CoverTile). */
 const COVER_COL_W = 84;
+/** The cover's tile at most (a square), however tall the main track is. */
+const COVER_TILE_MAX = 60;
 /** A row at least this tall shows its track's name under the badge (a lower one says it on hover). */
 /** The room solo's S takes in a head. */
 const HEAD_SOLO_W = 24;
@@ -2945,7 +2947,7 @@ export const Timeline = React.memo(function Timeline({
         )) : null}
         {onResizeTrack && track.docIndex != null ? <TrackResizeHandle height={h} onResize={(height, done) => onResizeTrack(track, height, done)} /> : null}
         {/* the cover, in the column beside the heads, by the main track */}
-        {mainHead && cover ? <CoverTile thumb={cover.thumb} size={Math.min(h - 4, 72)} gutter={COVER_COL_W} onOpen={cover.open} menu={cover.menu} /> : null}
+        {mainHead && cover ? <CoverTile thumb={cover.thumb} size={Math.min(h - 12, COVER_TILE_MAX)} gutter={COVER_COL_W} onOpen={cover.open} menu={cover.menu} /> : null}
       </div>
     );
     headElements.set(track.lane, { pose, node });
@@ -4433,11 +4435,12 @@ export const Timeline = React.memo(function Timeline({
           <div
             className="relative overflow-hidden"
             /* the ground the heads lie on, seen in the gaps between them as between the rows */
-            style={{ height: `calc(100% - ${RULER_H}px - ${H_SCROLL_H}px)`, background: 'var(--tl-gap)' }}
+            /* with the cover's column: the line between the heads' side and the clips on its right, the cover inside it */
+            style={{ height: `calc(100% - ${RULER_H}px - ${H_SCROLL_H}px)`, background: 'var(--tl-gap)', ...(cover ? { boxShadow: `inset -1px 0 0 ${TL.line}` } : {}) }}
           >
             {/* moved with the track area's vertical scroll (onScroll), as the rows' backgrounds are; its own block
                 (flow-root), so the first head's margin stays inside it and the reorder guide's top counts from it */}
-            <div ref={headShiftRef} className="relative flow-root" style={{ transform: rowsShift, ...(cover ? { width: `calc(100% - ${COVER_COL_W}px)`, boxShadow: `1px 0 0 ${TL.line}` } : {}) }}>
+            <div ref={headShiftRef} className="relative flow-root" style={{ transform: rowsShift, ...(cover ? { width: `calc(100% - ${COVER_COL_W}px)` } : {}) }}>
               {heads}
               {laneOrder ? (() => {
                 const hover = laneOrder.hoverLane;

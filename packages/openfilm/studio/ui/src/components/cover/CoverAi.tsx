@@ -61,7 +61,7 @@ export function CoverAiPanel({ ratio, hasPicture, busy, made, thumbOf, agent, on
       className={`h-7 rounded-md px-2.5 text-[12px] transition disabled:opacity-45 ${on ? 'bg-[var(--bg-selected)] text-[var(--text)] shadow-[inset_0_0_0_1px_var(--accent)]' : 'bg-[var(--bg-field)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{label}</button>
   );
   return createPortal(
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 p-6" data-cover-ai="" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="fixed inset-0 z-[10060] flex items-center justify-center bg-black/40 p-6" data-cover-ai="" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-label={t('covers.aiTitle')} className="flex max-h-full w-[580px] max-w-full flex-col overflow-hidden rounded-[14px] bg-[var(--bg-raised)] text-[13px] text-[var(--text)] shadow-[0_24px_80px_rgba(0,0,0,.55),0_0_0_1px_var(--border)]">
         <div className="flex h-12 shrink-0 items-center gap-1 px-4">
           {(['make', 'agent'] as const).map((k) => (
@@ -128,6 +128,13 @@ export function CoverAiPanel({ ratio, hasPicture, busy, made, thumbOf, agent, on
 
 /** The looks' pages already read, by their address. */
 const LOOK_PAGES = new Map<string, string>();
+/** The looks' pages read ahead (the design opened), so the first one the pointer rests on shows at once. */
+export function readLooksAhead(pages: readonly string[]) {
+  for (const page of pages) {
+    if (LOOK_PAGES.has(page)) continue;
+    void fetch(page).then((r) => (r.ok ? r.text() : null), () => null).then((text) => { if (text) LOOK_PAGES.set(page, text); });
+  }
+}
 
 /**
  * A look tried on the cover while the pointer rests on it in the library: the cover's picture and the look over it,

@@ -7,7 +7,7 @@
  * project's folder, where its files are.
  */
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { basename, join, relative, resolve, sep } from 'node:path';
@@ -247,7 +247,12 @@ export function restaged(film, stage) {
     ...t,
     clips: t.clips.map((c) => {
       if (!c.box) return c;
-      const b = /** @type {{ x: number, y: number, w: number, h: number, r?: number }} */ (c.box);
+      const own = /** @type {{ x?: number, y?: number, w?: number, h?: number, r?: number }} */ (c.box);
+      /* a thing of the library is placed by its width alone, its height its size's (`size`) */
+      const size = /** @type {{ w?: number, h?: number } | undefined} */ (c.size);
+      const ownH = own.h ?? (own.w != null && size?.w && size.h ? (own.w * size.h) / size.w : undefined);
+      if (own.x == null || own.y == null || own.w == null || ownH == null) return c;
+      const b = { ...own, x: own.x, y: own.y, w: own.w, h: ownH };
       const filled = b.x <= 0 && b.y <= 0 && b.x + b.w >= from.w && b.y + b.h >= from.h;
       if (filled) {
         /* as far into the picture as it was: covering the stage just so, or zoomed in on it */
@@ -257,7 +262,9 @@ export function restaged(film, stage) {
       }
       const w = Math.round(b.w * k), h = Math.round(b.h * k);
       const cx = ((b.x + b.w / 2) / from.w) * stage.w, cy = ((b.y + b.h / 2) / from.h) * stage.h;
-      return { ...c, box: { ...b, x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), w, h } };
+      const box = { ...b, x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), w, h };
+      if (own.h == null) delete (/** @type {{ h?: number }} */ (box)).h;
+      return { ...c, box };
     }),
   }));
   return { ...film, stage, tracks };
@@ -282,7 +289,8 @@ export async function makeCover(root, ask) {
       const from = coverFolder(root, ask.from);
       const { value, problems } = readFilmFile(await readFile(join(from.abs, FILM_FILE), 'utf8'));
       if (!value) throw new CoverFilmError(problems.join('\n'), 422);
-      for (const f of await readdir(from.abs)) if (f !== FILM_FILE && !f.startsWith('.')) await copyFile(join(from.abs, f), join(abs, f));
+      /* its own files, and the folders of the library's things taken into it (saved/) */
+      for (const f of await readdir(from.abs)) if (f !== FILM_FILE && !f.startsWith('.')) await cp(join(from.abs, f), join(abs, f), { recursive: true });
       film = restaged(/** @type {FilmValue} */ (value), stage);
       /* a moment of the film is drawn again at the new size, sharp where the copy is bigger; where it sits stays the copy's */
       for (const track of film.tracks) {

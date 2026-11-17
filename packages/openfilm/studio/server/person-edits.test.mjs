@@ -831,17 +831,3 @@ test('the films inside a project (a cover) are in the note of the project: once 
   assert.deepEqual(clip(read(cover), 'title').box, { x: 900, y: 500, w: 640, h: 360 }, 'the agent\'s move stands');
   assert.equal(tell(root, 'pid:7'), null);
 });
-
-test('PROBE after told and taken, the person changes it again: the agent writing from its copy again', async () => {
-  const root = await project(F([page('title')]));
-  const edit = async (text) => { const now = await settleProjectFilm(root); await editProjectFilm(root, now.rev, [{ op: 'props', edits: [{ clip: 'title', prop: 'at', value: text }] }]); };
-  await edit(1);
-  const mine = read(root); clip(mine, 'title').at = 5; write(root, mine); await settleProjectFilm(root);
-  const a = clip(read(root), 'title').at;
-  const note = tell(root, 'app:c');
-  write(root, mine); await settleProjectFilm(root);
-  const b = clip(read(root), 'title').at;
-  await edit(2);
-  const again = structuredClone(mine); clip(again, 'title').at = 7; write(root, again); await settleProjectFilm(root);
-  console.log('PROBE', a, Boolean(note), b, clip(read(root), 'title').at);
-});

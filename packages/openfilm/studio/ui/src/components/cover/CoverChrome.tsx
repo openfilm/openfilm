@@ -26,7 +26,7 @@ export function ShapeMark({ shape, size = 14 }: { shape: CoverShape; size?: numb
 }
 
 /**
- * In the column between the edit's track heads and its clips, by the main track: the film's cover (its picture, or a
+ * In a column of the heads' side, right of the track heads and left of the line before the clips, by the main track: a square, the film's cover (its picture, or a
  * dashed box with a pen and "Cover" while it has none). A click opens the cover design; its menu opens it, makes the
  * frame at the playhead the cover's picture, or exports the covers.
  */
@@ -35,7 +35,8 @@ export function CoverTile({ thumb, size, gutter, onOpen, menu }: {
 }) {
   const t = useT();
   const [at, setAt] = React.useState<{ x: number; y: number } | null>(null);
-  const w = thumb ? Math.round(size * 0.78) : size;
+  /* a square, in the middle of its column */
+  const w = size;
   return (
     <>
       <button type="button" data-cover-tile="" onClick={(e) => { e.stopPropagation(); onOpen(); }}
@@ -58,7 +59,7 @@ export function CoverTile({ thumb, size, gutter, onOpen, menu }: {
   );
 }
 
-/** The cover design's top bar: its name, a tab for each shape the film has a cover in (the main one first), a new shape, the safe areas, the feed preview. */
+/** The cover design's header (its window's top): its name, a tab for each shape the film has a cover in (the main one first), a new shape, the safe areas, the feed preview. */
 export function CoverTopBar({ covers, current, main, thumbOf, safe, feed, onOpen, onAddShape, onMain, onExport, onSafe, onFeed }: {
   covers: readonly CoverInfo[];
   current: string;
@@ -84,8 +85,8 @@ export function CoverTopBar({ covers, current, main, thumbOf, safe, feed, onOpen
     id: s.id, label: `${t(`covers.shape_${s.id}`)} ${s.ratio}`, note: t(`covers.where_${s.id}`), onSelect: () => onAddShape(s),
   }));
   return (
-    <div data-cover-topbar="" className="@container flex h-10 shrink-0 items-center gap-1 border-b border-[var(--border)] px-3 text-[12.5px]">
-      <span className="mr-3 shrink-0 font-semibold text-[var(--text)]">{t('covers.designTitle')}</span>
+    <div data-cover-topbar="" className="@container flex h-[60px] shrink-0 items-center gap-1 px-5 text-[12.5px]">
+      <span className="mr-4 shrink-0 text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{t('covers.designTitle')}</span>
       <div role="tablist" aria-label={t('covers.shapes')} className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
         {[...covers].sort((a, b) => Number(b.folder === main) - Number(a.folder === main)
           || COVER_SHAPES.indexOf(shapeOf(a.stage)) - COVER_SHAPES.indexOf(shapeOf(b.stage))).map((c) => {
@@ -221,12 +222,15 @@ export function CoverBottom({ outerId, filmSeconds, frameAt, busy, canUndo, canR
 }
 
 /** The cover as a feed shows it: at the size it is seen there, its title under it. */
-export function CoverFeed({ projectId, cover, title }: { projectId: string; cover: CoverInfo; title: string }) {
+export function CoverFeed({ projectId, cover, title, inline = false }: { projectId: string; cover: CoverInfo; title: string;
+  /** in a column of its own (the design's side), not over the picture's corner */
+  inline?: boolean }) {
   const t = useT();
   const shape = shapeOf(cover.stage);
   const w = FEED_WIDTH[shape.id];
   return (
-    <div data-cover-feed="" className="pointer-events-none absolute right-3 top-3 z-20 hidden rounded-lg @[760px]:block bg-[var(--bg-raised)] p-2 shadow-[0_8px_24px_rgba(0,0,0,.45),0_0_0_1px_var(--border)]" style={{ width: w + 16 }}>
+    <div data-cover-feed="" className={inline ? 'mx-auto max-w-full rounded-lg bg-[var(--bg-field)] p-2'
+      : 'pointer-events-none absolute right-3 top-3 z-20 hidden rounded-lg @[760px]:block bg-[var(--bg-raised)] p-2 shadow-[0_8px_24px_rgba(0,0,0,.45),0_0_0_1px_var(--border)]'} style={{ width: w + 16 }}>
       <div className="mb-1.5 text-[10.5px] text-[var(--text-faint)]">{t('covers.feedTitle')}</div>
       <img src={coverThumb(projectId, cover, 480)} alt="" className="w-full rounded-[4px]" />
       <div className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-[var(--text)]">{title}</div>
