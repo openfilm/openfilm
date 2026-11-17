@@ -107,13 +107,15 @@ test('a skill of OpenFilm\'s own has no switch of its own: the plugin it goes wi
 test('every plugin made has a switch; what is not made yet is never on, and no agent hears of it', async () => {
   const h = home();
   const state = (id) => pluginStates(h).find((p) => p.id === id);
-  /* 0.4.0 has these four; the rest come in later versions (none listed before then) */
-  assert.deepEqual(PLUGINS.map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['color', false]]);
+  /* 0.4.0 has these four workbenches and six connectors, each connector off until got; the rest come later (none listed before then) */
+  assert.deepEqual(PLUGINS.map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['color', false],
+    ['dropbox', false], ['frameio', false], ['notion', false], ['adobe', false], ['canva', false], ['vimeo', false]]);
   const { CORE_SKILLS } = await import('./skills.mjs');
   /* the film's and the media's go with none: each is there while a plugin on needs it */
   assert.deepEqual(CORE_SKILLS.map((skill) => pluginOfSkill(skill)), [undefined, undefined, 'canvas']);
   assert.deepEqual(PLUGINS.map((p) => [p.id, p.skills, p.requires]),
-    [['screening', [], ['film', 'media']], ['edit', [], ['film', 'media']], ['canvas', ['canvas'], ['media']], ['color', ['color'], ['film']]]);
+    [['screening', [], ['film', 'media']], ['edit', [], ['film', 'media']], ['canvas', ['canvas'], ['media']], ['color', ['color'], ['film']],
+      ...['dropbox', 'frameio', 'notion', 'adobe', 'canva', 'vimeo'].map((id) => [id, [], []])]);
   assert.throws(() => setPluginOn('sound', true, h), /no plugin/);
   /* a choice written by hand for one there is not is not followed */
   mkdirSync(h, { recursive: true });
@@ -193,6 +195,7 @@ test('each plugin of OpenFilm\'s own is in one category, and one made is rated, 
   /* by what it helps make, in the order a film is made */
   assert.deepEqual(Object.fromEntries(PLUGINS.map((p) => [p.id, p.profile?.category])), {
     screening: 'edit', edit: 'edit', canvas: 'material', color: 'picture',
+    dropbox: 'material', frameio: 'edit', notion: 'tool', adobe: 'picture', canva: 'picture', vimeo: 'tool',
   });
 });
 

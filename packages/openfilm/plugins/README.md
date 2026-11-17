@@ -87,6 +87,21 @@ A `bin` that is one file is one command, `openfilm my-plugin`.
 A film never depends on a plugin. What a plugin writes into `film.html` is standard HTML and CSS and files of the project,
 so the film plays and renders with the plugin off.
 
+### A connector: `.mcp.json`
+
+A plugin reaches a service your agent can use when its folder has a `.mcp.json`, written as a Claude Code plugin's:
+
+```json
+{ "mcpServers": { "notion": { "type": "http", "url": "https://mcp.notion.com/mcp" } } }
+```
+
+Each server is a remote one (`"type": "http"`, an `https://` address, optional string `headers`) or a program to run
+(`"type": "stdio"`, its `command`, `args` and string `env`); at most eight, each named in lowercase letters, digits,
+`-` and `_`. While the plugin is on, the desktop app gives its servers to the agent's session over ACP (`mcpServers`
+of `session/new`; a remote one only to an agent that says it takes them). The agent signs in to the service itself the
+first time, as in its terminal: put no keys in the file. A plugin with only a `.mcp.json` and its `openfilm.json` is
+listed as a connector in the Community.
+
 ### `look`: what an agent sees of your dimension
 
 A workbench plugin lets an agent check its work without the interface: a `look` command that tells the film as your

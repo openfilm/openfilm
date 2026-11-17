@@ -284,7 +284,9 @@ export const workbenchesOn = (home) => inPersonsOrder(pluginStates(home), workbe
  * @param {string} [home]
  */
 export function pluginsOffLine(home) {
-  const off = pluginStates(home).filter((p) => !p.on && !p.soon);
+  /* those with a workbench or a tab of the library, where the person could be sent (a connector off is simply not
+     given to the agent: nothing of it to send them to) */
+  const off = pluginStates(home).filter((p) => !p.on && !p.soon && (p.workbench || p.tab));
   if (!off.length) return null;
   return `Plugins the person has turned off (Community › Added, in the OpenFilm menu, turns one on): ${off.map((p) => `${p.id} (${p.about})`).join('; ')}. `
     + 'Their workbenches are not shown, so do not send the person to one; when a task would be better done there, say so in a line.';
