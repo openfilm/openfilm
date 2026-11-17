@@ -3778,6 +3778,7 @@ export const ja: Words = {
         groq: '自社チップによる超高速推論：Whisper の書き起こしと Orpheus の音声を数秒で。',
         mimo: 'Xiaomi の MiMo モデル：自然な音声合成と正確な書き起こし。中国語で特に強みがあります。',
         doubao: 'Volcano Engine 上の ByteDance の Doubao 音声モデル：正確な書き起こし。中国語で特に強みがあります。',
+        volcengine: 'Volcano Engine Ark 上の ByteDance 公式モデル：音声付きの Seedance 動画（2.0 Fast、Mini、2.0、2.5 Flash、2.5、最長 30 秒）と Seedream 5.5 の画像。Ark の API キーを使います。',
         pexels: '写真家の大きなコミュニティによる無料のストック写真。映画に無料で使えます。',
         pixabay: '無料のストック画像、イラスト、ベクター。映画に無料で使えます。',
         brave: 'Brave 独自の検索インデックスを Brave Search API で。',

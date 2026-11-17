@@ -3775,6 +3775,7 @@ export const ko: Words = {
         groq: '자체 칩으로 하는 초고속 추론: Whisper 받아쓰기와 Orpheus 음성을 몇 초 만에.',
         mimo: 'Xiaomi의 MiMo 모델: 자연스러운 음성 합성과 정확한 받아쓰기, 특히 중국어에 강합니다.',
         doubao: 'Volcano Engine의 ByteDance Doubao 음성 모델: 정확한 받아쓰기, 특히 중국어에 강합니다.',
+        volcengine: 'Volcano Engine Ark에서 제공하는 ByteDance 공식 모델: 소리가 있는 Seedance 영상(2.0 Fast, Mini, 2.0, 2.5 Flash, 2.5, 최대 30초)과 Seedream 5.5 이미지. Ark API 키를 사용합니다.',
         pexels: '대규모 사진가 커뮤니티의 무료 스톡 사진으로, 영화에 무료로 쓸 수 있습니다.',
         pixabay: '무료 스톡 이미지, 일러스트, 벡터로, 영화에 무료로 쓸 수 있습니다.',
         brave: 'Brave 자체의 독립 검색 인덱스를 Brave Search API로 제공합니다.',

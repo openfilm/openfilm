@@ -3778,6 +3778,7 @@ export const es: Words = {
         groq: 'Inferencia muy rápida en sus propios chips: transcripción con Whisper y voces de Orpheus en segundos.',
         mimo: 'Los modelos MiMo de Xiaomi: voz natural y transcripción precisa, sobre todo en chino.',
         doubao: 'Los modelos de voz Doubao de ByteDance en Volcano Engine: transcripción precisa, sobre todo en chino.',
+        volcengine: 'Los modelos propios de ByteDance en Volcano Engine Ark: vídeo con sonido de Seedance (2.0 Fast, Mini, 2.0, 2.5 Flash y 2.5, hasta 30 s) e imágenes de Seedream 5.5. Usa una clave de API de Ark.',
         pexels: 'Fotos de stock gratuitas de una gran comunidad de fotógrafos, libres para usar en tus películas.',
         pixabay: 'Imágenes, ilustraciones y vectores de stock gratuitos, libres para usar en tus películas.',
         brave: 'El índice de búsqueda independiente de Brave, a través de la API de Brave Search.',

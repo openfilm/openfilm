@@ -3813,6 +3813,7 @@ export const en = {
         groq: 'Very fast inference on its own chips: Whisper transcription and Orpheus voices, in seconds.',
         mimo: 'Xiaomi\'s MiMo models: natural speech and accurate transcription, at their best in Chinese.',
         doubao: 'ByteDance\'s Doubao Speech on Volcano Engine: transcription, TTS 2.0 and voice cloning. Use a Speech API key; each product needs access in the service console.',
+        volcengine: 'ByteDance\'s own models on Volcano Engine Ark: Seedance video with sound (2.0 Fast, Mini, 2.0, 2.5 Flash and 2.5, up to 30 s) and Seedream 5.5 pictures. Use an Ark API key.',
         pexels: 'Free stock photos from a large community of photographers, free to use in your films.',
         pixabay: 'Free stock pictures, illustrations and vectors, free to use in your films.',
         brave: 'Brave\'s own independent search index, through the Brave Search API.',

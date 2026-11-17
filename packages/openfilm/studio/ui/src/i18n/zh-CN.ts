@@ -3812,6 +3812,7 @@ export const zhCN: Words = {
         groq: '用自研芯片做极速推理：Whisper 转写和 Orpheus 音色，几秒就好。',
         mimo: '小米的 MiMo 模型：自然的语音合成和准确的转写，中文表现最好。',
         doubao: '火山引擎上的豆包语音：语音识别、语音合成 2.0 和声音复刻。使用 Speech API Key，并在服务控制台开通对应产品。',
+        volcengine: '字节跳动在火山方舟上的官方模型：Seedance 有声视频（2.0 Fast、Mini、2.0、2.5 Flash 和 2.5，最长 30 秒）和 Seedream 5.5 图片。使用方舟 API Key。',
         pexels: '由大量摄影师社区提供的免费图库照片，可免费用在你的影片里。',
         pixabay: '免费的图库图片、插画和矢量图，可免费用在你的影片里。',
         brave: 'Brave 自己的独立搜索索引，通过 Brave Search API 提供。',

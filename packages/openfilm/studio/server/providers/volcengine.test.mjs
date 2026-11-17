@@ -133,3 +133,33 @@ test('what each model offers: sizes, lengths, references, with recordings and cl
   assert.equal(videoModelSpec('doubao-seedance-2-5-260628', true).voiceNeedsVisual, undefined);
   assert.equal(volcengine.env, 'ARK_API_KEY');
 });
+
+test('Seedance 2.5 Flash: 480p and 720p, 4 to 30 s, from up to 10 pictures and 5 clips and recordings', () => {
+  assert.deepEqual(videoModelSpec('doubao-seedance-2-5-flash-261115', true), {
+    ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'], seconds: [4, 30], refs: 10, frames: true, sizes: ['480p', '720p'], voice: 5, clip: 5,
+  });
+});
+
+test('a Seedream picture: its size in pixels, opaque or transparent, no mark; 4K asked is 2K; a mask is refused', async () => {
+  /* a 1 × 1 PNG */
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==', 'base64');
+  reply = (call) => call.url.pathname === '/api/v3/images/generations'
+    ? [200, { data: [{ b64_json: png.toString('base64'), size: '2720x1536' }], usage: { input_images: 1, generated_images: 1 } }] : [404, {}];
+  seen.length = 0;
+  const made = await volcengine.run('image', { out: 'snow', prompt: 'the harbor in snow', ref: ['a.png'], ratio: '16:9', size: '4k', transparent: true },
+    ctx({ 'a.png': new Uint8Array(png) }, 'doubao-seedream-5-5-261028'));
+  const sent = JSON.parse(seen.at(-1).body);
+  assert.equal(seen.at(-1).headers.authorization, `Bearer ${KEY}`);
+  assert.deepEqual({ ...sent, image: sent.image.map((u) => u.slice(0, 22)) }, {
+    model: 'doubao-seedream-5-5-261028', prompt: 'the harbor in snow', size: '2720x1536', output_format: 'png', background: 'transparent',
+    response_format: 'b64_json', watermark: false, image: ['data:image/png;base64,'],
+  });
+  assert.equal(made.files[0].path, 'assets/image/snow.png');
+  assert.equal(made.receipt.size, '2k');
+  assert.equal(made.receipt.refs, 1);
+  assert.match(made.receipt.notes[0], /Seedream makes 1k and 2k pictures/);
+  await volcengine.run('image', { out: 'a', prompt: 'a lantern' }, ctx({}, 'doubao-seedream-5-5-261028'));
+  assert.deepEqual(JSON.parse(seen.at(-1).body).size, '1536x1024', '1K at 3:2 by default');
+  assert.equal(JSON.parse(seen.at(-1).body).background, 'opaque');
+  await assert.rejects(volcengine.run('image', { out: 'a', prompt: 'x', ref: ['a.png'], mask: 'm.png' }, ctx({}, 'doubao-seedream-5-5-261028')), /--mask: Seedream changes a picture as the prompt says/);
+});
