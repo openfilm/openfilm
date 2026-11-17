@@ -2420,6 +2420,7 @@ export const ja: Words = {
     resizeBlock: "{name}のサイズを変更",
     preset_standard: "デフォルト",
     editLayout: "レイアウトを編集",
+    panels: "パネル",
     canvasEffectInEdit: "この素材は動画クリップ用です。編集モードに切り替えて使用してください。",
     title: 'レイアウト',
     assets: "ライブラリ",

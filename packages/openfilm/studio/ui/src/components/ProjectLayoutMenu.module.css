@@ -34,6 +34,10 @@
 .menu button:focus-visible { outline:1px solid var(--accent); outline-offset:1px; }
 
 .modeLabel { color:var(--text-muted); font-size:11px; margin:0 0 8px; }
+.panels { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.panels button { height:26px; padding:0 10px; border-radius:6px; font-size:12px; color:var(--text-muted); background:var(--bg-field); }
+.panels button:hover { color:var(--text); background:var(--bg-hover); }
+.panels button[aria-pressed="true"] { color:var(--text); background:var(--bg-pressed); }
 .editLayout { display:flex; align-items:center; width:100%; gap:7px; padding:9px; border-radius:6px; margin-top:10px; font-size:12px; color:var(--text); background:var(--bg-field); }
 .editLayout span { flex:1; text-align:left; }
 .editLayout:hover { background:var(--bg-hover); }

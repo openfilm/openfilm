@@ -2432,6 +2432,7 @@ export const zhCN: Words = {
     resizeBlock: "调整{name}大小",
     preset_standard: "默认",
     editLayout: "编辑布局",
+    panels: "面板",
     canvasEffectInEdit: "此素材用于剪辑片段，请切换到剪辑模式使用。",
     title: '布局',
     assets: "资源库",

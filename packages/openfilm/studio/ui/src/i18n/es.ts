@@ -2420,6 +2420,7 @@ export const es: Words = {
     resizeBlock: "Redimensionar {name}",
     preset_standard: "Predeterminado",
     editLayout: "Editar diseño",
+    panels: "Paneles",
     canvasEffectInEdit: "Este recurso se aplica a un clip. Cambia a edición para usarlo.",
     title: 'Diseño',
     assets: "Biblioteca",

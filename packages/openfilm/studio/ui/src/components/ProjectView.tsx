@@ -8,7 +8,7 @@
  */
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
-import { BookmarkPlus, ChartSpline, Columns2, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Diamond, Eye, EyeOff, FolderOpen, Layers, Lock, LockOpen, MessageSquarePlus, Plus, Settings2, Spline, TriangleAlert, Upload } from 'lucide-react';
+import { BookmarkPlus, ChartSpline, Columns2, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Diamond, Eye, EyeOff, FolderOpen, Layers, LibraryBig, Lock, LockOpen, MessageSquarePlus, Plus, Settings2, Spline, TriangleAlert, Upload } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, withAnimations, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
@@ -249,7 +249,7 @@ export function ProjectView({ projectId, onProject }: {
     canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes,
     libraryIndex, setRevealMedia, showFile, saveThings, folders, onLibraryDownloadFailed,
     title,
-    arrangement, openBlock,
+    arrangement, openBlock, openLibrary, libraryPane,
   } = useFrame(projectId);
   const keyHint = useKeyHint();
   /** film.html is missing from the folder (an agent writing it again, or it lost): said on the picture until it is back */
@@ -5301,8 +5301,17 @@ export function ProjectView({ projectId, onProject }: {
               <InBlock id="viewer">
               <div className={`${PANE} min-w-0 flex-1 bg-[var(--bg-viewer)]`} data-viewer-pane="" inert={coverOpen}>
                 <div className={PANE_BAR}>
-                  {/* the layers and the inspector shown or hidden, where the arrangement shown has them */}
-                  {own.places.layers ? (
+                  {/* in a browser, the library opened or closed (the layers are in the layout's menu); in the app, whose
+                      chat has the library's button, the layers and the inspector shown or hidden where the arrangement has them */}
+                  {!studioHost ? (
+                  <Tooltip label={t('assetDrawer.library')} side="bottom">
+                    <button type="button" data-viewer-library="" aria-pressed={libraryPane.open} onClick={() => openLibrary(!libraryPane.open)}
+                      aria-label={t('assetDrawer.library')}
+                      className={`${PANE_TOGGLE} ${libraryPane.open ? PANE_BTN_ON : ''}`}>
+                      <LibraryBig size={PANE_TOGGLE_ICON} />
+                    </button>
+                  </Tooltip>
+                  ) : own.places.layers ? (
                   <Tooltip label={t(layersShown ? 'layers.hidePane' : 'layers.showPane')} side="bottom">
                     <button type="button"
                       onClick={() => {

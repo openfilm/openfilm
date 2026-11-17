@@ -2433,6 +2433,7 @@ export const en = {
     resizeBlock: "Resize {name}",
     preset_standard: "Default",
     editLayout: "Edit layout",
+    panels: "Panels",
     canvasEffectInEdit: "This asset applies to a film clip. Switch to the edit to use it.",
     title: 'Layout',
     assets: "Library",

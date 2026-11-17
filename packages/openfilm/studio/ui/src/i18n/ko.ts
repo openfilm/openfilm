@@ -2418,6 +2418,7 @@ export const ko: Words = {
     resizeBlock: "{name} 크기 조정",
     preset_standard: "기본값",
     editLayout: "레이아웃 편집",
+    panels: "패널",
     canvasEffectInEdit: "이 소재는 영상 클립에 적용됩니다. 편집 모드에서 사용하세요.",
     title: '레이아웃',
     assets: "라이브러리",

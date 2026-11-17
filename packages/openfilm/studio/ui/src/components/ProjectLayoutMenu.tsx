@@ -2,7 +2,8 @@
 import React from 'react';
 import { Check, Download, GripVertical, MoreHorizontal, PanelsRightBottom, Pencil, Plus, RotateCcw, Save, Trash2, Upload, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { MAX_WORKSPACES, WORKSPACES_KEY, keepWorkspace, parseWorkspaces, readSavedWorkspaces, sameWorkspace, serializeWorkspaces, workspacePresets, type ArrangementSpec, type SavedWorkspace, type WorkspaceLayout } from '@/lib/workspaces';
+import { blockTitle } from '@/lib/blocks';
+import { MAX_WORKSPACES, WORKSPACES_KEY, centerOf, keepWorkspace, parseWorkspaces, readSavedWorkspaces, sameWorkspace, serializeWorkspaces, workspacePresets, type ArrangementSpec, type SavedWorkspace, type WorkspaceLayout } from '@/lib/workspaces';
 import type { BlockRoom, DrawnBlock } from '@/lib/workspace-preview';
 import { usePlugins } from '@/lib/plugins';
 import { WorkspacePreview } from './WorkspacePreview';
@@ -29,6 +30,9 @@ export function ProjectLayoutMenu({ className, value, spec, title, onChange, onR
 }) {
   const t = useT();
   const words = useArrangementWords(value.mode, title);
+  const language = useLanguage();
+  /* the panels that can be shown or hidden: every block but the main one */
+  const panels = spec.blocks.filter((block) => block !== centerOf(spec) && value.blocks[block.key]);
   const [open, setOpen] = React.useState(false);
   React.useEffect(() => { if (layoutEditing) setOpen(false); }, [layoutEditing]);
   const [saved, setSaved] = React.useState<SavedWorkspace[]>([]);
@@ -85,6 +89,8 @@ export function ProjectLayoutMenu({ className, value, spec, title, onChange, onR
       <div className={styles.heading}><strong>{t('layout.title')}</strong><button type="button" className={styles.reset} onClick={onReset}><RotateCcw size={12}/>{t('layout.restoreDefault')}</button></div>
       <p className={styles.modeLabel}>{words.layouts}</p>
       <div className={styles.presets}>{workspacePresets(spec).map(preset=><button key={preset.id} type="button" aria-label={t(`layout.preset_${preset.id}`)} aria-pressed={sameWorkspace(value,preset.layout,hasChat,spec)} onClick={()=>onChange(preset.layout)}><WorkspacePreview layout={preset.layout} spec={spec} viewport={viewport} hasChat={hasChat} sizes={sizes} className={styles.preview}/><span>{t(`layout.preset_${preset.id}`)}</span></button>)}</div>
+      {/* the arrangement's panels, each shown or hidden here (the layers among the edit's) */}
+      {panels.length ? <div className={styles.panels} role="group" aria-label={t('layout.panels')}>{panels.map(block=>{const place=value.blocks[block.key];return <button key={block.key} type="button" data-layout-panel={block.key} aria-pressed={Boolean(place?.open)} onClick={()=>place&&onChange({...value,blocks:{...value.blocks,[block.key]:{...place,open:!place.open}}})}>{blockTitle(block,language)}</button>;})}</div> : null}
       <button type="button" className={styles.editLayout} onClick={()=>{show(false);onEdit();}}><GripVertical size={15}/><span>{t('layout.editLayout')}</span><Pencil size={13}/></button>
       <section className={styles.section}><div className={styles.customHeading}><h3>{t('layout.savedLayouts')}</h3><span>{saved.length}/{MAX_WORKSPACES}</span><button type="button" disabled={saved.length>=MAX_WORKSPACES} aria-label={t('layout.saveCurrentShort')} onClick={()=>begin()}><Plus size={14}/>{t('layout.saveCurrentShort')}</button></div>
         {editing?<form className={styles.nameForm} onSubmit={event=>{event.preventDefault();save();}}><input ref={input} aria-label={t('layout.name')} value={editing.name} maxLength={40} onChange={event=>setEditing({...editing,name:event.target.value})}/><button type="button" className={styles.iconButton} aria-label={t('layout.cancel')} onClick={()=>setEditing(null)}><X size={13}/></button><button type="submit" className={styles.done} disabled={!name||duplicate}>{t('layout.save')}</button></form>:null}
