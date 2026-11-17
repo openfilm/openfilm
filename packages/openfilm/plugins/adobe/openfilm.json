@@ -24,30 +24,189 @@
   },
   "examples": {
     "zh-CN": [
-      "用 Adobe Firefly 生成一张片头背景图，放进片子开头",
-      "从 Adobe Stock 找三段城市夜景的素材",
-      "用 Photoshop 把这张产品图去掉背景"
+      {
+        "say": "用 Adobe Firefly 生成一张片头背景图，放进片子开头",
+        "does": "用 Firefly 按片子的风格生成背景图，放上开头的画面轨。"
+      },
+      {
+        "say": "从 Adobe Stock 找三段城市夜景的素材",
+        "does": "在 Adobe Stock 里搜索，挑三段给你预览，你选中的才放进项目。"
+      },
+      {
+        "say": "用 Photoshop 把这张产品图去掉背景",
+        "does": "用 Photoshop 抠掉背景，存成透明 PNG，替换片子里原来那张。"
+      }
     ],
     "en": [
-      "Make a title background with Adobe Firefly and put it at the start of the film",
-      "Find three city-at-night clips on Adobe Stock",
-      "Remove the background of this product photo with Photoshop"
+      {
+        "say": "Make a title background with Adobe Firefly and put it at the start of the film",
+        "does": "Generates a background in the film's style with Firefly and puts it on the opening's picture track."
+      },
+      {
+        "say": "Find three city-at-night clips on Adobe Stock",
+        "does": "Searches Adobe Stock and shows you three to preview; only the ones you pick go into the project."
+      },
+      {
+        "say": "Remove the background of this product photo with Photoshop",
+        "does": "Removes the background with Photoshop, saves a transparent PNG and swaps it in for the original."
+      }
     ],
     "ja": [
-      "Adobe Firefly でタイトルの背景画像を作って、映像の冒頭に入れて",
-      "Adobe Stock で都市の夜景素材を 3 本探して",
-      "Photoshop でこの製品写真の背景を消して"
+      {
+        "say": "Adobe Firefly でタイトルの背景画像を作って、映像の冒頭に入れて",
+        "does": "Firefly で映像の雰囲気に合う背景を作り、冒頭の映像トラックに置きます。"
+      },
+      {
+        "say": "Adobe Stock で都市の夜景素材を 3 本探して",
+        "does": "Adobe Stock を検索して3本をプレビュー。選んだものだけをプロジェクトに入れます。"
+      },
+      {
+        "say": "Photoshop でこの製品写真の背景を消して",
+        "does": "Photoshop で背景を抜いて透過 PNG にし、元の画像と差し替えます。"
+      }
     ],
     "ko": [
-      "Adobe Firefly로 타이틀 배경 이미지를 만들어 영상 앞부분에 넣어 줘",
-      "Adobe Stock에서 도시 야경 소스를 세 개 찾아 줘",
-      "Photoshop으로 이 제품 사진의 배경을 지워 줘"
+      {
+        "say": "Adobe Firefly로 타이틀 배경 이미지를 만들어 영상 앞부분에 넣어 줘",
+        "does": "Firefly로 영상 분위기에 맞는 배경을 만들어 첫 장면의 영상 트랙에 놓습니다."
+      },
+      {
+        "say": "Adobe Stock에서 도시 야경 소스를 세 개 찾아 줘",
+        "does": "Adobe Stock에서 찾아 3개를 미리 보여 주고, 고른 것만 프로젝트에 넣습니다."
+      },
+      {
+        "say": "Photoshop으로 이 제품 사진의 배경을 지워 줘",
+        "does": "Photoshop으로 배경을 지워 투명 PNG로 저장하고 원래 이미지와 바꿉니다."
+      }
     ],
     "es": [
-      "Crea un fondo para el título con Adobe Firefly y ponlo al principio",
-      "Busca tres clips de ciudad de noche en Adobe Stock",
-      "Quita el fondo de esta foto de producto con Photoshop"
+      {
+        "say": "Crea un fondo para el título con Adobe Firefly y ponlo al principio",
+        "does": "Genera un fondo al estilo de la película con Firefly y lo pone en la pista de imagen del inicio."
+      },
+      {
+        "say": "Busca tres clips de ciudad de noche en Adobe Stock",
+        "does": "Busca en Adobe Stock y te enseña tres para ver; solo las que elijas entran en el proyecto."
+      },
+      {
+        "say": "Quita el fondo de esta foto de producto con Photoshop",
+        "does": "Quita el fondo con Photoshop, guarda un PNG transparente y sustituye la imagen original."
+      }
     ]
+  },
+  "showcase": {
+    "highlights": {
+      "zh-CN": [
+        {
+          "icon": "sparkles",
+          "title": "Firefly 生成",
+          "text": "按描述生成图片和背景，风格跟着片子走。"
+        },
+        {
+          "icon": "search",
+          "title": "Adobe Stock 素材",
+          "text": "搜视频、图片和音乐，挑好的直接进项目。"
+        },
+        {
+          "icon": "crop",
+          "title": "Photoshop 修图",
+          "text": "去背景、裁切、调光调色，改好的图换回片子里。"
+        },
+        {
+          "icon": "image",
+          "title": "Express 设计",
+          "text": "做海报、缩略图和社交图，用片子里的画面。"
+        }
+      ],
+      "en": [
+        {
+          "icon": "sparkles",
+          "title": "Firefly images",
+          "text": "Pictures and backgrounds from a description, in the film's style."
+        },
+        {
+          "icon": "search",
+          "title": "Adobe Stock",
+          "text": "Search video, pictures and music; the ones you pick go straight into the project."
+        },
+        {
+          "icon": "crop",
+          "title": "Photoshop edits",
+          "text": "Remove backgrounds, crop and fix light and colour; the result goes back into the film."
+        },
+        {
+          "icon": "image",
+          "title": "Express designs",
+          "text": "Posters, thumbnails and social images made from the film's frames."
+        }
+      ],
+      "ja": [
+        {
+          "icon": "sparkles",
+          "title": "Firefly で生成",
+          "text": "説明から画像や背景を作り、映像の雰囲気に合わせます。"
+        },
+        {
+          "icon": "search",
+          "title": "Adobe Stock 素材",
+          "text": "動画・画像・音楽を探し、選んだものをそのままプロジェクトへ。"
+        },
+        {
+          "icon": "crop",
+          "title": "Photoshop で補正",
+          "text": "背景除去・切り抜き・明るさや色の補正をして映像に戻します。"
+        },
+        {
+          "icon": "image",
+          "title": "Express のデザイン",
+          "text": "映像のフレームからポスター・サムネイル・SNS 画像を作ります。"
+        }
+      ],
+      "ko": [
+        {
+          "icon": "sparkles",
+          "title": "Firefly 생성",
+          "text": "설명대로 이미지와 배경을 만들고 영상 분위기에 맞춥니다."
+        },
+        {
+          "icon": "search",
+          "title": "Adobe Stock 소재",
+          "text": "영상·이미지·음악을 찾아 고른 것을 바로 프로젝트에 넣습니다."
+        },
+        {
+          "icon": "crop",
+          "title": "Photoshop 보정",
+          "text": "배경 제거·자르기·밝기와 색 보정 후 영상에 다시 넣습니다."
+        },
+        {
+          "icon": "image",
+          "title": "Express 디자인",
+          "text": "영상 프레임으로 포스터·썸네일·SNS 이미지를 만듭니다."
+        }
+      ],
+      "es": [
+        {
+          "icon": "sparkles",
+          "title": "Imágenes con Firefly",
+          "text": "Imágenes y fondos a partir de una descripción, al estilo de la película."
+        },
+        {
+          "icon": "search",
+          "title": "Adobe Stock",
+          "text": "Busca vídeo, imágenes y música; lo que elijas entra directo en el proyecto."
+        },
+        {
+          "icon": "crop",
+          "title": "Retoques en Photoshop",
+          "text": "Quita fondos, recorta y ajusta luz y color; el resultado vuelve a la película."
+        },
+        {
+          "icon": "image",
+          "title": "Diseños con Express",
+          "text": "Carteles, miniaturas e imágenes sociales con fotogramas de la película."
+        }
+      ]
+    }
   },
   "about": "Adobe Express, Firefly, Photoshop and Adobe Stock tools (Adobe's own MCP server)",
   "category": "picture",

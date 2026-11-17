@@ -24,30 +24,189 @@
   },
   "examples": {
     "zh-CN": [
-      "把我 Dropbox 里「产品拍摄」文件夹的视频按时间剪成 30 秒预告片",
-      "从 Dropbox 找出上周拍的所有采访素材，挑最好的三段",
-      "把这部片子导出后传到 Dropbox 的「成片」文件夹"
+      {
+        "say": "把我 Dropbox 里「产品拍摄」文件夹的视频按时间剪成 30 秒预告片",
+        "does": "读出文件夹里的视频，按拍摄时间排好，剪成 30 秒放上时间线。"
+      },
+      {
+        "say": "从 Dropbox 找出上周拍的所有采访素材，挑最好的三段",
+        "does": "按日期找到采访素材，转写后挑出说得最好的三段给你看。"
+      },
+      {
+        "say": "把这部片子导出后传到 Dropbox 的「成片」文件夹",
+        "does": "导出成片后上传到「成片」文件夹，把链接告诉你。"
+      }
     ],
     "en": [
-      "Cut the footage in the \"Product shoot\" folder of my Dropbox into a 30-second teaser",
-      "Find last week's interview footage in my Dropbox and pick the best three takes",
-      "Export this film and put it in the \"Finals\" folder of my Dropbox"
+      {
+        "say": "Cut the footage in the \"Product shoot\" folder of my Dropbox into a 30-second teaser",
+        "does": "Reads the videos in that folder, orders them by when they were shot and cuts 30 seconds onto the timeline."
+      },
+      {
+        "say": "Find last week's interview footage in my Dropbox and pick the best three takes",
+        "does": "Finds the interviews by date, transcribes them and shows you the three best takes."
+      },
+      {
+        "say": "Export this film and put it in the \"Finals\" folder of my Dropbox",
+        "does": "Exports the film, uploads it to \"Finals\" and gives you the link."
+      }
     ],
     "ja": [
-      "Dropbox の「製品撮影」フォルダの映像で 30 秒の予告編を作って",
-      "先週撮ったインタビュー素材を Dropbox から探して、いちばん良い 3 本を選んで",
-      "この映像を書き出して Dropbox の「完成」フォルダに入れて"
+      {
+        "say": "Dropbox の「製品撮影」フォルダの映像で 30 秒の予告編を作って",
+        "does": "フォルダの動画を撮影順に並べ、30 秒にまとめてタイムラインに置きます。"
+      },
+      {
+        "say": "先週撮ったインタビュー素材を Dropbox から探して、いちばん良い 3 本を選んで",
+        "does": "日付でインタビュー素材を探して文字起こしし、良い3テイクを見せます。"
+      },
+      {
+        "say": "この映像を書き出して Dropbox の「完成」フォルダに入れて",
+        "does": "書き出してフォルダにアップロードし、リンクを伝えます。"
+      }
     ],
     "ko": [
-      "내 Dropbox의 「제품 촬영」 폴더 영상으로 30초 티저를 만들어 줘",
-      "지난주 찍은 인터뷰 소스를 Dropbox에서 찾아 가장 좋은 세 개를 골라 줘",
-      "이 영상을 내보내서 Dropbox의 「완성본」 폴더에 넣어 줘"
+      {
+        "say": "내 Dropbox의 「제품 촬영」 폴더 영상으로 30초 티저를 만들어 줘",
+        "does": "폴더의 영상을 촬영 순으로 놓고 30초로 엮어 타임라인에 올립니다."
+      },
+      {
+        "say": "지난주 찍은 인터뷰 소스를 Dropbox에서 찾아 가장 좋은 세 개를 골라 줘",
+        "does": "날짜로 인터뷰 소재를 찾아 받아쓰고 가장 좋은 세 테이크를 보여 줍니다."
+      },
+      {
+        "say": "이 영상을 내보내서 Dropbox의 「완성본」 폴더에 넣어 줘",
+        "does": "내보낸 뒤 폴더에 올리고 링크를 알려 줍니다."
+      }
     ],
     "es": [
-      "Monta un teaser de 30 segundos con los vídeos de la carpeta «Rodaje producto» de mi Dropbox",
-      "Busca en mi Dropbox las entrevistas de la semana pasada y elige las tres mejores tomas",
-      "Exporta esta película y déjala en la carpeta «Finales» de mi Dropbox"
+      {
+        "say": "Monta un teaser de 30 segundos con los vídeos de la carpeta «Rodaje producto» de mi Dropbox",
+        "does": "Lee los vídeos de esa carpeta, los ordena por fecha de grabación y monta 30 segundos en la línea de tiempo."
+      },
+      {
+        "say": "Busca en mi Dropbox las entrevistas de la semana pasada y elige las tres mejores tomas",
+        "does": "Encuentra las entrevistas por fecha, las transcribe y te enseña las tres mejores tomas."
+      },
+      {
+        "say": "Exporta esta película y déjala en la carpeta «Finales» de mi Dropbox",
+        "does": "Exporta la película, la sube a esa carpeta y te da el enlace."
+      }
     ]
+  },
+  "showcase": {
+    "highlights": {
+      "zh-CN": [
+        {
+          "icon": "search",
+          "title": "找素材",
+          "text": "按文件名、文件夹和日期找视频、图片和文档。"
+        },
+        {
+          "icon": "film",
+          "title": "直接剪",
+          "text": "选中的素材带进项目，放上时间线。"
+        },
+        {
+          "icon": "upload",
+          "title": "传回成片",
+          "text": "导出后存进你指定的文件夹。"
+        },
+        {
+          "icon": "folder",
+          "title": "改动先问你",
+          "text": "智能体要改动你 Dropbox 里的文件时，会先问你。"
+        }
+      ],
+      "en": [
+        {
+          "icon": "search",
+          "title": "Find your media",
+          "text": "Find videos, pictures and documents by name, folder and date."
+        },
+        {
+          "icon": "film",
+          "title": "Cut from it",
+          "text": "What you pick comes into the project and onto the timeline."
+        },
+        {
+          "icon": "upload",
+          "title": "Send the film back",
+          "text": "Exports and saves into the folder you name."
+        },
+        {
+          "icon": "folder",
+          "title": "Asks before changing",
+          "text": "Before your agent changes anything in your Dropbox, it asks you."
+        }
+      ],
+      "ja": [
+        {
+          "icon": "search",
+          "title": "素材を探す",
+          "text": "名前・フォルダ・日付で動画・画像・文書を探します。"
+        },
+        {
+          "icon": "film",
+          "title": "そのまま編集",
+          "text": "選んだ素材をプロジェクトに入れてタイムラインへ。"
+        },
+        {
+          "icon": "upload",
+          "title": "完成品を戻す",
+          "text": "書き出して指定のフォルダに保存します。"
+        },
+        {
+          "icon": "folder",
+          "title": "変更の前に確認",
+          "text": "Dropbox の中身を変える前に、エージェントがあなたに確認します。"
+        }
+      ],
+      "ko": [
+        {
+          "icon": "search",
+          "title": "소재 찾기",
+          "text": "이름·폴더·날짜로 영상·이미지·문서를 찾습니다."
+        },
+        {
+          "icon": "film",
+          "title": "바로 편집",
+          "text": "고른 소재를 프로젝트로 가져와 타임라인에 놓습니다."
+        },
+        {
+          "icon": "upload",
+          "title": "완성본 올리기",
+          "text": "내보내서 지정한 폴더에 저장합니다."
+        },
+        {
+          "icon": "folder",
+          "title": "바꾸기 전에 확인",
+          "text": "Dropbox 안의 파일을 바꾸기 전에 에이전트가 먼저 묻습니다."
+        }
+      ],
+      "es": [
+        {
+          "icon": "search",
+          "title": "Encuentra tu material",
+          "text": "Busca vídeos, imágenes y documentos por nombre, carpeta y fecha."
+        },
+        {
+          "icon": "film",
+          "title": "Monta desde ahí",
+          "text": "Lo que eliges entra en el proyecto y en la línea de tiempo."
+        },
+        {
+          "icon": "upload",
+          "title": "Devuelve la película",
+          "text": "Exporta y guarda en la carpeta que digas."
+        },
+        {
+          "icon": "folder",
+          "title": "Pregunta antes de cambiar",
+          "text": "Antes de cambiar algo en tu Dropbox, tu agente te lo pregunta."
+        }
+      ]
+    }
   },
   "about": "finds and fetches files from the person's Dropbox (Dropbox's own MCP server)",
   "category": "material",
