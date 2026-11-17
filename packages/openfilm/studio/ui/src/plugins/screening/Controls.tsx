@@ -4,11 +4,9 @@
  */
 import * as React from 'react';
 import { Tooltip } from '@/components/Tooltip';
-import { Icon, PATH_FULLSCREEN, PATH_FULLSCREEN_EXIT } from '@/components/player-controls/controls-bar';
-import { PLAYBACK_SPEEDS, speedText } from '@/lib/playback-speed';
-
-/* material "speed", 24×24, as the row's other icons */
-const PATH_SPEED = 'M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z';
+import { Icon } from '@/components/player-controls/controls-bar';
+import { mediaButton, SpeedFace } from '@/components/player-controls/MediaButtons';
+import { PLAYBACK_SPEEDS } from '@/lib/playback-speed';
 
 /* material icons, 24×24, as the player's */
 const PATH_CHECK = 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z';
@@ -45,9 +43,10 @@ export function SpeedMenu({ rate, label, normal, onRate }: { rate: number; label
   return (
     <div ref={wrap} className="relative">
       <Tooltip label={open ? undefined : label} shortcut="S">
-        <Btn label={label} active={open} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-          {rate === 1 ? <Icon d={PATH_SPEED} /> : <span className="flex h-6 min-w-[24px] items-center justify-center text-[12.5px] font-semibold tabular-nums">{speedText(rate)}</span>}
-        </Btn>
+        <button type="button" aria-label={label} aria-expanded={open} onMouseDown={(e) => e.preventDefault()} onClick={() => setOpen((o) => !o)}
+          className={mediaButton(open || rate !== 1, 24)}>
+          <SpeedFace speed={rate} size={24} />
+        </button>
       </Tooltip>
       {open ? (
         <div role="menu" aria-label={label} className="absolute bottom-[44px] right-0 z-30 min-w-[150px] rounded-[12px] bg-[rgb(28_28_28/.94)] py-1.5 shadow-[0_8px_28px_rgb(0_0_0/.45)] backdrop-blur">
@@ -62,14 +61,5 @@ export function SpeedMenu({ rate, label, normal, onRate }: { rate: number; label
         </div>
       ) : null}
     </div>
-  );
-}
-
-/** Full screen, drawn as the row's other buttons. */
-export function FullscreenButton({ full, label, onClick }: { full: boolean; label: string; onClick: () => void }) {
-  return (
-    <Tooltip label={label} shortcut="F">
-      <Btn label={label} onClick={onClick}><Icon d={full ? PATH_FULLSCREEN_EXIT : PATH_FULLSCREEN} /></Btn>
-    </Tooltip>
   );
 }

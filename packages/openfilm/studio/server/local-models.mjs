@@ -8,7 +8,7 @@
  *   GET    /api/local-models                every model, with where it stands (shown)
  *   POST   /api/local-models/<id>/install   fetched now, in a process of its own; GET says how far it is
  *   PUT    /api/local-models/<id>           { on }: used or not
- *   DELETE /api/local-models/<id>           its files thrown away, and off
+ *   DELETE /api/local-models/<id>           its download stopped, its files thrown away, and off (cancel, uninstall)
  *
  * They are what Local services runs (providers/local.mjs): transcripts and pictures' backgrounds; one coming, going
  * or turned on or off moves what Settings → Services chose for its kind (providers/index.mjs localModelsChanged).

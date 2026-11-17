@@ -114,9 +114,25 @@ export function setModelOn(/** @type {boolean} */ on, /** @type {ModelEntry} */ 
   } else writeFileSync(offFile(m), '');
 }
 
-/** The model's fetched files thrown away (a runtime another model still has stays), and the model turned off. */
+/** A fetch of the model running now stopped, and what it had written of its files thrown away. */
+function stopFetch(/** @type {ModelEntry} */ m) {
+  const { pid } = stateOf(m);
+  if (pid && pid !== process.pid && alive(pid)) { try { process.kill(pid); } catch { /* gone meanwhile */ } }
+  for (const f of m.files) {
+    const at = join(libraryCache(), f.path);
+    try {
+      for (const name of readdirSync(dirname(at))) if (name.startsWith(`${basename(at)}.part-`)) rmSync(join(dirname(at), name), { force: true });
+    } catch { /* its folder is not made yet */ }
+  }
+}
+
+/**
+ * The model's fetched files thrown away (a runtime another model still has stays), and the model turned off; a download
+ * of it running is stopped first (cancelled).
+ */
 export function removeModel(/** @type {ModelEntry} */ m) {
   setModelOn(false, m);
+  stopFetch(m);
   const kept = new Set(modelEntries().filter((o) => o.id !== m.id && modelReady(o)).flatMap((o) => o.files.map((f) => f.path)));
   for (const f of m.files) {
     const file = libraryFile(f.path);

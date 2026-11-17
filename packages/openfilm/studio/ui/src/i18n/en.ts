@@ -3919,6 +3919,7 @@ export const en = {
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */
     local: {
+      cancel: 'Cancel download',
       by: 'By {who}',
       name: 'Local services',
       tagline: 'Runs on this computer · free · nothing leaves it',

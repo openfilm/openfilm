@@ -3918,6 +3918,7 @@ export const zhCN: Words = {
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */
     local: {
+      cancel: '取消下载',
       by: '出自 {who}',
       name: '本地服务',
       tagline: '在这台电脑上运行 · 免费 · 内容不离开电脑',

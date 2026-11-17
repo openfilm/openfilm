@@ -317,7 +317,7 @@ export const libraryVoices = () => read('voices.json', { version: 1, providers: 
  */
 export function withPairs(voices) {
   return { ...voices, voices: [...voices.voices, ...DOUBAO_PAIRS.map((p) => ({ provider: 'doubao', id: p.id, name: p.name, description: p.description,
-    gender: null, age: null, language: p.language, accent: null, tags: [], sample: null, featured: true, uses: null, pair: true, members: p.members }))] };
+    gender: null, age: null, language: p.language, accent: null, tags: [], sample: p.sample, featured: true, uses: null, pair: true, members: p.members }))] };
 }
 
 /** Only an indexed public recording on the provider's own CDN, never an arbitrary URL supplied by the page. */

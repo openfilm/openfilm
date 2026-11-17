@@ -3881,6 +3881,7 @@ export const ko: Words = {
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */
     local: {
+      cancel: '다운로드 취소',
       by: '제공: {who}',
       name: '로컬 서비스',
       tagline: '이 컴퓨터에서 실행 · 무료 · 내용이 밖으로 나가지 않음',

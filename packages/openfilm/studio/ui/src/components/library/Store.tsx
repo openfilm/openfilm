@@ -59,8 +59,8 @@ export function StoreCard({ icon, cover, title, badges, by, summary, meta, actio
 export function StateMark({ off = false }: { off?: boolean }) {
   const t = useT();
   return off
-    ? <span className="inline-flex h-7 items-center rounded-full px-1 text-[12.5px] font-medium text-[var(--text-faint)]">{t('assetDrawer.stateOff')}</span>
-    : <span className="inline-flex h-7 items-center gap-1 rounded-full px-1 text-[12.5px] font-medium text-[var(--text-faint)]"><Check size={13} aria-hidden />{t('assetDrawer.stateInstalled')}</span>;
+    ? <span className="inline-flex h-7 items-center rounded-full border border-dashed border-[var(--border-strong)] px-2.5 text-[12.5px] font-medium text-[var(--text-faint)]">{t('assetDrawer.stateOff')}</span>
+    : <span className="inline-flex h-7 items-center gap-1 rounded-full bg-[var(--bg-field)] px-2.5 text-[12.5px] font-medium text-[var(--text-muted)]"><Check size={13} aria-hidden />{t('assetDrawer.stateInstalled')}</span>;
 }
 
 /** A page's button: the first thing to do filled, the others quiet, one that takes away in the warning's colour. */

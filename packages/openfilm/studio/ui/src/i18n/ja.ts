@@ -3884,6 +3884,7 @@ export const ja: Words = {
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */
     local: {
+      cancel: 'ダウンロードを中止',
       by: '提供: {who}',
       name: 'ローカルサービス',
       tagline: 'このコンピューターで動作 · 無料 · 内容は外に出ません',

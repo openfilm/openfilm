@@ -22,7 +22,8 @@ import { chat, help, links, onCommand, project, toast } from '@/studio';
 import { useBlock, useProject, useProvide } from '@/studio/react';
 import { clock, cuesOf, linkOf, sameRef, timeLabel, timeOf, type Clock, type Cue, type View } from './screening-model';
 import { Scrubber, useClock, type Mark, type MarkState, type ScrubberHandle } from './Scrubber';
-import { Btn, FullscreenButton, SpeedMenu } from './Controls';
+import { Btn, SpeedMenu } from './Controls';
+import { FullscreenButton } from '@/components/player-controls/MediaButtons';
 import { Icon, PATH_PAUSE, PATH_PLAY, VolumeControl } from '@/components/player-controls/controls-bar';
 import { SheetBody } from './ShortcutSheet';
 import { Stage } from './Stage';
@@ -393,7 +394,7 @@ function Screening({ projectId }: { projectId: string }) {
             <span className="flex-1" />
             <Idle idle={idle}><SpeedMenu rate={speed} label={w('speed')} normal={w('speedNormal')} onRate={rate} /></Idle>
             <Idle idle={idle}>
-              <FullscreenButton full={full} label={full ? w('exitFull') : w('kFull')} onClick={toggleFull} />
+              <FullscreenButton full={full} label={full ? w('exitFull') : w('kFull')} shortcut="F" size={24} onClick={toggleFull} />
             </Idle>
           </div>
         </div>

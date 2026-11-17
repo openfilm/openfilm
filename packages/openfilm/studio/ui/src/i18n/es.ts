@@ -3884,6 +3884,7 @@ export const es: Words = {
     },
     /* Settings → Services → Local services (components/settings/LocalModels) */
     local: {
+      cancel: 'Cancelar descarga',
       by: 'De {who}',
       name: 'Servicios locales',
       tagline: 'Se ejecutan en este ordenador · gratis · nada sale de él',

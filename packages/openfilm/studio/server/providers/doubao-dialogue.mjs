@@ -16,14 +16,17 @@ const RESOURCE = 'volc.service_type.10050';
 const TURN = 300;
 const SCRIPT = 10_000;
 
-/** The pairs made to speak together (Doubao's own podcast voices); any two Doubao voices also can. */
+/**
+ * The pairs made to speak together (Doubao's own podcast voices); any two Doubao voices also can. Doubao publishes no
+ * sample of these voices, so each pair's `sample` is a short dialogue of ours, made with them (library/pairs/).
+ */
 export const DOUBAO_PAIRS = [
   { id: 'zh_male_liufei_v2_saturn_bigtts+zh_male_xiaolei_v2_saturn_bigtts', name: '刘飞 & 潇磊', language: 'zh',
     members: [{ id: 'zh_male_liufei_v2_saturn_bigtts', name: '刘飞', gender: 'm' }, { id: 'zh_male_xiaolei_v2_saturn_bigtts', name: '潇磊', gender: 'm' }],
-    description: 'Podcast voices · two men talking' },
+    description: 'Podcast voices · two men talking', sample: 'pairs/liufei-xiaolei.mp3' },
   { id: 'zh_female_mizaitongxue_v2_saturn_bigtts+zh_male_dayixiansheng_v2_saturn_bigtts', name: '咪仔 & 大意先生', language: 'zh',
     members: [{ id: 'zh_female_mizaitongxue_v2_saturn_bigtts', name: '咪仔', gender: 'f' }, { id: 'zh_male_dayixiansheng_v2_saturn_bigtts', name: '大意先生', gender: 'm' }],
-    description: 'Podcast voices · a woman and a man' },
+    description: 'Podcast voices · a woman and a man', sample: 'pairs/mizai-dayi.mp3' },
 ];
 
 /** The two voices of a run's `--voice` (`a+b`, or two given), or null for one voice. */

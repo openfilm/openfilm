@@ -33,11 +33,11 @@ export const connectConnector = (id: string) => studioHost?.connectors?.connect(
 /** A connector's word on its card: connected, or to connect. */
 export function ConnectorMark({ state, onConnect }: { state: HostConnector | undefined; onConnect: () => void }) {
   const t = useT();
-  if (state?.connected) return <span className="inline-flex h-7 items-center gap-1 px-1 text-[12.5px] font-medium text-[var(--text-faint)]"><Check size={13} aria-hidden />{t('assetDrawer.connectorConnected')}</span>;
+  if (state?.connected) return <span className="inline-flex h-7 items-center gap-1 rounded-full bg-[var(--bg-field)] px-2.5 text-[12.5px] font-medium text-[var(--text-muted)]"><Check size={13} aria-hidden />{t('assetDrawer.connectorConnected')}</span>;
   if (state?.signingIn) return <span className="inline-flex h-7 items-center gap-1.5 px-1 text-[12.5px] text-[var(--text-faint)]"><Loader2 size={13} className="animate-spin" aria-hidden />{t('assetDrawer.connectorSigningShort')}</span>;
   return (
     <button type="button" onClick={onConnect} data-connector-connect=""
-      className="inline-flex h-7 min-w-[64px] items-center justify-center rounded-full bg-[var(--bg-pressed)] px-3.5 text-[13px] font-semibold text-[var(--accent)] transition hover:brightness-125 active:scale-[0.97]">
+      className="inline-flex h-7 min-w-[64px] items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--accent)_22%,transparent)] px-3.5 text-[13px] font-semibold text-[var(--accent)] transition hover:bg-[color-mix(in_srgb,var(--accent)_32%,transparent)] active:scale-[0.97]">
       {t('assetDrawer.connectorConnect')}
     </button>
   );

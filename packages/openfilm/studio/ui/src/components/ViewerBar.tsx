@@ -3,16 +3,18 @@
  * screen on the right. As tall (32px) as the pane bar above the picture, so the picture sits evenly between two equal edges.
  */
 import type React from 'react';
-import { Expand, Pause, Play } from 'lucide-react';
 import { useT } from '@/i18n';
 import { formatTimecode, useTimecodeFps } from '@/lib/timecode';
-import { PANE_BTN, PANE_ICON } from './dock-pane-bar';
 import { LiveText, type PlaybackClock } from './LiveTime';
 import { PlaybackMenu, type PlaybackSettings } from './PlaybackMenu';
+import { FullscreenButton, mediaButton } from './player-controls/MediaButtons';
+import { Icon, PATH_PAUSE, PATH_PLAY } from './player-controls/controls-bar';
+
+/** The speed's and full screen's icons in this bar (Screening's, in a taller bar, are larger: player-controls/MediaButtons). */
+const MEDIA_ICON = 18;
 import { Tooltip } from './Tooltip';
 
 /** The bar's buttons: the pane-bar size (22×22, icon 14) plus a keyboard focus ring (Tab must show where it is). */
-const VIEW_BTN = `${PANE_BTN} outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]`;
 
 export function ViewerBar({
   timeMs,
@@ -62,33 +64,19 @@ export function ViewerBar({
           aria-disabled={!playable}
           /* no focus on click: the next Space would land on the button and draw a focus ring; Tab focus is kept */
           onMouseDown={(e) => e.preventDefault()}
-          className={`${VIEW_BTN} ${playable ? '' : 'opacity-30'}`}
+          className={`${mediaButton(false, MEDIA_ICON)} ${playable ? '' : 'opacity-30'}`}
           aria-label={playing ? t('viewer.pause') : t('viewer.play')}
         >
-          {playing ? <Pause size={PANE_ICON} fill="currentColor" /> : <Play size={PANE_ICON} fill="currentColor" />}
+          <Icon d={playing ? PATH_PAUSE : PATH_PLAY} size={MEDIA_ICON} />
         </button>
       </Tooltip>
       <span className="flex items-center justify-end gap-1">
         {extra}
         {playback ? (
-          <PlaybackMenu
-            settings={playback}
-            disabled={!playable}
-            className={`${VIEW_BTN} !w-auto min-w-[22px] gap-1 px-1 disabled:pointer-events-none disabled:opacity-30`}
-          />
+          <PlaybackMenu settings={playback} disabled={!playable} size={MEDIA_ICON} />
         ) : null}
         {onFullscreen ? (
-          <Tooltip label={t('viewer.fullscreen')} action="preview-fullscreen">
-            <button
-              type="button"
-              onClick={() => { if (playable) onFullscreen(); }}
-              aria-disabled={!playable}
-              className={`${VIEW_BTN} ${playable ? '' : 'opacity-30'}`}
-              aria-label={t('viewer.fullscreen')}
-            >
-              <Expand size={PANE_ICON} />
-            </button>
-          </Tooltip>
+          <FullscreenButton label={t('viewer.fullscreen')} action="preview-fullscreen" size={MEDIA_ICON} disabled={!playable} onClick={() => { if (playable) onFullscreen(); }} />
         ) : null}
       </span>
     </div>
