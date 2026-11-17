@@ -1,9 +1,10 @@
 {
-  "order": 8,
+  "order": 7,
+  "beta": true,
   "icon": "layers",
   "title": {
     "en": "Compositing",
-    "zh-CN": "合成台",
+    "zh-CN": "合成",
     "ja": "合成",
     "ko": "합성",
     "es": "Composición"

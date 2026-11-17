@@ -1,9 +1,9 @@
 {
-  "order": 3,
+  "order": 5,
   "icon": "spline",
   "title": {
     "en": "Motion",
-    "zh-CN": "动效台",
+    "zh-CN": "动效",
     "ja": "モーション",
     "ko": "모션",
     "es": "Movimiento"

@@ -1,12 +1,12 @@
 {
-  "order": 5,
+  "order": 6,
   "icon": "box",
   "title": {
-    "en": "Stage",
-    "zh-CN": "导演台",
-    "ja": "ステージ",
-    "ko": "스테이지",
-    "es": "Escenario"
+    "en": "3D",
+    "zh-CN": "3D",
+    "ja": "3D",
+    "ko": "3D",
+    "es": "3D"
   },
   "summary": {
     "en": "Shots blocked out in 3D: the set, who moves where, and the camera, played live.",

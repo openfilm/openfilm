@@ -1,9 +1,10 @@
 {
-  "order": 6,
+  "order": 4,
+  "beta": true,
   "icon": "audio",
   "title": {
     "en": "Sound",
-    "zh-CN": "声音台",
+    "zh-CN": "声音",
     "ja": "サウンド",
     "ko": "사운드",
     "es": "Sonido"
