@@ -651,6 +651,8 @@ async function start() {
       ...(IDENTITY.studioHome || process.env.OPENFILM_EXPORTS ? {} : { OPENFILM_EXPORTS: app.getPath('desktop') }),
       /* another examples index (a file, to try one), passed through when run from source */
       ...(process.env.OPENFILM_EXAMPLES_INDEX ? { OPENFILM_EXAMPLES_INDEX: process.env.OPENFILM_EXAMPLES_INDEX } : {}),
+      /* another Community library catalog (a local build or the preview channel, to try one), passed through when run from source */
+      ...(process.env.OPENFILM_COMMUNITY_LIBRARY_URL ? { OPENFILM_COMMUNITY_LIBRARY_URL: process.env.OPENFILM_COMMUNITY_LIBRARY_URL } : {}),
       /* another OpenFilm service (a local one, to develop it), passed through when run from source */
       ...(process.env.OPENFILM_API_URL ? { OPENFILM_API_URL: process.env.OPENFILM_API_URL } : {}),
     },
