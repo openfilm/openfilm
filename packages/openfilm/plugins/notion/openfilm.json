@@ -1,0 +1,38 @@
+{
+  "order": 22,
+  "icon": "plug",
+  "title": {
+    "en": "Notion",
+    "zh-CN": "Notion",
+    "ja": "Notion",
+    "ko": "Notion",
+    "es": "Notion"
+  },
+  "summary": {
+    "en": "Scripts and shot lists from Notion: the agent reads your pages and writes back what it made.",
+    "zh-CN": "从 Notion 拿脚本和分镜表：智能体读你的页面，也能把做好的写回去。",
+    "ja": "Notion の台本やショットリスト：ページを読み、作ったものを書き戻します。",
+    "ko": "Notion의 대본과 샷 리스트: 페이지를 읽고 만든 결과를 다시 적습니다.",
+    "es": "Guiones y listas de planos de Notion: el agente lee tus páginas y escribe lo que hizo."
+  },
+  "details": {
+    "en": "When to use it: your script, brief or shot list is in Notion.\nHow: turn it on, then ask \"make the video from the Launch script page in Notion\". The first time it asks you to sign in to Notion.",
+    "zh-CN": "什么时候用：脚本、需求或分镜表写在 Notion 里。\n怎么用：打开后说「按 Notion 里的发布会脚本做片子」。第一次会请你登录 Notion。",
+    "ja": "使うとき：台本や要件、ショットリストが Notion にあるとき。\n使い方：オンにして「Notion の発表会台本のページから映像を作って」と頼みます。初回は Notion へのサインインを求められます。",
+    "ko": "언제: 대본, 요구 사항, 샷 리스트가 Notion에 있을 때.\n사용법: 켠 뒤 \"Notion의 런칭 대본 페이지로 영상을 만들어 줘\"라고 말합니다. 처음에는 Notion 로그인을 요청합니다.",
+    "es": "Cuándo: tu guion, briefing o lista de planos está en Notion.\nCómo: actívalo y pide «haz el vídeo con la página Guion de lanzamiento de Notion». La primera vez te pedirá iniciar sesión en Notion."
+  },
+  "about": "reads and writes the person's Notion pages and databases (Notion's own MCP server)",
+  "category": "tool",
+  "difficulty": 1,
+  "ease": 5,
+  "cost": "free",
+  "audience": {
+    "en": "Anyone who plans videos in Notion",
+    "zh-CN": "在 Notion 里策划视频的人",
+    "ja": "Notion で映像を企画する人",
+    "ko": "Notion에서 영상을 기획하는 사람",
+    "es": "Quien planifica sus vídeos en Notion"
+  },
+  "on": false
+}

@@ -1,0 +1,38 @@
+{
+  "order": 20,
+  "icon": "plug",
+  "title": {
+    "en": "Dropbox",
+    "zh-CN": "Dropbox",
+    "ja": "Dropbox",
+    "ko": "Dropbox",
+    "es": "Dropbox"
+  },
+  "summary": {
+    "en": "Your Dropbox for the agent: find footage, pictures and documents, and bring them into the film.",
+    "zh-CN": "让智能体用你的 Dropbox：找素材、图片和文档，放进片子里。",
+    "ja": "エージェントが Dropbox を使えるように：素材や画像、文書を探して映像に取り込みます。",
+    "ko": "에이전트가 Dropbox를 쓰게: 영상, 사진, 문서를 찾아 영상에 가져옵니다.",
+    "es": "Tu Dropbox para el agente: busca material, imágenes y documentos y los trae a la película."
+  },
+  "details": {
+    "en": "When to use it: your footage or brief lives in Dropbox.\nHow: turn it on, then ask the agent, e.g. \"use the interview clips in Dropbox/Shoot\". The first time it asks you to sign in to Dropbox.",
+    "zh-CN": "什么时候用：素材或脚本存在 Dropbox 里。\n怎么用：打开后直接告诉智能体，比如「用 Dropbox/拍摄 里的采访片段」。第一次会请你登录 Dropbox。",
+    "ja": "使うとき：素材や台本が Dropbox にあるとき。\n使い方：オンにしてエージェントに「Dropbox/撮影 のインタビューを使って」と頼みます。初回は Dropbox へのサインインを求められます。",
+    "ko": "언제: 영상이나 대본이 Dropbox에 있을 때.\n사용법: 켠 뒤 에이전트에게 \"Dropbox/촬영의 인터뷰 클립을 써 줘\"라고 말합니다. 처음에는 Dropbox 로그인을 요청합니다.",
+    "es": "Cuándo: tu material o guion está en Dropbox.\nCómo: actívalo y pide al agente, p. ej., «usa las entrevistas de Dropbox/Rodaje». La primera vez te pedirá iniciar sesión en Dropbox."
+  },
+  "about": "finds and fetches files from the person's Dropbox (Dropbox's own MCP server)",
+  "category": "material",
+  "difficulty": 1,
+  "ease": 5,
+  "cost": "free",
+  "audience": {
+    "en": "Anyone whose footage and files are in Dropbox",
+    "zh-CN": "素材和文件放在 Dropbox 的人",
+    "ja": "素材やファイルを Dropbox に置いている人",
+    "ko": "영상과 파일을 Dropbox에 두는 사람",
+    "es": "Quien guarda su material y archivos en Dropbox"
+  },
+  "on": false
+}

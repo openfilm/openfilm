@@ -1,0 +1,38 @@
+{
+  "order": 24,
+  "icon": "plug",
+  "title": {
+    "en": "Canva",
+    "zh-CN": "Canva",
+    "ja": "Canva",
+    "ko": "Canva",
+    "es": "Canva"
+  },
+  "summary": {
+    "en": "Designs from Canva: the agent finds or makes a thumbnail, a cover or a social post for the film.",
+    "zh-CN": "用 Canva 的设计：智能体为片子找或做封面、缩略图和社交帖子。",
+    "ja": "Canva のデザイン：映像のサムネイルやカバー、SNS 投稿を探したり作ったりします。",
+    "ko": "Canva 디자인: 영상의 썸네일, 커버, SNS 게시물을 찾거나 만듭니다.",
+    "es": "Diseños de Canva: el agente busca o crea una miniatura, una portada o un post para la película."
+  },
+  "details": {
+    "en": "When to use it: your brand kit or templates are in Canva, or the film needs a thumbnail.\nHow: turn it on, then ask \"make a YouTube thumbnail in Canva with our brand kit\". The first time it asks you to sign in to Canva.",
+    "zh-CN": "什么时候用：品牌素材和模板在 Canva 里，或片子需要一张封面。\n怎么用：打开后说「用我们的品牌套件在 Canva 做一张 YouTube 封面」。第一次会请你登录 Canva。",
+    "ja": "使うとき：ブランドキットやテンプレートが Canva にある、または映像にサムネイルが必要なとき。\n使い方：オンにして「ブランドキットで Canva の YouTube サムネイルを作って」と頼みます。初回は Canva へのサインインを求められます。",
+    "ko": "언제: 브랜드 키트나 템플릿이 Canva에 있거나 영상에 썸네일이 필요할 때.\n사용법: 켠 뒤 \"브랜드 키트로 Canva에서 YouTube 썸네일을 만들어 줘\"라고 말합니다. 처음에는 Canva 로그인을 요청합니다.",
+    "es": "Cuándo: tu kit de marca o tus plantillas están en Canva, o la película necesita una miniatura.\nCómo: actívalo y pide «haz una miniatura de YouTube en Canva con nuestro kit de marca». La primera vez te pedirá iniciar sesión en Canva."
+  },
+  "about": "finds and makes Canva designs (Canva's own MCP server)",
+  "category": "picture",
+  "difficulty": 1,
+  "ease": 5,
+  "cost": "free",
+  "audience": {
+    "en": "Creators and marketers who design in Canva",
+    "zh-CN": "在 Canva 里做设计的创作者和市场人员",
+    "ja": "Canva でデザインするクリエイターやマーケター",
+    "ko": "Canva에서 디자인하는 크리에이터와 마케터",
+    "es": "Creadores y equipos de marketing que diseñan en Canva"
+  },
+  "on": false
+}

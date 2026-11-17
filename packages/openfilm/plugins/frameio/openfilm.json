@@ -1,0 +1,38 @@
+{
+  "order": 21,
+  "icon": "plug",
+  "title": {
+    "en": "Frame.io",
+    "zh-CN": "Frame.io",
+    "ja": "Frame.io",
+    "ko": "Frame.io",
+    "es": "Frame.io"
+  },
+  "summary": {
+    "en": "Review with Frame.io: the agent reads your team's comments, uploads cuts and fetches media.",
+    "zh-CN": "用 Frame.io 审片：智能体能读团队的批注、上传版本、取回素材。",
+    "ja": "Frame.io でレビュー：チームのコメントを読み、カットをアップロードし、素材を取得します。",
+    "ko": "Frame.io로 검토: 팀의 코멘트를 읽고, 컷을 올리고, 소스를 가져옵니다.",
+    "es": "Revisión con Frame.io: el agente lee los comentarios del equipo, sube montajes y trae material."
+  },
+  "details": {
+    "en": "When to use it: you share cuts for review in Frame.io (V4 accounts).\nHow: turn it on, then ask \"apply the comments on v3 from Frame.io\". The first time it asks you to sign in with your Adobe ID.",
+    "zh-CN": "什么时候用：你在 Frame.io 上发版本给别人审（V4 账号）。\n怎么用：打开后说「按 Frame.io 上 v3 的批注改」。第一次会请你用 Adobe ID 登录。",
+    "ja": "使うとき：Frame.io でカットをレビューに出しているとき（V4 アカウント）。\n使い方：オンにして「Frame.io の v3 のコメントを反映して」と頼みます。初回は Adobe ID でのサインインを求められます。",
+    "ko": "언제: Frame.io에서 컷을 검토받을 때(V4 계정).\n사용법: 켠 뒤 \"Frame.io의 v3 코멘트를 반영해 줘\"라고 말합니다. 처음에는 Adobe ID 로그인을 요청합니다.",
+    "es": "Cuándo: compartes montajes para revisión en Frame.io (cuentas V4).\nCómo: actívalo y pide «aplica los comentarios de la v3 en Frame.io». La primera vez te pedirá iniciar sesión con tu Adobe ID."
+  },
+  "about": "reads review comments, uploads versions and fetches media in Frame.io (Frame.io's own MCP server)",
+  "category": "edit",
+  "difficulty": 1,
+  "ease": 5,
+  "cost": "free",
+  "audience": {
+    "en": "Editors and teams who review cuts in Frame.io",
+    "zh-CN": "在 Frame.io 上审片的剪辑师和团队",
+    "ja": "Frame.io でカットをレビューする編集者やチーム",
+    "ko": "Frame.io에서 컷을 검토하는 편집자와 팀",
+    "es": "Montadores y equipos que revisan en Frame.io"
+  },
+  "on": false
+}

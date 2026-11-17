@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "vimeo": {
+      "type": "http",
+      "url": "https://mcp.vimeo.com/mcp"
+    }
+  }
+}
