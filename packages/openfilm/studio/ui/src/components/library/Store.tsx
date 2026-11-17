@@ -176,13 +176,13 @@ export function StoreChips<K extends string>({ label, items, value, onChange }: 
 }
 
 /** A part of a store page: its name, a word under it, See all at its right when there is more. */
-export function StoreSection({ title, note, all, children }: { title: string; note?: string | undefined; all?: (() => void) | undefined; children: React.ReactNode }) {
+export function StoreSection({ title, badge, note, all, children }: { title: string; badge?: React.ReactNode; note?: string | undefined; all?: (() => void) | undefined; children: React.ReactNode }) {
   const t = useT();
   return (
     <section className="mb-10" data-community-shelf={title}>
       <header className="mb-3.5 flex items-end gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{title}</h3>
+          <h3 className="text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{title}{badge}</h3>
           {note ? <p className="mt-0.5 text-[13px] text-[var(--text-faint)]">{note}</p> : null}
         </div>
         {all ? <button type="button" onClick={all} className="shrink-0 pb-0.5 text-[13px] font-medium text-[var(--text-muted)] hover:text-[var(--text)]">{t('assetDrawer.seeAll')} ›</button> : null}

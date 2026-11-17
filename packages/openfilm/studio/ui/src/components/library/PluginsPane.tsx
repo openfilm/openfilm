@@ -33,6 +33,7 @@ import {
 } from '../SkillPage';
 import { CATEGORIES, categoryOfSkill, type Category } from '@/lib/plugin-profile';
 import { ProfileStrip } from './PluginProfile';
+import { GhostPacks, GhostThings, SoonPill } from './StorePlaceholders';
 import { DocLines, DocOff, DocSay, DocSection, DocSteps, sortDetails } from './DocSections';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
@@ -631,27 +632,32 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
      with the Community), each thing seen large over the page and stepped through. All: each kind's packs, a row each;
      one kind (`kind:<kind>`): its packs, then every one of its things. No banner, no coloured tiles: their own pictures */
   const kind = line.startsWith('kind:') ? line.slice('kind:'.length) as FeatureKind : null;
-  /* the media always (packs of footage, pictures and sounds of any kind: a kind that grows from the Community); the others
-     when the library has some */
-  const kinds = ASSET_KINDS.filter((k) => k === 'media' || (library?.items ?? []).some((it) => it.by && it.cat === k));
+  /* every kind of the library, each with its place: what the Community has of it, else its place drawn empty (each kind's
+     way in and way to publish are still being settled) */
+  const kinds = ASSET_KINDS;
   const kindChips = (
     <StoreChips label={t('assetDrawer.tab_assets')} value={kind} onChange={(k) => showPluginsLine(k ? `kind:${k}` : 'assets')}
-      items={[{ key: null, label: t('assetDrawer.allItems') }, ...kinds.map((k) => ({ key: k, label: kindName(k), count: assetsOf(k as LibraryCategory).length, icon: <KindIcon kind={k} size={14} /> }))]} />
+      items={[{ key: null, label: t('assetDrawer.allItems') }, ...kinds.map((k) => {
+        const n = assetsOf(k as LibraryCategory).length;
+        return { key: k, label: kindName(k), ...(n ? { count: n } : {}), icon: <KindIcon kind={k} size={14} /> };
+      })]} />
   );
+  /* how many packs a row shows: more where their pictures are square */
+  const rowOf = (k: FeatureKind) => (shapeOf(k) === 'sound' || shapeOf(k) === 'sticker' ? 6 : 4);
   if (!kind) {
-    const rows = kinds.map((k) => ({ k, packs: packsOf(k) })).filter((x) => x.packs.length);
+    const rows = kinds.map((k) => ({ k, packs: packsOf(k) })).filter((x) => x.packs.length || !q);
     return (
       <PluginsPage key={line} title={t('assetDrawer.tab_assets')} note={q ? undefined : t('assetDrawer.note_assets')}>
         {status}
         {kindChips}
         {rows.map(({ k, packs }) => (
-          <StoreSection key={k} title={kindName(k)} note={t('assetDrawer.packsCount').replace('{n}', packs.length.toLocaleString())}
+          <StoreSection key={k} title={kindName(k)} badge={packs.length ? undefined : <SoonPill />}
+            note={packs.length ? t('assetDrawer.packsCount').replace('{n}', packs.length.toLocaleString()) : t(`assetDrawer.kindAbout_${k}`)}
             all={() => showPluginsLine(`kind:${k}`)}>
-            <div className={packGrid(k)}>{packs.slice(0, shapeOf(k) === 'sound' || shapeOf(k) === 'sticker' ? 6 : 4).map(packTile)}</div>
+            {packs.length ? <div className={packGrid(k)}>{packs.slice(0, rowOf(k)).map(packTile)}</div> : <GhostPacks kind={k} count={rowOf(k)} />}
           </StoreSection>
         ))}
         {q && !rows.length ? <Empty text={t('assetDrawer.noSkillsFound')} /> : null}
-        {!q && !rows.length ? <Empty text={t('assetDrawer.libraryLater')} /> : null}
         {q ? null : publishCall(t('assetDrawer.kindNone').replaceAll('{kind}', t('assetDrawer.tab_assets')))}
         {lightbox}
       </PluginsPage>
@@ -676,7 +682,18 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
           </StoreSection>
         </>
       ) : q ? <Empty text={t('assetDrawer.noSkillsFound')} />
-        : <><Empty text={t('assetDrawer.libraryLater')} />{publishCall(t('assetDrawer.kindNone').replaceAll('{kind}', kindName(kind)))}</>}
+        : (
+          <>
+            {/* nothing of it yet: its packs and its things drawn empty, in its own shape */}
+            <StoreSection title={t('assetDrawer.packs')} badge={<SoonPill />} note={t(`assetDrawer.kindAbout_${kind}`)}>
+              <GhostPacks kind={kind} count={rowOf(kind)} />
+            </StoreSection>
+            <StoreSection title={t('assetDrawer.allItems')} badge={<SoonPill />} note={t('assetDrawer.kindPlaceholder').replaceAll('{kind}', kindName(kind))}>
+              <GhostThings kind={kind} count={shapeOf(kind) === 'sound' ? 8 : shapeOf(kind) === 'sticker' ? 14 : 8} />
+            </StoreSection>
+            {publishCall(t('assetDrawer.kindNone').replaceAll('{kind}', kindName(kind)))}
+          </>
+        )}
       {lightbox}
     </PluginsPage>
   );
