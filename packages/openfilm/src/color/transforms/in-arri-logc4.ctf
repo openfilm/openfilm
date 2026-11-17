@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2" id="openfilm:in-arri-logc4">
+    <Description>OpenFilm input: ARRI LogC4, ARRI Wide Gamut 4 footage into ACEScct</Description>
+    <Log inBitDepth="32f" outBitDepth="32f" style="cameraLogToLin">
+        <LogParams base="2" linSideSlope="2231.82630906769" linSideOffset="64" logSideSlope="0.0647954196341293" logSideOffset="-0.295908392682586" linSideBreak="-0.0180569961199113" />
+    </Log>
+    <Matrix inBitDepth="32f" outBitDepth="32f">
+        <Array dim="3 3">
+   1.08988212185032 -0.0284558573520014 -0.0614262644983184
+-0.0564721174094854    1.17395999050224  -0.117487873092753
+0.00574130479619738 -0.00572826056814317    0.999986955771946
+        </Array>
+    </Matrix>
+    <Log inBitDepth="32f" outBitDepth="32f" style="cameraLinToLog">
+        <LogParams base="2" linSideSlope="1" linSideOffset="0" logSideSlope="0.0570776255707763" logSideOffset="0.554794520547945" linSideBreak="0.0078125" />
+    </Log>
+</ProcessList>

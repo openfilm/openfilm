@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2.5" id="fixture">
+    <Description>OpenFilm color fixture</Description>
+    <GradingHueCurve inBitDepth="32f" outBitDepth="32f" style="log" hsyTransform="none">
+        <SatSat>
+            <ControlPoints>0 0 0.5 0.6 1 1</ControlPoints>
+        </SatSat>
+    </GradingHueCurve>
+</ProcessList>

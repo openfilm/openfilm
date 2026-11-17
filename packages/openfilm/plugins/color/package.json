@@ -3,12 +3,10 @@
   "private": true,
   "browser": "ui.js",
   "bin": {
-    "show": "show.mjs",
-    "set": "set.mjs",
-    "auto": "auto.mjs",
-    "match": "match.mjs",
-    "copy": "copy.mjs",
-    "reset": "reset.mjs",
-    "look": "look.mjs"
+    "look": "bin/look.mjs",
+    "input": "bin/input.mjs",
+    "balance": "bin/balance.mjs",
+    "match": "bin/match.mjs",
+    "filter": "bin/filter.mjs"
   }
 }

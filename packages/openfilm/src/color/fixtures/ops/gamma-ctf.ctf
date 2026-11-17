@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="1.5" id="fixture">
+    <Description>OpenFilm color fixture</Description>
+    <Gamma inBitDepth="32f" outBitDepth="32f" style="basicFwd">
+<GammaParams gamma="2.2"/><GammaParams channel="A" gamma="1"/>
+    </Gamma>
+</ProcessList>

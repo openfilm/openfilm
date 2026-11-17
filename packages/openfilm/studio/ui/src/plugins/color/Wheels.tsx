@@ -1,193 +1,175 @@
 /**
- * The color wheels: offset, lift, gamma and gain, each a wheel and its master below it. A wheel is laid out as the
- * vectorscope is (red up and a little left, blue right, green down left), so pushing it toward a color moves the
- * picture's colors that way on the scope: its puck is a color difference (Cb, Cr) whose luma is 0, turned into red,
- * green and blue amounts that change no brightness. The master moves all three alike, as brightness.
+ * A color wheel, as a colorist's: a dark disc in a thin ring of the colors it pushes toward, a puck for which way and
+ * how far that part of the picture is pushed, a line under it for how much brighter or darker it is, and its red,
+ * green and blue under that. Each zone wheel is one of the layer's `adjust-tone` (src/color/adjust: wheelAt,
+ * wheelColor), red toward where the vectorscope has it.
+ *
+ * Shift moves the puck finely; a double-click puts the color (or, on the line, the brightness) back as it was; the
+ * arrow at its corner puts the whole wheel back.
  */
 import * as React from 'react';
-import type { Wheel as WheelValue } from '../../../../../plugins/color/engine/grade.mjs';
+import { RotateCcw } from 'lucide-react';
+import { wheelAt, wheelColor, type Wheel } from '../../../../../src/color/adjust.mjs';
 
-export type WheelId = 'offset' | 'lift' | 'gamma' | 'gain';
+/** Where red is round a wheel, as a vectorscope draws it (radians, counterclockwise from the right). */
+const RED_AT = (103 / 180) * Math.PI;
+/** How far in from the edge the puck reaches at its most, px: the ring stays clear. */
+const INSET = 9;
 
-/** How far each wheel's edge is from its middle, in the amount its red, green and blue take. */
-const REACH: Record<WheelId, number> = { offset: 0.15, lift: 0.25, gamma: 0.3, gain: 0.35 };
-/** The master's range. */
-const MASTER: Record<WheelId, [number, number]> = { offset: [-0.5, 0.5], lift: [-0.5, 0.5], gamma: [-1, 1], gain: [0, 2] };
-const KR = 0.2126, KB = 0.0722, KG = 0.7152;
+/** The screen angle of a hue, and back. */
+const angleOf = (hue: number) => RED_AT + hue * 2 * Math.PI;
+const hueOf = (angle: number) => ((((angle - RED_AT) / (2 * Math.PI)) % 1) + 1) % 1;
 
-/** A wheel's red, green, blue, apart from its master (gain's about 1, the rest about 0). */
-const colorOf = (id: WheelId, v: WheelValue): [number, number, number] => (id === 'gain' ? [v.r - 1, v.g - 1, v.b - 1] : [v.r, v.g, v.b]);
-
-/** The puck's place, -1–1 each way (up is +), for a wheel's red, green, blue. */
-function puckOf(id: WheelId, v: WheelValue): [number, number] {
-  const [r, g, b] = colorOf(id, v);
-  const y = KR * r + KG * g + KB * b;
-  const cb = (b - y) / 1.8556, cr = (r - y) / 1.5748;
-  return [cb / REACH[id], cr / REACH[id]];
-}
-/** The red, green, blue for a puck's place: a color difference of no luma. */
-function fromPuck(id: WheelId, x: number, y: number, v: WheelValue): WheelValue {
-  const cb = x * REACH[id], cr = y * REACH[id];
-  const r = 1.5748 * cr, b = 1.8556 * cb, g = -(KR * r + KB * b) / KG;
-  const base = id === 'gain' ? 1 : 0;
-  const round = (n: number) => Math.round(n * 1000) / 1000;
-  return { y: v.y, r: round(base + r), g: round(base + g), b: round(base + b) };
+/** The color a wheel pushes toward at a hue, full: what its ring shows there. */
+function hueColor(hue: number): [number, number, number] {
+  const w = wheelAt({ r: 1, g: 1, b: 1, m: 1 }, hue, 1);
+  const lo = Math.min(w.r, w.g, w.b), hi = Math.max(w.r, w.g, w.b);
+  return [(w.r - lo) / (hi - lo), (w.g - lo) / (hi - lo), (w.b - lo) / (hi - lo)];
 }
 
-/** Where pure red, yellow, green, cyan, blue and magenta are on the wheel, for its rim. */
-const HUES: [string, [number, number, number]][] = [['#ff3b30', [1, 0, 0]], ['#ffd60a', [1, 1, 0]], ['#34c759', [0, 1, 0]], ['#32d4e6', [0, 1, 1]], ['#0a84ff', [0, 0, 1]], ['#ff2fd0', [1, 0, 1]]];
-const RIM = (() => {
-  const stops = HUES.map(([css, [r, g, b]]) => {
-    const y = KR * r + KG * g + KB * b;
-    const angle = Math.atan2((r - y) / 1.5748, (b - y) / 1.8556) * 180 / Math.PI;
-    /* CSS's conic angle runs clockwise from up */
-    return { css, deg: ((90 - angle) % 360 + 360) % 360 };
-  }).sort((a, b) => a.deg - b.deg);
-  const first = stops[0];
-  return `conic-gradient(from 0deg, ${[...stops, { css: first.css, deg: first.deg + 360 }].map((s) => `${s.css} ${s.deg}deg`).join(', ')}, ${first.css} ${first.deg + 360}deg)`;
-})();
+/** The wheel's face, drawn once for its size: the disc, a faint wash of each hue toward its edge, and the ring. */
+function useFace(size: number) {
+  return React.useMemo(() => {
+    const c = document.createElement('canvas');
+    const dpr = window.devicePixelRatio || 1;
+    c.width = c.height = Math.round(size * dpr);
+    const g = c.getContext('2d')!;
+    const img = g.createImageData(c.width, c.height);
+    const r = c.width / 2;
+    const ringIn = 1 - (4.5 * dpr) / r, gap = 1 - (6 * dpr) / r;
+    for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+      const dx = x - r + 0.5, dy = r - y - 0.5, d = Math.hypot(dx, dy) / r;
+      if (d > 1) continue;
+      const [cr, cg, cb] = hueColor(hueOf(Math.atan2(dy, dx)));
+      const i = (y * c.width + x) * 4;
+      if (d >= ringIn) {
+        /* the ring: the hue itself, a little muted */
+        img.data[i] = 70 + cr * 150; img.data[i + 1] = 70 + cg * 150; img.data[i + 2] = 70 + cb * 150;
+        img.data[i + 3] = d > 1 - 1.2 / r ? 255 * (1 - d) * r / 1.2 : 255;
+      } else if (d >= gap) {
+        img.data[i] = img.data[i + 1] = img.data[i + 2] = 16; img.data[i + 3] = 255;
+      } else {
+        /* the disc: near black, each hue coming in faintly toward the edge */
+        const k = 0.1 * d * d;
+        img.data[i] = 30 + cr * 255 * k; img.data[i + 1] = 30 + cg * 255 * k; img.data[i + 2] = 31 + cb * 255 * k;
+        img.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    return c.toDataURL();
+  }, [size]);
+}
 
-export function Wheels({ values, labels, onPreview, onCommit, resetLabel }: {
-  values: Record<WheelId, WheelValue>;
-  labels: Record<WheelId, string>;
-  onPreview: (id: WheelId, v: WheelValue) => void;
-  onCommit: (id: WheelId, v: WheelValue) => void;
-  resetLabel: string;
+const signed = (v: number, d = 2) => { const r = Math.round(v * 10 ** d) / 10 ** d; return `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r).toFixed(d)}`; };
+
+/**
+ * One wheel, `size` px across. `readout` is what its line reads (by default the brightness as -1…1); `detail` what is
+ * under its name (by default its red, green and blue against as they were).
+ */
+export function ColorWheel({ wheel, label, size = 132, readout, detail, onPreview, onCommit, onReset }: {
+  wheel: Wheel; label: string; size?: number; readout?: (w: Wheel) => string; detail?: (w: Wheel) => React.ReactNode;
+  onPreview: (w: Wheel) => void; onCommit: (w: Wheel) => void; onReset?: () => void;
 }) {
-  return (
-    <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-      {(['lift', 'gamma', 'gain', 'offset'] as const).map((id) => (
-        <OneWheel key={id} id={id} value={values[id]} label={labels[id]} resetLabel={resetLabel}
-          onPreview={(v) => onPreview(id, v)} onCommit={(v) => onCommit(id, v)} />
-      ))}
-    </div>
-  );
-}
+  const SIZE = size;
+  const face = useFace(size);
+  const [live, setLive] = React.useState<Wheel | null>(null);
+  const w = live ?? wheel;
+  const { hue, far } = wheelColor(w);
+  const a = angleOf(hue);
+  const reach = SIZE / 2 - INSET;
+  const px = SIZE / 2 + Math.cos(a) * far * reach, py = SIZE / 2 - Math.sin(a) * far * reach;
+  const drag = React.useRef<{ x: number; y: number; hue: number; far: number } | null>(null);
+  const set = (next: Wheel) => { setLive(next); onPreview(next); };
+  const commit = () => { if (live) onCommit(live); setLive(null); };
 
-function OneWheel({ id, value, label, resetLabel, onPreview, onCommit }: {
-  id: WheelId; value: WheelValue; label: string; resetLabel: string;
-  onPreview: (v: WheelValue) => void; onCommit: (v: WheelValue) => void;
-}) {
-  const disk = React.useRef<HTMLDivElement | null>(null);
-  const [drag, setDrag] = React.useState<WheelValue | null>(null);
-  const v = drag ?? value;
-  const [px, py] = puckOf(id, v);
-  const neutral = id === 'gain' ? 1 : 0;
-  const changed = v.r !== neutral || v.g !== neutral || v.b !== neutral;
-  const masterChanged = v.y !== neutral;
-  /** The pointer's place on the disk, -1–1 each way (up is +). */
-  const placeOf = (clientX: number, clientY: number): [number, number] => {
-    const box = disk.current!.getBoundingClientRect();
-    const rad = box.width / 2;
-    return [(clientX - box.left - rad) / rad, -(clientY - box.top - rad) / rad];
-  };
-  const inside = (x: number, y: number): [number, number] => { const d = Math.hypot(x, y); return d > 1 ? [x / d, y / d] : [x, y]; };
-  const down = (e: React.PointerEvent) => {
+  const down = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
-    e.preventDefault();
-    const target = e.currentTarget as HTMLElement;
-    target.setPointerCapture(e.pointerId);
-    const start = placeOf(e.clientX, e.clientY);
-    /* a press on the puck takes it from where it is; anywhere else, the puck jumps there first */
-    const onPuck = Math.hypot(start[0] - px, start[1] - py) < 0.15;
-    const origin: [number, number] = onPuck ? [px, py] : inside(start[0], start[1]);
-    let last = onPuck ? value : fromPuck(id, origin[0], origin[1], value);
-    if (!onPuck) { setDrag(last); onPreview(last); }
-    const move = (ev: PointerEvent) => {
-      const [x, y] = placeOf(ev.clientX, ev.clientY);
-      /* with ⇧, a tenth as far */
-      const k = ev.shiftKey ? 0.1 : 1;
-      const [nx, ny] = inside(origin[0] + (x - start[0]) * k, origin[1] + (y - start[1]) * k);
-      last = fromPuck(id, nx, ny, value);
-      setDrag(last);
-      onPreview(last);
-    };
-    const up = () => {
-      target.removeEventListener('pointermove', move);
-      target.removeEventListener('pointerup', up);
-      target.removeEventListener('pointercancel', up);
-      setDrag(null);
-      onCommit(last);
-    };
-    target.addEventListener('pointermove', move);
-    target.addEventListener('pointerup', up);
-    target.addEventListener('pointercancel', up);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { x: e.clientX, y: e.clientY, hue, far };
+    /* a press away from the puck puts it there at once (not at the very middle: a double-click there puts it back) */
+    const r = e.currentTarget.getBoundingClientRect();
+    const dx = e.clientX - r.left - SIZE / 2, dy = SIZE / 2 - (e.clientY - r.top);
+    if (Math.hypot(e.clientX - r.left - px, e.clientY - r.top - py) > 8 && Math.hypot(dx, dy) > SIZE * 0.06) {
+      const f = Math.min(1, Math.hypot(dx, dy) / reach);
+      drag.current = { x: e.clientX, y: e.clientY, hue: hueOf(Math.atan2(dy, dx)), far: f };
+      set(wheelAt(w, hueOf(Math.atan2(dy, dx)), f));
+    }
   };
-  const [lo, hi] = MASTER[id];
-  return (
-    <div className="flex min-w-0 flex-col items-center gap-1.5">
-      <div className="flex w-full items-center justify-between">
-        <span className="text-[11px] font-medium text-[var(--text-muted)]">{label}</span>
-        <button type="button" disabled={!changed && !masterChanged} onClick={() => onCommit({ y: neutral, r: neutral, g: neutral, b: neutral })}
-          className="rounded px-1 text-[10px] text-[var(--text-faint)] hover:text-[var(--text)] disabled:invisible">{resetLabel}</button>
-      </div>
-      <div ref={disk} role="slider" aria-label={label} aria-valuetext={`${v.r.toFixed(3)} ${v.g.toFixed(3)} ${v.b.toFixed(3)}`} tabIndex={0}
-        onPointerDown={down}
-        onDoubleClick={() => onCommit({ ...value, r: neutral, g: neutral, b: neutral })}
-        onKeyDown={(e) => {
-          const step = e.shiftKey ? 0.01 : 0.05;
-          const moves: Record<string, [number, number]> = { ArrowUp: [0, step], ArrowDown: [0, -step], ArrowLeft: [-step, 0], ArrowRight: [step, 0] };
-          const m = moves[e.key];
-          if (!m) return;
-          e.preventDefault();
-          onCommit(fromPuck(id, px + m[0], py + m[1], value));
-        }}
-        className="relative aspect-square w-full max-w-[150px] cursor-crosshair touch-none rounded-full outline-none ring-1 ring-[var(--border)] focus-visible:ring-[var(--accent)]"
-        style={{ background: `radial-gradient(circle, #2a2a2a 0%, rgba(42,42,42,0.9) 38%, rgba(42,42,42,0) 72%), ${RIM}` }}>
-        <div className="pointer-events-none absolute inset-[18%] rounded-full border border-white/10" />
-        <div className="pointer-events-none absolute left-1/2 top-[8%] h-[84%] w-px -translate-x-1/2 bg-white/10" />
-        <div className="pointer-events-none absolute left-[8%] top-1/2 h-px w-[84%] -translate-y-1/2 bg-white/10" />
-        <div className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/40 shadow"
-          style={{ left: `${50 + px * 50}%`, top: `${50 - py * 50}%` }} />
-      </div>
-      <Master value={v.y} lo={lo} hi={hi} neutral={neutral} label={label}
-        onPreview={(y) => { const n = { ...v, y }; setDrag(n); onPreview(n); }}
-        onCommit={(y) => { setDrag(null); onCommit({ ...value, y }); }} />
-      <div className="flex w-full justify-between font-mono text-[9.5px] tabular-nums text-[var(--text-faint)]">
-        <span className="text-[#ff6b61]">{v.r.toFixed(2)}</span><span className="text-[#5fd97a]">{v.g.toFixed(2)}</span><span className="text-[#5aa8ff]">{v.b.toFixed(2)}</span>
-        <span className="text-[var(--text-muted)]">{v.y.toFixed(2)}</span>
-      </div>
-    </div>
-  );
-}
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d) return;
+    /* the puck follows the pointer, a fifth as far with Shift */
+    const k = e.shiftKey ? 0.2 : 1;
+    const a0 = angleOf(d.hue);
+    const x = Math.cos(a0) * d.far * reach + (e.clientX - d.x) * k;
+    const y = Math.sin(a0) * d.far * reach - (e.clientY - d.y) * k;
+    set(wheelAt(w, hueOf(Math.atan2(y, x)), Math.min(1, Math.hypot(x, y) / reach)));
+  };
+  const up = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return;
+    drag.current = null;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    commit();
+  };
 
-/** A wheel's master: a thin bar dragged sideways, double-click back to neutral. */
-function Master({ value, lo, hi, neutral, label, onPreview, onCommit }: {
-  value: number; lo: number; hi: number; neutral: number; label: string;
-  onPreview: (v: number) => void; onCommit: (v: number) => void;
-}) {
-  const bar = React.useRef<HTMLDivElement | null>(null);
-  const pct = (n: number) => ((n - lo) / (hi - lo)) * 100;
-  const down = (e: React.PointerEvent) => {
-    e.preventDefault();
-    const target = e.currentTarget as HTMLElement;
-    target.setPointerCapture(e.pointerId);
-    const box = bar.current!.getBoundingClientRect();
-    const x0 = e.clientX, v0 = value;
-    let last = value;
-    const move = (ev: PointerEvent) => {
-      const k = ev.shiftKey ? 0.1 : 1;
-      last = Math.round(Math.min(hi, Math.max(lo, v0 + ((ev.clientX - x0) / box.width) * (hi - lo) * k)) * 1000) / 1000;
-      onPreview(last);
-    };
-    const up = () => { target.removeEventListener('pointermove', move); target.removeEventListener('pointerup', up); onCommit(last); };
-    target.addEventListener('pointermove', move);
-    target.addEventListener('pointerup', up);
+  /* the line under the wheel: how much brighter or darker, -1…1 for a gain of 0.01…1.99 */
+  const bright = Math.round((w.m - 1) * 100) / 100;
+  const line = React.useRef<{ x: number; m: number } | null>(null);
+  const lineDown = (e: React.PointerEvent<HTMLDivElement>) => { e.currentTarget.setPointerCapture(e.pointerId); line.current = { x: e.clientX, m: w.m }; };
+  const lineMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const l = line.current;
+    if (!l) return;
+    const m = Math.min(1.99, Math.max(0.01, l.m + ((e.clientX - l.x) / SIZE) * (e.shiftKey ? 0.2 : 1)));
+    set({ ...w, m: Math.round(m * 1000) / 1000 });
   };
+  const lineUp = (e: React.PointerEvent<HTMLDivElement>) => { if (!line.current) return; line.current = null; e.currentTarget.releasePointerCapture(e.pointerId); commit(); };
+
+  const plain = far < 0.006;
+  const mean = (w.r + w.g + w.b) / 3;
+  const changed = !plain || Math.abs(w.m - 1) > 0.0005;
+  /* the puck in the color it pushes toward, as bright as the ring */
+  const [pr, pg, pb] = hueColor(hue);
+  const tone = (v: number) => Math.round(255 * (0.45 + 0.55 * (1 - far + far * v)));
   return (
-    <div ref={bar} role="slider" aria-label={`${label} master`} aria-valuemin={lo} aria-valuemax={hi} aria-valuenow={value} tabIndex={0}
-      onPointerDown={down} onDoubleClick={() => onCommit(neutral)}
-      onKeyDown={(e) => {
-        const step = (hi - lo) / (e.shiftKey ? 400 : 80);
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); onCommit(Math.round(Math.min(hi, Math.max(lo, value + (e.key === 'ArrowLeft' ? -step : step))) * 1000) / 1000); }
-      }}
-      className="relative h-4 w-full max-w-[150px] cursor-ew-resize touch-none outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]">
-      <div className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-[var(--border-strong)]" />
-      <div className="absolute top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-[var(--text-muted)]"
-        style={{ left: `${Math.min(pct(neutral), pct(value))}%`, width: `${Math.abs(pct(value) - pct(neutral))}%` }} />
-      <div className="absolute top-1/2 h-[9px] w-px -translate-y-1/2 bg-[var(--text-faint)]" style={{ left: `${pct(neutral)}%` }} />
-      <div className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--bg-panel)] shadow-[0_0_0_1px_var(--border-strong),0_1px_3px_rgba(0,0,0,0.25)]"
-        style={{ left: `${pct(value)}%` }} />
+    <div className="group/wheel relative flex min-w-0 flex-col items-center gap-2" style={{ width: SIZE }}>
+      <div className="flex w-full items-baseline justify-between text-[11.5px]">
+        <span className="text-[var(--text-muted)]">{label}</span>
+        {onReset ? (
+          <button type="button" aria-label={label} onClick={onReset}
+            className={`rounded p-0.5 text-[var(--text-faint)] transition hover:text-[var(--text)] ${changed ? 'opacity-0 group-hover/wheel:opacity-100' : 'pointer-events-none opacity-0'}`}>
+            <RotateCcw size={11} />
+          </button>
+        ) : null}
+      </div>
+      <div className="relative cursor-crosshair touch-none select-none rounded-full shadow-[0_1px_0_rgba(255,255,255,0.04),0_6px_18px_rgba(0,0,0,0.35)]"
+        style={{ width: SIZE, height: SIZE, backgroundImage: `url(${face})`, backgroundSize: 'cover' }}
+        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+        onDoubleClick={() => onCommit(wheelAt(w, 0, 0))} title={label}>
+        <span className="pointer-events-none absolute left-1/2 top-1/2 h-px w-3 -translate-x-1/2 bg-white/20" />
+        <span className="pointer-events-none absolute left-1/2 top-1/2 h-3 w-px -translate-y-1/2 bg-white/20" />
+        <span className="pointer-events-none absolute left-1/2 top-1/2 rounded-full border border-white/[0.05]" style={{ width: reach, height: reach, transform: 'translate(-50%,-50%)' }} />
+        {!plain ? <svg className="pointer-events-none absolute inset-0" width={SIZE} height={SIZE}><line x1={SIZE / 2} y1={SIZE / 2} x2={px} y2={py} stroke="rgba(255,255,255,0.35)" strokeWidth="1" /></svg> : null}
+        <span className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-white shadow-[0_0_0_1px_rgba(0,0,0,0.55),0_1px_4px_rgba(0,0,0,0.6)]"
+          style={{ left: px, top: py, background: plain ? 'rgba(20,20,22,0.9)' : `rgb(${tone(pr)},${tone(pg)},${tone(pb)})` }} />
+      </div>
+      <div className="relative h-4 w-full cursor-ew-resize touch-none select-none" onPointerDown={lineDown} onPointerMove={lineMove} onPointerUp={lineUp} onPointerCancel={lineUp}
+        onDoubleClick={() => onCommit({ ...w, m: 1 })}>
+        <span className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 rounded-full bg-white/[0.08]" />
+        <span className="absolute top-1/2 h-[2px] -translate-y-1/2 rounded-full bg-white/60"
+          style={{ left: `${50 + Math.min(0, bright) * 50}%`, width: `${Math.abs(bright) * 50}%` }} />
+        <span className="absolute left-1/2 top-1/2 h-2 w-px -translate-y-1/2 bg-white/25" />
+        <span className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.55),0_1px_3px_rgba(0,0,0,0.5)]" style={{ left: `${50 + bright * 50}%` }} />
+      </div>
+      <div className="flex w-full items-center justify-between font-mono text-[10.5px] tabular-nums leading-none">
+        {detail ? detail(w) : (
+          <>
+            <span className="text-[#ff7a6e]">{signed(w.r - mean)}</span>
+            <span className="text-[#62d98a]">{signed(w.g - mean)}</span>
+            <span className="text-[#6f9cff]">{signed(w.b - mean)}</span>
+          </>
+        )}
+        <span className="text-[var(--text)]">{readout ? readout(w) : signed(bright)}</span>
+      </div>
     </div>
   );
 }

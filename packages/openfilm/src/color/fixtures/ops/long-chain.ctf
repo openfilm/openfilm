@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2.5" id="urn:uuid:ef9c22e2-33fc-a316-31ca-734ab72b8257">
+    <Log inBitDepth="32f" outBitDepth="32f" style="cameraLogToLin">
+        <LogParams base="10" linSideSlope="5.26315789473684" linSideOffset="0.0526315789473684" logSideSlope="0.255620723362659" logSideOffset="0.410557184750733" linSideBreak="0.01125" />
+    </Log>
+    <Matrix inBitDepth="32f" outBitDepth="32f">
+        <Array dim="3 3">
+               1.05                   0                   0
+                  0                   1                   0
+                  0                   0                0.95
+        </Array>
+    </Matrix>
+    <Log inBitDepth="32f" outBitDepth="32f" style="cameraLinToLog">
+        <LogParams base="10" linSideSlope="5.26315789473684" linSideOffset="0.0526315789473684" logSideSlope="0.255620723362659" logSideOffset="0.410557184750733" linSideBreak="0.01125" />
+    </Log>
+    <GradingPrimary inBitDepth="32f" outBitDepth="32f" style="log">
+        <Brightness rgb="0.02 0 -0.02" master="0.05" />
+        <Contrast rgb="1 1 1" master="1.2" />
+        <Saturation master="1.1" />
+        <Pivot contrast="-0.2" />
+    </GradingPrimary>
+    <GradingTone inBitDepth="32f" outBitDepth="32f" style="log">
+        <Shadows rgb="1 1 1" master="0.9" start="0.5" pivot="0" />
+        <Highlights rgb="1 1 1" master="1.1" start="0.3" pivot="1" />
+    </GradingTone>
+    <GradingRGBCurve inBitDepth="32f" outBitDepth="32f" style="log">
+        <Master>
+            <ControlPoints>
+                          0 0
+                 0.30000001 0.27000001
+                 0.69999999 0.74000001
+                          1 1
+            </ControlPoints>
+        </Master>
+    </GradingRGBCurve>
+    <GradingHueCurve inBitDepth="32f" outBitDepth="32f" style="log">
+        <HueSat>
+            <ControlPoints>
+                          0 1
+                 0.33000001 1.4
+                 0.66000003 1
+            </ControlPoints>
+        </HueSat>
+    </GradingHueCurve>
+    <ASC_CDL inBitDepth="32f" outBitDepth="32f" style="FwdNoClamp">
+        <SOPNode>
+            <Slope>1.02 1 0.98</Slope>
+            <Offset>0 0 0.01</Offset>
+            <Power>1.1 1 1</Power>
+        </SOPNode>
+        <SatNode>
+            <Saturation>1</Saturation>
+        </SatNode>
+    </ASC_CDL>
+    <FixedFunction inBitDepth="32f" outBitDepth="32f" style="GamutComp13Fwd" params="1.147 1.264 1.312 0.815 0.803 0.88 1.2">
+    </FixedFunction>
+</ProcessList>

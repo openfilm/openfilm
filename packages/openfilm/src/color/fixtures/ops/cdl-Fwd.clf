@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList compCLFversion="3.0" id="fixture">
+    <ASC_CDL inBitDepth="32f" outBitDepth="32f" style="Fwd">
+<SOPNode><Slope>1.1 0.95 1.05</Slope><Offset>0.02 -0.01 0.03</Offset><Power>1.2 0.9 1.1</Power></SOPNode><SatNode><Saturation>1.3</Saturation></SatNode>
+    </ASC_CDL>
+</ProcessList>

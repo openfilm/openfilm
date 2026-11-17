@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2.5" id="fixture">
+    <Description>OpenFilm color fixture</Description>
+    <ExposureContrast inBitDepth="32f" outBitDepth="32f" style="log">
+<ECParams exposure="1.2" contrast="1.3" gamma="0.9" pivot="0.3" logExposureStep="0.1" logMidGray="0.4"/>
+    </ExposureContrast>
+</ProcessList>

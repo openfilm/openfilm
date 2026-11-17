@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList compCLFversion="3.0" id="fixture">
+    <Exponent inBitDepth="32f" outBitDepth="32f" style="monCurveMirrorFwd">
+<ExponentParams exponent="2.4" offset="0.055"/><ExponentParams channel="G" exponent="2.2" offset="0.099"/>
+    </Exponent>
+</ProcessList>

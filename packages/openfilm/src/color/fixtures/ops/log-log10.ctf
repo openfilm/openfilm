@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2.5" id="fixture">
+    <Description>OpenFilm color fixture</Description>
+    <Log inBitDepth="32f" outBitDepth="32f" style="log10">
+
+    </Log>
+</ProcessList>

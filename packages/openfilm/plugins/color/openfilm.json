@@ -1,9 +1,9 @@
 {
-  "order": 7,
+  "order": 3,
   "icon": "palette",
   "title": {
     "en": "Color",
-    "zh-CN": "调色台",
+    "zh-CN": "调色",
     "ja": "カラー",
     "ko": "컬러",
     "es": "Color"
@@ -17,12 +17,12 @@
   },
   "details": {
     "en": "When to use it: footage looks grey (camera log), has a cast, shots don't match, or you want a look.\nHow to use it: grade by hand with wheels, curves and windows, or press Auto and Match; or ask your agent, which measures the picture before it changes it.\nTurned off: grades still play and export (they are LUT files of the project).",
-    "zh-CN": "什么时候用：素材发灰（相机 Log）、偏色、几个镜头颜色不一致，或想要某种风格。\n怎么用：在调色台里用色轮、曲线、窗口亲手调，或点自动、匹配；也可以让智能体调，它会先测量画面再改。\n关掉后：调好的颜色照样播放和导出（保存在项目的 LUT 文件里）。",
+    "zh-CN": "什么时候用：素材发灰（相机 Log）、偏色、几个镜头颜色不一致，或想要某种风格。\n怎么用：在调色工作台里用色轮、曲线、窗口亲手调，或点自动、匹配；也可以让智能体调，它会先测量画面再改。\n关掉后：调好的颜色照样播放和导出（保存在项目的 LUT 文件里）。",
     "ja": "使うとき：素材が眠い（カメラのログ）、色かぶりがある、ショットの色がそろわない、ある雰囲気にしたいとき。\n使い方：ホイール、カーブ、ウィンドウで手で調整するか、自動とマッチを押します。エージェントに頼むと、画面を測ってから直します。\nオフにすると：グレードはそのまま再生・書き出しされます（プロジェクトの LUT ファイル）。",
     "ko": "언제 쓰나요: 소스가 흐리거나(카메라 로그) 색이 틀어졌거나, 장면끼리 색이 안 맞거나, 특정 느낌을 원할 때.\n쓰는 법: 휠, 커브, 윈도로 직접 조정하거나 자동·매칭을 누릅니다. 에이전트에게 맡기면 화면을 측정한 뒤 고칩니다.\n끄면: 보정한 색은 그대로 재생·내보내기됩니다(프로젝트의 LUT 파일).",
     "es": "Cuándo usarlo: el material se ve gris (log de cámara), tiene una dominante, los planos no casan o quieres un look.\nCómo usarlo: grada a mano con ruedas, curvas y ventanas, o pulsa Auto e Igualar; o pídeselo a tu agente, que mide la imagen antes de cambiarla.\nSi se desactiva: las gradaciones se siguen reproduciendo y exportando (son archivos LUT del proyecto)."
   },
-  "about": "grading the film's color by hand, clip by clip: each video clip's grade is a LUT of the project",
+  "about": "grading the film's color clip by clip: each video clip's grade is a chain of color transform files of the project (--of-lut)",
   "category": "picture",
   "difficulty": 4,
   "ease": 3,
@@ -37,6 +37,7 @@
   "workbench": "color",
   "beta": true,
   "blocks": [
+    "edit:viewer",
     {
       "id": "scopes",
       "title": {
@@ -46,34 +47,39 @@
         "ko": "스코프",
         "es": "Scopes"
       },
-      "edge": "left",
-      "size": 300,
+      "edge": "right",
+      "size": 312,
       "min": [
-        200,
+        220,
         200
       ],
       "range": [
-        220,
-        640
+        240,
+        560
       ]
     },
     {
-      "id": "viewer",
+      "id": "shots",
       "title": {
-        "en": "Viewer",
-        "zh-CN": "预览",
-        "ja": "プレビュー",
-        "ko": "미리보기",
-        "es": "Visor"
+        "en": "Shots",
+        "zh-CN": "镜头",
+        "ja": "ショット",
+        "ko": "샷",
+        "es": "Planos"
       },
-      "edge": "center",
+      "edge": "bottom",
+      "size": 112,
       "min": [
-        320,
-        240
+        240,
+        88
+      ],
+      "range": [
+        88,
+        220
       ]
     },
     {
-      "id": "grade",
+      "id": "tools",
       "title": {
         "en": "Grade",
         "zh-CN": "调色",
@@ -81,35 +87,15 @@
         "ko": "그레이드",
         "es": "Gradación"
       },
-      "edge": "right",
-      "size": 340,
-      "min": [
-        280,
-        240
-      ],
-      "range": [
-        300,
-        640
-      ]
-    },
-    {
-      "id": "clips",
-      "title": {
-        "en": "Clips",
-        "zh-CN": "片段",
-        "ja": "クリップ",
-        "ko": "클립",
-        "es": "Clips"
-      },
       "edge": "bottom",
-      "size": 128,
+      "size": 330,
       "min": [
-        240,
-        96
+        320,
+        220
       ],
       "range": [
-        96,
-        320
+        220,
+        720
       ]
     }
   ],

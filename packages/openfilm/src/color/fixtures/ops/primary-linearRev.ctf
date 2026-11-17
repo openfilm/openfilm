@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2.5" id="fixture">
+    <Description>OpenFilm color fixture</Description>
+    <GradingPrimary inBitDepth="32f" outBitDepth="32f" style="linearRev">
+<Offset rgb="0.01 0 -0.01" master="0.005"/><Exposure rgb="0.2 0 -0.1" master="0.3"/><Contrast rgb="1.1 1 0.9" master="1.15"/><Saturation master="0.85"/><Pivot contrast="0.1"/>
+    </GradingPrimary>
+</ProcessList>

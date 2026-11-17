@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2.5" id="fixture">
+    <Description>OpenFilm color fixture</Description>
+    <GradingRGBCurve inBitDepth="32f" outBitDepth="32f" style="log">
+        <Master>
+            <ControlPoints>0 0 0.1 0.4 0.15 0.42 0.9 0.5 1 1</ControlPoints>
+        </Master>
+    </GradingRGBCurve>
+</ProcessList>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2.5" id="fixture">
+    <Description>OpenFilm color fixture</Description>
+    <GradingHueCurve inBitDepth="32f" outBitDepth="32f" style="log">
+        <HueHue>
+            <ControlPoints>0 0 0.2 0.25 0.4 0.38 0.6 0.6 0.8 0.85</ControlPoints>
+        </HueHue>
+        <HueSat>
+            <ControlPoints>0 1.2 0.33 0.8 0.66 1.4</ControlPoints>
+        </HueSat>
+        <HueLum>
+            <ControlPoints>0.1 1.1 0.5 0.9 0.9 1</ControlPoints>
+        </HueLum>
+        <LumSat>
+            <ControlPoints>0 0.8 0.5 1.2 1 0.9</ControlPoints>
+        </LumSat>
+        <SatSat>
+            <ControlPoints>0 0 0.3 0.4 1 0.95</ControlPoints>
+        </SatSat>
+        <LumLum>
+            <ControlPoints>0 0.02 0.5 0.48 1 1.02</ControlPoints>
+        </LumLum>
+        <SatLum>
+            <ControlPoints>0 1 0.5 0.95 1 1.1</ControlPoints>
+        </SatLum>
+        <HueFx>
+            <ControlPoints>0 0 0.3 0.05 0.6 -0.04 0.9 0</ControlPoints>
+        </HueFx>
+    </GradingHueCurve>
+</ProcessList>
